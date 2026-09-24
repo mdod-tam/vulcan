@@ -60,6 +60,22 @@ class TwoFactorAuthenticationCredentialTest < ActionDispatch::IntegrationTest
     assert_select 'div', { minimum: 0 } # More lenient check, just ensure page renders
   end
 
+  test 'setup remains in the default language outside public verification locale scope' do
+    get setup_two_factor_authentication_path(locale: :es)
+    assert_response :success
+    assert_select 'html[lang=en]'
+    assert_select 'h1', 'Secure Your Account'
+  end
+
+  test 'TOTP enrollment uses the shared invalid-code feedback' do
+    get new_credential_two_factor_authentication_path(type: 'totp')
+    secret = css_select('input[name="secret"]').sole['value']
+    post create_credential_two_factor_authentication_path(type: 'totp'), params: { code: 'invalid', secret: secret }
+    assert_response :unprocessable_content
+    assert_includes response.body, I18n.t('two_factor_verification.errors.invalid_code')
+    assert_empty @user.totp_credentials
+  end
+
   test 'webauthn credential form starts registration on submit' do
     get new_credential_two_factor_authentication_path(type: 'webauthn')
 
@@ -212,6 +228,18 @@ class TwoFactorAuthenticationCredentialTest < ActionDispatch::IntegrationTest
 
     assert_response :unprocessable_content
     assert_select 'h1', text: 'Text Message Verification'
+    assert_includes response.body, I18n.t('two_factor_verification.errors.invalid_code')
+  end
+
+  test 'SMS enrollment provider failure uses the shared service-error feedback' do
+    post create_credential_two_factor_authentication_path(type: 'sms'), params: { phone_number: '555-123-4567' }
+    @session_token = nil
+    TwilioVerifyService.expects(:check_verification).returns(success: false)
+    assert_no_difference('SmsCredential.count') do
+      post confirm_pending_sms_credential_two_factor_authentication_path, params: { code: '123456' }
+    end
+    assert_response :unprocessable_content
+    assert_includes CGI.unescapeHTML(response.body), I18n.t('two_factor_verification.errors.verification_service_unavailable')
   end
 
   test 'successful SMS setup confirmation marks an existing unverified row verified' do

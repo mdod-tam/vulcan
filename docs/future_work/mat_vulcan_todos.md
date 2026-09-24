@@ -41,7 +41,6 @@ This document lists only remaining work. Tasks are small, explicit, and testable
 
 - [ ] Choose JS test runner setup (Node + jsdom vs. headless browser) and mocking approach  [TEST-001]
 - [ ] rails_request.js tests: success (200 JSON), success (HTML), failure (4xx/5xx), network error, retry path  [TEST-001]
-- [ ] BaseFormController tests: field validation, error summary rendering, focus management  [TEST-001]
 - [ ] Autosave controller tests: debounce, pending/saved states, error state  [TEST-001]
 - [ ] Upload controller tests: file type/size validation, progress, error/retry  [TEST-001]
 - [ ] Extract shared validation utils and document usage (README in controllers/)
@@ -99,6 +98,14 @@ Signed-in portal locale routing  [DATA-002]
   account locale, a request parameter, or both, then apply it once rather than per-controller.
   Surfaced while adding `constituent_portal.dependents.*`: the `es` entries are correct and
   unreachable.
+
+MFA enrollment localization
+
+- [ ] Apply the signed-in locale policy above to constituent-facing MFA setup and credential
+  enrollment. Translate the setup screens, WebAuthn/TOTP/SMS enrollment feedback in `auth.js`,
+  and the pending SMS enrollment service's duplicate-send message. Cover setup, validation
+  failures, retry, and completion for each factor in English and Spanish with system tests.
+  Keep public sign-in and MFA verification language tied to the request, not the matched account.
 
 Portal dependent creation: two separate outcomes  [DATA-002]
 

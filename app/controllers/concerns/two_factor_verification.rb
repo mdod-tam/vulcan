@@ -7,12 +7,11 @@
 #
 # The module integrates with the TwoFactorAuth service module for logging
 # and session management, ensuring consistent behavior across the application.
-module TwoFactorVerification # rubocop:disable Metrics/ModuleLength
+module TwoFactorVerification
   extend ActiveSupport::Concern
 
   protected
 
-  # Challenge management methods (Now directly using TwoFactorAuth module)
   def store_challenge(type, challenge, metadata = {})
     TwoFactorAuth.store_challenge(session, type, challenge, metadata)
   end
@@ -25,17 +24,10 @@ module TwoFactorVerification # rubocop:disable Metrics/ModuleLength
     TwoFactorAuth.clear_challenge(session)
   end
 
-  # Verification result methods
   def complete_verification(_user_id, _type)
-    # Log successful verification (using TwoFactorAuth module)
-    # Note: The log_verification_success/failure methods below already call the module
-    # TwoFactorAuth.log_verification_success(user_id, type) # Redundant call
-
-    # Complete the authentication process (using TwoFactorAuth module)
     TwoFactorAuth.complete_authentication(session)
   end
 
-  # Updated log calls within verification methods to pass context hash
   def log_verification_success(user_id, type, context = {})
     TwoFactorAuth.log_verification_success(user_id, type, context)
   end
@@ -44,7 +36,8 @@ module TwoFactorVerification # rubocop:disable Metrics/ModuleLength
     TwoFactorAuth.log_verification_failure(user_id, type, error, context)
   end
 
-  # Unified verification methods that delegate to type-specific handlers
+  # Returns [success, message_or_error_code]. On failure, handle_failed_verification
+  # translates :user_session and :verification_failed or uses the localized message.
   def verify_credential(type, params)
     case type.to_sym
     when :webauthn
@@ -54,7 +47,7 @@ module TwoFactorVerification # rubocop:disable Metrics/ModuleLength
     when :sms
       verify_sms_credential(params[:code], params[:credential_id])
     else
-      [false, 'Invalid credential type']
+      [false, t('two_factor_verification.errors.invalid_type')]
     end
   end
 
@@ -65,7 +58,7 @@ module TwoFactorVerification # rubocop:disable Metrics/ModuleLength
   end
 
   def verify_totp_credential(code)
-    return [false, 'No code provided'] if code.blank?
+    return [false, t('two_factor_verification.errors.no_code')] if code.blank?
 
     with_verified_user(:totp) do |user|
       verify_totp_code(code, user)
@@ -73,13 +66,13 @@ module TwoFactorVerification # rubocop:disable Metrics/ModuleLength
   end
 
   def verify_sms_credential(code, credential_id)
-    return [false, 'No code provided'] if code.blank?
+    return [false, t('two_factor_verification.errors.no_code')] if code.blank?
 
     user = find_user_for_two_factor
-    return [false, 'User session not found'] unless user
+    return [false, :user_session] unless user
 
     credential = sms_credential_from_active_challenge(user, credential_id)
-    return [false, TwoFactorAuth::ERROR_MESSAGES[:expired_code]] unless credential
+    return [false, t('two_factor_verification.errors.expired_code')] unless credential
 
     verify_sms_code(code, credential)
   end
@@ -89,7 +82,7 @@ module TwoFactorVerification # rubocop:disable Metrics/ModuleLength
   # Base verification method with common user validation
   def with_verified_user(_credential_type)
     user_for_2fa = find_user_for_two_factor
-    return [false, 'User session not found'] unless user_for_2fa
+    return [false, :user_session] unless user_for_2fa
 
     yield(user_for_2fa)
   end
@@ -98,9 +91,15 @@ module TwoFactorVerification # rubocop:disable Metrics/ModuleLength
   def verify_webauthn_challenge(params, user)
     webauthn_credential = WebAuthn::Credential.from_get(params)
     stored_credential = user.webauthn_credentials.find_by(external_id: webauthn_credential.id)
-    return [false, 'Credential not found'] unless stored_credential
+    unless stored_credential
+      log_verification_failure(user.id, :webauthn, 'Credential not found')
+      return [false, :verification_failed]
+    end
 
     perform_webauthn_verification(webauthn_credential, stored_credential, user)
+  rescue WebAuthn::Error, OpenSSL::PKey::PKeyError => e
+    log_verification_failure(user.id, :webauthn, e.class.name, credential_id: stored_credential&.id)
+    [false, :verification_failed]
   end
 
   def perform_webauthn_verification(webauthn_credential, stored_credential, user)
@@ -114,9 +113,6 @@ module TwoFactorVerification # rubocop:disable Metrics/ModuleLength
     stored_credential.update!(sign_count: webauthn_credential.sign_count)
     log_verification_success(user.id, :webauthn, credential_id: stored_credential.id)
     [true, 'Verification successful']
-  rescue WebAuthn::Error => e
-    log_verification_failure(user.id, :webauthn, e.message, credential_id: stored_credential&.id)
-    [false, "Verification failed: #{e.message}"]
   end
 
   # TOTP specific verification
@@ -131,7 +127,7 @@ module TwoFactorVerification # rubocop:disable Metrics/ModuleLength
     end
 
     log_verification_failure(user.id, :totp, 'Invalid code', credential_ids: user.totp_credentials.pluck(:id))
-    [false, TwoFactorAuth::ERROR_MESSAGES[:invalid_code]]
+    [false, t('two_factor_verification.errors.invalid_code')]
   end
 
   def sms_credential_from_active_challenge(user, submitted_credential_id)
@@ -150,7 +146,7 @@ module TwoFactorVerification # rubocop:disable Metrics/ModuleLength
   def verify_sms_code(code, credential)
     challenge = sms_login_challenge(credential)
     result = challenge.check(code)
-    return [false, TwoFactorAuth::ERROR_MESSAGES[:expired_code]] unless result
+    return [false, t('two_factor_verification.errors.expired_code')] unless result
 
     user_for_2fa = find_user_for_two_factor
 
@@ -166,53 +162,22 @@ module TwoFactorVerification # rubocop:disable Metrics/ModuleLength
     else
       error_msg = result[:error] || 'Verification service unavailable'
       log_verification_failure(user_for_2fa.id, :sms, error_msg, credential_id: credential.id)
-      [false, TwoFactorAuth::ERROR_MESSAGES[:verification_service_unavailable]]
+      [false, t('two_factor_verification.errors.verification_service_unavailable')]
     end
   end
 
   def sms_verification_error_message(status)
     case status
     when 'expired', 'not_found'
-      TwoFactorAuth::ERROR_MESSAGES[:expired_code]
+      t('two_factor_verification.errors.expired_code')
     when 'max_attempts_reached'
-      TwoFactorAuth::ERROR_MESSAGES[:max_attempts_reached]
+      t('two_factor_verification.errors.max_attempts_reached')
     else
-      TwoFactorAuth::ERROR_MESSAGES[:invalid_code]
+      t('two_factor_verification.errors.invalid_code')
     end
   end
 
   protected
-
-  # Error handling methods
-  def handle_verification_error(error, type, format = :html)
-    error_message = get_friendly_error_message(error, type)
-    log_verification_failure(current_user.id, type, error_message)
-
-    if format == :json || request.xhr?
-      render json: { error: error_message, details: error.message }, status: :unprocessable_content
-    else
-      flash.now[:alert] = error_message
-      render :new
-    end
-  end
-
-  def get_friendly_error_message(error, type)
-    case type
-    when :webauthn
-      case error.message
-      when /challenge/i
-        TwoFactorAuth::ERROR_MESSAGES[:webauthn_challenge_mismatch]
-      when /already registered/i
-        'This security key is already registered with your account.'
-      when /user verification/i
-        'Your device rejected the verification. Please ensure your fingerprint or PIN is set up correctly.'
-      else
-        "Verification failed: #{error.message}"
-      end
-    else
-      TwoFactorAuth::ERROR_MESSAGES[:invalid_code]
-    end
-  end
 
   # Shared helper methods for credential management
 
@@ -279,7 +244,7 @@ module TwoFactorVerification # rubocop:disable Metrics/ModuleLength
   end
 
   def sms_resend_wait_message(wait_seconds)
-    "Please wait #{wait_seconds} seconds before requesting another code."
+    t('two_factor_verification.sms.wait', seconds: wait_seconds)
   end
 
   def sms_login_challenge(credential)

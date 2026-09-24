@@ -186,7 +186,9 @@ module Admin
       visit admin_application_path(@application)
 
       # Assign voucher
-      click_button 'Assign Voucher'
+      accept_confirm do
+        click_button 'Assign Voucher'
+      end
       wait_for_turbo
 
       # Wait for audit log to update and verify entry

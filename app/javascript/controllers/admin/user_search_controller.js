@@ -1,8 +1,8 @@
-import BaseFormController from "../base/form_controller"
+import { Controller } from "@hotwired/stimulus"
 import { setVisible } from "../../utils/visibility"
-import { simpleDebounce } from "../../utils/debounce"
+import { debounce } from "../../utils/debounce"
 
-class UserSearchController extends BaseFormController {
+class UserSearchController extends Controller {
   static targets = [
     "searchInput",
     "searchResults",
@@ -22,20 +22,10 @@ class UserSearchController extends BaseFormController {
   }
 
   connect() {
-    super.connect()
-
-    // Add debounced search listener using our new pattern
-    if (this.hasSearchInputTarget) {
-      this.addDebouncedListener(
-        this.searchInputTarget,
-        'input',
-        this.performSearch,
-        300
-      )
-    }
+    this.debouncedSearch = debounce(q => this.navigateToSearch(q), 300)
   }
 
-  async performSearch(event) {
+  performSearch(event) {
     const q = event.target.value.trim()
 
     if (q.length === 0) {
@@ -43,8 +33,7 @@ class UserSearchController extends BaseFormController {
       return
     }
 
-    // Use Turbo Frame navigation
-    this.navigateToSearch(q)
+    this.debouncedSearch(q)
   }
 
   navigateToSearch(q) {
@@ -55,7 +44,7 @@ class UserSearchController extends BaseFormController {
     // Construct the search URL; pass frame_id so the backend Turbo response targets the right frame
     const frameId = turboFrame.id || ''
     const searchUrl = `${this.searchUrlValue}?q=${encodeURIComponent(q)}&role=${this.roleValue}&frame_id=${encodeURIComponent(frameId)}`
-    
+
     // Set the turbo frame's src to trigger navigation
     // Ensure it's visible in case it was previously hidden by clearResults()
     setVisible(turboFrame, true)
@@ -63,6 +52,7 @@ class UserSearchController extends BaseFormController {
   }
 
   clearResults() {
+    this.debouncedSearch.cancel()
     if (this.hasSearchResultsTarget) {
       const target = this.searchResultsTarget
       // Clear the turbo frame by removing its src
@@ -71,8 +61,6 @@ class UserSearchController extends BaseFormController {
       setVisible(target, false)
     }
   }
-
-
 
   clearSearchAndShowForm() {
     if (this.hasSearchInputTarget) {
@@ -310,7 +298,6 @@ class UserSearchController extends BaseFormController {
       .replace(/'/g, "&#039;")
   }
 
-  // Override from BaseFormController for custom validation
   async validateBeforeSubmit(data) {
     // Handle both FormData and plain objects
     const firstName = data instanceof FormData ? data.get('first_name') : data.first_name
@@ -383,13 +370,13 @@ class UserSearchController extends BaseFormController {
         if (input) {
           input.classList.add('border-red-500', 'border-2')
           input.setAttribute('aria-invalid', 'true')
-          
+
           // Remove any existing error message
           const existingError = input.parentElement.querySelector('.field-error-message')
           if (existingError) {
             existingError.remove()
           }
-          
+
           // Create and insert error display
           const errorEl = document.createElement('div')
           errorEl.className = 'field-error-message text-red-600 text-sm mt-1 flex items-start gap-1'
@@ -401,7 +388,7 @@ class UserSearchController extends BaseFormController {
             <span>${this.escapeHtml(message)}</span>
           `
           input.parentElement.appendChild(errorEl)
-          
+
           // Track first error for scrolling
           if (!firstErrorInput) {
             firstErrorInput = input
@@ -417,16 +404,7 @@ class UserSearchController extends BaseFormController {
     }
   }
 
-  // Override from BaseFormController for success handling
-  async handleSuccess(data) {
-    if (data.user) {
-      this.handleGuardianCreationSuccess(data)
-    } else {
-      super.handleSuccess(data)
-    }
-  }
-
-  handleGuardianCreationSuccess(data) {
+  handleSuccess(data) {
     const { user } = data
     const displayHTML = this.buildUserDisplayHTML(
       this.escapeHtml(`${user.first_name} ${user.last_name}`),
@@ -449,38 +427,9 @@ class UserSearchController extends BaseFormController {
     this.clearSearchAndShowForm()
   }
 
-  
-
-  // Override disconnect to add event handler cleanup
   disconnect() {
-    // Clean up managed event listeners
-    this.cleanupAllEventHandlers()
-
-    // Call parent disconnect
-    super.disconnect()
-  }
-
-  // Add event handler management mixin methods
-  addDebouncedListener(element, event, handler, wait = 300) {
-    if (!element) return
-
-    const debounced = simpleDebounce(handler.bind(this), wait)
-    element.addEventListener(event, debounced)
-
-    this._managedListeners = this._managedListeners || []
-    this._managedListeners.push({ element, event, handler: debounced })
-  }
-
-  cleanupAllEventHandlers() {
-    if (this._managedListeners) {
-      this._managedListeners.forEach(({ element, event, handler }) => {
-        element.removeEventListener(event, handler)
-      })
-      this._managedListeners = []
-    }
+    this.debouncedSearch.cancel()
   }
 }
-
-// Apply target safety mixin
 
 export default UserSearchController

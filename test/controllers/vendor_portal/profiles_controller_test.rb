@@ -64,6 +64,31 @@ module VendorPortal
       assert_nil @vendor_user.terms_accepted_at # Verify terms_accepted_at is still nil
     end
 
-    # Add more tests as needed for other profile update scenarios, validations, etc.
+    test 'invalid Turbo submission renders errors and preserves changes for retry' do
+      attributes = {
+        business_name: 'Updated vendor', business_tax_id: '123456789',
+        website_url: 'ftp://example.com', physical_address_1: '42 New Street',
+        physical_address_2: 'Suite 3', city: 'Baltimore', state: 'MD', zip_code: '21201',
+        phone: '4105551234', email: @vendor_user.email, terms_accepted: '1'
+      }
+      original_name = @vendor_user.business_name
+      headers = { 'Accept' => 'text/vnd.turbo-stream.html, text/html' }
+
+      patch vendor_portal_profile_url, params: { users_vendor: attributes }, headers: headers
+
+      assert_response :unprocessable_content
+      assert_equal 'text/html', response.media_type
+      assert_select 'li', text: /Website url must be a valid URL/
+      attributes.except(:terms_accepted).merge(phone: '410-555-1234').each do |field, value|
+        assert_select "input[name='users_vendor[#{field}]'][value=?]", value
+      end
+      assert_equal original_name, @vendor_user.reload.business_name
+
+      patch vendor_portal_profile_url, params: { users_vendor: attributes.merge(website_url: 'https://example.com') }, headers: headers
+
+      assert_redirected_to vendor_portal_dashboard_url
+      assert_equal 'Updated vendor', @vendor_user.reload.business_name
+      assert_equal 'https://example.com', @vendor_user.website_url
+    end
   end
 end

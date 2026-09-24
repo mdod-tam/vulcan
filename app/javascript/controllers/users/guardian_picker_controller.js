@@ -1,6 +1,5 @@
 import { Controller } from "@hotwired/stimulus";
 import { setVisible, setFieldValue } from "../../utils/visibility";
-import { debouncedDispatch } from "../../utils/debounce";
 
 // Handles guardian‑selection UI toggling and central state.
 export default class extends Controller {
@@ -239,6 +238,6 @@ export default class extends Controller {
   }
 
   dispatchSelectionChange() {
-    debouncedDispatch(this, "selectionChange", { selectedValue: this.selectedValue });
+    this.dispatch("selectionChange", { detail: { selectedValue: this.selectedValue } });
   }
 }

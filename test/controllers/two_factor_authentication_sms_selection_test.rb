@@ -140,6 +140,55 @@ class TwoFactorAuthenticationSmsSelectionTest < ActionDispatch::IntegrationTest
     assert_select 'p', text: /We've sent a 6-digit code by text/
   end
 
+  %i[en es].each do |locale|
+    test "unavailable verification methods use #{locale} feedback" do
+      post sign_in_path(locale: locale), params: { contact: @user.email, password: 'password123' }
+      get verify_method_two_factor_authentication_path(type: 'webauthn', locale: locale)
+      assert_redirected_to setup_two_factor_authentication_path(locale: locale)
+      assert_equal I18n.t('two_factor_verification.errors.key_unavailable', locale: locale), flash[:alert]
+      @user.totp_credentials.destroy_all
+      get verify_method_two_factor_authentication_path(type: 'totp', locale: locale)
+      assert_equal I18n.t('two_factor_verification.errors.totp_unavailable', locale: locale), flash[:alert]
+      get verify_method_two_factor_authentication_path(type: 'unknown', locale: locale)
+      assert_redirected_to verify_two_factor_authentication_path(locale: locale)
+      assert_equal I18n.t('two_factor_verification.errors.invalid_method', locale: locale), flash[:alert]
+    end
+
+    test "TOTP and SMS keep #{locale} through forms, errors, resend and verification" do
+      post sign_in_path(locale: locale), params: { contact: @user.email, password: 'password123' }
+      assert_redirected_to verify_two_factor_authentication_path(locale: locale)
+      follow_redirect!
+      assert_select 'a[href=?]', verify_method_two_factor_authentication_path(type: 'totp', locale: locale)
+      get verify_method_two_factor_authentication_path(type: 'totp', locale: locale)
+      assert_select 'h1', I18n.t('two_factor_verification.totp.heading', locale: locale)
+      assert_select 'form[action=?]', process_verification_two_factor_authentication_path(type: 'totp', locale: locale)
+      post process_verification_two_factor_authentication_path(type: 'totp', locale: locale), params: { code: 'invalid' }
+      assert_response :unprocessable_content
+      assert_includes response.body, I18n.t('two_factor_verification.errors.invalid_code', locale: locale)
+
+      TwilioVerifyService.expects(:send_verification).once.returns(success: true, verification_sid: 'TEST_LOCALE', status: 'pending')
+      post select_sms_verification_two_factor_authentication_path(locale: locale)
+      assert_redirected_to verify_method_two_factor_authentication_path(type: 'sms', locale: locale)
+      follow_redirect!
+      assert_select 'h1', I18n.t('two_factor_verification.sms.heading', locale: locale)
+      assert_select 'form[action=?]', process_verification_two_factor_authentication_path(type: 'sms', locale: locale)
+      assert_select 'a[href=?]', resend_sms_verification_two_factor_authentication_path(locale: locale)
+      post resend_sms_verification_two_factor_authentication_path(locale: locale), headers: { 'Accept' => Mime[:turbo_stream].to_s }
+      assert_response :success
+      assert_includes response.body, I18n.t('two_factor_verification.sms.resend_hint', locale: locale)
+
+      TwilioVerifyService.expects(:check_verification).once.returns(success: true, status: 'pending', valid: false)
+      post process_verification_two_factor_authentication_path(type: 'sms', locale: locale), params: { code: 'invalid' }
+      assert_response :unprocessable_content
+      assert_includes response.body, I18n.t('two_factor_verification.errors.invalid_code', locale: locale)
+      TwilioVerifyService.expects(:check_verification).once.returns(success: true, status: 'approved', valid: true)
+      assert_difference('Session.count', 1) do
+        post process_verification_two_factor_authentication_path(type: 'sms', locale: locale), params: { code: '123456' }
+      end
+      assert_response :redirect
+    end
+  end
+
   private
 
   def start_password_step

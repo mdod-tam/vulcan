@@ -41,7 +41,7 @@ const Auth = {
   },
 
   // Core fetch with timeout and retries on 502/503
-  async sendRequest(url, method, body = null) {
+  async sendRequest(url, method, body = null, messages = {}) {
     const controller = new AbortController();
     const timeoutId = setTimeout(() => controller.abort(), FETCH_TIMEOUT);
 
@@ -74,24 +74,24 @@ const Auth = {
           continue;
         }
         clearTimeout(timeoutId);
-        return this.handleResponse(response);
+        return this.handleResponse(response, messages);
       } catch (error) {
         if (error.name === 'AbortError') {
           clearTimeout(timeoutId);
-          return this.formatError("Request timed out. Please try again.");
+          return this.formatError(messages.timedOut || "Request timed out. Please try again.");
         }
         clearTimeout(timeoutId);
         Logger.error(`Network error during ${method} to ${url}:`, error);
-        return this.formatError("Network error. Please check your connection and try again.");
+        return this.formatError(messages.networkError || "Network error. Please check your connection and try again.");
       }
     }
 
     clearTimeout(timeoutId);
-    return this.formatError("Operation failed after multiple attempts.");
+    return this.formatError(messages.failed || "Operation failed after multiple attempts.");
   },
 
   // Handle fetch response
-  async handleResponse(response) {
+  async handleResponse(response, messages = {}) {
     if (response.ok) {
       const data = await response.json();
       Logger.log("Operation successful:", data);
@@ -103,17 +103,12 @@ const Auth = {
         Logger.error(`Operation failed with status ${response.status}:`, errorData);
         return {
           success: false,
-          message: errorData.error || 'Operation failed',
+          message: messages[errorData.error_code] || messages.failed || errorData.error || 'Operation failed',
           details: errorData.details || ''
         };
       } catch (_) {
-        const errorText = await response.text();
-        Logger.error(`Operation failed with status ${response.status}:`, errorText);
-        return {
-          success: false,
-          message: `Operation failed: ${errorText || 'Unknown error'}`,
-          details: ''
-        };
+        Logger.error(`Operation failed with status ${response.status}: invalid JSON response`);
+        return this.formatError(messages.failed || `Operation failed (HTTP ${response.status}). Please try again.`);
       }
     }
   },
@@ -147,15 +142,6 @@ const Auth = {
     return map[error.name] || "Failed to complete operation.";
   },
 
-  // Generic code verifier for TOTP/SMS
-  async verifyCode(method, code, callbackUrl, feedback) {
-    this.updateFeedback(feedback, `Verifying ${method.toUpperCase()} code...`, false);
-    Logger.log(`Verifying ${method.toUpperCase()} code`);
-    const result = await this.sendRequest(callbackUrl, 'POST', { code, method });
-    if (!result.success) this.updateFeedback(feedback, result.message);
-    return result;
-  },
-
   // WebAuthn registration
   async registerWebAuthnCredential(callbackUrl, credentialOptions, nickname, feedback) {
     this.updateFeedback(feedback, "Preparing to register security key...", false);
@@ -182,8 +168,8 @@ const Auth = {
   },
 
   // WebAuthn verification
-  async verifyWebAuthnCredential(credentialOptions, callbackUrl, feedback) {
-    this.updateFeedback(feedback, "Preparing to verify security key...", false);
+  async verifyWebAuthnCredential(credentialOptions, callbackUrl, feedback, messages = {}) {
+    this.updateFeedback(feedback, messages.preparing || "Preparing to verify security key...", false);
     try {
       Logger.log("Requesting credential assertion with options:", credentialOptions);
       const credential = await WebAuthnJSON.get({ publicKey: credentialOptions });
@@ -191,25 +177,15 @@ const Auth = {
 
       const wrapped = { two_factor_authentication: credential };
       const url = callbackUrl || this.getEndpointUrl('verify', 'webauthn');
-      const result = await this.sendRequest(url, 'POST', wrapped);
+      const result = await this.sendRequest(url, 'POST', wrapped, messages);
       if (!result.success) this.updateFeedback(feedback, result.message);
       return result;
     } catch (error) {
       Logger.error("Verification failed:", error);
-      const msg = this.getErrorMessage(error);
+      const msg = messages[error.name] || messages.failed || this.getErrorMessage(error);
       this.updateFeedback(feedback, msg);
       return this.formatError(msg, error.message);
     }
-  },
-
-  // Request SMS code
-  async requestSmsCode(url, feedback) {
-    this.updateFeedback(feedback, "Sending verification code...", false);
-    Logger.log("Requesting SMS code");
-    const result = await this.sendRequest(url, 'POST');
-    if (result.success) this.updateFeedback(feedback, "Verification code sent. Please check your phone.", false);
-    else this.updateFeedback(feedback, result.message);
-    return result;
   }
 };
 
@@ -217,23 +193,11 @@ const Auth = {
 const registerWebAuthn = (callbackUrl, credentialOptions, nickname, feedback) =>
   Auth.registerWebAuthnCredential(callbackUrl, credentialOptions, nickname, feedback);
 
-const verifyWebAuthn = (credentialOptions, callbackUrl, feedback) =>
-  Auth.verifyWebAuthnCredential(credentialOptions, callbackUrl, feedback);
-
-const verifyTotpCode = (code, callbackUrl, feedback) =>
-  Auth.verifyCode('totp', code, callbackUrl, feedback);
-
-const verifySmsCode = (code, callbackUrl, feedback) =>
-  Auth.verifyCode('sms', code, callbackUrl, feedback);
-
-const requestSmsCode = (url, feedback) =>
-  Auth.requestSmsCode(url, feedback);
+const verifyWebAuthn = (credentialOptions, callbackUrl, feedback, messages) =>
+  Auth.verifyWebAuthnCredential(credentialOptions, callbackUrl, feedback, messages);
 
 export {
   Auth as default,
   registerWebAuthn,
-  verifyWebAuthn,
-  verifyTotpCode,
-  verifySmsCode,
-  requestSmsCode
+  verifyWebAuthn
 };

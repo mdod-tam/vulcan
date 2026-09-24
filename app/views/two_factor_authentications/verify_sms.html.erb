@@ -1,13 +1,13 @@
 <div class="max-w-md mx-auto px-4 py-8">
   <div class="bg-white rounded-lg shadow-md p-8">
     <div class="text-center mb-8">
-      <h1 class="text-2xl font-bold text-gray-800">Text Message Verification</h1>
+      <h1 class="text-2xl font-bold text-gray-800"><%= t('two_factor_verification.sms.heading') %></h1>
       <% if @sms_code_sent %>
-        <p class="mt-3 text-gray-600">Enter the code sent to your phone to complete sign-in.</p>
+        <p class="mt-3 text-gray-600"><%= t('two_factor_verification.sms.intro_sent') %></p>
       <% else %>
-        <p class="mt-3 text-gray-600">Send a text message code to complete sign-in.</p>
+        <p class="mt-3 text-gray-600"><%= t('two_factor_verification.sms.intro_unsent') %></p>
       <% end %>
-      <p class="mt-2 text-sm text-gray-600">You can choose another method below if you prefer.</p>
+      <p class="mt-2 text-sm text-gray-600"><%= t('two_factor_verification.sms.hint') %></p>
     </div>
 
     <div class="bg-blue-50 rounded-lg p-4 mb-6">
@@ -20,10 +20,9 @@
         <div class="ml-3">
           <p class="text-sm text-blue-700">
             <% if @sms_code_sent %>
-              We've sent a 6-digit code by text to your phone number (<%= @sms_credential.phone_number %>).
-              Enter it below to verify your identity.
+              <%= t('two_factor_verification.sms.instructions_sent', phone: @sms_credential.phone_number) %>
             <% else %>
-              Send a 6-digit code by text to your phone number (<%= @sms_credential.phone_number %>) to verify your identity.
+              <%= t('two_factor_verification.sms.instructions_unsent', phone: @sms_credential.phone_number) %>
             <% end %>
           </p>
         </div>
@@ -33,7 +32,7 @@
     <% if @sms_code_sent %>
       <%= form_with url: process_verification_two_factor_authentication_path(type: 'sms'), method: :post, class: "space-y-4" do |form| %>
         <div>
-          <label for="code" class="block text-sm font-medium text-gray-700 mb-1">Verification Code</label>
+          <label for="code" class="block text-sm font-medium text-gray-700 mb-1"><%= t('two_factor_verification.common.code_label') %></label>
           <div class="mt-1 relative rounded-md shadow-sm">
             <%= form.text_field :code,
                 class: "block w-full py-3 px-4 border border-gray-300 rounded-md shadow-sm focus:ring-indigo-500 focus:border-indigo-500 text-lg text-center tracking-widest",
@@ -45,37 +44,38 @@
                 autofocus: true,
                 maxlength: 6 %>
           </div>
-          <p class="mt-2 text-sm text-gray-500">Enter the 6-digit code from the text message.</p>
+          <p class="mt-2 text-sm text-gray-500"><%= t('two_factor_verification.sms.code_hint') %></p>
         </div>
 
-        <div class="flex justify-between items-center pt-4">
+        <div class="flex justify-between items-center gap-4 pt-4">
           <%= render 'shared/sms_resend',
               resend_path: resend_sms_verification_two_factor_authentication_path,
               message: nil,
               message_type: :success %>
 
-          <%= form.submit "Verify", class: "inline-flex justify-center py-2 px-4 border border-transparent shadow-sm text-sm font-medium rounded-md text-white bg-indigo-600 hover:bg-indigo-700 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-indigo-500" %>
+          <%= form.submit t('two_factor_verification.common.submit'), class: "inline-flex justify-center py-2 px-4 border border-transparent shadow-sm text-sm font-medium rounded-md text-white bg-indigo-600 hover:bg-indigo-700 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-indigo-500" %>
         </div>
       <% end %>
     <% else %>
       <div id="sms_resend" class="space-y-3">
-        <%= button_to "Send verification code",
+        <%= button_to t('two_factor_verification.sms.send'),
             select_sms_verification_two_factor_authentication_path,
             method: :post,
             class: "w-full inline-flex justify-center py-2 px-4 border border-transparent shadow-sm text-sm font-medium rounded-md text-white bg-indigo-600 hover:bg-indigo-700 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-indigo-500" %>
-        <p class="text-sm text-gray-500 text-center">We will send a 6-digit code to your saved phone number.</p>
+        <p class="text-sm text-gray-500 text-center"><%= t('two_factor_verification.sms.send_hint') %></p>
       </div>
     <% end %>
 
-    <div class="mt-4 flex justify-between">
+    <div class="mt-4 flex justify-between gap-4">
       <div>
         <% if @webauthn_enabled %>
-          <%= link_to "Use Device or Security Key Instead", verify_method_two_factor_authentication_path(type: 'webauthn'), class: "text-sm text-indigo-600 hover:text-indigo-900" %>
+          <%= link_to t('two_factor_verification.common.use_key'), verify_method_two_factor_authentication_path(type: 'webauthn'), class: "text-sm text-indigo-600 hover:text-indigo-900" %>
         <% end %>
       </div>
       <div>
         <% if @totp_enabled %>
-          <%= link_to "Use Authenticator App Instead", verify_method_two_factor_authentication_path(type: 'totp'), class: "text-sm text-indigo-600 hover:text-indigo-900" %>
+          <%= link_to t('two_factor_verification.common.use_totp'),
+                      verify_method_two_factor_authentication_path(type: 'totp'), class: "text-sm text-indigo-600 hover:text-indigo-900" %>
         <% end %>
       </div>
     </div>
@@ -88,9 +88,9 @@
           </svg>
         </div>
         <div class="ml-3">
-          <h3 class="text-sm font-medium text-yellow-800">Having trouble?</h3>
+          <h3 class="text-sm font-medium text-yellow-800"><%= t('two_factor_verification.common.trouble') %></h3>
           <div class="mt-2 text-sm text-yellow-700">
-            <p>The verification code expires after 10 minutes. Make sure your phone has service before sending or requesting another code.</p>
+            <p><%= t('two_factor_verification.sms.help') %></p>
           </div>
         </div>
       </div>

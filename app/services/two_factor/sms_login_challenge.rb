@@ -6,7 +6,6 @@ module TwoFactor
     LOCK_TTL = 30.seconds
     RESEND_COOLDOWN_SECONDS = 30
     TERMINAL_STATUSES = %w[approved expired max_attempts_reached not_found].freeze
-    DUPLICATE_SEND_MESSAGE = 'A verification code is being sent. Please wait a moment.'
 
     def self.cache_key(credential_id)
       "two_factor:sms_login:#{credential_id}"

@@ -4,154 +4,78 @@ import { verifyWebAuthn } from "../../auth"
 class CredentialAuthenticatorController extends Controller {
   static targets = [
     "webauthnForm",
-    "verificationButton"
+    "verificationButton",
+    "feedback"
   ]
+  static values = { messages: Object, verificationUrl: String }
 
-
-
-  connect() {
-    if (process.env.NODE_ENV !== 'production') {
-      console.log("CredentialAuthenticatorController connected")
-    }
-  }
-
-  disconnect() {
-    if (process.env.NODE_ENV !== 'production') {
-      console.log("CredentialAuthenticatorController disconnected")
-    }
-  }
-
-  // Fired when "Verify with Security Key" is clicked
   async startVerification(event) {
     event.preventDefault()
+    if (!this.hasWebauthnFormTarget) return
 
-    if (!this.hasWebauthnFormTarget) {
-      // If the form target is missing, bail out
-      return
-    }
+    const button = this.verificationButtonTarget
+    if (button.disabled) return
 
-    const form = this.webauthnFormTarget
-    const formData = new FormData(form)
-
-    let challenge = formData.get('challenge')
-    let timeout = parseInt(formData.get('timeout')) || 30000
-    let rpId = formData.get('rp_id')
-    let allowCredentials
-
+    let failureMessage = this.messagesValue.optionsError
     try {
-      allowCredentials = JSON.parse(formData.get('allow_credentials') || '[]')
-    } catch {
-      allowCredentials = []
-    }
+      button.disabled = true
+      button.setAttribute("aria-disabled", "true")
+      this.feedbackTarget.textContent = this.messagesValue.preparing
+      this.feedbackTarget.classList.remove("error")
 
-    // If no challenge in form, fetch it dynamically (old controller pattern)
-    if (!challenge) {
-      if (process.env.NODE_ENV !== 'production') {
-        console.log("No challenge in form, fetching dynamically...")
-      }
-      
+      const form = this.webauthnFormTarget
+      const formData = new FormData(form)
+      let challenge = formData.get('challenge')
+      let timeout = parseInt(formData.get('timeout')) || 30000
+      let rpId = formData.get('rp_id')
+      let allowCredentials
+
       try {
-        const optionsUrl = form.action || '/two_factor_authentication/verification_options/webauthn'
-        const response = await fetch(optionsUrl, {
+        allowCredentials = JSON.parse(formData.get('allow_credentials') || '[]')
+      } catch {
+        allowCredentials = []
+      }
+
+      if (!challenge) {
+        const response = await fetch(form.action || '/two_factor_authentication/verification_options/webauthn', {
           headers: { "Accept": "application/json" },
           credentials: "same-origin"
         })
-        
         if (!response.ok) {
-          throw new Error(`HTTP error ${response.status}`)
+          console.error(`Security-key options request failed with status ${response.status}`)
+          this.feedbackTarget.textContent = this.messagesValue.optionsError
+          return
         }
-
         const options = await response.json()
-        
+
         challenge = options.challenge
         timeout = options.timeout || 30000
         rpId = options.rpId
         allowCredentials = options.allowCredentials || []
-        
-        if (process.env.NODE_ENV !== 'production') {
-          console.log("Fetched WebAuthn options:", options)
-        }
-      } catch (error) {
-        console.error("Failed to fetch WebAuthn options:", error)
-        if (error.message.includes('404')) {
-          console.error("No security keys are registered for this account.")
-        } else {
-          console.error("Failed to get verification options. Please try again.")
-        }
+      }
+
+      if (!challenge) {
+        this.feedbackTarget.textContent = this.messagesValue.optionsError
         return
       }
-    }
 
-    if (!challenge) {
-      console.error("No challenge found after fetching")
-      console.error("Verification failed: No challenge provided.")
-      return
-    }
-
-    try {
-      const credentialOptions = {
-        challenge,
-        timeout,
-        rpId,
-        allowCredentials,
-        userVerification: "required"
-      }
-
-      // Use verification endpoint instead of options endpoint
-      const callbackUrl = '/two_factor_authentication/verify/webauthn'
-
-      // We pass `null` for the feedback element, since we now use the flash outlet
+      failureMessage = this.messagesValue.failed
       const result = await verifyWebAuthn(
-        credentialOptions,
-        callbackUrl,
-        null
+        { challenge, timeout, rpId, allowCredentials, userVerification: "required" },
+        this.verificationUrlValue,
+        this.feedbackTarget,
+        this.messagesValue
       )
-
-      if (result.success) {
-        if (process.env.NODE_ENV !== 'production') {
-          console.log("WebAuthn verification successful")
-        }
-        console.log("Security key verified successfully!")
-      } else {
-        console.error(result.message || "Security key verification failed")
-        if (process.env.NODE_ENV !== 'production') {
-          console.error("WebAuthn verification failed:", result.details)
-        }
-      }
+      if (result.success) this.feedbackTarget.textContent = this.messagesValue.verified
     } catch (error) {
-      console.error("WebAuthn verification error:", error)
-      console.error(`Error: ${error.message || "Something went wrong."}`)
+      console.error("Security-key verification could not be completed:", error)
+      if (this.hasFeedbackTarget) this.feedbackTarget.textContent = failureMessage
+    } finally {
+      button.disabled = false
+      button.setAttribute("aria-disabled", "false")
     }
   }
 
-  // Alternate entry point if you want to verify a key outside of the form flow
-  async verifyKey(options) {
-    try {
-      const result = await verifyWebAuthn(options, null, null)
-
-      if (result.success) {
-        if (this.hasVerificationButtonTarget) {
-          const button = this.verificationButtonTarget
-          button.textContent = "Verified"
-          button.disabled = true
-        }
-        console.log("Security key verified successfully!")
-      } else {
-        console.error(result.message || "Security key verification failed")
-        if (process.env.NODE_ENV !== 'production') {
-          console.error("Key verification error:", result.details)
-        }
-      }
-
-      return result
-    } catch (error) {
-      console.error("Key verification error:", error)
-      console.error(`Error: ${error.message || "Something went wrong."}`)
-      return { success: false, message: error.message }
-    }
-  }
 }
-
-// Apply target safety mixin
 
 export default CredentialAuthenticatorController

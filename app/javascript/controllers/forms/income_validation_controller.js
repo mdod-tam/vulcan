@@ -330,6 +330,5 @@ class IncomeValidationController extends Controller {
 
 }
 
-// Apply target safety mixin
 
 export default IncomeValidationController

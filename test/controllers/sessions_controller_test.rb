@@ -146,7 +146,7 @@ class SessionsControllerTest < ActionDispatch::IntegrationTest
     post sign_in_path, params: { email: user.email, password: 'password123' }
 
     assert_redirected_to verify_method_two_factor_authentication_path(type: 'sms')
-    assert_equal TwoFactor::SmsLoginChallenge::DUPLICATE_SEND_MESSAGE, flash[:notice]
+    assert_equal I18n.t('two_factor_verification.sms.sending', locale: :en), flash[:notice]
     assert_equal user.id, session[TwoFactorAuth::SESSION_KEYS[:temp_user_id]]
   end
 

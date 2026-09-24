@@ -1,228 +1,105 @@
-import ReportsChartController from 'controllers/charts/reports_chart_controller';
+import { Application } from '@hotwired/stimulus'
+import { Chart } from 'chart.js'
+import ChartController from 'controllers/charts/chart_controller'
 
-// Mock the global Chart object and its instance
-const mockChartInstance = {
-  destroy: jest.fn(),
-  update: jest.fn(),
-  data: {
-    labels: [],
-    datasets: [{ data: [] }, { data: [] }],
-  },
-};
-window.Chart = jest.fn().mockImplementation(() => mockChartInstance);
-window.requestAnimationFrame = (cb) => {
-  if (cb) cb();
-  return 1;
-};
+jest.mock('chart.js', () => ({
+  Chart: Object.assign(jest.fn().mockImplementation(() => ({ destroy: jest.fn() })), { register: jest.fn() })
+}))
 
-// JSDOM doesn't implement getContext, so we mock it.
-HTMLCanvasElement.prototype.getContext = () => ({
-  clearRect: () => {},
-  fillRect: () => {},
-});
+const settle = () => new Promise(resolve => setTimeout(resolve, 0))
+let application
 
-describe('ReportsChartController', () => {
-  let element;
-  let controller;
+async function mount(values = '') {
+  document.body.innerHTML = `<p id="description">The same counts are in the table.</p>
+    <div data-controller="chart" data-chart-data-value='{"Draft":"5","Approved":3,"Invalid":"x"}' ${values}>
+      <canvas data-chart-target="canvas" role="img" aria-label="Applications" aria-describedby="description"></canvas>
+    </div>`
+  application = Application.start()
+  application.register('chart', ChartController)
+  await settle()
+  return Chart.mock.calls.at(-1)[1]
+}
 
-  const currentSnapshot = { Draft: 5, 'In progress': 10, Approved: 3 };
-  const previousSnapshot = { Draft: 2, 'In progress': 8, Approved: 1 };
+beforeEach(() => Chart.mockClear())
+afterEach(async () => {
+  document.body.innerHTML = ''
+  await settle()
+  application.stop()
+  jest.restoreAllMocks()
+})
 
-  beforeEach(async () => {
-    jest.clearAllMocks();
+test('a construction failure does not cause a second error on disconnect', async () => {
+  const failure = new Error('Chart construction failed')
+  const handleError = jest.spyOn(Application.prototype, 'handleError').mockImplementation(() => {})
+  Chart.mockImplementationOnce(() => { throw failure })
+  await mount()
+  document.querySelector('[data-controller]').remove()
+  await settle()
+  expect(handleError.mock.calls.map(([error]) => error)).toEqual([failure])
+})
 
-    document.body.innerHTML = `
-      <p id="reports-chart-desc" class="sr-only">FY26 application status snapshot chart.</p>
-      <div
-        aria-describedby="reports-chart-desc"
-        data-reports-chart-current-data-value='${JSON.stringify(currentSnapshot)}'
-        data-reports-chart-previous-data-value='${JSON.stringify(previousSnapshot)}'
-        data-reports-chart-current-dataset-label-value="FY26"
-        data-reports-chart-previous-dataset-label-value="FY25"
-        data-reports-chart-type-value="bar"
-        data-reports-chart-title-value="FY26 Application Status Snapshot"
-      ></div>
-    `;
-    element = document.querySelector('div[data-reports-chart-current-data-value]');
+test('connects to the view canvas without replacing accessible markup', async () => {
+  const config = await mount('data-chart-title-value="Applications" data-chart-dataset-label-value="FY26"')
+  expect(Chart).toHaveBeenCalledTimes(1)
+  expect(Chart.mock.calls[0][0]).toBe(document.querySelector('canvas'))
+  expect(document.querySelector('canvas').getAttribute('aria-describedby')).toBe('description')
+  expect(document.getElementById('description').textContent).toContain('same counts')
+  expect(config.type).toBe('bar')
+  expect(config.data.labels).toEqual(['Draft', 'Approved', 'Invalid'])
+  expect(config.data.datasets[0]).toMatchObject({ label: 'FY26', data: [5, 3, 0] })
+  expect(config.options).toMatchObject({ responsive: true, maintainAspectRatio: false })
+  expect(config.options.events).toBeUndefined()
+  expect(config.options.plugins.title).toEqual({ display: true, text: 'Applications' })
+})
 
-    Object.defineProperty(element, 'clientWidth', { value: 400, configurable: true });
-    Object.defineProperty(element, 'clientHeight', { value: 300, configurable: true });
-    Object.defineProperty(element, 'offsetParent', { value: document.body, configurable: true });
-    element.getBoundingClientRect = () => ({ width: 400, height: 300, top: 0, left: 0, right: 400, bottom: 300 });
+test('aligns comparison values by category and retains all-zero comparisons', async () => {
+  const config = await mount(`data-chart-comparison-data-value='{"Approved":0,"Draft":0}'
+    data-chart-comparison-label-value="FY25"`)
+  expect(config.data.datasets[1]).toMatchObject({ label: 'FY25', data: [0, 0, 0] })
+})
 
-    controller = new ReportsChartController();
+test('formats currency for the numeric horizontal axis and tooltip', async () => {
+  const config = await mount('data-chart-index-axis-value="y" data-chart-format-value="currency" data-chart-y-axis-label-value="Amount in USD"')
+  expect(config.options.indexAxis).toBe('y')
+  expect(config.options.scales.x.ticks.callback(1200)).toBe('$1,200')
+  expect(config.options.scales.x.title).toEqual({ display: true, text: 'Amount in USD' })
+  expect(config.options.scales.y?.title).toBeUndefined()
+  expect(config.options.plugins.tooltip.callbacks.label({ dataset: { label: 'Total' }, raw: 1200 })).toBe('Total: $1,200')
+})
 
-    Object.defineProperty(controller, 'element', { value: element, configurable: true });
-    Object.defineProperty(controller, 'currentDataValue', {
-      value: JSON.parse(element.dataset.reportsChartCurrentDataValue),
-      configurable: true,
-      writable: true
-    });
-    Object.defineProperty(controller, 'previousDataValue', {
-      value: JSON.parse(element.dataset.reportsChartPreviousDataValue),
-      configurable: true,
-      writable: true
-    });
-    Object.defineProperty(controller, 'typeValue', { value: element.dataset.reportsChartTypeValue, configurable: true, writable: true });
-    Object.defineProperty(controller, 'titleValue', { value: element.dataset.reportsChartTitleValue, configurable: true, writable: true });
-    Object.defineProperty(controller, 'currentDatasetLabelValue', {
-      value: element.dataset.reportsChartCurrentDatasetLabelValue,
-      configurable: true,
-      writable: true
-    });
-    Object.defineProperty(controller, 'previousDatasetLabelValue', {
-      value: element.dataset.reportsChartPreviousDatasetLabelValue,
-      configurable: true,
-      writable: true
-    });
-    Object.defineProperty(controller, 'compactValue', { value: false, configurable: true, writable: true });
-    Object.defineProperty(controller, 'yAxisLabelValue', { value: '', configurable: true, writable: true });
+test('compact charts omit legend and title', async () => {
+  const config = await mount('data-chart-compact-value="true" data-chart-title-value="Activity"')
+  expect(config.options.plugins.legend.display).toBe(false)
+  expect(config.options.plugins.title.display).toBe(false)
+})
 
-    controller.connected = true;
-    await controller.initializeChart();
-  });
+test('empty and hidden charts construct eagerly', async () => {
+  const config = await mount('style="display:none"')
+  expect(config.data.datasets).toHaveLength(1)
+  const element = document.querySelector('[data-controller]')
+  element.remove()
+  await settle()
+  element.setAttribute('data-chart-data-value', '{}')
+  document.body.appendChild(element)
+  await settle()
+  expect(Chart.mock.calls.at(-1)[1].data.labels).toEqual([])
+})
 
-  it('creates a canvas and instantiates a chart', () => {
-    const canvas = element.querySelector('canvas');
-    expect(canvas).not.toBeNull();
-    expect(canvas.width).toBe(400);
-    expect(canvas.height).toBe(300);
-    expect(canvas.getAttribute('aria-describedby')).toBe('reports-chart-desc');
-    expect(window.Chart).toHaveBeenCalledTimes(1);
-    const config = window.Chart.mock.calls[0][1];
-    expect(config.data.datasets[0].label).toBe('FY26');
-    expect(config.data.datasets[1].label).toBe('FY25');
-    expect(config.options.events).toEqual([]);
-  });
-
-  it('destroys the chart instance on disconnect', () => {
-    controller.disconnect();
-    expect(mockChartInstance.destroy).toHaveBeenCalledTimes(1);
-  });
-
-  it('updates the chart when data values change', () => {
-    mockChartInstance.update.mockClear();
-
-    controller.currentDataValue = { Draft: 6, 'In progress': 11, Approved: 4 };
-    controller.currentDataValueChanged();
-
-    expect(mockChartInstance.update).toHaveBeenCalledWith('none');
-    expect(controller.chartInstance.data.datasets[0].data).toEqual([6, 11, 4]);
-  });
-
-  it('keeps a provided previous dataset when all previous values are zero', () => {
-    controller.previousDataValue = { Draft: 0, 'In progress': 0, Approved: 0 };
-    controller.recreateChart();
-
-    const lastCall = window.Chart.mock.calls[window.Chart.mock.calls.length - 1];
-    const config = lastCall[1];
-    expect(config.data.datasets).toHaveLength(2);
-    expect(config.data.datasets[1].label).toBe('FY25');
-    expect(config.data.datasets[1].data).toEqual([0, 0, 0]);
-  });
-
-  it('still initializes later charts when an earlier queued init fails', async () => {
-    ReportsChartController.initQueue = Promise.resolve();
-
-    const secondElement = document.createElement('div');
-    Object.assign(secondElement.dataset, {
-      reportsChartCurrentDataValue: JSON.stringify({ Created: 1 }),
-      reportsChartPreviousDataValue: JSON.stringify({}),
-      reportsChartTypeValue: 'bar',
-      reportsChartTitleValue: 'Second chart'
-    });
-    Object.defineProperty(secondElement, 'clientWidth', { value: 200, configurable: true });
-    Object.defineProperty(secondElement, 'clientHeight', { value: 150, configurable: true });
-    secondElement.getBoundingClientRect = () => ({
-      width: 200, height: 150, top: 0, left: 0, right: 200, bottom: 150
-    });
-    document.body.appendChild(secondElement);
-
-    const failingController = new ReportsChartController();
-    Object.defineProperty(failingController, 'element', { value: element, configurable: true });
-    Object.defineProperty(failingController, 'currentDataValue', {
-      value: currentSnapshot, configurable: true, writable: true
-    });
-    Object.defineProperty(failingController, 'previousDataValue', {
-      value: previousSnapshot, configurable: true, writable: true
-    });
-    Object.defineProperty(failingController, 'typeValue', { value: 'bar', configurable: true, writable: true });
-    Object.defineProperty(failingController, 'titleValue', { value: 'Fails', configurable: true, writable: true });
-    Object.defineProperty(failingController, 'compactValue', { value: false, configurable: true, writable: true });
-    Object.defineProperty(failingController, 'yAxisLabelValue', { value: '', configurable: true, writable: true });
-    failingController.connected = true;
-    failingController.renderChart = () => {
-      throw new Error('boom')
-    };
-
-    const secondController = new ReportsChartController();
-    Object.defineProperty(secondController, 'element', { value: secondElement, configurable: true });
-    Object.defineProperty(secondController, 'currentDataValue', {
-      value: { Created: 1 }, configurable: true, writable: true
-    });
-    Object.defineProperty(secondController, 'previousDataValue', {
-      value: {}, configurable: true, writable: true
-    });
-    Object.defineProperty(secondController, 'typeValue', { value: 'bar', configurable: true, writable: true });
-    Object.defineProperty(secondController, 'titleValue', { value: 'Second chart', configurable: true, writable: true });
-    Object.defineProperty(secondController, 'compactValue', { value: false, configurable: true, writable: true });
-    Object.defineProperty(secondController, 'yAxisLabelValue', { value: '', configurable: true, writable: true });
-    secondController.connected = true;
-
-    await failingController.initializeChart();
-    await secondController.initializeChart();
-
-    expect(secondElement.querySelector('canvas')).not.toBeNull();
-    expect(window.Chart.mock.calls.length).toBeGreaterThan(1);
-  });
-
-  it('does not render after disconnect while init is queued', async () => {
-    ReportsChartController.initQueue = Promise.resolve();
-
-    let rafCallback = null;
-    window.requestAnimationFrame = (cb) => {
-      rafCallback = cb;
-      return 1;
-    };
-
-    const pendingController = new ReportsChartController();
-    Object.defineProperty(pendingController, 'element', { value: element, configurable: true });
-    Object.defineProperty(pendingController, 'currentDataValue', {
-      value: currentSnapshot, configurable: true, writable: true
-    });
-    Object.defineProperty(pendingController, 'previousDataValue', {
-      value: previousSnapshot, configurable: true, writable: true
-    });
-    Object.defineProperty(pendingController, 'typeValue', { value: 'bar', configurable: true, writable: true });
-    Object.defineProperty(pendingController, 'titleValue', { value: 'Pending', configurable: true, writable: true });
-    Object.defineProperty(pendingController, 'compactValue', { value: false, configurable: true, writable: true });
-    Object.defineProperty(pendingController, 'yAxisLabelValue', { value: '', configurable: true, writable: true });
-    pendingController.connected = true;
-    pendingController.chartInstance = null;
-
-    const renderSpy = jest.spyOn(pendingController, 'renderChart');
-    const scheduleSpy = jest.spyOn(pendingController, 'scheduleInitialization');
-
-    const initPromise = pendingController.initializeChart();
-
-    while (!rafCallback) {
-      await Promise.resolve();
-    }
-
-    pendingController.disconnect();
-    expect(pendingController.connected).toBe(false);
-
-    rafCallback();
-    await initPromise;
-
-    expect(renderSpy).not.toHaveBeenCalled();
-    expect(scheduleSpy).not.toHaveBeenCalled();
-
-    renderSpy.mockRestore();
-    scheduleSpy.mockRestore();
-    window.requestAnimationFrame = (cb) => {
-      if (cb) cb();
-      return 1;
-    };
-  });
-});
+test('destroys every disconnected instance once across repeated reconnects', async () => {
+  await mount()
+  const element = document.querySelector('[data-controller]')
+  const canvas = element.querySelector('canvas')
+  for (let i = 0; i < 5; i++) {
+    const instance = Chart.mock.results.at(-1).value
+    element.remove()
+    await settle()
+    expect(instance.destroy).toHaveBeenCalledTimes(1)
+    document.body.appendChild(element)
+    await settle()
+    expect(element.querySelector('canvas')).toBe(canvas)
+  }
+  element.remove()
+  await settle()
+  expect(Chart).toHaveBeenCalledTimes(6)
+  Chart.mock.results.forEach(({ value }) => expect(value.destroy).toHaveBeenCalledTimes(1))
+})

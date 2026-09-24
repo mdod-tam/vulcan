@@ -42,6 +42,5 @@ class EvaluationManagementController extends Controller {
   }
 }
 
-// Apply target safety mixin
 
 export default EvaluationManagementController

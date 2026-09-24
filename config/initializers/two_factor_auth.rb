@@ -16,16 +16,6 @@ module TwoFactorAuth
     return_path: :two_factor_return_path
   }.freeze
 
-  # Error messages used across different 2FA methods
-  ERROR_MESSAGES = {
-    invalid_code: 'Invalid verification code. Please try again.',
-    expired_code: 'Verification code has expired. Please request a new one.',
-    missing_credential: 'No credential found for verification.',
-    webauthn_challenge_mismatch: 'Security verification failed. Please try again.',
-    verification_service_unavailable: "We're experiencing temporary issues verifying codes. Please try again.",
-    max_attempts_reached: 'Maximum attempts reached. Please request a new code.'
-  }.freeze
-
   # helper methods for session management
   def self.store_temp_user_id(session, user_id)
     session[SESSION_KEYS[:temp_user_id]] = user_id

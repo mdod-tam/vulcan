@@ -15,7 +15,7 @@ module VendorPortal
         redirect_to vendor_portal_dashboard_path
       else
         flash.now[:alert] = 'There was an error updating your profile'
-        render :edit
+        render :edit, status: :unprocessable_content
       end
     end
 

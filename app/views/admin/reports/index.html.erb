@@ -4,12 +4,12 @@
     <a href="#main-content" class="sr-only focus:not-sr-only focus:absolute focus:p-4 focus:bg-white focus:z-50">
       Skip to main content
     </a>
-    
+
     <div class="mb-6">
       <div class="flex justify-between items-center">
         <h1 class="text-3xl font-bold" id="page-title">System Reports</h1>
         <div class="flex gap-3">
-        <a href="<%= admin_application_analytics_pain_points_path %>" 
+        <a href="<%= admin_application_analytics_pain_points_path %>"
            class="inline-flex items-center px-4 py-2 border border-gray-300 rounded-md shadow-sm text-sm font-medium text-gray-700 bg-white hover:bg-gray-50 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-indigo-500"
            aria-label="View pain point analysis">
           Pain Point Analysis
@@ -57,23 +57,24 @@
               <dd class="text-sm font-medium text-gray-900" aria-labelledby="current-fy-heading"><%= @current_fy_draft_applications %></dd>
             </div>
           </dl>
-          
+
           <%# Current FY Applications Chart %>
           <div class="mt-4">
             <div style="position: relative; height: 200px; width: 100%;"
-                 data-controller="reports-chart" 
-                 data-reports-chart-current-data-value="<%= { 'Created' => @current_fy_applications, 'Draft' => @current_fy_draft_applications }.to_json %>"
-                 data-reports-chart-previous-data-value="<%= {}.to_json %>"
-                 data-reports-chart-type-value="bar"
-                 data-reports-chart-compact-value="true"
-                 data-reports-chart-title-value="Current FY Applications">
-              <div class="sr-only">
+                 data-controller="chart"
+                 data-chart-data-value="<%= { 'Created' => @current_fy_applications, 'Draft' => @current_fy_draft_applications }.to_json %>"
+                 data-chart-compact-value="true"
+                 data-chart-dataset-label-value="Current Fiscal Year"
+                 data-chart-title-value="Current FY Applications">
+              <canvas data-chart-target="canvas" role="img" aria-label="Current FY Applications" aria-describedby="current-fy-applications-desc"></canvas>
+              <div id="current-fy-applications-desc" class="sr-only">
                 Chart showing current fiscal year applications: <%= @current_fy_applications %> created and <%= @current_fy_draft_applications %> draft applications.
               </div>
             </div>
           </div>
+
         </div>
-        
+
         <!-- Previous FY Applications -->
         <div class="bg-gray-50 rounded p-4">
           <h3 id="previous-fy-heading" class="font-medium text-gray-700">Previous Fiscal Year (<%= @previous_fy_label %>)</h3>
@@ -87,32 +88,33 @@
               <dd class="text-sm font-medium text-gray-900" aria-labelledby="previous-fy-heading"><%= @previous_fy_draft_applications %></dd>
             </div>
           </dl>
-          
+
           <%# Previous FY Applications Chart %>
           <div class="mt-4">
             <div style="position: relative; height: 200px; width: 100%;"
-                 data-controller="reports-chart" 
-                 data-reports-chart-current-data-value="<%= { 'Created' => @previous_fy_applications, 'Draft' => @previous_fy_draft_applications }.to_json %>"
-                 data-reports-chart-previous-data-value="<%= {}.to_json %>"
-                 data-reports-chart-type-value="bar"
-                 data-reports-chart-compact-value="true"
-                 data-reports-chart-title-value="Previous FY Applications">
-              <div class="sr-only">
+                 data-controller="chart"
+                 data-chart-data-value="<%= { 'Created' => @previous_fy_applications, 'Draft' => @previous_fy_draft_applications }.to_json %>"
+                 data-chart-compact-value="true"
+                 data-chart-dataset-label-value="Previous Fiscal Year"
+                 data-chart-title-value="Previous FY Applications">
+              <canvas data-chart-target="canvas" role="img" aria-label="Previous FY Applications" aria-describedby="previous-fy-applications-desc"></canvas>
+              <div id="previous-fy-applications-desc" class="sr-only">
                 Chart showing previous fiscal year applications: <%= @previous_fy_applications %> created and <%= @previous_fy_draft_applications %> draft applications.
               </div>
             </div>
           </div>
+
         </div>
       </div>
-      
+
       <%# Applications Comparison Chart %>
       <div class="mt-4">
         <div style="position: relative; height: 300px; width: 100%;"
-             data-controller="reports-chart" 
-             data-reports-chart-current-data-value="<%= @applications_chart_data[:current].to_json %>"
-             data-reports-chart-previous-data-value="<%= @applications_chart_data[:previous].to_json %>"
-             data-reports-chart-type-value="bar"
-             data-reports-chart-title-value="Applications Comparison">
+             data-controller="chart"
+             data-chart-data-value="<%= @applications_chart_data[:current].to_json %>"
+             data-chart-comparison-data-value="<%= @applications_chart_data[:previous].to_json %>"
+             data-chart-title-value="Applications Comparison">
+          <canvas data-chart-target="canvas" role="img" aria-label="Applications Comparison" aria-describedby="chart-description-applications"></canvas>
           <div id="chart-description-applications" class="sr-only">
             This chart compares the number of applications created and draft applications between the current fiscal year and the previous fiscal year.
           </div>
@@ -125,7 +127,7 @@
         <p class="text-sm text-gray-500 mb-3">
           Distribution of disability types from submitted applications. Note: Applicants may select multiple disabilities.
         </p>
-        
+
         <div class="grid grid-cols-1 md:grid-cols-2 gap-4">
           <!-- Current FY Disabilities -->
           <div class="bg-gray-50 rounded p-4">
@@ -195,23 +197,23 @@
           <h4 class="sr-only" id="disability-comparison-chart-heading">Disability Type Comparison Chart</h4>
           <div style="position: relative; height: 300px; width: 100%;"
                aria-labelledby="disability-comparison-chart-heading disability-comparison-chart-desc"
-               data-controller="reports-chart" 
-               data-reports-chart-current-data-value="<%= { 
+               data-controller="chart"
+               data-chart-data-value="<%= {
                  'Hearing' => @current_fy_hearing_disability_count || 0,
                  'Vision' => @current_fy_vision_disability_count || 0,
                  'Speech' => @current_fy_speech_disability_count || 0,
                  'Mobility' => @current_fy_mobility_disability_count || 0,
                  'Cognition' => @current_fy_cognition_disability_count || 0
                }.to_json %>"
-               data-reports-chart-previous-data-value="<%= { 
+               data-chart-comparison-data-value="<%= {
                  'Hearing' => @previous_fy_hearing_disability_count || 0,
                  'Vision' => @previous_fy_vision_disability_count || 0,
                  'Speech' => @previous_fy_speech_disability_count || 0,
                  'Mobility' => @previous_fy_mobility_disability_count || 0,
                  'Cognition' => @previous_fy_cognition_disability_count || 0
                }.to_json %>"
-               data-reports-chart-type-value="bar"
-               data-reports-chart-title-value="Disability Type Comparison">
+               data-chart-title-value="Disability Type Comparison">
+            <canvas data-chart-target="canvas" role="img" aria-label="Disability Type Comparison" aria-describedby="disability-comparison-chart-desc"></canvas>
             <div id="disability-comparison-chart-desc" class="sr-only">
               Bar chart comparing disability types between current fiscal year (Hearing: <%= @current_fy_hearing_disability_count || 0 %>, Vision: <%= @current_fy_vision_disability_count || 0 %>, Speech: <%= @current_fy_speech_disability_count || 0 %>, Mobility: <%= @current_fy_mobility_disability_count || 0 %>, Cognition: <%= @current_fy_cognition_disability_count || 0 %>) and previous fiscal year (Hearing: <%= @previous_fy_hearing_disability_count || 0 %>, Vision: <%= @previous_fy_vision_disability_count || 0 %>, Speech: <%= @previous_fy_speech_disability_count || 0 %>, Mobility: <%= @previous_fy_mobility_disability_count || 0 %>, Cognition: <%= @previous_fy_cognition_disability_count || 0 %>).
             </div>
@@ -228,7 +230,7 @@
                rows: @equipment_by_type_rows,
                chart_data: @equipment_by_type_chart_data,
                error_message: @equipment_by_type_error %>
-    
+
     <%# Voucher Statistics Section %>
     <% if @vouchers_enabled %>
       <section aria-labelledby="voucher-statistics-heading" class="bg-white rounded-lg shadow p-6 mb-8">
@@ -254,23 +256,30 @@
               <dd class="text-sm font-medium text-gray-900" aria-labelledby="current-fy-vouchers-heading"><%= number_to_currency(@current_fy_voucher_value) %></dd>
             </div>
           </dl>
-          
+
           <%# Current FY Vouchers Chart %>
           <div class="mt-4">
             <div style="position: relative; height: 200px; width: 100%;"
-                 data-controller="reports-chart" 
-               data-reports-chart-current-data-value="<%= { 'Issued' => @current_fy_vouchers, 'Active' => @current_fy_active_vouchers || 0, 'Expired' => @current_fy_expired_vouchers || 0 }.to_json %>"
-               data-reports-chart-previous-data-value="<%= {}.to_json %>"
-                 data-reports-chart-type-value="bar"
-                 data-reports-chart-compact-value="true"
-                 data-reports-chart-title-value="Current FY Vouchers">
-              <div class="sr-only">
-                Chart showing current fiscal year vouchers: <%= @current_fy_vouchers %> issued, <%= @current_fy_active_vouchers || 0 %> active unredeemed, and <%= @current_fy_expired_vouchers || 0 %> expired vouchers.
+                 data-controller="chart"
+                 data-chart-data-value="<%= {
+                   'Issued' => @current_fy_vouchers,
+                   'Active' => @current_fy_active_vouchers || 0,
+                   'Expired' => @current_fy_expired_vouchers || 0
+                 }.to_json %>"
+                 data-chart-compact-value="true"
+                 data-chart-dataset-label-value="Current Fiscal Year"
+                 data-chart-title-value="Current FY Vouchers">
+              <canvas data-chart-target="canvas" role="img" aria-label="Current FY Vouchers" aria-describedby="current-fy-vouchers-desc"></canvas>
+              <div id="current-fy-vouchers-desc" class="sr-only">
+                Chart showing current fiscal year vouchers: <%= @current_fy_vouchers %> issued,
+                <%= @current_fy_active_vouchers || 0 %> active unredeemed, and
+                <%= @current_fy_expired_vouchers || 0 %> expired vouchers.
               </div>
             </div>
           </div>
+
         </div>
-        
+
         <div class="bg-gray-50 rounded p-4">
           <h3 id="previous-fy-vouchers-heading" class="font-medium text-gray-700">Previous Fiscal Year (<%= @previous_fy_label %>)</h3>
           <dl class="mt-2 grid grid-cols-1 gap-x-4 gap-y-2">
@@ -291,38 +300,45 @@
               <dd class="text-sm font-medium text-gray-900" aria-labelledby="previous-fy-vouchers-heading"><%= number_to_currency(@previous_fy_voucher_value) %></dd>
             </div>
           </dl>
-          
+
           <%# Previous FY Vouchers Chart %>
           <div class="mt-4">
             <div style="position: relative; height: 200px; width: 100%;"
-                 data-controller="reports-chart" 
-               data-reports-chart-current-data-value="<%= { 'Issued' => @previous_fy_vouchers, 'Active' => @previous_fy_active_vouchers || 0, 'Expired' => @previous_fy_expired_vouchers || 0 }.to_json %>"
-               data-reports-chart-previous-data-value="<%= {}.to_json %>"
-                 data-reports-chart-type-value="bar"
-                 data-reports-chart-compact-value="true"
-                 data-reports-chart-title-value="Previous FY Vouchers">
-              <div class="sr-only">
-                Chart showing previous fiscal year vouchers: <%= @previous_fy_vouchers %> issued, <%= @previous_fy_active_vouchers || 0 %> active unredeemed, and <%= @previous_fy_expired_vouchers || 0 %> expired vouchers.
+                 data-controller="chart"
+                 data-chart-data-value="<%= {
+                   'Issued' => @previous_fy_vouchers,
+                   'Active' => @previous_fy_active_vouchers || 0,
+                   'Expired' => @previous_fy_expired_vouchers || 0
+                 }.to_json %>"
+                 data-chart-compact-value="true"
+                 data-chart-dataset-label-value="Previous Fiscal Year"
+                 data-chart-title-value="Previous FY Vouchers">
+              <canvas data-chart-target="canvas" role="img" aria-label="Previous FY Vouchers" aria-describedby="previous-fy-vouchers-desc"></canvas>
+              <div id="previous-fy-vouchers-desc" class="sr-only">
+                Chart showing previous fiscal year vouchers: <%= @previous_fy_vouchers %> issued,
+                <%= @previous_fy_active_vouchers || 0 %> active unredeemed, and
+                <%= @previous_fy_expired_vouchers || 0 %> expired vouchers.
               </div>
             </div>
           </div>
+
         </div>
       </div>
-      
+
       <%# Vouchers Comparison Chart %>
       <div class="mt-4">
         <div style="position: relative; height: 300px; width: 100%;"
-             data-controller="reports-chart" 
-             data-reports-chart-current-data-value="<%= @vouchers_chart_data[:current].to_json %>"
-             data-reports-chart-previous-data-value="<%= @vouchers_chart_data[:previous].to_json %>"
-             data-reports-chart-type-value="bar"
-             data-reports-chart-title-value="Voucher Statistics Comparison">
+             data-controller="chart"
+             data-chart-data-value="<%= @vouchers_chart_data[:current].to_json %>"
+             data-chart-comparison-data-value="<%= @vouchers_chart_data[:previous].to_json %>"
+             data-chart-title-value="Voucher Statistics Comparison">
+          <canvas data-chart-target="canvas" role="img" aria-label="Voucher Statistics Comparison" aria-describedby="chart-description-vouchers"></canvas>
           <div id="chart-description-vouchers" class="sr-only">
             This chart compares voucher statistics between the current fiscal year and the previous fiscal year, including total vouchers issued, active unredeemed vouchers, and expired vouchers.
           </div>
         </div>
       </div>
-      
+
       <%# Voucher Value Chart %>
       <div class="mt-4 bg-gray-50 rounded p-4">
         <h4 class="font-medium text-gray-700 mb-2">Voucher Value Comparison</h4>
@@ -334,22 +350,23 @@
           <span class="text-sm text-gray-500">Previous FY Total Value:</span>
           <span class="text-sm font-medium text-gray-900"><%= number_to_currency(@previous_fy_voucher_value) %></span>
         </div>
-        
+
         <div style="position: relative; height: 300px; width: 100%;"
-             data-controller="reports-chart" 
-             data-reports-chart-current-data-value="<%= { 'Total Value' => @current_fy_voucher_value.to_f }.to_json %>"
-             data-reports-chart-previous-data-value="<%= { 'Total Value' => @previous_fy_voucher_value.to_f }.to_json %>"
-             data-reports-chart-type-value="bar"
-             data-reports-chart-y-axis-label-value="Value ($)"
-             data-reports-chart-title-value="Voucher Value Comparison">
-          <div class="sr-only">
+             data-controller="chart"
+             data-chart-data-value="<%= { 'Total Value' => @current_fy_voucher_value.to_f }.to_json %>"
+             data-chart-comparison-data-value="<%= { 'Total Value' => @previous_fy_voucher_value.to_f }.to_json %>"
+             data-chart-y-axis-label-value="Value ($)"
+             data-chart-format-value="currency"
+             data-chart-title-value="Voucher Value Comparison">
+          <canvas data-chart-target="canvas" role="img" aria-label="Voucher Value Comparison" aria-describedby="voucher-value-comparison-desc"></canvas>
+          <div id="voucher-value-comparison-desc" class="sr-only">
             Chart comparing voucher values: Current fiscal year: <%= number_to_currency(@current_fy_voucher_value) %>, Previous fiscal year: <%= number_to_currency(@previous_fy_voucher_value) %>.
           </div>
         </div>
       </div>
       </section>
     <% end %>
-    
+
     <%# Services Overview Section %>
     <section aria-labelledby="services-overview-heading" class="bg-white rounded-lg shadow p-6 mb-8">
       <h2 id="services-overview-heading" class="text-xl font-bold mb-4">Services Overview</h2>
@@ -366,23 +383,24 @@
               <dd class="text-sm font-medium text-gray-900" aria-labelledby="current-fy-services-heading"><%= @current_fy_evaluations %></dd>
             </div>
           </dl>
-          
+
           <%# Current FY Services Chart %>
           <div class="mt-4">
             <div style="position: relative; height: 200px; width: 100%;"
-                 data-controller="reports-chart" 
-                 data-reports-chart-current-data-value="<%= { 'Training' => @current_fy_trainings, 'Evaluation' => @current_fy_evaluations }.to_json %>"
-                 data-reports-chart-previous-data-value="<%= {}.to_json %>"
-                 data-reports-chart-type-value="bar"
-                 data-reports-chart-compact-value="true"
-                 data-reports-chart-title-value="Current FY Services">
-              <div class="sr-only">
+                 data-controller="chart"
+                 data-chart-data-value="<%= { 'Training' => @current_fy_trainings, 'Evaluation' => @current_fy_evaluations }.to_json %>"
+                 data-chart-compact-value="true"
+                 data-chart-dataset-label-value="Current Fiscal Year"
+                 data-chart-title-value="Current FY Services">
+              <canvas data-chart-target="canvas" role="img" aria-label="Current FY Services" aria-describedby="current-fy-services-desc"></canvas>
+              <div id="current-fy-services-desc" class="sr-only">
                 Chart showing current fiscal year services: <%= @current_fy_trainings %> training sessions and <%= @current_fy_evaluations %> evaluation sessions.
               </div>
             </div>
           </div>
+
         </div>
-        
+
         <div class="bg-gray-50 rounded p-4">
           <h3 id="previous-fy-services-heading" class="font-medium text-gray-700">Previous Fiscal Year (<%= @previous_fy_label %>)</h3>
           <dl class="mt-2 grid grid-cols-1 gap-x-4 gap-y-2">
@@ -395,21 +413,22 @@
               <dd class="text-sm font-medium text-gray-900" aria-labelledby="previous-fy-services-heading"><%= @previous_fy_evaluations %></dd>
             </div>
           </dl>
-          
+
           <%# Previous FY Services Chart %>
           <div class="mt-4">
             <div style="position: relative; height: 200px; width: 100%;"
-                 data-controller="reports-chart" 
-                 data-reports-chart-current-data-value="<%= { 'Training' => @previous_fy_trainings, 'Evaluation' => @previous_fy_evaluations }.to_json %>"
-                 data-reports-chart-previous-data-value="<%= {}.to_json %>"
-                 data-reports-chart-type-value="bar"
-                 data-reports-chart-compact-value="true"
-                 data-reports-chart-title-value="Previous FY Services">
-              <div class="sr-only">
+                 data-controller="chart"
+                 data-chart-data-value="<%= { 'Training' => @previous_fy_trainings, 'Evaluation' => @previous_fy_evaluations }.to_json %>"
+                 data-chart-compact-value="true"
+                 data-chart-dataset-label-value="Previous Fiscal Year"
+                 data-chart-title-value="Previous FY Services">
+              <canvas data-chart-target="canvas" role="img" aria-label="Previous FY Services" aria-describedby="previous-fy-services-desc"></canvas>
+              <div id="previous-fy-services-desc" class="sr-only">
                 Chart showing previous fiscal year services: <%= @previous_fy_trainings %> training sessions and <%= @previous_fy_evaluations %> evaluation sessions.
               </div>
             </div>
           </div>
+
         </div>
       </div>
 
@@ -480,7 +499,7 @@
           </div>
         </div>
       </div>
-      
+
       <%# Services Comparison Chart %>
       <div class="mt-4 bg-gray-50 rounded p-4">
         <h4 class="font-medium text-gray-700 mb-2">Services Comparison</h4>
@@ -494,20 +513,20 @@
             <span class="text-sm text-gray-700">Previous FY</span>
           </div>
         </div>
-        
+
         <div style="position: relative; height: 300px; width: 100%;"
-             data-controller="reports-chart" 
-             data-reports-chart-current-data-value="<%= @services_chart_data[:current].to_json %>"
-             data-reports-chart-previous-data-value="<%= @services_chart_data[:previous].to_json %>"
-             data-reports-chart-type-value="bar"
-             data-reports-chart-title-value="Services Comparison">
+             data-controller="chart"
+             data-chart-data-value="<%= @services_chart_data[:current].to_json %>"
+             data-chart-comparison-data-value="<%= @services_chart_data[:previous].to_json %>"
+             data-chart-title-value="Services Comparison">
+          <canvas data-chart-target="canvas" role="img" aria-label="Services Comparison" aria-describedby="chart-description-services"></canvas>
           <div id="chart-description-services" class="sr-only">
             This chart compares training sessions and evaluation sessions between the current fiscal year and the previous fiscal year.
           </div>
         </div>
       </div>
     </section>
-    
+
     <%# Vendor Activity Section %>
     <% if @vouchers_enabled %>
       <section aria-labelledby="vendor-activity-heading" class="bg-white rounded-lg shadow p-6 mb-8">
@@ -525,23 +544,23 @@
               <dd class="text-sm font-medium text-gray-900" aria-labelledby="vendor-summary-heading"><%= @recent_active_vendors %></dd>
             </div>
           </dl>
-          
+
           <%# Vendor Activity Bar Chart (instead of pie) %>
           <div class="mt-4">
             <div style="position: relative; height: 200px; width: 100%;"
-                 data-controller="reports-chart" 
-                 data-reports-chart-current-data-value="<%= { 'Recent' => @recent_active_vendors, 'Other' => (@active_vendors - @recent_active_vendors) }.to_json %>"
-                 data-reports-chart-previous-data-value="<%= {}.to_json %>"
-                 data-reports-chart-type-value="bar"
-                 data-reports-chart-compact-value="true"
-                 data-reports-chart-title-value="Vendor Activity">
-              <div class="sr-only">
+                 data-controller="chart"
+                 data-chart-data-value="<%= { 'Recent' => @recent_active_vendors, 'Other' => (@active_vendors - @recent_active_vendors) }.to_json %>"
+                 data-chart-comparison-data-value="<%= {}.to_json %>"
+                 data-chart-compact-value="true"
+                 data-chart-title-value="Vendor Activity">
+              <canvas data-chart-target="canvas" role="img" aria-label="Vendor Activity" aria-describedby="vendor-activity-desc"></canvas>
+              <div id="vendor-activity-desc" class="sr-only">
                 Chart showing vendor activity: <%= @recent_active_vendors %> vendors active in the last month out of <%= @active_vendors %> total active vendors.
               </div>
             </div>
           </div>
         </div>
-        
+
         <div class="bg-gray-50 rounded p-4">
           <h3 id="vendor-details-heading" class="font-medium text-gray-700 mb-2">Vendor Activity Details</h3>
           <p class="text-sm text-gray-500 mb-4">
@@ -551,7 +570,7 @@
               <%= @recent_active_vendors %> out of <%= @active_vendors %> vendors (<%= number_to_percentage((@recent_active_vendors.to_f / @active_vendors) * 100, precision: 1) %>) have had transactions in the last 30 days.
             <% end %>
           </p>
-          
+
           <div class="flex flex-col space-y-2">
             <div class="flex items-center">
               <span class="inline-block w-3 h-3 bg-indigo-600 rounded-full mr-2" aria-hidden="true"></span>
@@ -566,7 +585,7 @@
       </div>
       </section>
     <% end %>
-    
+
     <%= render 'mfr_section' %>
 
     <%# Referral Origin Section %>
@@ -652,11 +671,11 @@
         <% if @referral_ytd_data&.any? %>
           <div style="position: relative; height: 300px; width: 100%;"
                aria-labelledby="referral-ytd-chart-heading referral-ytd-chart-desc"
-               data-controller="reports-chart" 
-               data-reports-chart-current-data-value="<%= @referral_ytd_data.to_json %>"
-               data-reports-chart-previous-data-value="<%= {}.to_json %>"
-               data-reports-chart-type-value="bar"
-               data-reports-chart-title-value="Referral Sources (YTD)">
+               data-controller="chart"
+               data-chart-data-value="<%= @referral_ytd_data.to_json %>"
+               data-chart-comparison-data-value="<%= {}.to_json %>"
+               data-chart-title-value="Referral Sources (YTD)">
+            <canvas data-chart-target="canvas" role="img" aria-label="Referral Sources (YTD)" aria-describedby="referral-ytd-chart-desc"></canvas>
             <div id="referral-ytd-chart-desc" class="sr-only">
               Bar chart showing referral sources for the current fiscal year to date: <%= @referral_ytd_data.map { |k, v| "#{k}: #{v}" }.join(', ') %>.
             </div>

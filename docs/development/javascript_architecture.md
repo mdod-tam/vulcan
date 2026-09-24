@@ -15,7 +15,6 @@ The server re-decides anything the browser decided.
 - **Assets are built, not served from source.** [esbuild](../../esbuild.config.js) bundles `app/javascript/application.js` into `app/assets/builds` (`yarn build`); Tailwind is `yarn build:css`.
 - **Views own URLs and copy.** Controllers read them from values rather than constructing paths, which is why templates pass `:id` placeholder routes for URLs a controller will need after a record exists.
 - **Both attachment syntaxes are in use** — literal `data-controller` attributes and ERB `data:` hashes — so a grep for one finds roughly half the call sites.
-- `debug` is dynamically imported in development only.
 
 ## Autosave, as a representative interaction
 
@@ -30,13 +29,15 @@ Two behaviors are not visible from the controller alone:
 
 [`services/rails_request.js`](../../app/javascript/services/rails_request.js) wraps `@rails/request.js`. `perform()` has three outcomes, not two: `{ success: true, data, response }`, `{ success: false, aborted: true }` on cancellation, and a thrown `RequestError` carrying `status` and `data` for a non-OK response.
 
-Requests are tracked by `key`, and reusing an in-flight key cancels the earlier request — autosave uses a single key per form, so rapid edits collapse to the last one. Cancellation is client-side only; the server may have already committed, so ordering-sensitive controllers still need their own staleness check.
+Requests with a `key` are tracked, and reusing an in-flight key cancels the earlier request. Autosave uses a single key per form, so overlapping saves cancel the earlier client request. Cancellation is client-side only; the server may have already committed, so ordering-sensitive controllers still own their ordering and stale-response checks.
 
-`tryShowFlash` is a no-op that returns `false` — a leftover from a removed toast library. Failed requests need their own visible feedback, via the [flash container](../../app/views/shared/_flash.html.erb) or inline status text.
+Failed requests need caller-owned visible feedback, via the [flash container](../../app/views/shared/_flash.html.erb) or inline status text. Parsing consumes the installed library’s `FetchResponse` status and cached JSON/text promises, including a Turbo Stream body already read by the library. Only the request that owns the current key may remove its cancellation handle.
 
-`BaseFormController#collectFormData` ([base/form_controller.js](../../app/javascript/controllers/base/form_controller.js)) flattens `FormData` into literal keys: `constituent[email]` stays that string rather than nesting. Names ending in `[]` become arrays under the unbracketed name.
+[`admin-user-search`](../../app/javascript/controllers/admin/user_search_controller.js) is a concrete Stimulus controller. Its input action schedules one trailing search after 300 ms; clearing results, selection, and disconnect cancel queued searches. Adult and guardian roles retain separate frames and picker outlets.
 
-Server-rendered HTML goes through Turbo frames and streams. Authentication and a few lookups still call `fetch` directly and keep their own response contracts.
+Guardian creation collects the current `guardian_attributes` fields, no-contact flags, and review choice/receipt directly. It owns required-field feedback and retry controls. Rails returns a 422 HTML review fragment or JSON containing `user`; the controller selects that returned guardian. No generic form base intercepts the surrounding paper form.
+
+Server-rendered HTML goes through Turbo frames and streams. Authentication and a few lookups still call `fetch` directly and keep their own response contracts. Security-key verification reads its URL and translated feedback from the view; recognized server error codes select local messages, and unknown failures use generic retry guidance. `Auth` and WebAuthn are module imports, not window globals.
 
 ## Submit gating
 
@@ -74,13 +75,23 @@ Form length hints should track [the server validation](../../app/models/concerns
 
 ## Charts
 
-Chart.js is tree-shaken and registered in [`application.js`](../../app/javascript/application.js), exposed as `window.Chart`, with animation, responsiveness, and aspect-ratio maintenance disabled globally. [`ChartBaseController`](../../app/javascript/controllers/charts/base_controller.js) sets explicit canvas dimensions from the container, falling back to the parent and then 400×300, and destroys instances on disconnect.
+[`chart_controller.js`](../../app/javascript/controllers/charts/chart_controller.js) imports Chart.js and registers only bar-chart components. It remains part of the single application bundle. Views provide a canvas inside a relatively positioned container with a fixed height, plus stable accessible labels and text descriptions.
 
-The reason for the fixed sizing is that a chart in a hidden container measures zero: [`reports-chart`](../../app/javascript/controllers/charts/reports_chart_controller.js) queues initialization across animation frames until measurable, and [`chart-toggle`](../../app/javascript/controllers/charts/toggle_controller.js) announces visibility changes. Patching `getComputedStyle` is a known dead end — Chart.js also calls it for tooltip and hover positioning.
+`connect()` constructs one responsive chart from the primary and optional comparison data. `disconnect()` destroys it. Chart.js handles container resizing and device-pixel-ratio changes; the controller does not measure, replace, defer, or poll canvases. Horizontal bars use `indexAxis: "y"`. Tooltips and normal Chart.js interactions remain enabled.
+
+The optional `yAxisLabel` titles the numeric value axis: Y for vertical bars, X for horizontal bars.
+
+Comparison data must use the primary data's category keys; the controller derives labels from the primary data.
+
+Do not patch `getComputedStyle`: Chart.js uses real element measurements for hover and tooltip positioning, so zero-size stubs can break interactions.
+
+The vendor chart is constructed while hidden. [`chart-toggle`](../../app/javascript/controllers/charts/toggle_controller.js) only toggles its region and button state; Chart.js resizes the canvas when revealed. Reports retain all existing visualizations, including the six compact fiscal-year charts, their numeric cards, and consolidated comparisons.
+
+If either `RAILS_ENV` or `NODE_ENV` is `production`, builds are minified and omit source maps; development builds retain them. Production also excludes the unused Turbo and Stimulus gem assets, including their source maps, because esbuild bundles these libraries. The shared debounce utility provides trailing calls and cancellation for controller teardown.
 
 ## Tests
 
-Jest on jsdom ([jest.config.js](../../jest.config.js)), with `@rails/request.js` mapped to a [mock](../../test/javascript/mocks/rails_request.js) and `controllers/*` resolving into `app/javascript/controllers`.
+Jest on jsdom ([jest.config.js](../../jest.config.js)), with `@rails/request.js` mapped to a [mock](../../test/javascript/mocks/rails_request.js) by default and `controllers/*` resolving into `app/javascript/controllers`. Request contract tests load the installed library directly and replace only network responses.
 
 ```bash
 yarn test test/javascript/controllers/final_submit_gate_controller_test.js

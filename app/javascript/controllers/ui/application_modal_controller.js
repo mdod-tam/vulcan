@@ -1,26 +1,12 @@
 import { Controller } from "@hotwired/stimulus"
 
 class ApplicationModalController extends Controller {
-  connect() {
-    // Store bound function as instance property for proper cleanup
-    this.boundHandleFormSubmit = this.handleFormSubmit.bind(this)
-    // Listen for Turbo form submissions within modals
-    this.element.addEventListener("turbo:submit-end", this.boundHandleFormSubmit)
-  }
-
-  disconnect() {
-    // Remove listener using the same bound function reference
-    this.element.removeEventListener("turbo:submit-end", this.boundHandleFormSubmit)
-  }
-
   handleFormSubmit(event) {
-    // If form submission was successful, close the modal and reload the page
     if (event.detail.success) {
       const dialog = event.target.closest("dialog")
       if (dialog) {
         dialog.close()
-        // Reload the page to reflect changes
-        window.location.reload()
+        Turbo.visit(window.location.href, { action: "replace" })
       }
     }
   }

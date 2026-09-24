@@ -11,11 +11,9 @@ import AddCredentialController from "./auth/add_credential_controller"
 import CredentialAuthenticatorController from "./auth/credential_authenticator_controller"
 import TotpFormController from "./auth/totp_form_controller"
 
-// Chart Controllers - registered synchronously to ensure Stimulus can connect them
-// Note: Chart.js is loaded in application.js, so no additional bundle cost
+// Chart Controllers
 import ChartController from "./charts/chart_controller"
 import ChartToggleController from "./charts/toggle_controller"
-import ReportsChartController from "./charts/reports_chart_controller"
 
 // Form Controllers
 import ApplicationFormController from "./forms/application_form_controller"
@@ -26,7 +24,6 @@ import ContactFeedbackController from "./forms/contact_feedback_controller"
 import CurrencyFormatterController from "./forms/currency_formatter_controller"
 import DateRangeController from "./forms/date_range_controller"
 import DependentFieldsController from "./forms/dependent_fields_controller"
-import DependentSelectorController from "./forms/dependent_selector_controller"
 import IncomeValidationController from "./forms/income_validation_controller"
 import FinalSubmitGateController from "./forms/final_submit_gate_controller"
 import PaperApplicationController from "./forms/paper_application_controller"
@@ -46,7 +43,6 @@ import ErrorSummaryController from "./ui/error_summary_controller"
 import MobileMenuController from "./ui/mobile_menu_controller"
 import ModalController from "./ui/modal_controller"
 import PdfLoaderController from "./ui/pdf_loader_controller"
-import ReportsToggleController from "./ui/reports_toggle_controller"
 import UploadController from "./ui/upload_controller"
 import VisibilityController from "./ui/visibility_controller"
 import StreamReadyController from "./ui/stream_ready_controller"
@@ -56,14 +52,6 @@ import AdultPickerController from "./users/adult_picker_controller"
 import ApplicantTypeController from "./users/applicant_type_controller"
 import DocumentProofHandlerController from "./users/document_proof_handler_controller"
 import GuardianPickerController from "./users/guardian_picker_controller"
-
-// Development-only imports
-if (process.env?.NODE_ENV === "development") {
-  import("./debug_controller").then(module => {
-    application.register("debug", module.default)
-  })
-}
-
 
 // Admin Controllers
 application.register("role-select", RoleSelectController)
@@ -79,7 +67,6 @@ application.register("totp-form", TotpFormController)
 // Chart Controllers
 application.register("chart", ChartController)
 application.register("chart-toggle", ChartToggleController)
-application.register("reports-chart", ReportsChartController)
 
 // Form Controllers
 application.register("application-form", ApplicationFormController)
@@ -90,7 +77,6 @@ application.register("contact-feedback", ContactFeedbackController)
 application.register("currency-formatter", CurrencyFormatterController)
 application.register("date-range", DateRangeController)
 application.register("dependent-fields", DependentFieldsController)
-application.register("dependent-selector", DependentSelectorController)
 application.register("income-validation", IncomeValidationController)
 application.register("final-submit-gate", FinalSubmitGateController)
 application.register("paper-application", PaperApplicationController)
@@ -110,7 +96,6 @@ application.register("error-summary", ErrorSummaryController)
 application.register("mobile-menu", MobileMenuController)
 application.register("modal", ModalController)
 application.register("pdf-loader", PdfLoaderController)
-application.register("reports-toggle", ReportsToggleController)
 application.register("upload", UploadController)
 application.register("visibility", VisibilityController)
 application.register("stream-ready", StreamReadyController)

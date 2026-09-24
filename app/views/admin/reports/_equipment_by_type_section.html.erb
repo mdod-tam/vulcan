@@ -63,13 +63,13 @@
 
       <div class="mt-4" style="position: relative; height: 300px; width: 100%;"
            aria-describedby="equipment-by-type-chart-desc"
-           data-controller="reports-chart"
-           data-reports-chart-current-data-value="<%= chart_data[:non_voucher].to_json %>"
-           data-reports-chart-previous-data-value="<%= (vouchers_enabled ? chart_data[:voucher] : {}).to_json %>"
-           data-reports-chart-current-dataset-label-value="<%= non_voucher_label %>"
-           data-reports-chart-previous-dataset-label-value="<%= vouchers_enabled ? voucher_label : '' %>"
-           data-reports-chart-type-value="bar"
-           data-reports-chart-title-value="Equipment by Type">
+           data-controller="chart"
+           data-chart-data-value="<%= chart_data[:non_voucher].to_json %>"
+           data-chart-comparison-data-value="<%= (vouchers_enabled ? chart_data[:voucher] : {}).to_json %>"
+           data-chart-dataset-label-value="<%= non_voucher_label %>"
+           data-chart-comparison-label-value="<%= vouchers_enabled ? voucher_label : '' %>"
+           data-chart-title-value="Equipment by Type">
+        <canvas data-chart-target="canvas" role="img" aria-label="Equipment by Type" aria-describedby="equipment-by-type-chart-desc"></canvas>
         <div id="equipment-by-type-chart-desc" class="sr-only">
           Bar chart showing equipment counts by device type for <%= period_label %>.
         </div>

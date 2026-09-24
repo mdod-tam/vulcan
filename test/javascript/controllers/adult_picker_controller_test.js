@@ -11,10 +11,6 @@ jest.mock("../../../app/javascript/utils/visibility", () => ({
   setFieldValue: jest.fn()
 }))
 
-jest.mock("../../../app/javascript/utils/debounce", () => ({
-  debouncedDispatch: jest.fn()
-}))
-
 import { setFieldValue, setVisible } from "../../../app/javascript/utils/visibility"
 
 describe("AdultPickerController", () => {

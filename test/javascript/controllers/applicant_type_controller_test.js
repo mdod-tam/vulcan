@@ -22,7 +22,7 @@ jest.mock('../../../app/javascript/utils/visibility', () => ({
 
 // Mock the debounce utility
 jest.mock('../../../app/javascript/utils/debounce', () => ({
-  createVeryShortDebounce: jest.fn((fn) => {
+  debounce: jest.fn((fn) => {
     const debouncedFn = fn
     debouncedFn.cancel = jest.fn()
     return debouncedFn

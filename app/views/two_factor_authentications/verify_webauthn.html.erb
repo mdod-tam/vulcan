@@ -1,8 +1,8 @@
 <div class="max-w-md mx-auto px-4 py-8">
   <div class="bg-white rounded-lg shadow-md p-8">
     <div class="text-center mb-8">
-      <h1 class="text-2xl font-bold text-gray-800">Device or Security Key Verification</h1>
-      <p class="mt-3 text-gray-600">Use your device (fingerprint or face) or a physical security key to complete sign-in.</p>
+      <h1 class="text-2xl font-bold text-gray-800"><%= t('security_key_verification.page.heading') %></h1>
+      <p class="mt-3 text-gray-600"><%= t('security_key_verification.page.intro') %></p>
     </div>
 
     <div class="bg-blue-50 rounded-lg p-6 mb-6">
@@ -13,20 +13,20 @@
           </svg>
         </div>
         <div class="ml-3">
-          <h3 class="text-sm font-medium text-blue-800">Other ways to verify:</h3>
+          <h3 class="text-sm font-medium text-blue-800"><%= t('security_key_verification.page.other_methods') %></h3>
           <div class="mt-2 space-y-1">
             <p class="text-sm text-blue-700 flex items-center">
               <svg class="h-4 w-4 mr-1" fill="currentColor" viewBox="0 0 20 20" xmlns="http://www.w3.org/2000/svg">
                 <path fill-rule="evenodd" d="M6.267 3.455a3.066 3.066 0 001.745-.723 3.066 3.066 0 013.976 0 3.066 3.066 0 001.745.723 3.066 3.066 0 012.812 2.812c.051.643.304 1.254.723 1.745a3.066 3.066 0 010 3.976 3.066 3.066 0 00-.723 1.745 3.066 3.066 0 01-2.812 2.812 3.066 3.066 0 00-1.745.723 3.066 3.066 0 01-3.976 0 3.066 3.066 0 00-1.745-.723 3.066 3.066 0 01-2.812-2.812 3.066 3.066 0 00-.723-1.745 3.066 3.066 0 010-3.976 3.066 3.066 0 00.723-1.745 3.066 3.066 0 012.812-2.812zm7.44 5.252a1 1 0 00-1.414-1.414L9 10.586 7.707 9.293a1 1 0 00-1.414 1.414l2 2a1 1 0 001.414 0l4-4z" clip-rule="evenodd"></path>
               </svg>
-              Device or Security Key
+              <%= t('security_key_verification.page.key_name') %>
             </p>
             <% if @totp_enabled %>
               <p class="text-sm text-blue-700 flex items-center">
                 <svg class="h-4 w-4 mr-1" fill="currentColor" viewBox="0 0 20 20" xmlns="http://www.w3.org/2000/svg">
                   <path fill-rule="evenodd" d="M10 18a8 8 0 100-16 8 8 0 000 16zm1-12a1 1 0 10-2 0v4a1 1 0 00.293.707l2.828 2.829a1 1 0 101.415-1.415L11 9.586V6z" clip-rule="evenodd"></path>
                 </svg>
-                Authenticator app
+                <%= t('security_key_verification.page.totp_name') %>
               </p>
             <% end %>
             <% if @sms_enabled %>
@@ -34,7 +34,7 @@
                 <svg class="h-4 w-4 mr-1" fill="currentColor" viewBox="0 0 20 20" xmlns="http://www.w3.org/2000/svg">
                   <path d="M2 3a1 1 0 011-1h2.153a1 1 0 01.986.836l.74 4.435a1 1 0 01-.54 1.06l-1.548.773a11.037 11.037 0 006.105 6.105l.774-1.548a1 1 0 011.059-.54l4.435.74a1 1 0 01.836.986V17a1 1 0 01-1 1h-2C7.82 18 2 12.18 2 5V3z"></path>
                 </svg>
-                Text message
+                <%= t('security_key_verification.page.sms_name') %>
               </p>
             <% end %>
           </div>
@@ -42,7 +42,11 @@
       </div>
     </div>
 
-    <div data-controller="credential-authenticator">
+    <div data-controller="credential-authenticator"
+         data-credential-authenticator-verification-url-value="<%= process_verification_two_factor_authentication_path(type: 'webauthn') %>"
+         data-credential-authenticator-messages-value="<%= t('security_key_verification.feedback').merge(
+                                                             user_session: t('two_factor_verification.errors.user_session')
+                                                           ).to_json %>">
       <%= form_with url: verification_options_two_factor_authentication_path(type: 'webauthn'),
         method: :get,
         local: true,
@@ -57,28 +61,28 @@
             </svg>
           </div>
           <div>
-            <h3 class="text-lg font-medium text-gray-900">Device or Security Key</h3>
-            <p class="text-sm text-gray-500">Use your registered device or security key to verify your identity</p>
+            <h3 class="text-lg font-medium text-gray-900"><%= t('security_key_verification.page.key_name') %></h3>
+            <p class="text-sm text-gray-500"><%= t('security_key_verification.page.key_description') %></p>
           </div>
         </div>
         
         <div class="mt-4">
           <ol class="text-sm text-gray-600 space-y-2 ml-4 list-decimal">
             <li>
-              Get ready to verify.
+              <%= t('security_key_verification.page.prepare') %>
               <% if @platform_key_available %>
-                Your device can use fingerprint, face, or PIN.
+                <%= t('security_key_verification.page.prepare_platform') %>
               <% else %>
-                If you use a physical key, insert it now.
+                <%= t('security_key_verification.page.prepare_key') %>
               <% end %>
             </li>
-            <li>Click the button below.</li>
+            <li><%= t('security_key_verification.page.click_button') %></li>
             <li>
-              Follow the on-screen prompt.
+              <%= t('security_key_verification.page.follow_prompt') %>
               <% if @platform_key_available %>
-                You may be asked for fingerprint, face, or PIN.
+                <%= t('security_key_verification.page.prompt_platform') %>
               <% else %>
-                You may be asked to tap your security key.
+                <%= t('security_key_verification.page.prompt_key') %>
               <% end %>
             </li>
           </ol>
@@ -88,10 +92,16 @@
           <button type="button"
                   data-credential-authenticator-target="verificationButton"
                   data-action="click->credential-authenticator#startVerification"
-                  class="inline-flex justify-center items-center px-4 py-2 border border-transparent text-sm font-medium rounded-md shadow-sm text-white bg-indigo-600 hover:bg-indigo-700 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-indigo-500">
-            Verify with Device or Security Key
+                  aria-describedby="security-key-feedback"
+                  aria-disabled="false"
+                  class="inline-flex justify-center items-center px-4 py-2 border border-transparent text-sm font-medium rounded-md shadow-sm text-white bg-indigo-600 hover:bg-indigo-700 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-indigo-500 disabled:opacity-50">
+            <%= t('security_key_verification.page.submit') %>
           </button>
         </div>
+        <p id="security-key-feedback"
+           data-credential-authenticator-target="feedback"
+           role="status" aria-live="polite" aria-atomic="true"
+           class="mt-4 text-sm text-gray-700"></p>
       </div>
       <% end %>
     </div>
@@ -99,12 +109,12 @@
     <div class="mt-4 flex justify-between">
       <div>
         <% if @totp_enabled %>
-          <%= link_to "Use Authenticator App Instead", verify_method_two_factor_authentication_path(type: 'totp'), class: "text-sm text-indigo-600 hover:text-indigo-900" %>
+          <%= link_to t('two_factor_verification.common.use_totp'), verify_method_two_factor_authentication_path(type: 'totp'), class: "text-sm text-indigo-600 hover:text-indigo-900" %>
         <% end %>
       </div>
       <div>
         <% if @sms_enabled %>
-          <%= button_to "Use Text Message Instead",
+          <%= button_to t('two_factor_verification.common.use_sms'),
               select_sms_verification_two_factor_authentication_path,
               method: :post,
               form: { class: "inline" },
@@ -114,7 +124,7 @@
     </div>
 
     <div class="mt-6 text-center">
-      <%= link_to "I've lost my security key", lost_security_key_path, class: "text-sm text-gray-500 hover:text-gray-700" %>
+      <%= link_to t('security_key_verification.page.lost_key'), lost_security_key_path, class: "text-sm text-gray-500 hover:text-gray-700" %>
     </div>
   </div>
 </div>

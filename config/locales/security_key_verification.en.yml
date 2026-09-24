@@ -1,0 +1,34 @@
+en:
+  security_key_verification:
+    feedback:
+      preparing: "Preparing verification. Follow your device or security key prompt."
+      verified: "Security key verified. Signing you in…"
+      optionsError: "Could not start verification. Try again, or use another verification method."
+      failed: &verification_failed "Verification failed. Try again, or use another verification method."
+      timedOut: "Verification timed out. Please try again."
+      networkError: "Could not connect. Check your connection and try again."
+      NotAllowedError: "Verification was cancelled or timed out. Please try again."
+      NotSupportedError: "Your browser or device does not support this security key. Use another verification method."
+      SecurityError: "Your browser blocked verification. Use another verification method."
+      AbortError: "Verification was interrupted. Please try again."
+      InvalidStateError: "Your security key is not ready. Reconnect it and try again, or use another verification method."
+      # These keys match server error_code values consumed by Auth.handleResponse.
+      verification_failed: *verification_failed
+      session_failed: "Verification succeeded, but sign-in could not be completed. Please sign in again."
+    page:
+      heading: "Device or Security Key Verification"
+      intro: "Use your device (fingerprint or face) or a physical security key to complete sign-in."
+      other_methods: "Other ways to verify:"
+      key_name: "Device or Security Key"
+      totp_name: "Authenticator app"
+      sms_name: "Text message"
+      key_description: "Use your registered device or security key to verify your identity"
+      prepare: "Get ready to verify."
+      prepare_platform: "Your device can use fingerprint, face, or PIN."
+      prepare_key: "If you use a physical key, insert it now."
+      click_button: "Click the button below."
+      follow_prompt: "Follow the on-screen prompt."
+      prompt_platform: "You may be asked for fingerprint, face, or PIN."
+      prompt_key: "You may be asked to tap your security key."
+      submit: "Verify with Device or Security Key"
+      lost_key: "I've lost my security key"

@@ -1,0 +1,33 @@
+es:
+  security_key_verification:
+    feedback:
+      preparing: "Preparando la verificación. Siga las instrucciones de su dispositivo o llave de seguridad."
+      verified: "Llave de seguridad verificada. Iniciando sesión…"
+      optionsError: "No se pudo iniciar la verificación. Inténtelo de nuevo o use otro método de verificación."
+      failed: &verification_failed "La verificación falló. Inténtelo de nuevo o use otro método de verificación."
+      timedOut: "Se agotó el tiempo de verificación. Inténtelo de nuevo."
+      networkError: "No se pudo conectar. Revise su conexión e inténtelo de nuevo."
+      NotAllowedError: "La verificación se canceló o se agotó el tiempo. Inténtelo de nuevo."
+      NotSupportedError: "Su navegador o dispositivo no admite esta llave de seguridad. Use otro método de verificación."
+      SecurityError: "Su navegador bloqueó la verificación. Use otro método de verificación."
+      AbortError: "La verificación se interrumpió. Inténtelo de nuevo."
+      InvalidStateError: "Su llave de seguridad no está lista. Vuelva a conectarla e inténtelo de nuevo, o use otro método de verificación."
+      verification_failed: *verification_failed
+      session_failed: "La verificación se completó correctamente, pero no se pudo iniciar sesión. Vuelva a iniciar sesión."
+    page:
+      heading: "Verificación con dispositivo o llave de seguridad"
+      intro: "Use su dispositivo (huella digital o rostro) o una llave de seguridad física para completar el inicio de sesión."
+      other_methods: "Otras formas de verificar:"
+      key_name: "Dispositivo o llave de seguridad"
+      totp_name: "Aplicación de autenticación"
+      sms_name: "Mensaje de texto"
+      key_description: "Use su dispositivo o llave de seguridad registrados para verificar su identidad"
+      prepare: "Prepárese para verificar."
+      prepare_platform: "Su dispositivo puede usar huella digital, rostro o PIN."
+      prepare_key: "Si usa una llave física, insértela ahora."
+      click_button: "Haga clic en el botón de abajo."
+      follow_prompt: "Siga las instrucciones en pantalla."
+      prompt_platform: "Se le puede pedir su huella digital, rostro o PIN."
+      prompt_key: "Se le puede pedir que toque su llave de seguridad."
+      submit: "Verificar con dispositivo o llave de seguridad"
+      lost_key: "He perdido mi llave de seguridad"

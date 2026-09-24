@@ -25,6 +25,39 @@ module Admin
       exercise_hard_contact_conflict
     end
 
+    test 'guardian required-field retry retains no-contact choices and creates truthful selected contact' do
+      visit new_admin_paper_application_path
+      choose 'applicant_is_minor'
+      within '#guardian-info-section' do
+        click_link 'Create New Guardian'
+        { first_name: 'Postal', date_of_birth: '01/15/1980', physical_address_1: '123 Postal Avenue',
+          city: 'Baltimore', state: 'MD', zip_code: '21202' }.each do |key, value|
+          fill_in "guardian_attributes[#{key}]", with: value
+        end
+        check 'guardian_no_email_address_checkbox'
+        check 'guardian_no_phone_number_checkbox'
+        click_button 'Save Guardian'
+        assert_text 'Last name is required'
+        assert_checked_field 'guardian_no_email_address_checkbox'
+        assert_checked_field 'guardian_no_phone_number_checkbox'
+        capture('guardian-no-contact-required-retry')
+        uncheck 'guardian_no_email_address_checkbox'
+        assert_field 'guardian_attributes[email]', disabled: false
+        fill_in 'guardian_attributes[email]', with: 'discarded@example.com'
+        check 'guardian_no_email_address_checkbox'
+        fill_in 'guardian_attributes[last_name]', with: 'Guardian'
+        assert_difference 'User.count', 1 do
+          click_button 'Save Guardian'
+          assert_selector '[data-guardian-picker-target="selectedPane"]', text: 'Postal Guardian'
+        end
+      end
+      guardian = User.order(:id).last
+      assert_nil guardian.email
+      assert_nil guardian.phone
+      assert_field 'guardian_id', with: guardian.id.to_s, type: 'hidden'
+      capture('guardian-no-contact-selected')
+    end
+
     test 'an old page submits native files through the compatibility route and retries with saved uploads' do
       create(:constituent, first_name: 'Legacy', last_name: 'Applicant', date_of_birth: Date.new(1980, 1, 15))
       start_self('Legacy', 'Applicant')
@@ -163,17 +196,45 @@ module Admin
         }.each { |key, value| fill_in "guardian_attributes[#{key}]", with: value }
         choose 'guardian_phone_type_voice'
         choose 'guardian_communication_preference_email'
+        entered = guardian_fields
         click_button 'Save Guardian'
         assert_selector '#guardian-review-heading'
+        assert_equal entered, guardian_fields
+        assert_no_difference ['User.count', 'DuplicateReviewCase.count'] do
+          click_button 'Save Guardian'
+          assert_selector '#guardian-review-heading'
+          assert_button 'Save Guardian', disabled: false
+        end
+        assert_equal entered, guardian_fields
+        fill_in 'guardian_attributes[physical_address_1]', with: '789 Corrected Avenue'
+        fill_in 'guardian_attributes[city]', with: 'Annapolis'
+        # Refresh the receipt for the edited values before making the identity decision.
+        click_button 'Save Guardian'
+        assert_selector '#guardian-review-heading'
+        assert_field 'guardian_attributes[physical_address_1]', with: '789 Corrected Avenue'
+        assert_field 'guardian_attributes[city]', with: 'Annapolis'
         fill_in 'guardian_identity_rationale', with: 'The paper identifies a different guardian.'
         capture('guardian-review')
+        page.current_window.resize_to(390, 844)
+        capture('guardian-review-narrow')
+        page.current_window.resize_to(1200, 900)
         assert_difference ['User.count', 'DuplicateReviewCase.count'], 1 do
           click_button 'These are different people — create a new person'
           assert_selector '[data-guardian-picker-target="selectedPane"]', text: 'Review Guardian'
         end
       end
       capture('guardian-created')
-      User.find_by!(email: 'new.guardian@example.com')
+      guardian = User.find_by!(email: 'new.guardian@example.com')
+      assert_equal '789 Corrected Avenue', guardian.physical_address_1
+      assert_equal 'Annapolis', guardian.city
+      guardian
+    end
+
+    def guardian_fields
+      page.evaluate_script(<<~JS)
+        Array.from(document.querySelectorAll('#guardian-info-section input[name^="guardian_attributes"], #guardian-info-section select[name^="guardian_attributes"]'))
+          .map(input => [input.name, input.value, input.checked || false, input.disabled]);
+      JS
     end
 
     def exercise_dependent_decision(guardian)
@@ -203,6 +264,9 @@ module Admin
         assert_selector 'h1', text: 'Application #', wait: 20
       end
       assert_equal 'dependent', DuplicateReviewCase.order(:id).last.metadata['intake_role']
+      application = Application.order(:id).last
+      assert_equal guardian.id, application.managing_guardian_id
+      assert guardian.reload.dependents.exists?(application.user_id)
       capture('dependent-application')
     end
 

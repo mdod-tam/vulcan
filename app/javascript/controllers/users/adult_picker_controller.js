@@ -1,6 +1,5 @@
 import { Controller } from "@hotwired/stimulus"
 import { setVisible, setFieldValue } from "../../utils/visibility"
-import { debouncedDispatch } from "../../utils/debounce"
 
 // Manages adult applicant search-and-select for paper applications.
 // Mirrors guardian_picker_controller pattern but adds contact mode switching,
@@ -465,6 +464,6 @@ export default class extends Controller {
   }
 
   dispatchSelectionChange() {
-    debouncedDispatch(this, "selectionChange", { selectedValue: this.selectedValue })
+    this.dispatch("selectionChange", { detail: { selectedValue: this.selectedValue } })
   }
 }

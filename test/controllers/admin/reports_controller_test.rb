@@ -221,12 +221,12 @@ module Admin
         end
 
         mfr_section = css_select('#mfr-data-heading').first.ancestors('section').first
-        chart_element = mfr_section.at_css('[data-reports-chart-title-value="MFR throughput comparison"]')
+        chart_element = mfr_section.at_css('[data-chart-title-value="MFR throughput comparison"]')
         assert_not_nil chart_element
-        assert_equal most_recent[:fy_label], chart_element['data-reports-chart-current-dataset-label-value']
+        assert_equal most_recent[:fy_label], chart_element['data-chart-dataset-label-value']
         assert_equal result.data[:preceding_fy][:fy_label],
-                     chart_element['data-reports-chart-previous-dataset-label-value']
-        parsed_chart = JSON.parse(chart_element['data-reports-chart-current-data-value'])
+                     chart_element['data-chart-comparison-label-value']
+        parsed_chart = JSON.parse(chart_element['data-chart-data-value'])
         assert_equal chart, parsed_chart
       end
     end
@@ -239,8 +239,8 @@ module Admin
         assert_no_match(/Vouchers issued during FY/, response.body)
 
         mfr_section = css_select('#mfr-data-heading').first.ancestors('section').first
-        chart_element = mfr_section.at_css('[data-reports-chart-title-value="MFR throughput comparison"]')
-        parsed_chart = JSON.parse(chart_element['data-reports-chart-current-data-value'])
+        chart_element = mfr_section.at_css('[data-chart-title-value="MFR throughput comparison"]')
+        parsed_chart = JSON.parse(chart_element['data-chart-data-value'])
         assert_not parsed_chart.key?('Vouchers issued during FY')
       end
     end

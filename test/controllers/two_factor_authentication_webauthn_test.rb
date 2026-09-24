@@ -111,8 +111,8 @@ class TwoFactorAuthenticationWebauthnTest < ActionDispatch::IntegrationTest
            params: { two_factor_authentication: { id: 'test-credential-id' } },
            as: :json
 
-      # We expect not_found response since our credential id doesn't exist
-      assert_response :not_found
+      # Unknown credentials use the same public failure as verifier rejection.
+      assert_response :unprocessable_content
     end
   end
 
@@ -149,8 +149,8 @@ class TwoFactorAuthenticationWebauthnTest < ActionDispatch::IntegrationTest
            params: { two_factor_authentication: { id: 'malformed-credential-data', type: 'public-key' } },
            as: :json
 
-      # Verify we get an appropriate error response - not_found because the credential ID won't exist
-      assert_response :not_found
+      # Malformed credentials do not disclose the credential lookup result.
+      assert_response :unprocessable_content
     end
   end
 end

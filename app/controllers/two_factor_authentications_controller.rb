@@ -13,6 +13,8 @@ class TwoFactorAuthenticationsController < ApplicationController
   include TwoFactorVerification
   include TurboStreamResponseHandling
 
+  around_action :with_public_request_locale, except: :setup
+
   before_action :ensure_two_factor_initiated_unless_skipped, except: %i[setup resend_sms_verification]
   before_action :authenticate_user!, only: %i[setup]
   skip_before_action :authenticate_user!,
@@ -117,7 +119,7 @@ class TwoFactorAuthenticationsController < ApplicationController
       else
         handle_error_response(
           html_redirect_path: setup_two_factor_authentication_path,
-          error_message: 'No security keys are registered. Please set up a security key first.'
+          error_message: t('two_factor_verification.errors.key_unavailable')
         )
       end
     when 'totp'
@@ -126,7 +128,7 @@ class TwoFactorAuthenticationsController < ApplicationController
       else
         handle_error_response(
           html_redirect_path: setup_two_factor_authentication_path,
-          error_message: 'No authenticator app is set up. Please set up TOTP authentication first.'
+          error_message: t('two_factor_verification.errors.totp_unavailable')
         )
       end
     when 'sms'
@@ -134,7 +136,7 @@ class TwoFactorAuthenticationsController < ApplicationController
     else
       handle_error_response(
         html_redirect_path: verify_two_factor_authentication_path,
-        error_message: 'Invalid verification method'
+        error_message: t('two_factor_verification.errors.invalid_method')
       )
     end
   end
@@ -148,7 +150,7 @@ class TwoFactorAuthenticationsController < ApplicationController
     else
       handle_error_response(
         html_redirect_path: verify_two_factor_authentication_path,
-        error_message: 'SMS verification not available'
+        error_message: t('two_factor_verification.errors.sms_unavailable')
       )
     end
   end
@@ -163,7 +165,7 @@ class TwoFactorAuthenticationsController < ApplicationController
     success, message = if @type.present?
                          verify_credential(@type, verification_params)
                        else
-                         [false, 'Invalid credential type']
+                         [false, t('two_factor_verification.errors.invalid_type')]
                        end
 
     respond_to do |format|
@@ -181,25 +183,25 @@ class TwoFactorAuthenticationsController < ApplicationController
     return redirect_to sign_in_path, status: :see_other unless @user
 
     credential = resolve_sms_credential_for_resend(@user)
-    return redirect_to verify_two_factor_authentication_path, alert: 'SMS verification not available', status: :see_other unless credential
+    return redirect_to verify_two_factor_authentication_path, alert: t('two_factor_verification.errors.sms_unavailable'), status: :see_other unless credential
 
     sms_challenge_result = ensure_sms_challenge_for_user(credential, @user)
     case sms_challenge_result
     when :active
       redirect_to verify_method_two_factor_authentication_path(type: 'sms'),
-                  notice: 'Enter the verification code we sent.',
+                  notice: t('two_factor_verification.sms.active'),
                   status: :see_other
     when :sent
       redirect_to verify_method_two_factor_authentication_path(type: 'sms'),
-                  notice: 'A verification code has been sent.',
+                  notice: t('two_factor_verification.sms.sent'),
                   status: :see_other
     when :sending
       redirect_to verify_method_two_factor_authentication_path(type: 'sms'),
-                  notice: TwoFactor::SmsLoginChallenge::DUPLICATE_SEND_MESSAGE,
+                  notice: t('two_factor_verification.sms.sending'),
                   status: :see_other
     else
       redirect_to verify_two_factor_authentication_path,
-                  alert: 'Could not send verification code.',
+                  alert: t('two_factor_verification.sms.send_failed'),
                   status: :see_other
     end
   end
@@ -210,7 +212,7 @@ class TwoFactorAuthenticationsController < ApplicationController
     return redirect_to sign_in_path unless @user
 
     credential = resolve_sms_credential_for_resend(@user)
-    return handle_error_response(error_message: 'SMS verification not available') unless credential
+    return handle_error_response(error_message: t('two_factor_verification.errors.sms_unavailable')) unless credential
 
     sms_challenge_result = resend_sms_challenge_for_user(credential, @user)
     if sms_challenge_result == :waiting
@@ -248,6 +250,10 @@ class TwoFactorAuthenticationsController < ApplicationController
 
   private
 
+  def default_url_options
+    super.merge(locale: public_request_locale_param)
+  end
+
   # Find user for setup flow (authenticated or in 2FA flow)
   def find_setup_user
     current_user || find_user_for_two_factor
@@ -282,7 +288,7 @@ class TwoFactorAuthenticationsController < ApplicationController
   # Redirect authenticated user to profile with notice
   def redirect_to_authenticated_user_profile
     redirect_to edit_profile_path,
-                notice: 'Your account is already secured with two-factor authentication.'
+                notice: t('two_factor_verification.already_secured')
   end
 
   # Redirect to appropriate verification method based on available credentials
@@ -336,14 +342,20 @@ class TwoFactorAuthenticationsController < ApplicationController
         return_to = stored_location || _dashboard_for(@user)
         render json: { status: 'success', redirect_url: return_to }
       else
-        render json: { error: 'Unable to create session' }, status: :unprocessable_content
+        render json: { error: t('security_key_verification.feedback.session_failed'), error_code: 'session_failed' },
+               status: :unprocessable_content
       end
     end
   end
 
   # Handle failed verification response
   def handle_failed_verification(format, message)
-    status = determine_error_status(message)
+    error_code = message if message.is_a?(Symbol)
+    message = case message
+              when :verification_failed then t('security_key_verification.feedback.failed')
+              when :user_session then t('two_factor_verification.errors.user_session')
+              else message
+              end
 
     format.html do
       if set_verification_context
@@ -351,7 +363,7 @@ class TwoFactorAuthenticationsController < ApplicationController
         handle_error_response(
           html_render_action: template,
           error_message: message,
-          status: status
+          status: :unprocessable_content
         )
       else
         redirect_to sign_in_path, alert: message
@@ -365,13 +377,17 @@ class TwoFactorAuthenticationsController < ApplicationController
       elsif set_verification_context
         handle_error_response(
           error_message: message,
-          status: status
+          status: :unprocessable_content
         )
       else
         redirect_to sign_in_path, alert: message
       end
     end
-    format.json { render json: { error: message }, status: status }
+    format.json do
+      error = { error: message }
+      error[:error_code] = error_code if error_code
+      render json: error, status: :unprocessable_content
+    end
   end
 
   # Returns false (without rendering) when the session no longer resolves to a
@@ -389,16 +405,6 @@ class TwoFactorAuthenticationsController < ApplicationController
     @sms_credential = resolve_sms_credential_for_resend(@user)
     @sms_code_sent = @sms_credential.present? && active_sms_challenge_for?(@sms_credential)
     true
-  end
-
-  # Determine appropriate HTTP status code based on error message
-  def determine_error_status(message)
-    case message
-    when /credential not found/i, /not found/i
-      :not_found
-    else
-      :unprocessable_content
-    end
   end
 
   # Get template name for verification type
@@ -477,7 +483,7 @@ class TwoFactorAuthenticationsController < ApplicationController
   end
 
   def render_resend_success(credential)
-    message = 'A new verification code has been sent.'
+    message = t('two_factor_verification.sms.resent')
     respond_to do |format|
       format.html { redirect_to resend_sms_redirect_path(credential), notice: message }
       format.turbo_stream do
@@ -495,7 +501,7 @@ class TwoFactorAuthenticationsController < ApplicationController
   end
 
   def render_resend_failure(credential)
-    message = 'Could not send verification code.'
+    message = t('two_factor_verification.sms.send_failed')
     respond_to do |format|
       format.html { redirect_to resend_sms_redirect_path(credential), alert: message }
       format.turbo_stream do

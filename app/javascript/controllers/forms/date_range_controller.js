@@ -30,6 +30,5 @@ class DateRangeController extends Controller {
   }
 }
 
-// Apply target safety mixin
 
 export default DateRangeController

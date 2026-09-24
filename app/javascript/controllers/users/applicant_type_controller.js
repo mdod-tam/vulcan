@@ -1,6 +1,6 @@
 import { Controller } from "@hotwired/stimulus";
 import { setVisible } from "../../utils/visibility";
-import { createVeryShortDebounce } from "../../utils/debounce";
+import { debounce } from "../../utils/debounce";
 
 export default class extends Controller {
   static targets = ["radio", "adultSection", "adultSearchSection", "radioSection", "guardianSection", "sectionsForDependentWithGuardian", "commonSections", "dependentField", "stepNumber"];
@@ -15,7 +15,7 @@ export default class extends Controller {
     this._connected = true;
 
     this._lastState = null; // Track last state to prevent unnecessary dispatches
-    this.debouncedRefresh = createVeryShortDebounce(() => this.executeRefresh());
+    this.debouncedRefresh = debounce(() => this.executeRefresh(), 10);
 
     this._boundGuardianPickerSelectionChange = this.guardianPickerSelectionChange.bind(this);
     this._boundAdultPickerSelectionChange = this.adultPickerSelectionChange.bind(this);
@@ -65,17 +65,11 @@ export default class extends Controller {
 
   // This can be called by an action on the guardian-picker if its selection changes, or if this controller needs to react to external changes.
   guardianPickerOutletConnected(_outlet, _element) {
-    if (process.env.NODE_ENV !== 'production') {
-      console.log("ApplicantTypeController: Guardian Picker Outlet Connected");
-    }
     // Use a delayed refresh to avoid immediate recursion
     setTimeout(() => this.refresh(), 50);
   }
 
   guardianPickerOutletDisconnected(_outlet, _element) {
-    if (process.env.NODE_ENV !== 'production') {
-      console.log("ApplicantTypeController: Guardian Picker Outlet Disconnected");
-    }
     // Use a delayed refresh to avoid immediate recursion
     setTimeout(() => this.refresh(), 50);
   }
@@ -101,48 +95,27 @@ export default class extends Controller {
 
   // Handle guardian picker selection changes
   guardianPickerSelectionChange(event) {
-    if (process.env.NODE_ENV !== 'production') {
-      console.log("ApplicantTypeController: Guardian selection changed:", event.detail);
-    }
     // Refresh to update visibility based on new guardian selection
     this.refresh();
   }
 
   updateApplicantTypeDisplay() { // Called by radio button change
-    if (process.env.NODE_ENV !== 'production') {
-      console.log("ApplicantTypeController: updateApplicantTypeDisplay fired, isDependentSelected:", this.isDependentRadioChecked());
-    }
+
     this.refresh(); // refresh will now handle the event dispatch
   }
 
   refresh() {
-    if (process.env.NODE_ENV !== 'production') {
-      console.log("ApplicantTypeController: Refresh executing");
-    }
     this.debouncedRefresh();
   }
 
   executeRefresh() {
     try {
-      if (process.env.NODE_ENV !== 'production') {
-        console.log("ApplicantTypeController: executeRefresh running");
-      }
       // Check if guardianPickerOutlet is connected and has a value
       const guardianChosen = this.hasGuardianPickerOutlet && this.guardianPickerOutlet.selectedValue;
 
       // Determine if the dependent section should be shown
       // It's shown if a guardian is chosen OR if the 'dependent' radio is manually checked (and no guardian is chosen)
       const dependentRadioSelected = this.isDependentRadioChecked();
-
-      if (process.env.NODE_ENV !== 'production') {
-        console.log("ApplicantTypeController: State check:", {
-          hasGuardianPickerOutlet: this.hasGuardianPickerOutlet,
-          guardianPickerSelectedValue: this.hasGuardianPickerOutlet ? this.guardianPickerOutlet.selectedValue : null,
-          guardianChosen: guardianChosen,
-          dependentRadioSelected: dependentRadioSelected,
-          showDependentSections: dependentRadioSelected && guardianChosen
-        });
-      }
 
       // Hide the applicant-type radio section when a guardian is chosen
       if (this.hasRadioSectionTarget) {
@@ -154,9 +127,6 @@ export default class extends Controller {
         setVisible(this.guardianSectionTarget, dependentRadioSelected);
         // Disable form fields in hidden guardian section to prevent form submission conflicts
         this._toggleFormFieldsDisabled(this.guardianSectionTarget, !dependentRadioSelected);
-        if (process.env.NODE_ENV !== 'production') {
-          console.log(`ApplicantTypeController: Guardian Section ${this.guardianSectionTarget.classList.contains("hidden") ? "hidden" : "visible"}`);
-        }
       }
 
       // Show sections for dependent with guardian only if dependent radio is selected AND a guardian is chosen
@@ -165,9 +135,6 @@ export default class extends Controller {
         setVisible(this.sectionsForDependentWithGuardianTarget, showDependentSections);
         // Disable form fields in hidden dependent section to prevent form submission conflicts
         this._toggleFormFieldsDisabled(this.sectionsForDependentWithGuardianTarget, !showDependentSections);
-        if (process.env.NODE_ENV !== 'production') {
-          console.log(`ApplicantTypeController: Dependent Sections ${showDependentSections ? "SHOWN" : "HIDDEN"}`);
-        }
       }
 
       // Manage 'required' attribute for dependent fields
@@ -229,15 +196,11 @@ export default class extends Controller {
         this._lastState.showCommon !== showCommon;
 
       if (stateChanged) {
-        if (process.env.NODE_ENV !== 'production') {
-          console.log("ApplicantTypeController: Dispatching applicantTypeChanged. isDependentSelected:", currentIsDependentSelected);
-        }
         this.dispatch("applicantTypeChanged", { detail: { isDependentSelected: currentIsDependentSelected } });
 
         // Update last state
         this._lastState = { isDependentSelected: currentIsDependentSelected, guardianChosen, showCommon };
       }
-
     } catch (error) {
       console.error("ApplicantTypeController: Error in refresh:", error);
     }
