@@ -14,7 +14,21 @@ module ApplicationSubmissionEligibility
     !status_archived? && !status_rejected?
   end
 
+  # The applicant's own unmanaged draft, or a dependent's draft that +actor_id+ manages.
+  def resumable_portal_draft_for?(actor_id)
+    status_draft? && managing_guardian_id == (user_id == actor_id ? nil : actor_id)
+  end
+
   class_methods do
+    # The draft a portal actor resumes instead of starting a second one, so portal autosave and the
+    # full form continue the same draft. Like the sibling check below, it reads the caller's locked
+    # inventory for the applicant, so a draft committed by a concurrent request is seen rather than
+    # duplicated.
+    def resumable_portal_draft(applications, actor_id:)
+      Array(applications).select { |application| application.resumable_portal_draft_for?(actor_id) }
+                         .max_by { |application| [application.created_at, application.id] }
+    end
+
     # The identity-review admission rule, in one place so the locked writer and the portal form
     # cannot drift. Applications::ApplicationCreator asks under lock and refuses; the portal form
     # asks on GET so it can warn and disable submission before the constituent selects documents a

@@ -63,6 +63,7 @@ module Applications
 
       ActiveRecord::Base.transaction do
         lock_and_requalify_applicant!
+        AutosaveRevisions.new(target_application).prepare!(context: @form.autosave_context, revision: @form.autosave_revision)
         setup_applicant_user
         update_user_attributes
         create_or_update_application
@@ -185,14 +186,21 @@ module Applications
       end
     end
 
+    # A new-application post continues the actor's existing draft for this applicant. The portal's
+    # new-application page posts to create even after autosave has started that draft, so without
+    # this a Save would start a second draft and a Submit would be refused as a sibling of the
+    # constituent's own draft.
     def replace_with_exact_target!(locked_inventory)
       if target_application.persisted?
         exact_target = locked_inventory.find { |application| application.id == target_application.id }
         raise IneligibleApplicantError, 'This application no longer belongs to this participant.' unless exact_target
 
         @target_application = exact_target
+      elsif (resumable_draft = Application.resumable_portal_draft(locked_inventory, actor_id: @current_user.id))
+        @target_application = resumable_draft
       end
 
+      target_application.user_id = @applicant_user.id if target_application.new_record?
       target_application.association(:user).target = @applicant_user
     end
 
@@ -284,10 +292,10 @@ module Applications
     end
 
     def set_medical_provider_details
-      target_application.medical_provider_name = @form.medical_provider_name if @form.medical_provider_name.present?
-      target_application.medical_provider_phone = @form.medical_provider_phone if @form.medical_provider_phone.present?
-      target_application.medical_provider_fax = @form.medical_provider_fax if @form.medical_provider_fax.present?
-      target_application.medical_provider_email = @form.medical_provider_email if @form.medical_provider_email.present?
+      target_application.medical_provider_name = @form.medical_provider_name unless @form.medical_provider_name.nil?
+      target_application.medical_provider_phone = @form.medical_provider_phone unless @form.medical_provider_phone.nil?
+      target_application.medical_provider_fax = @form.medical_provider_fax unless @form.medical_provider_fax.nil?
+      target_application.medical_provider_email = @form.medical_provider_email unless @form.medical_provider_email.nil?
     end
 
     def attach_file_uploads
@@ -312,6 +320,8 @@ module Applications
 
     def save_application_with_audit
       was_new_record = target_application.new_record?
+      # Submission and cleanup share the transaction; a refused submission retains draft ordering.
+      target_application.autosave_revisions = {} if @form.is_submission
       target_application.save!
       actor = determine_audit_actor
 
@@ -364,7 +374,7 @@ module Applications
     end
 
     def should_log_application_updated_event?
-      target_application.saved_changes.except('updated_at').any?
+      target_application.saved_changes.except('updated_at', 'autosave_revisions').any?
     end
 
     def log_events

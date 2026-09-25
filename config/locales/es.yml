@@ -168,6 +168,13 @@ es:
         stale_request: "Este formulario estaba desactualizado, por lo que no se cambió nada. Vuelva a cargar la página e inténtelo de nuevo."
         duplicate_identity: "%{name} ya está asociado a su cuenta con este nombre y fecha de nacimiento. Si se trata de otra persona, comuníquese con el equipo de MAT al %{support_email} o %{support_phone}."
   applications:
+    autosave:
+      saving: "Guardando borrador…"
+      saved: "Borrador guardado"
+      unsaved: 'Use "Save Application" para conservar los demás cambios del formulario.'
+      refresh: 'El guardado automático no está disponible en esta página. Use "Save Application" para guardar sus cambios.'
+      # El nombre del botón queda en inglés a propósito: este formulario todavía no está traducido.
+      failed: "Algunos cambios todavía no se han guardado. Use \"Save Application\" para conservarlos."
     submission_gate:
       pending_identity_review_status: "El envío no está disponible mientras revisamos la información asociada con esta solicitud. Todavía puede guardar su borrador."
       # El nombre del botón queda en inglés a propósito: este formulario todavía no está traducido.

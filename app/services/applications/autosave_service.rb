@@ -40,48 +40,25 @@ module Applications
       @application = if params[:id].present?
                        find_existing_application
                      else
-                       find_or_create_draft_application
+                       build_draft_application
                      end
     end
 
     def find_existing_application
       # Search in both user's own applications and applications they manage as guardian.
-      # No fallback to find_or_create_draft_application: the caller supplied an exact
-      # application id, so if it can't be found (or isn't owned/managed by current_user),
-      # autosave must fail closed rather than silently substituting a different draft.
+      # No fallback to a new or resumed draft: the caller supplied an exact application id, so if
+      # it can't be found (or isn't owned/managed by current_user), autosave must fail closed rather
+      # than silently substituting a different draft.
       current_user.applications.find_by(id: params[:id]) ||
         current_user.managed_applications.find_by(id: params[:id])
     end
 
-    def find_or_create_draft_application
-      # Determine if this is for a dependent based on params
-      # Could come from multiple sources: user_id param or nested application[user_id]
+    # Without an id this is only the applicant a draft is for. Whether that means resuming an
+    # existing draft, creating one, or refusing is decided under lock in
+    # lock_and_requalify_participant!, so concurrent first saves resolve to a single draft.
+    def build_draft_application
       dependent_id = authorized_dependent_id
       return nil if dependent_id == :unauthorized
-
-      # Build query to find existing draft
-      # For dependent applications: match both user_id (the dependent) and managing_guardian_id (current user)
-      # For self applications: match user_id and no managing_guardian_id
-      draft_query = Application.draft.order(created_at: :desc)
-
-      draft_query = if dependent_id.present?
-                      # Looking for a dependent's draft application managed by current user
-                      draft_query.where(user_id: dependent_id, managing_guardian_id: current_user.id)
-                    else
-                      # Looking for current user's own draft application (not as a guardian)
-                      draft_query.where(user_id: current_user.id, managing_guardian_id: nil)
-                    end
-
-      existing_draft = draft_query.first
-
-      # Return existing draft if found, otherwise create new
-      return existing_draft if existing_draft
-
-      # Check for active application before creating new draft
-      # This prevents creating drafts when user already has submitted/processing application
-      target_user_id = dependent_id || current_user.id
-      active_application = Application.active_for_constituent(target_user_id).first
-      return nil if active_application
 
       create_new_application(dependent_id)
     end
@@ -119,20 +96,31 @@ module Applications
     def save_field
       attribute_name = extract_attribute_name
       target_model = autosave_target_for(attribute_name)
-      return { success: false, errors: { field_name => ['This field cannot be autosaved'] } } if target_model == :ignored
+      return field_error_result('This field cannot be autosaved') if target_model == :ignored
 
       result = nil
       ActiveRecord::Base.transaction do
         lock_and_requalify_participant!
-        result = target_model == :user ? save_user_field(attribute_name) : save_application_field(attribute_name)
+        @revisions = AutosaveRevisions.new(@application)
+        @outcome = @revisions.prepare!(context: params[:autosave_context],
+                                       revision: params[:autosave_revision],
+                                       field: attribute_name)
+        result = if @outcome == :superseded
+                   { success: true }
+                 else
+                   target_model == :user ? save_user_field(attribute_name) : save_application_field(attribute_name)
+                 end
       end
 
       result[:success] ? autosave_success_result : result
+    rescue AutosaveRevisions::InvalidRevision
+      autosave_error_result(I18n.t('applications.autosave.refresh', locale: @target_user&.effective_message_locale || I18n.default_locale))
     rescue IneligibleAutosaveTargetError => e
       { success: false, errors: { base: [e.message] } }
     rescue StandardError => e
+      # The exception text can carry database or internal detail, so it stays in the log.
       Rails.logger.error("Error autosaving field #{attribute_name}: #{e.message}")
-      { success: false, errors: { "application[#{attribute_name}]" => [e.message] } }
+      autosave_error_result('This field could not be saved')
     end
 
     # Locks the target participant (and, for a dependent application, the guardian) through
@@ -142,9 +130,10 @@ module Applications
     # found -- never substituting a different one -- still belongs to the same participant
     # (ownership itself could have been transferred by a merge in the window between the
     # initial unlocked lookup and this lock being granted), and that any guardian relationship
-    # is still authorized. For a brand-new draft about to be created, checks the shared
-    # Application.sibling_application_eligibility_error policy against the target's own
-    # now-locked application inventory instead of the prior unlocked ad hoc check.
+    # is still authorized. Without an id, resumes the actor's draft for this applicant from the
+    # now-locked inventory when one exists; otherwise checks the shared
+    # Application.sibling_application_eligibility_error policy against that inventory before a new
+    # draft is created.
     def lock_and_requalify_participant!
       initial_target_id = @application.user_id
       guardian_ids = GuardianRelationship.where(dependent_id: initial_target_id).pluck(:guardian_id)
@@ -177,8 +166,13 @@ module Applications
         @application = exact_application
       else
         locked_inventory = Application.where(user_id: initial_target_id).order(:id).lock.to_a
-        error = Application.sibling_application_eligibility_error(locked_inventory, target_application: @application)
-        raise IneligibleAutosaveTargetError, error if error
+        resumable_draft = Application.resumable_portal_draft(locked_inventory, actor_id: current_user.id)
+        if resumable_draft
+          @application = resumable_draft
+        else
+          error = Application.sibling_application_eligibility_error(locked_inventory, target_application: @application)
+          raise IneligibleAutosaveTargetError, error if error
+        end
       end
 
       install_locked_application_associations!
@@ -256,12 +250,15 @@ module Applications
     # has already locked and revalidated the target user and (if persisted) the application.
     def save_user_field(attribute)
       value = cast_user_field_value(attribute, field_value)
+      was_new_record = @application.new_record?
 
       # Autosave persists individual draft fields without running full-form validations.
       # rubocop:disable Rails/SkipsModelValidations
       @target_user.update_column(attribute, value)
-      @application.update_column(:last_visited_step, attribute) if @application.persisted?
+      @application.last_visited_step = attribute
+      @application.save!(validate: false)
       # rubocop:enable Rails/SkipsModelValidations
+      log_application_created_event if was_new_record
       { success: true }
     end
 
@@ -281,7 +278,7 @@ module Applications
       end
 
       @application.valid?
-      return { success: false, errors: { "application[#{attribute}]" => @application.errors[attribute] } } if @application.errors[attribute].any?
+      return { success: false, errors: { field_name => @application.errors[attribute] } } if @application.errors[attribute].any?
 
       was_new_record = @application.new_record?
 
@@ -311,23 +308,33 @@ module Applications
       end
     end
 
+    # A cleared field is saved as cleared, as a full draft save would store it; otherwise the draft
+    # would keep the old number and bring it back on the next load.
     def validate_field_value(attribute)
+      return { success: true } if field_value.blank?
+
       case attribute
       when 'annual_income'
-        return autosave_error_result('Must be a valid number') unless field_value.to_s.match?(/\A\d+(\.\d+)?\z/)
+        return field_error_result('Must be a valid number') unless field_value.to_s.match?(/\A\d+(\.\d+)?\z/)
       when 'household_size'
-        return autosave_error_result('Must be a valid integer') unless field_value.to_s.match?(/\A\d+\z/)
+        return field_error_result('Must be a valid integer') unless field_value.to_s.match?(/\A\d+\z/)
       end
 
       { success: true }
     end
 
     def autosave_success_result
-      { success: true, application_id: @application.id, message: 'Field saved successfully' }
+      { success: true, application_id: @application.id, outcome: @outcome.to_s,
+        revision: params[:autosave_revision].to_i, current_revision: @revisions.acknowledged_revision,
+        value: (autosave_target_for(extract_attribute_name) == :user ? @target_user : @application).public_send(extract_attribute_name) }
     end
 
     def autosave_error_result(message)
       { success: false, errors: { base: [message] } }
+    end
+
+    def field_error_result(message)
+      { success: false, errors: { field_name => [message] } }
     end
 
     def log_application_created_event

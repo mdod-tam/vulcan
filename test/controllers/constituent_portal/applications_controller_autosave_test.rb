@@ -5,6 +5,7 @@ require 'test_helper'
 module ConstituentPortal
   class ApplicationsControllerAutosaveTest < ActionDispatch::IntegrationTest
     include AuthenticationTestHelper
+    include AutosaveTestHelper
 
     setup do
       # Set up test data using factories
@@ -16,6 +17,47 @@ module ConstituentPortal
 
       # Set thread local context to skip proof validations in tests
       setup_paper_application_context
+    end
+
+    test 'a page opened yesterday still saves its full form and selected document' do
+      metadata = nil
+      travel_to 25.hours.ago do
+        get edit_constituent_portal_application_path(@draft_application)
+        assert_response :success
+        html = Nokogiri::HTML(response.body)
+        metadata = %w[autosave_context autosave_revision].index_with { |name| html.at_css("input[name='#{name}']")['value'] }
+      end
+      sign_in_for_integration_test(@user)
+      patch constituent_portal_application_path(@draft_application), params: metadata.merge(
+        save_draft: 'Save Application', application: {
+          household_size: '4', annual_income: '40000', hearing_disability: '1',
+          income_proof: fixture_file_upload(Rails.root.join('test/fixtures/files/income_proof.pdf'), 'application/pdf')
+        }
+      )
+      assert_response :redirect
+      assert_equal 4, @draft_application.reload.household_size
+      assert @draft_application.income_proof.attached?
+    end
+
+    test 'malformed ordering data cannot refuse a full form save' do
+      patch constituent_portal_application_path(@draft_application), params: {
+        autosave_context: 'bad-context', autosave_revision: 'bad-revision', save_draft: 'Save Application',
+        application: { household_size: '4', annual_income: '40000', hearing_disability: '1' }
+      }
+      assert_response :redirect
+      assert_equal 4, @draft_application.reload.household_size
+    end
+
+    test 'a full form remains authoritative without JavaScript or a new revision' do
+      metadata = autosave_metadata(actor: @user).merge(autosave_revision: 0)
+      submitted = metadata.merge(save_draft: 'Save Application', application: {
+                                   annual_income: '40000', household_size: '4', hearing_disability: '1'
+                                 })
+      post constituent_portal_applications_path, params: submitted
+      assert_response :redirect
+      post constituent_portal_applications_path, params: submitted
+      assert_response :redirect
+      assert_equal 4, @draft_application.reload.household_size
     end
 
     teardown do
@@ -30,7 +72,7 @@ module ConstituentPortal
     test 'should autosave Application field for existing draft' do
       # Test autosaving household_size for an existing application
       patch autosave_field_constituent_portal_application_path(@draft_application),
-            params: { field_name: 'application[household_size]', field_value: '4' },
+            params: { **autosave_metadata(actor: @user), field_name: 'application[household_size]', field_value: '4' },
             as: :json
 
       # Verify the response
@@ -49,7 +91,7 @@ module ConstituentPortal
       # Test autosaving for a new application (no ID provided)
       assert_difference('Application.count') do
         patch autosave_field_constituent_portal_applications_path,
-              params: { field_name: 'application[household_size]', field_value: '3' },
+              params: { **autosave_metadata(actor: @user), field_name: 'application[household_size]', field_value: '3' },
               as: :json
       end
 
@@ -73,6 +115,7 @@ module ConstituentPortal
       assert_no_difference('Application.count') do
         patch autosave_field_constituent_portal_applications_path,
               params: {
+                **autosave_metadata(actor: @user),
                 user_id: unrelated_user.id,
                 field_name: 'application[household_size]',
                 field_value: '3'
@@ -93,6 +136,7 @@ module ConstituentPortal
       assert_difference('Application.count') do
         patch autosave_field_constituent_portal_applications_path,
               params: {
+                **autosave_metadata(actor: @user, applicant: dependent),
                 user_id: dependent.id,
                 field_name: 'application[household_size]',
                 field_value: '3'
@@ -106,12 +150,43 @@ module ConstituentPortal
       assert_equal @user.id, new_application.managing_guardian_id
     end
 
+    # The dependent's new-application page used to render an autosave URL that did not name the
+    # dependent, so every save landed in the guardian's own draft and user record, and the final
+    # submit filed the application as the guardian's. Drive the URL the page actually renders.
+    test 'a dependent new-application page autosaves into the dependent draft and never the guardian' do
+      @user.update!(hearing_disability: false)
+      @draft_application.update!(household_size: 1)
+      dependent = create(:constituent, :with_disabilities, hearing_disability: false)
+      create(:guardian_relationship, guardian_user: @user, dependent_user: dependent, relationship_type: 'Parent')
+
+      get new_constituent_portal_application_path(user_id: dependent.id)
+      assert_response :success
+      autosave_form = css_select('form[data-controller~="autosave"]').first
+      autosave_url = autosave_form['data-autosave-url-value']
+      context = autosave_form.at_css('input[name="autosave_context"]')['value']
+
+      assert_difference('Application.count', 1) do
+        patch autosave_url, params: { autosave_context: context, autosave_revision: 1,
+                                      field_name: 'application[household_size]', field_value: '5' }, as: :json
+        assert_response :success
+        patch autosave_url, params: { autosave_context: context, autosave_revision: 2,
+                                      field_name: 'application[hearing_disability]', field_value: 'true' }, as: :json
+        assert_response :success
+      end
+
+      dependent_draft = Application.find_by!(user: dependent, managing_guardian_id: @user.id)
+      assert_equal 5, dependent_draft.household_size
+      assert dependent.reload.hearing_disability, "the dependent's disability must be saved on the dependent"
+      assert_not @user.reload.hearing_disability, "the guardian's record must not change"
+      assert_equal 1, @draft_application.reload.household_size, "the guardian's own draft must not change"
+    end
+
     test 'should log application_created when autosave creates a new draft' do
       @draft_application.destroy
 
       assert_difference -> { Event.where(action: 'application_created').count }, 1 do
         patch autosave_field_constituent_portal_applications_path,
-              params: { field_name: 'application[household_size]', field_value: '3' },
+              params: { **autosave_metadata(actor: @user), field_name: 'application[household_size]', field_value: '3' },
               as: :json
       end
 
@@ -129,7 +204,7 @@ module ConstituentPortal
     test 'should not autosave invalid Application field' do
       # Test autosaving an invalid annual_income
       patch autosave_field_constituent_portal_application_path(@draft_application),
-            params: { field_name: 'application[annual_income]', field_value: 'invalid' },
+            params: { **autosave_metadata(actor: @user), field_name: 'application[annual_income]', field_value: 'invalid' },
             as: :json
 
       # Verify the response indicates error
@@ -147,7 +222,7 @@ module ConstituentPortal
     test 'should autosave boolean Application field' do
       # Test autosaving self_certify_disability
       patch autosave_field_constituent_portal_application_path(@draft_application),
-            params: { field_name: 'application[self_certify_disability]', field_value: 'true' },
+            params: { **autosave_metadata(actor: @user), field_name: 'application[self_certify_disability]', field_value: 'true' },
             as: :json
 
       # Verify the response
@@ -162,7 +237,7 @@ module ConstituentPortal
     test 'should autosave medical provider fields' do
       # Test autosaving nested medical provider field
       patch autosave_field_constituent_portal_application_path(@draft_application),
-            params: { field_name: 'application[medical_provider_attributes][name]', field_value: 'Dr. Jane Smith' },
+            params: { **autosave_metadata(actor: @user), field_name: 'application[medical_provider_attributes][name]', field_value: 'Dr. Jane Smith' },
             as: :json
 
       # Verify the response
@@ -179,7 +254,7 @@ module ConstituentPortal
       attribute_name = 'household_size' # The actual attribute name
 
       patch autosave_field_constituent_portal_application_path(@draft_application),
-            params: { field_name: field_name, field_value: '5' },
+            params: { **autosave_metadata(actor: @user), field_name: field_name, field_value: '5' },
             as: :json
 
       assert_response :success
@@ -194,7 +269,7 @@ module ConstituentPortal
     test 'should autosave User disability field' do
       # Test autosaving hearing_disability
       patch autosave_field_constituent_portal_application_path(@draft_application),
-            params: { field_name: 'application[hearing_disability]', field_value: 'true' },
+            params: { **autosave_metadata(actor: @user), field_name: 'application[hearing_disability]', field_value: 'true' },
             as: :json
 
       # Verify the response
@@ -208,7 +283,7 @@ module ConstituentPortal
 
     test 'should not autosave managing guardian directly' do
       patch autosave_field_constituent_portal_application_path(@draft_application),
-            params: { field_name: 'application[managing_guardian_id]', field_value: @user.id.to_s },
+            params: { **autosave_metadata(actor: @user), field_name: 'application[managing_guardian_id]', field_value: @user.id.to_s },
             as: :json
 
       assert_response :unprocessable_content
@@ -222,7 +297,7 @@ module ConstituentPortal
       unrelated_user = create(:constituent, :with_disabilities)
 
       patch autosave_field_constituent_portal_application_path(@draft_application),
-            params: { field_name: 'application[user_id]', field_value: unrelated_user.id.to_s },
+            params: { **autosave_metadata(actor: @user), field_name: 'application[user_id]', field_value: unrelated_user.id.to_s },
             as: :json
 
       assert_response :unprocessable_content
@@ -278,7 +353,7 @@ module ConstituentPortal
       attribute_name = 'hearing_disability' # The actual attribute name
 
       patch autosave_field_constituent_portal_application_path(@draft_application),
-            params: { field_name: field_name, field_value: 'false' },
+            params: { **autosave_metadata(actor: @user), field_name: field_name, field_value: 'false' },
             as: :json
 
       assert_response :success
@@ -293,7 +368,7 @@ module ConstituentPortal
     test 'should not autosave file upload fields' do
       # Test autosaving a file field
       patch autosave_field_constituent_portal_application_path(@draft_application),
-            params: { field_name: 'application[income_proof]', field_value: 'some_file.pdf' },
+            params: { **autosave_metadata(actor: @user), field_name: 'application[income_proof]', field_value: 'some_file.pdf' },
             as: :json
 
       # Verify the response indicates error
@@ -309,7 +384,7 @@ module ConstituentPortal
 
       # Test autosaving a physical address field
       patch autosave_field_constituent_portal_application_path(@draft_application),
-            params: { field_name: 'application[physical_address_1]', field_value: '123 Main St Ignored' },
+            params: { **autosave_metadata(actor: @user), field_name: 'application[physical_address_1]', field_value: '123 Main St Ignored' },
             as: :json
 
       # Verify the response indicates error

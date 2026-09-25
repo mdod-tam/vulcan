@@ -7,9 +7,6 @@ class ApplicationsSystemTest < ApplicationSystemTestCase
   include SystemTestEvidence
 
   setup do
-    # Force a clean browser session for each test
-    Capybara.reset_sessions!
-
     @user = create(:constituent, first_name: 'Test', last_name: 'Guardian')
     @dependent = create(:constituent, first_name: 'Jane', last_name: 'Dependent', email: 'jane.dependent@example.com', phone: '5555551212')
 
@@ -256,16 +253,89 @@ class ApplicationsSystemTest < ApplicationSystemTestCase
     take_evidence_screenshot('application-dependent-refused-pending-review', full: true, html: true)
   end
 
+  test 'a refused submission resumes its autosaved dependent draft and preserves a usable save retry' do
+    @dependent.update!(physical_address_1: '12 Original Dependent Road')
+    guardian_address = @user.physical_address_1
+    system_test_sign_in(@user)
+    assert_text 'Dashboard', wait: 10
+    js_errors = collect_javascript_errors
+    visit new_constituent_portal_application_path(user_id: @dependent.id)
+    assert_text "New Application for #{@dependent.full_name}"
+    assert_no_selector '#pending-review-notice'
+
+    fill_in 'Household Size', with: 2
+    assert_selector '[data-autosave-target="status"]', text: I18n.t('applications.autosave.saved')
+    draft = Application.where(user: @dependent, managing_guardian_id: @user.id).sole
+    assert_equal 2, draft.household_size
+    fill_complete_application_form
+    find('input[name="application[medical_provider_attributes][fax]"]').set('2025555678')
+    find_field('Household Size').click
+    wait_until(time: 10) { draft.reload.medical_provider_fax == '2025555678' }
+    assert_equal '12 Original Dependent Road', @dependent.reload.physical_address_1,
+                 'the edited address requires the full form save'
+    assert_selector "form[action='#{constituent_portal_applications_path}'][data-controller~='autosave']"
+    assert_selector 'input[name="submit_application"]:not([disabled])'
+
+    review_case = open_registration_soft_match_case_for(@dependent)
+    find('input[name="submit_application"]:not([disabled])').click
+
+    assert_selector '#pending-review-notice'
+    assert_no_selector '#error-summary'
+    assert_text "This application is for #{@dependent.full_name}"
+    assert_selector "input[name='application[user_id]'][value='#{@dependent.id}']", visible: :all
+    assert_selector "form[action='#{constituent_portal_application_path(draft)}'] input[name='_method'][value='patch']", visible: :all
+    assert_field 'Household Size', with: '3', disabled: false
+    assert_equal 60_000, find_field('Annual Income', disabled: false).value.to_f
+    assert_field 'Street Address', with: '456 Oak Ave', disabled: false
+    assert_selector 'input[name="application[medical_provider_attributes][name]"][value="Dr. Jane Smith"]:not([disabled])'
+    assert_selector 'input[name="application[medical_provider_attributes][fax]"][value="2025555678"]:not([disabled])'
+    assert_selector 'input[name="save_draft"]:not([disabled])'
+    assert_selector 'input[name="submit_application"]:disabled'
+    assert_equal [draft.id], Application.where(user: @dependent).pluck(:id)
+    assert_equal 0, Application.where(user: @user).count
+    assert_equal '12 Original Dependent Road', @dependent.reload.physical_address_1
+    assert_empty page.evaluate_script('window.__systemTestErrors')
+    assert_no_javascript_errors(js_errors, 'the resumed dependent draft refusal')
+    take_evidence_screenshot('application-autosaved-dependent-refusal', full: true, html: true)
+
+    find('input[name="application[medical_provider_attributes][name]"]').set('Dr. Corrected Provider')
+    find('input[name="application[medical_provider_attributes][fax]"]').set('')
+    fill_in 'Street Address', with: '78 Corrected Dependent Road'
+    assert_field 'Street Address', with: '78 Corrected Dependent Road', disabled: false
+    assert_equal '', find('input[name="application[medical_provider_attributes][fax]"]').value
+    assert_empty page.evaluate_script('window.__systemTestErrors')
+    take_evidence_screenshot('application-autosaved-dependent-corrected-retry', full: true, html: true)
+    find('input[name="save_draft"]').click
+
+    assert_current_path constituent_portal_application_path(draft, format: :html)
+    assert_equal [draft.id], Application.where(user: @dependent).pluck(:id)
+    draft.reload
+    assert_equal ['draft', @dependent.id, @user.id], [draft.status, draft.user_id, draft.managing_guardian_id]
+    assert_equal [3, 60_000], [draft.household_size, draft.annual_income.to_i]
+    assert_equal 'Dr. Corrected Provider', draft.medical_provider_name
+    assert draft.medical_provider_fax.blank?, 'the cleared provider field must remain cleared after the full save'
+    assert_equal '78 Corrected Dependent Road', @dependent.reload.physical_address_1
+    assert_equal guardian_address, @user.reload.physical_address_1
+    assert_equal 'open', review_case.reload.status
+    assert_empty page.evaluate_script('window.__systemTestErrors')
+    take_evidence_screenshot('application-autosaved-dependent-retry-saved', full: true, html: true)
+
+    page.go_back
+    assert_selector 'form[data-controller~="autosave"]:not([aria-busy="true"])'
+    assert_field 'Street Address', with: '78 Corrected Dependent Road', disabled: false
+    assert_selector 'input[name="save_draft"]:not([disabled])'
+    assert_selector 'input[name="submit_application"]:disabled'
+    assert_empty page.evaluate_script('window.__systemTestErrors')
+    assert_no_javascript_errors(js_errors, 'returning to the saved dependent draft')
+  end
+
   # The UI block cannot cover the case that opens after the page was rendered, and that is exactly
   # what the locked service gate is for. This drives that race in a real browser: the form loads
   # ungated and enables submission, the case opens, and the click is refused server-side.
   #
-  # It is also the only remaining path to the create-path refusal through new.html.erb. The autosave
-  # controller creates a draft on the first debounced change and rewrites the form action to the
-  # member route, so a normal browser journey is a PATCH by the time of the click -- asserting the
-  # collection action before filling is not enough, because it is still true then and false at the
-  # click. Detaching autosave holds the page in the pre-first-autosave window, where create is
-  # genuinely reachable, and the collection action is re-asserted on both sides of the click.
+  # Autosave now leaves the collection form action intact, and create can resume its draft. This
+  # separate case detaches autosave to cover a refusal before any draft exists; the test above
+  # covers the same POST after autosave has already created the dependent's draft.
   test 'a review opened after the form loaded is still refused by the server' do
     fresh = create(:constituent, first_name: 'Fresh', last_name: 'Applicant',
                                  email: "fresh-#{SecureRandom.hex(3)}@example.com")
