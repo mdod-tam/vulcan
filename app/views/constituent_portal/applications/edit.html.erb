@@ -6,9 +6,18 @@
 
  <% edit_form_data = {
    controller: "final-submit-gate currency-formatter autosave",
-   autosave_target: "form",
+   action: %w[
+     input->autosave#fieldInput change->autosave#fieldChange focusout->autosave#fieldLeave
+     submit->autosave#prepareSubmission turbo:submit-start->autosave#submissionStarted
+     turbo:submit-end->autosave#submissionEnded turbo:before-cache@document->autosave#beforeCache
+   ].join(' '),
    autosave_url_value: autosave_field_constituent_portal_application_path(@application),
-   autosave_debounce_wait_value: 1000
+   autosave_debounce_wait_value: 1000,
+   autosave_saving_text_value: t('applications.autosave.saving', locale: form_message_locale),
+   autosave_saved_text_value: t('applications.autosave.saved', locale: form_message_locale),
+   autosave_failed_text_value: t('applications.autosave.failed', locale: form_message_locale),
+   autosave_unsaved_text_value: t('applications.autosave.unsaved', locale: form_message_locale),
+   autosave_form_dirty_value: @form.present?
  }
    if @application.income_collection_enabled?
      edit_form_data[:controller] = "income-validation #{edit_form_data[:controller]}"
@@ -28,8 +37,9 @@
               class: "space-y-8", 
               data: edit_form_data) do |f| %>
    
+   <%= render 'autosave_fields', state: autosave_form_state %>
    <!-- Autosave status indicator -->
-   <div data-autosave-target="autosaveStatus" class="text-sm text-gray-500 mt-2 hidden"></div>
+   <div data-autosave-target="status" class="text-sm mt-2 min-h-5" role="status" aria-live="polite"></div>
    <div class="bg-white shadow sm:rounded-lg">
      <h2 id="application_form_heading" class="sr-only">Application Details Form</h2>
 

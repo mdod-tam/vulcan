@@ -23,6 +23,9 @@ Rails.application.config.filter_parameters += [
   # /\btoken\z/ is anchored and this parameter is not called "token".
   :identity_decision, :identity_review_receipt, :identity_rationale, /_signed_id\z/,
 
+  # Autosave wraps income, disability, and provider details in a generic value parameter.
+  :autosave_context, :field_value,
+
   # SMS credential specific field
   :phone_number,
 

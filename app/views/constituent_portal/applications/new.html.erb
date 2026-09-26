@@ -15,13 +15,22 @@
       </h1>
       <p class="text-l text-gray-900"><span style="color: red;">*</span> Indicates a required field</p>
 
+      <%# The draft is resolved by the server for this applicant, so a dependent's page must name the
+          dependent here: without it every save lands in the guardian's own draft. %>
       <% new_app_form_data = {
         controller: "final-submit-gate currency-formatter accessibility-announcer autosave",
-        autosave_target: "form",
-        autosave_url_value: autosave_field_constituent_portal_applications_path,
+        action: %w[
+          input->autosave#fieldInput change->autosave#fieldChange focusout->autosave#fieldLeave
+          submit->autosave#prepareSubmission turbo:submit-start->autosave#submissionStarted
+          turbo:submit-end->autosave#submissionEnded turbo:before-cache@document->autosave#beforeCache
+        ].join(' '),
+        autosave_url_value: autosave_field_constituent_portal_applications_path(user_id: (@application.user_id if @applicant_type == 'dependent')),
         autosave_debounce_wait_value: 1000,
-        autosave_edit_form_url_value: constituent_portal_application_path(':id'),
-        autosave_edit_autosave_url_value: autosave_field_constituent_portal_application_path(':id')
+        autosave_saving_text_value: t('applications.autosave.saving', locale: form_message_locale),
+        autosave_saved_text_value: t('applications.autosave.saved', locale: form_message_locale),
+        autosave_failed_text_value: t('applications.autosave.failed', locale: form_message_locale),
+        autosave_unsaved_text_value: t('applications.autosave.unsaved', locale: form_message_locale),
+        autosave_form_dirty_value: @form.present?
       }
         if FeatureFlag.income_proof_required?
           new_app_form_data[:controller] = "income-validation #{new_app_form_data[:controller]}"
@@ -44,8 +53,9 @@
           html: { "aria-labelledby": "form-title" },
           data: new_app_form_data) do |form| %>
 
+        <%= render 'autosave_fields', state: autosave_form_state %>
         <!-- Autosave status indicator -->
-        <div data-autosave-target="autosaveStatus" class="text-sm text-gray-500 mt-2 hidden" role="status" aria-live="polite"></div>
+        <div data-autosave-target="status" class="text-sm mt-2 min-h-5" role="status" aria-live="polite"></div>
 
         <%= render "pending_review_notice" %>
 
@@ -129,6 +139,7 @@
                   params.dig(:constituent, :locale).presence || @applicant_user&.locale.presence || current_user&.locale.presence || "en"
                 ),
                 id: "constituent_locale",
+                data: { no_autosave: true },
                 class: "mt-1 block w-full h-10 py-2 px-3 border border-gray-300 rounded-md shadow-sm focus:outline-none focus:ring-indigo-500 focus:border-indigo-500 sm:text-sm" %>
             <p class="mt-1 text-xs text-gray-700">
               We will use this language for notifications when Spanish templates are available.

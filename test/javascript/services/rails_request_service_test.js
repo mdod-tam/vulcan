@@ -43,6 +43,13 @@ test('installed request library sends same-origin CSRF and JSON and caches its p
   expect(raw.json).toHaveBeenCalledTimes(1)
 })
 
+test('keepalive reaches fetch only when requested so unload-time saves can finish', async () => {
+  fetch.mockResolvedValue(response('{}'))
+  await service.perform({ method: 'patch', url: '/save', body: {}, keepalive: true })
+  await service.perform({ method: 'patch', url: '/save', body: {} })
+  expect(fetch.mock.calls.map(([, options]) => options.keepalive)).toEqual([true, false])
+})
+
 test('HTTP JSON errors preserve their status and validation data', async () => {
   fetch.mockResolvedValue(response('{"errors":{"name":["Required"]}}', 422))
   await expect(service.perform({ url: '/save' })).rejects.toMatchObject({

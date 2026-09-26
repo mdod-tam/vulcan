@@ -1,267 +1,235 @@
 import { Controller } from "@hotwired/stimulus"
 import { railsRequest } from "../../services/rails_request"
-import { debounce } from "../../utils/debounce"
 import { setVisible } from "../../utils/visibility"
 
-class AutosaveController extends Controller {
-  static targets = ["form", "autosaveStatus", "fieldError"]
+const STATUS_COLORS = { saving: "text-indigo-600", saved: "text-green-600", failed: "text-red-600", unsaved: "text-red-600" }
+const CONTROLS = 'input:not([type=hidden]):not([type=submit]):not([type=button]), select, textarea'
 
+// The server orders writes by page and edit revision. Departure requests may overlap ordinary
+// saves; keepalive allows them to outlive the document, but cannot guarantee delivery.
+export default class extends Controller {
+  static targets = ["status", "context", "revision"]
   static values = {
-    url: String,
-    debounceWait: { type: Number, default: 1000 },
-    editFormUrl: String,
-    editAutosaveUrl: String
+    url: String, debounceWait: { type: Number, default: 1000 }, formDirty: Boolean,
+    savingText: String, savedText: String, failedText: String, unsavedText: String
   }
 
   connect() {
-    this.debouncedSave = debounce(() => this.executeFieldSave(), 20)
-
-    this.requestKey = `autosave-${this.identifier}-${Date.now()}`
-
-    this.setupFieldListeners()
+    this.generation = Symbol()
+    this.pageContext = this.contextTarget.value
+    this.revisionElement = this.revisionTarget
+    this.connected = true
+    this.edited = new Map()
+    this.inflight = new Set()
+    this.timers = new Map()
+    this.initial = new Map()
+    this.lastValues = new Map()
+    this.manual = new Set(this.formDirtyValue ? [this.element] : [])
+    this.queue = Promise.resolve()
+    this.element.querySelectorAll(CONTROLS).forEach(element => {
+      this.initial.set(element, fieldValue(element))
+      this.lastValues.set(element.name, fieldValue(element))
+      if (element.dataset.autosavePending) {
+        this.edited.set(element.name, { element, value: fieldValue(element), revision: Number(element.dataset.autosavePending) })
+        this.schedule(element.name, 0)
+      }
+    })
+    this.hasChanges = this.edited.size > 0 || this.manual.size > 0
+    this.onPagehide = () => this.flush()
+    this.onBeforeUnload = event => { event.preventDefault(); event.returnValue = "" }
+    window.addEventListener("pagehide", this.onPagehide)
+    this.updateStatus()
   }
 
   disconnect() {
-    // Cancel any pending autosave requests
-    railsRequest.cancel(this.requestKey)
+    this.connected = false
+    window.removeEventListener("pagehide", this.onPagehide)
+    window.removeEventListener("beforeunload", this.onBeforeUnload)
+    clearTimeout(this.statusTimer)
+    this.flush()
+  }
 
-    // Clean up event listeners
-    this.cleanupEventListeners()
+  fieldInput({ target }) { this.capture(target, this.debounceWaitValue) }
+  fieldChange({ target }) { this.capture(target, 0) }
+  fieldLeave({ target }) {
+    if (this.edited.has(target.name)) this.schedule(target.name, 0)
+  }
 
-    // Clear timers
-    if (this._statusTimeout) {
-      clearTimeout(this._statusTimeout)
-      this._statusTimeout = null
+  capture(element, wait) {
+    if (this.submitting || !element.name || element.disabled || !element.matches(CONTROLS)) return
+    const value = fieldValue(element)
+    this.hasChanges = true
+    if (element.type === "file" || element.dataset.noAutosave) {
+      if (value === this.initial.get(element)) this.manual.delete(element)
+      else this.manual.add(element)
+      this.formDirtyValue = this.manual.size > 0
+    } else {
+      if (value !== this.lastValues.get(element.name)) {
+        const revision = this.nextRevision()
+        this.edited.set(element.name, { element, value, revision })
+        element.dataset.autosavePending = revision
+        this.lastValues.set(element.name, value)
+      }
+      if (this.edited.has(element.name)) this.schedule(element.name, wait)
     }
+    this.updateStatus()
   }
 
-  setupFieldListeners() {
-    if (!this.hasFormTarget) return
-
-    // Get all form inputs except file inputs, buttons, and submit inputs
-    const formInputs = this.formTarget.querySelectorAll(
-      'input:not([type="file"]):not([type="button"]):not([type="submit"]), select, textarea'
-    )
-
-    // Store bound handler for cleanup
-    this._boundHandleBlur = this.handleBlur.bind(this)
-    this._fieldElements = []
-
-    formInputs.forEach(input => {
-      // Store reference for cleanup
-      this._fieldElements.push(input)
-      // Add blur event listener to trigger autosave
-      input.addEventListener('blur', this._boundHandleBlur)
-    })
+  nextRevision() {
+    const revision = Number(this.revisionElement.value) + 1
+    this.revisionElement.value = revision
+    return revision
   }
 
-  cleanupEventListeners() {
-    if (this._fieldElements && this._boundHandleBlur) {
-      this._fieldElements.forEach(element => {
-        element.removeEventListener('blur', this._boundHandleBlur)
-      })
-    }
-    this._fieldElements = []
-    this._boundHandleBlur = null
+  schedule(name, wait) {
+    clearTimeout(this.timers.get(name))
+    const generation = this.generation
+    this.timers.set(name, setTimeout(() => {
+      this.timers.delete(name)
+      this.queue = this.queue.then(() => this.connected && generation === this.generation && this.save(name))
+    }, wait))
   }
 
-  handleBlur(event) {
-    // Store the element for the debounced save
-    this._pendingElement = event.target
-    this.debouncedSave()
-  }
-
-  executeFieldSave() {
-    if (this._pendingElement) {
-      this.saveField(this._pendingElement)
-      this._pendingElement = null
-    }
-  }
-
-  async saveField(element) {
-    // Skip if no element, it's a file input, or has the 'data-no-autosave' attribute
-    if (!element || element.type === 'file' || element.dataset.noAutosave) return
-
-    const fieldName = element.name
-    let fieldValue = element.value
-
-    // Special handling for checkboxes
-    if (element.type === 'checkbox') {
-      fieldValue = element.checked
-    }
-
-    // Do not save if the field name is empty
-    if (!fieldName) return
-
-    // Show saving status
-    this.updateStatus("Saving...", "text-indigo-600")
-
+  async save(name) {
+    const edit = this.edited.get(name)
+    if (!edit || edit.sending || this.submitting) return
+    const generation = this.generation
+    const inflight = this.inflight
+    edit.sending = true
+    edit.failed = false
+    inflight.add(edit)
+    this.updateStatus()
     try {
-      // Clear any existing errors for this field
-      this.clearFieldErrorNear(element)
-
-      // Use centralized rails request service
-      const result = await railsRequest.perform({
-        method: 'patch',
-        url: this.urlValue,
-        body: {
-          field_name: fieldName,
-          field_value: fieldValue
-        },
-        key: this.requestKey
+      const { data } = await railsRequest.perform({
+        method: "patch", url: this.urlValue, keepalive: true,
+        body: { field_name: name, field_value: edit.value, autosave_context: this.pageContext, autosave_revision: edit.revision }
       })
-
-      if (result.success) {
-        const data = result.data
-
-        if (data.success) {
-          this.updateStatus("Saved", "text-green-600")
-
-          // If this is a new application, update the form action URL 
-          // to include the new application ID
-          if (data.applicationId && !this.formTarget.action.includes(`/${data.applicationId}`) && this.hasEditFormUrlValue && this.hasEditAutosaveUrlValue) {
-            // Use Rails-generated URLs
-            const newFormAction = this.editFormUrlValue.replace(':id', data.applicationId)
-            this.formTarget.action = newFormAction
-
-            // Update the autosave URL as well
-            this.urlValue = this.editAutosaveUrlValue.replace(':id', data.applicationId)
-
-            // Add or update the _method hidden field to PATCH
-            let methodField = this.formTarget.querySelector('input[name="_method"]')
-            if (!methodField) {
-              methodField = document.createElement('input')
-              methodField.type = 'hidden'
-              methodField.name = '_method'
-              this.formTarget.appendChild(methodField)
-            }
-            methodField.value = 'patch'
-          }
-        } else {
-          this.updateStatus("Error saving", "text-red-600")
-
-          // Display field-specific errors
-          if (data.errors) {
-            Object.entries(data.errors).forEach(([field, messages]) => {
-              if (field === fieldName) {
-                this.displayFieldError(element, messages.join(', '))
-              }
-            })
-          }
-        }
-      } else if (!result.aborted) {
-        this.updateStatus("Failed to save", "text-red-600")
+      if (!data?.success || data.revision !== edit.revision || !Number.isSafeInteger(data.current_revision) || data.current_revision < data.revision || !["saved", "superseded"].includes(data.outcome)) {
+        throw new Error("Unconfirmed autosave response")
       }
-
+      if (generation === this.generation) {
+        this.revisionElement.value = Math.max(Number(this.revisionElement.value), data.current_revision)
+      }
+      if (generation === this.generation && this.edited.get(name) === edit) {
+        this.edited.delete(name)
+        delete edit.element.dataset.autosavePending
+        if (this.connected) {
+          // A restored Turbo snapshot can contain an edit the server has already superseded.
+          if (data.outcome === "superseded") {
+            if (edit.element.type === "checkbox") edit.element.checked = data.value === true
+            else edit.element.value = data.value ?? ""
+            this.lastValues.set(name, fieldValue(edit.element))
+            edit.element.dispatchEvent(new Event("input", { bubbles: true }))
+          }
+          this.clearFieldError(edit.element)
+        }
+      }
     } catch (error) {
-      if (error.name !== "AbortError") {
-        console.error('Autosave error:', error)
-        this.updateStatus("Failed to save", "text-red-600")
+      if (generation === this.generation && this.edited.get(name) === edit) {
+        edit.failed = true
+        const messages = error.data?.errors?.[name]
+        if (messages && this.connected) this.showFieldError(edit.element, messages.join(", "))
+      }
+    } finally {
+      edit.sending = false
+      inflight.delete(edit)
+      if (generation === this.generation) this.updateStatus()
+    }
+  }
 
-        // Handle error data if available
-        if (error.data?.errors) {
-          Object.entries(error.data.errors).forEach(([field, messages]) => {
-            if (field === fieldName) {
-              this.displayFieldError(element, messages.join(', '))
-            }
-          })
+  flush() {
+    this.timers.forEach(clearTimeout)
+    this.timers.clear()
+    if (!this.submitting) this.edited.forEach((_edit, name) => this.save(name))
+  }
+
+  prepareSubmission() { this.nextRevision() }
+
+  submissionStarted() {
+    this.submitting = true
+    this.submittedRevision = Number(this.revisionElement.value)
+    this.timers.forEach(clearTimeout)
+    this.timers.clear()
+    // Turbo has already captured FormData. Freeze controls while that snapshot is submitted.
+    this.frozen = [...this.element.querySelectorAll('input, select, textarea, button')].filter(element => !element.disabled)
+    this.frozen.forEach(element => { element.disabled = true })
+  }
+
+  beforeCache() { this.frozen?.forEach(element => { element.disabled = false }) }
+
+  submissionEnded({ detail: { success } }) {
+    this.submitting = false
+    this.beforeCache()
+    if (success) {
+      this.edited.forEach((edit, name) => {
+        if (edit.revision <= this.submittedRevision) {
+          this.edited.delete(name)
+          this.inflight.delete(edit)
+          delete edit.element.dataset.autosavePending
         }
-      }
+      })
+      this.manual.clear()
+      this.formDirtyValue = false
+    } else {
+      this.edited.forEach(edit => { edit.failed = true })
+      this.manual.add(this.element)
+      this.formDirtyValue = true
     }
-
-    // Clear any existing status timeout to prevent stacking
-    if (this._statusTimeout) {
-      clearTimeout(this._statusTimeout)
-    }
-
-    // Clear status message after a delay
-    this._statusTimeout = setTimeout(() => {
-      this.updateStatus("", "")
-      this._statusTimeout = null
-    }, 3000)
+    this.updateStatus()
   }
 
-  updateStatus(message, cssClass) {
-    if (this.hasAutosaveStatusTarget) {
-      const target = this.autosaveStatusTarget
-      target.textContent = message
-
-      // Reset classes
-      target.className = "text-sm mt-2"
-
-      // Add new class if provided
-      if (cssClass) {
-        target.classList.add(cssClass)
-      }
-
-      // Use setVisible utility for consistent visibility management
-      setVisible(target, !!message)
-    }
+  updateStatus() {
+    if (!this.connected) return
+    const failed = [...this.edited.values()].some(edit => edit.failed)
+    const pending = this.edited.size > 0 || this.inflight.size > 0
+    const dirty = pending || this.manual.size > 0
+    if (dirty) window.addEventListener("beforeunload", this.onBeforeUnload)
+    else window.removeEventListener("beforeunload", this.onBeforeUnload)
+    if (!this.hasStatusTarget) return
+    if (!this.hasChanges && !dirty) { this.statusTarget.textContent = ""; return }
+    const state = failed ? "failed" : pending ? "saving" : this.manual.size ? "unsaved" : "saved"
+    clearTimeout(this.statusTimer)
+    const status = this.statusTarget
+    status.classList.remove(...Object.values(STATUS_COLORS))
+    status.classList.add(STATUS_COLORS[state])
+    status.textContent = this[`${state}TextValue`]
+    if (state === "saved") this.statusTimer = setTimeout(() => { status.textContent = "" }, 3000)
   }
 
-  displayFieldError(element, message) {
-    // Find or create error element near the field
-    const errorContainer = this.findOrCreateFieldErrorElement(element)
-
-    if (errorContainer) {
-      errorContainer.textContent = message
-      errorContainer.classList.add('text-red-600', 'text-sm', 'mt-1')
-      setVisible(errorContainer, true)
-    }
+  showFieldError(element, message) {
+    const error = this.fieldError(element) || this.createFieldError(element)
+    error.textContent = message
+    setVisible(error, true)
+    element.setAttribute("aria-invalid", "true")
   }
 
-  clearFieldError(event) {
-    this.clearFieldErrorNear(event.target)
+  clearFieldError(element) {
+    const error = this.fieldError(element)
+    if (!error) return
+    error.textContent = ""
+    setVisible(error, false)
+    element.removeAttribute("aria-invalid")
   }
 
-  clearFieldErrorNear(element) {
-    const errorContainer = this.findFieldErrorElement(element)
-    if (errorContainer) {
-      errorContainer.textContent = ''
-      setVisible(errorContainer, false)
-    }
+  fieldError(element) {
+    const next = element.nextElementSibling
+    return next?.id === fieldErrorId(element) ? next : null
   }
 
-  findFieldErrorElement(element) {
-    // First look for an existing field error element with a data-field attribute
-    const fieldName = element.name
-
-    // Look for error elements that are siblings of the input
-    const parent = element.parentElement
-    if (parent) {
-      const errorElem = parent.querySelector(`.field-error-message[data-field="${fieldName}"]`)
-      if (errorElem) return errorElem
-
-      // Also look for any field error elements without a specific data field that are siblings
-      const genericErrorElem = parent.querySelector('.field-error-message:not([data-field])')
-      if (genericErrorElem) return genericErrorElem
-    }
-
-    // Look more broadly for any target
-    return this.fieldErrorTargets.find(target =>
-      target.dataset.field === fieldName || !target.dataset.field
-    )
-  }
-
-  findOrCreateFieldErrorElement(element) {
-    // First try to find an existing error element
-    const existing = this.findFieldErrorElement(element)
-    if (existing) return existing
-
-    // If not found, create a new one
-    const errorElem = document.createElement('p')
-    errorElem.className = 'field-error-message text-red-600 text-sm mt-1'
-    errorElem.dataset.field = element.name
-
-    // Insert after the input element
-    const parent = element.parentElement
-    if (parent) {
-      parent.insertBefore(errorElem, element.nextSibling)
-      return errorElem
-    }
-
-    return null
+  createFieldError(element) {
+    const error = document.createElement("p")
+    error.id = fieldErrorId(element)
+    error.className = "field-error-message text-red-600 text-sm mt-1"
+    element.insertAdjacentElement("afterend", error)
+    element.setAttribute("aria-describedby", [element.getAttribute("aria-describedby"), error.id].filter(Boolean).join(" "))
+    return error
   }
 }
 
-export default AutosaveController
+function fieldValue(element) {
+  return element.type === "checkbox" ? element.checked : element.value
+}
+
+function fieldErrorId(element) {
+  return `${element.id || element.name}-autosave-error`
+}

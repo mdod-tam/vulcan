@@ -4,6 +4,7 @@ require 'test_helper'
 
 module ConstituentPortal
   class ApplicationsControllerTest < ActionDispatch::IntegrationTest
+    include AutosaveTestHelper
     include ActionDispatch::TestProcess::FixtureFile
     include AuthenticationTestHelper
 
@@ -264,6 +265,72 @@ module ConstituentPortal
       # notice has to say so and name the action that recovers them.
       assert_select '#pending-review-documents-notice',
                     text: /#{Regexp.escape(refused_documents_message)}/
+    end
+
+    # The new-application form posts to create until the page is reloaded, even after autosave has
+    # started the draft. Create must continue that draft: a Save used to start a second draft, and a
+    # Submit was refused because the constituent's own draft counted as a sibling application.
+    test 'Save Application posted to create continues the draft autosave already started' do
+      applicant = create(:constituent, :with_disabilities)
+      sign_in_for_integration_test(applicant)
+      draft = autosaved_draft(applicant, household_size: '2')
+
+      assert_no_difference('Application.count') do
+        post constituent_portal_applications_path,
+             params: pending_review_submission_params.except(:submit_application).merge(save_draft: 'Save Application')
+      end
+
+      assert_redirected_to constituent_portal_application_path(draft)
+      draft.reload
+      assert_equal 'draft', draft.status
+      assert_equal 3, draft.household_size, 'the full form is authoritative over the autosaved value'
+    end
+
+    test 'Submit posted to create submits the dependent draft autosave already started' do
+      guardian = create(:constituent, :with_disabilities)
+      dependent = create(:constituent, :with_disabilities)
+      create(:guardian_relationship, guardian_user: guardian, dependent_user: dependent, relationship_type: 'Parent')
+      sign_in_for_integration_test(guardian)
+      draft = autosaved_draft(guardian, household_size: '2', user_id: dependent.id)
+
+      params = pending_review_submission_params
+      params[:application] = params[:application].merge(user_id: dependent.id, for_self: 'false')
+      assert_no_difference('Application.count') do
+        post constituent_portal_applications_path, params: params
+      end
+
+      assert_redirected_to constituent_portal_application_path(draft)
+      draft.reload
+      assert_equal 'in_progress', draft.status
+      assert_equal [dependent.id, guardian.id], [draft.user_id, draft.managing_guardian_id]
+      assert_equal 0, Application.where(user: guardian).count, 'nothing may be filed as the guardian'
+    end
+
+    # A refused create that resumed a draft re-renders what was typed, not what was stored, and the
+    # re-rendered form now targets that draft, so an unchanged retry submits it.
+    test 'a refused create that resumed a draft keeps typed values and an unchanged retry submits that draft' do
+      applicant = create(:constituent, :with_disabilities)
+      sign_in_for_integration_test(applicant)
+      draft = autosaved_draft(applicant, household_size: '7')
+      review_case = open_soft_match_case_for(applicant)
+
+      assert_no_difference('Application.count') do
+        post constituent_portal_applications_path, params: pending_review_submission_params
+      end
+
+      assert_response :unprocessable_content
+      assert_select '#pending-review-notice'
+      assert_select "input[name='application[household_size]'][value='3']"
+      assert_select "form[action='#{constituent_portal_application_path(draft)}'] input[name='_method'][value='patch']"
+      assert_equal 7, draft.reload.household_size, 'a refusal saves nothing'
+
+      review_case.update!(status: :resolved_ignored, resolution_determination: :keep_separate,
+                          resolution_rationale: 'Different people', resolved_by: create(:admin),
+                          resolved_at: Time.current)
+      patch constituent_portal_application_path(draft), params: pending_review_submission_params
+
+      assert_redirected_to constituent_portal_application_path(draft)
+      assert_equal ['in_progress', 3], draft.reload.values_at(:status, :household_size)
     end
 
     # The same notice on arrival must not claim documents were lost: nothing has been selected yet.
@@ -1317,6 +1384,16 @@ module ConstituentPortal
       GuardianRelationship.create!(guardian_user: guardian, dependent_user: dependent,
                                    relationship_type: 'parent')
       [guardian, dependent]
+    end
+
+    def autosaved_draft(actor, household_size:, user_id: nil)
+      result = Applications::AutosaveService.new(
+        current_user: actor,
+        params: { **autosave_metadata(actor: actor, applicant: user_id ? User.find(user_id) : actor),
+          user_id: user_id, field_name: 'application[household_size]', field_value: household_size }.compact
+      ).call
+      assert result[:success], "autosave setup failed: #{result[:errors]}"
+      Application.find(result[:application_id])
     end
 
     def open_soft_match_case_for(subject)

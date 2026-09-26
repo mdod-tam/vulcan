@@ -29,6 +29,8 @@ export default class extends Controller {
   }
 
   update() {
+    // Turbo owns disabled controls until the submitted snapshot has finished.
+    if (this.element.getAttribute("aria-busy") === "true") return
     this._syncConditionalRequiredControls()
 
     const hardBlockMessage = this._hardBlockMessage()

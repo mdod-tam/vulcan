@@ -10,7 +10,7 @@
 #
 # It's strongly recommended that you check this file into your version control system.
 
-ActiveRecord::Schema[8.1].define(version: 2026_09_17_004500) do
+ActiveRecord::Schema[8.1].define(version: 2026_09_24_000000) do
   # These are extensions that must be enabled in order to support this database
   enable_extension "pg_catalog.plpgsql"
 
@@ -96,6 +96,7 @@ ActiveRecord::Schema[8.1].define(version: 2026_09_17_004500) do
     t.datetime "application_date"
     t.string "application_transfer_id"
     t.integer "application_type"
+    t.jsonb "autosave_revisions", default: {}, null: false
     t.datetime "created_at", null: false
     t.string "current_step"
     t.text "document_signing_audit_url"
