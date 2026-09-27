@@ -14,6 +14,7 @@ module Applications
     self.use_transactional_tests = false
 
     include ConcurrencyTestHelper
+    include AutosaveTestHelper
 
     test 'merge commits first: autosave on the newly-merged duplicate then fails closed with zero writes' do
       admin, canonical, duplicate, review_case = build_fixtures
@@ -364,6 +365,7 @@ module Applications
       Applications::AutosaveService.new(
         current_user: User.find(user.id),
         params: {
+          **autosave_metadata(actor: user),
           id: application_id,
           field_name: 'application[vision_disability]',
           field_value: 'true'
@@ -375,6 +377,7 @@ module Applications
       Applications::AutosaveService.new(
         current_user: User.find(user.id),
         params: {
+          **autosave_metadata(actor: user),
           id: application_id,
           field_name: 'application[household_size]',
           field_value: '4'

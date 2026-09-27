@@ -9,3 +9,8 @@ linters:
     rubocop_config:
       inherit_from:
         - .rubocop.yml
+      # ERB fragments are padded for column alignment and stripped of their final newline.
+      Layout/InitialIndentation:
+        Enabled: false
+      Layout/TrailingEmptyLines:
+        Enabled: false

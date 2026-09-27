@@ -153,6 +153,19 @@ describe("FinalSubmitGateController", () => {
     expect(status.textContent).toBe("Application is ready to submit.")
   })
 
+  test("late validation cannot re-enable controls during a Turbo submission", () => {
+    completeEveryRequirement()
+    controller.update()
+    expect(submitButton.disabled).toBe(false)
+    form.setAttribute("aria-busy", "true")
+    submitButton.disabled = true
+    controller.handleIncomeValidation({ detail: { exceedsThreshold: false } })
+    expect(submitButton.disabled).toBe(true)
+    form.removeAttribute("aria-busy")
+    controller.update()
+    expect(submitButton.disabled).toBe(false)
+  })
+
   test("clearing the block restores the ordinary completeness gate", () => {
     form.dataset.finalSubmitGateBlockedMessage = "Submitting is unavailable while we review this application."
     controller.update()

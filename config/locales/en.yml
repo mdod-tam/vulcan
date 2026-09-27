@@ -185,6 +185,13 @@ en:
         # Support must resolve distinct people who share both values.
         duplicate_identity: "%{name} is already associated with your account with this name and birthdate. If this is a different person, contact the MAT Team at %{support_email} or %{support_phone}."
   applications:
+    autosave:
+      # Autosave status for the constituent application form, announced through a polite live region.
+      saving: "Saving draft…"
+      saved: "Draft saved"
+      unsaved: 'Use "Save Application" to keep the remaining form changes.'
+      refresh: 'Autosave is unavailable for this page. Use "Save Application" to save your changes.'
+      failed: "Some changes are not saved yet. Use \"Save Application\" to keep them."
     submission_gate:
       # The live region explains the disabled control. The visible notice has the full explanation.
       pending_identity_review_status: "Submitting is unavailable while we review information associated with this application. You can still save your draft."

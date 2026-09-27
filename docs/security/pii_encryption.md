@@ -49,7 +49,7 @@ Fixtures are encrypted and key references are stored. These settings do not esta
 
 ## Keep personal data out of logs
 
-[Parameter filtering](../../config/initializers/filter_parameter_logging.rb) covers contact details, names, addresses, DOB, password fields, provider contacts, and tokens. Paper identity receipts, rationales, and upload `*_signed_id` parameters are filtered, as is the legacy `identity_decision` parameter from older forms. Encrypted attributes are also added to filtering. Review storage and filtering together when adding a sensitive field.
+[Parameter filtering](../../config/initializers/filter_parameter_logging.rb) covers contact details, names, addresses, DOB, password fields, provider contacts, and tokens. Paper identity receipts, rationales, and upload `*_signed_id` parameters are filtered, as is the legacy `identity_decision` parameter from older forms. Autosave filters `field_value`, which can contain personal data, and its `autosave_context` page identifier. Encrypted attributes are also added to filtering. Review storage and filtering together when adding a sensitive field.
 
 SQL binds need names for filtering to work. A hash condition carries its column name; a positional value in `where('LOWER(first_name) = ?', value)` does not. [Constituent duplicate matching](../../app/models/users/constituent.rb) uses named query attributes for this reason.
 

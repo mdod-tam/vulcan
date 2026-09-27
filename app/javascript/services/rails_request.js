@@ -20,7 +20,8 @@ export class RailsRequestService {
     body = null,
     key = null, // Optional key for tracking/canceling specific requests
     signal = null,
-    headers = {}
+    headers = {},
+    keepalive = false // Lets the browser finish the request after the page unloads
   }) {
     // Cancel existing request with same key if provided
     if (key && this.activeRequests.has(key)) {
@@ -38,7 +39,8 @@ export class RailsRequestService {
     try {
       const requestOptions = {
         signal: finalSignal,
-        headers
+        headers,
+        keepalive
       }
 
       if (body) {

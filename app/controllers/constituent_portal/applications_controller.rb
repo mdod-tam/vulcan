@@ -177,7 +177,7 @@ module ConstituentPortal
     # This is the Rails-idiomatic approach: data is rendered once on page load, avoiding
     # unnecessary AJAX requests for static configuration data.
     # See: app/services/income_threshold_calculation_service.rb for core FPL logic
-    helper_method :fpl_thresholds_json, :fpl_modifier_value
+    helper_method :fpl_thresholds_json, :fpl_modifier_value, :form_message_locale, :autosave_form_state
 
     def fpl_thresholds_json
       return '{}' unless FeatureFlag.income_proof_required?
@@ -324,16 +324,10 @@ module ConstituentPortal
       @target_user_id ||= params[:user_id].presence&.to_i || current_user.id
     end
 
-    # Finds existing draft application for target user
-    # For dependent applications, only finds drafts managed by current guardian
     def existing_draft
-      @existing_draft ||= begin
-        scope = Application.draft_for_constituent(target_user_id)
-        # If this is for a dependent (user_id param present and != current_user),
-        # only look for applications managed by current user
-        scope = scope.where(managing_guardian_id: current_user.id) if params[:user_id].present? && target_user_id != current_user.id
-        scope.first
-      end
+      @existing_draft ||= Application.resumable_portal_draft(
+        Application.draft_for_constituent(target_user_id), actor_id: current_user.id
+      )
     end
 
     # Finds existing active (non-draft) application for target user
@@ -381,8 +375,9 @@ module ConstituentPortal
       # failure result carries ApplicationForm#target_application, which for a new application is a
       # bare Application.new. That is always truthy, so the fallback above never fires and the form
       # would re-render empty, silently discarding everything the constituent typed. Re-apply the
-      # submitted values so a refusal costs them an explanation, not their work.
-      @application.assign_attributes(filtered_application_params) if @application.new_record?
+      # submitted values so a refusal costs them an explanation, not their work. The same holds when
+      # the creator resumed an existing draft: nothing is saved, this object is only rendered.
+      @application.assign_attributes(filtered_application_params)
       restore_applicant_context_from_params
       setup_address_for_form
       restore_medical_provider_from_params
@@ -486,7 +481,7 @@ module ConstituentPortal
         # that message whenever the same request also changed the language preference -- the
         # headline would render in the newly chosen locale and these two supplements in the old one,
         # on one screen. pending_review_locale stays for the GET notice, where there is no form.
-        locale = @form&.message_locale || pending_review_locale(address_applicant_user)
+        locale = form_message_locale
         @submission_blocked_message = submission_gate_blocked_message(locale)
         # Only on this path. The GET notice fires before anything is selected, so there is nothing
         # to have lost; here the constituent did select documents and the re-render cannot give
@@ -519,6 +514,16 @@ module ConstituentPortal
         locale: locale
       )
       @submission_blocked_message = submission_gate_blocked_message(locale)
+    end
+
+    # The locale for form-owned messages on this page -- the refusal notices and the autosave status
+    # -- in ApplicationForm#message_locale's order when there is a form, else the applicant's.
+    def form_message_locale
+      @form&.message_locale || pending_review_locale(address_applicant_user)
+    end
+
+    def autosave_form_state
+      Applications::AutosaveRevisions.new(@application).form_state(context: params[:autosave_context], revision: params[:autosave_revision])
     end
 
     def submission_gate_blocked_message(locale)
@@ -560,10 +565,13 @@ module ConstituentPortal
         render json: {
           success: true,
           applicationId: result[:application_id],
-          message: result[:message]
+          outcome: result[:outcome],
+          revision: result[:revision],
+          current_revision: result[:current_revision],
+          value: result[:value]
         }, status: :ok
       else
-        render json: { success: false, errors: result[:errors] }, status: :unprocessable_content
+        render json: { success: false, errors: result[:errors], status_message: result[:status_message] }.compact, status: :unprocessable_content
       end
     end
 

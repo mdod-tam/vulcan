@@ -3,6 +3,17 @@
 require 'test_helper'
 
 class FilterParameterLoggingTest < ActiveSupport::TestCase
+  test 'autosave logs retain the field and revision but redact its value and page id' do
+    filtered = ActiveSupport::ParameterFilter.new(Rails.application.config.filter_parameters).filter(
+      'field_name' => 'application[medical_provider_email]', 'field_value' => 'doctor@example.com',
+      'autosave_context' => '0194504e-7920-4c00-b289-bd47348794b6', 'autosave_revision' => '7'
+    )
+    assert_equal '[FILTERED]', filtered['field_value']
+    assert_equal '[FILTERED]', filtered['autosave_context']
+    assert_equal 'application[medical_provider_email]', filtered['field_name']
+    assert_equal '7', filtered['autosave_revision']
+  end
+
   test 'filters contact and password parameters from logs' do
     filter = ActiveSupport::ParameterFilter.new(Rails.application.config.filter_parameters)
     filtered = filter.filter(

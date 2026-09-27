@@ -1,0 +1,3 @@
+<%# locals: (state:) %>
+<%= hidden_field_tag :autosave_context, state[:context], data: { autosave_target: 'context', no_autosave: true } %>
+<%= hidden_field_tag :autosave_revision, state[:revision], data: { autosave_target: 'revision', no_autosave: true } %>

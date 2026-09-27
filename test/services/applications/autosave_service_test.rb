@@ -4,6 +4,8 @@ require 'test_helper'
 
 module Applications
   class AutosaveServiceTest < ActiveSupport::TestCase
+    include AutosaveTestHelper
+
     setup do
       # Create guardian with explicit disability settings to avoid factory defaults
       @user = FactoryBot.create(:constituent,
@@ -23,6 +25,7 @@ module Applications
         result = Applications::AutosaveService.new(
           current_user: @user,
           params: {
+            **autosave_metadata(actor: @user),
             field_name: 'application[household_size]',
             field_value: '3'
           }
@@ -43,6 +46,7 @@ module Applications
           result = Applications::AutosaveService.new(
             current_user: @user,
             params: {
+              **autosave_metadata(actor: @user),
               field_name: 'application[household_size]',
               field_value: '3'
             }
@@ -59,6 +63,7 @@ module Applications
         result = Applications::AutosaveService.new(
           current_user: @user,
           params: {
+            **autosave_metadata(actor: @user),
             field_name: 'application[annual_income]',
             field_value: '25000'
           }
@@ -83,6 +88,7 @@ module Applications
           results << Applications::AutosaveService.new(
             current_user: @user,
             params: {
+              **autosave_metadata(actor: @user),
               field_name: 'application[household_size]',
               field_value: '2'
             }
@@ -109,6 +115,7 @@ module Applications
         result = Applications::AutosaveService.new(
           current_user: @user,
           params: {
+            **autosave_metadata(actor: @user, applicant: @dependent),
             user_id: @dependent.id,
             field_name: 'application[household_size]',
             field_value: '3'
@@ -129,6 +136,7 @@ module Applications
         result = Applications::AutosaveService.new(
           current_user: @user,
           params: {
+            **autosave_metadata(actor: @user, applicant: @dependent),
             user_id: @dependent.id,
             field_name: 'application[household_size]',
             field_value: '3'
@@ -150,6 +158,7 @@ module Applications
       result = Applications::AutosaveService.new(
         current_user: @user,
         params: {
+          **autosave_metadata(actor: @user),
           field_name: 'application[household_size]',
           field_value: '5'
         }
@@ -166,6 +175,7 @@ module Applications
       result = Applications::AutosaveService.new(
         current_user: @user,
         params: {
+          **autosave_metadata(actor: @user),
           id: draft.id,
           field_name: 'application[annual_income]',
           field_value: '30000'
@@ -182,6 +192,7 @@ module Applications
       result = Applications::AutosaveService.new(
         current_user: @user,
         params: {
+          **autosave_metadata(actor: @user),
           id: 99_999, # Non-existent ID
           field_name: 'application[household_size]',
           field_value: '3'
@@ -201,6 +212,7 @@ module Applications
         result = Applications::AutosaveService.new(
           current_user: @user,
           params: {
+            **autosave_metadata(actor: @user),
             field_name: 'application[household_size]',
             field_value: '3'
           }
@@ -217,6 +229,7 @@ module Applications
       result = Applications::AutosaveService.new(
         current_user: @user,
         params: {
+          **autosave_metadata(actor: @user),
           field_name: 'application[hearing_disability]',
           field_value: 'true'
         }
@@ -233,6 +246,7 @@ module Applications
       result = Applications::AutosaveService.new(
         current_user: @user,
         params: {
+          **autosave_metadata(actor: @user),
           field_name: 'application[physical_address_1]',
           field_value: '123 Main St'
         }
@@ -248,6 +262,7 @@ module Applications
       result = Applications::AutosaveService.new(
         current_user: @user,
         params: {
+          **autosave_metadata(actor: @user),
           field_name: 'application[annual_income]',
           field_value: 'invalid'
         }
@@ -255,6 +270,36 @@ module Applications
 
       assert_not result[:success]
       assert result[:errors].present?
+    end
+
+    test 'a cleared number is saved as cleared instead of keeping the old value' do
+      draft = FactoryBot.create(:application, :draft, user: @user, household_size: 4, annual_income: 20_000)
+
+      %w[household_size annual_income].each do |attribute|
+        result = Applications::AutosaveService.new(
+          current_user: @user,
+          params: { **autosave_metadata(actor: @user), id: draft.id, field_name: "application[#{attribute}]", field_value: '' }
+        ).call
+
+        assert result[:success], "clearing #{attribute} must save"
+      end
+
+      draft.reload
+      assert_nil draft.household_size
+      assert_nil draft.annual_income
+    end
+
+    test 'an invalid number is reported on the field that was sent' do
+      draft = FactoryBot.create(:application, :draft, user: @user, household_size: 4)
+
+      result = Applications::AutosaveService.new(
+        current_user: @user,
+        params: { **autosave_metadata(actor: @user), id: draft.id, field_name: 'application[household_size]', field_value: '4x' }
+      ).call
+
+      assert_not result[:success]
+      assert_equal({ 'application[household_size]' => ['Must be a valid integer'] }, result[:errors])
+      assert_equal 4, draft.reload.household_size
     end
 
     test 'finds dependent draft by id when guardian is current user' do
@@ -270,6 +315,7 @@ module Applications
       result = Applications::AutosaveService.new(
         current_user: @user,
         params: {
+          **autosave_metadata(actor: @user, applicant: @dependent),
           id: dependent_draft.id,
           field_name: 'application[household_size]',
           field_value: '4'
@@ -297,6 +343,7 @@ module Applications
       result = Applications::AutosaveService.new(
         current_user: @user,
         params: {
+          **autosave_metadata(actor: @user, applicant: @dependent),
           id: dependent_draft.id,
           field_name: 'application[hearing_disability]',
           field_value: 'true'
@@ -323,6 +370,7 @@ module Applications
       result = Applications::AutosaveService.new(
         current_user: User.find(@user.id),
         params: {
+          **autosave_metadata(actor: @user, applicant: @dependent),
           id: dependent_draft.id,
           field_name: 'application[household_size]',
           field_value: '4'
@@ -347,6 +395,7 @@ module Applications
       result = Applications::AutosaveService.new(
         current_user: @user,
         params: {
+          **autosave_metadata(actor: @user, applicant: @dependent),
           id: dependent_draft.id,
           field_name: 'application[household_size]',
           field_value: '4'
@@ -371,6 +420,7 @@ module Applications
       result = Applications::AutosaveService.new(
         current_user: @user,
         params: {
+          **autosave_metadata(actor: @user, applicant: @dependent),
           id: dependent_draft.id,
           field_name: 'application[maryland_resident]',
           field_value: 'true'
@@ -389,28 +439,30 @@ module Applications
       result = Applications::AutosaveService.new(
         current_user: @user,
         params: {
+          **autosave_metadata(actor: @user),
           field_name: 'application[household_size]',
           field_value: '3'
         }
       ).call
 
       assert_not result[:success]
-      assert_includes result[:errors]['application[household_size]'], 'simulated application-created audit failure'
+      assert_includes result[:errors][:base], 'This field could not be saved'
       assert_equal application_count, Application.count, 'the new draft must roll back with its required audit'
       assert_equal event_count, Event.count
       assert_nil Application.find_by(user: @user)
     end
 
-    test 'rolls back a user-field write when updating the application step raises' do
+    test 'rolls back a user-field write and its revision when saving the application fails' do
       draft = FactoryBot.create(:application, :draft, user: @user, last_visited_step: 'step_1')
       Application.any_instance
-                 .stubs(:update_column)
-                 .with(:last_visited_step, 'hearing_disability')
+                 .stubs(:save!)
+                 .with(validate: false)
                  .raises(StandardError, 'simulated application step failure')
 
       result = Applications::AutosaveService.new(
         current_user: @user,
         params: {
+          **autosave_metadata(actor: @user),
           id: draft.id,
           field_name: 'application[hearing_disability]',
           field_value: 'true'
@@ -418,9 +470,10 @@ module Applications
       ).call
 
       assert_not result[:success]
-      assert_includes result[:errors]['application[hearing_disability]'], 'simulated application step failure'
+      assert_includes result[:errors][:base], 'This field could not be saved'
       assert_not @user.reload.hearing_disability, 'the earlier user-field write must roll back'
       assert_equal 'step_1', draft.reload.last_visited_step
+      assert_empty draft.autosave_revisions
     end
 
     test 'rolls back an application-field write when updating the application step raises' do
@@ -439,6 +492,7 @@ module Applications
       result = Applications::AutosaveService.new(
         current_user: @user,
         params: {
+          **autosave_metadata(actor: @user),
           id: draft.id,
           field_name: 'application[household_size]',
           field_value: '5'
@@ -446,7 +500,7 @@ module Applications
       ).call
 
       assert_not result[:success]
-      assert_includes result[:errors]['application[household_size]'], 'simulated application step failure'
+      assert_includes result[:errors][:base], 'This field could not be saved'
       assert_equal 2, draft.reload.household_size, 'the earlier application-field write must roll back'
       assert_equal 'step_1', draft.last_visited_step
     end

@@ -13,23 +13,27 @@ The server re-decides anything the browser decided.
 - **Registration is manual.** [`controllers/index.js`](../../app/javascript/controllers/index.js) imports and registers each controller explicitly; [`controllers/application.js`](../../app/javascript/controllers/application.js) registers nothing on purpose. An unregistered controller is inert, with no error.
 - **The identifier is the registered name, not the path.** `admin-user-search` lives at `admin/user_search_controller.js`.
 - **Assets are built, not served from source.** [esbuild](../../esbuild.config.js) bundles `app/javascript/application.js` into `app/assets/builds` (`yarn build`); Tailwind is `yarn build:css`.
-- **Views own URLs and copy.** Controllers read them from values rather than constructing paths, which is why templates pass `:id` placeholder routes for URLs a controller will need after a record exists.
+- **Views own URLs and copy.** Controllers read them from values rather than constructing paths or composing user-facing strings.
 - **Both attachment syntaxes are in use** — literal `data-controller` attributes and ERB `data:` hashes — so a grep for one finds roughly half the call sites.
 
 ## Autosave, as a representative interaction
 
-The constituent application form autosaves on blur: [`autosave_controller.js`](../../app/javascript/controllers/forms/autosave_controller.js) sends one `field_name`/`field_value` pair per save to `ConstituentPortal::ApplicationsController#autosave_field`, which delegates to [`Applications::AutosaveService`](../../app/services/applications/autosave_service.rb). File inputs and `data-no-autosave` fields are excluded; uploads go through direct upload instead.
+The constituent application form keeps its draft current while the constituent works: [`autosave_controller.js`](../../app/javascript/controllers/forms/autosave_controller.js) sends one `field_name`/`field_value` pair per save to `ConstituentPortal::ApplicationsController#autosave_field`, which delegates to [`Applications::AutosaveService`](../../app/services/applications/autosave_service.rb). File inputs, disabled fields, and `data-no-autosave` fields are excluded; uploads go through direct upload instead, and user-owned fields such as the address and preferred language are saved only by the full form.
 
-Two behaviors are not visible from the controller alone:
+Behaviors that are not visible from one save:
 
-- **The first save may create the draft.** When the response carries an `applicationId` the form lacked, the controller rewrites the form `action`, switches its own URL to the member route, and injects `_method=patch`. The two `:id` placeholder values in [`applications/new.html.erb`](../../app/views/constituent_portal/applications/new.html.erb) exist for that substitution.
-- **Validation comes back per field**, rendered next to the offending input, with the outcome also announced through an `aria-live="polite"` status region that clears after three seconds.
+- **When a field is sent.** Changed fields save on `change` or blur, after a pause in typing (`debounceWait`, 1 s), and on departure (`disconnect()` or `pagehide`). Every autosave uses `keepalive`, including requests started before departure. Ordinary saves are serialized; departure sends may overlap. A failed edit stays pending for blur or departure retry.
+- **Ordering belongs to the server.** A random page ID and rising edit revision accompany each request. Both field saves and full-form saves commit their ordering metadata with the values under the existing locks; older field saves from that page are superseded. Full-form saves remain authoritative, including on pages left open overnight. The acknowledgement identifies the request revision and current server revision. A restored Turbo snapshot retries its original pending revisions and adopts a superseding server value instead of overwriting it. See [server ordering and rollout](service_architecture.md#portal-autosave-ordering).
+- **Save/Submit captures a snapshot.** The normal form submission carries the page context and a later revision. After Turbo captures FormData, controls freeze until the request ends or the page is cached. A failed full submission leaves the edit state unconfirmed and does not start queued field saves. No submission is intercepted or replayed.
+- **The server resolves the draft.** The new-application page always posts to the collection routes. Without an id, `AutosaveService` resumes the actor's draft for that applicant under lock (`Application.resumable_portal_draft`) or creates one, and `ApplicationCreator` does the same for Save/Submit, so neither a slow first response nor parallel unload saves can create a second draft. A dependent's page names the dependent in its autosave URL (`user_id`); without it the draft would be the guardian's.
+- **Feedback.** Field errors use `aria-invalid` and preserve existing `aria-describedby` references. The polite status region uses en/es copy from the applicant's message locale. “Draft saved” appears only when no edit is pending, in flight, failed, or awaiting a full-form save; it clears after three seconds. Address, language, and file changes require Save Application and remain unconfirmed until that succeeds.
+- **Navigation remains best-effort.** A native unload warning is registered only while changes are unconfirmed. Browser policy controls whether it appears; it does not guard Turbo visits or guarantee delivery. Back/Forward can still lose an edit if every departure save fails. The controller stores no drafts in browser storage and does not coordinate history. Pending revision markers live only on the current DOM and Turbo's normal snapshots.
 
 ## rails_request
 
 [`services/rails_request.js`](../../app/javascript/services/rails_request.js) wraps `@rails/request.js`. `perform()` has three outcomes, not two: `{ success: true, data, response }`, `{ success: false, aborted: true }` on cancellation, and a thrown `RequestError` carrying `status` and `data` for a non-OK response.
 
-Requests with a `key` are tracked, and reusing an in-flight key cancels the earlier request. Autosave uses a single key per form, so overlapping saves cancel the earlier client request. Cancellation is client-side only; the server may have already committed, so ordering-sensitive controllers still own their ordering and stale-response checks.
+Requests with a `key` are tracked, and reusing an in-flight key cancels the earlier request. `keepalive: true` permits a request to outlive the page, subject to browser limits and network failure. Cancellation cannot undo a server commit; autosave therefore enforces write ordering on the server as well as handling stale responses in the controller.
 
 Failed requests need caller-owned visible feedback, via the [flash container](../../app/views/shared/_flash.html.erb) or inline status text. Parsing consumes the installed library’s `FetchResponse` status and cached JSON/text promises, including a Turbo Stream body already read by the library. Only the request that owns the current key may remove its cancellation handle.
 
@@ -55,7 +59,7 @@ These coordinate by event, not by reference: `income-validation` dispatches `inc
 Constraints that are easy to break:
 
 - `@submission_blocked_message` renders as `data-final-submit-gate-blocked-message`; any non-empty value disables final submit regardless of field completeness, and an empty value blocks nothing. The authoritative check is Rails' own, under lock at save time.
-- The gate recomputes on every `input`/`change`, so an externally set `disabled` does not survive. New conditions belong in the gate.
+- The gate recomputes on every `input`/`change`, except while Turbo marks the form `aria-busy`. Late validation must not re-enable controls during submission. Other persistent conditions belong in the gate.
 - Blank, unchecked, disabled, and absent are four distinct submissions — browsers drop unchecked boxes and disabled controls entirely, hence the hidden `"0"` companions. [Paper intake retry](paper_application_architecture.md#retry-restoration) depends on the distinction.
 - Secure-request recipient forms are the only conditional-channel case: unchecking a recipient clears and disables its channel, re-checking restores the server's email/letter default, and SMS stays explicit.
 

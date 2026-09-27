@@ -60,6 +60,8 @@ class ApplicationForm
 
   # Form state
   attribute :is_submission, :boolean, default: false
+  attribute :autosave_context, :string
+  attribute :autosave_revision, :string
 
   # Runtime dependencies (injected)
   attr_accessor :current_user, :application
@@ -154,6 +156,8 @@ class ApplicationForm
   end
 
   def populate_from_params(params)
+    self.autosave_context = params[:autosave_context]
+    self.autosave_revision = params[:autosave_revision]
     return if params[:application].blank?
 
     app_params = params[:application]
