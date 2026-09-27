@@ -211,5 +211,76 @@ module Applications
       assert_equal I18n.t('applications.certification_upload.messages.already_submitted'), result.message
       assert_not @application.reload.medical_certification.attached?
     end
+
+    test 'a correction requested after a DocuSeal rejection replaces the primary certification' do
+      attach_docuseal_primary
+      record_certification_rejection(at: 2.days.ago)
+      @secure_request_form.update!(sent_at: 1.day.ago)
+
+      result = submit_upload
+
+      assert_predicate result, :success?
+      @application.reload
+      assert_predicate @application, :medical_certification_status_received?
+      assert_equal 'medical_certification_valid.pdf', @application.medical_certification.blob.filename.to_s
+      assert_equal 0, @application.additional_medical_certifications.count
+    end
+
+    test 'an upload for a request sent before the latest rejection is kept aside for review' do
+      attach_docuseal_primary
+      @secure_request_form.update!(sent_at: 3.days.ago)
+      record_certification_rejection(at: 1.day.ago)
+
+      result = submit_upload
+
+      assert_predicate result, :success?
+      @application.reload
+      assert_predicate @application, :medical_certification_status_rejected?
+      assert_equal 'docuseal_primary.pdf', @application.medical_certification.blob.filename.to_s
+      assert_equal 'request_predates_rejection',
+                   @application.additional_medical_certifications.first.blob.metadata['retention_reason']
+    end
+
+    test 'an upload after approval never replaces the approved certification' do
+      @application.medical_certification.attach(io: StringIO.new('approved'), filename: 'approved.pdf', content_type: 'application/pdf')
+      @application.update!(medical_certification_status: :approved)
+
+      result = submit_upload
+
+      assert_predicate result, :success?
+      @application.reload
+      assert_predicate @application, :medical_certification_status_approved?
+      assert_equal 'approved.pdf', @application.medical_certification.blob.filename.to_s
+      assert_equal 'certification_approved',
+                   @application.additional_medical_certifications.first.blob.metadata['retention_reason']
+
+      event = Event.find_by!(auditable: @application, action: 'cert_submitted_via_secure_form')
+      assert_equal 'certification_approved', event.metadata['retention_reason']
+    end
+
+    private
+
+    def submit_upload
+      SubmitCertificationUpload.new(
+        application: @application,
+        medical_provider_secure_request_form: @secure_request_form,
+        file: @file
+      ).call
+    end
+
+    def attach_docuseal_primary
+      @application.medical_certification.attach(
+        io: StringIO.new('docuseal primary content'),
+        filename: 'docuseal_primary.pdf',
+        content_type: 'application/pdf',
+        metadata: { source: 'docuseal' }
+      )
+    end
+
+    def record_certification_rejection(at:)
+      @application.update!(medical_certification_status: :rejected)
+      ApplicationStatusChange.create!(application: @application, user: User.system_user, from_status: 'received',
+                                      to_status: 'rejected', change_type: 'medical_certification', changed_at: at)
+    end
   end
 end

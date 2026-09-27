@@ -104,37 +104,8 @@ module Webhooks
       # Idempotency: skip if already processed for this submission (same URL check happens in attach)
       return if app.document_signing_status == 'signed' && app.document_signing_document_url.present?
 
-      current_status = app.medical_certification_status.to_s
-      retained_additional_blob_id = nil
-
-      if retain_docuseal_as_additional?(app, current_status)
-        # A MAT secure upload already supplied the certification. Keep that
-        # first received document as primary, while retaining the later DocuSeal
-        # PDF separately for admin review/comparison.
-        retained_additional_blob_id = attach_additional_signed_pdf(app, data)
-        app.update!(
-          document_signing_status: :signed,
-          document_signing_signed_at: Time.current
-        )
-      elsif current_status == 'approved'
-        # Discard the incoming file; keep existing approved certification
-        url = signed_pdf_url(app, data)
-        app.update!(
-          document_signing_status: :signed,
-          document_signing_signed_at: Time.current,
-          document_signing_audit_url: data['audit_log_url'],
-          document_signing_document_url: url.presence || app.document_signing_document_url
-        )
-      else
-        # Attach and mark as received when no current secure-upload primary
-        # certification must be protected from a late DocuSeal completion.
-        attach_signed_pdf(app, data)
-        update_attrs = {
-          document_signing_status: :signed,
-          document_signing_signed_at: Time.current
-        }
-        app.update!(update_attrs)
-      end
+      outcome = accept_signed_pdf(app, data)
+      app.update!(document_signing_status: :signed, document_signing_signed_at: Time.current)
 
       AuditEventService.log(
         action: 'document_signing_completed',
@@ -145,24 +116,17 @@ module Webhooks
           document_signing_submission_id: data['submission_id'],
           completed_at: Time.current.iso8601,
           provider_email: data['email']
-        }.merge(document_signing_completion_metadata(retained_additional_blob_id))
+        }.merge(document_signing_completion_metadata(outcome))
       )
     end
 
-    def retain_docuseal_as_additional?(app, current_status)
-      current_status.in?(%w[received approved rejected]) && secure_certification_upload_previously_received?(app)
-    end
-
-    def secure_certification_upload_previously_received?(app)
-      Event.exists?(auditable: app, action: 'cert_submitted_via_secure_form')
-    end
-
-    def document_signing_completion_metadata(retained_additional_blob_id)
-      return {} if retained_additional_blob_id.blank?
+    def document_signing_completion_metadata(outcome)
+      return {} unless outcome&.dig(:placement) == :additional
 
       {
         retained_as: 'additional_medical_certification',
-        additional_medical_certification_blob_id: retained_additional_blob_id
+        additional_medical_certification_blob_id: outcome[:additional_blob_id],
+        retention_reason: outcome[:retention_reason]
       }
     end
 
@@ -184,24 +148,29 @@ module Webhooks
       )
     end
 
-    # Attempts to download and attach the signed PDF from DocuSeal.
-    # Returns true on success (including idempotent skip), false on failure.
-    def attach_signed_pdf(app, data)
+    # Downloads the signed PDF and hands it to the certification owner, which
+    # decides between primary and additional. Returns the owner's result, or nil on failure.
+    def accept_signed_pdf(app, data)
       url = signed_pdf_url(app, data)
-      return false if url.blank?
+      return if url.blank?
 
-      # Idempotency: skip if same URL already stored (consider this a success)
-      return true if app.document_signing_document_url == url
+      # Idempotency: this document was already accepted.
+      existing_attachment = additional_signed_pdf_attachment(app, url)
+      if existing_attachment
+        return { success: true, placement: :additional, additional_blob_id: existing_attachment.blob_id,
+                 retention_reason: existing_attachment.blob.metadata['retention_reason'] }
+      end
+      return { success: true, placement: :primary } if app.document_signing_document_url == url
 
       blob = signed_pdf_blob(app, data, url, filename: "medical_cert_docuseal_#{app.id}.pdf")
-      return false unless blob
+      return unless blob
 
-      result = MedicalCertificationAttachmentService.attach_certification(
+      result = MedicalCertificationAttachmentService.accept_submission(
         application: app,
-        blob_or_file: blob,
-        status: :received,
-        admin: User.system_user,
+        blob: blob,
         submission_method: :docuseal,
+        requested_at: app.document_signing_requested_at,
+        admin: User.system_user,
         metadata: {
           document_signing_service: 'docuseal',
           document_signing_submission_id: app.document_signing_submission_id,
@@ -209,30 +178,10 @@ module Webhooks
           document_signing_audit_url: data['audit_log_url']
         }
       )
-      return false unless result[:success]
+      return unless result[:success]
 
       persist_document_signing_urls!(app, data, url)
-      true
-    rescue StandardError => e
-      Rails.logger.error "Document signing download/attach failed for App ##{app.id}: #{e.message}"
-      Rails.logger.error "Payload data keys: #{data.keys.join(', ')}" if data.respond_to?(:keys)
-      log_attachment_failure(app, 'exception', e.message)
-      false
-    end
-
-    def attach_additional_signed_pdf(app, data)
-      url = signed_pdf_url(app, data)
-      return if url.blank?
-
-      existing_attachment = additional_signed_pdf_attachment(app, url)
-      return existing_attachment.blob_id if existing_attachment
-
-      blob = signed_pdf_blob(app, data, url, filename: "medical_cert_docuseal_additional_#{app.id}.pdf")
-      return unless blob
-
-      app.additional_medical_certifications.attach(blob)
-      persist_document_signing_urls!(app, data, url)
-      blob.id
+      result
     rescue StandardError => e
       Rails.logger.error "Document signing download/attach failed for App ##{app.id}: #{e.message}"
       Rails.logger.error "Payload data keys: #{data.keys.join(', ')}" if data.respond_to?(:keys)

@@ -169,13 +169,16 @@ class DocumentSigningWorkflowTest < ActionDispatch::IntegrationTest
   end
 
   test 'document signing workflow with resubmission after rejection' do
-    # Setup: Application was previously rejected
+    # Setup: Application was previously rejected, then a new signing request was sent
     @application.update!(medical_certification_status: :rejected)
+    ApplicationStatusChange.create!(application: @application, user: @admin, from_status: 'received', to_status: 'rejected',
+                                    change_type: 'medical_certification', changed_at: 2.days.ago)
     # Prepare app to match webhook submission
     @application.update!(
       document_signing_service: 'docuseal',
       document_signing_submission_id: 'sub_123456',
-      document_signing_status: :sent
+      document_signing_status: :sent,
+      document_signing_requested_at: 1.day.ago
     )
 
     # Provider submits new signed document

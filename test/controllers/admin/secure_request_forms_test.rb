@@ -563,6 +563,22 @@ module Admin
       assert_select '[data-testid="additional-medical-certifications"]', text: /DocuSeal signed form/
     end
 
+    test 'show page flags additional certifications that need review' do
+      application = create(:application, medical_certification_status: :approved)
+      application.medical_certification.attach(io: StringIO.new('approved'), filename: 'approved.pdf', content_type: 'application/pdf')
+      application.additional_medical_certifications.attach(
+        io: StringIO.new('late docuseal content'),
+        filename: 'late_docuseal.pdf',
+        content_type: 'application/pdf',
+        metadata: { source: 'docuseal', retention_reason: 'certification_approved' }
+      )
+
+      get admin_application_path(application)
+
+      assert_response :success
+      assert_select '[data-testid="additional-medical-certifications"]', text: /DocuSeal signed form \(received after approval, review\)/
+    end
+
     test 'show page labels additional secure upload certification submissions' do
       application = create(:application, medical_certification_status: :received)
       application.medical_certification.attach(

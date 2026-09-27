@@ -14,6 +14,42 @@ class MedicalCertificationAttachmentServiceTest < ActiveSupport::TestCase
     @test_file = fixture_file_upload('medical_certification_valid.pdf', 'application/pdf')
   end
 
+  test 'accept_submission applies one placement table to every submission channel' do
+    cases = {
+      not_requested: [nil, :primary, nil],
+      requested: [nil, :primary, nil],
+      received: [nil, :additional, 'certification_received'],
+      approved: [nil, :additional, 'certification_approved'],
+      rejected_then_requested: [1.day.ago, :primary, nil],
+      requested_then_rejected: [3.days.ago, :additional, 'request_predates_rejection']
+    }
+
+    %i[secure_form docuseal].each do |submission_method|
+      cases.each do |label, (requested_at, placement, reason)|
+        application = create(:application, status: :in_progress)
+        status = label.to_s.start_with?('rejected', 'requested_then') ? :rejected : label
+        application.update_columns(medical_certification_status: Application.medical_certification_statuses[status])
+        if status == :rejected
+          ApplicationStatusChange.create!(application: application, user: @admin, from_status: 'requested', to_status: 'rejected',
+                                          change_type: 'medical_certification', changed_at: 2.days.ago)
+        end
+        blob = ActiveStorage::Blob.create_and_upload!(io: StringIO.new('cert'), filename: 'cert.pdf', content_type: 'application/pdf')
+
+        result = MedicalCertificationAttachmentService.accept_submission(
+          application: application, blob: blob, submission_method: submission_method,
+          requested_at: requested_at || 1.hour.ago, admin: @admin
+        )
+
+        message = "#{submission_method} #{label}"
+        assert result[:success], message
+        assert_equal placement, result[:placement], message
+        assert_equal reason, result[:retention_reason], message
+        expected_status = placement == :primary ? 'received' : status.to_s
+        assert_equal expected_status, application.reload.medical_certification_status, message
+      end
+    end
+  end
+
   test 'normalizing direct uploads does not log upload references or blob contents' do
     blob = ActiveStorage::Blob.create_and_upload!(io: StringIO.new('proof'), filename: 'private-proof.pdf', content_type: 'application/pdf')
     messages = []

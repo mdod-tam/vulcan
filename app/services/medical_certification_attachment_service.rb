@@ -67,6 +67,55 @@ class MedicalCertificationAttachmentService
     end
   end
 
+  # Why a provider submission is kept beside the primary certification instead of replacing it.
+  RETENTION_REASONS = %w[certification_approved certification_received request_predates_rejection].freeze
+
+  # Accepts a certification that a provider submitted through DocuSeal or a secure
+  # upload link. Every channel uses this decision, so a correction and a late,
+  # obsolete completion are told apart the same way:
+  # - approved or received: keep the new document as additional, status unchanged.
+  # - rejected: a request sent after the latest rejection is a correction and
+  #   replaces the primary. An earlier request is kept as additional.
+  # - not requested or requested: the document becomes the primary.
+  # An additional document is never discarded and carries its reason for staff review.
+  #
+  # @return [Hash] :success, :placement (:primary or :additional), :additional_blob_id, :retention_reason
+  def self.accept_submission(application:, blob:, submission_method:, requested_at:, admin:, metadata: {})
+    application.with_lock do
+      retention_reason = submission_retention_reason(application, requested_at)
+      if retention_reason.nil?
+        result = attach_certification(application: application, blob_or_file: blob, status: :received,
+                                      admin: admin, submission_method: submission_method, metadata: metadata)
+        next result.merge(placement: :primary)
+      end
+
+      blob.update!(metadata: blob.metadata.merge('retention_reason' => retention_reason))
+      application.additional_medical_certifications.attach(blob)
+      {
+        success: application.additional_medical_certifications.attachments.any? { |attachment| attachment.blob_id == blob.id },
+        placement: :additional,
+        additional_blob_id: blob.id,
+        retention_reason: retention_reason
+      }
+    end
+  end
+
+  def self.submission_retention_reason(application, requested_at)
+    case application.medical_certification_status.to_s
+    when 'approved' then 'certification_approved'
+    when 'received' then 'certification_received'
+    when 'rejected'
+      rejected_at = latest_rejection_at(application)
+      correction = requested_at.present? && rejected_at.present? && requested_at > rejected_at
+      correction ? nil : 'request_predates_rejection'
+    end
+  end
+
+  def self.latest_rejection_at(application)
+    ApplicationStatusChange.where(application: application, change_type: 'medical_certification', to_status: 'rejected')
+                           .maximum(:changed_at) || application.medical_certification_verified_at
+  end
+
   # Reject a medical certification without requiring a file attachment
   def self.reject_certification(application:, admin:, reason:, notes: nil, # rubocop:disable Metrics/ParameterLists
                                 reason_code: nil, submission_method: :admin_review, metadata: {})
