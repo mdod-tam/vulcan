@@ -196,6 +196,32 @@ test('a failed request keeps the edit pending, so leaving the field sends it aga
   expect(status()).toBe('Draft saved')
 })
 
+test('a translated server status stays until that field saves, even when another field succeeds', async () => {
+  const message = 'Autosave is unavailable for this page. Use "Save Application" to save your changes.'
+  railsRequest.perform.mockRejectedValueOnce(new RequestError('Unprocessable', 422, { status_message: message }))
+  type('size', '4')
+  await advance(1000)
+  expect(status()).toBe(message)
+
+  type('income', '50000')
+  await advance(4000)
+  expect(status()).toBe(message)
+
+  leave('size')
+  await advance(0)
+  expect(status()).toBe('Draft saved')
+})
+
+test('an English base error preserves the Spanish failed status and Save advice', async () => {
+  const message = 'Algunos cambios todavía no se han guardado. Use "Save Application" para conservarlos.'
+  form.dataset.autosaveFailedTextValue = message
+  await settle()
+  railsRequest.perform.mockRejectedValueOnce(new RequestError('Unprocessable', 422, { errors: { base: ['This field could not be saved'] } }))
+  type('size', '4')
+  await advance(1000)
+  expect(status()).toBe(message)
+})
+
 test('leaving the page sends every unsent edit at once with keepalive and cancels nothing in flight', async () => {
   held()
   type('size', '4')

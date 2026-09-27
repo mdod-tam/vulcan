@@ -29,7 +29,8 @@ export default class extends Controller {
   }
 
   update() {
-    // Turbo owns disabled controls until the submitted snapshot has finished.
+    // While Turbo submits the form (aria-busy), the autosave controller keeps controls disabled.
+    // Do not change them here.
     if (this.element.getAttribute("aria-busy") === "true") return
     this._syncConditionalRequiredControls()
 

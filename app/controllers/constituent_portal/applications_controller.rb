@@ -324,16 +324,10 @@ module ConstituentPortal
       @target_user_id ||= params[:user_id].presence&.to_i || current_user.id
     end
 
-    # Finds existing draft application for target user
-    # For dependent applications, only finds drafts managed by current guardian
     def existing_draft
-      @existing_draft ||= begin
-        scope = Application.draft_for_constituent(target_user_id)
-        # If this is for a dependent (user_id param present and != current_user),
-        # only look for applications managed by current user
-        scope = scope.where(managing_guardian_id: current_user.id) if params[:user_id].present? && target_user_id != current_user.id
-        scope.first
-      end
+      @existing_draft ||= Application.resumable_portal_draft(
+        Application.draft_for_constituent(target_user_id), actor_id: current_user.id
+      )
     end
 
     # Finds existing active (non-draft) application for target user
@@ -577,7 +571,7 @@ module ConstituentPortal
           value: result[:value]
         }, status: :ok
       else
-        render json: { success: false, errors: result[:errors] }, status: :unprocessable_content
+        render json: { success: false, errors: result[:errors], status_message: result[:status_message] }.compact, status: :unprocessable_content
       end
     end
 

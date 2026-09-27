@@ -104,6 +104,87 @@ class ApplicationAutosaveTest < ApplicationSystemTestCase
     capture_status_states(nil, locale: :es, page_name: 'new', applicant: spanish)
   end
 
+  test 'an unexpected autosave error keeps Spanish failure guidance and allows retry' do
+    @user.update!(locale: 'es')
+    draft = create(:application, :draft, user: @user, household_size: 2)
+    sign_in_as(@user)
+    visit edit_constituent_portal_application_path(draft)
+    service = Applications::AutosaveService
+    original = service.instance_method(:save_application_field)
+    service.define_method(:save_application_field) { |_attribute| raise 'simulated field-save failure' }
+
+    type_in_place 'Household Size', 7
+    assert_selector status_selector, text: t_autosave(:failed, locale: :es)
+    assert_no_text 'This field could not be saved'
+    assert_equal 2, draft.reload.household_size
+    capture_both_widths('application-autosave-unexpected-error-es')
+
+    service.define_method(:save_application_field, original)
+    type_in_place 'Household Size', 8
+    assert_selector status_selector, text: t_autosave(:saved, locale: :es)
+    assert_equal 8, draft.reload.household_size
+    capture_both_widths('application-autosave-unexpected-error-retry-es')
+  ensure
+    service&.define_method(:save_application_field, original) if original
+    service.send(:private, :save_application_field) if original
+  end
+
+  %i[en es].each do |locale|
+    test "a rejected page context explains the full Save recovery in #{locale}" do
+      @user.update!(locale: locale)
+      draft = create(:application, :draft, user: @user, household_size: 2)
+      sign_in_as(@user)
+      visit edit_constituent_portal_application_path(draft)
+      page.execute_script(<<~JS)
+        const original = window.fetch
+        window.fetch = (url, options) => {
+          if (String(url).includes('autosave_field')) {
+            options.body = JSON.stringify({ ...JSON.parse(options.body), autosave_context: 'invalid-context' })
+          }
+          return original(url, options)
+        }
+      JS
+      type_in_place 'Household Size', 7
+      assert_selector status_selector, text: t_autosave(:refresh, locale: locale)
+      assert_equal 2, draft.reload.household_size
+      capture_both_widths("application-autosave-refresh-#{locale}")
+
+      find('input[name="save_draft"]').click
+      assert_current_path constituent_portal_application_path(draft, format: :html)
+      assert_equal 7, draft.reload.household_size
+      assert_no_runtime_errors
+    end
+  end
+
+  test 'manual edits and a refused Save stay unsaved until a corrected full Save succeeds' do
+    draft = create(:application, :draft, user: @user)
+    original_address = @user.physical_address_1
+    sign_in_as(@user)
+    visit edit_constituent_portal_application_path(draft)
+    type_in_place 'Street Address', '31 Keyboard Retry Road'
+    find_field('Street Address').send_keys(:tab)
+    assert_focused 'application_physical_address_2'
+    assert_selector status_selector, text: t_autosave(:unsaved)
+    assert_equal original_address, @user.reload.physical_address_1
+    capture_both_widths('application-manual-unsaved-keyboard')
+
+    fill_in 'application_alternate_contact_phone', with: 'not a phone'
+    find('input[name="save_draft"]').click
+    assert_selector '#error-summary', text: /invalid/i
+    assert_selector status_selector, text: t_autosave(:unsaved)
+    assert_field 'Street Address', with: '31 Keyboard Retry Road', disabled: false
+    assert_field 'application_alternate_contact_phone', with: 'not a phone', disabled: false
+    assert_equal original_address, @user.reload.physical_address_1
+    capture_both_widths('application-refused-save-unsaved')
+
+    fill_in 'application_alternate_contact_phone', with: '2025550123'
+    find('input[name="save_draft"]').click
+    assert_current_path constituent_portal_application_path(draft, format: :html)
+    assert_equal '31 Keyboard Retry Road', @user.reload.physical_address_1
+    assert_equal '2025550123', draft.reload.alternate_contact_phone
+    assert_no_runtime_errors
+  end
+
   test 'a delayed older save cannot overwrite the value sent on departure' do
     draft = create(:application, :draft, user: @user, household_size: 2)
     sign_in_as(@user)
@@ -322,6 +403,7 @@ class ApplicationAutosaveTest < ApplicationSystemTestCase
   end
 
   def capture_both_widths(name)
+    assert_no_runtime_errors
     page.current_window.resize_to(*WIDE)
     take_evidence_screenshot("#{name}-wide", full: true, html: true)
     page.current_window.resize_to(*NARROW)
@@ -329,6 +411,13 @@ class ApplicationAutosaveTest < ApplicationSystemTestCase
     page.execute_script('window.scrollTo(0, 0)')
     take_evidence_screenshot("#{name}-390-top")
     puts "[overflow] #{name}: scrollWidth=#{page.evaluate_script('document.documentElement.scrollWidth')}"
+    puts "[status] #{name}: #{page.evaluate_script(<<~JS)}"
+      (() => {
+        const status = document.querySelector('[data-autosave-target="status"]')
+        const style = getComputedStyle(status)
+        return { color: style.color, height: status.clientHeight, minHeight: style.minHeight, lineHeight: style.lineHeight }
+      })()
+    JS
   ensure
     page.current_window.resize_to(*WIDE)
   end

@@ -296,6 +296,7 @@ class ApplicationsSystemTest < ApplicationSystemTestCase
     assert_equal '12 Original Dependent Road', @dependent.reload.physical_address_1
     assert_empty page.evaluate_script('window.__systemTestErrors')
     assert_no_javascript_errors(js_errors, 'the resumed dependent draft refusal')
+    assert_selector '[data-autosave-target="status"][role="status"][aria-live="polite"]', text: I18n.t('applications.autosave.unsaved')
     take_evidence_screenshot('application-autosaved-dependent-refusal', full: true, html: true)
 
     find('input[name="application[medical_provider_attributes][name]"]').set('Dr. Corrected Provider')

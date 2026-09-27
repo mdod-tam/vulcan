@@ -15,8 +15,8 @@
       </h1>
       <p class="text-l text-gray-900"><span style="color: red;">*</span> Indicates a required field</p>
 
-      <%# The draft is resolved by the server for this applicant, so a dependent's page must name the
-          dependent here: without it every save lands in the guardian's own draft. %>
+      <%# The server resolves the draft for this applicant. A dependent page must name the
+          dependent here, or every save goes to the guardian's own draft. %>
       <% new_app_form_data = {
         controller: "final-submit-gate currency-formatter accessibility-announcer autosave",
         action: %w[
@@ -55,7 +55,7 @@
 
         <%= render 'autosave_fields', state: autosave_form_state %>
         <!-- Autosave status indicator -->
-        <div data-autosave-target="status" class="text-sm mt-2 min-h-5" role="status" aria-live="polite"></div>
+        <div data-autosave-target="status" class="text-sm mt-2 min-h-10 sm:min-h-5" role="status" aria-live="polite"></div>
 
         <%= render "pending_review_notice" %>
 

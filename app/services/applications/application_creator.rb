@@ -320,7 +320,7 @@ module Applications
 
     def save_application_with_audit
       was_new_record = target_application.new_record?
-      # Submission and cleanup share the transaction; a refused submission retains draft ordering.
+      # Submission clears the metadata in the same transaction. A refused submission keeps the draft ordering.
       target_application.autosave_revisions = {} if @form.is_submission
       target_application.save!
       actor = determine_audit_actor

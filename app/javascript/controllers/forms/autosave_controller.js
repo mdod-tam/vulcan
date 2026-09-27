@@ -2,11 +2,11 @@ import { Controller } from "@hotwired/stimulus"
 import { railsRequest } from "../../services/rails_request"
 import { setVisible } from "../../utils/visibility"
 
-const STATUS_COLORS = { saving: "text-indigo-600", saved: "text-green-600", failed: "text-red-600", unsaved: "text-red-600" }
+const STATUS_COLORS = { saving: "text-indigo-600", saved: "text-green-700", failed: "text-red-600", unsaved: "text-red-600" }
 const CONTROLS = 'input:not([type=hidden]):not([type=submit]):not([type=button]), select, textarea'
 
-// The server orders writes by page and edit revision. Departure requests may overlap ordinary
-// saves; keepalive allows them to outlive the document, but cannot guarantee delivery.
+// The server orders writes by page and edit revision. Departure requests can overlap ordinary saves.
+// Keepalive lets a request continue after the page unloads, but delivery is not guaranteed.
 export default class extends Controller {
   static targets = ["status", "context", "revision"]
   static values = {
@@ -127,6 +127,8 @@ export default class extends Controller {
     } catch (error) {
       if (generation === this.generation && this.edited.get(name) === edit) {
         edit.failed = true
+        // Only translated server status messages replace the page's localized failure text.
+        edit.message = error.data?.status_message
         const messages = error.data?.errors?.[name]
         if (messages && this.connected) this.showFieldError(edit.element, messages.join(", "))
       }
@@ -180,19 +182,19 @@ export default class extends Controller {
 
   updateStatus() {
     if (!this.connected) return
-    const failed = [...this.edited.values()].some(edit => edit.failed)
+    const failed = [...this.edited.values()].filter(edit => edit.failed)
     const pending = this.edited.size > 0 || this.inflight.size > 0
     const dirty = pending || this.manual.size > 0
     if (dirty) window.addEventListener("beforeunload", this.onBeforeUnload)
     else window.removeEventListener("beforeunload", this.onBeforeUnload)
     if (!this.hasStatusTarget) return
     if (!this.hasChanges && !dirty) { this.statusTarget.textContent = ""; return }
-    const state = failed ? "failed" : pending ? "saving" : this.manual.size ? "unsaved" : "saved"
+    const state = failed.length ? "failed" : pending ? "saving" : this.manual.size ? "unsaved" : "saved"
     clearTimeout(this.statusTimer)
     const status = this.statusTarget
     status.classList.remove(...Object.values(STATUS_COLORS))
     status.classList.add(STATUS_COLORS[state])
-    status.textContent = this[`${state}TextValue`]
+    status.textContent = failed.find(edit => edit.message)?.message || this[`${state}TextValue`]
     if (state === "saved") this.statusTimer = setTimeout(() => { status.textContent = "" }, 3000)
   }
 

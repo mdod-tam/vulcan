@@ -19,6 +19,20 @@ module ConstituentPortal
       setup_paper_application_context
     end
 
+    test 'invalid ordering metadata returns a dedicated translated status without saving' do
+      @user.update!(locale: 'es')
+      original_size = @draft_application.household_size
+      patch autosave_field_constituent_portal_application_path(@draft_application), params: {
+        field_name: 'application[household_size]', field_value: '7',
+        autosave_context: 'bad-context', autosave_revision: 1
+      }, as: :json
+
+      assert_response :unprocessable_content
+      assert_equal I18n.t('applications.autosave.refresh', locale: :es), response.parsed_body['status_message']
+      assert_not response.parsed_body.key?('errors')
+      assert_equal original_size, @draft_application.reload.household_size
+    end
+
     test 'a page opened yesterday still saves its full form and selected document' do
       metadata = nil
       travel_to 25.hours.ago do

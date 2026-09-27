@@ -20,7 +20,7 @@ module Applications
 
     # Both writers hold the participant/application locks and commit this metadata with the values.
     # Full forms remain authoritative, even with older revisions. The browser stamps Save above
-    # earlier edits and freezes controls during submission; the server rejects only stale field saves.
+    # earlier edits and freezes controls during submission. The server rejects only stale field saves.
     def prepare!(context:, revision:, field: nil)
       revision = autosave_revision(revision)
       unless valid_autosave_context?(context) && revision && (!field || revision.positive?)

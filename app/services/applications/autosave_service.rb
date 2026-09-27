@@ -114,7 +114,7 @@ module Applications
 
       result[:success] ? autosave_success_result : result
     rescue AutosaveRevisions::InvalidRevision
-      autosave_error_result(I18n.t('applications.autosave.refresh', locale: @target_user&.effective_message_locale || I18n.default_locale))
+      { success: false, status_message: I18n.t('applications.autosave.refresh', locale: @target_user&.effective_message_locale || I18n.default_locale) }
     rescue IneligibleAutosaveTargetError => e
       { success: false, errors: { base: [e.message] } }
     rescue StandardError => e
