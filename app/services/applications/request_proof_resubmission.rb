@@ -152,15 +152,7 @@ module Applications
     end
 
     def requestable_proof_state?
-      return false if current_proof_status == 'approved'
-      return true if current_proof_status == 'rejected'
-      return false if current_proof_attachment.attached?
-
-      current_proof_status == 'not_reviewed'
-    end
-
-    def current_proof_attachment
-      application.public_send("#{proof_type}_proof")
+      application.proof_requestable_via_secure_form?(proof_type)
     end
 
     def current_proof_status

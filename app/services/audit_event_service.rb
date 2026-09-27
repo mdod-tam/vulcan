@@ -96,9 +96,10 @@ class AuditEventService < BaseService
       end
     end
 
-    # For profile update events, include which fields changed AND their new values
+    # For profile and contact field update events, include which fields changed AND their new values
     # This allows different changes to the same fields while deduplicating identical saves
-    if action.to_s.include?('profile_updated') || action.to_s == 'profile_created_by_admin_via_paper'
+    if action.to_s.include?('profile_updated') ||
+       %w[profile_created_by_admin_via_paper alternate_contact_updated medical_provider_info_updated].include?(action.to_s)
       changes = metadata['changes'] || metadata[:changes]
       if changes.present?
         # Create fingerprint based on fields + new values to distinguish different actual changes

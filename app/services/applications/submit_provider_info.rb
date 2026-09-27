@@ -44,30 +44,35 @@ module Applications
       result = nil
 
       ApplicationRecord.transaction do
-        secure_request_form.with_lock do
-          secure_request_form.reload
-          unless provider_info_request_form?
-            result = invalid_request_failure
-            next
-          end
-
-          unless secure_request_form.active_for_public_use?
-            result = inactive_request_failure
-            next
-          end
-
-          previous_presence = field_presence(application.attributes.symbolize_keys)
-
-          application.update!(normalized_provider_params)
-          secure_request_form.mark_submitted!
-          log_submission(previous_presence)
-          result = success(message(:submitted))
+        # Lock the application before the form, in the same order as issuance.
+        application.lock!
+        secure_request_form.lock!
+        unless provider_info_request_form?
+          result = invalid_request_failure
+          next
         end
+
+        unless secure_request_form.active_for_public_use?
+          result = inactive_request_failure
+          next
+        end
+
+        previous_presence = field_presence(application.attributes.symbolize_keys)
+
+        # The submission is always accepted. The change audit marks it for
+        # review when it replaces a value already on file.
+        application.medical_provider_change_source = change_source
+        application.update!(normalized_provider_params)
+        secure_request_form.mark_submitted!
+        log_submission(previous_presence)
+        result = success(message(:submitted))
       end
 
       result
     rescue ActiveRecord::RecordInvalid => e
       failure(e.record.errors.full_messages.to_sentence, { errors: e.record.errors })
+    ensure
+      application.medical_provider_change_source = nil
     end
 
     def read_attribute_for_validation(attribute)
@@ -165,6 +170,15 @@ module Applications
           submitted_presence: field_presence(params)
         }
       )
+    end
+
+    def change_source
+      {
+        submitted_via: 'secure_request_form',
+        secure_request_form_id: secure_request_form.id,
+        request_batch_id: secure_request_form.request_batch_id,
+        form_sent_at: secure_request_form.sent_at&.iso8601
+      }
     end
 
     def changed_provider_fields

@@ -2,12 +2,17 @@
   <%= t('admin.applications.secure_request_forms.panel.title') %>
 </h2>
 
-<%= render "secure_request_recipient_form",
-           application: @application,
-           recipient_options: @secure_request_recipient_options,
-           default_recipient_ids: @secure_request_default_recipient_ids,
-           missing_managing_guardian: @secure_request_missing_managing_guardian,
-           purpose: "provider_info" %>
+<% provider_info_missing = @application.missing_required_provider_info? %>
+<% if provider_info_missing %>
+  <%= render "secure_request_recipient_form",
+             application: @application,
+             recipient_options: @secure_request_recipient_options,
+             default_recipient_ids: @secure_request_default_recipient_ids,
+             missing_managing_guardian: @secure_request_missing_managing_guardian,
+             purpose: "provider_info" %>
+<% else %>
+  <p class="mb-4 text-sm text-gray-700" data-testid="provider-info-complete-note"><%= t('admin.applications.secure_request_forms.panel.info_complete') %></p>
+<% end %>
 
 <% if @secure_request_forms.present? %>
   <div class="overflow-x-auto">
@@ -67,13 +72,15 @@
                                           } },
                                   class: "inline-flex items-center rounded-md border border-red-300 bg-white px-2.5 py-1.5 text-sm font-medium text-red-700 hover:bg-red-50 focus:outline-none focus:ring-2 focus:ring-red-600 focus:ring-offset-2" %>
                   <% end %>
-                  <%= form_with url: admin_application_secure_request_forms_path(@application), method: :post, local: true, data: { turbo: false }, class: "inline" do %>
-                    <%= hidden_field_tag "recipient_ids[]", secure_request_form.recipient_id %>
-                    <%= hidden_field_tag :resend_of_id, secure_request_form.id %>
-                    <%= submit_tag t('admin.applications.secure_request_forms.table.resend'),
-                                   class: "text-sm font-medium text-indigo-700 hover:text-indigo-900" %>
+                  <% if provider_info_missing %>
+                    <%= form_with url: admin_application_secure_request_forms_path(@application), method: :post, local: true, data: { turbo: false }, class: "inline" do %>
+                      <%= hidden_field_tag "recipient_ids[]", secure_request_form.recipient_id %>
+                      <%= hidden_field_tag :resend_of_id, secure_request_form.id %>
+                      <%= submit_tag t('admin.applications.secure_request_forms.table.resend'),
+                                     class: "text-sm font-medium text-indigo-700 hover:text-indigo-900" %>
+                    <% end %>
                   <% end %>
-                <% elsif secure_request_form.status_sent? && secure_request_form.expired? %>
+                <% elsif provider_info_missing && secure_request_form.status_sent? && secure_request_form.expired? %>
                   <%= form_with url: admin_application_secure_request_forms_path(@application), method: :post, local: true, data: { turbo: false }, class: "inline" do %>
                     <%= hidden_field_tag "recipient_ids[]", secure_request_form.recipient_id %>
                     <%= hidden_field_tag :resend_of_id, secure_request_form.id %>

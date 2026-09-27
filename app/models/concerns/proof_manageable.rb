@@ -68,6 +68,20 @@ module ProofManageable
     !status_archived? && !status_approved?
   end
 
+  # Secure proof links serve a rejected proof or a proof that was never uploaded.
+  # Issuance, the admin send button, and public submission all use this rule.
+  def proof_requestable_via_secure_form?(proof_type)
+    return false if public_send("#{proof_type}_proof_status_approved?")
+    return true if public_send("#{proof_type}_proof_status_rejected?")
+
+    public_send("#{proof_type}_proof_status_not_reviewed?") && !public_send("#{proof_type}_proof").attached?
+  end
+
+  # The constituent portal accepts only a replacement for a rejected proof.
+  def proof_resubmittable_via_portal?(proof_type)
+    public_send("#{proof_type}_proof_status_rejected?")
+  end
+
   # Updates proof status directly (for testing and admin operations)
   # @param proof_type [String] The type of proof ('income' or 'residency')
   # @param status [String] The new status ('approved', 'rejected', 'not_reviewed')

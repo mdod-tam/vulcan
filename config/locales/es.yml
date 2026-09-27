@@ -238,6 +238,7 @@ es:
         file_suspicious: "Suba otro archivo. Este archivo no se puede aceptar."
         file_invalid: "Suba un documento válido."
         attachment_failed: "No se pudo adjuntar el documento. Inténtelo de nuevo."
+        no_longer_needed: "Ya no es necesario subir este documento. Comuníquese con el programa si tiene preguntas."
     certification_upload:
       messages:
         provider_email_required: "Se requiere el correo electrónico del proveedor. Envíe primero un formulario de información del proveedor para recopilar información de contacto actualizada."
@@ -309,6 +310,7 @@ es:
           selection_help: "Seleccione al menos un destinatario y luego un canal de entrega para cada destinatario seleccionado."
           submit_blocked: "Ningún destinatario puede recibir una solicitud segura actualmente, por lo que este formulario no se puede enviar. Resuelva primero los problemas indicados arriba."
           no_recipients: "No hay destinatarios elegibles disponibles para esta solicitud."
+          info_complete: "La información obligatoria del profesional certificador ya está registrada. Revoque los enlaces activos que ya no se necesiten."
         managing_guardian:
           title: "Falta tutor principal"
           description: "A esta solicitud le falta un tutor principal. Confirme el tutor principal del dependiente antes de enviar este enlace seguro."

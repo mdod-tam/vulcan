@@ -166,14 +166,50 @@ module Admin
       assert_no_match(/>Sms</, response.body)
     end
 
-    test 'show page hides secure provider information requests when provider info is complete' do
+    test 'show page hides secure provider information requests when provider info is complete and no link is active' do
       application = create(:application)
-      create(:secure_request_form, application: application, recipient: application.user, recipient_channel: :sms)
+      create(:secure_request_form, :revoked, application: application, recipient: application.user, recipient_channel: :sms)
 
       get admin_application_path(application)
 
       assert_response :success
       assert_no_match(/Secure provider information requests/, response.body)
+    end
+
+    test 'show page keeps an active provider information link revocable after provider info is complete' do
+      application = create(:application)
+      form = create(:secure_request_form, application: application, recipient: application.user, recipient_channel: :sms)
+
+      get admin_application_path(application)
+
+      assert_response :success
+      assert_includes response.body, I18n.t('admin.applications.secure_request_forms.panel.title')
+      assert_select "[data-testid='provider-info-complete-note']"
+      assert_select "form[action='#{admin_application_secure_request_form_revocation_path(application, form)}']"
+      assert_select "form[action='#{admin_application_secure_request_forms_path(application)}']", count: 0
+    end
+
+    test 'show page activity history shows replaced provider values for review' do
+      application = create(:application, status: :awaiting_proof)
+      form = create(:secure_request_form, application: application, recipient: application.user)
+      create(:admin, email: PublicAuditActor::SYSTEM_AUDIT_EMAIL)
+      old_email = application.medical_provider_email
+
+      Applications::SubmitProviderInfo.new(
+        application: application,
+        secure_request_form: form,
+        params: {
+          medical_provider_name: application.medical_provider_name,
+          medical_provider_phone: application.medical_provider_phone,
+          medical_provider_email: 'replacement@example.test'
+        }
+      ).call
+
+      get admin_application_path(application)
+
+      assert_response :success
+      assert_includes response.body, 'Provider Info Replaced - Review'
+      assert_includes response.body, "Medical provider email: #{old_email} -&gt; replacement@example.test"
     end
 
     test 'show page shows secure provider information requests when any required provider field is missing' do

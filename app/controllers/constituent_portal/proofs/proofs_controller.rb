@@ -246,14 +246,7 @@ module ConstituentPortal
       end
 
       def can_modify_proof?
-        case params[:proof_type]
-        when 'income'
-          @application.income_proof_status_rejected?
-        when 'residency'
-          @application.residency_proof_status_rejected?
-        when 'id'
-          @application.id_proof_status_rejected?
-        end
+        @application.proof_resubmittable_via_portal?(params[:proof_type])
       end
     end
   end

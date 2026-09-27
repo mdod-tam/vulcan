@@ -96,6 +96,9 @@ module Applications
         [metadata['secure_request_form_id'], metadata['request_batch_id']].compact.join('-')
       when 'cert_upload_request_revoked'
         metadata['medical_provider_secure_request_form_id'].to_s
+      when 'alternate_contact_updated', 'medical_provider_info_updated'
+        # Each stored change is distinct; AuditEventService already drops identical repeats.
+        event.id.to_s
       end
     end
 

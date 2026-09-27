@@ -135,5 +135,83 @@ module Applications
       assert_equal I18n.t('applications.proof_resubmission.messages.already_submitted'), result.message
       assert_not @application.reload.income_proof.attached?
     end
+
+    test 'refuses an approved proof without replacing it and records the refusal' do
+      attach_income_proof(@application)
+      @application.update_columns(income_proof_status: Application.income_proof_statuses[:approved])
+      original_blob_id = @application.reload.income_proof.blob.id
+
+      result = SubmitProofResubmission.new(
+        application: @application,
+        secure_request_form: @secure_request_form,
+        file: @file
+      ).call
+
+      assert_not result.success?
+      assert_equal I18n.t('applications.proof_resubmission.messages.no_longer_needed'), result.message
+      assert_predicate @application.reload, :income_proof_status_approved?
+      assert_equal original_blob_id, @application.income_proof.blob.id
+      assert_predicate @secure_request_form.reload, :status_sent?
+
+      event = Event.find_by!(auditable: @application, action: 'proof_secure_submission_refused')
+      assert_equal @secure_request_form.id, event.metadata.fetch('secure_request_form_id')
+      assert_equal 'income', event.metadata.fetch('proof_type')
+      assert_equal 'approved', event.metadata.fetch('proof_status')
+    end
+
+    test 'refuses a proof uploaded through another path after the link was sent' do
+      attach_income_proof(@application)
+      @application.update_columns(income_proof_status: Application.income_proof_statuses[:not_reviewed])
+
+      result = SubmitProofResubmission.new(
+        application: @application,
+        secure_request_form: @secure_request_form,
+        file: @file
+      ).call
+
+      assert_not result.success?
+      assert_equal I18n.t('applications.proof_resubmission.messages.no_longer_needed'), result.message
+      assert_predicate @secure_request_form.reload, :status_sent?
+    end
+
+    test 'issuance and submission agree for every proof state' do
+      admin = create(:admin)
+      states = {
+        'approved with a document' => [:approved, true, false],
+        'rejected with a document' => [:rejected, true, true],
+        'rejected without a document' => [:rejected, false, true],
+        'not reviewed with a document' => [:not_reviewed, true, false],
+        'never uploaded' => [:not_reviewed, false, true]
+      }
+
+      states.each do |label, (status, attached, requestable)|
+        application = create(:application, :in_progress)
+        attach_income_proof(application) if attached
+        application.update_columns(income_proof_status: Application.income_proof_statuses[status])
+        application.reload
+
+        assert_equal requestable, application.proof_requestable_via_secure_form?(:income), label
+
+        issue_result = RequestProofResubmission.new(application: application, actor: admin, proof_type: 'income').call
+        issue_refused = issue_result.message == I18n.t('applications.proof_resubmission.messages.request_not_needed')
+        assert_equal !requestable, issue_refused, "issuance: #{label}"
+
+        # Only one active link per recipient is allowed; clear any link issuance created.
+        application.secure_request_forms.update_all(status: SecureRequestForm.statuses[:revoked], revoked_at: Time.current)
+        form = create(:secure_request_form, kind: :income_proof_resubmission, application: application)
+        submit_result = SubmitProofResubmission.new(application: application, secure_request_form: form, file: @file).call
+        assert_equal requestable, submit_result.success?, "submission: #{label}"
+      end
+    end
+
+    private
+
+    def attach_income_proof(application)
+      application.income_proof.attach(
+        io: Rails.root.join('test/fixtures/files/income_proof.pdf').open,
+        filename: 'existing_income_proof.pdf',
+        content_type: 'application/pdf'
+      )
+    end
   end
 end

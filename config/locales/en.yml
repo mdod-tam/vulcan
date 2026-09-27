@@ -257,6 +257,7 @@ en:
         file_suspicious: "Upload a different file. This file cannot be accepted."
         file_invalid: "Upload a valid proof document."
         attachment_failed: "The proof could not be attached. Please try again."
+        no_longer_needed: "This document no longer needs to be uploaded. Contact the program if you have questions."
     certification_upload:
       messages:
         provider_email_required: "Secure cert upload form cannot be sent - provider email is missing. Send a provider info form to the constituent/guardian to collect updated certifying professional contact information."
@@ -592,6 +593,7 @@ en:
           selection_help: "Choose at least one recipient, then choose a delivery channel for each selected recipient."
           submit_blocked: "No recipient can currently receive a secure request, so this form cannot be submitted. Resolve the issues listed above first."
           no_recipients: "No eligible recipients are available for this request."
+          info_complete: "Required certifying professional information is now on file. Revoke any active links that are no longer needed."
         managing_guardian:
           title: "Missing managing guardian"
           description: "This application is missing a managing guardian. Confirm the dependent's managing guardian before sending this secure link."

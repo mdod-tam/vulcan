@@ -42,20 +42,27 @@ module Applications
       result = nil
 
       ApplicationRecord.transaction do
-        secure_request_form.with_lock do
-          secure_request_form.reload
-          unless secure_request_form.active_for_public_use?
-            result = inactive_request_failure
-            next
-          end
-
-          attach_result = attach_proof
-          raise AttachmentFailure, attach_result[:error]&.message || message(:attachment_failed) unless attach_result[:success]
-
-          secure_request_form.mark_submitted!
-          log_submission
-          result = success(message(:submitted))
+        # Lock the application before the form, in the same order as issuance.
+        application.lock!
+        secure_request_form.lock!
+        unless secure_request_form.active_for_public_use?
+          result = inactive_request_failure
+          next
         end
+
+        # Another path can approve or replace the proof after the link was sent.
+        unless application.proof_requestable_via_secure_form?(proof_type)
+          log_refused_submission
+          result = failure(message(:no_longer_needed))
+          next
+        end
+
+        attach_result = attach_proof
+        raise AttachmentFailure, attach_result[:error]&.message || message(:attachment_failed) unless attach_result[:success]
+
+        secure_request_form.mark_submitted!
+        log_submission
+        result = success(message(:submitted))
       end
 
       result
@@ -136,6 +143,20 @@ module Applications
           recipient_channel: secure_request_form.recipient_channel,
           request_batch_id: secure_request_form.request_batch_id,
           proof_type: proof_type.to_s
+        }
+      )
+    end
+
+    def log_refused_submission
+      PublicAuditActor.log_audit(
+        action: 'proof_secure_submission_refused',
+        auditable: application,
+        metadata: {
+          secure_request_form_id: secure_request_form.id,
+          request_batch_id: secure_request_form.request_batch_id,
+          proof_type: proof_type.to_s,
+          proof_status: application.public_send("#{proof_type}_proof_status"),
+          reason: 'proof_no_longer_requestable'
         }
       )
     end

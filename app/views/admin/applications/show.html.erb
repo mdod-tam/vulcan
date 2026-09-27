@@ -250,7 +250,7 @@
       <%= render "medical_certification_section" %>
     </section>
 
-    <% if @application.missing_required_provider_info? %>
+    <% if @application.provider_info_requests_visible? %>
       <section class="bg-white rounded-lg shadow p-6 mb-6" aria-labelledby="secure-request-forms-title" id="secure-request-forms-section">
         <%= render "secure_request_forms" %>
       </section>
