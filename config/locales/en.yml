@@ -485,6 +485,10 @@ en:
         file_blank: "Please choose a W9 file to upload."
         file_type_invalid: "Upload a PDF, JPEG, PNG, or HEIC/HEIF file for W9 review."
         file_too_large: "The file must be %{max_size} MB or smaller."
+        file_too_small: "Upload a non-empty W9 file."
+        file_suspicious: "Upload a different file. This file cannot be accepted."
+        file_invalid: "Upload a valid W9 file."
+        attachment_failed: "The W9 could not be attached. Please try again."
         submitted: "Thank you. Your W9 form has been submitted for review."
   date:
     formats:

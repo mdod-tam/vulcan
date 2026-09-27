@@ -17,7 +17,7 @@ class SecurePublicFormMatrixTest < ActionDispatch::IntegrationTest
       resend_create_path: :secure_proof_form_resend_path, success_path: :secure_proof_form_success_path,
       submit_service: Applications::SubmitProofResubmission, resend_service: Applications::RequestProofResubmission,
       rate_limit_key: 'secure_proof_form_resend', success_carries_locale: true,
-      revoked_submitted_show: :submitted
+      sent_path: :secure_proof_form_resend_sent_path
     },
     certification: {
       factory: :medical_provider_secure_request_form, kind: :certification_upload, wrong_kind: nil,
@@ -26,7 +26,7 @@ class SecurePublicFormMatrixTest < ActionDispatch::IntegrationTest
       resend_create_path: :secure_certification_form_resend_path, success_path: :secure_certification_form_success_path,
       submit_service: Applications::SubmitCertificationUpload, resend_service: Applications::RequestCertificationUpload,
       rate_limit_key: 'secure_certification_form_resend', success_carries_locale: false,
-      revoked_submitted_show: :submitted
+      sent_path: :secure_certification_form_resend_sent_path
     },
     provider_info: {
       factory: :secure_request_form, kind: :provider_info_request, wrong_kind: :income_proof_resubmission,
@@ -35,7 +35,7 @@ class SecurePublicFormMatrixTest < ActionDispatch::IntegrationTest
       resend_create_path: :secure_provider_info_form_resend_path, success_path: :secure_provider_info_form_success_path,
       submit_service: Applications::SubmitProviderInfo, resend_service: Applications::RequestProviderInfo,
       rate_limit_key: 'secure_provider_info_form_resend', success_carries_locale: true,
-      revoked_submitted_show: :unavailable
+      sent_path: :secure_provider_info_form_resend_sent_path
     },
     w9: {
       factory: :vendor_secure_request_form, kind: :w9_upload, wrong_kind: nil,
@@ -44,7 +44,7 @@ class SecurePublicFormMatrixTest < ActionDispatch::IntegrationTest
       resend_create_path: :secure_w9_form_resend_path, success_path: :secure_w9_form_success_path,
       submit_service: Vendors::SubmitW9Resubmission, resend_service: Vendors::RequestW9Resubmission,
       rate_limit_key: 'secure_w9_form_resend', success_carries_locale: false,
-      revoked_submitted_show: :submitted
+      sent_path: :secure_w9_form_resend_sent_path
     }
   }.freeze
 
@@ -62,11 +62,11 @@ class SecurePublicFormMatrixTest < ActionDispatch::IntegrationTest
         get public_send(config[:form_path], token: token)
 
         assert_secure_headers
-        case expected_show(config, state)
+        case expected_show(state)
         when :resend then assert_redirected_to public_send(config[:resend_path], token: token)
         else
           assert_response :ok
-          assert_template "#{config[:views]}/#{expected_show(config, state)}"
+          assert_template "#{config[:views]}/#{expected_show(state)}"
         end
         assert_nil form&.reload&.submitted_at if state == :active
       end
@@ -82,14 +82,15 @@ class SecurePublicFormMatrixTest < ActionDispatch::IntegrationTest
         patch public_send(config[:form_path]), params: update_params(name, token)
 
         assert_secure_headers
+        # Every update answers with 303 so Turbo follows it to a GET page.
+        assert_response :see_other
         case expected_update(state)
         when :resend then assert_redirected_to public_send(config[:resend_path], token: token)
         when :success
           expected = config[:success_carries_locale] ? { locale: form.delivery_locale } : {}
           assert_redirected_to public_send(config[:success_path], **expected)
         else
-          assert_response :ok
-          assert_template "#{config[:views]}/#{expected_update(state)}"
+          assert_redirected_to public_send(config[:form_path], token: token)
         end
       end
 
@@ -122,9 +123,18 @@ class SecurePublicFormMatrixTest < ActionDispatch::IntegrationTest
         post public_send(config[:resend_create_path]), params: { token: token }
 
         assert_secure_headers
-        assert_response :ok
-        assert_template "#{config[:resend_views]}/create"
+        assert_response :see_other
+        assert_redirected_to public_send(config[:sent_path], locale: 'en')
       end
+    end
+
+    test "#{name} resend sent page follows the locale in the redirect" do
+      get public_send(config[:sent_path], locale: 'es')
+
+      assert_secure_headers
+      assert_response :ok
+      assert_template "#{config[:resend_views]}/create"
+      assert_select 'html[lang=?]', 'es'
     end
 
     test "#{name} success page locale" do
@@ -162,22 +172,20 @@ class SecurePublicFormMatrixTest < ActionDispatch::IntegrationTest
     [token, create(config[:factory], *traits, **attributes)]
   end
 
-  def expected_show(config, state)
+  def expected_show(state)
     case state
     when :missing, :wrong_kind, :revoked then :unavailable
     when :active then :show
     when :expired then :resend
-    when :submitted then :submitted
-    when :revoked_submitted then config[:revoked_submitted_show]
+    when :submitted, :revoked_submitted then :submitted
     end
   end
 
   def expected_update(state)
     case state
-    when :missing, :wrong_kind, :revoked, :revoked_submitted then :unavailable
+    when :missing, :wrong_kind, :revoked, :revoked_submitted, :submitted then :current_state
     when :active then :success
     when :expired then :resend
-    when :submitted then :submitted
     end
   end
 

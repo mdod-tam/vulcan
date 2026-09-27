@@ -87,6 +87,8 @@ class SecureProofFormsControllerTest < ActionDispatch::IntegrationTest
 
     patch secure_proof_form_path, params: { token: @raw_token }
 
+    assert_response :see_other
+    follow_redirect!
     assert_response :success
     assert_select 'h1', I18n.t('secure_proof_forms.unavailable.heading')
   end
@@ -102,6 +104,8 @@ class SecureProofFormsControllerTest < ActionDispatch::IntegrationTest
   test 'patch with blank token renders unavailable' do
     patch secure_proof_form_path
 
+    assert_response :see_other
+    follow_redirect!
     assert_response :success
     assert_select 'h1', I18n.t('secure_proof_forms.unavailable.heading')
   end
@@ -111,6 +115,8 @@ class SecureProofFormsControllerTest < ActionDispatch::IntegrationTest
 
     patch secure_proof_form_path, params: { token: @raw_token }
 
+    assert_response :see_other
+    follow_redirect!
     assert_response :success
     assert_select 'h1', I18n.t('secure_proof_forms.submitted.heading')
   end

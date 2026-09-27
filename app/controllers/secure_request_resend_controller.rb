@@ -7,6 +7,7 @@ class SecureRequestResendController < SecurePublicFormController
 
   before_action :set_secure_request_form, only: %i[new create]
   around_action :with_request_locale, only: %i[new create]
+  around_action :with_public_request_locale, only: :sent
 
   def new
     return render_unavailable unless request_form_kind?
@@ -25,6 +26,12 @@ class SecureRequestResendController < SecurePublicFormController
       end
     end
 
+    # Redirect so the browser and Turbo land on a GET page. The locale is the
+    # one this request already used, so the redirect reveals nothing new.
+    redirect_to sent_path(locale: I18n.locale), status: :see_other
+  end
+
+  def sent
     render_html_response :create
   end
 
@@ -60,6 +67,7 @@ class SecureRequestResendController < SecurePublicFormController
   def request_form_kind_matches? = raise(NotImplementedError)
   def request_replacement_link = raise(NotImplementedError)
   def form_path = raise(NotImplementedError)
+  def sent_path(**) = raise(NotImplementedError)
   def rate_limit_key = raise(NotImplementedError)
   def resend_log_label = raise(NotImplementedError)
   def resend_log_context = raise(NotImplementedError)

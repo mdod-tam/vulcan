@@ -10,10 +10,6 @@ class SecureProviderInfoFormsController < SecureRequestFormController
   def request_form_class = SecureRequestForm
   def request_form_kind_matches? = @secure_request_form.kind_provider_info_request?
 
-  def revoked_hides_submission?
-    true
-  end
-
   def submit_request_form
     Applications::SubmitProviderInfo.new(
       application: @secure_request_form.application,
@@ -27,6 +23,7 @@ class SecureProviderInfoFormsController < SecureRequestFormController
     @constituent_name_available = @constituent_name.present?
   end
 
+  def form_path = secure_provider_info_form_path(token: @token)
   def resend_path = new_secure_provider_info_form_resend_path(token: @token)
   def success_redirect_path = secure_provider_info_form_success_path(locale: @secure_request_form.delivery_locale)
 end

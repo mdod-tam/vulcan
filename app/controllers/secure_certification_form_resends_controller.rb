@@ -17,6 +17,7 @@ class SecureCertificationFormResendsController < SecureRequestResendController
   end
 
   def form_path = secure_certification_form_path(token: @token)
+  def sent_path(**) = secure_certification_form_resend_sent_path(**)
   def rate_limit_key = 'secure_certification_form_resend'
   def resend_log_label = 'Certification upload'
 

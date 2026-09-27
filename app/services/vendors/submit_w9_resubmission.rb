@@ -2,21 +2,11 @@
 
 module Vendors
   class SubmitW9Resubmission < BaseService
+    include SecureFormSubmission
+
     MESSAGE_SCOPE = 'vendors.w9_resubmission.messages'
-    MAX_FILE_SIZE = 10.megabytes
-    ALLOWED_CONTENT_TYPES = ProofUploadFormats::ALLOWED_CONTENT_TYPES
 
-    attr_reader :vendor, :vendor_secure_request_form, :file, :form_errors
-
-    delegate :model_name, to: :class
-
-    def self.human_attribute_name(attribute, *_args)
-      attribute.to_s.humanize
-    end
-
-    def self.lookup_ancestors
-      [self]
-    end
+    attr_reader :vendor, :vendor_secure_request_form, :file
 
     def self.model_name
       ActiveModel::Name.new(self, nil, 'W9Resubmission')
@@ -57,90 +47,13 @@ module Vendors
       failure(e.record.errors.full_messages.to_sentence, { errors: e.record.errors })
     end
 
-    def read_attribute_for_validation(attribute)
-      public_send(attribute)
-    end
-
     private
 
     def form_belongs_to_vendor?
       vendor_secure_request_form.vendor_id == vendor.id
     end
 
-    def invalid_request_failure
-      failure(message(:invalid_request))
-    end
-
-    def inactive_request_failure
-      key = if vendor_secure_request_form.submitted?
-              :already_submitted
-            elsif vendor_secure_request_form.revoked?
-              :revoked
-            elsif vendor_secure_request_form.expired?
-              :expired
-            else
-              :invalid_request
-            end
-
-      failure(message(key))
-    end
-
-    def validation_failure
-      failure(message(:validation_failed), { errors: form_errors })
-    end
-
-    def file_valid?
-      @form_errors = ActiveModel::Errors.new(self)
-      validate_file
-      form_errors.blank?
-    end
-
-    def validate_file
-      if file.blank?
-        form_errors.add(:file, :blank, message: message(:file_blank))
-        return
-      end
-
-      unless ALLOWED_CONTENT_TYPES.include?(detected_content_type)
-        form_errors.add(:file, :invalid, message: message(:file_type_invalid))
-        return
-      end
-
-      return unless file_size_bytes > MAX_FILE_SIZE
-
-      form_errors.add(:file, :too_large, message: message(:file_too_large, max_size: MAX_FILE_SIZE / 1.megabyte))
-    end
-
-    def detected_content_type
-      @detected_content_type ||= begin
-        io = upload_io
-        content_type = Marcel::MimeType.for(io, name: original_filename)
-        io.rewind if io.respond_to?(:rewind)
-        content_type
-      end
-    end
-
-    def file_size_bytes
-      file.respond_to?(:size) ? file.size.to_i : upload_io.size.to_i
-    end
-
-    def upload_io
-      @upload_io ||= if file.respond_to?(:tempfile)
-                       file.tempfile
-                     else
-                       file
-                     end
-    end
-
-    def original_filename
-      if file.respond_to?(:original_filename)
-        file.original_filename
-      elsif file.respond_to?(:path)
-        File.basename(file.path)
-      else
-        'w9.pdf'
-      end
-    end
+    def request_form = vendor_secure_request_form
 
     def attach_w9!
       vendor.w9_form.attach(file)

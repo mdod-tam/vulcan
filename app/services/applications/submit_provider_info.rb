@@ -2,6 +2,8 @@
 
 module Applications
   class SubmitProviderInfo < BaseService
+    include SecureFormSubmission
+
     MESSAGE_SCOPE = 'applications.provider_info.messages'
     PROVIDER_FIELDS = %i[
       medical_provider_name
@@ -12,17 +14,7 @@ module Applications
     PHONE_NUMBER_PATTERN = /\A(?:\d{10}|\d{3}-\d{3}-\d{4})\z/
     PHONE_NUMBER_FIELDS = %i[medical_provider_phone medical_provider_fax].freeze
 
-    attr_reader :application, :secure_request_form, :params, :form_errors
-
-    delegate :model_name, to: :class
-
-    def self.human_attribute_name(attribute, *_args)
-      attribute.to_s.humanize
-    end
-
-    def self.lookup_ancestors
-      [self]
-    end
+    attr_reader :application, :secure_request_form, :params
 
     def self.model_name
       ActiveModel::Name.new(self, nil, 'ProviderInfo')
@@ -85,23 +77,7 @@ module Applications
       secure_request_form&.kind_provider_info_request?
     end
 
-    def invalid_request_failure
-      failure(message(:invalid_request))
-    end
-
-    def inactive_request_failure
-      key = if secure_request_form.submitted?
-              :already_submitted
-            elsif secure_request_form.revoked?
-              :revoked
-            elsif secure_request_form.expired?
-              :expired
-            else
-              :invalid_request
-            end
-
-      failure(message(key))
-    end
+    def request_form = secure_request_form
 
     def provider_params_valid?
       @form_errors = ActiveModel::Errors.new(self)
@@ -112,10 +88,6 @@ module Applications
       validate_phone_number(:medical_provider_phone)
       validate_phone_number(:medical_provider_fax)
       form_errors.blank?
-    end
-
-    def validation_failure
-      failure(message(:validation_failed), { errors: form_errors })
     end
 
     def validate_presence(attribute)

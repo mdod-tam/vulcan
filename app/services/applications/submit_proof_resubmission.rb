@@ -2,25 +2,16 @@
 
 module Applications
   class SubmitProofResubmission < BaseService
+    include SecureFormSubmission
+
     MESSAGE_SCOPE = 'applications.proof_resubmission.messages'
     KIND_TO_PROOF_TYPE = {
       'id_proof_resubmission' => :id,
       'residency_proof_resubmission' => :residency,
       'income_proof_resubmission' => :income
     }.freeze
-    class AttachmentFailure < StandardError; end
 
-    attr_reader :application, :secure_request_form, :file, :form_errors
-
-    delegate :model_name, to: :class
-
-    def self.human_attribute_name(attribute, *_args)
-      attribute.to_s.humanize
-    end
-
-    def self.lookup_ancestors
-      [self]
-    end
+    attr_reader :application, :secure_request_form, :file
 
     def self.model_name
       ActiveModel::Name.new(self, nil, 'ProofResubmission')
@@ -58,7 +49,7 @@ module Applications
         end
 
         attach_result = attach_proof
-        raise AttachmentFailure, attach_result[:error]&.message || message(:attachment_failed) unless attach_result[:success]
+        raise_attachment_failure(attach_result[:error]) unless attach_result[:success]
 
         secure_request_form.mark_submitted!
         log_submission
@@ -67,50 +58,14 @@ module Applications
 
       result
     rescue AttachmentFailure => e
-      failure(e.message.presence || message(:attachment_failed))
+      failure(e.message)
     rescue ActiveRecord::RecordInvalid => e
       failure(e.record.errors.full_messages.to_sentence, { errors: e.record.errors })
     end
 
-    def read_attribute_for_validation(attribute)
-      public_send(attribute)
-    end
-
     private
 
-    def invalid_request_failure
-      failure(message(:invalid_request))
-    end
-
-    def inactive_request_failure
-      key = if secure_request_form.submitted?
-              :already_submitted
-            elsif secure_request_form.revoked?
-              :revoked
-            elsif secure_request_form.expired?
-              :expired
-            else
-              :invalid_request
-            end
-
-      failure(message(key))
-    end
-
-    def validation_failure
-      failure(message(:validation_failed), { errors: form_errors })
-    end
-
-    def file_valid?
-      @form_errors = ActiveModel::Errors.new(self)
-      validate_file
-      form_errors.blank?
-    end
-
-    def validate_file
-      ProofAttachmentValidator.validate!(file)
-    rescue ProofAttachmentValidator::ValidationError => e
-      form_errors.add(:file, e.error_type, message: validation_message(e))
-    end
+    def request_form = secure_request_form
 
     def proof_type
       KIND_TO_PROOF_TYPE[secure_request_form.kind]
@@ -163,23 +118,6 @@ module Applications
 
     def message(key, **)
       I18n.t("#{MESSAGE_SCOPE}.#{key}", **, locale: secure_request_form.delivery_locale)
-    end
-
-    def validation_message(error)
-      case error.error_type
-      when :no_attachment
-        message(:file_blank)
-      when :invalid_type
-        message(:file_type_invalid)
-      when :file_too_large
-        message(:file_too_large, max_size: ProofAttachmentValidator::MAX_FILE_SIZE / 1.megabyte)
-      when :file_too_small
-        message(:file_too_small)
-      when :suspicious_content
-        message(:file_suspicious)
-      else
-        message(:file_invalid)
-      end
     end
   end
 end

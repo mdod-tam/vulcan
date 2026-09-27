@@ -62,23 +62,28 @@ module Vendors
     end
 
     test 'accepts JPEG W9 when Marcel detects image/jpeg' do
-      file = fixture_file_upload(Rails.root.join('test/fixtures/files/sample.jpg'), 'image/jpeg')
-      Marcel::MimeType.stubs(:for).returns('image/jpeg')
+      Tempfile.create(['w9-upload', '.jpg'], binmode: true) do |jpeg|
+        # The shared upload validator requires at least 1 KB.
+        jpeg.write("\xFF\xD8\xFF\xE0".b + ("\x00".b * 2048))
+        jpeg.rewind
+        file = Rack::Test::UploadedFile.new(jpeg.path, 'image/jpeg', true, original_filename: 'w9.jpg')
+        Marcel::MimeType.stubs(:for).returns('image/jpeg')
 
-      result = SubmitW9Resubmission.new(
-        vendor: @vendor,
-        vendor_secure_request_form: @secure_request_form,
-        file: file
-      ).call
+        result = SubmitW9Resubmission.new(
+          vendor: @vendor,
+          vendor_secure_request_form: @secure_request_form,
+          file: file
+        ).call
 
-      assert_predicate result, :success?
-      assert @vendor.w9_form.attached?
-      assert_equal 'image/jpeg', @vendor.w9_form.content_type
+        assert_predicate result, :success?
+        assert @vendor.w9_form.attached?
+        assert_equal 'image/jpeg', @vendor.w9_form.content_type
+      end
     end
 
     test 'fails validation when file type is not allowed' do
       Tempfile.create(['w9-upload', '.txt']) do |file|
-        file.write('not a pdf')
+        file.write('not a pdf ' * 200)
         file.rewind
 
         upload = Rack::Test::UploadedFile.new(file.path, 'text/plain', original_filename: 'w9.txt')
@@ -91,6 +96,26 @@ module Vendors
         assert_not result.success?
         assert_equal I18n.t('vendors.w9_resubmission.messages.file_type_invalid', locale: @vendor.effective_locale),
                      result.data.fetch(:errors).messages.fetch(:file).first
+      end
+    end
+
+    test 'rejects a W9 PDF with active content like proof and certification uploads' do
+      Tempfile.create(['w9-upload', '.pdf'], binmode: true) do |pdf|
+        pdf.write("%PDF-1.4\n1 0 obj << /OpenAction << /S /JavaScript /JS (app.alert(1)) >> >>\n".b + (' ' * 2048))
+        pdf.rewind
+        upload = Rack::Test::UploadedFile.new(pdf.path, 'application/pdf', true, original_filename: 'w9.pdf')
+        original_blob_id = @vendor.w9_form.blob.id
+
+        result = SubmitW9Resubmission.new(
+          vendor: @vendor,
+          vendor_secure_request_form: @secure_request_form,
+          file: upload
+        ).call
+
+        assert_not result.success?
+        assert_equal I18n.t('vendors.w9_resubmission.messages.file_suspicious', locale: @vendor.effective_locale),
+                     result.data.fetch(:errors).messages.fetch(:file).first
+        assert_equal original_blob_id, @vendor.reload.w9_form.blob.id
       end
     end
   end

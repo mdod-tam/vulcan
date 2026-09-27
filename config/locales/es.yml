@@ -624,6 +624,10 @@ es:
         file_blank: "Seleccione un archivo W9 para cargar."
         file_type_invalid: "Suba un archivo PDF, JPEG, PNG o HEIC/HEIF para la revisión del W9."
         file_too_large: "El archivo debe ser de %{max_size} MB o menos."
+        file_too_small: "Suba un archivo W9 que no esté vacío."
+        file_suspicious: "Suba otro archivo. Este archivo no se puede aceptar."
+        file_invalid: "Suba un archivo W9 válido."
+        attachment_failed: "No se pudo adjuntar el W9. Inténtelo de nuevo."
         submitted: "Gracias. Su formulario W9 fue enviado para revisión."
   document_signing:
     medical_certification_request:

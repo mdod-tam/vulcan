@@ -107,9 +107,19 @@ class ProofAttachmentService
 
   def self.record_failure(error, context)
     log_error(error)
-    log_failure_audit_event(error, context)
+    record_failure_audit_after_transaction(error, context)
   rescue StandardError => e
     Rails.logger.error "Failed to record proof failure: #{e.message}"
+  end
+
+  # A caller can roll back its own open transaction after this failure, which
+  # would also remove the audit event. Write the event after that transaction ends.
+  def self.record_failure_audit_after_transaction(error, context)
+    transaction = ApplicationRecord.current_transaction
+    return log_failure_audit_event(error, context) unless transaction.open?
+
+    transaction.after_commit { log_failure_audit_event(error, context) }
+    transaction.after_rollback { log_failure_audit_event(error, context) }
   end
 
   def self.record_metrics(result, proof_type, status)

@@ -14,6 +14,7 @@ class SecureW9FormsController < SecureRequestFormController
     ).call
   end
 
+  def form_path = secure_w9_form_path(token: @token)
   def resend_path = new_secure_w9_form_resend_path(token: @token)
   def success_redirect_path = secure_w9_form_success_path
 

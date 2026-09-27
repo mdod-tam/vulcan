@@ -16,6 +16,7 @@ class SecureProviderInfoFormResendsController < SecureRequestResendController
   end
 
   def form_path = secure_provider_info_form_path(token: @token)
+  def sent_path(**) = secure_provider_info_form_resend_sent_path(**)
   def rate_limit_key = 'secure_provider_info_form_resend'
   def resend_log_label = 'Provider-info'
 

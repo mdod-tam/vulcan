@@ -61,6 +61,8 @@ class SecureCertificationFormResendsControllerTest < ActionDispatch::Integration
 
     post secure_certification_form_resend_path, params: { token: @raw_token }
 
+    assert_response :see_other
+    follow_redirect!
     assert_response :success
     assert_select 'h1', I18n.t('secure_certification_form_resends.create.heading')
   end
@@ -71,6 +73,8 @@ class SecureCertificationFormResendsControllerTest < ActionDispatch::Integration
 
     post secure_certification_form_resend_path, params: { token: @raw_token }
 
+    assert_response :see_other
+    follow_redirect!
     assert_response :success
     assert_equal 'no-store', response.headers['Cache-Control']
     assert_equal 'no-referrer', response.headers['Referrer-Policy']
@@ -83,6 +87,8 @@ class SecureCertificationFormResendsControllerTest < ActionDispatch::Integration
 
     post secure_certification_form_resend_path, params: { token: @raw_token }
 
+    assert_response :see_other
+    follow_redirect!
     assert_response :success
     assert_select 'h1', I18n.t('secure_certification_form_resends.create.heading')
   end
@@ -93,6 +99,8 @@ class SecureCertificationFormResendsControllerTest < ActionDispatch::Integration
 
     post secure_certification_form_resend_path, params: { token: @raw_token }
 
+    assert_response :see_other
+    follow_redirect!
     assert_response :success
     assert_select 'h1', I18n.t('secure_certification_form_resends.create.heading')
   end
@@ -102,6 +110,8 @@ class SecureCertificationFormResendsControllerTest < ActionDispatch::Integration
 
     post secure_certification_form_resend_path, params: { token: 'not-real' }
 
+    assert_response :see_other
+    follow_redirect!
     assert_response :success
     assert_select 'h1', I18n.t('secure_certification_form_resends.create.heading')
   end
@@ -115,6 +125,8 @@ class SecureCertificationFormResendsControllerTest < ActionDispatch::Integration
 
     post secure_certification_form_resend_path, params: { token: proof_token }
 
+    assert_response :see_other
+    follow_redirect!
     assert_response :success
     assert_select 'h1', I18n.t('secure_certification_form_resends.create.heading')
   end

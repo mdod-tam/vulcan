@@ -26,6 +26,7 @@ class SecureProofFormsController < SecureRequestFormController
     @proof_type_label = t("secure_proof_forms.proof_types.#{proof_type}")
   end
 
+  def form_path = secure_proof_form_path(token: @token)
   def resend_path = new_secure_proof_form_resend_path(token: @token)
   def success_redirect_path = secure_proof_form_success_path(locale: @secure_request_form.delivery_locale)
 end

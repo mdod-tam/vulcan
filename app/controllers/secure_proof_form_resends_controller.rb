@@ -20,6 +20,7 @@ class SecureProofFormResendsController < SecureRequestResendController
   end
 
   def form_path = secure_proof_form_path(token: @token)
+  def sent_path(**) = secure_proof_form_resend_sent_path(**)
   def rate_limit_key = 'secure_proof_form_resend'
   def resend_log_label = 'Proof resubmission'
 

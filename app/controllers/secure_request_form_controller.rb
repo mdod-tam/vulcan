@@ -11,7 +11,6 @@ class SecureRequestFormController < SecurePublicFormController
 
   def show
     return render_unavailable unless request_form_kind?
-    return render_unavailable if @secure_request_form.revoked? && revoked_hides_submission?
     return render_submitted if @secure_request_form.submitted?
     return render_unavailable if @secure_request_form.revoked?
     return redirect_to resend_path if @secure_request_form.expired?
@@ -20,13 +19,13 @@ class SecureRequestFormController < SecurePublicFormController
   end
 
   def update
-    return render_unavailable unless request_form_kind? && !@secure_request_form.revoked?
-    return render_submitted if @secure_request_form.submitted?
-    return redirect_to resend_path if @secure_request_form.expired?
+    return redirect_to_current_state unless request_form_kind? && !@secure_request_form.revoked?
+    return redirect_to_current_state if @secure_request_form.submitted?
+    return redirect_to resend_path, status: :see_other if @secure_request_form.expired?
 
     result = submit_request_form
-    return redirect_to success_redirect_path if result.success?
-    return render_submitted if @secure_request_form.reload.submitted?
+    return redirect_to success_redirect_path, status: :see_other if result.success?
+    return redirect_to_current_state if @secure_request_form.reload.submitted?
 
     @form_errors = result.data&.fetch(:errors, nil)
     @form_error_message = result.message if @form_errors.blank?
@@ -47,9 +46,10 @@ class SecureRequestFormController < SecurePublicFormController
     @secure_request_form.present? && request_form_kind_matches?
   end
 
-  # Provider-info pages show a revoked link as unavailable even after submission.
-  def revoked_hides_submission?
-    false
+  # Turbo ignores a 200 response to a form submission, so a link that can no
+  # longer be used redirects to its page, which shows the current state.
+  def redirect_to_current_state
+    redirect_to form_path, status: :see_other
   end
 
   def assign_display_context; end
@@ -66,6 +66,7 @@ class SecureRequestFormController < SecurePublicFormController
   def request_form_class = raise(NotImplementedError)
   def request_form_kind_matches? = raise(NotImplementedError)
   def submit_request_form = raise(NotImplementedError)
+  def form_path = raise(NotImplementedError)
   def resend_path = raise(NotImplementedError)
   def success_redirect_path = raise(NotImplementedError)
 end

@@ -67,6 +67,8 @@ class SecureW9FormsControllerTest < ActionDispatch::IntegrationTest
 
     patch secure_w9_form_path, params: { token: @raw_token }
 
+    assert_response :see_other
+    follow_redirect!
     assert_response :success
     assert_select 'h1', I18n.t('secure_w9_forms.unavailable.heading')
   end
@@ -84,6 +86,8 @@ class SecureW9FormsControllerTest < ActionDispatch::IntegrationTest
 
     patch secure_w9_form_path, params: { token: @raw_token }
 
+    assert_response :see_other
+    follow_redirect!
     assert_response :success
     assert_select 'h1', I18n.t('secure_w9_forms.submitted.heading')
   end

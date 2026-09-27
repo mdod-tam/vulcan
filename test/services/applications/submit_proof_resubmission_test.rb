@@ -204,6 +204,24 @@ module Applications
       end
     end
 
+    test 'an attachment failure shows only the translated message and keeps its audit event' do
+      ProofAttachmentService.stubs(:perform_attachment_flow)
+                            .raises(StandardError, 'storage error at s3://private-bucket/key-123')
+
+      result = SubmitProofResubmission.new(
+        application: @application,
+        secure_request_form: @secure_request_form,
+        file: @file
+      ).call
+
+      assert_not result.success?
+      assert_equal I18n.t('applications.proof_resubmission.messages.attachment_failed'), result.message
+      assert_not_includes result.message, 'private-bucket'
+      assert_predicate @secure_request_form.reload, :status_sent?
+      # The failure audit is written after the submission transaction rolls back.
+      assert Event.exists?(auditable: @application, action: 'income_proof_attachment_failed')
+    end
+
     private
 
     def attach_income_proof(application)

@@ -22,6 +22,7 @@ class SecureCertificationFormsController < SecureRequestFormController
     @application_id = @secure_request_form.application_id
   end
 
+  def form_path = secure_certification_form_path(token: @token)
   def resend_path = new_secure_certification_form_resend_path(token: @token)
   def success_redirect_path = secure_certification_form_success_path
 
