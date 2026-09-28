@@ -8,13 +8,12 @@ module Admin
     before_action :set_secure_request_form
 
     def create
-      unless @secure_request_form.active?
+      # revoke! returns false when a submission committed first.
+      unless @secure_request_form.active? && @secure_request_form.revoke!(actor: current_user, reason: :manual_revocation)
         redirect_to admin_application_path(@application),
                     alert: t('admin.applications.secure_request_form_revocations.create.not_active')
         return
       end
-
-      @secure_request_form.revoke!(actor: current_user, reason: :manual_revocation)
 
       redirect_to admin_application_path(@application),
                   notice: t('admin.applications.secure_request_form_revocations.create.success')

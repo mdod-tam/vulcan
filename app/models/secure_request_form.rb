@@ -79,6 +79,38 @@ class SecureRequestForm < ApplicationRecord
     delivery_owner_id.present? && delivery_source.present?
   end
 
+  PROOF_TYPES_BY_KIND = {
+    'id_proof_resubmission' => 'id',
+    'residency_proof_resubmission' => 'residency',
+    'income_proof_resubmission' => 'income'
+  }.freeze
+
+  def audit_subject = application
+  def audit_identity = { secure_request_form_id: id }
+
+  def audit_metadata
+    {
+      application_id: application_id,
+      **audit_identity,
+      request_batch_id: request_batch_id,
+      recipient_id: recipient_id,
+      recipient_name: recipient&.full_name,
+      recipient_role: recipient_role,
+      recipient_channel: recipient_channel,
+      kind: kind,
+      proof_type: PROOF_TYPES_BY_KIND[kind]
+    }
+  end
+
+  def revocation_audit_action
+    kind_provider_info_request? ? 'provider_info_request_revoked' : 'proof_resubmission_request_revoked'
+  end
+
+  # Only proof links record an expiration event.
+  def expiration_audit_action
+    'proof_resubmission_request_expired' unless kind_provider_info_request?
+  end
+
   private
 
   def delivery_provenance_is_complete

@@ -7,6 +7,12 @@ module SecureTokenizable
 
   included do
     before_validation :ensure_request_batch_id, on: :create
+
+    # Expired, still-open links whose expiration event has not been recorded yet.
+    scope :expiration_unrecorded, lambda {
+      status_sent.where(submitted_at: nil, revoked_at: nil, expiration_recorded_at: nil)
+                 .where(expires_at: ..Time.current)
+    }
   end
 
   class_methods do
@@ -54,13 +60,22 @@ module SecureTokenizable
     update!(status: :submitted, submitted_at: Time.current)
   end
 
+  # Locks the row so a submission that commits first is never overwritten.
+  # Returns false, with no audit event, when the form is already submitted or revoked.
   def revoke!(actor: nil, reason: nil, metadata: {})
-    revoked_time = Time.current
+    revoked = false
 
     ApplicationRecord.transaction do
+      lock!
+      next if submitted? || revoked?
+
+      revoked_time = Time.current
       update!(status: :revoked, revoked_at: revoked_time)
       record_revocation_audit_event(actor: actor, reason: reason, metadata: metadata, revoked_at: revoked_time)
+      revoked = true
     end
+
+    revoked
   end
 
   def display_status
@@ -71,6 +86,13 @@ module SecureTokenizable
     :active
   end
 
+  # Each form model defines these, so a new form type cannot silently skip its audit events.
+  def audit_subject = raise(NotImplementedError, "#{self.class.name} must define audit_subject")
+  def audit_identity = raise(NotImplementedError, "#{self.class.name} must define audit_identity")
+  def audit_metadata = raise(NotImplementedError, "#{self.class.name} must define audit_metadata")
+  def revocation_audit_action = raise(NotImplementedError, "#{self.class.name} must define revocation_audit_action")
+  def expiration_audit_action = raise(NotImplementedError, "#{self.class.name} must define expiration_audit_action")
+
   private
 
   def ensure_request_batch_id
@@ -78,93 +100,18 @@ module SecureTokenizable
   end
 
   def record_revocation_audit_event(actor:, reason:, metadata:, revoked_at:)
-    auditable = secure_request_revocation_auditable
-    action = secure_request_revocation_action
-    event_actor = actor || secure_request_revocation_fallback_actor
-    return if auditable.blank? || action.blank? || event_actor.blank?
+    event_actor = actor || requested_by
+    return if event_actor.blank?
+
+    event_metadata = audit_metadata
+    event_metadata[:reason] = reason.to_s if reason.present?
 
     AuditEventService.log(
-      action: action,
+      action: revocation_audit_action,
       actor: event_actor,
-      auditable: auditable,
+      auditable: audit_subject,
       created_at: revoked_at,
-      metadata: secure_request_revocation_metadata(reason: reason, metadata: metadata)
+      metadata: event_metadata.merge(metadata.to_h)
     )
-  end
-
-  def secure_request_revocation_auditable
-    return application if respond_to?(:application)
-
-    vendor if respond_to?(:vendor)
-  end
-
-  def secure_request_revocation_fallback_actor
-    requested_by if respond_to?(:requested_by)
-  end
-
-  def secure_request_revocation_action
-    case self
-    when SecureRequestForm
-      if kind_provider_info_request?
-        'provider_info_request_revoked'
-      elsif kind_id_proof_resubmission? || kind_residency_proof_resubmission? || kind_income_proof_resubmission?
-        'proof_resubmission_request_revoked'
-      end
-    when MedicalProviderSecureRequestForm
-      'cert_upload_request_revoked' if kind_certification_upload?
-    when VendorSecureRequestForm
-      'w9_upload_request_revoked' if kind_w9_upload?
-    end
-  end
-
-  def secure_request_revocation_metadata(reason:, metadata:)
-    base_metadata = case self
-                    when SecureRequestForm
-                      {
-                        application_id: application_id,
-                        secure_request_form_id: id,
-                        request_batch_id: request_batch_id,
-                        recipient_id: recipient_id,
-                        recipient_name: recipient&.full_name,
-                        recipient_role: recipient_role,
-                        recipient_channel: recipient_channel,
-                        kind: kind,
-                        proof_type: secure_request_form_proof_type
-                      }
-                    when MedicalProviderSecureRequestForm
-                      {
-                        application_id: application_id,
-                        medical_provider_secure_request_form_id: id,
-                        request_batch_id: request_batch_id,
-                        provider_name: provider_name,
-                        provider_email: provider_email,
-                        requested_channel: 'email'
-                      }
-                    when VendorSecureRequestForm
-                      {
-                        vendor_secure_request_form_id: id,
-                        vendor_id: vendor_id,
-                        request_batch_id: request_batch_id,
-                        recipient_email: recipient_email,
-                        kind: kind,
-                        requested_channel: 'email'
-                      }
-                    else
-                      {}
-                    end
-
-    base_metadata[:reason] = reason.to_s if reason.present?
-    base_metadata.merge(metadata.to_h)
-  end
-
-  def secure_request_form_proof_type
-    case kind.to_s
-    when 'id_proof_resubmission'
-      'id'
-    when 'residency_proof_resubmission'
-      'residency'
-    when 'income_proof_resubmission'
-      'income'
-    end
   end
 end

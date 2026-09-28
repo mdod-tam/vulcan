@@ -286,4 +286,30 @@ class SecureRequestFormTest < ActiveSupport::TestCase
     assert_not_predicate sibling_form.reload, :revoked?
     assert_predicate sibling_form.reload, :active?
   end
+
+  test 'revoke! does not overwrite a submission that committed first' do
+    admin = create(:admin)
+    form = create(:secure_request_form)
+    # Another request submits the form after this copy was loaded.
+    SecureRequestForm.where(id: form.id).update_all(status: SecureRequestForm.statuses[:submitted], submitted_at: Time.current)
+
+    assert_no_difference -> { Event.where(action: 'provider_info_request_revoked').count } do
+      assert_not form.revoke!(actor: admin, reason: :manual_revocation)
+    end
+    assert_predicate form.reload, :status_submitted?
+    assert_nil form.revoked_at
+  end
+
+  test 'revoke! revokes an open form and records one audit event' do
+    admin = create(:admin)
+    form = create(:secure_request_form, kind: :income_proof_resubmission)
+
+    assert_difference -> { Event.where(action: 'proof_resubmission_request_revoked').count }, 1 do
+      assert form.revoke!(actor: admin, reason: :manual_revocation)
+    end
+    event = Event.where(action: 'proof_resubmission_request_revoked').last
+    assert_equal 'income', event.metadata['proof_type']
+    assert_equal 'manual_revocation', event.metadata['reason']
+    assert_not form.revoke!(actor: admin), 'a second revoke is a no-op'
+  end
 end

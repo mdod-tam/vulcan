@@ -33,4 +33,20 @@ class MedicalProviderSecureRequestForm < ApplicationRecord
     certification_upload.status_sent.where(application_id: application_id, provider_email: provider_email)
                         .where(submitted_at: nil, revoked_at: nil)
   }
+
+  def audit_subject = application
+  def audit_identity = { medical_provider_secure_request_form_id: id }
+  def revocation_audit_action = 'cert_upload_request_revoked'
+  def expiration_audit_action = 'cert_upload_request_expired'
+
+  def audit_metadata
+    {
+      application_id: application_id,
+      **audit_identity,
+      request_batch_id: request_batch_id,
+      provider_name: provider_name,
+      provider_email: provider_email,
+      requested_channel: 'email'
+    }
+  end
 end

@@ -10,8 +10,7 @@ module Admin
       revoked_count = 0
       ApplicationRecord.transaction do
         active_batch_requests.each do |secure_request_form|
-          secure_request_form.revoke!(actor: current_user, reason: :manual_batch_revocation)
-          revoked_count += 1
+          revoked_count += 1 if secure_request_form.revoke!(actor: current_user, reason: :manual_batch_revocation)
         end
       end
 

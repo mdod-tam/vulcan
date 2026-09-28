@@ -5,11 +5,7 @@ module Applications
     include SecureFormSubmission
 
     MESSAGE_SCOPE = 'applications.proof_resubmission.messages'
-    KIND_TO_PROOF_TYPE = {
-      'id_proof_resubmission' => :id,
-      'residency_proof_resubmission' => :residency,
-      'income_proof_resubmission' => :income
-    }.freeze
+    KIND_TO_PROOF_TYPE = SecureRequestForm::PROOF_TYPES_BY_KIND.transform_values(&:to_sym).freeze
 
     attr_reader :application, :secure_request_form, :file
 
