@@ -57,7 +57,8 @@ class SecureRequestForm < ApplicationRecord
   scope :with_incomplete_delivery_provenance, lambda {
     where(delivery_owner_id: nil).or(where(delivery_source: nil))
   }
-  # Timestamp checks are defensive against status/timestamp drift (see revoked?/submitted?).
+  # The open_*_for_recipient scopes also require nil timestamps, because status
+  # and timestamps can disagree (see revoked? and submitted?).
   scope :open_provider_info_for_recipient, lambda { |application_id:, recipient_id:|
     provider_info.status_sent.where(application_id: application_id, recipient_id: recipient_id)
                  .where(submitted_at: nil, revoked_at: nil)

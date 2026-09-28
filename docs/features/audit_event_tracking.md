@@ -40,6 +40,9 @@ Fingerprints are what separate a legitimate repeated action from a duplicate —
 | Paper identity decisions | Case services record `duplicate_review_case_opened` and `duplicate_review_case_resolved` for self-applicant, guardian, and dependent decisions, in the business transaction. Keep-separate records one case per actual pair; existing-person selection creates no second user. See [paper intake](../development/paper_application_architecture.md). |
 | Paper follow-up failure | `PaperApplicationService` attempts an `application_post_creation_step_failed` event after a confirmed commit, identifying the failed step and error class. Failure to record this warning must not invite duplicate intake. |
 | Communication | `NotificationService` audits notification creation/delivery only when `audit: true`; most callers leave the domain event with its workflow owner. |
+| Contact changes | [ContactChangeAudit](../../app/models/concerns/contact_change_audit.rb) records `alternate_contact_updated`, and `medical_provider_info_updated` for a submitted application, from every write path. These events store old and new values so staff can see what was replaced. A secure provider information submission that replaces a value on file sets `review_required`. |
+| Vendor W9 | A change to a W-9 field (business name, tax ID, or address) while the W9 is approved or under review records `w9_details_changed` with field names only. Only a newly attached W9 moves the status to pending review. |
+| Secure request links | Revocation and expiration events come from each form model's audit hooks; see [secure request links](secure_request_links.md). |
 
 `paper_identity_no_match_confirmed` remains readable as historical evidence and has no new writer. Historical audit-only rows are not automatically treated as pair decisions.
 

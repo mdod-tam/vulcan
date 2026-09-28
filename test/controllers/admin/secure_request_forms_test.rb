@@ -421,6 +421,28 @@ module Admin
 
       assert_response :success
       assert_includes response.body, I18n.t('admin.applications.certification_upload_requests.create.provider_email_required')
+      assert_select '[data-testid="secure-cert-upload-disabled-reason"]',
+                    text: /#{Regexp.escape(I18n.t('admin.applications.certification_upload_requests.create.provider_email_required').first(40))}/
+      assert_select 'button[disabled][aria-describedby="secure-cert-upload-disabled-reason"]'
+    end
+
+    test 'provider information row actions name their link and resend asks for confirmation' do
+      application = create(:application, status: :awaiting_proof)
+      application.update_columns(medical_provider_email: nil)
+      guardian = create(:constituent)
+      first = create(:secure_request_form, application: application, recipient: application.user)
+      second = create(:secure_request_form, application: application, recipient: guardian, delivery_owner: guardian)
+
+      get admin_application_path(application)
+
+      assert_response :success
+      revoke_labels = css_select("form[action^='/admin/applications/#{application.id}/secure_request_forms'] button[aria-label]")
+                      .pluck('aria-label')
+      assert_equal 2, revoke_labels.uniq.size, 'each Revoke button names its own link'
+      [first, second].each do |form|
+        assert_select "form[action='#{admin_application_secure_request_forms_path(application)}'][onsubmit*='confirm'] " \
+                      "input[name='resend_of_id'][value='#{form.id}']"
+      end
     end
 
     test 'show page offers secure proof upload link for rejected unattached income proof' do

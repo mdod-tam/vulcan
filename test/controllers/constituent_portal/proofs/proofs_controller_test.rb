@@ -196,4 +196,13 @@ class ConstituentProofsSubmissionTest < ActionDispatch::IntegrationTest
     assert dependent_application.income_proof.attached?
     assert_equal 'not_reviewed', dependent_application.income_proof_status
   end
+
+  test 'an application the constituent cannot reach redirects to the dashboard' do
+    other_application = create(:application, :paper_rejected_proofs)
+
+    get constituent_portal_application_new_proof_path(application_id: other_application.id, proof_type: 'income')
+
+    assert_redirected_to constituent_portal_dashboard_path
+    assert_equal 'Application not found', flash[:alert]
+  end
 end

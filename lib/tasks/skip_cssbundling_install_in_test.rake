@@ -3,10 +3,8 @@
 if Rails.env.test? && Rake::Task.task_defined?('css:build')
   require 'fileutils'
 
-  # In test we only need the compiled stylesheet, not a fresh dependency
-  # installation on every run. Using the local binary avoids invoking
-  # css:install -> yarn install during test:prepare, which has been brittle in
-  # local environments even when node_modules is already present.
+  # In test, build CSS with the local Tailwind binary. This skips css:install
+  # (yarn install) during test:prepare, which fails in some local setups.
   Rake::Task['css:build'].clear_prerequisites
   Rake::Task['css:build'].clear_actions
   Rake::Task['css:build'].enhance do

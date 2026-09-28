@@ -36,11 +36,16 @@ Unknown event types and unmatched submission IDs change nothing, and the receive
 
 ### Which file wins
 
-A certification can arrive through several channels, and a late DocuSeal completion must not overwrite work already done elsewhere:
+A certification can arrive through DocuSeal or a secure upload link. [`MedicalCertificationAttachmentService.accept_submission`](../../app/services/medical_certification_attachment_service.rb) decides placement for both channels, so a correction and a late, obsolete completion are told apart the same way:
 
-- **Normal completion** attaches the signed PDF as the primary certification and marks it `received`.
-- **A secure upload already received, and certification is `received`, `approved`, or `rejected`** — that file and status stay, and the DocuSeal PDF is kept in `additional_medical_certifications` for comparison. The distinction comes from the `cert_submitted_via_secure_form` audit event.
-- **Already approved without that secure-upload history** — the approved file and status are preserved, and the signing URLs are recorded without attaching the incoming PDF.
+| Current status | Submission | Result |
+| --- | --- | --- |
+| `not_requested` or `requested` | Any | Becomes the primary certification, status `received`. |
+| `rejected` | Requested after the latest rejection | A correction: replaces the primary, status `received`. |
+| `rejected` | Requested before the latest rejection | Kept in `additional_medical_certifications`, status unchanged. |
+| `received` or `approved` | Any | Kept in `additional_medical_certifications`, status unchanged. |
+
+The request time is the secure form's `sent_at`, or `document_signing_requested_at` for DocuSeal, which is written together with the submission ID the webhook must match. The rejection time is the latest rejected certification status change. A kept document is never discarded: its blob and the submission event record the reason, and the admin certification list shows it as a review note.
 
 A failed download or attachment can leave signing at `signed` while certification never becomes `received`; the reason is in `document_signing_attachment_failed`. Completion processing also skips an application already marked signed with a stored document URL, and checks additional files by URL to avoid duplicate attachments.
 

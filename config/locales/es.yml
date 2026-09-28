@@ -1,4 +1,7 @@
 es:
+  layouts:
+    secure_public:
+      program_name: "Programa de Telecomunicaciones Accesibles de Maryland"
   shared:
     header:
       main_navigation: "Navegación principal"
@@ -271,6 +274,7 @@ es:
       dependent_email_help: "Este correo electrónico se usará para comunicaciones sobre los beneficios de la persona dependiente. Las comunicaciones seguras de flujo de trabajo pueden enviarse por defecto a la persona dependiente/solicitante cuando este correo electrónico sea distinto del correo electrónico del tutor."
       guardian_phone_help: "Las llamadas o mensajes de texto para la persona dependiente usarán la ruta telefónica del tutor."
   admin:
+    secure_link_row_action: "%{action} enlace de %{recipient}, enviado %{sent_at}"
     applications:
       filters:
         pending_provider_info: "Información del Proveedor Pendiente"
@@ -330,6 +334,7 @@ es:
           send_new_link: "Enviar nuevo enlace"
           no_actions: "Sin acciones"
           empty: "No se han enviado solicitudes seguras de información del proveedor."
+          resend_confirm: "¿Enviar un nuevo enlace? El enlace actual dejará de funcionar."
           originally_delivered_to: "Entregado originalmente a %{owner}. Al reenviar se vuelve a verificar la información de contacto actual."
           delivery_ownership_unknown: "Se desconoce el propietario histórico de la entrega."
         delivery_owner:

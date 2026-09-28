@@ -120,7 +120,7 @@ module ConstituentPortal
       end
 
       def handle_application_not_found(application_id)
-        Rails.logger.error "Application not found with ID: #{application_id} for user: #{current_user.id} with dependents: #{current_user.&dependents.pluck(:id)}"
+        Rails.logger.error "Application not found with ID: #{application_id} for user: #{current_user.id} with dependents: #{current_user.dependents.pluck(:id)}"
         redirect_to constituent_portal_dashboard_path, alert: 'Application not found'
       end
 

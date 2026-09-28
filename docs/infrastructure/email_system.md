@@ -41,7 +41,9 @@ Password-reset mail builds links from [`CanonicalPublicUrlOptions`](../../app/se
 
 ## Collecting documents
 
-Documents arrive through secure forms or staff upload. No live Action Mailbox implementation collects proofs or certifications in this checkout, and two leftover scripts imply otherwise: [`bin/test-inbound-email`](../../bin/test-inbound-email) calls the missing `MatVulcan::InboundEmailConfig`, and [`bin/test-inbound-emails`](../../bin/test-inbound-emails) targets a removed test file.
+Documents arrive through secure forms or staff upload. No Action Mailbox implementation collects proofs or certifications.
+
+A disabled template normally skips its email. Proof and provider information emails that carry a secure link fail instead, so the issuing service revokes the unsent link; see [secure request links](../features/secure_request_links.md). Provider certification emails use the default locale.
 
 | Request | Issuing / submitting |
 | --- | --- |

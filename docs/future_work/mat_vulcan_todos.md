@@ -269,7 +269,7 @@ Consolidated `Proof` model  [FILE-SEC-001][DATA-001][AUDIT-002]
 - [ ] Single table vs. polymorphic; FK strategy; migration plan
 - [ ] Migration: create `proofs` + backfill rake task  [DATA-001]
 - [ ] Services: update `ProofAttachmentService`/`ProofReviewService` for `Proof`  [FILE-SEC-001]
-- [ ] UI/mailboxes: read/write `Proof` records
+- [ ] UI: read/write `Proof` records
 - [ ] Audit/events: include `proof_id` and `kind`  [AUDIT-002]
 - [ ] Tests: backfill correctness, services, UI reads
 

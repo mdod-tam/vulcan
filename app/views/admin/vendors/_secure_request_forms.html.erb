@@ -53,6 +53,8 @@
                                       turbo: false
                                     }
                                   },
+                                  'aria-label': secure_link_row_action_label(t('admin.vendors.vendor_secure_request_forms.table.revoke'), form,
+                                                                             recipient: secure_request_masked_email(form.recipient_email)),
                                   class: 'inline-flex items-center rounded-md border border-red-300 bg-white px-2.5 py-1.5 text-sm font-medium text-red-700 hover:bg-red-50 focus:outline-none focus:ring-2 focus:ring-red-600 focus:ring-offset-2' %>
                   <% elsif vendor_secure_w9_upload_requestable?(@vendor) && (form.revoked? || (form.status_sent? && form.expired?)) %>
                     <%= button_to t('admin.vendors.vendor_secure_request_forms.table.send_new_link'),
@@ -60,6 +62,8 @@
                                   method: :post,
                                   form: { data: { turbo: false } },
                                   form_class: 'inline',
+                                  'aria-label': secure_link_row_action_label(t('admin.vendors.vendor_secure_request_forms.table.send_new_link'), form,
+                                                                             recipient: secure_request_masked_email(form.recipient_email)),
                                   class: 'inline-flex items-center rounded-md border border-gray-300 bg-white px-2.5 py-1.5 text-sm font-medium text-gray-700 hover:bg-gray-50 focus:outline-none focus:ring-2 focus:ring-indigo-500 focus:ring-offset-2' %>
                   <% else %>
                     <span class="text-gray-500"><%= t('admin.vendors.vendor_secure_request_forms.table.no_actions') %></span>

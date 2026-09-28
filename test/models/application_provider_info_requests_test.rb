@@ -33,8 +33,7 @@ class ApplicationProviderInfoRequestsTest < ActiveSupport::TestCase
 
   # -----------------------------------------------------------------------
   # pending_provider_info alignment regression coverage
-  # The scope must stay aligned with Application#required_proofs_approved? and
-  # the plan's definition of proof prerequisites.
+  # The scope must stay aligned with Application#required_proofs_approved?.
   # -----------------------------------------------------------------------
 
   # Application model callbacks recalculate income_proof_required from income/household

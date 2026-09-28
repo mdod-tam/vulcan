@@ -64,6 +64,8 @@
                             turbo: false
                           }
                         },
+                        'aria-label': secure_link_row_action_label(t('admin.applications.proof_secure_request_forms.table.revoke'), form,
+                                                                   recipient: secure_request_issued_recipient_label(form)),
                         class: 'inline-flex items-center rounded-md border border-red-300 bg-white px-2.5 py-1.5 text-sm font-medium text-red-700 hover:bg-red-50 focus:outline-none focus:ring-2 focus:ring-red-600 focus:ring-offset-2'
                       ) %>
                 <% else %>

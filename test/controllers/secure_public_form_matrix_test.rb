@@ -136,6 +136,23 @@ class SecurePublicFormMatrixTest < ActionDispatch::IntegrationTest
       assert_select 'html[lang=?]', 'es'
     end
 
+    test "#{name} layout names the program in the page locale" do
+      get public_send(config[:success_path], locale: 'es')
+
+      assert_select 'header p', I18n.t('layouts.secure_public.program_name', locale: :es)
+    end
+
+    test "#{name} unavailable page shows the configured support contact" do
+      Policy.stubs(:get).returns(nil)
+      Policy.stubs(:get).with('support_email').returns('help@example.test')
+      Policy.stubs(:get).with('support_phone').returns('410-555-0142')
+
+      get public_send(config[:form_path], token: 'not-a-real-token')
+
+      assert_includes response.body, 'help@example.test'
+      assert_includes response.body, '410-555-0142'
+    end
+
     test "#{name} success page locale" do
       get public_send(config[:success_path], locale: 'es')
 

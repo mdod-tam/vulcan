@@ -22,6 +22,9 @@
 #       enabled: "ON"
 
 en:
+  layouts:
+    secure_public:
+      program_name: "Maryland Accessible Telecommunications Program"
   password_visibility:
     status:
       hidden: "Password is hidden"
@@ -555,6 +558,7 @@ en:
     unfiltered_error: "Filter error – showing unfiltered results."
     e_template_not_found: "Email template not found."
   admin:
+    secure_link_row_action: "%{action} link for %{recipient}, sent %{sent_at}"
     application_notes:
       create:
         note_added: "Note added successfully."
@@ -617,6 +621,7 @@ en:
           send_new_link: "Send New Link"
           no_actions: "No actions"
           empty: "No secure provider information requests have been sent."
+          resend_confirm: "Send a new link? The current link will stop working."
           originally_delivered_to: "Originally delivered to %{owner}. Resending re-checks the current contact information."
           delivery_ownership_unknown: "Historical delivery ownership is unknown."
         delivery_owner:

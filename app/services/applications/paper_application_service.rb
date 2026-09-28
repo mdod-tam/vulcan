@@ -1172,8 +1172,8 @@ module Applications
       send_account_creation_notifications
     end
 
-    # Automatically sends a provider info secure form to the constituent/guardian
-    # when an admin creates a paper application without certifying professional info.
+    # Sends a provider information link when staff mark provider information as
+    # missing and the certification is not approved.
     #
     # Failure stays non-blocking -- the application is already saved and the admin can send the form
     # manually -- but it is reported through the post-creation wrapper rather than swallowed here.

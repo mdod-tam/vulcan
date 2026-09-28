@@ -273,10 +273,8 @@ module Applications
     end
 
     def rejection_delivery?
-      # We intentionally infer the delivery template from the application's
-      # current certification state rather than storing a second context column
-      # on the request row. In the current codebase, secure cert links are only
-      # used for initial requests and rejection follow-ups.
+      # The certification status selects the template. Secure certification
+      # links serve only first requests and rejection follow-ups.
       application.medical_certification_status_rejected?
     end
 
