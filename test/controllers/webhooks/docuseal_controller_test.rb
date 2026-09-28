@@ -124,6 +124,7 @@ module Webhooks
     test 'handles form.completed event with approved medical cert status' do
       @application.update!(medical_certification_status: :approved)
       Webhooks::BaseController.any_instance.stubs(:verify_webhook_signature).returns(true)
+      mock_successful_docuseal_download
 
       make_signed_webhook_request(@completed_payload)
       assert_response :ok
@@ -133,8 +134,10 @@ module Webhooks
       assert_not_nil @application.document_signing_signed_at
       # Should NOT change medical_certification_status when already approved
       assert_equal 'approved', @application.medical_certification_status
-      # Should NOT attach file when already approved
+      # Keeps the signed form beside the approved certification for staff review
       assert_not @application.medical_certification.attached?
+      assert_equal 1, @application.additional_medical_certifications.count
+      assert_equal 'certification_approved', @application.additional_medical_certifications.first.blob.metadata['retention_reason']
       assert_equal 'https://example.com/signed_doc.pdf', @application.document_signing_document_url
       assert_equal 'https://example.com/audit_log', @application.document_signing_audit_url
 
@@ -147,6 +150,7 @@ module Webhooks
     test 'approved completion remains idempotent after first webhook stores document url' do
       @application.update!(medical_certification_status: :approved)
       Webhooks::BaseController.any_instance.stubs(:verify_webhook_signature).returns(true)
+      mock_successful_docuseal_download
 
       make_signed_webhook_request(@completed_payload)
       assert_response :ok
@@ -161,7 +165,8 @@ module Webhooks
     end
 
     test 'handles form.completed event with rejected medical cert status' do
-      @application.update!(medical_certification_status: :rejected)
+      record_certification_rejection(at: 2.days.ago)
+      @application.update!(document_signing_requested_at: 1.day.ago)
       Webhooks::BaseController.any_instance.stubs(:verify_webhook_signature).returns(true)
 
       # Mock HTTP download
@@ -234,10 +239,11 @@ module Webhooks
       assert_equal 'received', @application.medical_certification_status
       assert_equal 'secure_upload.pdf', @application.medical_certification.blob.filename.to_s
       assert_equal 1, @application.additional_medical_certifications.count
-      assert_match(/\Amedical_cert_docuseal_additional_/, @application.additional_medical_certifications.first.filename.to_s)
+      assert_equal 'certification_received', @application.additional_medical_certifications.first.blob.metadata['retention_reason']
 
       event = Event.where(action: 'document_signing_completed', auditable: @application).last
       assert_equal 'additional_medical_certification', event.metadata['retained_as']
+      assert_equal 'certification_received', event.metadata['retention_reason']
       assert event.metadata['additional_medical_certification_blob_id'].present?
     end
 
@@ -264,11 +270,27 @@ module Webhooks
       assert_equal 'rejected', @application.medical_certification_status
       assert_equal 'secure_upload.pdf', @application.medical_certification.blob.filename.to_s
       assert_equal 1, @application.additional_medical_certifications.count
-      assert_match(/\Amedical_cert_docuseal_additional_/, @application.additional_medical_certifications.first.filename.to_s)
+      assert_equal 'request_predates_rejection', @application.additional_medical_certifications.first.blob.metadata['retention_reason']
 
       event = Event.where(action: 'document_signing_completed', auditable: @application).last
       assert_equal 'additional_medical_certification', event.metadata['retained_as']
+      assert_equal 'request_predates_rejection', event.metadata['retention_reason']
       assert event.metadata['additional_medical_certification_blob_id'].present?
+    end
+
+    test 'DocuSeal completion for a request sent before the latest rejection is kept aside' do
+      @application.update!(document_signing_requested_at: 3.days.ago)
+      record_certification_rejection(at: 1.day.ago)
+      Webhooks::BaseController.any_instance.stubs(:verify_webhook_signature).returns(true)
+      mock_successful_docuseal_download
+
+      make_signed_webhook_request(@completed_payload)
+      assert_response :ok
+
+      @application.reload
+      assert_equal 'rejected', @application.medical_certification_status
+      assert_not @application.medical_certification.attached?
+      assert_equal 'request_predates_rejection', @application.additional_medical_certifications.first.blob.metadata['retention_reason']
     end
 
     test 'late DocuSeal completion retains approved secure-uploaded certification for comparison' do
@@ -474,6 +496,12 @@ module Webhooks
     end
 
     private
+
+    def record_certification_rejection(at:)
+      @application.update!(medical_certification_status: :rejected)
+      ApplicationStatusChange.create!(application: @application, user: @system_user, from_status: 'requested',
+                                      to_status: 'rejected', change_type: 'medical_certification', changed_at: at)
+    end
 
     def mock_successful_docuseal_download
       mock_response = mock('http_response')

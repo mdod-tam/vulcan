@@ -23,6 +23,7 @@ Rails.application.routes.draw do
   get 'secure_certification_form/success', to: 'secure_certification_forms#success', as: :secure_certification_form_success
   resource :secure_certification_form, only: %i[show update]
   resource :secure_certification_form_resend, only: %i[new create], controller: 'secure_certification_form_resends'
+  get 'secure_certification_form_resend/sent', to: 'secure_certification_form_resends#sent', as: :secure_certification_form_resend_sent
 
   # Welcome/Onboarding
   get 'welcome', to: 'welcome#index', as: :welcome
@@ -95,6 +96,9 @@ Rails.application.routes.draw do
   resource :secure_provider_info_form_resend,
            only: %i[new create],
            controller: 'secure_provider_info_form_resends'
+  get 'secure_provider_info_form_resend/sent',
+      to: 'secure_provider_info_form_resends#sent',
+      as: :secure_provider_info_form_resend_sent
   get 'secure_w9_form/success',
       to: 'secure_w9_forms#success',
       as: :secure_w9_form_success
@@ -102,6 +106,9 @@ Rails.application.routes.draw do
   resource :secure_w9_form_resend,
            only: %i[new create],
            controller: 'secure_w9_form_resends'
+  get 'secure_w9_form_resend/sent',
+      to: 'secure_w9_form_resends#sent',
+      as: :secure_w9_form_resend_sent
   get 'secure_proof_form/success',
       to: 'secure_proof_forms#success',
       as: :secure_proof_form_success
@@ -109,6 +116,9 @@ Rails.application.routes.draw do
   resource :secure_proof_form_resend,
            only: %i[new create],
            controller: 'secure_proof_form_resends'
+  get 'secure_proof_form_resend/sent',
+      to: 'secure_proof_form_resends#sent',
+      as: :secure_proof_form_resend_sent
 
   namespace :admin do
     resource :dashboard, only: [:show], controller: :dashboards

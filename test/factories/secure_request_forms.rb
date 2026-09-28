@@ -39,8 +39,8 @@ FactoryBot.define do
       revoked_at { Time.current }
     end
 
-    # SMS channel snapshot. The recipient must have phone_type: 'text' for the
-    # resolver to select SMS; set that on the recipient before or after building.
+    # Sets only the stored channel snapshot. The resolver never chooses SMS by
+    # default; SMS needs an explicit override and a text-capable phone.
     trait :sms do
       recipient_channel { :sms }
     end

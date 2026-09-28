@@ -12,6 +12,12 @@ class MedicalProviderSecureRequestForm < ApplicationRecord
   enum :status, { sent: 0, submitted: 1, revoked: 2 }, prefix: true
 
   validates :provider_email, presence: true
+
+  # Providers get the default locale. The constituent's locale says nothing
+  # about the provider's language.
+  def delivery_locale
+    I18n.default_locale
+  end
   validates :request_batch_id, presence: true
   validates :public_token_digest, presence: true, uniqueness: true
   validates :expires_at, presence: true
@@ -19,8 +25,28 @@ class MedicalProviderSecureRequestForm < ApplicationRecord
 
   scope :certification_upload, -> { where(kind: kinds[:certification_upload]) }
   scope :active, -> { status_sent.where(submitted_at: nil, revoked_at: nil).where(arel_table[:expires_at].gt(Time.current)) }
+  # An application has one certifying provider, so a new request replaces every open one.
+  scope :open_certification_upload_for_application, lambda { |application_id:|
+    certification_upload.status_sent.where(application_id: application_id).where(submitted_at: nil, revoked_at: nil)
+  }
   scope :open_certification_upload_for_provider, lambda { |application_id:, provider_email:|
     certification_upload.status_sent.where(application_id: application_id, provider_email: provider_email)
                         .where(submitted_at: nil, revoked_at: nil)
   }
+
+  def audit_subject = application
+  def audit_identity = { medical_provider_secure_request_form_id: id }
+  def revocation_audit_action = 'cert_upload_request_revoked'
+  def expiration_audit_action = 'cert_upload_request_expired'
+
+  def audit_metadata
+    {
+      application_id: application_id,
+      **audit_identity,
+      request_batch_id: request_batch_id,
+      provider_name: provider_name,
+      provider_email: provider_email,
+      requested_channel: 'email'
+    }
+  end
 end

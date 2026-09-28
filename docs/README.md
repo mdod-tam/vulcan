@@ -20,7 +20,7 @@ A few terms help when reading the code: a **constituent** receives assistance; a
 | --- | --- |
 | Intake or application status | [Application workflow](features/application_workflow_guide.md), [paper intake](development/paper_application_architecture.md), and [service architecture](development/service_architecture.md). |
 | Account matching, guardians, or recipients | [User management](development/user_management_features.md), [guardian relationships](development/guardian_relationship_system.md), [authentication](security/authentication_system.md), and [notifications](features/notifications.md). |
-| Uploads or provider responses | [Proof review](features/proof_review_process_guide.md) and [DocuSeal integration](development/docuseal_integration_guide.md). |
+| Uploads or provider responses | [Proof review](features/proof_review_process_guide.md), [secure request links](features/secure_request_links.md), and [DocuSeal integration](development/docuseal_integration_guide.md). |
 | Forms or browser behavior | [JavaScript architecture](development/javascript_architecture.md) and [testing/debugging](development/testing_and_debugging_guide.md). |
 | Messages or delivery history | [Notifications](features/notifications.md), [email/letters](infrastructure/email_system.md), and [audit tracking](features/audit_event_tracking.md). |
 
@@ -44,6 +44,7 @@ Use the source and test links in the workflow guides to trace the current path. 
 | --- | --- |
 | [Application workflow](features/application_workflow_guide.md) | Drafts, autosave reporting, submission, approval, and fulfillment. |
 | [Proof review](features/proof_review_process_guide.md) | Document intake, review, secure resubmission, and certification. |
+| [Secure request links](features/secure_request_links.md) | Link timing, issuance, delivery, public submission, and revocation. |
 | [Notifications](features/notifications.md) | Delivery ownership, recipients, intentional non-delivery, and troubleshooting. |
 | [Audit and event tracking](features/audit_event_tracking.md) | Event creation, deduplication, actors, and displayed history. |
 

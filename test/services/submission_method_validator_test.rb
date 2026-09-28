@@ -47,10 +47,8 @@ class SubmissionMethodValidatorTest < ActiveSupport::TestCase
     assert_equal :unknown, result
   end
 
-  # secure_request_form is the audit source for provider-info submissions.
-  # The plan requires it NOT to pass through SubmissionMethodValidator, which is
-  # proof-attachment-specific today. Verifying it coerces to :unknown ensures
-  # the two audit paths never accidentally merge.
+  # Provider-info audits must not use SubmissionMethodValidator, which covers
+  # only proof attachments. Coercion to :unknown keeps the two audit paths apart.
   test 'does not accept secure_request_form as a valid submission method' do
     assert_equal :unknown, SubmissionMethodValidator.validate(:secure_request_form)
     assert_equal :unknown, SubmissionMethodValidator.validate('secure_request_form')

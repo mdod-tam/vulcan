@@ -9,7 +9,7 @@ module Admin
     before_action :set_vendor, only: %i[show edit update]
 
     def index
-      # Attachment presence controls whether the W9 review action is actionable.
+      # Preload W9 attachments. The list uses their presence to offer W9 review.
       @vendors = Users::Vendor.includes([:w9_form_attachment]).order(:business_name)
 
       # Filter by W9 status if provided
@@ -32,6 +32,7 @@ module Admin
                                            w9_submitted_via_secure_form
                                            w9_upload_request_revoked
                                            w9_upload_request_expired
+                                           w9_details_changed
                                          ])
                                   .includes(:user)
                                   .order(created_at: :desc)

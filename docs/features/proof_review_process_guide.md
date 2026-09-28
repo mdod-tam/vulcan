@@ -55,7 +55,7 @@ Accepted formats and limits also vary by entry point, across [`ProofUploadFormat
 
 [`RequestProofResubmission`](../../app/services/applications/request_proof_resubmission.rb) creates `SecureRequestForm` records and attempts delivery. For a dependent application the applicant, the person receiving the request, and the owner of the contact it is delivered to can all be different people, so [`SecureRequestRecipientResolver`](../../app/services/applications/secure_request_recipient_resolver.rb) picks them and the form stores each role separately. Email and letter are the default channels; SMS requires an explicit choice and an eligible number.
 
-Each form is bound to one application and proof type. Submission requires it to be active, unexpired, unrevoked, and unused, and rechecks that under lock before attaching. A successful upload consumes the request — it does not approve the proof.
+Each form is bound to one application and proof type. Submission requires it to be active, unexpired, unrevoked, and unused. Under the application lock it also rechecks that the proof still needs a document: an approved proof, or one replaced through another path, refuses the upload and records `proof_secure_submission_refused`. A successful upload consumes the request — it does not approve the proof. [Secure request links](secure_request_links.md) covers the shared public form contract.
 
 **A saved rejection and a delivered request are independent.** Delivery failing does not undo the review; `ProofReviewService` exposes `resubmission_delivered` so admin controllers can warn, and recovery is a resend rather than a re-review.
 

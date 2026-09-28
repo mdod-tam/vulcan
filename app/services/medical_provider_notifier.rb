@@ -222,7 +222,7 @@ class MedicalProviderNotifier
     end
     message_id = mail.message_id
 
-    Rails.logger.info "Email successfully queued for medical provider for Application ID: #{application.id} with message ID: #{message_id}"
+    Rails.logger.info "Email #{secure_upload_url.present? ? 'sent' : 'queued'} for medical provider for Application ID: #{application.id} with message ID: #{message_id}"
     { success: true, method: EMAIL_METHOD, message_id: message_id }
   rescue StandardError => e
     Rails.logger.error "Email sending error for Application ID: #{application.id} - #{sanitize_secure_error_message(e.message)}"

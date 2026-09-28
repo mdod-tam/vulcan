@@ -61,6 +61,8 @@ class SecureProofFormResendsControllerTest < ActionDispatch::IntegrationTest
 
     post secure_proof_form_resend_path, params: { token: @raw_token }
 
+    assert_response :see_other
+    follow_redirect!
     assert_response :success
     assert_select 'h1', I18n.t('secure_proof_form_resends.create.heading')
   end
@@ -71,6 +73,8 @@ class SecureProofFormResendsControllerTest < ActionDispatch::IntegrationTest
 
     post secure_proof_form_resend_path, params: { token: @raw_token }
 
+    assert_response :see_other
+    follow_redirect!
     assert_response :success
     assert_equal 'no-store', response.headers['Cache-Control']
     assert_equal 'no-referrer', response.headers['Referrer-Policy']
@@ -83,6 +87,8 @@ class SecureProofFormResendsControllerTest < ActionDispatch::IntegrationTest
 
     post secure_proof_form_resend_path, params: { token: @raw_token }
 
+    assert_response :see_other
+    follow_redirect!
     assert_response :success
     assert_select 'h1', I18n.t('secure_proof_form_resends.create.heading')
   end
@@ -93,6 +99,8 @@ class SecureProofFormResendsControllerTest < ActionDispatch::IntegrationTest
 
     post secure_proof_form_resend_path, params: { token: @raw_token }
 
+    assert_response :see_other
+    follow_redirect!
     assert_response :success
     assert_select 'h1', I18n.t('secure_proof_form_resends.create.heading')
   end
@@ -114,6 +122,8 @@ class SecureProofFormResendsControllerTest < ActionDispatch::IntegrationTest
     post secure_proof_form_resend_path, params: { token: @raw_token }
     post secure_proof_form_resend_path, params: { token: @raw_token }
 
+    assert_response :see_other
+    follow_redirect!
     assert_response :success
     assert_select 'h1', I18n.t('secure_proof_form_resends.create.heading')
   end
@@ -129,6 +139,8 @@ class SecureProofFormResendsControllerTest < ActionDispatch::IntegrationTest
 
     post secure_proof_form_resend_path, params: { token: provider_token }
 
+    assert_response :see_other
+    follow_redirect!
     assert_response :success
     assert_select 'h1', I18n.t('secure_proof_form_resends.create.heading')
     assert_predicate provider_form.reload, :kind_provider_info_request?

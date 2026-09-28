@@ -6,13 +6,12 @@ module Admin
     before_action :set_form
 
     def create
-      unless @form.active?
+      # revoke! returns false when a submission committed first.
+      unless @form.active? && @form.revoke!(actor: current_user, reason: :manual_revocation)
         redirect_to admin_vendor_path(@vendor),
                     alert: t('admin.vendors.vendor_secure_request_form_revocations.create.not_active')
         return
       end
-
-      @form.revoke!(actor: current_user, reason: :manual_revocation)
 
       redirect_to admin_vendor_path(@vendor),
                   notice: t('admin.vendors.vendor_secure_request_form_revocations.create.success')

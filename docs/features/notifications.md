@@ -21,7 +21,7 @@ The requested channel is `:email` or `:letter`, and what happened instead is rec
 | --- | --- |
 | Ordinary notification | [NotificationService](../../app/services/notification_service.rb) creates the row and calls the mapped mailer. |
 | Proof approval | `ProofReview` records the audit event and a notification without sending a message. |
-| Proof rejection | [RequestProofResubmission](../../app/services/applications/request_proof_resubmission.rb) issues the secure upload request. A failed delivery leaves the review saved and lets staff see a warning. |
+| Proof rejection | [RequestProofResubmission](../../app/services/applications/request_proof_resubmission.rb) issues the secure upload request. A failed delivery leaves the review saved and lets staff see a warning. A link that cannot be issued records `proof_resubmission_request_failed`. |
 | Request for provider details | [RequestProviderInfo](../../app/services/applications/request_provider_info.rb) owns the secure request and delivery. |
 | Disability certification | [MedicalCertificationService](../../app/services/applications/medical_certification_service.rb) and [MedicalCertificationReviewer](../../app/services/applications/medical_certification_reviewer.rb) own provider requests and follow-up. Provider delivery can include fax; DocuSeal signing has separate tracking. |
 | Security-key recovery approval | Always email, including for users who prefer letters. |
@@ -39,7 +39,7 @@ When delivery is requested for these actions, routing metadata records `none` / 
 
 [SecureRequestRecipientResolver](../../app/services/applications/secure_request_recipient_resolver.rb) selects the contact owner and channel for provider-info and proof requests. Each new form stores its delivery owner and source, so the issued link retains that history. Resending creates a replacement using current eligible contact details.
 
-The stored owner's supported locale controls messages and public form responses, with a default-locale fallback. Older forms without an owner fall back to the logical recipient; they do not infer a guardian. Letters have no historical address snapshot.
+The stored owner's supported locale controls messages and public form responses, with a default-locale fallback. Provider certification links use the default locale, and W9 links use the vendor's locale. Older forms without an owner fall back to the logical recipient; they do not infer a guardian. Letters have no historical address snapshot.
 
 Automatic proof-rejection delivery does not select SMS. Staff can select it from the application detail page when retrying.
 

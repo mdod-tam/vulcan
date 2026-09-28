@@ -255,7 +255,7 @@ module Applications
       ).count
     end
 
-    test 'resend targets original provider email snapshot' do
+    test 'resend targets the provider email on file now, not the expired link snapshot' do
       first_result = RequestCertificationUpload.new(application: @application, actor: @actor).call
       original = first_result.data.fetch(:medical_provider_secure_request_form)
       @application.update!(medical_provider_email: 'updated-provider@example.com')
@@ -271,8 +271,8 @@ module Applications
       end
 
       replacement = MedicalProviderSecureRequestForm.status_sent.order(:sent_at).last
-      assert_equal original.provider_email, replacement.provider_email
-      assert_not_equal @application.medical_provider_email, replacement.provider_email
+      assert_equal 'updated-provider@example.com', replacement.provider_email
+      assert_predicate original.reload, :revoked?
     end
 
     test 'rejects non-email channels' do

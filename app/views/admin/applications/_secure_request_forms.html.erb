@@ -2,12 +2,17 @@
   <%= t('admin.applications.secure_request_forms.panel.title') %>
 </h2>
 
-<%= render "secure_request_recipient_form",
-           application: @application,
-           recipient_options: @secure_request_recipient_options,
-           default_recipient_ids: @secure_request_default_recipient_ids,
-           missing_managing_guardian: @secure_request_missing_managing_guardian,
-           purpose: "provider_info" %>
+<% provider_info_missing = @application.missing_required_provider_info? %>
+<% if provider_info_missing %>
+  <%= render 'secure_request_recipient_form',
+             application: @application,
+             recipient_options: @secure_request_recipient_options,
+             default_recipient_ids: @secure_request_default_recipient_ids,
+             missing_managing_guardian: @secure_request_missing_managing_guardian,
+             purpose: 'provider_info' %>
+<% else %>
+  <p class="mb-4 text-sm text-gray-700" data-testid="provider-info-complete-note"><%= t('admin.applications.secure_request_forms.panel.info_complete') %></p>
+<% end %>
 
 <% if @secure_request_forms.present? %>
   <div class="overflow-x-auto">
@@ -26,9 +31,10 @@
       <tbody class="divide-y divide-gray-100">
         <% @secure_request_forms.each do |secure_request_form| %>
           <% active_batch_count = @active_secure_request_form_batch_counts.fetch(secure_request_form.request_batch_id, 0) %>
+          <% row_recipient = secure_request_issued_recipient_label(secure_request_form) %>
           <tr>
             <td class="px-3 py-3 text-gray-900">
-              <%= link_to secure_request_issued_recipient_label(secure_request_form),
+              <%= link_to row_recipient,
                           admin_user_path(secure_request_form.recipient),
                           class: 'text-indigo-700 underline', data: { turbo_frame: '_top' } %>
               <%# The row preserves the owner at issuance. Resends resolve the current contact. %>
@@ -54,6 +60,8 @@
                                         data: {
                                           turbo: false
                                         } },
+                                'aria-label': secure_link_row_action_label(t('admin.applications.secure_request_forms.table.revoke'),
+                                                                           secure_request_form, recipient: row_recipient),
                                 class: "inline-flex items-center rounded-md border border-red-300 bg-white px-2.5 py-1.5 text-sm font-medium text-red-700 hover:bg-red-50 focus:outline-none focus:ring-2 focus:ring-red-600 focus:ring-offset-2" %>
                   <% if active_batch_count > 1 %>
                     <%= button_to t('admin.applications.secure_request_forms.table.revoke_batch'),
@@ -67,17 +75,26 @@
                                           } },
                                   class: "inline-flex items-center rounded-md border border-red-300 bg-white px-2.5 py-1.5 text-sm font-medium text-red-700 hover:bg-red-50 focus:outline-none focus:ring-2 focus:ring-red-600 focus:ring-offset-2" %>
                   <% end %>
-                  <%= form_with url: admin_application_secure_request_forms_path(@application), method: :post, local: true, data: { turbo: false }, class: "inline" do %>
-                    <%= hidden_field_tag "recipient_ids[]", secure_request_form.recipient_id %>
-                    <%= hidden_field_tag :resend_of_id, secure_request_form.id %>
-                    <%= submit_tag t('admin.applications.secure_request_forms.table.resend'),
-                                   class: "text-sm font-medium text-indigo-700 hover:text-indigo-900" %>
+                  <% if provider_info_missing %>
+                    <%# Resending revokes the active link, so it confirms like Revoke. %>
+                    <%= form_with url: admin_application_secure_request_forms_path(@application), method: :post, local: true,
+                                  data: { turbo: false }, class: 'inline',
+                                  html: { onsubmit: "return confirm(#{t('admin.applications.secure_request_forms.table.resend_confirm').to_json})" } do %>
+                      <%= hidden_field_tag 'recipient_ids[]', secure_request_form.recipient_id %>
+                      <%= hidden_field_tag :resend_of_id, secure_request_form.id %>
+                      <%= submit_tag t('admin.applications.secure_request_forms.table.resend'),
+                                     'aria-label': secure_link_row_action_label(t('admin.applications.secure_request_forms.table.resend'),
+                                                                                secure_request_form, recipient: row_recipient),
+                                     class: 'text-sm font-medium text-indigo-700 hover:text-indigo-900' %>
+                    <% end %>
                   <% end %>
-                <% elsif secure_request_form.status_sent? && secure_request_form.expired? %>
+                <% elsif provider_info_missing && secure_request_form.status_sent? && secure_request_form.expired? %>
                   <%= form_with url: admin_application_secure_request_forms_path(@application), method: :post, local: true, data: { turbo: false }, class: "inline" do %>
                     <%= hidden_field_tag "recipient_ids[]", secure_request_form.recipient_id %>
                     <%= hidden_field_tag :resend_of_id, secure_request_form.id %>
                     <%= submit_tag t('admin.applications.secure_request_forms.table.send_new_link'),
+                                   'aria-label': secure_link_row_action_label(t('admin.applications.secure_request_forms.table.send_new_link'),
+                                                                              secure_request_form, recipient: row_recipient),
                                    class: "text-sm font-medium text-indigo-700 hover:text-indigo-900" %>
                   <% end %>
                 <% else %>

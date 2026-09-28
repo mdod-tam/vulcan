@@ -9,9 +9,7 @@ class SecureRequestForm < ApplicationRecord
   encrypts :recipient_phone, deterministic: true
 
   def delivery_locale
-    locale = delivery_owner ? delivery_owner.locale : recipient&.effective_message_locale
-    candidate = locale.to_s.to_sym
-    I18n.available_locales.include?(candidate) ? candidate : I18n.default_locale
+    SecureFormLocaleResolver.normalize(delivery_owner ? delivery_owner.locale : recipient&.effective_message_locale)
   end
 
   belongs_to :application
@@ -59,7 +57,8 @@ class SecureRequestForm < ApplicationRecord
   scope :with_incomplete_delivery_provenance, lambda {
     where(delivery_owner_id: nil).or(where(delivery_source: nil))
   }
-  # Timestamp checks are defensive against status/timestamp drift (see revoked?/submitted?).
+  # The open_*_for_recipient scopes also require nil timestamps, because status
+  # and timestamps can disagree (see revoked? and submitted?).
   scope :open_provider_info_for_recipient, lambda { |application_id:, recipient_id:|
     provider_info.status_sent.where(application_id: application_id, recipient_id: recipient_id)
                  .where(submitted_at: nil, revoked_at: nil)
@@ -79,6 +78,38 @@ class SecureRequestForm < ApplicationRecord
 
   def delivery_provenance?
     delivery_owner_id.present? && delivery_source.present?
+  end
+
+  PROOF_TYPES_BY_KIND = {
+    'id_proof_resubmission' => 'id',
+    'residency_proof_resubmission' => 'residency',
+    'income_proof_resubmission' => 'income'
+  }.freeze
+
+  def audit_subject = application
+  def audit_identity = { secure_request_form_id: id }
+
+  def audit_metadata
+    {
+      application_id: application_id,
+      **audit_identity,
+      request_batch_id: request_batch_id,
+      recipient_id: recipient_id,
+      recipient_name: recipient&.full_name,
+      recipient_role: recipient_role,
+      recipient_channel: recipient_channel,
+      kind: kind,
+      proof_type: PROOF_TYPES_BY_KIND[kind]
+    }
+  end
+
+  def revocation_audit_action
+    kind_provider_info_request? ? 'provider_info_request_revoked' : 'proof_resubmission_request_revoked'
+  end
+
+  # Only proof links record an expiration event.
+  def expiration_audit_action
+    'proof_resubmission_request_expired' unless kind_provider_info_request?
   end
 
   private

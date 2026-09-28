@@ -45,6 +45,7 @@ class Application < ApplicationRecord
   include VoucherManagement
   include TrainingManagement
   include EvaluationManagement
+  include ContactChangeAudit
 
   # Attribute accessors
   # Virtual attribute to hold nested medical provider params for the form
@@ -160,7 +161,6 @@ class Application < ApplicationRecord
   # Callbacks
   before_create :stamp_workflow_defaults!
   before_create :ensure_managing_guardian_set
-  after_save :log_alternate_contact_changes, if: :saved_change_to_alternate_contact?
 
   # Scopes
   scope :draft, -> { where(status: :draft) }
@@ -703,41 +703,6 @@ class Application < ApplicationRecord
   def viewable_by?(user)
     # Alias for consistency with Rails authorization patterns
     accessible_by?(user)
-  end
-
-  # Add a condition method to check if any alternate contact field changed
-  def saved_change_to_alternate_contact?
-    saved_change_to_alternate_contact_name? ||
-      saved_change_to_alternate_contact_phone? ||
-      saved_change_to_alternate_contact_email?
-  end
-
-  # Log changes to alternate contact fields
-  def log_alternate_contact_changes
-    changed_attributes = {}
-    %w[name phone email].each do |field|
-      attribute = "alternate_contact_#{field}"
-      if saved_change_to_attribute?(attribute)
-        old_value, new_value = saved_change_to_attribute(attribute)
-        changed_attributes[attribute] = { old: old_value, new: new_value }
-      end
-    end
-
-    # Only log if there were actual changes to alternate contact fields
-    return if changed_attributes.blank?
-
-    # Use Event model to log the changes
-    AuditEventService.log(
-      action: 'alternate_contact_updated',
-      actor: Current.user || user, # Use Current.user if available, otherwise fall back to the application's user
-      auditable: self,
-      metadata: {
-        changes: changed_attributes,
-        changed_by: Current.user&.id
-      }
-    )
-  rescue StandardError => e
-    Rails.logger.error "Failed to log alternate contact changes for application #{id}: #{e.message}"
   end
 
   private

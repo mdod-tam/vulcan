@@ -120,7 +120,7 @@ module ConstituentPortal
       end
 
       def handle_application_not_found(application_id)
-        Rails.logger.error "Application not found with ID: #{application_id} for user: #{current_user.id} with dependents: #{current_user.&dependents.pluck(:id)}"
+        Rails.logger.error "Application not found with ID: #{application_id} for user: #{current_user.id} with dependents: #{current_user.dependents.pluck(:id)}"
         redirect_to constituent_portal_dashboard_path, alert: 'Application not found'
       end
 
@@ -246,14 +246,7 @@ module ConstituentPortal
       end
 
       def can_modify_proof?
-        case params[:proof_type]
-        when 'income'
-          @application.income_proof_status_rejected?
-        when 'residency'
-          @application.residency_proof_status_rejected?
-        when 'id'
-          @application.id_proof_status_rejected?
-        end
+        @application.proof_resubmittable_via_portal?(params[:proof_type])
       end
     end
   end

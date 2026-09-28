@@ -109,4 +109,37 @@ class SecureFormExpirationRecorderTest < ActiveSupport::TestCase
       assert_predicate result, :success?
     end
   end
+
+  test 'marks recorded forms so later runs no longer scan them' do
+    form = create(:secure_request_form, kind: :income_proof_resubmission, requested_by: @admin, expires_at: 1.hour.ago)
+
+    SecureFormExpirationRecorder.new.call
+
+    assert_not_nil form.reload.expiration_recorded_at
+    assert_not_includes SecureRequestForm.expiration_unrecorded, form
+  end
+
+  test 'marks a form expired before the marker existed without a second event' do
+    form = create(:secure_request_form, kind: :income_proof_resubmission, requested_by: @admin, expires_at: 1.hour.ago)
+    AuditEventService.log(action: 'proof_resubmission_request_expired', actor: @admin, auditable: form.application,
+                          metadata: { secure_request_form_id: form.id })
+
+    assert_no_difference('Event.count') do
+      result = SecureFormExpirationRecorder.new.call
+      assert_equal 0, result.data[:proof]
+    end
+    assert_not_nil form.reload.expiration_recorded_at
+  end
+
+  test 'expiration events keep the metadata each form type recorded before' do
+    form = create(:medical_provider_secure_request_form, requested_by: @admin, expires_at: 1.hour.ago)
+
+    SecureFormExpirationRecorder.new.call
+
+    event = Event.find_by!(action: 'cert_upload_request_expired')
+    assert_equal %w[application_id expires_at medical_provider_secure_request_form_id provider_email provider_name
+                    request_batch_id requested_channel],
+                 (event.metadata.keys - ['__service_generated']).sort
+    assert_equal form.id, event.metadata['medical_provider_secure_request_form_id']
+  end
 end

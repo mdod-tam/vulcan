@@ -15,6 +15,10 @@ class ApplicationMailer < ActionMailer::Base
     def deliver_now = self
   end
 
+  # Raised when a delivery that carries a secure link cannot be sent, so the
+  # issuing service revokes the unsent link and records the failure.
+  class DeliverySkipped < StandardError; end
+
   helper :mailer
 
   default(
@@ -25,9 +29,13 @@ class ApplicationMailer < ActionMailer::Base
   layout 'mailer'
   before_action :set_common_variables
 
+  # Pass required_delivery: true in mail_options when the email carries a secure link.
   def send_email(recipient_email, template, variables, mail_options = {})
+    required_delivery = mail_options.delete(:required_delivery)
     unless template.enabled?
       Rails.logger.warn("Email template '#{template.name}' is disabled. Skipping email to #{recipient_email}")
+      raise DeliverySkipped, "Email template '#{template.name}' is disabled" if required_delivery
+
       return
     end
 

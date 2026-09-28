@@ -523,6 +523,7 @@ module Applications
     test 'secure_url_for raises when the configured host is blank in production' do
       Rails.env.stubs(:production?).returns(true)
       Rails.application.config.action_mailer.stubs(:default_url_options).returns({ host: '' })
+      Rails.application.routes.stubs(:default_url_options).returns({})
 
       service = RequestProviderInfo.new(application: @application, actor: @actor)
 

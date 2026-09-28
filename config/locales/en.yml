@@ -22,6 +22,9 @@
 #       enabled: "ON"
 
 en:
+  layouts:
+    secure_public:
+      program_name: "Maryland Accessible Telecommunications Program"
   password_visibility:
     status:
       hidden: "Password is hidden"
@@ -264,6 +267,7 @@ en:
         file_suspicious: "Upload a different file. This file cannot be accepted."
         file_invalid: "Upload a valid proof document."
         attachment_failed: "The proof could not be attached. Please try again."
+        no_longer_needed: "This document no longer needs to be uploaded. Contact the program if you have questions."
     certification_upload:
       messages:
         provider_email_required: "Secure cert upload form cannot be sent - provider email is missing. Send a provider info form to the constituent/guardian to collect updated certifying professional contact information."
@@ -491,6 +495,10 @@ en:
         file_blank: "Please choose a W9 file to upload."
         file_type_invalid: "Upload a PDF, JPEG, PNG, or HEIC/HEIF file for W9 review."
         file_too_large: "The file must be %{max_size} MB or smaller."
+        file_too_small: "Upload a non-empty W9 file."
+        file_suspicious: "Upload a different file. This file cannot be accepted."
+        file_invalid: "Upload a valid W9 file."
+        attachment_failed: "The W9 could not be attached. Please try again."
         submitted: "Thank you. Your W9 form has been submitted for review."
   date:
     formats:
@@ -557,6 +565,7 @@ en:
     unfiltered_error: "Filter error – showing unfiltered results."
     e_template_not_found: "Email template not found."
   admin:
+    secure_link_row_action: "%{action} link for %{recipient}, sent %{sent_at}"
     application_notes:
       create:
         note_added: "Note added successfully."
@@ -599,6 +608,7 @@ en:
           selection_help: "Choose at least one recipient, then choose a delivery channel for each selected recipient."
           submit_blocked: "No recipient can currently receive a secure request, so this form cannot be submitted. Resolve the issues listed above first."
           no_recipients: "No eligible recipients are available for this request."
+          info_complete: "Required certifying professional information is now on file. Revoke any active links that are no longer needed."
         managing_guardian:
           title: "Missing managing guardian"
           description: "This application is missing a managing guardian. Confirm the dependent's managing guardian before sending this secure link."
@@ -618,6 +628,7 @@ en:
           send_new_link: "Send New Link"
           no_actions: "No actions"
           empty: "No secure provider information requests have been sent."
+          resend_confirm: "Send a new link? The current link will stop working."
           originally_delivered_to: "Originally delivered to %{owner}. Resending re-checks the current contact information."
           delivery_ownership_unknown: "Historical delivery ownership is unknown."
         delivery_owner:
@@ -857,7 +868,7 @@ en:
         team: "Customer Service Team"
       footer:
         address: "Maryland Accessible Telecommunications | %{office_address}"
-        contact_line: "Phone: 555-123-4567 | Email: %{support_email} | Website: %{program_website_url}"
+        contact_line: "Phone: %{support_phone} | Email: %{support_email} | Website: %{program_website_url}"
       page_number: "Page %{page} of %{total}"
       titles:
         application_notifications_account_created: "We Received Your Maryland Accessible Telecommunications Application"

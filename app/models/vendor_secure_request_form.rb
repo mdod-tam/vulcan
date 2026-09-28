@@ -9,6 +9,10 @@ class VendorSecureRequestForm < ApplicationRecord
   belongs_to :requested_by, class_name: 'User', optional: true
 
   enum :kind, { w9_upload: 0 }, prefix: true
+
+  def delivery_locale
+    SecureFormLocaleResolver.for_recipient(vendor)
+  end
   enum :status, { sent: 0, submitted: 1, revoked: 2 }, prefix: true
 
   validates :recipient_email, presence: true
@@ -23,4 +27,20 @@ class VendorSecureRequestForm < ApplicationRecord
     w9_upload.status_sent.where(vendor_id: vendor_id)
              .where(submitted_at: nil, revoked_at: nil)
   }
+
+  def audit_subject = vendor
+  def audit_identity = { vendor_secure_request_form_id: id }
+  def revocation_audit_action = 'w9_upload_request_revoked'
+  def expiration_audit_action = 'w9_upload_request_expired'
+
+  def audit_metadata
+    {
+      **audit_identity,
+      vendor_id: vendor_id,
+      request_batch_id: request_batch_id,
+      recipient_email: recipient_email,
+      kind: kind,
+      requested_channel: 'email'
+    }
+  end
 end

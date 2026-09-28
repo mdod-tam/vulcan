@@ -10,7 +10,7 @@
 #
 # It's strongly recommended that you check this file into your version control system.
 
-ActiveRecord::Schema[8.1].define(version: 2026_09_24_000000) do
+ActiveRecord::Schema[8.1].define(version: 2026_09_27_120000) do
   # These are extensions that must be enabled in order to support this database
   enable_extension "pg_catalog.plpgsql"
 
@@ -342,6 +342,7 @@ ActiveRecord::Schema[8.1].define(version: 2026_09_24_000000) do
   create_table "medical_provider_secure_request_forms", force: :cascade do |t|
     t.bigint "application_id", null: false
     t.datetime "created_at", null: false
+    t.datetime "expiration_recorded_at"
     t.datetime "expires_at", null: false
     t.integer "kind", default: 0, null: false
     t.string "provider_email", null: false
@@ -357,7 +358,7 @@ ActiveRecord::Schema[8.1].define(version: 2026_09_24_000000) do
     t.index ["application_id", "kind", "provider_email", "sent_at"], name: "idx_med_provider_secure_forms_on_app_kind_email_sent"
     t.index ["application_id", "kind", "provider_email"], name: "idx_med_provider_secure_forms_one_active_provider", unique: true, where: "((status = 0) AND (kind = 0))"
     t.index ["application_id"], name: "index_medical_provider_secure_request_forms_on_application_id"
-    t.index ["expires_at"], name: "index_med_provider_secure_forms_on_open_expiration", where: "((status = 0) AND (submitted_at IS NULL) AND (revoked_at IS NULL))"
+    t.index ["expires_at"], name: "index_med_provider_secure_forms_on_open_expiration", where: "((status = 0) AND (submitted_at IS NULL) AND (revoked_at IS NULL) AND (expiration_recorded_at IS NULL))"
     t.index ["public_token_digest"], name: "idx_med_provider_secure_forms_on_public_token_digest", unique: true
     t.index ["requested_by_id"], name: "index_medical_provider_secure_request_forms_on_requested_by_id"
     t.check_constraint "kind = 0", name: "medical_provider_secure_request_forms_kind_check"
@@ -509,6 +510,7 @@ ActiveRecord::Schema[8.1].define(version: 2026_09_24_000000) do
     t.datetime "created_at", null: false
     t.bigint "delivery_owner_id"
     t.string "delivery_source"
+    t.datetime "expiration_recorded_at"
     t.datetime "expires_at", null: false
     t.integer "kind", default: 0, null: false
     t.string "public_token_digest", null: false
@@ -533,7 +535,7 @@ ActiveRecord::Schema[8.1].define(version: 2026_09_24_000000) do
     t.index ["application_id", "kind", "request_batch_id"], name: "idx_secure_request_forms_on_app_kind_batch"
     t.index ["application_id"], name: "index_secure_request_forms_on_application_id"
     t.index ["delivery_owner_id"], name: "index_secure_request_forms_on_delivery_owner_id"
-    t.index ["expires_at"], name: "index_secure_request_forms_on_open_expiration", where: "((status = 0) AND (submitted_at IS NULL) AND (revoked_at IS NULL))"
+    t.index ["expires_at"], name: "index_secure_request_forms_on_open_expiration", where: "((status = 0) AND (submitted_at IS NULL) AND (revoked_at IS NULL) AND (expiration_recorded_at IS NULL))"
     t.index ["public_token_digest"], name: "idx_secure_request_forms_on_public_token_digest", unique: true
     t.index ["recipient_id"], name: "index_secure_request_forms_on_recipient_id"
     t.index ["requested_by_id"], name: "index_secure_request_forms_on_requested_by_id"
@@ -842,6 +844,7 @@ ActiveRecord::Schema[8.1].define(version: 2026_09_24_000000) do
 
   create_table "vendor_secure_request_forms", force: :cascade do |t|
     t.datetime "created_at", null: false
+    t.datetime "expiration_recorded_at"
     t.datetime "expires_at", null: false
     t.integer "kind", default: 0, null: false
     t.string "public_token_digest", null: false
@@ -854,7 +857,7 @@ ActiveRecord::Schema[8.1].define(version: 2026_09_24_000000) do
     t.datetime "submitted_at"
     t.datetime "updated_at", null: false
     t.bigint "vendor_id", null: false
-    t.index ["expires_at"], name: "index_vendor_secure_forms_on_open_expiration", where: "((status = 0) AND (submitted_at IS NULL) AND (revoked_at IS NULL))"
+    t.index ["expires_at"], name: "index_vendor_secure_forms_on_open_expiration", where: "((status = 0) AND (submitted_at IS NULL) AND (revoked_at IS NULL) AND (expiration_recorded_at IS NULL))"
     t.index ["public_token_digest"], name: "idx_vendor_secure_forms_on_public_token_digest", unique: true
     t.index ["requested_by_id"], name: "index_vendor_secure_request_forms_on_requested_by_id"
     t.index ["vendor_id", "kind", "sent_at"], name: "idx_vendor_secure_forms_on_vendor_kind_sent_at"

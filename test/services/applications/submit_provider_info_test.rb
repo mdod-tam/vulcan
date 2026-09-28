@@ -69,9 +69,10 @@ module Applications
     end
 
     test 'rechecks request status after acquiring the row lock' do
-      @secure_request_form.define_singleton_method(:with_lock) do |&block|
-        update!(status: :submitted, submitted_at: Time.current)
-        block.call
+      # Another request submits the form before this one acquires the row lock.
+      @secure_request_form.define_singleton_method(:lock!) do |*args|
+        self.class.where(id: id).update_all(status: self.class.statuses[:submitted], submitted_at: Time.current)
+        super(*args)
       end
 
       assert_no_difference -> { Event.where(action: 'medical_provider_info_submitted').count } do
@@ -307,6 +308,48 @@ module Applications
       submitted_presence.each_value do |v|
         assert_includes [true, false], v, "Expected boolean presence flag, got #{v.inspect}"
       end
+    end
+
+    test 'accepts a submission that replaces values on file and marks it for review' do
+      @application.update_columns(medical_provider_name: 'Dr. Admin Entered', medical_provider_email: 'admin-entered@example.test')
+
+      result = SubmitProviderInfo.new(
+        application: @application,
+        secure_request_form: @secure_request_form,
+        params: @params
+      ).call
+
+      assert_predicate result, :success?
+      assert_equal 'Dr. Secure', @application.reload.medical_provider_name
+
+      event = secure_form_change_event
+      assert_equal @system_audit_actor.id, event.user_id
+      assert event.metadata['review_required']
+      assert_equal %w[medical_provider_email medical_provider_name], event.metadata['overwritten_fields'].sort
+      assert_equal 'secure_request_form', event.metadata['submitted_via']
+      assert_equal @secure_request_form.id, event.metadata['secure_request_form_id']
+      assert_equal({ 'old' => 'Dr. Admin Entered', 'new' => 'Dr. Secure' }, event.metadata['changes']['medical_provider_name'])
+      assert_nil @application.medical_provider_change_source
+    end
+
+    test 'filling blank provider values is recorded without a review flag' do
+      SubmitProviderInfo.new(
+        application: @application,
+        secure_request_form: @secure_request_form,
+        params: @params
+      ).call
+
+      event = secure_form_change_event
+      assert_not event.metadata['review_required']
+      assert_empty event.metadata['overwritten_fields']
+      assert_equal({ 'old' => nil, 'new' => 'provider@example.test' }, event.metadata['changes']['medical_provider_email'])
+    end
+
+    private
+
+    def secure_form_change_event
+      Event.where(action: 'medical_provider_info_updated', auditable: @application)
+           .find { |event| event.metadata['submitted_via'] == 'secure_request_form' }
     end
   end
 end

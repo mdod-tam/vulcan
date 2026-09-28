@@ -97,7 +97,7 @@ class VendorNotificationsMailer < ApplicationMailer
                 )
 
     subject, body = text_template.render(**variables)
-    send_mail(vendor.email, subject, body, content_type: 'text/plain')
+    send_mail(secure_request_recipient_email(vendor), subject, body, content_type: 'text/plain')
   rescue StandardError => e
     log_mail_error(e, vendor, template_name, variables.except(:status_box_html, :header_html, :footer_html))
     raise e
@@ -123,7 +123,7 @@ class VendorNotificationsMailer < ApplicationMailer
       locale: locale
     )
 
-    send_mail(vendor.email, subject, body, content_type: 'text/plain')
+    send_mail(secure_request_recipient_email(vendor), subject, body, content_type: 'text/plain')
   rescue StandardError => e
     log_mail_error(e, vendor, template_name, {
       vendor_business_name: vendor&.business_name,
@@ -279,6 +279,11 @@ class VendorNotificationsMailer < ApplicationMailer
              vendor_portal_url: vendor_portal_url,
              locale: locale)
     end
+  end
+
+  # A secure W9 request passes the email recorded on its request row.
+  def secure_request_recipient_email(vendor)
+    params[:recipient_email].presence || vendor.email
   end
 
   def send_mail(to, subject, body, content_type: 'text/plain')

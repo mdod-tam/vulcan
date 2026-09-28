@@ -5,15 +5,10 @@ module ProofResubmissionRequestsHelper
     proof_type = proof_type.to_s
     return false unless ProofReview.reviewable_proof_type?(proof_type)
     return false if proof_type == 'income' && !application.income_proof_required?
-    return false if application.public_send("#{proof_type}_proof_status_approved?")
+    return false unless application.proof_requestable_via_secure_form?(proof_type)
 
     forms = secure_request_forms || proof_secure_request_forms(application, proof_type)
-    return false if forms.any?(&:active?) && proof_recovery_recipient_ids(forms).empty?
-
-    return true if application.public_send("#{proof_type}_proof_status_rejected?")
-
-    application.public_send("#{proof_type}_proof_status_not_reviewed?") &&
-      !application.public_send("#{proof_type}_proof").attached?
+    !(forms.any?(&:active?) && proof_recovery_recipient_ids(forms).empty?)
   end
 
   def secure_proof_recipient_options(options, forms)

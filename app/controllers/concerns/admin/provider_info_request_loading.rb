@@ -14,7 +14,7 @@ module Admin
     end
 
     def load_provider_info_request_data(application)
-      unless application.missing_required_provider_info?
+      unless application.provider_info_requests_visible?
         @secure_request_forms = []
         @active_secure_request_form_batch_counts = {}
         return
@@ -132,7 +132,7 @@ module Admin
     end
 
     def provider_info_secure_link_recent_cutoff
-      (Policy.get('secure_form_link_expiration_hours') || 48).hours.ago
+      SecureFormPolicy.link_expiration_hours.hours.ago
     end
   end
 end

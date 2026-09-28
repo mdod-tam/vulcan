@@ -27,4 +27,10 @@ module ApplicationProviderInfoRequests
 
     scope :pending_provider_info, -> { with_provider_info_prerequisites_met.missing_required_provider_info }
   end
+
+  # Staff must be able to see and revoke a live link after another path
+  # completes the provider information.
+  def provider_info_requests_visible?
+    missing_required_provider_info? || secure_request_forms.provider_info.active.exists?
+  end
 end

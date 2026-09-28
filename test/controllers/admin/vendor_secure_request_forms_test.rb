@@ -170,5 +170,17 @@ module Admin
       assert_equal I18n.t('admin.vendors.vendor_secure_request_form_revocations.create.not_active'), flash[:alert]
       assert_predicate form.reload, :submitted?
     end
+
+    test 'vendor show page flags W9 details changed after submission' do
+      vendor = create(:vendor, :with_w9)
+      vendor.update_column(:w9_status, Users::Vendor.w9_statuses[:approved])
+      vendor.reload.update!(business_tax_id: '98-7654321')
+
+      get admin_vendor_path(vendor)
+
+      assert_response :success
+      assert_includes response.body, 'W9 details changed after submission, review whether a new W9 is needed'
+      assert_includes response.body, 'Changed: Business tax id'
+    end
   end
 end

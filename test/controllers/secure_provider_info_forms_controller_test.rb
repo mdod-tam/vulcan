@@ -116,6 +116,8 @@ class SecureProviderInfoFormsControllerTest < ActionDispatch::IntegrationTest
 
     patch secure_provider_info_form_path(token: token), params: { token: token }
 
+    assert_response :see_other
+    follow_redirect!
     assert_response :success
     assert_select 'h1', text: I18n.t('secure_provider_info_forms.submitted.heading')
   end
@@ -273,7 +275,7 @@ class SecureProviderInfoFormsControllerTest < ActionDispatch::IntegrationTest
     assert_redirected_to secure_provider_info_form_path(token: token)
   end
 
-  test 'resend page form opts out of turbo submission' do
+  test 'resend page form submits through Turbo so a second click is blocked' do
     application = create(:application)
     token = SecureRequestForm.generate_public_token
     create(:secure_request_form, :expired, application: application, recipient: application.user, raw_token: token)
@@ -281,7 +283,8 @@ class SecureProviderInfoFormsControllerTest < ActionDispatch::IntegrationTest
     get new_secure_provider_info_form_resend_path(token: token)
 
     assert_response :success
-    assert_select 'form[data-turbo=?]', 'false'
+    assert_select 'form[data-turbo]', count: 0
+    assert_select 'form [data-turbo-submits-with]'
   end
 
   test 'resend confirmation uses delivery owner locale without leaking it to later requests' do
@@ -296,6 +299,8 @@ class SecureProviderInfoFormsControllerTest < ActionDispatch::IntegrationTest
 
       post secure_provider_info_form_resend_path, params: { token: token, unexpected_destination: 'attacker@example.test' }
 
+      assert_response :see_other
+      follow_redirect!
       assert_response :success
       assert_includes response.body, I18n.t('secure_provider_info_form_resends.create.title', locale: :es)
       assert_equal :en, I18n.locale
@@ -310,6 +315,8 @@ class SecureProviderInfoFormsControllerTest < ActionDispatch::IntegrationTest
 
     post secure_provider_info_form_resend_path, params: { token: token }
 
+    assert_response :see_other
+    follow_redirect!
     assert_response :success
   end
 
@@ -323,6 +330,8 @@ class SecureProviderInfoFormsControllerTest < ActionDispatch::IntegrationTest
          params: { token: token },
          headers: { 'Accept' => Mime[:turbo_stream].to_s }
 
+    assert_response :see_other
+    follow_redirect!
     assert_response :success
     assert_equal Mime[:html].to_s, response.media_type
     assert_select 'h1', I18n.t!('secure_provider_info_form_resends.create.heading')
@@ -339,6 +348,8 @@ class SecureProviderInfoFormsControllerTest < ActionDispatch::IntegrationTest
 
     post secure_provider_info_form_resend_path, params: { token: token }
 
+    assert_response :see_other
+    follow_redirect!
     assert_response :success
     assert_select 'h1', I18n.t!('secure_provider_info_form_resends.create.heading')
   end
@@ -353,6 +364,8 @@ class SecureProviderInfoFormsControllerTest < ActionDispatch::IntegrationTest
 
     post secure_provider_info_form_resend_path, params: { token: token }
 
+    assert_response :see_other
+    follow_redirect!
     assert_response :success
     assert_select 'h1', I18n.t!('secure_provider_info_form_resends.create.heading')
   end
@@ -376,6 +389,8 @@ class SecureProviderInfoFormsControllerTest < ActionDispatch::IntegrationTest
 
     post secure_provider_info_form_resend_path, params: { token: token }
 
+    assert_response :see_other
+    follow_redirect!
     assert_response :success
     assert_equal 'no-store', response.headers['Cache-Control']
     assert_equal 'no-referrer', response.headers['Referrer-Policy']
@@ -487,6 +502,8 @@ class SecureProviderInfoFormsControllerTest < ActionDispatch::IntegrationTest
       medical_provider_email: 'revoked@example.test'
     }
 
+    assert_response :see_other
+    follow_redirect!
     assert_response :ok
     assert_select 'h1', I18n.t!('secure_provider_info_forms.unavailable.heading')
   end
@@ -513,6 +530,8 @@ class SecureProviderInfoFormsControllerTest < ActionDispatch::IntegrationTest
         }
       end
 
+      assert_response :see_other
+      follow_redirect!
       assert_response :ok
       assert_select 'h1', I18n.t!('secure_provider_info_forms.unavailable.heading')
       assert_nil application.reload.medical_provider_name
@@ -552,6 +571,8 @@ class SecureProviderInfoFormsControllerTest < ActionDispatch::IntegrationTest
       }
     end
 
+    assert_response :see_other
+    follow_redirect!
     assert_response :ok
     assert_select 'h1', I18n.t!('secure_provider_info_forms.submitted.heading')
     assert_equal 'Dr. Already Submitted', application.reload.medical_provider_name
@@ -599,6 +620,8 @@ class SecureProviderInfoFormsControllerTest < ActionDispatch::IntegrationTest
 
       post secure_provider_info_form_resend_path, params: { token: token }
 
+      assert_response :see_other
+      follow_redirect!
       assert_response :ok
       assert_select 'h1', I18n.t!('secure_provider_info_form_resends.create.heading')
     end

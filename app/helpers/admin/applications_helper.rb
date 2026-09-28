@@ -81,15 +81,20 @@ module Admin
       'portal'
     end
 
+    ADDITIONAL_CERTIFICATION_REVIEW_NOTES = {
+      'certification_approved' => 'received after approval, review',
+      'certification_received' => 'received while another certification awaited review, review',
+      'request_predates_rejection' => 'requested before the latest rejection, review'
+    }.freeze
+
     def additional_medical_certification_source_label(certification)
-      case certification.blob.metadata['source']
-      when 'docuseal'
-        'DocuSeal signed form'
-      when 'secure_form'
-        'Secure upload'
-      else
-        'Additional certification'
-      end
+      source = case certification.blob.metadata['source']
+               when 'docuseal' then 'DocuSeal signed form'
+               when 'secure_form' then 'Secure upload'
+               else 'Additional certification'
+               end
+      note = ADDITIONAL_CERTIFICATION_REVIEW_NOTES[certification.blob.metadata['retention_reason']]
+      note ? "#{source} (#{note})" : source
     end
 
     def voucher_assignment_detail(metadata, fallback_time:)

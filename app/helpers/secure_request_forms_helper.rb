@@ -1,6 +1,11 @@
 # frozen_string_literal: true
 
 module SecureRequestFormsHelper
+  # Rows repeat the same buttons, so each gets a name that says which link it acts on.
+  def secure_link_row_action_label(action, secure_form, recipient:)
+    t('admin.secure_link_row_action', action: action, recipient: recipient, sent_at: l(secure_form.sent_at, format: :short))
+  end
+
   def secure_request_masked_contact(secure_request_form)
     case secure_request_form.recipient_channel
     when 'email'

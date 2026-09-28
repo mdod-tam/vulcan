@@ -216,6 +216,24 @@ module Letters
       service.send(:add_footer, footer_pdf)
     end
 
+    test 'letter footer shows the program phone number, not a placeholder' do
+      service = TextTemplateToPdfService.new(
+        template_name: 'application_notifications_account_created',
+        recipient: @user,
+        variables: @variables
+      )
+
+      footer_pdf = mock('footer_pdf')
+      footer_pdf.stubs(:move_down)
+      footer_pdf.stubs(:font_size)
+      footer_pdf.stubs(:stroke_horizontal_rule)
+      footer_pdf.stubs(:text)
+      footer_pdf.expects(:text).with(all_of(includes("Phone: #{ProgramContact.support_phone}"),
+                                            includes(ProgramContact.support_email)), align: :center)
+
+      service.send(:add_footer, footer_pdf)
+    end
+
     test 'correctly queues item for printing' do
       # Skip this test as it requires accessing private methods or stubbing PrintQueueItem
       # which varies between testing frameworks

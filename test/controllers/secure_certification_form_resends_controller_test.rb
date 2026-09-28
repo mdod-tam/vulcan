@@ -46,13 +46,14 @@ class SecureCertificationFormResendsControllerTest < ActionDispatch::Integration
     assert_redirected_to secure_certification_form_path(token: @raw_token)
   end
 
-  test 'new uses application user Spanish locale' do
+  test 'new is in English for the provider even when the applicant prefers Spanish' do
     @application.user.update!(locale: 'es')
 
     get new_secure_certification_form_resend_path(token: @raw_token)
 
     assert_response :success
-    assert_select 'h1', I18n.t('secure_certification_form_resends.new.heading', locale: :es)
+    assert_select 'html[lang=?]', 'en'
+    assert_select 'h1', I18n.t('secure_certification_form_resends.new.heading', locale: :en)
   end
 
   test 'create calls resend service and renders neutral response' do
@@ -61,6 +62,8 @@ class SecureCertificationFormResendsControllerTest < ActionDispatch::Integration
 
     post secure_certification_form_resend_path, params: { token: @raw_token }
 
+    assert_response :see_other
+    follow_redirect!
     assert_response :success
     assert_select 'h1', I18n.t('secure_certification_form_resends.create.heading')
   end
@@ -71,6 +74,8 @@ class SecureCertificationFormResendsControllerTest < ActionDispatch::Integration
 
     post secure_certification_form_resend_path, params: { token: @raw_token }
 
+    assert_response :see_other
+    follow_redirect!
     assert_response :success
     assert_equal 'no-store', response.headers['Cache-Control']
     assert_equal 'no-referrer', response.headers['Referrer-Policy']
@@ -83,6 +88,8 @@ class SecureCertificationFormResendsControllerTest < ActionDispatch::Integration
 
     post secure_certification_form_resend_path, params: { token: @raw_token }
 
+    assert_response :see_other
+    follow_redirect!
     assert_response :success
     assert_select 'h1', I18n.t('secure_certification_form_resends.create.heading')
   end
@@ -93,6 +100,8 @@ class SecureCertificationFormResendsControllerTest < ActionDispatch::Integration
 
     post secure_certification_form_resend_path, params: { token: @raw_token }
 
+    assert_response :see_other
+    follow_redirect!
     assert_response :success
     assert_select 'h1', I18n.t('secure_certification_form_resends.create.heading')
   end
@@ -102,6 +111,8 @@ class SecureCertificationFormResendsControllerTest < ActionDispatch::Integration
 
     post secure_certification_form_resend_path, params: { token: 'not-real' }
 
+    assert_response :see_other
+    follow_redirect!
     assert_response :success
     assert_select 'h1', I18n.t('secure_certification_form_resends.create.heading')
   end
@@ -115,6 +126,8 @@ class SecureCertificationFormResendsControllerTest < ActionDispatch::Integration
 
     post secure_certification_form_resend_path, params: { token: proof_token }
 
+    assert_response :see_other
+    follow_redirect!
     assert_response :success
     assert_select 'h1', I18n.t('secure_certification_form_resends.create.heading')
   end
