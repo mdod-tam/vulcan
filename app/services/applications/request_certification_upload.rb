@@ -22,6 +22,13 @@ module Applications
       return failure(message(:provider_email_required)) if provider_email.blank?
       return failure(message(:unsupported_channel)) unless channel == :email
 
+      # An email-issuing request is checked before any request, token, revocation, or status change.
+      if deliver_email
+        denial, @email_context = EmailDelivery.issuance(delivery_mail_action)
+        denial&.raise_if_configuration_error!
+        return suppressed(denial.reason) if denial
+      end
+
       request_form = nil
       raw_token = nil
 
@@ -44,12 +51,22 @@ module Applications
       return success(message(:resent)) if public_recovery
 
       failure(e.message)
+    rescue EmailDelivery::ConfigurationError => e
+      configuration_failure(request_form, e)
+    rescue ApplicationMailer::DeliverySkipped => e
+      request_form&.persisted? ? delivery_suppressed(request_form, e.reason) : suppressed(e.reason)
     rescue StandardError => e
       Rails.logger.warn("Certification upload delivery failed for application #{application.id}: #{sanitize_secure_error_message(e.message)}")
       request_form&.persisted? ? delivery_failure(request_form, e) : failure(message(:delivery_failed))
     end
 
     private
+
+    def configuration_failure(request_form, error)
+      data = request_form&.persisted? ? delivery_failure(request_form, error).data : {}
+      failure(I18n.t('email_delivery.configuration_error', locale: secure_form_locale_for(actor)),
+              data.merge(delivery_error: true, configuration_error: true, reason: error.reason))
+    end
 
     def ensure_cooldown_allows!
       latest_request = MedicalProviderSecureRequestForm
@@ -133,6 +150,24 @@ module Applications
       resolver.known_recipients.find { |recipient| recipient.id == default_recipient_id } || application.user
     end
 
+    # The email was stopped on purpose: revoke the unsent link, keep no cooldown, and say why.
+    def delivery_suppressed(request_form, reason)
+      tracking_notification_for(request_form)&.mark_delivery_suppressed!(reason)
+      request_form.revoke!(actor: actor, reason: :delivery_suppressed, metadata: { suppression_reason: reason })
+      revert_initial_status_after_suppression(request_form)
+      suppressed(reason, request_form)
+    end
+
+    def suppressed(reason, request_form = nil)
+      failure(message(:delivery_suppressed),
+              { medical_provider_secure_request_form: request_form, delivery_suppressed: true,
+                suppression_reason: reason }.compact)
+    end
+
+    def delivery_mail_action
+      rejection_delivery? ? 'MedicalProviderMailer#certification_rejected' : 'MedicalProviderMailer#request_certification'
+    end
+
     def delivery_failure(request_form, error)
       persist_delivery_failure(request_form, error)
       revoke_failed_request(request_form, error)
@@ -156,6 +191,11 @@ module Applications
     def persist_delivery_failure(request_form, error)
       notification = tracking_notification_for(request_form)
       return if notification.blank?
+
+      if error.is_a?(EmailDelivery::ConfigurationError)
+        notification.mark_delivery_not_sent!(EmailDelivery::Decision.configuration_error(error.reason))
+        return
+      end
 
       notification.update!(
         delivery_status: :error,
@@ -203,7 +243,46 @@ module Applications
           medical_certification_requested_at: Time.current
         )
       end
+      # The stored value, at database precision, identifies this transition later.
+      @requested_at_set = application.reload.medical_certification_requested_at
       record_status_transition(previous_status)
+    end
+
+    # When this call moved certification to requested and its email was then stopped, undo only that
+    # move: the state must still be exactly the one this call set, with no other open request and no
+    # DocuSeal request made since.
+    def revert_initial_status_after_suppression(request_form)
+      return if @requested_at_set.blank?
+
+      application.with_lock do
+        application.reload
+        next unless application.medical_certification_status_requested?
+        next unless application.medical_certification_requested_at == @requested_at_set
+        next if application.document_signing_requested_at.present? && application.document_signing_requested_at >= @requested_at_set
+        next if MedicalProviderSecureRequestForm.open_certification_upload_for_application(application_id: application.id)
+                                                .where.not(id: request_form.id).exists?
+
+        with_proof_validation_skipped do
+          application.update!(medical_certification_status: :not_requested, medical_certification_requested_at: nil)
+        end
+        record_suppressed_request_reversal(request_form)
+      end
+    end
+
+    def record_suppressed_request_reversal(request_form)
+      ApplicationStatusChange.create!(
+        application: application, user: actor, from_status: 'requested', to_status: 'not_requested',
+        change_type: 'medical_certification',
+        metadata: { change_type: 'medical_certification', reason: 'delivery_suppressed',
+                    medical_provider_secure_request_form_id: request_form.id }
+      )
+      AuditEventService.log(
+        action: 'medical_certification_request_suppressed',
+        actor: actor,
+        auditable: application,
+        metadata: { old_status: 'requested', new_status: 'not_requested',
+                    medical_provider_secure_request_form_id: request_form.id }
+      )
     end
 
     def with_proof_validation_skipped
@@ -254,22 +333,24 @@ module Applications
     def deliver_request_email!(request_form, raw_token)
       secure_upload_url = secure_upload_url_for(raw_token)
 
-      if rejection_delivery?
-        MedicalProviderMailer.with(
-          application: application,
-          recipient_email: request_form.provider_email,
-          rejection_reason: rejection_reason_for_delivery,
-          admin: actor,
-          secure_upload_url: secure_upload_url
-        ).certification_rejected.deliver_now
-      else
-        MedicalProviderMailer.with(
-          application: application,
-          recipient_email: request_form.provider_email,
-          timestamp: Time.current.iso8601,
-          secure_upload_url: secure_upload_url
-        ).request_certification.deliver_now
-      end
+      mail =
+        if rejection_delivery?
+          MedicalProviderMailer.with(
+            application: application,
+            recipient_email: request_form.provider_email,
+            rejection_reason: rejection_reason_for_delivery,
+            admin: actor,
+            secure_upload_url: secure_upload_url
+          ).certification_rejected
+        else
+          MedicalProviderMailer.with(
+            application: application,
+            recipient_email: request_form.provider_email,
+            timestamp: Time.current.iso8601,
+            secure_upload_url: secure_upload_url
+          ).request_certification
+        end
+      EmailDelivery.deliver_now!(mail, context: @email_context)
     end
 
     def rejection_delivery?

@@ -4,6 +4,8 @@ module DocumentSigning
   # Service to handle document signing submissions via DocuSeal or other providers
   # Reuses existing service patterns and audit mechanisms
   class SubmissionService < BaseService
+    EMAIL_ACTION = 'DocuSeal#signing_request'
+
     attr_reader :service_type
 
     def initialize(application:, actor:, service: 'docuseal')
@@ -22,6 +24,14 @@ module DocumentSigning
       if @application.document_signing_requested_at.present? &&
          @application.document_signing_requested_at > 30.seconds.ago
         return failure('Request sent too recently. Please wait before sending another.')
+      end
+
+      # DocuSeal emails the provider itself, so the email controls are checked here, next to the call.
+      # A denied request makes no submission and changes no status, timestamp, or counter.
+      if (denial = EmailDelivery.issuance_denial(EMAIL_ACTION))
+        return failure('Signing request not sent: DocuSeal emails the provider, and that email is turned off ' \
+                       'in the email settings. Print the form instead, or turn email back on and try again.',
+                       { delivery_suppressed: true, suppression_reason: denial.reason })
       end
 
       submission = create_submission!
@@ -60,6 +70,9 @@ module DocumentSigning
       )
 
       success('Document signing request created', submission)
+    rescue EmailDelivery::ConfigurationError => e
+      failure(I18n.t('email_delivery.configuration_error', locale: :en),
+              { delivery_error: true, configuration_error: true, reason: e.reason })
     rescue StandardError => e
       log_error(e, application_id: @application.id)
       failure("Failed to create document signing request: #{e.message}")

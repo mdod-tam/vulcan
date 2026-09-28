@@ -128,6 +128,24 @@ class ProofReviewServiceTest < ActiveSupport::TestCase
     assert_equal 'Proof is not reviewable for this application', result.message
   end
 
+  test 'a rejection whose resubmission email is turned off reports suppression, not a delivery failure' do
+    EmailDelivery::ControlWriter.set(name: EmailDelivery.category_control('proof'), enabled: false, actor: @admin,
+                                     operation_id: 'op-1')
+
+    result = ProofReviewService.new(
+      @application,
+      @admin,
+      { proof_type: 'residency', status: 'rejected', rejection_reason: 'Address mismatch' }
+    ).call
+
+    assert result.success?, result.message
+    assert_equal 'rejected', @application.reload.residency_proof_status
+    assert_equal false, result.data[:resubmission_delivered]
+    assert result.data[:resubmission_suppressed]
+    event = Event.find_by!(action: 'proof_resubmission_request_failed', auditable: @application)
+    assert event.metadata['delivery_suppressed']
+  end
+
   test 'rejecting one proof is not blocked by unrelated missing required proofs' do
     application = create(:application, :in_progress)
     application.residency_proof.attach(

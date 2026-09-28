@@ -16,7 +16,7 @@ class NotificationServiceTest < ActiveSupport::TestCase
   end
 
   test 'create_and_deliver! creates a notification and enqueues an email job for deliverable actions' do
-    assert_enqueued_jobs 1, only: ActionMailer::MailDeliveryJob do
+    assert_enqueued_jobs 1, only: EmailDelivery::MailDeliveryJob do
       notification = nil
       assert_difference 'Notification.count', 1 do
         notification = NotificationService.create_and_deliver!(
@@ -64,7 +64,7 @@ class NotificationServiceTest < ActiveSupport::TestCase
   end
 
   test 'proof approval notifications are record-only delivery noops' do
-    assert_no_enqueued_jobs only: ActionMailer::MailDeliveryJob do
+    assert_no_enqueued_jobs only: EmailDelivery::MailDeliveryJob do
       notification = NotificationService.create_and_deliver!(
         type: :proof_approved,
         recipient: @constituent,
@@ -83,7 +83,7 @@ class NotificationServiceTest < ActiveSupport::TestCase
   end
 
   test 'medical certification approval notifications are record-only delivery noops' do
-    assert_no_enqueued_jobs only: ActionMailer::MailDeliveryJob do
+    assert_no_enqueued_jobs only: EmailDelivery::MailDeliveryJob do
       notification = NotificationService.create_and_deliver!(
         type: :medical_certification_approved,
         recipient: @constituent,

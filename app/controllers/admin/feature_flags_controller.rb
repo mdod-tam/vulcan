@@ -1,11 +1,11 @@
 module Admin
   class FeatureFlagsController < BaseController
     def index
-      @feature_flags = FeatureFlag.all
+      @feature_flags = FeatureFlag.general
     end
 
     def update
-      @feature_flag = FeatureFlag.find(params[:id])
+      @feature_flag = FeatureFlag.general.find(params[:id])
       old_value = @feature_flag.enabled
 
       begin

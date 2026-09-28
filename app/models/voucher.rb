@@ -295,15 +295,7 @@ class Voucher < ApplicationRecord
   end
 
   def determine_actor_for_logging
-    actor = Current.user
-    return actor if actor.present?
-
-    begin
-      User.system_user
-    rescue StandardError => e
-      Rails.logger.error("Failed to get system user for voucher status change logging: #{e.message}")
-      nil
-    end
+    Current.user.presence || PublicAuditActor.system_audit_actor_or_report('voucher status change')
   end
 
   def valid_actor?(actor)

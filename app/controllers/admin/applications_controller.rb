@@ -216,6 +216,7 @@ module Admin
 
     def proof_resubmission_delivery_alert(result)
       return unless proof_resubmission_delivery_failed?(result)
+      return t('admin.proof_reviews.create.resubmission_suppressed', locale: :en) if result.data[:resubmission_suppressed]
 
       t('admin.proof_reviews.create.resubmission_not_delivered', locale: :en)
     end
@@ -427,6 +428,9 @@ module Admin
       if result.success?
         redirect_to admin_application_path(@application),
                     notice: t('.d_sign_request_pass')
+      elsif result.data.is_a?(Hash) && result.data[:delivery_suppressed]
+        # Intentionally not sent, which is not a failure; staff can print the form instead.
+        redirect_to admin_application_path(@application), alert: result.message
       else
         redirect_to admin_application_path(@application),
                     alert: "Failed to send signing request: #{result.message}"

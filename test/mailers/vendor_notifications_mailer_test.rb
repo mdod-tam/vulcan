@@ -24,6 +24,7 @@ class VendorNotificationsMailerTest < ActionMailer::TestCase
 
     # Still stub subject and body for inspection if needed
     template_instance.stubs(:subject).returns(subject_format)
+    template_instance.stubs(:render_subject).returns(subject_format)
     template_instance.stubs(:body).returns(body_format)
 
     template_instance
@@ -78,6 +79,8 @@ class VendorNotificationsMailerTest < ActionMailer::TestCase
     expected_text = "Mock Payment Issued Body #{@invoice.invoice_number}"
     payment_template = mock('payment_template_specific')
     payment_template.stubs(:subject).returns('Payment issued')
+    payment_template.stubs(:render_subject).returns('Payment issued')
+    payment_template.stubs(:enabled?).returns(true)
     payment_template.stubs(:render).returns(['Payment issued', expected_text])
 
     # Override stubs for this test
@@ -130,6 +133,8 @@ class VendorNotificationsMailerTest < ActionMailer::TestCase
     expected_text = 'Mock W9 Approved Body'
     approved_template = mock('approved_template_specific')
     approved_template.stubs(:subject).returns('W9 approved')
+    approved_template.stubs(:render_subject).returns('W9 approved')
+    approved_template.stubs(:enabled?).returns(true)
     approved_template.stubs(:render).returns(['W9 approved', expected_text])
 
     # Update the stub for this test

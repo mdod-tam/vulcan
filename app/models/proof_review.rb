@@ -160,7 +160,7 @@ class ProofReview < ApplicationRecord
     return unless result.failure?
 
     Rails.logger.warn("Proof resubmission request failed for ProofReview #{id}: #{result.message}")
-    log_resubmission_request_failure(result.message)
+    log_resubmission_request_failure(result.message, delivery_suppressed: result.data.is_a?(Hash) && result.data[:delivery_suppressed])
   rescue StandardError => e
     Rails.logger.error "Failed to request proof resubmission: #{e.message}"
     log_resubmission_request_failure(e.class.name)
@@ -168,12 +168,14 @@ class ProofReview < ApplicationRecord
 
   # The rejection stands even when its secure link cannot be sent. Record that
   # durably so staff can follow up; no fallback recipient is guessed.
-  def log_resubmission_request_failure(reason)
+  # delivery_suppressed marks an email the email controls stopped on purpose, not a failure to deliver.
+  def log_resubmission_request_failure(reason, delivery_suppressed: false)
     AuditEventService.log(
       action: 'proof_resubmission_request_failed',
       actor: admin,
       auditable: application,
-      metadata: { proof_type: proof_type, proof_review_id: id, reason: reason.to_s }
+      metadata: { proof_type: proof_type, proof_review_id: id, reason: reason.to_s,
+                  delivery_suppressed: delivery_suppressed.presence }.compact
     )
   rescue StandardError => e
     Rails.logger.error "Failed to record proof resubmission request failure: #{e.message}"

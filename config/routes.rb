@@ -232,6 +232,8 @@ Rails.application.routes.draw do
     # Application Analytics
     get 'application_analytics/pain_points', to: 'application_analytics#pain_points'
 
+    resource :email_delivery_control, only: :update
+
     resources :email_templates, only: %i[index show edit update] do
       member do
         get :new_test_email

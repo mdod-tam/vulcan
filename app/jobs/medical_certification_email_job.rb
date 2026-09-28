@@ -1,7 +1,10 @@
 # frozen_string_literal: true
 
 class MedicalCertificationEmailJob < ApplicationJob
+  include EmailDeliveryContextJob
+
   queue_as :default
+  self.email_delivery_mail_action = 'MedicalProviderMailer#request_certification'
   retry_on Net::SMTPError, wait: :exponentially_longer, attempts: 3
 
   def perform(application_id:, timestamp:, notification_id: nil)
@@ -13,6 +16,10 @@ class MedicalCertificationEmailJob < ApplicationJob
     send_request_email(application, timestamp, notification)
 
     Rails.logger.info "Successfully sent disability certification email for application #{application_id}"
+  rescue ApplicationMailer::DeliverySkipped => e
+    # Intentionally not sent: terminal, not retried, and not an error.
+    notification&.mark_delivery_suppressed!(e.reason)
+    Rails.logger.info "Disability certification email for application #{application_id} suppressed: #{e.reason}"
   rescue StandardError => e
     handle_job_error(application_id, e, notification)
     raise
@@ -36,11 +43,13 @@ class MedicalCertificationEmailJob < ApplicationJob
   end
 
   def send_request_email(application, timestamp, notification)
-    MedicalProviderMailer.with(
-      application: application,
-      timestamp: timestamp,
-      notification_id: notification&.id
-    ).request_certification.deliver_now
+    EmailDelivery.deliver_now!(
+      MedicalProviderMailer.with(
+        application: application,
+        timestamp: timestamp,
+        notification_id: notification&.id
+      ).request_certification
+    )
   end
 
   def handle_job_error(application_id, error, notification)
@@ -49,7 +58,12 @@ class MedicalCertificationEmailJob < ApplicationJob
 
     return if notification.blank?
 
-    notification.update_metadata!('error_message', error.message)
+    if error.is_a?(EmailDelivery::ConfigurationError)
+      notification.mark_delivery_not_sent!(EmailDelivery::Decision.configuration_error(error.reason))
+      return
+    end
+
+    notification.update_metadata!('delivery_error', { 'message' => error.message, 'error_class' => error.class.name })
     notification.update(delivery_status: 'error')
   end
 

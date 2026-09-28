@@ -1,6 +1,5 @@
 # frozen_string_literal: true
 
-# rubocop:disable Metrics/ClassLength
 class NotificationService
   VALID_CHANNELS = %i[email letter].freeze
 
@@ -130,49 +129,17 @@ class NotificationService
     NotificationBuilder.new(self)
   end
 
-  MAILER_MAP = {
-    'proof_rejected' => [ApplicationNotificationsMailer, :proof_rejected],
-    'id_proof_rejected' => [ApplicationNotificationsMailer, :proof_rejected],
-    'income_proof_rejected' => [ApplicationNotificationsMailer, :proof_rejected],
-    'residency_proof_rejected' => [ApplicationNotificationsMailer, :proof_rejected],
-    'account_created' => [ApplicationNotificationsMailer, :account_created],
-    'id_proof_attached' => [ApplicationNotificationsMailer, :proof_received],
-    'income_proof_attached' => [ApplicationNotificationsMailer, :proof_received],
-    'residency_proof_attached' => [ApplicationNotificationsMailer, :proof_received],
-    'w9_approved' => [VendorNotificationsMailer, :w9_approved],
-    'w9_rejected' => [VendorNotificationsMailer, :w9_rejected],
-    'training_requested' => [ApplicationNotificationsMailer, :training_requested],
-    'trainer_assigned' => [TrainingSessionNotificationsMailer, :trainer_assigned],
-    'training_scheduled' => [TrainingSessionNotificationsMailer, :training_scheduled],
-    'training_rescheduled' => [TrainingSessionNotificationsMailer, :training_rescheduled],
-    'training_cancelled' => [TrainingSessionNotificationsMailer, :training_cancelled],
-    'training_missed' => [TrainingSessionNotificationsMailer, :no_show_notification],
-    'security_key_recovery_approved' => [ApplicationNotificationsMailer, :security_key_recovery_approved],
-    'medical_certification_requested' => [MedicalProviderMailer, :requested],
-    'medical_certification_not_provided' => [ApplicationNotificationsMailer, :medical_certification_not_provided],
-    'max_rejections_warning' => [ApplicationNotificationsMailer, :max_rejections_reached]
-    # medical_certification_received: no email — constituent sees status in dashboard
-    # documents_requested: no email mailer yet — notification record created for audit trail only
-  }.freeze
+  # Compatibility views of EmailDelivery::Catalog, which owns delivery classification.
+  MAILER_MAP = EmailDelivery::Catalog.mailer_map.freeze
 
-  # Actions where a Notification record is created for audit/in-app purposes but
-  # no email is sent. Prevents ERROR log noise for intentionally no-email actions.
-  NOOP_DELIVERY_ACTIONS = %w[
-    medical_certification_received
-    documents_requested
-    proof_approved
-    medical_certification_approved
-  ].freeze
+  # Notification record for audit/in-app purposes only; no email.
+  NOOP_DELIVERY_ACTIONS = EmailDelivery::Catalog.audit_only_actions.freeze
 
   # Reviewable proof rejections must deliver through Applications::RequestProofResubmission.
   # These notification actions are legacy/mailer-test only; pass metadata: { delivery_path: 'legacy' }
   # to create and deliver through NotificationService intentionally.
-  ORPHAN_PROOF_REJECTION_DELIVERY_ACTIONS = %w[
-    proof_rejected
-    id_proof_rejected
-    income_proof_rejected
-    residency_proof_rejected
-  ].freeze
+  ORPHAN_PROOF_REJECTION_DELIVERY_ACTIONS =
+    EmailDelivery::Catalog.notification_actions_owned_by(EmailDelivery::Catalog::PROOF_REVIEW_OWNER).freeze
 
   def self.reviewable_proof_rejection_action?(action)
     ORPHAN_PROOF_REJECTION_DELIVERY_ACTIONS.include?(action.to_s)
@@ -184,27 +151,9 @@ class NotificationService
     !legacy_proof_rejection_delivery_metadata?(opts_metadata_from(opts))
   end
 
-  PREFERENCE_ROUTED_ACTIONS = %w[
-    proof_rejected
-    id_proof_rejected
-    income_proof_rejected
-    residency_proof_rejected
-    account_created
-    id_proof_attached
-    income_proof_attached
-    residency_proof_attached
-    training_requested
-    trainer_assigned
-    training_scheduled
-    training_rescheduled
-    training_cancelled
-    training_missed
-    medical_certification_not_provided
-  ].freeze
+  PREFERENCE_ROUTED_ACTIONS = EmailDelivery::Catalog.notification_actions_with_routing(:preference).freeze
 
-  EMAIL_ONLY_ACTIONS = %w[
-    security_key_recovery_approved
-  ].freeze
+  EMAIL_ONLY_ACTIONS = EmailDelivery::Catalog.notification_actions_with_routing(:email_only).freeze
 
   # ---- Creation + validation -------------------------------------------------
 
@@ -436,7 +385,7 @@ class NotificationService
       channel: channel,
       actual_delivery_channel: actual_delivery_channel
     )
-    true # Delivery successful
+    !notification.local_delivery_outcome?
   rescue StandardError => e
     ActiveSupport::Notifications.instrument 'notification_service.error', notification: notification, error: e, stage: 'delivery', channel: channel
     handle_delivery_error(notification, e, channel)
@@ -472,27 +421,43 @@ class NotificationService
 
     raise StandardError, "Mailer '#{mailer_class}' method '#{method_name}' returned an invalid delivery object" unless mail_delivery.respond_to?(:deliver_later)
 
-    mail_delivery.deliver_later
+    outcome = EmailDelivery::Current.set(notification_id: notification.id) { queue_mail_delivery(mail_delivery) }
     redact_temp_password(notification) if notification.metadata&.dig('temp_password').present?
+    raise StandardError, "Mail job for '#{notification.action}' could not be queued" if outcome == :enqueue_failed
+
+    if %i[suppressed configuration_error].include?(outcome)
+      notification.reload # Outcome already persisted the refusal; do not reinterpret it here.
+      return ['none', notification.metadata['delivery_route_reason']]
+    end
 
     [actual_delivery_channel, delivery_route_reason]
   end
 
+  # :queued means the job was accepted, not that anything was sent. A refused or failed queue write
+  # returns false rather than raising, so the outcome is checked explicitly.
+  def queue_mail_delivery(mail_delivery)
+    return EmailDelivery.deliver_later(mail_delivery) if mail_delivery.is_a?(ActionMailer::MessageDelivery)
+
+    mail_delivery.deliver_later
+    :queued
+  end
+
+  # The catalog names each action's argument shape; the arguments themselves are built here.
   def build_mail_delivery(notification, mailer_class, method_name)
-    case notification.action
-    when 'account_created'
+    case EmailDelivery::Catalog.notification_action(notification.action)&.adapter
+    when :recipient
       mailer_class.public_send(method_name, notification.recipient)
-    when 'proof_rejected', 'id_proof_rejected', 'income_proof_rejected', 'residency_proof_rejected'
+    when :proof_review
       application, proof_review = proof_review_delivery_context(notification)
       mailer_class.public_send(method_name, application, proof_review, recipient: notification.recipient)
-    when 'id_proof_attached', 'income_proof_attached', 'residency_proof_attached'
+    when :proof_attached
       application = notification.notifiable
       proof_type = notification.metadata&.dig('proof_type').presence ||
                    notification.action.delete_suffix('_proof_attached')
       mailer_class.public_send(method_name, application, proof_type)
-    when 'trainer_assigned', 'training_scheduled',
-         'training_cancelled', 'training_missed',
-         'max_rejections_warning'
+    when :vendor_params
+      mailer_class.with(vendor: notification.notifiable).public_send(method_name)
+    when :notifiable
       mailer_class.public_send(method_name, notification.notifiable)
     else
       mailer_class.public_send(method_name, notification.notifiable, notification)
@@ -573,15 +538,14 @@ class NotificationService
   end
 
   def persist_delivery_routing_metadata(notification, actual_delivery_channel:, delivery_route_reason:)
-    merged_meta = (notification.metadata || {}).merge(
-      'actual_delivery_channel' => actual_delivery_channel.to_s,
-      'delivery_route_reason' => delivery_route_reason.to_s
-    )
-
-    return if notification.update(metadata: merged_meta)
-
-    notification.assign_attributes(metadata: merged_meta)
-    notification.save(validate: false)
+    notification.with_lock do
+      unless notification.local_delivery_outcome?
+        notification.update!(metadata: notification.metadata.to_h.merge(
+          'actual_delivery_channel' => actual_delivery_channel.to_s,
+          'delivery_route_reason' => delivery_route_reason.to_s
+        ))
+      end
+    end
   rescue StandardError => e
     Rails.logger.warn "NotificationService: Failed to persist routing metadata for Notification ##{notification.id}: #{e.message}"
   end
@@ -648,13 +612,10 @@ class NotificationService
       Rails.logger.error "NotificationService: Delivery via #{channel} failed for Notification ##{notification.id}: #{error_message}"
     end
 
-    merged_meta = (notification.metadata || {}).merge(error_meta(error_message, channel))
+    notification.with_lock do
+      return if notification.local_delivery_outcome?
 
-    unless notification.update(delivery_status: 'error', metadata: merged_meta)
-      Rails.logger.error "NotificationService: Failed to update delivery status for Notification #{notification.id}
-      due to: #{notification.errors.full_messages.to_sentence}"
-      notification.assign_attributes(delivery_status: 'error', metadata: merged_meta)
-      notification.save(validate: false)
+      notification.update!(delivery_status: 'error', metadata: notification.metadata.to_h.merge(error_meta(error_message, channel)))
     end
   rescue StandardError => e
     Rails.logger.error "NotificationService: Failed persisting delivery error for Notification ##{notification.id}: #{e.message}"
@@ -667,6 +628,7 @@ class NotificationService
     should_deliver = notification.instance_variable_get(:@should_deliver)
     delivery_successful = notification.instance_variable_get(:@delivery_successful)
 
+    notification.reload
     notification_metadata = notification.metadata.is_a?(Hash) ? notification.metadata : {}
     requested_channel = notification_metadata['channel'] || 'unknown'
     actual_channel = notification_metadata['actual_delivery_channel'] || requested_channel
@@ -693,7 +655,9 @@ class NotificationService
   end
 
   def audit_event_action(notification, should_deliver, delivery_successful)
-    if should_deliver && delivery_successful
+    if should_deliver && notification.suppressed_delivery_status?
+      "notification_#{notification.action}_suppressed"
+    elsif should_deliver && delivery_successful
       "notification_#{notification.action}_sent"
     elsif should_deliver
       "notification_#{notification.action}_failed"
@@ -707,18 +671,14 @@ class NotificationService
     ActiveSupport::Notifications.instrument 'notification_service.error', notification: notification, error: error, stage: 'audit'
     Rails.logger.error "NotificationService: Audit log creation failed for Notification ##{notification.id}: #{error.message}"
 
-    # Store an audit-error stamp in metadata for compliance tracking
-    merged_meta = (notification.metadata || {}).merge(
-      'audit_error' => {
+    notification.update_metadata!(
+      'audit_error', {
         'message' => error.message,
         'error_at' => Time.current.iso8601
       }
     )
-    # Attempt to update without validations as a fallback to ensure error status is persisted
-    notification.assign_attributes(metadata: merged_meta)
-    return if notification.save(validate: false)
-
-    Rails.logger.error "NotificationService: Failed to force save audit error for Notification ##{notification.id} even with validations skipped."
+  rescue StandardError => e
+    Rails.logger.error "NotificationService: Failed persisting audit error for Notification ##{notification.id}: #{e.message}"
   end
   private :handle_audit_trail_error
 
@@ -883,4 +843,3 @@ class NotificationService
     end
   end
 end
-# rubocop:enable Metrics/ClassLength

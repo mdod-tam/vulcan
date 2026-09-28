@@ -45,7 +45,7 @@ These are available states, not a promise that every transition between them is 
 [Application#reconcile_workflow_state!](../../app/models/concerns/application_status_management.rb) reevaluates progress after document work:
 
 - Approved residency and ID proofs, plus income proof when required, satisfy the regular proof requirements.
-- When those proofs are approved and certification is outstanding, reconciliation can move the application to `awaiting_dcf` and request certification.
+- When those proofs are approved and certification is outstanding, reconciliation can move the application to `awaiting_dcf`. It does not request certification: staff send the request from the application page, which shows certification as Not Requested until then.
 - When required proofs and disability certification are approved, reconciliation can approve the application.
 - Already approved, rejected, or archived applications are left alone.
 

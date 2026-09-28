@@ -97,4 +97,21 @@ class MedicalCertificationEmailJobTest < ActiveJob::TestCase
       template.version = 1
     end
   end
+  test 'a certification email queued before an off and on interval is suppressed, not retried' do
+    notification = Notification.create!(
+      recipient: @constituent, actor: @admin, action: 'medical_certification_requested',
+      notifiable: @application, metadata: { 'channel' => 'email' }
+    )
+    MedicalCertificationEmailJob.perform_later(application_id: @application.id, timestamp: Time.current.iso8601,
+                                               notification_id: notification.id)
+    EmailDelivery::ControlWriter.set(name: EmailDelivery::GLOBAL_CONTROL, enabled: false, actor: @admin, operation_id: 'op-1')
+    EmailDelivery::ControlWriter.set(name: EmailDelivery::GLOBAL_CONTROL, enabled: true, actor: @admin, operation_id: 'op-2')
+
+    assert_no_emails do
+      assert_nothing_raised { perform_enqueued_jobs(only: MedicalCertificationEmailJob) }
+    end
+
+    assert_equal 'pending_canceled', notification.reload.metadata.dig('delivery_suppressed', 'reason')
+    assert_equal 'suppressed', notification.delivery_status
+  end
 end

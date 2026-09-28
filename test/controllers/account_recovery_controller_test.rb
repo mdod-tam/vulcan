@@ -250,7 +250,7 @@ class AccountRecoveryControllerTest < ActionDispatch::IntegrationTest
   end
 
   test 'should create record-only admin notification when request created' do
-    assert_no_enqueued_jobs only: ActionMailer::MailDeliveryJob do
+    assert_no_enqueued_jobs only: EmailDelivery::MailDeliveryJob do
       assert_difference -> { Notification.where(action: 'security_key_recovery_requested', recipient: @admin).count }, 1 do
         post request_security_key_reset_path, params: {
           contact: @user.email,

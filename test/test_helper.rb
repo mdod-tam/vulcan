@@ -45,6 +45,8 @@ unless defined?(SEEDS_LOADED)
     end
   end
   Rails.application.load_seed
+  # Restore the callback so tests exercise the real payment notice.
+  Invoice.set_callback(:save, :after, :send_payment_notification, if: :payment_details_added?) if Rails.env.test?
   SEEDS_LOADED = true
 end
 
@@ -233,6 +235,8 @@ module ActiveSupport
         # Ensure the single workflow feature flag exists with its default so that
         # stamp_workflow_defaults! and scrub_income_fields behave correctly.
         FeatureFlag.find_or_create_by!(name: 'vouchers_enabled') { |f| f.enabled = false }
+        # Email is on unless a test turns it off through EmailDelivery::ControlWriter.
+        EmailDelivery::CONTROL_NAMES.each { |name| FeatureFlag.find_or_create_by!(name: name) { |f| f.enabled = true } }
       end
 
       teardown { DatabaseCleaner.clean }
@@ -278,7 +282,7 @@ module ActiveSupport
                   ->(*actual) { actual == expected }
                 end
 
-      assert_enqueued_with(job: ActionMailer::MailDeliveryJob, args: matcher, &)
+      assert_enqueued_with(job: EmailDelivery::MailDeliveryJob, args: matcher, &)
     end
 
     def assert_test_has_assertions

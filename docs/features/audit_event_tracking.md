@@ -27,7 +27,7 @@ The application timeline combines events, status changes, proof reviews, selecte
 
 Each business event still needs a single owner. Neither layer substitutes for that: creation-time deduplication is a five-second window, not a concurrency guarantee, and display deduplication only hides what two writers already stored.
 
-Fingerprints are what separate a legitimate repeated action from a duplicate — the blob for an attachment, the case ID for duplicate review, the retired user ID for a merge, the step name for a paper follow-up failure. The creation and display fingerprints are computed separately, so a new action can be distinguished in one layer and collapsed in the other.
+Fingerprints are what separate a legitimate repeated action from a duplicate — the blob for an attachment, the case ID for duplicate review, the retired user ID for a merge, the step name for a paper follow-up failure. A caller that passes `operation_id` in metadata gets one event per operation, however close together, and a retry of that operation is suppressed; email template edits and toggles use this. The creation and display fingerprints are computed separately, so a new action can be distinguished in one layer and collapsed in the other.
 
 ## Event ownership
 

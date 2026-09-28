@@ -21,6 +21,11 @@ module Vendors
       return failure(message(:request_not_needed)) unless requestable_w9_state?
       return failure(message(:missing_rejection_review)) if vendor.w9_status_rejected? && latest_rejection_review.blank?
 
+      # Checked before any request, token, or revocation exists.
+      denial, @email_context = EmailDelivery.issuance(delivery_mail_action)
+      denial&.raise_if_configuration_error!
+      return suppressed(denial.reason) if denial
+
       request_form = nil
       raw_token = nil
 
@@ -42,12 +47,22 @@ module Vendors
       return success(message(:resent)) if public_recovery
 
       failure(e.message)
+    rescue EmailDelivery::ConfigurationError => e
+      configuration_failure(request_form, e)
+    rescue ApplicationMailer::DeliverySkipped => e
+      request_form&.persisted? ? delivery_suppressed(request_form, e.reason) : suppressed(e.reason)
     rescue StandardError => e
       Rails.logger.warn("W9 resubmission delivery failed for vendor #{vendor.id}: #{sanitize_secure_error_message(e.message)}")
       request_form&.persisted? ? delivery_failure(request_form, e) : failure(message(:delivery_failed))
     end
 
     private
+
+    def configuration_failure(request_form, error)
+      data = request_form&.persisted? ? delivery_failure(request_form, error).data : {}
+      failure(I18n.t('email_delivery.configuration_error', locale: secure_form_locale_for(vendor)),
+              data.merge(delivery_error: true, configuration_error: true, reason: error.reason))
+    end
 
     def ensure_cooldown_allows!
       latest_request = VendorSecureRequestForm
@@ -122,6 +137,22 @@ module Vendors
       )
     end
 
+    # The email was stopped on purpose: revoke the unsent link, keep no cooldown, and say why.
+    def delivery_suppressed(request_form, reason)
+      tracking_notification_for(request_form)&.mark_delivery_suppressed!(reason)
+      request_form.revoke!(actor: actor, reason: :delivery_suppressed, metadata: { suppression_reason: reason })
+      suppressed(reason, request_form)
+    end
+
+    def suppressed(reason, request_form = nil)
+      failure(message(:delivery_suppressed),
+              { vendor_secure_request_form: request_form, delivery_suppressed: true, suppression_reason: reason }.compact)
+    end
+
+    def delivery_mail_action
+      latest_rejection_review.present? ? 'VendorNotificationsMailer#w9_rejected' : 'VendorNotificationsMailer#w9_upload_requested'
+    end
+
     def delivery_failure(request_form, error)
       persist_delivery_failure(request_form, error)
       revoke_failed_request(request_form, error)
@@ -145,6 +176,11 @@ module Vendors
     def persist_delivery_failure(request_form, error)
       notification = tracking_notification_for(request_form)
       return if notification.blank?
+
+      if error.is_a?(EmailDelivery::ConfigurationError)
+        notification.mark_delivery_not_sent!(EmailDelivery::Decision.configuration_error(error.reason))
+        return
+      end
 
       notification.update!(
         delivery_status: :error,
@@ -193,11 +229,8 @@ module Vendors
         w9_review: latest_rejection_review,
         secure_upload_url: secure_upload_url
       )
-      if latest_rejection_review.present?
-        mailer.w9_rejected.deliver_now
-      else
-        mailer.w9_upload_requested.deliver_now
-      end
+      EmailDelivery.deliver_now!(latest_rejection_review.present? ? mailer.w9_rejected : mailer.w9_upload_requested,
+                                 context: @email_context)
     end
 
     def secure_upload_url_for(raw_token)

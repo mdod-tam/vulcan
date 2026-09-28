@@ -2,9 +2,9 @@
 
 module EmailStatusHelper
   def delivery_status_badge(notification)
-    return '' unless notification.email_tracking?
+    return '' unless notification.email_tracking? || notification.local_delivery_outcome?
 
-    badge_class = notification.delivery_status_badge_class
+    badge_class = delivery_status_badge_class(notification)
     status_text = notification.delivery_status || 'Pending'
 
     content_tag(:span, status_text,
@@ -12,7 +12,7 @@ module EmailStatusHelper
   end
 
   def format_email_status(notification)
-    return '' unless notification.email_tracking?
+    return '' unless notification.email_tracking? || notification.local_delivery_outcome?
 
     html = []
     html << build_delivery_status_section(notification)
@@ -29,6 +29,8 @@ module EmailStatusHelper
       case notification.delivery_status
       when 'error'
         build_error_message(notification)
+      when 'suppressed'
+        content_tag(:p, t('notification_delivery.suppressed'))
       when nil
         content_tag(:p, 'Delivery status: Pending')
       else
@@ -92,7 +94,7 @@ module EmailStatusHelper
 
   def show_manual_check_button?(notification)
     notification.message_id.present? &&
-      !notification.delivery_status.in?(['error']) &&
+      !notification.delivery_status.in?(%w[error suppressed]) &&
       notification.opened_at.nil?
   end
 end

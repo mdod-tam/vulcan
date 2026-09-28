@@ -47,7 +47,9 @@ Automatic proof-rejection delivery does not select SMS. Staff can select it from
 
 [NotificationComposer](../../app/services/notification_composer.rb) supplies short in-app text. Mailers supply full email and letter bodies using [EmailTemplate](../../app/models/email_template.rb). Each template's `syntax` selects `legacy_percent` placeholders or `liquid` with declared variable paths and restricted syntax. Preserve recipient and locale behavior when changing a template.
 
-[UpdateEmailStatusJob](../../app/jobs/update_email_status_job.rb) polls Postmark only for `medical_certification_requested` notifications with a message ID. The webhook handler targets `MedicalProviderEmail`, not `Notification`; see the [email guide](../infrastructure/email_system.md) for that integration's limits. Do not assume every email has delivery or open tracking.
+[UpdateEmailStatusJob](../../app/jobs/update_email_status_job.rb) polls Postmark only for `medical_certification_requested` notifications with a message ID. The bounce/complaint webhook is broken and not targeted by production Postmark; see the [email guide](../infrastructure/email_system.md) for its status and the delivery-status values. Do not assume every email has delivery or open tracking.
+
+Email policy refusals use one locked notification writer. Intentional suppression stores `suppressed`; missing or unreadable settings store `error` with `delivery_error.message`. Both record actual channel `none`. The enqueue adapter preserves that distinction, and routing or audit-error updates merge fresh metadata under a row lock so they cannot erase a worker's refusal. Public account-recovery responses do not expose these internal outcomes.
 
 Notification auditing is opt-in through `audit: true`. Normally, leave the domain event with its workflow owner so a single action does not generate duplicate audit history.
 

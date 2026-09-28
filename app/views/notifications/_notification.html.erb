@@ -59,12 +59,12 @@
       <%= time_ago_in_words(notification.created_at) %> ago
     </p>
     
-    <% if notification.email_tracking? %>
+    <% if notification.email_tracking? || notification.local_delivery_outcome? %>
       <div class="mt-2 flex justify-between">
         <span class="inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium <%= delivery_status_badge_class(notification) %>">
           <%= notification.delivery_status || 'Processing' %>
         </span>
-        
+        <% if notification.email_tracking? %>
         <%= button_to check_email_status_notification_path(notification), method: :post, 
             class: "text-xs text-indigo-600 hover:text-indigo-500 font-medium flex items-center", 
             form: { "data-turbo" => true } do %>
@@ -73,7 +73,11 @@
           </svg>
           Check Status
         <% end %>
+        <% end %>
       </div>
+      <% if notification.suppressed_delivery_status? %>
+        <div class="mt-1 text-xs text-gray-700"><%= t('notification_delivery.suppressed') %></div>
+      <% end %>
     <% end %>
     
     <% if notification.email_error_message.present? %>

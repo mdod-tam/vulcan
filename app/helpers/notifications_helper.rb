@@ -49,12 +49,13 @@ module NotificationsHelper
   end
 
   def delivery_status_badge_class(notification)
-    return 'bg-gray-100 text-gray-600' unless notification.email_tracking?
+    return 'bg-gray-100 text-gray-600' unless notification.email_tracking? || notification.local_delivery_outcome?
 
     case notification.delivery_status
     when 'delivered' then 'bg-green-100 text-green-800'
     when 'opened'    then 'bg-blue-100 text-blue-800'
     when 'error'     then 'bg-red-100 text-red-800'
+    when 'suppressed' then 'bg-gray-100 text-gray-700'
     else 'bg-yellow-100 text-yellow-800'
     end
   end

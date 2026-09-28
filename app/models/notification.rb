@@ -4,7 +4,12 @@ class Notification < ApplicationRecord
   attr_accessor :delivery_successful
 
   # Suffix: true generates methods like `delivered_status?` and scopes like `delivered_status`.
-  enum :delivery_status, { delivered: 'delivered', opened: 'opened', error: 'error' }, suffix: true
+  # queued and submitted mean the provider has the message, not that the recipient received it;
+  # suppressed means it was intentionally not sent.
+  enum :delivery_status, {
+    queued: 'queued', submitted: 'submitted', delivered: 'delivered', opened: 'opened', error: 'error',
+    suppressed: 'suppressed'
+  }, suffix: true
 
   belongs_to :recipient, class_name: 'User'
   belongs_to :actor, class_name: 'User', optional: true
@@ -33,6 +38,12 @@ class Notification < ApplicationRecord
     message_id.present?
   end
 
+  # An outcome recorded here without the provider: suppressed, or failed before handoff.
+  # It is shown even when there is no provider message id to poll.
+  def local_delivery_outcome?
+    suppressed_delivery_status? || error_delivery_status?
+  end
+
   def check_email_status!
     return unless email_tracking?
 
@@ -44,6 +55,35 @@ class Notification < ApplicationRecord
     return 'Unknown error' unless metadata.is_a?(Hash)
 
     metadata.fetch('delivery_error', {}).fetch('message', 'Unknown error')
+  end
+
+  # Records that this notification's email was intentionally not sent.
+  def mark_delivery_suppressed!(reason)
+    mark_delivery_not_sent!(EmailDelivery::Decision.suppressed(reason))
+  end
+
+  # Both policy outcomes use the same locked write as routing, preserving unrelated metadata.
+  def mark_delivery_not_sent!(decision)
+    raise ArgumentError, 'Expected a delivery refusal' if decision.allowed?
+
+    details = { 'reason' => decision.reason }
+    if decision.configuration_error?
+      details['message'] = EmailDelivery::ConfigurationError::MESSAGE
+      key = 'delivery_error'
+      status = :error
+      route = 'email_configuration_error'
+    else
+      key = 'delivery_suppressed'
+      status = :suppressed
+      route = 'email_suppressed'
+    end
+
+    with_lock do
+      update!(delivery_status: status,
+              metadata: metadata.to_h.except('delivery_suppressed', 'delivery_error').merge(
+                key => details, 'actual_delivery_channel' => 'none', 'delivery_route_reason' => route
+              ))
+    end
   end
 
   def update_metadata!(key, value)

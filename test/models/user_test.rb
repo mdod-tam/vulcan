@@ -475,4 +475,14 @@ class UserTest < ActiveSupport::TestCase
     # Clean up Current.user to avoid affecting other tests
     Current.user = nil
   end
+
+  test 'system_user does not trust a remembered row whose id now belongs to someone else' do
+    system = User.system_user
+    stale = Users::Administrator.instantiate(system.attributes.merge('id' => create(:constituent).id))
+    User.instance_variable_set(:@system_user, stale)
+
+    assert_equal system, User.system_user
+  ensure
+    User.instance_variable_set(:@system_user, nil)
+  end
 end

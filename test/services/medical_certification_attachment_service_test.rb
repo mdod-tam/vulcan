@@ -64,7 +64,7 @@ class MedicalCertificationAttachmentServiceTest < ActiveSupport::TestCase
   end
 
   test 'attaches medical certification with ActionDispatch::Http::UploadedFile' do
-    assert_no_enqueued_jobs only: ActionMailer::MailDeliveryJob do
+    assert_no_enqueued_jobs only: EmailDelivery::MailDeliveryJob do
       assert_difference 'ActiveStorage::Attachment.count' do
         assert_difference -> { Notification.where(action: 'medical_certification_approved').count }, 1 do
           assert_difference -> { Event.where(action: 'medical_certification_status_changed', auditable: @application).count }, 1 do
@@ -95,7 +95,7 @@ class MedicalCertificationAttachmentServiceTest < ActiveSupport::TestCase
   end
 
   test 'medical certification approval notification remains record-only when delivery is requested' do
-    assert_no_enqueued_jobs only: ActionMailer::MailDeliveryJob do
+    assert_no_enqueued_jobs only: EmailDelivery::MailDeliveryJob do
       notification = NotificationService.create_and_deliver!(
         type: 'medical_certification_approved',
         recipient: @application.user,
@@ -154,7 +154,7 @@ class MedicalCertificationAttachmentServiceTest < ActiveSupport::TestCase
     starting_rejections = @application.total_rejections
 
     assert_no_difference 'ActiveStorage::Attachment.count' do
-      assert_no_enqueued_jobs only: ActionMailer::MailDeliveryJob do
+      assert_no_enqueued_jobs only: EmailDelivery::MailDeliveryJob do
         assert_difference 'Notification.count', 1 do
           result = MedicalCertificationAttachmentService.reject_certification(
             application: @application,

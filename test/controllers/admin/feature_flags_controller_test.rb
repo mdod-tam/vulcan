@@ -110,5 +110,25 @@ module Admin
       assert_redirected_to admin_feature_flags_path
       assert_match 'simulated audit failure', flash[:alert]
     end
+
+    test 'index omits email controls' do
+      get :index
+
+      assert_not_includes assigns(:feature_flags).map(&:name), EmailDelivery::GLOBAL_CONTROL
+    end
+
+    test 'update refuses an email control id without changing it' do
+      control = FeatureFlag.find_by!(name: EmailDelivery::GLOBAL_CONTROL)
+
+      assert_no_difference('Event.count') do
+        assert_raises(ActiveRecord::RecordNotFound) do
+          patch :update, params: { id: control.id, feature_flag: { enabled: false } }
+        end
+      end
+
+      control.reload
+      assert control.enabled
+      assert_equal 0, control.delivery_generation
+    end
   end
 end

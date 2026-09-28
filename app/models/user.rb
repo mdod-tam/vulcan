@@ -52,8 +52,13 @@ class User < ApplicationRecord
     @system_user
   end
 
+  # The memoized row must still be the system admin: after a restore or a sequence reset the
+  # same id can belong to someone else.
   def self.system_user_valid?(user)
-    user.persisted? && user.admin? && exists?(user.id)
+    return false unless user.persisted?
+
+    current = find_by(id: user.id)
+    current.present? && current.admin? && current.email == user.email
   end
   private_class_method :system_user_valid?
 

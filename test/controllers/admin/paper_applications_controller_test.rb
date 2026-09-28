@@ -1370,7 +1370,7 @@ module Admin
       # is referenced in a job but doesn't exist (e.g., due to a rolled back transaction)
 
       # Create a job that references a non-existent constituent
-      job = ActionMailer::MailDeliveryJob.new(
+      job = EmailDelivery::MailDeliveryJob.new(
         'ApplicationNotificationsMailer',
         'account_created',
         'deliver_now',

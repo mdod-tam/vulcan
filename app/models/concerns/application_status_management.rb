@@ -93,27 +93,21 @@ module ApplicationStatusManagement
     end
   end
 
-  # Consolidates DCF escalation: transitions to awaiting_dcf and conditionally
-  # requests medical certification. Safe to call from any path — idempotent,
-  # locked, and self-healing (repairs a missing cert request on re-entry).
+  # Moves the application to awaiting_dcf. Staff request certification from the
+  # application page, so escalation leaves medical_certification_status untouched.
+  # Safe to call from any path: idempotent and locked.
   def escalate_to_dcf!(actor:, trigger: nil)
     with_lock do
       reload
 
-      return if status_approved? || status_rejected? || status_archived?
+      return if status_approved? || status_rejected? || status_archived? || status_awaiting_dcf?
 
       transition_status!(
         :awaiting_dcf,
         actor: actor,
-        notes: 'Requesting medical certification documents',
+        notes: 'Awaiting disability certification',
         metadata: { trigger: trigger&.to_s }.compact
-      ) unless status_awaiting_dcf?
-
-      return unless required_proofs_for_dcf_approved?
-      return unless medical_certification_status_not_requested?
-
-      update!(medical_certification_status: :requested)
-      MedicalProviderMailer.request_certification(self).deliver_later
+      )
     end
   end
 

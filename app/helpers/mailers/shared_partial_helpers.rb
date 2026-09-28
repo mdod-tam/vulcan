@@ -14,9 +14,9 @@ module Mailers
 
     private
 
-    # Central cache for rendered content within a mailer invocation
+    # Caches rendered content for one mailer instance, so a later message sees template edits.
     def mailer_cache
-      Thread.current[:mailer_render_cache] ||= {}
+      @mailer_cache ||= {}
     end
 
     # Generic helper for caching and rendering blocks

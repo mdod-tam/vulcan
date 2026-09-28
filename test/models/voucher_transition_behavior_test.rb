@@ -232,8 +232,8 @@ class VoucherTransitionBehaviorTest < ActiveSupport::TestCase
     # income is ignored in the proof-sufficiency check when the flag is off.
     assert_equal 'awaiting_dcf', app.status,
                  'Expected awaiting_dcf: income ignored (flag off), residency approved triggers DCF escalation'
-    assert_equal 'requested', app.medical_certification_status,
-                 'Expected cert request to be sent when proofs are sufficient'
+    assert_equal 'not_requested', app.medical_certification_status,
+                 'Escalation leaves the certification request to staff'
   end
 
   # --- PaperApplicationService: income proof processing skip ---

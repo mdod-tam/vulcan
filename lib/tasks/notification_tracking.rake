@@ -87,16 +87,14 @@ namespace :notification_tracking do
 
       # Set a placeholder message ID so we can identify these later
       placeholder_id = "backfilled-#{notification.id}-#{Time.current.to_i}"
-      notification.update(
-        message_id: placeholder_id,
-        delivery_status: 'unknown'
-      )
+      # No delivery_status: the actual outcome is unknown, which the UI shows as pending.
+      notification.update(message_id: placeholder_id)
 
       puts 'UPDATED with placeholder ID'
     end
 
     puts "Backfill complete. Added placeholder message IDs to #{processed} notifications."
-    puts "These notifications will show 'Unknown' delivery status in the UI."
+    puts 'These notifications will show a pending delivery status in the UI.'
   end
 
   desc 'Check status of all tracked emails'

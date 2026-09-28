@@ -93,8 +93,18 @@ class ProofReviewService < BaseService
     return data unless proof_review&.status_rejected?
 
     data.merge(
-      resubmission_delivered: proof_resubmission_delivered?
+      resubmission_delivered: proof_resubmission_delivered?,
+      resubmission_suppressed: proof_resubmission_suppressed?
     )
+  end
+
+  # The email controls stopped the resubmission email on purpose.
+  def proof_resubmission_suppressed?
+    return false unless proof_review&.persisted?
+
+    Event.where(action: 'proof_resubmission_request_failed', auditable: application)
+         .where("metadata->>'proof_review_id' = ?", proof_review.id.to_s)
+         .exists?(["metadata->>'delivery_suppressed' = 'true'"])
   end
 
   def proof_resubmission_delivered?

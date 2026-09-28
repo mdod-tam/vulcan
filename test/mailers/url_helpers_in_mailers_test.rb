@@ -55,6 +55,7 @@ class UrlHelpersInMailersTest < ActionMailer::TestCase
     subject = 'Your Proof Was Rejected'
     body = "Proof resubmission link:\nhttp://test.example.com/dashboard"
     mock_template.stubs(:subject).returns(subject)
+    mock_template.stubs(:render_subject).returns(subject)
     mock_template.stubs(:render).returns([subject, body])
     mock_template.stubs(:enabled?).returns(true)
     EmailTemplate.stubs(:find_by!).returns(mock_template)
@@ -70,6 +71,7 @@ class UrlHelpersInMailersTest < ActionMailer::TestCase
     subject = 'New Evaluation Assigned'
     body = "Evaluator evaluation link:\nhttp://test.example.com/evaluations/123"
     mock_template.stubs(:subject).returns(subject)
+    mock_template.stubs(:render_subject).returns(subject)
     mock_template.stubs(:render).returns([subject, body])
     mock_template.stubs(:enabled?).returns(true)
     EmailTemplate.stubs(:find_by!).returns(mock_template)

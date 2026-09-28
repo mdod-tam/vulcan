@@ -29,6 +29,8 @@ module Applications
       delivery_result = deliver_requests(deliveries)
       return delivery_result if delivery_result.failure?
 
+      return email_denial_result(deliveries) if denied_email_candidates.any? && email_denial.configuration_error?
+
       result
     rescue ActiveRecord::RecordNotUnique,
            ActiveRecord::RecordInvalid,
@@ -76,7 +78,11 @@ module Applications
         end
 
         deliveries = create_requests_for(resolved.data)
-        result = success(message(:request_created), { secure_request_forms: deliveries.map(&:secure_request_form) })
+        result = if deliveries.empty? && denied_email_candidates.any?
+                   email_denial_result(deliveries)
+                 else
+                   success(message(:request_created), { secure_request_forms: deliveries.map(&:secure_request_form) })
+                 end
       end
 
       [deliveries, result]
@@ -160,9 +166,15 @@ module Applications
       failure(message(:needs_managing_guardian))
     end
 
+    # A denied email candidate gets no request, token, or revocation; letter and SMS candidates proceed.
     def create_requests_for(candidates)
       request_batch_id = SecureRandom.uuid
-      candidates.map do |candidate|
+      candidates.filter_map do |candidate|
+        if email_denied_for?(candidate)
+          denied_email_candidates << candidate
+          next
+        end
+
         ensure_cooldown_allows!(candidate)
         SecureRequestForm
           .open_provider_info_for_recipient(application_id: application.id, recipient_id: candidate.recipient.id)
@@ -267,6 +279,7 @@ module Applications
 
     def deliver_requests(deliveries)
       delivery_failures = []
+      suppression_reason = nil
 
       # Transport starts after commit. One failure must not block other recipients.
       # Failure metadata must exclude secrets.
@@ -279,6 +292,9 @@ module Applications
         when :letter
           deliver_letter(delivery)
         end
+      rescue ApplicationMailer::DeliverySkipped => e
+        suppression_reason = e.reason
+        suppress_delivery(delivery, e.reason)
       rescue StandardError => e
         report_delivery_failure(e, [delivery])
         delivery_failures << delivery_failure_context(e, [delivery])
@@ -286,15 +302,59 @@ module Applications
       end
 
       return failure(message(:delivery_failed), delivery_failure_data(delivery_failures, deliveries)) if delivery_failures.any?
+      return suppressed(suppression_reason) if suppression_reason
 
       success
     end
 
     def deliver_email(delivery)
       # deliver_now keeps the raw bearer URL out of Active Job arguments.
-      ApplicationNotificationsMailer
-        .provider_info_requested(application, delivery.secure_request_form, secure_url: secure_url_for(delivery.raw_token))
-        .deliver_now
+      EmailDelivery.deliver_now!(
+        ApplicationNotificationsMailer
+          .provider_info_requested(application, delivery.secure_request_form, secure_url: secure_url_for(delivery.raw_token)),
+        context: email_issuance.last
+      )
+    end
+
+    # The email was stopped on purpose after its request was prepared: revoke the unsent link and
+    # keep no cooldown. Other recipients in the batch are unaffected.
+    def suppress_delivery(delivery, reason)
+      request_form = delivery.secure_request_form
+      Notification.where(notifiable: application, action: 'provider_info_requested')
+                  .where("metadata->>'secure_request_form_id' = ?", request_form.id.to_s)
+                  .order(created_at: :desc).first
+                  &.mark_delivery_suppressed!(reason)
+      request_form.revoke!(actor: actor, reason: :delivery_suppressed, metadata: { suppression_reason: reason })
+    end
+
+    def email_denied_for?(candidate)
+      candidate.channel.to_s == 'email' && email_denial.present?
+    end
+
+    def email_denial
+      email_issuance.first
+    end
+
+    # Checked once per call; the context is the authorization each email delivery is verified against.
+    def email_issuance
+      @email_issuance ||= EmailDelivery.issuance('ApplicationNotificationsMailer#provider_info_requested')
+    end
+
+    def denied_email_candidates
+      @denied_email_candidates ||= []
+    end
+
+    def email_denial_result(deliveries)
+      return suppressed(email_denial.reason) unless email_denial.configuration_error?
+
+      failure(I18n.t('email_delivery.configuration_error', locale: secure_form_locale_for(actor)),
+              { delivery_error: true, configuration_error: true, reason: email_denial.reason,
+                secure_request_forms: Array(deliveries).map(&:secure_request_form),
+                failed_recipient_ids: denied_email_candidates.map { |candidate| candidate.recipient.id } })
+    end
+
+    def suppressed(reason)
+      failure(message(:delivery_suppressed), { delivery_suppressed: true, suppression_reason: reason })
     end
 
     def deliver_letter(delivery)

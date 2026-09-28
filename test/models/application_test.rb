@@ -680,7 +680,7 @@ class ApplicationTest < ActiveSupport::TestCase
 
   # --- escalate_to_dcf! tests ---
 
-  test 'escalate_to_dcf! transitions to awaiting_dcf and requests certification when proofs approved' do
+  test 'escalate_to_dcf! transitions to awaiting_dcf and leaves the certification request to staff' do
     application = create(:application, :in_progress, skip_proofs: true)
     application.update_columns(
       status: Application.statuses[:in_progress],
@@ -692,9 +692,7 @@ class ApplicationTest < ActiveSupport::TestCase
     )
     application.reload
 
-    request_mail = mock('request_mail')
-    request_mail.expects(:deliver_later).once
-    MedicalProviderMailer.expects(:request_certification).with(application).returns(request_mail).once
+    MedicalProviderMailer.expects(:request_certification).never
 
     assert_difference -> { ApplicationStatusChange.where(application: application, to_status: 'awaiting_dcf').count }, 1 do
       assert_difference -> { Event.where(auditable: application, action: 'application_status_changed').count }, 1 do
@@ -704,7 +702,7 @@ class ApplicationTest < ActiveSupport::TestCase
 
     application.reload
     assert_equal 'awaiting_dcf', application.status
-    assert_equal 'requested', application.medical_certification_status
+    assert_equal 'not_requested', application.medical_certification_status
   end
 
   test 'escalate_to_dcf! transitions to awaiting_dcf but skips cert request when proofs not approved' do
@@ -727,7 +725,7 @@ class ApplicationTest < ActiveSupport::TestCase
     assert_equal 'not_requested', application.medical_certification_status
   end
 
-  test 'escalate_to_dcf! self-heals: skips transition but requests cert when already awaiting_dcf' do
+  test 'escalate_to_dcf! is a no-op when already awaiting_dcf' do
     application = create(:application, :in_progress, skip_proofs: true)
     application.update_columns(
       status: Application.statuses[:awaiting_dcf],
@@ -739,9 +737,7 @@ class ApplicationTest < ActiveSupport::TestCase
     )
     application.reload
 
-    request_mail = mock('request_mail')
-    request_mail.expects(:deliver_later).once
-    MedicalProviderMailer.expects(:request_certification).with(application).returns(request_mail).once
+    MedicalProviderMailer.expects(:request_certification).never
 
     assert_no_difference -> { ApplicationStatusChange.where(application: application).count } do
       application.escalate_to_dcf!(actor: @admin, trigger: :proof_review_approved)
@@ -749,7 +745,7 @@ class ApplicationTest < ActiveSupport::TestCase
 
     application.reload
     assert_equal 'awaiting_dcf', application.status
-    assert_equal 'requested', application.medical_certification_status
+    assert_equal 'not_requested', application.medical_certification_status
   end
 
   test 'escalate_to_dcf! no-ops for terminal statuses' do
@@ -813,9 +809,7 @@ class ApplicationTest < ActiveSupport::TestCase
     )
     application.reload
 
-    request_mail = mock('request_mail')
-    request_mail.expects(:deliver_later).once
-    MedicalProviderMailer.expects(:request_certification).with(application).returns(request_mail).once
+    MedicalProviderMailer.expects(:request_certification).never
 
     assert_difference -> { ApplicationStatusChange.where(application: application, to_status: 'awaiting_dcf').count }, 1 do
       assert_difference -> { Event.where(auditable: application, action: 'application_status_changed').count }, 1 do

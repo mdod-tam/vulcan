@@ -49,6 +49,8 @@ class EvaluatorMailer < ApplicationMailer
     @queued_letters ||= Set.new
   end
 
+  private
+
   # Check if a letter has already been queued for this evaluation and letter type
   def letter_already_queued?(evaluation, letter_type)
     # Use a class instance variable to track queued letters across instances
@@ -63,8 +65,6 @@ class EvaluatorMailer < ApplicationMailer
       false
     end
   end
-
-  private
 
   # Load email template with error handling
   def load_email_template(template_name, locale: nil)
@@ -203,11 +203,12 @@ class EvaluatorMailer < ApplicationMailer
     evaluation.recommended_products.order(:name).map(&:name).join("\n")
   end
 
-  # Queue letter if constituent prefers print communication
+  # Queue letter if constituent prefers print communication. True means the letter route
+  # handled this message, including a letter queued earlier, so no email follows.
   def queue_letter_if_needed(evaluation, template_name, variables)
     constituent = evaluation.constituent
     return false unless prefers_letter_delivery?(constituent)
-    return false if letter_already_queued?(evaluation, 'evaluation_submission_confirmation')
+    return true if letter_already_queued?(evaluation, 'evaluation_submission_confirmation')
 
     queue_letter_delivery(
       recipient: constituent,

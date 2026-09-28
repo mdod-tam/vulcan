@@ -22,6 +22,24 @@ module EmailTemplates
       assert_equal 'Hi Alex. Optional: Al. Missing: ', body
     end
 
+    test 'legacy percent rendering inserts supplied values literally in one pass' do
+      # rubocop:disable Style/FormatStringToken
+      template = create(
+        :email_template,
+        :text,
+        subject: 'Re: %<name>s',
+        body: 'Name: %<name>s. Note: %{note}',
+        variables: { 'required' => %w[name note], 'optional' => [] },
+        syntax: :legacy_percent
+      )
+
+      subject, body = template.render(name: 'C:\\new\\0 \\1 %{note}', note: '%<name>s & \\&')
+
+      assert_equal 'Re: C:\\new\\0 \\1 %{note}', subject
+      assert_equal 'Name: C:\\new\\0 \\1 %{note}. Note: %<name>s & \\&', body
+      # rubocop:enable Style/FormatStringToken
+    end
+
     test 'liquid renders exact allowed paths without passing root objects through' do
       template = create(
         :email_template,

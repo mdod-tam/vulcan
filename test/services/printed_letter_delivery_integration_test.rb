@@ -157,7 +157,7 @@ class PrintedLetterDeliveryIntegrationTest < ActiveSupport::TestCase
     ApplicationNotificationsMailer.unstub(:account_created)
 
     assert_difference('PrintQueueItem.count', 1) do
-      perform_enqueued_jobs(only: ActionMailer::MailDeliveryJob) do
+      perform_enqueued_jobs(only: EmailDelivery::MailDeliveryJob) do
         NotificationService.create_and_deliver!(
           type: :account_created,
           recipient: @constituent,
@@ -178,7 +178,7 @@ class PrintedLetterDeliveryIntegrationTest < ActiveSupport::TestCase
     ApplicationNotificationsMailer.unstub(:registration_confirmation)
 
     assert_difference('PrintQueueItem.count', 1) do
-      perform_enqueued_jobs(only: ActionMailer::MailDeliveryJob) do
+      perform_enqueued_jobs(only: EmailDelivery::MailDeliveryJob) do
         ApplicationNotificationsMailer.registration_confirmation(@constituent).deliver_later
       end
     end
@@ -193,7 +193,7 @@ class PrintedLetterDeliveryIntegrationTest < ActiveSupport::TestCase
     ApplicationNotificationsMailer.unstub(:proof_received)
 
     assert_difference('PrintQueueItem.count', 1) do
-      perform_enqueued_jobs(only: ActionMailer::MailDeliveryJob) do
+      perform_enqueued_jobs(only: EmailDelivery::MailDeliveryJob) do
         NotificationService.create_and_deliver!(
           type: :id_proof_attached,
           recipient: @constituent,

@@ -15,9 +15,17 @@ class ApplicationMailer < ActionMailer::Base
     def deliver_now = self
   end
 
-  # Raised when a delivery that carries a secure link cannot be sent, so the
-  # issuing service revokes the unsent link and records the failure.
-  class DeliverySkipped < StandardError; end
+  # Raised when a delivery that carries a secure link is intentionally not sent (a disabled
+  # template or an email control), so the issuing service revokes the unsent link and records
+  # a suppression rather than a failure.
+  class DeliverySkipped < StandardError
+    attr_reader :reason
+
+    def initialize(message = nil, reason: nil)
+      @reason = reason.to_s.presence || 'suppressed'
+      super(message || "Email delivery suppressed: #{@reason}")
+    end
+  end
 
   helper :mailer
 
@@ -29,12 +37,23 @@ class ApplicationMailer < ActionMailer::Base
   layout 'mailer'
   before_action :set_common_variables
 
+  self.delivery_job = EmailDelivery::MailDeliveryJob
+
+  # Last check before handoff, for queued and immediate deliveries alike.
+  before_deliver :enforce_email_delivery_controls
+
+  private
+
   # Pass required_delivery: true in mail_options when the email carries a secure link.
   def send_email(recipient_email, template, variables, mail_options = {})
     required_delivery = mail_options.delete(:required_delivery)
     unless template.enabled?
       Rails.logger.warn("Email template '#{template.name}' is disabled. Skipping email to #{recipient_email}")
-      raise DeliverySkipped, "Email template '#{template.name}' is disabled" if required_delivery
+      # No message is built, so the final check never runs; record the suppression here.
+      EmailDelivery::Outcome.record_not_sent(EmailDelivery::Decision.suppressed(:template_disabled),
+                                             context: EmailDelivery::Current.context,
+                                             mail_action: "#{self.class.name}##{action_name}")
+      raise DeliverySkipped.new("Email template '#{template.name}' is disabled", reason: 'template_disabled') if required_delivery
 
       return
     end
@@ -54,7 +73,22 @@ class ApplicationMailer < ActionMailer::Base
     mail_with_text_body(default_options.merge(mail_options), rendered_text_body)
   end
 
-  private
+  # A letter route never calls mail, so it has nothing to stop here.
+  def enforce_email_delivery_controls
+    return unless @_mail_was_called
+
+    mail_action = "#{self.class.name}##{action_name}"
+    context = if EmailDelivery::Current.queued
+                EmailDelivery::Current.context
+              else
+                EmailDelivery::Policy.capture(mail_action: mail_action, params: params || {})
+              end
+    decision = EmailDelivery::Policy.verify_delivery(mail_action, context)
+    return if decision.allowed?
+
+    EmailDelivery::Outcome.record_not_sent(decision, context: context, mail_action: mail_action)
+    throw :abort
+  end
 
   def mail_with_text_body(mail_options, text_body)
     mail(mail_options) do |format|
@@ -102,6 +136,15 @@ class ApplicationMailer < ActionMailer::Base
       variables: letter_variables,
       letter_type: letter_type
     ).queue_for_printing
+  end
+
+  # Queues a printed letter when the recipient prefers mail. Returns true when the letter route
+  # handles the message, so the caller sends no email.
+  def queue_letter_if_preferred(recipient, template_name, variables, application: nil)
+    return false unless prefers_letter_delivery?(recipient)
+
+    queue_letter_delivery(recipient: recipient, template_name: template_name, variables: variables, application: application)
+    true
   end
 
   def letter_recipient_for(recipient)
@@ -162,25 +205,10 @@ class ApplicationMailer < ActionMailer::Base
     candidate.tr('_', '-').split('-').first.downcase
   end
 
-  def interpolate_template_text(template_text, variables = {})
-    rendered_text = template_text.to_s.dup
-    variables.each do |key, value|
-      rendered_text = rendered_text.gsub("%{#{key}}", value.to_s)
-      rendered_text = rendered_text.gsub("%<#{key}>s", value.to_s)
-    end
-    rendered_text
-  end
-
   def header_title_from_template_subject(template:, subject_variables: {}, fallback: '')
     return fallback.to_s if template.blank?
 
-    rendered_subject =
-      if template.respond_to?(:render_subject) && template.respond_to?(:render_syntax)
-        template.render_subject(**subject_variables)
-      else
-        interpolate_template_text(template.subject, subject_variables)
-      end
-    rendered_subject = rendered_subject.to_s.strip
+    rendered_subject = template.render_subject(**subject_variables).to_s.strip
     rendered_subject.presence || fallback.to_s
   rescue StandardError
     fallback.to_s

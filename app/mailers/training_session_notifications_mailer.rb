@@ -69,20 +69,7 @@ class TrainingSessionNotificationsMailer < ApplicationMailer
       support_email: footer_contact_email
     }.compact
 
-    # Render subject and body from the text template
-    rendered_subject, rendered_text_body = text_template.render(**variables)
-
-    # Send email as non-multipart text-only
-    text_body = rendered_text_body.to_s
-    Rails.logger.debug { "DEBUG: Preparing to send trainer_assigned email with content: #{text_body.inspect}" }
-
-    mail(
-      to: trainer.email,
-      subject: rendered_subject,
-      message_stream: 'notifications',
-      body: text_body,
-      content_type: 'text/plain'
-    )
+    send_email(trainer.email, text_template, variables)
   rescue StandardError => e
     # Update error logging to include template name and variables
     AuditEventService.log(
@@ -160,20 +147,7 @@ class TrainingSessionNotificationsMailer < ApplicationMailer
 
     return noop_letter_delivery if queue_letter_if_preferred(constituent, template_name, variables, application: application)
 
-    # Render subject and body from the text template
-    rendered_subject, rendered_text_body = text_template.render(**variables)
-
-    # Send email as non-multipart text-only
-    text_body = rendered_text_body.to_s
-    Rails.logger.debug { "DEBUG: Preparing to send training_scheduled email with content: #{text_body.inspect}" }
-
-    mail(
-      to: recipient_email_for(constituent),
-      subject: rendered_subject,
-      message_stream: 'notifications',
-      body: text_body,
-      content_type: 'text/plain'
-    )
+    send_email(recipient_email_for(constituent), text_template, variables)
   rescue StandardError => e
     # Log error with more details
     AuditEventService.log(
@@ -194,7 +168,7 @@ class TrainingSessionNotificationsMailer < ApplicationMailer
   end
 
   # Notify constituent that training is rescheduled
-  # rubocop:disable Metrics/MethodLength, Metrics/PerceivedComplexity
+  # rubocop:disable Metrics/PerceivedComplexity
   def training_rescheduled(training_session, notification = nil)
     constituent = training_session.constituent
     locale = resolve_template_locale(recipient: constituent)
@@ -257,18 +231,7 @@ class TrainingSessionNotificationsMailer < ApplicationMailer
 
     return noop_letter_delivery if queue_letter_if_preferred(constituent, template_name, variables, application: application)
 
-    rendered_subject, rendered_text_body = text_template.render(**variables)
-
-    text_body = rendered_text_body.to_s
-    Rails.logger.debug { "DEBUG: Preparing to send training_rescheduled email with content: #{text_body.inspect}" }
-
-    mail(
-      to: recipient_email_for(constituent),
-      subject: rendered_subject,
-      message_stream: 'notifications',
-      body: text_body,
-      content_type: 'text/plain'
-    )
+    send_email(recipient_email_for(constituent), text_template, variables)
   rescue StandardError => e
     AuditEventService.log(
       actor: trainer,
@@ -286,7 +249,7 @@ class TrainingSessionNotificationsMailer < ApplicationMailer
     )
     raise
   end
-  # rubocop:enable Metrics/MethodLength, Metrics/PerceivedComplexity
+  # rubocop:enable Metrics/PerceivedComplexity
 
   # Notify constituent that training is cancelled
   def training_cancelled(training_session)
@@ -342,20 +305,7 @@ class TrainingSessionNotificationsMailer < ApplicationMailer
 
     return noop_letter_delivery if queue_letter_if_preferred(constituent, template_name, variables, application: application)
 
-    # Render subject and body from the text template
-    rendered_subject, rendered_text_body = text_template.render(**variables)
-
-    # Send email as non-multipart text-only
-    text_body = rendered_text_body.to_s
-    Rails.logger.debug { "DEBUG: Preparing to send training_cancelled email with content: #{text_body.inspect}" }
-
-    mail(
-      to: recipient_email_for(constituent),
-      subject: rendered_subject,
-      message_stream: 'notifications',
-      body: text_body,
-      content_type: 'text/plain'
-    )
+    send_email(recipient_email_for(constituent), text_template, variables)
   rescue StandardError => e
     # Log error with more details
     AuditEventService.log(
@@ -430,20 +380,7 @@ class TrainingSessionNotificationsMailer < ApplicationMailer
 
     return noop_letter_delivery if queue_letter_if_preferred(constituent, template_name, variables, application: application)
 
-    # Render subject and body from the text template
-    rendered_subject, rendered_text_body = text_template.render(**variables)
-
-    # Send email as non-multipart text-only
-    text_body = rendered_text_body.to_s
-    Rails.logger.debug { "DEBUG: Preparing to send no_show_notification email with content: #{text_body.inspect}" }
-
-    mail(
-      to: recipient_email_for(constituent),
-      subject: rendered_subject,
-      message_stream: 'notifications',
-      body: text_body,
-      content_type: 'text/plain'
-    )
+    send_email(recipient_email_for(constituent), text_template, variables)
   rescue StandardError => e
     # Log error with more details
     AuditEventService.log(
@@ -552,17 +489,5 @@ class TrainingSessionNotificationsMailer < ApplicationMailer
     I18n.t('training_session_notifications.trainer_assigned.labels.not_specified',
            default: 'Not specified',
            locale: locale)
-  end
-
-  def queue_letter_if_preferred(constituent, template_name, variables, application: nil)
-    return false unless prefers_letter_delivery?(constituent)
-
-    queue_letter_delivery(
-      recipient: constituent,
-      template_name: template_name,
-      variables: variables,
-      application: application
-    )
-    true
   end
 end

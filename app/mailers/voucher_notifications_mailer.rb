@@ -59,20 +59,7 @@ class VoucherNotificationsMailer < ApplicationMailer
 
     return noop_letter_delivery if queue_letter_if_preferred(user, template_name, variables, application: voucher.application)
 
-    # Render subject and body from the text template
-    rendered_subject, rendered_text_body = text_template.render(**variables)
-
-    # Send email as non-multipart text-only
-    text_body = rendered_text_body.to_s
-    Rails.logger.debug { "DEBUG: Preparing to send voucher_assigned email with content: #{text_body.inspect}" }
-
-    mail(
-      to: recipient_email_for(user),
-      subject: rendered_subject,
-      message_stream: 'notifications',
-      body: text_body,
-      content_type: 'text/plain'
-    )
+    send_email(recipient_email_for(user), text_template, variables)
   rescue StandardError => e
     # Log error with more details
     AuditEventService.log(
@@ -166,20 +153,7 @@ class VoucherNotificationsMailer < ApplicationMailer
 
     return noop_letter_delivery if queue_letter_if_preferred(user, template_name, variables, application: voucher.application)
 
-    # Render subject and body from the text template
-    rendered_subject, rendered_text_body = text_template.render(**variables)
-
-    # Send email as non-multipart text-only
-    text_body = rendered_text_body.to_s
-    Rails.logger.debug { "DEBUG: Preparing to send voucher_expiring_soon email with content: #{text_body.inspect}" }
-
-    mail(
-      to: recipient_email_for(user),
-      subject: rendered_subject,
-      message_stream: 'notifications',
-      body: text_body,
-      content_type: 'text/plain'
-    )
+    send_email(recipient_email_for(user), text_template, variables)
   rescue StandardError => e
     # Log error with more details
     AuditEventService.log(
@@ -257,20 +231,7 @@ class VoucherNotificationsMailer < ApplicationMailer
 
     return noop_letter_delivery if queue_letter_if_preferred(user, template_name, variables, application: voucher.application)
 
-    # Render subject and body from the text template
-    rendered_subject, rendered_text_body = text_template.render(**variables)
-
-    # Send email as non-multipart text-only
-    text_body = rendered_text_body.to_s
-    Rails.logger.debug { "DEBUG: Preparing to send voucher_expired email with content: #{text_body.inspect}" }
-
-    mail(
-      to: recipient_email_for(user),
-      subject: rendered_subject,
-      message_stream: 'notifications',
-      body: text_body,
-      content_type: 'text/plain'
-    )
+    send_email(recipient_email_for(user), text_template, variables)
   rescue StandardError => e
     # Log error with more details
     AuditEventService.log(
@@ -290,7 +251,7 @@ class VoucherNotificationsMailer < ApplicationMailer
     raise e
   end
 
-  def voucher_redeemed # rubocop:disable Metrics/MethodLength, Metrics/PerceivedComplexity
+  def voucher_redeemed # rubocop:disable Metrics/PerceivedComplexity
     transaction = params[:transaction]
     voucher = transaction.voucher
     user = voucher.application.user
@@ -361,20 +322,7 @@ class VoucherNotificationsMailer < ApplicationMailer
 
     return noop_letter_delivery if queue_letter_if_preferred(user, template_name, variables, application: voucher.application)
 
-    # Render subject and body from the text template
-    rendered_subject, rendered_text_body = text_template.render(**variables)
-
-    # Send email as non-multipart text-only
-    text_body = rendered_text_body.to_s
-    Rails.logger.debug { "DEBUG: Preparing to send voucher_redeemed email with content: #{text_body.inspect}" }
-
-    mail(
-      to: recipient_email_for(user),
-      subject: rendered_subject,
-      message_stream: 'notifications',
-      body: text_body,
-      content_type: 'text/plain'
-    )
+    send_email(recipient_email_for(user), text_template, variables)
   rescue StandardError => e
     # Log error with more details
     AuditEventService.log(
@@ -392,19 +340,5 @@ class VoucherNotificationsMailer < ApplicationMailer
       }
     )
     raise e
-  end
-
-  private
-
-  def queue_letter_if_preferred(user, template_name, variables, application: nil)
-    return false unless prefers_letter_delivery?(user)
-
-    queue_letter_delivery(
-      recipient: user,
-      template_name: template_name,
-      variables: variables,
-      application: application
-    )
-    true
   end
 end
