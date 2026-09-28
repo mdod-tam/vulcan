@@ -12,7 +12,7 @@ Portal and paper intake share the same application model and lifecycle methods, 
 
 | Path | Owner and behavior |
 | --- | --- |
-| Portal draft/autosave | [AutosaveService](../../app/services/applications/autosave_service.rb) saves individual non-file fields and can create a draft. |
+| Portal draft/autosave | [AutosaveService](../../app/services/applications/autosave_service.rb) resumes or creates the actor's draft and saves individual non-file fields. |
 | Portal save/submission | [ApplicationCreator](../../app/services/applications/application_creator.rb) validates the form, locks/rechecks participants and eligibility, saves applicant/application changes and attachments, then records history. Final submission moves the draft to `in_progress`. |
 | Staff paper intake | [PaperApplicationService](../../app/services/applications/paper_application_service.rb) coordinates applicant selection/creation, proofs, the application write, and follow-up. Guardian quick-create is a separate step; see [paper intake](../development/paper_application_architecture.md). |
 
@@ -22,7 +22,7 @@ Portal final submission is blocked while the applicant is the subject of an open
 
 ## Draft autosave and reporting
 
-[AutosaveService](../../app/services/applications/autosave_service.rb) saves allowlisted fields and records the last successful field in `applications.last_visited_step`. Despite its name, this is an attribute such as `household_size`, not a form page. The marker uses `update_column`, so its write skips model validations and callbacks. Failed or unsupported field saves do not advance it; file uploads use a separate flow.
+[AutosaveService](../../app/services/applications/autosave_service.rb) resumes or creates a draft using the same actor/applicant rule as the portal form and full Save. It saves allowlisted fields and records the last successful field in `applications.last_visited_step`. Despite its name, this is an attribute such as `household_size`, not a form page. Application-field saves update the marker with `update_column`, which skips validations and callbacks. Disability-field saves persist it with `save!(validate: false)`, which skips validations but runs callbacks. Failed or unsupported field saves do not advance it; file uploads use a separate flow.
 
 The admin **Pain Point Analysis** report at `/admin/application_analytics/pain_points` uses [Application.pain_point_analysis](../../app/models/application.rb) to count current drafts by that attribute, excluding blank markers. These counts are a clue for investigation: there is no inactivity cutoff, and they do not prove abandonment or explain why someone stopped.
 

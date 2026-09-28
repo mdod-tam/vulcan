@@ -96,6 +96,7 @@ ActiveRecord::Schema[8.1].define(version: 2026_09_27_120000) do
     t.datetime "application_date"
     t.string "application_transfer_id"
     t.integer "application_type"
+    t.jsonb "autosave_revisions", default: {}, null: false
     t.datetime "created_at", null: false
     t.string "current_step"
     t.text "document_signing_audit_url"

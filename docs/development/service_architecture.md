@@ -64,7 +64,7 @@ A merge can retire a user while another request is editing or creating related w
 | --- | --- |
 | [Duplicate merge](../../app/services/users/duplicate_merge_service.rb) | Case and candidate evidence, owned and managed applications, guardian relationships; live blockers rechecked before transfer. |
 | [Review-case writers](../../app/services/duplicate_review_cases) and [pair entry](../../app/services/duplicate_reconciliation/review_pair_service.rb) | Participants and evidence before resolution, flags, or audit changes. [Flag sync](../../app/services/duplicate_reconciliation/review_flag_sync_service.rb) handles one constituent at a time. |
-| Portal submission and autosave | Guardian authority and application inventory. Submission and new drafts check sibling eligibility; an existing draft's autosave locks its target without repeating that check. |
+| Portal submission and autosave | Guardian authority and application inventory. Without an application id, both resume the actor's existing draft for the applicant from the locked inventory; otherwise submission and new drafts check sibling eligibility. An existing draft's autosave locks its target without repeating that check. |
 | [Dependent creation and edits](../../app/controllers/constituent_portal/dependents_controller.rb) | Guardian eligibility, relationships, contact snapshots, replay and admission checks. Standalone relationship creation locks both endpoints. |
 | Contact/role edits, sign-in, [password changes](../../app/services/users/password_update_service.rb) | Current eligibility and the submitted credential or reset-token authority. |
 | Secure-request issuance | Actor and recipient/delivery-owner inventory before the application, relationships, and resend form; the service retries if that inventory shifts. |
@@ -74,6 +74,20 @@ A merge can retire a user while another request is editing or creating related w
 This applies to the writers listed, not to every `User` update. Paper new-person creation additionally takes a [name/date-of-birth transaction lock](../../app/services/applications/paper_identity_creation_lock.rb) before recomputing identity matches.
 
 **Password-reset issuance sits outside this boundary.** A concurrent contact change can send instructions to an old address or phone; what makes the link safe is token invalidation and a locked redemption, since reset tokens depend on the password, normalized email, and normalized phone ([authentication](../security/authentication_system.md#password-reset-and-account-access)).
+
+## Portal autosave ordering
+
+[`Applications::AutosaveRevisions`](../../app/models/applications/autosave_revisions.rb) wraps the application for `AutosaveService` and `ApplicationCreator`. The portal form receives a random UUID identifying that page. The value object also supplies the next revision when rendering the form. Each edit has a rising revision; Save/Submit carries a revision covering the whole snapshot. The page ID is ordering bookkeeping, not authorization: the existing actor/applicant checks and locks still control access.
+
+Within the existing participant/application locks, a field save compares its revision with that page's field revision and full-form boundary. An older or duplicate save returns `superseded`, with the current value and revision, without changing data, progress, or audit events. A successful full-form save sets the boundary for every field to the greater of its submitted revision and the highest revision already stored for that page. This includes a previously unseen page ID, so a delayed first autosave cannot overwrite its full Save. A refused or rolled-back save advances nothing. The JSONB `applications.autosave_revisions` column commits with the values; it stores page IDs and counters, not field values. Even a first disability edit persists a draft so its user-owned value and revision share a transaction.
+
+Page IDs do not expire. Drafts retain other pages' ordering entries on full Save: deleting them would allow an older request from another open tab to overwrite that tab's newer edit. Successful portal submission clears the metadata in the same transaction; a refused or rolled-back submission retains it. Submitted applications reject autosaves. Draft metadata can still grow with the number of pages used until submission.
+
+Missing or malformed metadata refuses a field autosave with guidance to use Save Application. A full form instead skips ordering for that request and saves normally; bookkeeping never rejects an otherwise valid full Save. Valid metadata orders field saves within that page. A late full Save with an older revision can still overwrite a newer field save: the browser prevents that ordering during normal use by stamping Save above earlier edits and freezing controls during submission, rather than the server rejecting the full form. Separate tabs remain last-write-wins, and unversioned full forms do not establish a boundary. This is not collaborative editing or guaranteed offline saving.
+
+Full saves apply submitted blank provider fields as clears, while omitted fields remain unchanged. During Save/Submit the browser freezes form controls after Turbo captures the submitted values; validation feedback cannot re-enable a second submit. Failure or cached-page restoration makes those controls usable again.
+
+Deployment requires the additive migration before the new server code. All writers must enforce the protocol before the new JavaScript's parallel departure saves can rely on it; avoid serving new assets alongside old workers. Older open pages may have unversioned autosaves refused and should use Save Application or refresh. Full forms with missing or malformed metadata remain supported for legacy pages; current forms also work without JavaScript. On rollback, restore the old assets and application code before removing the column.
 
 ## Temporary request context
 
