@@ -15,7 +15,7 @@ A secure request link lets someone complete one document task without a portal a
 
 | Policy key | Default | Effect |
 | --- | --- | --- |
-| `secure_form_link_expiration_hours` | 48 | How long a new link stays usable. Email and SMS copy states this value. |
+| `secure_form_link_expiration_hours` | 48 | How long a new link stays usable. The provider information email and the proof and provider information text messages state this value; proof, certification, and W9 emails do not. |
 | `secure_form_resend_cooldown_hours` | 1 | How soon another link can be issued: per recipient for proof and provider information, per application for certification, and per vendor for W9. |
 
 `RecordSecureFormExpirationsJob` runs hourly in production ([schedule](../../config/recurring.yml)). It records one expiration event for each expired proof, certification, or W9 link that is still open, then sets `expiration_recorded_at` so later runs skip that form. Provider information links do not record an expiration event.

@@ -133,7 +133,6 @@ class MedicalProviderMailer < ApplicationMailer
     reason&.body.presence || fallback_reason
   end
 
-  # Locale for provider-facing emails based on the associated application user.
   # Providers get the default locale, the same as their secure form pages.
   def provider_email_locale
     I18n.default_locale.to_s

@@ -52,9 +52,8 @@ module Applications
       Vendors::RequestW9Resubmission.any_instance.unstub(:call)
       first = Vendors::RequestW9Resubmission.new(vendor: vendor, actor: @admin).call
                                             .data.fetch(:vendor_secure_request_form)
-      # Any vendor update with a W9 attached moves the W9 to pending review, so
-      # change only the email to keep the W9 requestable.
-      vendor.update_column(:email, "current-vendor-#{SecureRandom.hex(3)}@example.test")
+      # An email change keeps the rejected W9 requestable.
+      vendor.update!(email: "current-vendor-#{SecureRandom.hex(3)}@example.test")
 
       travel_to first.sent_at + 2.hours do
         result = Vendors::RequestW9Resubmission.new(vendor: vendor, actor: @admin, resend_of: first).call

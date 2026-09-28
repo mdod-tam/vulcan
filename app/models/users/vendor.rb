@@ -102,6 +102,11 @@ module Users
         .order(processed_at: :desc)
     end
 
+    # W9 link issuance and the admin send button use this rule.
+    def w9_requestable_via_secure_form?
+      w9_status_not_submitted? || w9_status_rejected?
+    end
+
     # Virtual attribute for handling terms acceptance.
     # When the form sends a "terms_accepted" value (e.g., "1" for checked),
     # this getter returns true if "terms_accepted_at" is present.
@@ -112,11 +117,6 @@ module Users
     # The setter converts the submitted value into a timestamp.
     # If the value is truthy (checked), it sets terms_accepted_at to the current time;
     # otherwise, it clears the timestamp.
-    # W9 link issuance and the admin send button use this rule.
-    def w9_requestable_via_secure_form?
-      w9_status_not_submitted? || w9_status_rejected?
-    end
-
     def terms_accepted=(value)
       if ActiveModel::Type::Boolean.new.cast(value)
         self.terms_accepted_at ||= Time.current

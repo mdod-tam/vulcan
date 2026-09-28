@@ -81,12 +81,12 @@
                         "Voucher Cancelled"
                       when "profile_updated", "profile_updated_by_guardian"
                         "Profile Updated"
-                      when "alternate_contact_updated", "medical_provider_info_updated"
+                      when 'alternate_contact_updated', 'medical_provider_info_updated'
                         contact_field_change_label(log)
-                      when "proof_secure_submission_refused"
-                        "Secure Proof Upload Refused"
-                      when "proof_resubmission_request_failed"
-                        "Proof Resubmission Link Not Sent"
+                      when 'proof_secure_submission_refused'
+                        'Secure Proof Upload Refused'
+                      when 'proof_resubmission_request_failed'
+                        'Proof Resubmission Link Not Sent'
                       when "provider_info_request_revoked"
                         "Provider Info Request Revoked"
                       when "proof_resubmission_request_revoked"
@@ -254,13 +254,17 @@
                       guardian_name = log.user&.full_name || "Guardian"
                       changes_summary = log.metadata['changes']&.keys&.map(&:humanize)&.join(', ') || 'profile fields'
                       "#{guardian_name} updated #{user_name}'s profile (#{changes_summary})"
-                    when "alternate_contact_updated", "medical_provider_info_updated"
+                    when 'alternate_contact_updated', 'medical_provider_info_updated'
                       contact_field_change_detail(log)
-                    when "proof_resubmission_request_failed"
-                      "The #{log.metadata['proof_type'].to_s.humanize.downcase} proof was rejected, but its secure upload link was not sent: #{log.metadata['reason']}. Follow up with the applicant."
-                    when "proof_secure_submission_refused"
+                    when 'proof_resubmission_request_failed'
+                      proof_label = log.metadata['proof_type'].to_s.humanize.downcase
+                      "The #{proof_label} proof was rejected, but its secure upload link was not sent: " \
+                        "#{log.metadata['reason']}. Follow up with the applicant."
+                    when 'proof_secure_submission_refused'
                       proof_label = log.metadata['proof_type'].to_s.humanize
-                      "A secure #{proof_label} proof upload was refused because the proof no longer needed a document (status: #{log.metadata['proof_status'].to_s.humanize})."
+                      proof_status = log.metadata['proof_status'].to_s.humanize
+                      "A secure #{proof_label} proof upload was refused because the proof no longer needed a document " \
+                        "(status: #{proof_status})."
                     when "provider_info_request_revoked", "proof_resubmission_request_revoked", "proof_resubmission_request_expired",
                          "cert_upload_request_revoked", "cert_upload_request_expired",
                          "proof_submitted_via_secure_form", "cert_submitted_via_secure_form"
