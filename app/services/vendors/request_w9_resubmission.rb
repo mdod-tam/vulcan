@@ -216,7 +216,7 @@ module Vendors
     end
 
     def requestable_w9_state?
-      vendor.w9_status_not_submitted? || vendor.w9_status_rejected?
+      vendor.w9_requestable_via_secure_form?
     end
 
     def delivery_template_name

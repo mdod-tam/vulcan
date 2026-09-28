@@ -6,7 +6,8 @@ module Admin
     W9_SECURE_REQUEST_EVENT_TITLES = {
       'w9_submitted_via_secure_form' => 'Secure W9 uploaded for review',
       'w9_upload_request_revoked' => 'Secure W9 upload link revoked',
-      'w9_upload_request_expired' => 'Secure W9 upload link expired'
+      'w9_upload_request_expired' => 'Secure W9 upload link expired',
+      'w9_details_changed' => 'W9 details changed after submission, review whether a new W9 is needed'
     }.freeze
 
     def vendor_w9_history_items(w9_reviews:, secure_request_events:, secure_request_notifications: [])
@@ -63,6 +64,10 @@ module Admin
       return unless item.type == :secure_request_event
 
       metadata = item.record.metadata.deep_stringify_keys
+      if item.record.action == 'w9_details_changed'
+        return "Changed: #{Array(metadata['changed_fields']).map { |field| field.humanize(keep_id_suffix: true) }.to_sentence}"
+      end
+
       recipient_email = metadata['recipient_email']
       return if recipient_email.blank?
 
@@ -70,7 +75,7 @@ module Admin
     end
 
     def vendor_secure_w9_upload_requestable?(vendor)
-      vendor.email.present? && (vendor.w9_status_not_submitted? || vendor.w9_status_rejected?)
+      vendor.email.present? && vendor.w9_requestable_via_secure_form?
     end
 
     private

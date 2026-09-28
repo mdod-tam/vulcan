@@ -13,7 +13,12 @@ module Users
 
     has_one_attached :w9_form
 
+    # Fields a W-9 certifies. A change leaves the W9 on file describing old details.
+    W9_CERTIFIED_FIELDS = %w[business_name business_tax_id physical_address_1 physical_address_2 city state zip_code].freeze
+
     # Callbacks
+    after_update :log_w9_details_changed, if: :w9_details_changed_on_file?
+    after_save :note_w9_form_attached
     after_commit :update_w9_status_on_form_upload, on: :update
 
     validates :vendor_authorization_status, presence: true
@@ -107,6 +112,11 @@ module Users
     # The setter converts the submitted value into a timestamp.
     # If the value is truthy (checked), it sets terms_accepted_at to the current time;
     # otherwise, it clears the timestamp.
+    # W9 link issuance and the admin send button use this rule.
+    def w9_requestable_via_secure_form?
+      w9_status_not_submitted? || w9_status_rejected?
+    end
+
     def terms_accepted=(value)
       if ActiveModel::Type::Boolean.new.cast(value)
         self.terms_accepted_at ||= Time.current
@@ -117,14 +127,38 @@ module Users
 
     private
 
-    # Update w9_status when a W9 form is uploaded
-    def update_w9_status_on_form_upload
-      # When a W9 form is uploaded, it should go to pending_review status
-      # unless it's already pending_review (to avoid unnecessary updates)
-      # This handles: not_submitted -> pending_review, rejected -> pending_review, approved -> pending_review
-      return unless w9_form.attached? && !w9_status_pending_review?
+    # Only a newly attached W9 needs review. Other saves, such as a profile edit
+    # or an account lockout, keep the current W9 status.
+    def note_w9_form_attached
+      @w9_form_attached_in_save = attachment_changes.key?('w9_form')
+    end
 
-      update_column(:w9_status, :pending_review)
+    def update_w9_status_on_form_upload
+      return unless @w9_form_attached_in_save
+
+      @w9_form_attached_in_save = false
+      return if !w9_form.attached? || w9_status_pending_review?
+
+      update_column(:w9_status, :pending_review) # rubocop:disable Rails/SkipsModelValidations
+    end
+
+    # A changed name, tax ID, or address does not block vouchers. Staff see it in
+    # the W9 history and decide whether to request a new W9.
+    def w9_details_changed_on_file?
+      w9_form.attached? && (w9_status_approved? || w9_status_pending_review?) &&
+        W9_CERTIFIED_FIELDS.any? { |field| saved_change_to_attribute?(field) }
+    end
+
+    def log_w9_details_changed
+      AuditEventService.log(
+        action: 'w9_details_changed',
+        actor: Current.user || self,
+        auditable: self,
+        metadata: {
+          changed_fields: W9_CERTIFIED_FIELDS.select { |field| saved_change_to_attribute?(field) },
+          w9_status: w9_status
+        }
+      )
     end
   end
 end

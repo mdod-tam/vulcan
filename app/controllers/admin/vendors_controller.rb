@@ -32,6 +32,7 @@ module Admin
                                            w9_submitted_via_secure_form
                                            w9_upload_request_revoked
                                            w9_upload_request_expired
+                                           w9_details_changed
                                          ])
                                   .includes(:user)
                                   .order(created_at: :desc)
