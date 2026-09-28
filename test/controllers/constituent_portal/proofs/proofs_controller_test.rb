@@ -197,6 +197,13 @@ class ConstituentProofsSubmissionTest < ActionDispatch::IntegrationTest
     assert_equal 'not_reviewed', dependent_application.income_proof_status
   end
 
+  test 'proof upload help shows the program phone number' do
+    get constituent_portal_application_new_proof_path(application_id: @application.id, proof_type: 'income')
+
+    assert_response :success
+    assert_includes response.body, "or call #{ProgramContact.support_phone}."
+  end
+
   test 'an application the constituent cannot reach redirects to the dashboard' do
     other_application = create(:application, :paper_rejected_proofs)
 

@@ -272,7 +272,7 @@ module Admin
         'footer_text' => render(partial: 'shared/mailers/footer', formats: [:text], locals: { show_automated_message: true }),
         'header_logo_url' => asset_url('TAM_color.png'),
         'header_subtitle' => is_es ? 'Subtítulo de Muestra' : 'Sample Subtitle',
-        'footer_contact_email' => 'support@example.com',
+        'footer_contact_email' => ProgramContact.support_email,
         'footer_website_url' => ProgramContact.website_url,
         'footer_show_automated_message' => true,
         'organization_name' => 'Maryland Accessible Telecommunications',

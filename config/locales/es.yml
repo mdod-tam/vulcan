@@ -713,7 +713,7 @@ es:
         team: "Equipo de Servicio al Cliente"
       footer:
         address: "Telecomunicaciones Accesibles de Maryland | %{office_address}"
-        contact_line: "Teléfono: 555-123-4567 | Correo electrónico: %{support_email} | Sitio web: %{program_website_url}"
+        contact_line: "Teléfono: %{support_phone} | Correo electrónico: %{support_email} | Sitio web: %{program_website_url}"
       page_number: "Página %{page} de %{total}"
       titles:
         application_notifications_account_created: "Recibimos su solicitud de Telecomunicaciones Accesibles de Maryland"

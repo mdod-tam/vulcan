@@ -200,6 +200,7 @@ module Letters
                       office_address: ProgramContact.office_address,
                       locale: resolved_locale), align: :center
       pdf.text I18n.t('letters.pdf.footer.contact_line',
+                      support_phone: ProgramContact.support_phone,
                       support_email: support_email,
                       program_website_url: ProgramContact.website_url,
                       locale: resolved_locale), align: :center

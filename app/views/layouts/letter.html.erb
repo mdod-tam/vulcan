@@ -77,7 +77,7 @@
       <div class="letterhead">
         <h1>Maryland Accessible Telecommunications</h1>
         <p><%= ProgramContact.office_address %></p>
-        <p>Phone: 555-123-4567 | Email: <%= Policy.get('support_email') || 'mat.program1@maryland.gov' %></p>
+        <p>Phone: <%= ProgramContact.support_phone %> | Email: <%= Policy.get('support_email') || 'mat.program1@maryland.gov' %></p>
       </div>
     </div>
     
@@ -108,7 +108,7 @@
     
     <div class="footer">
       <p>Maryland Accessible Telecommunications | <%= ProgramContact.office_address %></p>
-      <p>Phone: 555-123-4567 | Email: <%= Policy.get('support_email') || 'mat.program1@maryland.gov' %> | Website: <%= ProgramContact.website_url %></p>
+      <p>Phone: <%= ProgramContact.support_phone %> | Email: <%= Policy.get('support_email') || 'mat.program1@maryland.gov' %> | Website: <%= ProgramContact.website_url %></p>
     </div>
   </div>
 </body>

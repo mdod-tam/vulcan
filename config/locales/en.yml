@@ -868,7 +868,7 @@ en:
         team: "Customer Service Team"
       footer:
         address: "Maryland Accessible Telecommunications | %{office_address}"
-        contact_line: "Phone: 555-123-4567 | Email: %{support_email} | Website: %{program_website_url}"
+        contact_line: "Phone: %{support_phone} | Email: %{support_email} | Website: %{program_website_url}"
       page_number: "Page %{page} of %{total}"
       titles:
         application_notifications_account_created: "We Received Your Maryland Accessible Telecommunications Application"
