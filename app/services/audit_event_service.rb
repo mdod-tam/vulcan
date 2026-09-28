@@ -165,6 +165,11 @@ class AuditEventService < BaseService
     # action alone made the second one within the dedup window look like a repeat of the first, so a
     # notification failure and a proof-delivery failure collapsed into one record and staff were
     # told about only half of what went wrong.
+    if action.to_s == 'proof_resubmission_request_failed'
+      proof_review_id = metadata['proof_review_id'] || metadata[:proof_review_id]
+      return "#{base}_#{proof_review_id}" if proof_review_id.present?
+    end
+
     if action.to_s == 'application_post_creation_step_failed'
       step = metadata['step'] || metadata[:step]
       return "#{base}_#{step}" if step.present?

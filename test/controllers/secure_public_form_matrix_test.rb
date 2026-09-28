@@ -16,7 +16,7 @@ class SecurePublicFormMatrixTest < ActionDispatch::IntegrationTest
       form_path: :secure_proof_form_path, resend_path: :new_secure_proof_form_resend_path,
       resend_create_path: :secure_proof_form_resend_path, success_path: :secure_proof_form_success_path,
       submit_service: Applications::SubmitProofResubmission, resend_service: Applications::RequestProofResubmission,
-      rate_limit_key: 'secure_proof_form_resend', success_carries_locale: true,
+      rate_limit_key: 'secure_proof_form_resend',
       sent_path: :secure_proof_form_resend_sent_path
     },
     certification: {
@@ -25,7 +25,7 @@ class SecurePublicFormMatrixTest < ActionDispatch::IntegrationTest
       form_path: :secure_certification_form_path, resend_path: :new_secure_certification_form_resend_path,
       resend_create_path: :secure_certification_form_resend_path, success_path: :secure_certification_form_success_path,
       submit_service: Applications::SubmitCertificationUpload, resend_service: Applications::RequestCertificationUpload,
-      rate_limit_key: 'secure_certification_form_resend', success_carries_locale: false,
+      rate_limit_key: 'secure_certification_form_resend',
       sent_path: :secure_certification_form_resend_sent_path
     },
     provider_info: {
@@ -34,7 +34,7 @@ class SecurePublicFormMatrixTest < ActionDispatch::IntegrationTest
       form_path: :secure_provider_info_form_path, resend_path: :new_secure_provider_info_form_resend_path,
       resend_create_path: :secure_provider_info_form_resend_path, success_path: :secure_provider_info_form_success_path,
       submit_service: Applications::SubmitProviderInfo, resend_service: Applications::RequestProviderInfo,
-      rate_limit_key: 'secure_provider_info_form_resend', success_carries_locale: true,
+      rate_limit_key: 'secure_provider_info_form_resend',
       sent_path: :secure_provider_info_form_resend_sent_path
     },
     w9: {
@@ -43,7 +43,7 @@ class SecurePublicFormMatrixTest < ActionDispatch::IntegrationTest
       form_path: :secure_w9_form_path, resend_path: :new_secure_w9_form_resend_path,
       resend_create_path: :secure_w9_form_resend_path, success_path: :secure_w9_form_success_path,
       submit_service: Vendors::SubmitW9Resubmission, resend_service: Vendors::RequestW9Resubmission,
-      rate_limit_key: 'secure_w9_form_resend', success_carries_locale: false,
+      rate_limit_key: 'secure_w9_form_resend',
       sent_path: :secure_w9_form_resend_sent_path
     }
   }.freeze
@@ -87,8 +87,7 @@ class SecurePublicFormMatrixTest < ActionDispatch::IntegrationTest
         case expected_update(state)
         when :resend then assert_redirected_to public_send(config[:resend_path], token: token)
         when :success
-          expected = config[:success_carries_locale] ? { locale: form.delivery_locale } : {}
-          assert_redirected_to public_send(config[:success_path], **expected)
+          assert_redirected_to public_send(config[:success_path], locale: form.delivery_locale)
         else
           assert_redirected_to public_send(config[:form_path], token: token)
         end
@@ -142,19 +141,21 @@ class SecurePublicFormMatrixTest < ActionDispatch::IntegrationTest
 
       assert_response :ok
       assert_template "#{config[:views]}/success"
-      assert_select 'html[lang=?]', config[:success_carries_locale] ? 'es' : 'en'
+      assert_select 'html[lang=?]', 'es'
     end
 
     test "#{name} form and resend pages follow the delivery locale" do
       token, form = build_state(config, :active)
       spanish_locale_owner(name, form).update!(locale: 'es')
+      # Providers get English; the applicant's locale is not the provider's.
+      expected = name == :certification ? 'en' : 'es'
 
       get public_send(config[:form_path], token: token)
-      assert_select 'html[lang=?]', 'es'
+      assert_select 'html[lang=?]', expected
 
       form.update!(expires_at: 1.hour.ago)
       get public_send(config[:resend_path], token: token)
-      assert_select 'html[lang=?]', 'es'
+      assert_select 'html[lang=?]', expected
     end
   end
 

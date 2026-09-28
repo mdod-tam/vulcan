@@ -232,7 +232,7 @@ module Applications
                        .first
       return if latest_request.blank?
 
-      cooldown_until = latest_request.sent_at + resend_cooldown_hours.hours
+      cooldown_until = latest_request.sent_at + SecureFormPolicy.resend_cooldown_hours.hours
       return if cooldown_until <= Time.current
 
       minutes = ((cooldown_until - Time.current) / 60.0).ceil
@@ -285,7 +285,7 @@ module Applications
         delivery_owner: candidate.delivery_owner,
         delivery_source: candidate.delivery_source&.to_s,
         public_token_digest: SecureRequestForm.digest_public_token(raw_token),
-        expires_at: link_expiration_hours.hours.from_now,
+        expires_at: SecureFormPolicy.expires_at,
         sent_at: Time.current,
         requested_by: actor
       }
@@ -465,21 +465,7 @@ module Applications
     end
 
     def secure_url_for(raw_token)
-      options = Rails.application.config.action_mailer.default_url_options || {}
-      host = options[:host]
-      protocol = options[:protocol] || (Rails.env.production? ? 'https' : 'http')
-
-      if Rails.env.production?
-        raise ArgumentError, 'Secure proof form host is not configured' if host.blank? || host == 'example.com'
-        raise ArgumentError, 'Secure proof form URLs must use HTTPS in production' unless protocol == 'https'
-      end
-
-      Rails.application.routes.url_helpers.secure_proof_form_url(
-        token: raw_token,
-        host: host,
-        port: options[:port],
-        protocol: protocol
-      )
+      SecureFormPolicy.public_url(:secure_proof_form_url, raw_token)
     end
 
     def sms_message(secure_url, secure_request_form)
@@ -490,16 +476,8 @@ module Applications
         locale: locale,
         secure_url: secure_url,
         proof_type: I18n.t("secure_proof_forms.proof_types.#{proof_type}", locale: locale),
-        hours: link_expiration_hours
+        hours: SecureFormPolicy.link_expiration_hours
       )
-    end
-
-    def link_expiration_hours
-      Policy.get('secure_form_link_expiration_hours') || 48
-    end
-
-    def resend_cooldown_hours
-      Policy.get('secure_form_resend_cooldown_hours') || 1
     end
 
     # The mailer must use the form's channel and encrypted contact snapshot, not the recipient's preferences.

@@ -34,7 +34,7 @@ module Applications
         end
       end
 
-      deliver_request_email!(raw_token) if deliver_email
+      deliver_request_email!(request_form, raw_token) if deliver_email
 
       success(message(:request_created), result_data(request_form, raw_token))
     rescue ActiveRecord::RecordNotUnique, ActiveRecord::RecordInvalid => e
@@ -53,15 +53,12 @@ module Applications
 
     def ensure_cooldown_allows!
       latest_request = MedicalProviderSecureRequestForm
-                       .certification_upload
-                       .status_sent
-                       .where(application: application, provider_email: provider_email)
-                       .where(submitted_at: nil, revoked_at: nil)
+                       .open_certification_upload_for_application(application_id: application.id)
                        .order(sent_at: :desc)
                        .first
       return if latest_request.blank?
 
-      cooldown_until = latest_request.sent_at + resend_cooldown_hours.hours
+      cooldown_until = latest_request.sent_at + SecureFormPolicy.resend_cooldown_hours.hours
       return if cooldown_until <= Time.current
 
       minutes = ((cooldown_until - Time.current) / 60.0).ceil
@@ -70,10 +67,7 @@ module Applications
 
     def revoke_open_requests
       MedicalProviderSecureRequestForm
-        .open_certification_upload_for_provider(
-          application_id: application.id,
-          provider_email: provider_email
-        )
+        .open_certification_upload_for_application(application_id: application.id)
         .find_each { |request_form| request_form.revoke!(actor: actor, reason: :replacement_request) }
     end
 
@@ -104,7 +98,7 @@ module Applications
         provider_email: provider_email,
         provider_name: provider_name,
         public_token_digest: MedicalProviderSecureRequestForm.digest_public_token(raw_token),
-        expires_at: link_expiration_hours.hours.from_now,
+        expires_at: SecureFormPolicy.expires_at,
         sent_at: Time.current,
         request_batch_id: SecureRandom.uuid,
         requested_by: actor
@@ -256,12 +250,14 @@ module Applications
       }
     end
 
-    def deliver_request_email!(raw_token)
+    # Delivers to the provider email recorded on the request row.
+    def deliver_request_email!(request_form, raw_token)
       secure_upload_url = secure_upload_url_for(raw_token)
 
       if rejection_delivery?
         MedicalProviderMailer.with(
           application: application,
+          recipient_email: request_form.provider_email,
           rejection_reason: rejection_reason_for_delivery,
           admin: actor,
           secure_upload_url: secure_upload_url
@@ -269,6 +265,7 @@ module Applications
       else
         MedicalProviderMailer.with(
           application: application,
+          recipient_email: request_form.provider_email,
           timestamp: Time.current.iso8601,
           secure_upload_url: secure_upload_url
         ).request_certification.deliver_now
@@ -291,37 +288,16 @@ module Applications
     end
 
     def secure_upload_url_for(raw_token)
-      options = Rails.application.config.action_mailer.default_url_options || {}
-      host = options[:host]
-      protocol = options[:protocol] || (Rails.env.production? ? 'https' : 'http')
-
-      if Rails.env.production?
-        raise ArgumentError, 'Secure certification form host is not configured' if host.blank? || host == 'example.com'
-        raise ArgumentError, 'Secure certification form URLs must use HTTPS in production' unless protocol == 'https'
-      end
-
-      Rails.application.routes.url_helpers.secure_certification_form_url(
-        token: raw_token,
-        host: host,
-        port: options[:port],
-        protocol: protocol
-      )
+      SecureFormPolicy.public_url(:secure_certification_form_url, raw_token)
     end
 
-    def link_expiration_hours
-      Policy.get('secure_form_link_expiration_hours') || 48
-    end
-
-    def resend_cooldown_hours
-      Policy.get('secure_form_resend_cooldown_hours') || 1
-    end
-
+    # A resend uses the provider on file now, not the one on the expired link.
     def provider_email
-      resend_of&.provider_email.presence || application.medical_provider_email
+      application.medical_provider_email
     end
 
     def provider_name
-      resend_of&.provider_name.presence || application.medical_provider_name
+      application.medical_provider_name
     end
 
     def message(key, **)

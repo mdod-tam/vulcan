@@ -47,13 +47,14 @@ class SecureCertificationFormsControllerTest < ActionDispatch::IntegrationTest
     assert_redirected_to new_secure_certification_form_resend_path(token: @raw_token)
   end
 
-  test 'show uses application user Spanish locale' do
+  test 'show is in English for the provider even when the applicant prefers Spanish' do
     @application.user.update!(locale: 'es')
 
     get secure_certification_form_path(token: @raw_token)
 
     assert_response :success
-    assert_select 'h1', I18n.t('secure_certification_forms.show.heading', locale: :es)
+    assert_select 'html[lang=?]', 'en'
+    assert_select 'h1', I18n.t('secure_certification_forms.show.heading', locale: :en)
   end
 
   test 'success response has secure no-store headers' do
@@ -110,7 +111,7 @@ class SecureCertificationFormsControllerTest < ActionDispatch::IntegrationTest
 
     patch secure_certification_form_path, params: { token: @raw_token, file: file }
 
-    assert_redirected_to secure_certification_form_success_path
+    assert_redirected_to secure_certification_form_success_path(locale: 'en')
   end
 
   test 'patch with missing file re-renders upload form with validation error' do

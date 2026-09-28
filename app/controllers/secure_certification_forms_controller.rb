@@ -24,9 +24,5 @@ class SecureCertificationFormsController < SecureRequestFormController
 
   def form_path = secure_certification_form_path(token: @token)
   def resend_path = new_secure_certification_form_resend_path(token: @token)
-  def success_redirect_path = secure_certification_form_success_path
-
-  def locale_recipient_for_request
-    @secure_request_form&.application&.user
-  end
+  def success_redirect_path = secure_certification_form_success_path(locale: @secure_request_form.delivery_locale)
 end

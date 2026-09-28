@@ -16,9 +16,5 @@ class SecureW9FormsController < SecureRequestFormController
 
   def form_path = secure_w9_form_path(token: @token)
   def resend_path = new_secure_w9_form_resend_path(token: @token)
-  def success_redirect_path = secure_w9_form_success_path
-
-  def locale_recipient_for_request
-    @secure_request_form&.vendor
-  end
+  def success_redirect_path = secure_w9_form_success_path(locale: @secure_request_form.delivery_locale)
 end

@@ -9,9 +9,7 @@ class SecureRequestForm < ApplicationRecord
   encrypts :recipient_phone, deterministic: true
 
   def delivery_locale
-    locale = delivery_owner ? delivery_owner.locale : recipient&.effective_message_locale
-    candidate = locale.to_s.to_sym
-    I18n.available_locales.include?(candidate) ? candidate : I18n.default_locale
+    SecureFormLocaleResolver.normalize(delivery_owner ? delivery_owner.locale : recipient&.effective_message_locale)
   end
 
   belongs_to :application

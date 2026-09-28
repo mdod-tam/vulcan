@@ -132,7 +132,7 @@ module Admin
     end
 
     def provider_info_secure_link_recent_cutoff
-      (Policy.get('secure_form_link_expiration_hours') || 48).hours.ago
+      SecureFormPolicy.link_expiration_hours.hours.ago
     end
   end
 end

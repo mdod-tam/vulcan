@@ -125,7 +125,7 @@ class ApplicationNotificationsMailer < ApplicationMailer # rubocop:disable Metri
           return noop_letter_delivery
         end
 
-        return send_email(secure_request_form.recipient_email, text_template, variables)
+        return send_email(secure_request_form.recipient_email, text_template, variables, required_delivery: true)
       end
 
       if prefers_letter_delivery?(recipient)
@@ -172,7 +172,7 @@ class ApplicationNotificationsMailer < ApplicationMailer # rubocop:disable Metri
           return noop_letter_delivery
         end
 
-        return send_email(secure_request_form.recipient_email, text_template, variables)
+        return send_email(secure_request_form.recipient_email, text_template, variables, required_delivery: true)
       end
 
       if prefers_letter_delivery?(recipient)
@@ -387,7 +387,8 @@ class ApplicationNotificationsMailer < ApplicationMailer # rubocop:disable Metri
         secure_request_form.recipient_email,
         text_template,
         variables,
-        reply_to: [support_email]
+        reply_to: [support_email],
+        required_delivery: true
       )
     end
   end
@@ -901,7 +902,7 @@ class ApplicationNotificationsMailer < ApplicationMailer # rubocop:disable Metri
                            constituent_name: application.constituent_full_name,
                            application_id: application.id,
                            secure_url: secure_url,
-                           expiration_hours: Policy.get('secure_form_link_expiration_hours') || 48,
+                           expiration_hours: SecureFormPolicy.link_expiration_hours,
                            support_email: support_email,
                            support_phone: support_phone,
                            provider_info_instructions: I18n.t(
@@ -910,7 +911,7 @@ class ApplicationNotificationsMailer < ApplicationMailer # rubocop:disable Metri
                              secure_url: secure_url,
                              support_email: support_email,
                              support_phone: support_phone,
-                             hours: Policy.get('secure_form_link_expiration_hours') || 48
+                             hours: SecureFormPolicy.link_expiration_hours
                            )
                          }).compact
   end

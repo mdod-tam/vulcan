@@ -3,10 +3,6 @@
 class SecureProofFormsController < SecureRequestFormController
   private
 
-  def success_page_uses_request_locale?
-    true
-  end
-
   def request_form_class = SecureRequestForm
 
   def request_form_kind_matches?

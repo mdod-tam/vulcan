@@ -157,10 +157,26 @@ class ProofReview < ApplicationRecord
       actor: admin,
       proof_type: proof_type.to_sym
     ).call
+    return unless result.failure?
 
-    Rails.logger.warn("Proof resubmission request failed for ProofReview #{id}: #{result.message}") if result.failure?
+    Rails.logger.warn("Proof resubmission request failed for ProofReview #{id}: #{result.message}")
+    log_resubmission_request_failure(result.message)
   rescue StandardError => e
     Rails.logger.error "Failed to request proof resubmission: #{e.message}"
+    log_resubmission_request_failure(e.class.name)
+  end
+
+  # The rejection stands even when its secure link cannot be sent. Record that
+  # durably so staff can follow up; no fallback recipient is guessed.
+  def log_resubmission_request_failure(reason)
+    AuditEventService.log(
+      action: 'proof_resubmission_request_failed',
+      actor: admin,
+      auditable: application,
+      metadata: { proof_type: proof_type, proof_review_id: id, reason: reason.to_s }
+    )
+  rescue StandardError => e
+    Rails.logger.error "Failed to record proof resubmission request failure: #{e.message}"
   end
 
   def log_rejection_audit_event

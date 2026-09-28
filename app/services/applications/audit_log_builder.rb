@@ -174,6 +174,7 @@ module Applications
             evaluator_assigned trainer_assigned
             medical_certification_requested medical_certification_status_changed
             alternate_contact_updated medical_provider_info_updated proof_secure_submission_refused
+            proof_resubmission_request_failed
             provider_info_request_revoked proof_resubmission_request_revoked
             proof_resubmission_request_expired
             cert_upload_request_revoked cert_upload_request_expired

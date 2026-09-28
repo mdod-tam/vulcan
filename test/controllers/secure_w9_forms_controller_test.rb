@@ -99,7 +99,7 @@ class SecureW9FormsControllerTest < ActionDispatch::IntegrationTest
 
     patch secure_w9_form_path, params: { token: @raw_token, file: file }
 
-    assert_redirected_to secure_w9_form_success_path
+    assert_redirected_to secure_w9_form_success_path(locale: 'en')
   end
 
   test 'patch with missing file re-renders upload form with validation error' do

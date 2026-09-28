@@ -85,6 +85,8 @@
                         contact_field_change_label(log)
                       when "proof_secure_submission_refused"
                         "Secure Proof Upload Refused"
+                      when "proof_resubmission_request_failed"
+                        "Proof Resubmission Link Not Sent"
                       when "provider_info_request_revoked"
                         "Provider Info Request Revoked"
                       when "proof_resubmission_request_revoked"
@@ -254,6 +256,8 @@
                       "#{guardian_name} updated #{user_name}'s profile (#{changes_summary})"
                     when "alternate_contact_updated", "medical_provider_info_updated"
                       contact_field_change_detail(log)
+                    when "proof_resubmission_request_failed"
+                      "The #{log.metadata['proof_type'].to_s.humanize.downcase} proof was rejected, but its secure upload link was not sent: #{log.metadata['reason']}. Follow up with the applicant."
                     when "proof_secure_submission_refused"
                       proof_label = log.metadata['proof_type'].to_s.humanize
                       "A secure #{proof_label} proof upload was refused because the proof no longer needed a document (status: #{log.metadata['proof_status'].to_s.humanize})."

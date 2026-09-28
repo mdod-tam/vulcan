@@ -32,7 +32,7 @@ module Vendors
         end
       end
 
-      deliver_request_email!(raw_token)
+      deliver_request_email!(request_form, raw_token)
 
       success(message(:request_created), result_data(request_form, raw_token))
     rescue ActiveRecord::RecordNotUnique, ActiveRecord::RecordInvalid => e
@@ -58,7 +58,7 @@ module Vendors
                        .first
       return if latest_request.blank?
 
-      cooldown_until = latest_request.sent_at + resend_cooldown_hours.hours
+      cooldown_until = latest_request.sent_at + SecureFormPolicy.resend_cooldown_hours.hours
       return if cooldown_until <= Time.current
 
       minutes = ((cooldown_until - Time.current) / 60.0).ceil
@@ -97,7 +97,7 @@ module Vendors
         status: :sent,
         recipient_email: recipient_email,
         public_token_digest: VendorSecureRequestForm.digest_public_token(raw_token),
-        expires_at: link_expiration_hours.hours.from_now,
+        expires_at: SecureFormPolicy.expires_at,
         sent_at: Time.current,
         request_batch_id: SecureRandom.uuid,
         requested_by: actor
@@ -182,12 +182,14 @@ module Vendors
       }
     end
 
-    def deliver_request_email!(raw_token)
+    # Delivers to the email recorded on the request row. deliver_now keeps the
+    # bearer URL out of job arguments.
+    def deliver_request_email!(request_form, raw_token)
       secure_upload_url = secure_upload_url_for(raw_token)
 
-      # Keep the bearer URL out of job payload serialization.
       mailer = VendorNotificationsMailer.with(
         vendor: vendor,
+        recipient_email: request_form.recipient_email,
         w9_review: latest_rejection_review,
         secure_upload_url: secure_upload_url
       )
@@ -199,21 +201,7 @@ module Vendors
     end
 
     def secure_upload_url_for(raw_token)
-      options = Rails.application.config.action_mailer.default_url_options || {}
-      host = options[:host]
-      protocol = options[:protocol] || (Rails.env.production? ? 'https' : 'http')
-
-      if Rails.env.production?
-        raise ArgumentError, 'Secure W9 form host is not configured' if host.blank? || host == 'example.com'
-        raise ArgumentError, 'Secure W9 form URLs must use HTTPS in production' unless protocol == 'https'
-      end
-
-      Rails.application.routes.url_helpers.secure_w9_form_url(
-        token: raw_token,
-        host: host,
-        port: options[:port],
-        protocol: protocol
-      )
+      SecureFormPolicy.public_url(:secure_w9_form_url, raw_token)
     end
 
     def result_data(request_form, raw_token)
@@ -235,16 +223,9 @@ module Vendors
       latest_rejection_review.present? ? 'vendor_notifications_w9_rejected' : 'vendor_notifications_w9_upload_requested'
     end
 
+    # A resend uses the vendor email on file now, not the one on the expired link.
     def recipient_email
-      resend_of&.recipient_email.presence || vendor.email
-    end
-
-    def link_expiration_hours
-      Policy.get('secure_form_link_expiration_hours') || 48
-    end
-
-    def resend_cooldown_hours
-      Policy.get('secure_form_resend_cooldown_hours') || 1
+      vendor.email
     end
 
     def message(key, **)

@@ -24,8 +24,4 @@ class SecureCertificationFormResendsController < SecureRequestResendController
   def resend_log_context
     { application_id: @secure_request_form.application_id, medical_provider_secure_request_form_id: @secure_request_form.id }
   end
-
-  def locale_recipient_for_request
-    @secure_request_form&.application&.user
-  end
 end

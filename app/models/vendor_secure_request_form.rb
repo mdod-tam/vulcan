@@ -9,6 +9,10 @@ class VendorSecureRequestForm < ApplicationRecord
   belongs_to :requested_by, class_name: 'User', optional: true
 
   enum :kind, { w9_upload: 0 }, prefix: true
+
+  def delivery_locale
+    SecureFormLocaleResolver.for_recipient(vendor)
+  end
   enum :status, { sent: 0, submitted: 1, revoked: 2 }, prefix: true
 
   validates :recipient_email, presence: true

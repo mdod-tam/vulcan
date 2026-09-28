@@ -7,7 +7,7 @@ class SecureRequestFormController < SecurePublicFormController
 
   before_action :set_secure_request_form, only: %i[show update]
   around_action :with_request_locale, only: %i[show update]
-  around_action :with_success_locale, only: :success
+  around_action :with_public_request_locale, only: :success
 
   def show
     return render_unavailable unless request_form_kind?
@@ -53,15 +53,6 @@ class SecureRequestFormController < SecurePublicFormController
   end
 
   def assign_display_context; end
-
-  def with_success_locale(&)
-    success_page_uses_request_locale? ? with_public_request_locale(&) : yield
-  end
-
-  # Proof and provider-info success pages follow the locale in the redirect.
-  def success_page_uses_request_locale?
-    false
-  end
 
   def request_form_class = raise(NotImplementedError)
   def request_form_kind_matches? = raise(NotImplementedError)

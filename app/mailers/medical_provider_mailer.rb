@@ -134,8 +134,9 @@ class MedicalProviderMailer < ApplicationMailer
   end
 
   # Locale for provider-facing emails based on the associated application user.
+  # Providers get the default locale, the same as their secure form pages.
   def provider_email_locale
-    resolve_template_locale(recipient: params[:application]&.user)
+    I18n.default_locale.to_s
   end
 
   def build_request_certification_variables
@@ -241,7 +242,7 @@ class MedicalProviderMailer < ApplicationMailer
 
     mail_with_text_body(
       {
-        to: application.medical_provider_email,
+        to: provider_recipient_email(application),
         from: 'no_reply@mdmat.org',
         reply_to: support_email,
         subject: subject,
@@ -261,9 +262,14 @@ class MedicalProviderMailer < ApplicationMailer
     mail_with_text_body(mail_options, body.to_s)
   end
 
+  # A secure request passes the email recorded on its request row.
+  def provider_recipient_email(application)
+    params[:recipient_email].presence || application.medical_provider_email
+  end
+
   def build_request_mail_options(application, subject)
     {
-      to: application.medical_provider_email,
+      to: provider_recipient_email(application),
       from: 'no_reply@mdmat.org',
       reply_to: support_email,
       subject: subject,

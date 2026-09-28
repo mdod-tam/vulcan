@@ -150,16 +150,16 @@ class MedicalProviderMailerTest < ActionMailer::TestCase
     Rails.logger = original_logger
   end
 
-  test 'certification_rejected uses locale-aware base template name for spanish recipients' do
+  test 'certification_rejected uses the English template even when the applicant prefers Spanish' do
     @constituent.update!(locale: 'es')
 
-    spanish_template = mock('spanish_rejected_template')
-    spanish_template.stubs(:render).returns(['Certificacion rechazada', 'Motivo traducido'])
+    english_template = mock('english_rejected_template')
+    english_template.stubs(:render).returns(['Certificacion rechazada', 'Motivo traducido'])
     EmailTemplate.expects(:find_by!).with(
       name: 'medical_provider_certification_rejected',
       format: :text,
-      locale: 'es'
-    ).returns(spanish_template)
+      locale: 'en'
+    ).returns(english_template)
 
     email = MedicalProviderMailer.with(
       application: @application,
