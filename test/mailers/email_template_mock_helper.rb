@@ -7,13 +7,11 @@ module EmailTemplateMockHelper
     template = mock('email_template')
 
     # Stub render to perform gsub-based interpolation matching the real EmailTemplate.render behavior
-    # Stub the render method to perform interpolation
     template.define_singleton_method(:render) do |**vars|
       rendered_body = body.dup
       rendered_subject = subject.dup
 
       vars.each do |key, value|
-        # Handle both "%{key}" and "%<key>s" format strings
         rendered_body = rendered_body.gsub("%{#{key}}", value.to_s)
         rendered_body = rendered_body.gsub("%<#{key}>s", value.to_s)
 

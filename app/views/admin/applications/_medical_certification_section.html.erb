@@ -154,7 +154,6 @@
            (@application.medical_certification_status == "requested" && @application.medical_certification.attached?) ||
            certification_action_state.requested_after_rejection) &&
            !["approved"].include?(@application.medical_certification_status) %>
-      <!-- Review button - Show this only when we have a certification to review AND it's not already accepted/approved -->
       <button type="button"
             data-action="click->modal#open"
             data-modal-id="medicalCertificationReviewModal"

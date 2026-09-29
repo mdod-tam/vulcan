@@ -94,6 +94,18 @@ class Notification < ApplicationRecord
     end
   end
 
+  # The adapter can fail after the caller commits and finishes recording its intended route.
+  def mark_delivery_enqueue_failed!(error)
+    with_lock do
+      unless local_delivery_outcome?
+        update!(delivery_status: :error, metadata: metadata.to_h.merge(
+          'actual_delivery_channel' => 'none', 'delivery_route_reason' => 'email_enqueue_failed',
+          'delivery_error' => { 'message' => 'Email could not be queued.', 'error_class' => error.class.name }
+        ))
+      end
+    end
+  end
+
   # Generate a human-readable message for the notification by delegating to the NotificationComposer.
   # This ensures all message logic is centralized and consistent.
   def message(viewer = nil)

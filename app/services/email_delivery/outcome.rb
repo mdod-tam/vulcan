@@ -17,7 +17,7 @@ module EmailDelivery
       request_id = context&.dig('request_id')
       ActiveSupport::Notifications.instrument("#{action}.email_delivery", reason: decision.reason, mail_action: mail_action)
       log(decision, action, mail_action, request_id)
-      mark_originating_notification(decision, context)
+      mark_originating_notification(context) { |notification| notification.mark_delivery_not_sent!(decision) }
       return if request_id.present? && recorded?(action, request_id)
       return unless (actor = audit_actor(action, mail_action))
 
@@ -37,6 +37,7 @@ module EmailDelivery
       request_id = context&.dig('request_id')
       ActiveSupport::Notifications.instrument("#{ENQUEUE_FAILED}.email_delivery", mail_action: mail_action)
       Rails.logger.error("EmailDelivery: #{ENQUEUE_FAILED} #{mail_action} #{error.class} request=#{request_id}")
+      mark_originating_notification(context) { |notification| notification.mark_delivery_enqueue_failed!(error) }
       return unless (actor = audit_actor(ENQUEUE_FAILED, mail_action))
 
       Event.create!(
@@ -49,11 +50,11 @@ module EmailDelivery
     end
 
     # The email was being sent for a notification: record the outcome on it, whenever it happened.
-    def self.mark_originating_notification(decision, context)
+    def self.mark_originating_notification(context)
       notification = Notification.find_by(id: context&.dig('notification_id'))
       return if notification.nil?
 
-      notification.mark_delivery_not_sent!(decision)
+      yield notification
     rescue StandardError => e
       Rails.logger.error("EmailDelivery: could not mark notification #{notification&.id} as not sent: #{e.class}")
     end
@@ -71,7 +72,7 @@ module EmailDelivery
     private_class_method :audit_actor
 
     def self.recorded?(action, request_id)
-      Event.where(action: action).exists?(["metadata->>'request_id' = ?", request_id])
+      Event.where(action: action).with_metadata(:request_id, request_id).exists?
     end
     private_class_method :recorded?
 

@@ -119,5 +119,35 @@ module Admin
       assert_no_text 'Test email not sent: proof emails are turned off.'
       take_screenshot('email-controls-test-send-configuration-error', html: true)
     end
+
+    test 'keyboard navigation and controls that disappear after page load remain usable' do
+      sign_in(@admin)
+      visit admin_email_templates_path
+
+      30.times do
+        page.driver.browser.keyboard.type(:Tab)
+        break if page.evaluate_script('document.activeElement.getAttribute("href")') == '#main-content'
+      end
+      assert_equal '#main-content', page.evaluate_script('document.activeElement.getAttribute("href")')
+      take_screenshot('email-controls-skip-link-focused', html: true)
+      page.driver.browser.keyboard.type(:Enter)
+      assert_equal 'main-content', page.evaluate_script('document.activeElement.id')
+
+      %w[email.category.proof email.global].each do |name|
+        FeatureFlag.find_by!(name: name).destroy!
+        within("[data-email-control='#{name}']") do
+          accept_confirm { click_button 'Turn off' }
+        end
+
+        assert_text 'Email settings could not be changed because the configuration is missing or invalid.'
+        within("[data-email-control='#{name}']") do
+          assert_text 'Configuration error'
+          assert_text 'Contact a system administrator'
+          assert_no_button 'Turn on'
+          assert_no_button 'Turn off'
+        end
+        take_screenshot("email-controls-missing-#{name.parameterize}", html: true)
+      end
+    end
   end
 end

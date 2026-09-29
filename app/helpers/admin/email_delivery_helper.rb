@@ -13,6 +13,8 @@ module Admin
     # change by someone else is not silently reversed, and an operation id, so a resubmitted
     # form is applied once.
     def email_control_button(label:, url:, enabled:, version:, extra_params: {})
+      return tag.p(email_delivery_t('missing_control_help'), class: 'text-sm text-red-800 max-w-prose') if enabled.nil?
+
       target = !enabled
       key = target ? 'turn_on' : 'turn_off'
       button_to email_delivery_t(key), url,
@@ -46,7 +48,12 @@ module Admin
     private
 
     def saved_state_badge(saved_enabled, mixed)
-      text = email_delivery_t(saved_enabled ? 'state_on' : 'state_off')
+      state = if saved_enabled.nil?
+                'state_missing'
+              else
+                saved_enabled ? 'state_on' : 'state_off'
+              end
+      text = email_delivery_t(state)
       colors = saved_enabled ? 'bg-green-100 text-green-800' : 'bg-red-100 text-red-800'
       badge = tag.span(text, class: "inline-flex items-center rounded-full px-2.5 py-0.5 font-medium #{colors}")
       return badge unless mixed

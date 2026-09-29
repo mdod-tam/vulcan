@@ -33,6 +33,10 @@ class MailQueueBoundaryTest < ActiveSupport::TestCase
     # These tests commit, so restore exactly what they changed for the tests that follow.
     Event.where(created_at: @started_at..).delete_all
     @control.update_columns(@control_values)
+    Notification.where(recipient: @user).destroy_all
+    @training_session&.destroy!
+    @application&.destroy!
+    @trainer&.destroy!
     @user&.destroy
     @admin&.destroy
     User.where(email: PublicAuditActor::SYSTEM_AUDIT_EMAIL).destroy_all unless @system_user_existed
@@ -98,6 +102,61 @@ class MailQueueBoundaryTest < ActiveSupport::TestCase
     assert Event.exists?(action: EmailDelivery::Outcome::ENQUEUE_FAILED)
   end
 
+  test 'a deferred notification keeps its identity after the caller context has ended' do
+    notification = nil
+    ActiveRecord::Base.transaction { notification = notify_user }
+
+    context = mail_jobs.sole.arguments.fetch('email_delivery_context')
+    assert_equal notification.id, context['notification_id']
+    set_email(false, 'op-1')
+    ActiveJob::Base.execute(mail_jobs.sole.arguments)
+
+    assert_equal 'suppressed', notification.reload.delivery_status
+    assert_equal 'none', notification.metadata['actual_delivery_channel']
+    assert_empty ActionMailer::Base.deliveries
+  end
+
+  test 'an off and on interval before commit cancels the original request' do
+    ActiveRecord::Base.transaction do
+      request_reset
+      set_email(false, 'op-1')
+      set_email(true, 'op-2')
+    end
+
+    assert_empty mail_jobs
+    assert_equal 'pending_canceled', Event.find_by!(action: EmailDelivery::Outcome::SUPPRESSED).metadata['reason']
+  end
+
+  test 'training stays committed but its notification reports a deferred queue failure' do
+    @application = create(:application, user: @user)
+    @trainer = create(:trainer)
+    @training_session = create(:training_session, :scheduled, application: @application, trainer: @trainer)
+    reject_mail_inserts!
+
+    TrainingSessionNotifier.new(@training_session).deliver_all
+
+    assert @training_session.reload.status_scheduled?
+    notification = Notification.find_by!(notifiable: @training_session, action: 'training_scheduled')
+    assert_equal 'error', notification.delivery_status
+    assert_equal 'none', notification.metadata['actual_delivery_channel']
+    assert_equal 'email_enqueue_failed', notification.metadata['delivery_route_reason']
+    assert_match 'could not be queued', notification.email_error_message
+    assert_equal 1, Event.where(action: EmailDelivery::Outcome::ENQUEUE_FAILED).count
+    assert_equal 'SolidQueue::Job::EnqueueError', Event.find_by!(action: EmailDelivery::Outcome::ENQUEUE_FAILED).metadata['error_class']
+    assert_empty mail_jobs
+  end
+
+  test 'a real queue insert failure reports enqueue_failed to an immediate caller' do
+    reject_mail_inserts!
+
+    assert_equal :enqueue_failed, EmailDelivery.deliver_later(UserMailer.with(user: @user).password_reset)
+
+    event = Event.find_by!(action: EmailDelivery::Outcome::ENQUEUE_FAILED)
+    assert_equal 'SolidQueue::Job::EnqueueError', event.metadata['error_class']
+    assert_not event.metadata.key?('error_message'), 'adapter SQL errors may contain serialized arguments'
+    assert_empty mail_jobs
+  end
+
   test 'rollout removes mail jobs queued without a captured context and keeps the rest' do
     request_reset
     legacy_adapter = ActionMailer::MailDeliveryJob.queue_adapter
@@ -119,8 +178,19 @@ class MailQueueBoundaryTest < ActiveSupport::TestCase
 
   private
 
+  # Exercise the adapter's real database-error wrapper, not a stubbed ActiveJob exception.
+  def reject_mail_inserts!
+    SolidQueue::Record.connection.add_check_constraint(
+      :solid_queue_jobs, "class_name <> 'EmailDelivery::MailDeliveryJob'", name: 'reject_mail_for_test'
+    )
+  end
+
   def request_reset
     UserMailer.with(user: @user).password_reset.deliver_later
+  end
+
+  def notify_user
+    NotificationService.create_and_deliver!(type: 'account_created', recipient: @user, actor: @admin, notifiable: @user)
   end
 
   def set_email(enabled, operation_id)

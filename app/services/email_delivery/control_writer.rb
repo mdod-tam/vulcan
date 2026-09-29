@@ -110,7 +110,7 @@ module EmailDelivery
     private_class_method :stale?
 
     def self.applied?(operation_id, action)
-      Event.where(action: action).exists?(["metadata->>'operation_id' = ?", operation_id.to_s])
+      Event.where(action: action).with_metadata(:operation_id, operation_id.to_s).exists?
     end
     private_class_method :applied?
   end

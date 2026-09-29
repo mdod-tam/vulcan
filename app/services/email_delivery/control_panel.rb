@@ -7,6 +7,7 @@ module EmailDelivery
   class ControlPanel
     Control = Data.define(:name, :label, :row, :saved_enabled, :suppressed_by) do
       def effective_enabled? = saved_enabled && suppressed_by.nil?
+      def missing? = row.nil?
     end
 
     Pair = Data.define(:name, :format, :rows, :category, :saved_enabled, :mixed, :suppressed_by) do
@@ -26,7 +27,7 @@ module EmailDelivery
       @global ||= begin
         row = @controls[GLOBAL_CONTROL]
         Control.new(name: GLOBAL_CONTROL, label: I18n.t('admin.email_delivery.global_label', locale: :en), row: row,
-                    saved_enabled: row&.enabled == true, suppressed_by: nil)
+                    saved_enabled: row&.enabled, suppressed_by: row ? nil : :configuration_error)
       end
     end
 
@@ -38,7 +39,7 @@ module EmailDelivery
       name = EmailDelivery.category_control(category)
       row = @controls[name]
       Control.new(name: name, label: self.class.category_label(category), row: row,
-                  saved_enabled: row&.enabled == true, suppressed_by: global.saved_enabled ? nil : :global_disabled)
+                  saved_enabled: row&.enabled, suppressed_by: upstream_suppression || (row ? nil : :configuration_error))
     end
 
     # { category => [Pair] } in catalog order, then templates no email uses.
@@ -84,10 +85,19 @@ module EmailDelivery
     private
 
     def pair_suppression(category)
-      return :global_disabled unless global.saved_enabled
+      return upstream_suppression if upstream_suppression
       return if category == UNASSIGNED
 
-      :category_disabled unless category_control(category).saved_enabled
+      control = category_control(category)
+      return :configuration_error if control.missing?
+
+      :category_disabled unless control.saved_enabled
+    end
+
+    def upstream_suppression
+      return :configuration_error if global.missing?
+
+      :global_disabled unless global.saved_enabled
     end
   end
 end

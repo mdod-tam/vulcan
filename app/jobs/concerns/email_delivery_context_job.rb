@@ -12,13 +12,16 @@ module EmailDeliveryContextJob
     # The catalog key of the email this job sends; a job may override the reader.
     class_attribute :email_delivery_mail_action, instance_writer: false
 
-    before_enqueue do |job|
-      job.email_delivery_context ||= EmailDelivery::Policy.capture(mail_action: job.email_delivery_mail_action,
-                                                                   params: job.email_delivery_params)
-    end
+    # Rails stores ActiveJob::EnqueueError, but Solid Queue raises its own error for failed inserts.
+    # Normalize both at the actual enqueue boundary, including writes deferred until commit.
+    around_enqueue do |job, block|
+      begin
+        block.call
+      rescue SolidQueue::Job::EnqueueError => e
+        job.enqueue_error = e
+        job.successfully_enqueued = false
+      end
 
-    # A queue write that fails after the caller's transaction commits raises nothing, so record it.
-    after_enqueue do |job|
       if job.enqueue_error
         EmailDelivery::Outcome.record_enqueue_failure(job.enqueue_error, context: job.email_delivery_context,
                                                                          mail_action: job.email_delivery_mail_action)
@@ -34,6 +37,14 @@ module EmailDeliveryContextJob
       end
       EmailDelivery::Current.set(context: job.email_delivery_context, queued: true, denial_decision: nil) { block.call }
     end
+  end
+
+  # Rails defers enqueue callbacks until commit. Capture here while the caller's notification
+  # context and the original control generations are still available; retries keep that capture.
+  def enqueue(options = {})
+    self.email_delivery_context ||= EmailDelivery::Policy.capture(mail_action: email_delivery_mail_action,
+                                                                  params: email_delivery_params)
+    super
   end
 
   # Mailer params the capture needs, such as a test send's template name.

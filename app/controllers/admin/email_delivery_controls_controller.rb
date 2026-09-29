@@ -17,6 +17,8 @@ module Admin
         expected_version: params[:expected_version].presence
       )
       redirect_back_to_controls(**flash_for(result, control_label(name)))
+    rescue EmailDelivery::ConfigurationError
+      redirect_back_to_controls(alert: t('admin.email_delivery.configuration_error', locale: :en))
     end
 
     private

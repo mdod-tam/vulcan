@@ -49,5 +49,28 @@ module Admin
 
       assert FeatureFlag.find_by!(name: 'email.global').enabled
     end
+
+    %w[email.global email.category.proof].each do |name|
+      test "a missing #{name} control reports misconfiguration without offering a toggle" do
+        FeatureFlag.find_by!(name: name).destroy!
+
+        get admin_email_templates_path
+
+        assert_select "[data-email-control='#{name}']" do
+          assert_select 'span', text: 'Configuration error'
+          assert_select 'form', count: 0
+          assert_select 'button', count: 0
+        end
+
+        assert_no_difference ['FeatureFlag.count', 'Event.count'] do
+          patch admin_email_delivery_control_path, headers: default_headers,
+                                                   params: { control: name, enabled: true, operation_id: SecureRandom.uuid }
+        end
+
+        assert_redirected_to admin_email_templates_path(anchor: 'email-delivery')
+        assert_match 'could not be changed', flash[:alert]
+        assert_not FeatureFlag.exists?(name: name)
+      end
+    end
   end
 end
