@@ -15,16 +15,16 @@ module Admin
       sign_in(@admin)
       visit admin_email_templates_path
 
-      assert_text 'Email delivery'
+      assert_text 'Outgoing communications'
       assert_selector '#email-delivery [data-email-control]', count: EmailDelivery::CONTROL_NAMES.size
       take_screenshot('email-controls-index', html: true)
 
       within('[data-email-control="email.category.proof"]') do
-        accept_confirm(/Email waiting to be sent will be canceled/) { click_button 'Turn off' }
+        accept_confirm(/unreleased letters will be canceled permanently/) { click_button 'Turn off' }
       end
-      assert_text 'Proof is now off. Email that was waiting to be sent has been canceled.'
+      assert_text 'Proof is now off. Matching messages and unreleased letters have been canceled.'
       within('#templates-proof-heading + ul') do
-        assert_text 'Email suppressed: proof emails are turned off'
+        assert_text 'Blocked: proof communications are turned off'
       end
       take_screenshot('email-controls-category-off', html: true)
 
@@ -38,26 +38,26 @@ module Admin
 
       voucher_en = EmailTemplate.find_by!(name: 'voucher_notifications_voucher_assigned', locale: 'en')
       visit new_test_email_admin_email_template_path(voucher_en)
-      assert_selector '#test-send-controls-note', text: 'Test emails follow the all-email, category, and template settings.'
+      assert_selector '#test-send-controls-note', text: 'Test emails follow All, Email, category and template settings.'
       fill_in 'Recipient Email Address', with: 'tester@example.com'
       click_button 'Send Test Email'
       assert_text 'Test email not sent: this template is turned off.'
       take_screenshot('email-controls-test-send-suppressed', html: true)
 
       visit admin_email_templates_path
-      within('[data-email-control="email.global"]') do
-        accept_confirm(/including password recovery|Email waiting to be sent/) { click_button 'Turn off' }
+      within('[data-email-control="communications.global"]') do
+        accept_confirm(/unreleased letters will be canceled/) { click_button 'Turn off' }
       end
-      assert_text 'All email is now off.'
+      assert_text 'All outgoing communications is now off.'
       within('[data-email-control="email.category.voucher"]') do
         assert_text 'On'
-        assert_text 'Email suppressed: all email is turned off'
+        assert_text 'Blocked: all outgoing communications are turned off'
       end
       take_screenshot('email-controls-master-off', html: true)
 
       page.current_window.resize_to(390, 844)
       visit admin_email_templates_path
-      assert_text 'Email delivery'
+      assert_text 'Outgoing communications'
       take_screenshot('email-controls-phone-width', html: true)
     ensure
       page.current_window.resize_to(1200, 800)
@@ -70,10 +70,43 @@ module Admin
       sign_in(@admin)
       visit notifications_path
 
-      assert_text 'suppressed'
-      assert_text 'Not sent: email was turned off in the email settings.'
-      assert_no_button 'Check Status'
+      assert_text I18n.t('notification_delivery.statuses.suppressed', locale: :en)
+      assert_text I18n.t('notification_delivery.suppressed', locale: :en)
+      assert_no_button I18n.t('notification_delivery.check_status', locale: :en)
       take_screenshot('notification-suppressed-status', html: true)
+
+      @admin.update!(locale: :es)
+      visit notifications_path
+      assert_text I18n.t('notification_delivery.statuses.suppressed', locale: :es)
+      assert_text I18n.t('notification_delivery.suppressed', locale: :es)
+      assert_no_selector '.translation_missing'
+      assert_no_text 'Translation missing'
+      take_screenshot('notification-suppressed-status-es', html: true)
+    end
+
+    test 'a failed bulk change keeps settings and allows a fresh retry' do
+      template = EmailTemplate.find_by!(name: 'voucher_notifications_voucher_assigned', locale: :en)
+      before_state = EmailTemplate.order(:id).pluck(:id, :enabled, :delivery_generation)
+      callback = ->(row) { raise ActiveRecord::RecordInvalid, row if row.id == template.id }
+      EmailTemplate.set_callback(:update, :after, callback)
+      sign_in(@admin)
+      visit admin_email_templates_path
+
+      accept_confirm { click_button 'Turn off all templates' }
+
+      assert_text I18n.t('admin.email_delivery.bulk_failed', locale: :en)
+      assert_equal before_state, EmailTemplate.order(:id).pluck(:id, :enabled, :delivery_generation)
+      take_screenshot('email-controls-bulk-failure', html: true)
+      EmailTemplate.skip_callback(:update, :after, callback)
+      callback = nil
+
+      accept_confirm { click_button 'Turn off all templates' }
+
+      assert_text 'templates changed (each covers EN and ES).'
+      assert EmailTemplate.deliverable.none?(&:enabled)
+      take_screenshot('email-controls-bulk-retried', html: true)
+    ensure
+      EmailTemplate.skip_callback(:update, :after, callback) if callback
     end
 
     test 'a DocuSeal request while email is off explains on the page why nothing was sent' do
@@ -88,7 +121,7 @@ module Admin
       accept_confirm { click_button('Send DocuSeal Request (Default)') }
 
       assert_text 'Signing request not sent'
-      assert_text 'Print the form instead'
+      assert_text 'Blank forms remain available'
       assert_nil application.reload.document_signing_requested_at
       take_screenshot('docuseal-request-suppressed', html: true)
     end
@@ -99,7 +132,7 @@ module Admin
       visit admin_email_templates_path
 
       within('[data-email-control="email.category.proof"]') do
-        accept_confirm(/email canceled earlier stays canceled/) { click_button 'Turn on' }
+        accept_confirm(/canceled messages and letters stay canceled/) { click_button 'Turn on' }
       end
 
       assert_text 'Proof is now on.'
@@ -139,7 +172,7 @@ module Admin
           accept_confirm { click_button 'Turn off' }
         end
 
-        assert_text 'Email settings could not be changed because the configuration is missing or invalid.'
+        assert_text 'Communication settings could not be changed because the configuration is missing or invalid.'
         within("[data-email-control='#{name}']") do
           assert_text 'Configuration error'
           assert_text 'Contact a system administrator'

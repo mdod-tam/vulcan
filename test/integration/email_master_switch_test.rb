@@ -49,11 +49,12 @@ class EmailMasterSwitchTest < ActionDispatch::IntegrationTest
 
     job = enqueued_jobs.find { |queued| queued['job_class'] == 'EmailDelivery::MailDeliveryJob' }
     context = job['email_delivery_context']
-    controls = [EmailDelivery::GLOBAL_CONTROL, EmailDelivery.category_control('account_security')].map do |name|
+    controls = [EmailDelivery::ALL_CONTROL, EmailDelivery.category_control('account_security')].map do |name|
       FeatureFlag.find_by!(name: name)
     end
     assert_equal(controls.map { |control| { 'control' => control.name, 'id' => control.id, 'generation' => control.delivery_generation } },
                  context['scopes'])
+    assert_equal EmailDelivery::GLOBAL_CONTROL, context.dig('channels', 'email', 'control')
     templates = EmailTemplate.where(name: 'user_mailer_password_reset', format: :text).order(:id)
     assert_equal(templates.map { |row| { 'name' => row.name, 'locale' => row.locale, 'id' => row.id, 'generation' => row.delivery_generation } },
                  context['templates'])
@@ -73,7 +74,6 @@ class EmailMasterSwitchTest < ActionDispatch::IntegrationTest
     load_seeded_email_templates('evaluator_mailer_evaluation_submission_confirmation')
     evaluation = create(:evaluation)
     evaluation.constituent.update!(communication_preference: 'letter')
-    EvaluatorMailer.queued_letters.clear
     set_email(false, 'op-1')
     Letters::TextTemplateToPdfService.any_instance.expects(:queue_for_printing).once
 

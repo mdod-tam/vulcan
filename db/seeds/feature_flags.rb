@@ -12,7 +12,9 @@ def seed_feature_flags
   feature_flags = {
     'vouchers_enabled' => false,
     'email.global' => true
-  }.merge(EmailDelivery::Catalog::CATEGORIES.to_h { |category| ["email.category.#{category}", true] })
+  }.merge(EmailDelivery::CONTROL_NAMES.index_with(true))
+  existing_email = FeatureFlag.find_by(name: EmailDelivery::GLOBAL_CONTROL)
+  feature_flags[EmailDelivery::ALL_CONTROL] = existing_email.enabled if existing_email
 
   feature_flags.each do |name, enabled|
     FeatureFlag.find_or_create_by!(name: name) do |flag|

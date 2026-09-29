@@ -37,8 +37,22 @@ module Admin
     end
 
     def email_bulk_button_class(turning_on)
-      colors = turning_on ? 'bg-green-700 hover:bg-green-800 focus-visible:outline-green-700' : 'bg-red-700 hover:bg-red-800 focus-visible:outline-red-700'
-      "px-4 py-2 text-white rounded-md text-sm font-medium focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 #{colors}"
+      base = 'px-4 py-2 text-white rounded-md text-sm font-medium focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2'
+      "#{base} #{email_button_colors(turning_on)}"
+    end
+
+    def email_control_flash(result, label:)
+      enabled = Array(result.control).all?(&:enabled)
+      state = email_delivery_t(enabled ? 'state_on' : 'state_off').downcase
+      case result.status
+      when :changed
+        message = email_delivery_t('changed', label: label, state: state)
+        message += " #{email_delivery_t('canceled_pending')}" unless enabled
+        { notice: message }
+      when :unchanged then { notice: email_delivery_t('unchanged', label: label, state: state) }
+      when :stale then { alert: email_delivery_t('stale', label: label) }
+      else { notice: email_delivery_t('already_applied') }
+      end
     end
 
     def email_template_link_class
@@ -70,8 +84,11 @@ module Admin
 
     def email_control_button_class(target)
       base = 'px-3 py-1.5 rounded-md text-sm font-medium focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2'
-      colors = target ? 'bg-green-700 hover:bg-green-800 focus-visible:outline-green-700' : 'bg-red-700 hover:bg-red-800 focus-visible:outline-red-700'
-      "#{base} text-white #{colors}"
+      "#{base} text-white #{email_button_colors(target)}"
+    end
+
+    def email_button_colors(turning_on)
+      turning_on ? 'bg-green-700 hover:bg-green-800 focus-visible:outline-green-700' : 'bg-red-700 hover:bg-red-800 focus-visible:outline-red-700'
     end
   end
 end

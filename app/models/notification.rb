@@ -57,13 +57,23 @@ class Notification < ApplicationRecord
     metadata.fetch('delivery_error', {}).fetch('message', 'Unknown error')
   end
 
+  def record_delivery_handoff!(channel:, state: :submitted)
+    with_lock do
+      next if local_delivery_outcome?
+
+      update!(delivery_status: state,
+              metadata: metadata.to_h.merge('actual_delivery_channel' => channel.to_s,
+                                            'delivery_route_reason' => channel.to_s == 'letter' ? 'queued_for_printing' : 'provider_submission'))
+    end
+  end
+
   # Records that this notification's email was intentionally not sent.
-  def mark_delivery_suppressed!(reason)
-    mark_delivery_not_sent!(EmailDelivery::Decision.suppressed(reason))
+  def mark_delivery_suppressed!(reason, channel: :email)
+    mark_delivery_not_sent!(EmailDelivery::Decision.suppressed(reason), channel: channel)
   end
 
   # Both policy outcomes use the same locked write as routing, preserving unrelated metadata.
-  def mark_delivery_not_sent!(decision)
+  def mark_delivery_not_sent!(decision, channel: :email)
     raise ArgumentError, 'Expected a delivery refusal' if decision.allowed?
 
     details = { 'reason' => decision.reason }
@@ -71,11 +81,11 @@ class Notification < ApplicationRecord
       details['message'] = EmailDelivery::ConfigurationError::MESSAGE
       key = 'delivery_error'
       status = :error
-      route = 'email_configuration_error'
+      route = "#{channel}_configuration_error"
     else
       key = 'delivery_suppressed'
       status = :suppressed
-      route = 'email_suppressed'
+      route = "#{channel}_suppressed"
     end
 
     with_lock do

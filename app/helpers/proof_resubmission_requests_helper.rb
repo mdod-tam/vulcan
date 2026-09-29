@@ -8,11 +8,11 @@ module ProofResubmissionRequestsHelper
     return false unless application.proof_requestable_via_secure_form?(proof_type)
 
     forms = secure_request_forms || proof_secure_request_forms(application, proof_type)
-    !(forms.any?(&:active?) && proof_recovery_recipient_ids(forms).empty?)
+    !(forms.any? { |form| proof_request_delivery_active?(form) } && proof_recovery_recipient_ids(forms).empty?)
   end
 
   def secure_proof_recipient_options(options, forms)
-    return options unless forms.any?(&:active?)
+    return options unless forms.any? { |form| proof_request_delivery_active?(form) }
 
     recovery_ids = proof_recovery_recipient_ids(forms)
     options.select { |option| recovery_ids.include?(option[:recipient].id) }
@@ -20,8 +20,16 @@ module ProofResubmissionRequestsHelper
 
   def proof_recovery_recipient_ids(forms)
     latest_by_recipient = forms.group_by(&:recipient_id).values.map { |requests| requests.max_by { |form| [form.sent_at, form.id] } }
-    revoked_ids = latest_by_recipient.select(&:revoked?).map(&:recipient_id)
-    revoked_ids - forms.select(&:active?).map(&:recipient_id)
+    revoked_ids = latest_by_recipient.select { |form| form.revoked? || (form.active? && !proof_request_delivery_active?(form)) }.map(&:recipient_id)
+    revoked_ids - forms.select { |form| proof_request_delivery_active?(form) }.map(&:recipient_id)
+  end
+
+  def proof_request_delivery_active?(form)
+    return false unless form.active?
+    return true unless form.recipient_channel == 'letter'
+
+    item = form.print_queue_items.order(:id).last
+    item.nil? || item.released_at.present? || item.delivery_decision.allowed?
   end
 
   def secure_proof_resubmission_button_text(proof_type)

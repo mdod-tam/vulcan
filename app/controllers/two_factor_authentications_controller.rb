@@ -195,6 +195,9 @@ class TwoFactorAuthenticationsController < ApplicationController
       redirect_to verify_method_two_factor_authentication_path(type: 'sms'),
                   notice: t('two_factor_verification.sms.sent'),
                   status: :see_other
+    when :suppressed, :configuration_error
+      redirect_to verify_two_factor_authentication_path,
+                  alert: t("outbound_delivery.sms_#{sms_challenge_result}"), status: :see_other
     when :sending
       redirect_to verify_method_two_factor_authentication_path(type: 'sms'),
                   notice: t('two_factor_verification.sms.sending'),
@@ -220,7 +223,7 @@ class TwoFactorAuthenticationsController < ApplicationController
     elsif sms_challenge_result == :sent
       render_resend_success(credential)
     else
-      render_resend_failure(credential)
+      render_resend_failure(credential, sms_challenge_result)
     end
   end
 
@@ -500,8 +503,12 @@ class TwoFactorAuthenticationsController < ApplicationController
     end
   end
 
-  def render_resend_failure(credential)
-    message = t('two_factor_verification.sms.send_failed')
+  def render_resend_failure(credential, outcome = nil)
+    message = if %i[suppressed configuration_error].include?(outcome)
+                t("outbound_delivery.sms_#{outcome}")
+              else
+                t('two_factor_verification.sms.send_failed')
+              end
     respond_to do |format|
       format.html { redirect_to resend_sms_redirect_path(credential), alert: message }
       format.turbo_stream do

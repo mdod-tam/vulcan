@@ -48,13 +48,13 @@ module Evaluations
       assert_equal 'completed', @evaluation.reload.status
     end
 
-    test 'email configuration refusal in the worker keeps the completed evaluation' do
+    test 'email configuration refusal at enqueue keeps the completed evaluation' do
       ensure_system_audit_actor!
       FeatureFlag.find_by!(name: EmailDelivery.category_control('evaluation')).destroy!
 
       result = SubmissionService.new(@evaluation, submission_params, actor: @evaluator).call
       assert result.success?
-      assert_equal :queued, result.data[:notification]
+      assert_equal :configuration_error, result.data[:notification]
       perform_enqueued_jobs
 
       assert_equal 'completed', @evaluation.reload.status

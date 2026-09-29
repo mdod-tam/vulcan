@@ -116,11 +116,16 @@ class EvaluatorMailerTest < ActionMailer::TestCase
 
   test 'a repeated submission confirmation for a letter recipient stays on the letter route' do
     @constituent.update!(communication_preference: 'letter')
-    EvaluatorMailer.queued_letters.clear
-    Letters::TextTemplateToPdfService.any_instance.expects(:queue_for_printing).once
+    EmailTemplate.unstub(:find_by!)
+    EmailTemplate.where(name: 'evaluator_mailer_evaluation_submission_confirmation', format: :text).first_or_create!(
+      locale: 'en', subject: 'Evaluation submitted', body: 'Your evaluation is complete.',
+      description: 'Evaluation confirmation', variables: { required: [], optional: [] }, version: 1
+    )
 
     assert_no_emails do
-      2.times { EvaluatorMailer.with(evaluation: @evaluation).evaluation_submission_confirmation.deliver_now }
+      assert_difference 'PrintQueueItem.count', 1 do
+        2.times { EvaluatorMailer.with(evaluation: @evaluation).evaluation_submission_confirmation.deliver_now }
+      end
     end
   end
 end

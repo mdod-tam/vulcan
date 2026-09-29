@@ -452,6 +452,7 @@ class ApplicationLifecycleFlowTest < ActiveSupport::TestCase
   def with_after_commit_callbacks
     DatabaseCleaner.strategy = :truncation
     DatabaseCleaner.clean
+    EmailDelivery::CONTROL_NAMES.each { |name| FeatureFlag.create!(name: name, enabled: true) }
     clear_enqueued_jobs
     clear_performed_jobs
     Current.reset

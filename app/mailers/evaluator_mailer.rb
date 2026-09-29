@@ -44,27 +44,7 @@ class EvaluatorMailer < ApplicationMailer
     raise
   end
 
-  # Class method to manage queued letters using class instance variable
-  def self.queued_letters
-    @queued_letters ||= Set.new
-  end
-
   private
-
-  # Check if a letter has already been queued for this evaluation and letter type
-  def letter_already_queued?(evaluation, letter_type)
-    # Use a class instance variable to track queued letters across instances
-    key = "#{evaluation.id}_#{letter_type}"
-
-    if self.class.queued_letters.include?(key)
-      true
-    else
-      self.class.queued_letters.add(key)
-      # Clean up old entries periodically to prevent memory leaks
-      self.class.queued_letters.clear if self.class.queued_letters.size > 1000
-      false
-    end
-  end
 
   # Load email template with error handling
   def load_email_template(template_name, locale: nil)
@@ -208,13 +188,13 @@ class EvaluatorMailer < ApplicationMailer
   def queue_letter_if_needed(evaluation, template_name, variables)
     constituent = evaluation.constituent
     return false unless prefers_letter_delivery?(constituent)
-    return true if letter_already_queued?(evaluation, 'evaluation_submission_confirmation')
 
     queue_letter_delivery(
       recipient: constituent,
       template_name: template_name,
       variables: variables,
       letter_type: :evaluation_submitted,
+      delivery_key: params[:delivery_request_id] || "evaluation-confirmation:#{evaluation.id}:#{evaluation.evaluation_date&.iso8601}",
       application: evaluation.application
     )
     true

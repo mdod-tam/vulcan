@@ -79,6 +79,23 @@ class VoucherNotificationsMailerTest < ActionMailer::TestCase
     assert_includes email.body.to_s, "Text Assigned for voucher #{@voucher.code}"
   end
 
+  %w[voucher_assigned voucher_expiring_soon voucher_expired voucher_redeemed].each do |action|
+    test "#{action} renders Spanish dates with a real template" do
+      @user.update!(locale: :es)
+      name = "voucher_notifications_#{action}"
+      template = EmailTemplate.find_by(name: name, locale: :es) || create(:email_template, :text, name: name, locale: :es)
+      template.update!(syntax: :legacy_percent, subject: 'Fechas del vale', body: '%<expiration_date_formatted>s',
+                       variables: { required: ['expiration_date_formatted'], optional: [] })
+      EmailTemplate.stubs(:find_by!).with(name: name, format: :text, locale: 'es').returns(template)
+
+      email = VoucherNotificationsMailer.with(voucher: @voucher, transaction: @transaction).public_send(action).deliver_now
+
+      assert_equal [@user.email], email.to
+      assert_includes email.body.decoded, I18n.l(@voucher.expiration_date.to_date, format: :long, locale: :es)
+      assert_not_includes email.body.decoded, I18n.l(@voucher.expiration_date.to_date, format: :long, locale: :en)
+    end
+  end
+
   test 'voucher_expiring_soon' do
     # Override the generic stub from setup with a more specific one for this test
     rendered_variables = nil

@@ -1,0 +1,11 @@
+en:
+  outbound_delivery:
+    sms_suppressed: "Text messages are currently turned off. Use another available verification method or contact program staff."
+    delivery_suppressed: "The message was not sent because this delivery method is turned off in the communication settings."
+    sms_configuration_error: "Text messages are temporarily unavailable. Use another available verification method or contact program staff."
+    letter_queued: "Letter awaiting release"
+    letter_released: "Letter released for printing"
+    letter_printed: "Letter marked printed"
+    letter_canceled: "Letter canceled before release"
+    partial_suppression: "Eligible recipients were processed. Some messages were not sent because their delivery settings are off."
+    letter_configuration_error: "Letter blocked: communication settings are unavailable"

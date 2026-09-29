@@ -68,16 +68,25 @@
                           data: { turbo: false } do |form| %>
               <div class="mb-4">
                 <label for="phone_number" class="block text-sm font-medium text-gray-700 mb-1">Phone Number</label>
-                <%= form.telephone_field :phone_number, id: "phone_number", class: "shadow-sm focus:ring-indigo-500 focus:border-indigo-500 block w-full sm:text-sm border-gray-400 rounded-md py-3", placeholder: "(555) 555-5555", required: true, autocomplete: "tel", aria: { describedby: "phone_number_help" } %>
+                <%= form.telephone_field :phone_number,
+                                         id: 'phone_number', value: params[:phone_number],
+                                         class: 'shadow-sm focus:ring-indigo-500 focus:border-indigo-500 block w-full sm:text-sm border-gray-400 rounded-md py-3',
+                                         placeholder: '(555) 555-5555', required: true, autocomplete: 'tel', aria: { describedby: 'phone_number_help' } %>
                 <p id="phone_number_help" class="mt-1 text-sm text-gray-500">Enter your mobile phone number to receive verification codes.</p>
               </div>
 
               <div class="flex items-center justify-between">
-                <%= link_to setup_two_factor_authentication_path, class: "text-indigo-600 hover:text-indigo-900 text-sm font-medium", aria: { label: "Back to authentication options" } do %>
+                <%= link_to setup_two_factor_authentication_path, class: 'text-indigo-600 hover:text-indigo-900 text-sm font-medium',
+                                                                  aria: { label: 'Back to authentication options' } do %>
                   &larr; Back to options
                 <% end %>
 
-                <%= form.submit "Continue", class: "inline-flex justify-center py-2 px-4 border border-transparent shadow-sm text-sm font-medium rounded-md text-white bg-indigo-600 hover:bg-indigo-700 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-indigo-500" %>
+                <%= form.submit 'Continue',
+                                class: [
+                                  'inline-flex justify-center py-2 px-4 border border-transparent shadow-sm text-sm font-medium rounded-md',
+                                  'text-white bg-indigo-600 hover:bg-indigo-700 focus:outline-none focus:ring-2 focus:ring-offset-2',
+                                  'focus:ring-indigo-500'
+                                ] %>
               </div>
             <% end %>
           </section>

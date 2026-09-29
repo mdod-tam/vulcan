@@ -6,14 +6,14 @@ module EmailDelivery
   # removes them with an audit record each; nothing about them is replayed.
   module LegacyMailJobs
     FRAMEWORK_MAIL_JOB = 'ActionMailer::MailDeliveryJob'
-    CONTEXT_JOBS = %w[MedicalCertificationEmailJob].freeze
+    CONTEXT_JOBS = %w[MedicalCertificationEmailJob EmailDelivery::MailDeliveryJob].freeze
     AUDIT_ACTION = 'email_delivery_legacy_job_removed'
 
     module_function
 
     def pending
       SolidQueue::Job.where(finished_at: nil, class_name: [FRAMEWORK_MAIL_JOB, *CONTEXT_JOBS]).select do |job|
-        job.class_name == FRAMEWORK_MAIL_JOB || job.arguments.to_h['email_delivery_context'].blank?
+        job.class_name == FRAMEWORK_MAIL_JOB || job.arguments.to_h.dig('email_delivery_context', 'version') != Policy::CONTEXT_VERSION
       end
     end
 

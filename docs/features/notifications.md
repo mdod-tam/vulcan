@@ -13,7 +13,7 @@ Rails flash messages give immediate request feedback.
 3. The mailer builds the message and resolves its destination. Preference-sensitive messages can become letters in the print queue.
 4. Routing metadata records the actual channel and reason. A queued message is not proof that the recipient received it.
 
-The requested channel is `:email` or `:letter`, and what happened instead is recorded in `actual_delivery_channel` and `delivery_route_reason` — the requested channel alone will not explain a message that became a letter. SMS never comes from here; specific workflows send it through `SmsService`.
+The requested channel is `:email`, `:letter`, or record-only `:sms`, and what happened instead is recorded in `actual_delivery_channel` and `delivery_route_reason` — the requested channel alone will not explain a message that became a letter. SMS never comes from here; specific workflows send it through `SmsService`.
 
 ## Which workflow owns delivery?
 
@@ -23,7 +23,7 @@ The requested channel is `:email` or `:letter`, and what happened instead is rec
 | Proof approval | `ProofReview` records the audit event and a notification without sending a message. |
 | Proof rejection | [RequestProofResubmission](../../app/services/applications/request_proof_resubmission.rb) issues the secure upload request. A failed delivery leaves the review saved and lets staff see a warning. A link that cannot be issued records `proof_resubmission_request_failed`. |
 | Request for provider details | [RequestProviderInfo](../../app/services/applications/request_provider_info.rb) owns the secure request and delivery. |
-| Disability certification | [MedicalCertificationService](../../app/services/applications/medical_certification_service.rb) and [MedicalCertificationReviewer](../../app/services/applications/medical_certification_reviewer.rb) own provider requests and follow-up. Provider delivery can include fax; DocuSeal signing has separate tracking. |
+| Disability certification | [MedicalCertificationService](../../app/services/applications/medical_certification_service.rb) and [MedicalCertificationReviewer](../../app/services/applications/medical_certification_reviewer.rb) own provider requests and follow-up. Fax delivery is unavailable with the installed client; historical callbacks remain handled. DocuSeal signing has separate tracking. |
 | Security-key recovery approval | Always email, including for users who prefer letters. |
 | Account-access SMS | [PasswordsController](../../app/controllers/passwords_controller.rb) sends through `SmsService` and records the outcome in audit events. |
 
@@ -49,7 +49,7 @@ Automatic proof-rejection delivery does not select SMS. Staff can select it from
 
 [UpdateEmailStatusJob](../../app/jobs/update_email_status_job.rb) polls Postmark only for `medical_certification_requested` notifications with a message ID. The bounce/complaint webhook is broken and not targeted by production Postmark; see the [email guide](../infrastructure/email_system.md) for its status and the delivery-status values. Do not assume every email has delivery or open tracking.
 
-Email policy refusals use one locked notification writer. Intentional suppression stores `suppressed`; missing or unreadable settings store `error` with `delivery_error.message`. Both record actual channel `none`. The enqueue adapter preserves that distinction, and routing or audit-error updates merge fresh metadata under a row lock so they cannot erase a worker's refusal. Public account-recovery responses do not expose these internal outcomes.
+Shared communication policy refusals use one locked notification writer. All dominates the independent Email, Printed letters and SMS switches; category settings apply across channels. Letter admission and authenticated POST release use the same captured policy. Intentional suppression stores `suppressed`; missing or unreadable settings store `error` with `delivery_error.message`. Both record actual channel `none`. The enqueue adapter preserves that distinction, and routing or audit-error updates merge fresh metadata under a row lock so they cannot erase a worker's refusal. Public account-recovery responses do not expose these internal outcomes.
 
 Notification auditing is opt-in through `audit: true`. Normally, leave the domain event with its workflow owner so a single action does not generate duplicate audit history.
 

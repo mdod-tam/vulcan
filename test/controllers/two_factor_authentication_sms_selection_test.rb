@@ -26,6 +26,19 @@ class TwoFactorAuthenticationSmsSelectionTest < ActionDispatch::IntegrationTest
     Rails.cache = @original_cache_store if @original_cache_store
   end
 
+  test 'All off refuses a new SMS challenge while keeping authenticator verification available' do
+    admin = create(:admin)
+    EmailDelivery::ControlWriter.set(name: EmailDelivery::ALL_CONTROL, enabled: false, actor: admin, operation_id: SecureRandom.uuid)
+    TwilioVerifyService.expects(:client).never
+    start_password_step
+    post select_sms_verification_two_factor_authentication_path
+    assert_redirected_to verify_two_factor_authentication_path
+    assert_equal I18n.t('outbound_delivery.sms_suppressed'), flash[:alert]
+    assert_nil Rails.cache.read(TwoFactor::SmsLoginChallenge.cache_key(@user.sms_credentials.first.id))
+    get verify_method_two_factor_authentication_path(type: 'totp')
+    assert_response :success
+  end
+
   test 'viewing authenticator app verification does not send SMS code' do
     TwilioVerifyService.expects(:send_verification).never
 

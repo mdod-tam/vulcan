@@ -1,7 +1,7 @@
 # frozen_string_literal: true
 
 module Admin
-  # The master and category email controls. Every change goes through EmailDelivery::ControlWriter.
+  # All, channel and category controls use EmailDelivery::ControlWriter.
   class EmailDeliveryControlsController < BaseController
     def update
       name = params.require(:control).to_s
@@ -16,7 +16,7 @@ module Admin
         expected_enabled: params.key?(:expected_enabled) ? boolean_param(:expected_enabled) : nil,
         expected_version: params[:expected_version].presence
       )
-      redirect_back_to_controls(**flash_for(result, control_label(name)))
+      redirect_back_to_controls(**helpers.email_control_flash(result, label: control_label(name)))
     rescue EmailDelivery::ConfigurationError
       redirect_back_to_controls(alert: t('admin.email_delivery.configuration_error', locale: :en))
     end
@@ -28,22 +28,11 @@ module Admin
     end
 
     def control_label(name)
-      return t('admin.email_delivery.global_label', locale: :en) if name == EmailDelivery::GLOBAL_CONTROL
+      return t('admin.email_delivery.global_label', locale: :en) if name == EmailDelivery::ALL_CONTROL
+      return EmailDelivery::ControlPanel.channel_label(EmailDelivery::CHANNEL_CONTROLS.key(name)) if
+        EmailDelivery::CHANNEL_CONTROLS.value?(name)
 
       EmailDelivery::ControlPanel.category_label(name.delete_prefix(EmailDelivery::CATEGORY_PREFIX))
-    end
-
-    def flash_for(result, label)
-      state = t(result.control.enabled ? 'admin.email_delivery.state_on' : 'admin.email_delivery.state_off', locale: :en).downcase
-      case result.status
-      when :changed
-        message = t('admin.email_delivery.changed', label: label, state: state, locale: :en)
-        message += " #{t('admin.email_delivery.canceled_pending', locale: :en)}" unless result.control.enabled
-        { notice: message }
-      when :unchanged then { notice: t('admin.email_delivery.unchanged', label: label, state: state, locale: :en) }
-      when :stale then { alert: t('admin.email_delivery.stale', label: label, locale: :en) }
-      else { notice: t('admin.email_delivery.already_applied', locale: :en) }
-      end
     end
 
     def redirect_back_to_controls(**flash)

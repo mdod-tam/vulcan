@@ -4,22 +4,22 @@
 class MedicalProviderNotifier
   include SecureErrorSanitizer
 
-  class NotificationError < StandardError; end
-
   REJECTION_ACTION = 'medical_certification_rejected'
   FAX_METHOD = 'fax'
   EMAIL_METHOD = 'email'
+  EMAIL_ACTION = 'MedicalProviderMailer#certification_rejected'
+  FAX_ACTION = 'FaxService#certification_rejected'
+  FAX_FAILURES = %w[failed no-answer busy canceled].freeze
+  FAX_TERMINAL = (FAX_FAILURES + %w[delivered]).freeze
 
-  attr_reader :application, :proof_review
+  attr_reader :application
 
-  def initialize(application, proof_review = nil)
+  def initialize(application)
     @application = application
-    @proof_review = proof_review
-    @fax_service = FaxService.new
   end
 
   # Notify the medical provider about a rejected certification.
-  # Uses email/fax fallback only; DocuSeal is a separate explicit admin action.
+  # Fax is unavailable with the installed provider client. DocuSeal remains an explicit admin action.
   # @param rejection_reason [String] The reason for rejection
   # @param admin [User] The admin who rejected the certification
   # @param notification_id [Integer, nil] Existing rejection notification id to enrich with delivery metadata
@@ -28,69 +28,90 @@ class MedicalProviderNotifier
   def send_certification_rejection_notice(rejection_reason:, admin:, notification_id: nil, secure_upload_url: nil)
     Rails.logger.info "Notifying medical provider about certification rejection for Application ID: #{application.id}"
 
-    delivery_result = attempt_notification_delivery(rejection_reason, admin, secure_upload_url: secure_upload_url)
+    @delivery_contexts = { 'email' => EmailDelivery::Policy.capture(mail_action: EMAIL_ACTION, params: { notification_id: notification_id }) }
+    delivery_result = if email_available?
+                        notify_by_email(rejection_reason, admin, secure_upload_url: secure_upload_url)
+                      else
+                        failure_result(method: FAX_METHOD, error: FaxService::UNAVAILABLE_MESSAGE)
+                      end
 
     handle_delivery_result(delivery_result, notification_id: notification_id)
   end
 
+  def receive_fax_status(notification, fax_sid:, status:)
+    return unless (%w[queued processing sending received] + FAX_TERMINAL).include?(status)
+
+    context = nil
+    blob_id = nil
+    notification.with_lock do
+      metadata = notification.metadata || {}
+      return unless metadata['fax_sid'] == fax_sid
+      return if FAX_TERMINAL.include?(metadata['fax_status_details'])
+
+      metadata['fax_status_details'] = status
+      metadata['fax_status'] = FAX_FAILURES.include?(status) ? 'failed' : status
+      metadata['fax_status_updated_at'] = Time.current.iso8601
+      context = claim_callback_fallback(metadata, notification, fax_sid) if FAX_FAILURES.include?(status)
+      blob_id = metadata['blob_id'] if FAX_TERMINAL.include?(status)
+      notification.update!(fax_status_attributes(metadata, status))
+    end
+    # Do not hold the notification row across queue/provider I/O. A crash after the claim leaves
+    # an observable claimed attempt for staff; duplicate callbacks cannot silently replay it.
+    queue_callback_fallback(notification, context) if context
+    ActiveStorage::Blob.find_by(id: blob_id)&.purge_later if blob_id
+  end
+
+  def fax_status_attributes(metadata, status)
+    attributes = { metadata: metadata }
+    attributes[:delivery_status] = status == 'delivered' ? :delivered : :error if FAX_TERMINAL.include?(status)
+    attributes
+  end
+  private :fax_status_attributes
+
+  # Called only while the matching notification is locked.
+  def claim_callback_fallback(metadata, notification, fax_sid)
+    return unless email_available? && metadata['email_fallback'].blank?
+
+    original = metadata.dig('provider_delivery_contexts', 'email')
+    unless original
+      metadata['email_fallback'] = { 'status' => 'suppressed', 'reason' => 'legacy_context_missing' }
+      return
+    end
+    context = original.except('notification_id').merge('provider_notification_id' => notification.id,
+                                                       'fax_sid' => fax_sid, 'request_id' => "fax-fallback:#{fax_sid}")
+    metadata['email_fallback'] = { 'status' => 'claimed', 'request_id' => context['request_id'], 'claimed_at' => Time.current.iso8601 }
+    context
+  end
+  private :claim_callback_fallback
+
+  def self.record_fallback_outcome(context, status:, reason: nil)
+    notification = Notification.find_by(id: context&.dig('provider_notification_id'))
+    return unless notification
+
+    notification.with_lock do
+      metadata = notification.metadata || {}
+      next unless metadata['fax_sid'] == context['fax_sid']
+
+      fallback = metadata['email_fallback']
+      next unless fallback && fallback['request_id'] == context['request_id']
+      next if %w[suppressed configuration_error enqueue_failed submitted].include?(fallback['status'])
+
+      fallback.merge!('status' => status.to_s, 'reason' => reason, 'updated_at' => Time.current.iso8601)
+      notification.update!(metadata: metadata)
+    end
+  end
+
+  def queue_callback_fallback(notification, context)
+    reason = notification.metadata['rejection_reason'] || application.medical_certification_rejection_reason
+    mail = MedicalProviderMailer.with(application: application, admin: notification.actor, rejection_reason: reason).certification_rejected
+    outcome = EmailDelivery.deliver_later(mail, context: context)
+    self.class.record_fallback_outcome(context, status: outcome)
+  rescue StandardError => e
+    self.class.record_fallback_outcome(context, status: :enqueue_failed, reason: e.class.name)
+    EmailDelivery::Outcome.record_enqueue_failure(e, context: context, mail_action: EMAIL_ACTION)
+  end
+
   private
-
-  # Attempt to deliver notification via available channels
-  def attempt_notification_delivery(rejection_reason, admin, secure_upload_url: nil)
-    methods = prioritized_delivery_methods(admin)
-    return failure_result(error: 'No contact method available for medical provider') if methods.empty?
-
-    last_failure = nil
-
-    methods.each_with_index do |method, index|
-      result = deliver_via_method(method, rejection_reason, admin, secure_upload_url: secure_upload_url)
-      if result[:success]
-        result[:fallback_from] = methods[index - 1] if index.positive?
-        return result
-      end
-
-      last_failure = result
-    end
-
-    last_failure || failure_result(error: 'All provider delivery methods failed')
-  end
-
-  def prioritized_delivery_methods(_admin)
-    methods = [preferred_delivery_method, EMAIL_METHOD, FAX_METHOD].uniq
-    methods.select { |method| delivery_method_available?(method) }
-  end
-
-  def preferred_delivery_method
-    return EMAIL_METHOD if email_available?
-
-    FAX_METHOD
-  end
-
-  def delivery_method_available?(method)
-    case method
-    when EMAIL_METHOD
-      email_available?
-    when FAX_METHOD
-      fax_available?
-    else
-      false
-    end
-  end
-
-  def deliver_via_method(method, rejection_reason, admin, secure_upload_url: nil)
-    case method
-    when EMAIL_METHOD
-      notify_by_email(rejection_reason, admin, secure_upload_url: secure_upload_url)
-    when FAX_METHOD
-      notify_by_fax(rejection_reason)
-    else
-      failure_result(method: method, error: 'Unsupported delivery method')
-    end
-  end
-
-  def fax_available?
-    application.medical_provider_fax.present?
-  end
 
   def email_available?
     application.medical_provider_email.present?
@@ -111,39 +132,26 @@ class MedicalProviderNotifier
 
     return unless notification
 
-    updated_metadata = (notification.metadata || {}).merge(
-      'notification_methods' => notification_methods,
-      'provider_notification_attempted_at' => Time.current.iso8601
-    )
-
-    if delivery_result[:success]
-      updated_metadata['delivery_method'] = delivery_result[:method]
-      apply_success_metadata(updated_metadata, delivery_result)
-    elsif delivery_result[:error].present?
-      updated_metadata['provider_notification_error'] = sanitize_secure_error_message(delivery_result[:error])
+    notification.with_lock do
+      metadata = (notification.metadata || {}).merge(
+        'notification_methods' => notification_methods, 'provider_notification_attempted_at' => Time.current.iso8601,
+        'provider_delivery_contexts' => @delivery_contexts
+      )
+      if delivery_result[:success]
+        metadata['delivery_method'] = delivery_result[:method]
+        metadata['provider_delivery_outcome'] = delivery_result[:outcome].to_s
+        apply_success_metadata(metadata, delivery_result)
+      elsif delivery_result[:error].present?
+        metadata['provider_notification_error'] = sanitize_secure_error_message(delivery_result[:error])
+      end
+      notification.update!(metadata: metadata)
     end
-
-    notification.update!(metadata: updated_metadata)
-    Rails.logger.info "Updated notification #{notification.id} with delivery metadata"
   end
 
   def find_rejection_notification(notification_id)
-    if notification_id.present?
-      notification = Notification.find_by(
-        id: notification_id,
-        notifiable: application,
-        action: REJECTION_ACTION
-      )
+    return unless notification_id
 
-      return notification if notification.present?
-
-      Rails.logger.warn "Rejection notification #{notification_id} not found for Application ID: #{application.id}; falling back to latest match"
-    end
-
-    scope = Notification.where(notifiable: application, action: REJECTION_ACTION)
-    recent_match = scope.where(created_at: 15.minutes.ago..).order(created_at: :desc).first
-
-    recent_match || scope.order(created_at: :desc).first
+    Notification.find_by(id: notification_id, notifiable: application, action: REJECTION_ACTION)
   end
 
   def apply_success_metadata(metadata, delivery_result)
@@ -167,45 +175,13 @@ class MedicalProviderNotifier
     }.compact
   end
 
-  # Notify the medical provider using fax
-  # @param rejection_reason [String] The reason for rejection
-  # @return [Hash] Hash containing success status and fax_sid
-  def notify_by_fax(rejection_reason)
-    pdf_path = generate_fax_pdf(rejection_reason)
-    return failure_result(method: FAX_METHOD, error: 'Failed to generate fax PDF') unless pdf_path
-
-    # Upload PDF to ActiveStorage for public URL access
-    blob = upload_pdf_to_storage(pdf_path)
-    return failure_result(method: FAX_METHOD, error: 'Failed to upload fax PDF') unless blob
-
-    # Generate public URL for Twilio
-    media_url = generate_blob_url(blob)
-    unless media_url
-      purge_blob(blob)
-      return failure_result(method: FAX_METHOD, error: 'Failed to generate fax media URL')
-    end
-
-    # Send fax with public URL
-    result = send_fax_document_via_url(media_url)
-
-    if result[:success]
-      # Store blob ID in result for webhook cleanup (don't purge here)
-      result[:blob_id] = blob.id
-    else
-      purge_blob(blob)
-    end
-
-    result
-  ensure
-    cleanup_temp_file(pdf_path)
-  end
-
   # Notify the medical provider by email
   # @param rejection_reason [String] The reason for rejection
   # @param admin [User] The admin who rejected the certification
   # @param secure_upload_url [String, nil] Tokenized upload URL for corrected certification upload
   # @return [Hash] Delivery result hash
   def notify_by_email(rejection_reason, admin, secure_upload_url: nil)
+    EmailDelivery.verify!(EMAIL_ACTION, context: @delivery_contexts.fetch('email'), channel: :email)
     mail = MedicalProviderMailer.with(
       application: application,
       rejection_reason: rejection_reason,
@@ -214,178 +190,23 @@ class MedicalProviderNotifier
     ).certification_rejected
 
     if secure_upload_url.present?
-      # The message contains a raw bearer URL, so deliver synchronously rather
-      # than serializing it into Active Job arguments via deliver_later.
-      mail.deliver_now
+      EmailDelivery.deliver_now!(mail, context: @delivery_contexts.fetch('email'))
+      { success: true, method: EMAIL_METHOD, outcome: :submitted, message_id: mail.message_id }
     else
-      mail.deliver_later
+      outcome = EmailDelivery.deliver_later(mail, context: @delivery_contexts.fetch('email'))
+      { success: %i[queued deferred].include?(outcome), method: EMAIL_METHOD, outcome: outcome }
     end
-    message_id = mail.message_id
-
-    Rails.logger.info "Email #{secure_upload_url.present? ? 'sent' : 'queued'} for medical provider for Application ID: #{application.id} with message ID: #{message_id}"
-    { success: true, method: EMAIL_METHOD, message_id: message_id }
+  rescue ApplicationMailer::DeliverySkipped, EmailDelivery::ConfigurationError => e
+    refusal_result(EMAIL_METHOD, e)
   rescue StandardError => e
-    Rails.logger.error "Email sending error for Application ID: #{application.id} - #{sanitize_secure_error_message(e.message)}"
+    Rails.logger.error("Provider email failed for application #{application.id}: #{sanitize_secure_error_message(e.message)}")
     failure_result(method: EMAIL_METHOD, error: e.message)
   end
 
-  # Upload PDF to ActiveStorage for public access
-  def upload_pdf_to_storage(pdf_path)
-    blob = File.open(pdf_path, 'rb') do |file|
-      ActiveStorage::Blob.create_and_upload!(
-        io: file,
-        filename: "cert_rejection_#{application.id}_#{Time.current.to_i}.pdf",
-        content_type: 'application/pdf'
-      )
-    end
-
-    Rails.logger.info "Uploaded fax PDF to ActiveStorage, blob ID: #{blob.id}"
-    blob
-  rescue StandardError => e
-    Rails.logger.error "Failed to upload PDF to storage for Application ID: #{application.id} - #{e.message}"
-    nil
-  end
-
-  # Generate public blob URL for Twilio
-  def generate_blob_url(blob)
-    host = default_url_options[:host]
-    protocol = default_url_options[:protocol] || 'https'
-
-    if host.blank?
-      Rails.logger.error 'Host not configured for blob URLs - cannot generate fax media URL'
-      return nil
-    end
-
-    Rails.application.routes.url_helpers.rails_blob_url(blob, host: host, protocol: protocol)
-  rescue StandardError => e
-    Rails.logger.error "Failed to generate blob URL for Application ID: #{application.id} - #{e.message}"
-    nil
-  end
-
-  # Send the fax document via public URL
-  def send_fax_document_via_url(media_url)
-    fax_result = @fax_service.send_fax(
-      to: application.medical_provider_fax,
-      media_url: media_url,
-      options: fax_options
-    )
-
-    handle_fax_result(fax_result)
-  rescue FaxService::FaxError => e
-    Rails.logger.error "Fax sending error for Application ID: #{application.id} - #{e.message}"
-    failure_result(method: FAX_METHOD, error: e.message)
-  rescue StandardError => e
-    Rails.logger.error "Unexpected error sending fax for Application ID: #{application.id} - #{e.message}"
-    failure_result(method: FAX_METHOD, error: e.message)
-  end
-
-  # Handle the result from fax service
-  def handle_fax_result(fax_result)
-    return failure_result(method: FAX_METHOD, error: 'Fax service returned no result') unless fax_result
-
-    fax_sid = fax_result.sid
-    Rails.logger.info "Fax successfully sent to medical provider for Application ID: #{application.id} - Fax SID: #{fax_sid}"
-    { success: true, method: FAX_METHOD, fax_sid: fax_sid }
-  end
-
-  # Get fax sending options
-  def fax_options
-    {
-      quality: 'fine',
-      status_callback: fax_status_callback_url
-    }.compact
-  end
-
-  def fax_status_callback_url
-    host = default_url_options[:host]
-    return nil if host.blank?
-
-    Rails.application.routes.url_helpers.webhooks_twilio_fax_status_url(
-      host: host,
-      protocol: default_url_options[:protocol] || 'https'
-    )
-  end
-
-  def default_url_options
-    Rails.application.config.action_mailer.default_url_options || {}
-  end
-
-  def support_email
-    Policy.get('support_email') || 'mat.program1@maryland.gov'
-  end
-
-  # Clean up temporary PDF file
-  def cleanup_temp_file(pdf_path)
-    FileUtils.rm_f(pdf_path) if pdf_path && File.exist?(pdf_path)
-  end
-
-  def purge_blob(blob)
-    blob.purge_later
-  rescue StandardError => e
-    Rails.logger.error "Failed to purge fax blob #{blob.id} for Application ID: #{application.id} - #{e.message}"
-  end
-
-  # Generate a PDF document for faxing
-  # @param rejection_reason [String] The reason for rejection
-  # @return [String, nil] The path to the generated PDF, or nil if generation failed
-  def generate_fax_pdf(rejection_reason)
-    temp_file_path = pdf_temp_file_path
-
-    Prawn::Document.generate(temp_file_path) do |pdf|
-      add_pdf_header(pdf)
-      add_applicant_info(pdf)
-      add_rejection_details(pdf, rejection_reason)
-      add_submission_instructions(pdf)
-      add_pdf_footer(pdf)
-    end
-
-    temp_file_path
-  rescue StandardError => e
-    Rails.logger.error "Error generating PDF for Application ID: #{application.id} - #{e.message}"
-    nil
-  end
-
-  # Generate temp file path for PDF
-  def pdf_temp_file_path
-    Rails.root.join('tmp', "certification_rejection_#{application.id}_#{Time.current.to_i}.pdf")
-  end
-
-  # Add header section to PDF
-  def add_pdf_header(pdf)
-    pdf.text 'Maryland Accessible Telecommunications', size: 18, style: :bold
-    pdf.move_down 10
-    pdf.text 'Disability Certification Form for Applicant needs Updates', size: 16, style: :bold
-    pdf.move_down 20
-  end
-
-  # Add applicant information section to PDF
-  def add_applicant_info(pdf)
-    pdf.text "Name: #{application.user.full_name}", size: 12
-    pdf.text "Application ID: #{application.id}", size: 12
-    pdf.move_down 20
-  end
-
-  # Add rejection reason details to PDF
-  def add_rejection_details(pdf, rejection_reason)
-    pdf.text 'Reason for Revision:', size: 14, style: :bold
-    pdf.move_down 5
-    pdf.text rejection_reason, size: 12
-    pdf.move_down 20
-  end
-
-  # Add submission instructions to PDF
-  def add_submission_instructions(pdf)
-    pdf.text 'Instructions for Submitting Revised Documentation:', size: 14, style: :bold
-    pdf.move_down 5
-    pdf.text "1. Email the revised certification to: #{support_email}", size: 12
-    pdf.text "2. If email is not available, contact #{support_email} for mailing instructions", size: 12
-    pdf.move_down 20
-  end
-
-  # Add footer section to PDF
-  def add_pdf_footer(pdf)
-    pdf.text 'Thank you for your assistance in helping this applicant access needed telecommunications services.', size: 12
-    pdf.text "For questions, please contact: #{support_email}", size: 12
+  def refusal_result(method, error)
+    { success: false, method: method,
+      outcome: error.is_a?(EmailDelivery::ConfigurationError) ? :configuration_error : :suppressed,
+      reason: error.reason, error: error.message }
   end
 
   # Get the contact methods that were available for the medical provider
@@ -393,7 +214,6 @@ class MedicalProviderNotifier
   def notification_methods
     methods = []
     methods << EMAIL_METHOD if email_available?
-    methods << FAX_METHOD if fax_available?
     methods
   end
 end

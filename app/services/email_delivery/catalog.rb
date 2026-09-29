@@ -76,6 +76,18 @@ module EmailDelivery
       [key, MailAction.new(key: key, category: category.to_s, routing: routing, template: template, owner: owner)]
     end.freeze
 
+    # Provider/letter entrypoints share classification with mailers, but are not mailer methods.
+    PROVIDER_ACTIONS = {
+      'SmsService#account_access' => [:account_security, :sms, nil, 'PasswordsController'],
+      'SmsService#proof_resubmission' => [:proof, :sms, nil, PROOF_REVIEW_OWNER],
+      'SmsService#provider_info' => [:certification, :sms, nil, 'Applications::RequestProviderInfo'],
+      'TwilioVerifyService#send_verification' => [:account_security, :sms, nil, 'TwoFactor'],
+      'FaxService#certification_rejected' => [:certification, :fax, nil, 'MedicalProviderNotifier'],
+      'Letters#medical_certification_form' => [:certification, :letter, nil, 'Applications::MedicalCertificationPdfService']
+    }.to_h do |key, (category, routing, template, owner)|
+      [key, MailAction.new(key: key, category: category.to_s, routing: routing, template: template, owner: owner)]
+    end.freeze
+
     PROOF_REJECTION = ['ApplicationNotificationsMailer#proof_rejected', :proof_review, :preference, PROOF_REVIEW_OWNER].freeze
     PROOF_ATTACHED = ['ApplicationNotificationsMailer#proof_received', :proof_attached, :preference].freeze
     AUDIT_ONLY = [nil, nil, nil].freeze
@@ -127,7 +139,20 @@ module EmailDelivery
     module_function
 
     def mail_action(key)
-      MAIL_ACTIONS[key.to_s]
+      MAIL_ACTIONS[key.to_s] || PROVIDER_ACTIONS[key.to_s]
+    end
+
+    def channels_for(key)
+      entry = mail_action(key)
+      return [] unless entry
+      return %w[email letter] if entry.routing == :preference
+      return [entry.routing.to_s] if %i[sms fax letter].include?(entry.routing)
+
+      ['email']
+    end
+
+    def letter_action_for(template_name)
+      MAIL_ACTIONS.values.find { |entry| entry.routing == :preference && entry.template == template_name }&.key
     end
 
     def notification_action(action)

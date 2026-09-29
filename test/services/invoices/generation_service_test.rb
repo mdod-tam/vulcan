@@ -56,7 +56,7 @@ module Invoices
       assert_in_delta 250.25, invoice.total_amount.to_f
       assert_not invoice.events.exists?(action: 'invoice_notification_enqueue_failed')
       assert_equal 'category_disabled', Event.find_by!(action: EmailDelivery::Outcome::SUPPRESSED).metadata['reason']
-      assert_equal 0, enqueued_jobs.size
+      assert_equal(0, enqueued_jobs.count { |job| job[:job] == EmailDelivery::MailDeliveryJob })
     end
 
     test 'the service reports each notice outcome' do

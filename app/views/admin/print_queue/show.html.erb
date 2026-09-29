@@ -1,71 +1,30 @@
-<div class="container mx-auto px-4 py-8">
-  <div class="flex justify-between items-center mb-6">
-    <h1 class="text-2xl font-bold">
-      Letter: <%= @letter.letter_type.titleize %> 
-      <span class="px-2 inline-flex text-xs leading-5 font-semibold rounded-full 
-            <%= letter_type_badge_class(@letter.letter_type) %>">
-        <%= @letter.status.titleize %>
-      </span>
-    </h1>
-    <div>
-      <%= link_to admin_print_queue_index_path, class: "px-4 py-2 bg-gray-200 rounded-md hover:bg-gray-300 text-gray-700 font-medium" do %>
-        Back to Print Queue
+<main class="container mx-auto px-4 py-8">
+  <%= link_to 'Back to print queue', admin_print_queue_index_path, class: 'text-indigo-700 underline' %>
+  <h1 class="mt-4 text-2xl font-bold">Letter #<%= @letter.id %></h1>
+  <div class="mt-4 rounded-lg bg-white p-6 shadow">
+    <dl class="space-y-2">
+      <div><dt class="inline font-semibold">Recipient:</dt> <dd class="inline"><%= @letter.constituent.full_name %></dd></div>
+      <div><dt class="inline font-semibold">Type:</dt> <dd class="inline"><%= @letter.letter_type.humanize %></dd></div>
+      <div><dt class="inline font-semibold">Status:</dt> <dd class="inline"><%= @letter.status.humanize %></dd></div>
+      <% if @letter.released_at %>
+        <div><dt class="inline font-semibold">Release authorized:</dt> <dd class="inline"><%= l(@letter.released_at, format: :long) %></dd></div>
       <% end %>
-    </div>
-  </div>
-
-  <div class="bg-white p-6 rounded-lg shadow mb-6">
-    <div class="grid grid-cols-1 md:grid-cols-2 gap-4">
-      <div>
-        <h2 class="text-lg font-medium mb-2">Constituent Details</h2>
-        <p><strong>Name:</strong> <%= @letter.constituent.full_name %></p>
-        <p><strong>Email:</strong> <%= display_contact_email(@letter.constituent) %></p>
-        <p><strong>Phone:</strong> <%= display_contact_phone(@letter.constituent) %></p>
-        <p><strong>Address:</strong>
-          <br><%= @letter.constituent.physical_address_1 %>
-          <% if @letter.constituent.physical_address_2.present? %>
-            <br><%= @letter.constituent.physical_address_2 %>
-          <% end %>
-          <br><%= @letter.constituent.city %>, <%= @letter.constituent.state %> <%= @letter.constituent.zip_code %>
-        </p>
-      </div>
-
-      <div>
-        <h2 class="text-lg font-medium mb-2">Letter Details</h2>
-        <p><strong>Letter Type:</strong> <%= @letter.letter_type.titleize %></p>
-        <p><strong>Status:</strong> <%= @letter.status.titleize %></p>
-        <p><strong>Created:</strong> <%= @letter.created_at.strftime("%B %d, %Y at %I:%M %p") %></p>
-        <% if @letter.printed_at.present? %>
-          <p><strong>Printed:</strong> <%= @letter.printed_at.strftime("%B %d, %Y at %I:%M %p") %></p>
-          <p><strong>Printed By:</strong> <%= @letter.admin&.full_name || "Unknown" %></p>
-        <% end %>
-        <% if @letter.application %>
-          <p><strong>Application:</strong> 
-            <%= link_to "App ##{@letter.application.id}", admin_application_path(@letter.application), class: "text-indigo-600 hover:text-indigo-900" %>
-          </p>
+      <% if @letter.canceled? %>
+        <div><dt class="inline font-semibold">Canceled:</dt> <dd class="inline"><%= EmailDelivery::ControlPanel.reason_text(@letter.cancellation_reason) %></dd></div>
+      <% end %>
+    </dl>
+    <p class="mt-4 max-w-prose text-sm text-gray-700">Downloading releases the final PDF for printing. Release does not confirm printing or delivery. Previously downloaded copies cannot be recalled.</p>
+    <% unless @letter.canceled? %>
+      <div class="mt-4 flex flex-wrap gap-3">
+        <%= button_to(@letter.released_at ? 'Download PDF again' : 'Release and download PDF',
+                      release_admin_print_queue_path(@letter),
+                      method: :post, form: { data: { turbo: false } },
+                      class: 'rounded bg-blue-700 px-4 py-2 text-white focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2') %>
+        <% if @letter.pending? && @letter.released_at %>
+          <%= button_to 'Mark as Printed', mark_as_printed_admin_print_queue_path(@letter), method: :post,
+                                                                                            class: 'rounded bg-green-700 px-4 py-2 text-white' %>
         <% end %>
       </div>
-    </div>
+    <% end %>
   </div>
-
-  <div class="bg-white p-6 rounded-lg shadow">
-    <h2 class="text-lg font-medium mb-4">Letter Preview</h2>
-    <div class="flex justify-center">
-      <div class="border border-gray-300 rounded-lg overflow-hidden w-full" style="height: 800px;">
-        <iframe src="<%= admin_print_queue_path(@letter, format: :pdf) %>" width="100%" height="100%" frameborder="0"></iframe>
-      </div>
-    </div>
-    
-    <div class="mt-6 flex justify-end space-x-3">
-      <%= link_to admin_print_queue_path(@letter, format: :pdf), class: "px-4 py-2 bg-blue-500 rounded-md hover:bg-blue-600 text-white font-medium", target: "_blank" do %>
-        Open PDF in New Tab
-      <% end %>
-      
-      <% if @letter.status == 'pending' %>
-        <%= button_to mark_as_printed_admin_print_queue_path(@letter), method: :post, class: "px-4 py-2 bg-green-500 rounded-md hover:bg-green-600 text-white font-medium" do %>
-          Mark as Printed
-        <% end %>
-      <% end %>
-    </div>
-  </div>
-</div>
+</main>

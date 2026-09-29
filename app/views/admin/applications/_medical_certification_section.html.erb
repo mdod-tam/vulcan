@@ -1,7 +1,6 @@
 <%# Medical Certification Section Content
      This partial is rendered inside #medical-certification-section and can be
-     updated via Turbo Stream for a smooth UX without full page reload.
-%>
+     updated via Turbo Stream for a smooth UX without full page reload. %>
 <div class="flex justify-between items-start">
   <div class="flex items-center gap-3">
     <h2 id="certification-title" class="text-xl font-semibold text-gray-900">Disability Certification</h2>
@@ -19,7 +18,7 @@
 
 <div class="mt-6 space-y-4">
   <!-- Disability Certification Upload Form (Visible unless approved) -->
-  <%= render "medical_certification_upload" %>
+  <%= render 'medical_certification_upload' %>
 
   <!-- Medical Certification -->
   <% if @application.medical_certification.attached? %>
@@ -35,7 +34,7 @@
               <%= number_to_human_size(@application.medical_certification.blob.byte_size) %>
             </p>
           </div>
-          <a href="<%= rails_blob_path(@application.medical_certification, disposition: "attachment") %>"
+          <a href="<%= rails_blob_path(@application.medical_certification, disposition: 'attachment') %>"
              class="inline-flex items-center px-3 py-1 border border-transparent rounded-md shadow-sm text-sm font-medium text-white bg-indigo-600 hover:bg-indigo-700"
              download>
             Download
@@ -59,7 +58,7 @@
                 <%= additional_medical_certification_source_label(certification) %> · <%= number_to_human_size(certification.blob.byte_size) %>
               </p>
             </div>
-            <a href="<%= rails_blob_path(certification, disposition: "attachment") %>"
+            <a href="<%= rails_blob_path(certification, disposition: 'attachment') %>"
                class="shrink-0 ml-3 inline-flex items-center px-3 py-1 border border-transparent rounded-md shadow-sm text-sm font-medium text-white bg-indigo-600 hover:bg-indigo-700"
                download>
               Download
@@ -96,16 +95,12 @@
     </div>
   <% end %>
 
-  <%= render "medical_provider_secure_request_forms_panel" %>
+  <%= render 'medical_provider_secure_request_forms_panel' %>
 
   <!-- Action Buttons -->
   <div class="mt-6">
-    <%
-      certification_action_state = medical_certification_action_state(
-        @application,
-        secure_request_forms: @medical_provider_secure_request_forms
-      )
-    %>
+    <%# RuboCop checks each ERB fragment separately; the local is read below. %>
+    <% certification_action_state = medical_certification_action_state(@application, secure_request_forms: @medical_provider_secure_request_forms) %> <%# erb_lint:disable Rubocop %>
 
     <% if show_medical_certification_request_buttons?(@application) && !@application.document_signing_status_signed? %>
       <div class="flex flex-wrap gap-2">
@@ -113,18 +108,21 @@
       <% if FeatureFlag.enabled?(:docusign_enabled, default: true) %>
         <% if certification_action_state.provider_ready_for_docuseal %>
           <%= button_to send_document_signing_request_admin_application_path(@application),
-              method: :post,
-              class: "inline-flex items-center px-4 py-2 border border-transparent rounded-md shadow-sm text-sm font-medium text-white bg-indigo-600 hover:bg-indigo-700 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-indigo-500",
-              form: {
-                data: {
-                  turbo_confirm: certification_action_state.docuseal_confirm,
-                  turbo_frame: '_top'
-                }
-              },
-              data: {
-                disable_with: "Sending..."
-              },
-              'aria-label': "Send DocuSeal digital signing request to #{@application.medical_provider_name}" do %>
+                        method: :post,
+                        class: [
+                          'inline-flex items-center px-4 py-2 border border-transparent rounded-md shadow-sm text-sm font-medium text-white',
+                          'bg-indigo-600 hover:bg-indigo-700 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-indigo-500'
+                        ],
+                        form: {
+                          data: {
+                            turbo_confirm: certification_action_state.docuseal_confirm,
+                            turbo_frame: '_top'
+                          }
+                        },
+                        data: {
+                          disable_with: 'Sending...'
+                        },
+                        'aria-label': "Send DocuSeal digital signing request to #{@application.medical_provider_name}" do %>
             <%= certification_action_state.docuseal_text %>
           <% end %>
         <% else %>
@@ -137,15 +135,18 @@
           <p id="docuseal-disabled-reason" class="w-full text-sm text-gray-600">Provider name and email required for DocuSeal</p>
         <% end %>
       <% end %>
-        <!-- Print Button (Alternative) -->
         <%= button_to queue_medical_certification_form_admin_application_path(@application),
-            method: :post,
-            class: "inline-flex items-center px-4 py-2 border border-gray-300 rounded-md shadow-sm text-sm font-medium text-gray-700 bg-white hover:bg-gray-50 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-indigo-500",
-            data: {
-              disable_with: "Queuing...",
-              turbo_confirm: "Add Disability Certification Form to the print queue?"
-            },
-            'aria-label': "Queue disability certification form for printing" do %>
+                      method: :post,
+                      params: { operation_id: SecureRandom.uuid },
+                      class: [
+                        'inline-flex items-center px-4 py-2 border border-gray-300 rounded-md shadow-sm text-sm font-medium text-gray-700 bg-white',
+                        'hover:bg-gray-50 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-indigo-500'
+                      ],
+                      data: {
+                        disable_with: 'Queuing...',
+                        turbo_confirm: 'Add Disability Certification Form to the print queue?'
+                      },
+                      'aria-label': 'Queue disability certification form for printing' do %>
           Print DCF
         <% end %>
       </div>
@@ -166,18 +167,21 @@
       <div class="mt-2 flex flex-wrap gap-2">
         <% if @application.medical_provider_email.present? %>
           <%= button_to admin_application_certification_upload_request_path(@application),
-              method: :post,
-              class: "inline-flex items-center px-4 py-2 border border-gray-300 rounded-md shadow-sm text-sm font-medium text-gray-700 bg-white hover:bg-gray-50 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-indigo-500",
-              form: {
-                onsubmit: "return confirm(#{certification_action_state.secure_cert_upload_confirm.to_json})",
-                data: {
-                  turbo: false
-                }
-              },
-              data: {
-                disable_with: "Sending..."
-              },
-              'aria-label': "Send secure certification upload link to #{@application.medical_provider_name}" do %>
+                        method: :post,
+                        class: [
+                          'inline-flex items-center px-4 py-2 border border-gray-300 rounded-md shadow-sm text-sm font-medium text-gray-700',
+                          'bg-white hover:bg-gray-50 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-indigo-500'
+                        ],
+                        form: {
+                          onsubmit: "return confirm(#{certification_action_state.secure_cert_upload_confirm.to_json})",
+                          data: {
+                            turbo: false
+                          }
+                        },
+                        data: {
+                          disable_with: 'Sending...'
+                        },
+                        'aria-label': "Send secure certification upload link to #{@application.medical_provider_name}" do %>
             Send Secure Cert Upload Link
           <% end %>
         <% else %>

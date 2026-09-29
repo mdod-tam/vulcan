@@ -4,7 +4,7 @@ class FeatureFlag < ApplicationRecord
 
   # Flags the generic admin screen may show and change. Email controls have their own
   # writer (EmailDelivery::ControlWriter) because turning one off cancels pending mail.
-  scope :general, -> { where.not('name LIKE ?', "#{EmailDelivery::CONTROL_PREFIX}%") }
+  scope :general, -> { where.not('name LIKE ? OR name LIKE ?', 'email.%', 'communications.%') }
 
   # Set only by EmailDelivery::ControlWriter.
   attr_accessor :email_control_write
@@ -22,17 +22,28 @@ class FeatureFlag < ApplicationRecord
     end
 
     def enable!(feature_name)
-      find_or_initialize_by(name: feature_name.to_s).update!(enabled: true)
+      update_general_flag!(feature_name, enabled: true)
     end
 
     def disable!(feature_name)
-      find_or_initialize_by(name: feature_name.to_s).update!(enabled: false)
+      update_general_flag!(feature_name, enabled: false)
     end
 
     # Income proof requirement is derived from the single `vouchers_enabled`
     # flag. Income is required only when the voucher workflow is disabled.
     def income_proof_required?
       !enabled?(:vouchers_enabled)
+    end
+
+    private
+
+    def update_general_flag!(feature_name, enabled:)
+      flag = find_or_initialize_by(name: feature_name.to_s)
+      if EmailDelivery.control_name?(flag.name)
+        flag.errors.add(:enabled, 'communication controls change only through EmailDelivery::ControlWriter')
+        raise ActiveRecord::RecordInvalid, flag
+      end
+      flag.update!(enabled: enabled)
     end
   end
 

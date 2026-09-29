@@ -227,6 +227,58 @@ module Admin
       assert_match "#{EmailTemplate.deliverable.distinct.count(:name)} templates changed", flash[:notice]
     end
 
+    test 'HTML test previews keep formatting without executable template markup' do
+      template = create(:email_template, :html, subject: 'Preview', variables: { required: [], optional: [] },
+                                                body: '<p>Allowed text</p><script>alert(1)</script><a href="javascript:alert(1)">Link</a><img src="x" onerror="alert(1)">')
+
+      get new_test_email_admin_email_template_path(template), headers: default_headers
+
+      assert_response :success
+      assert_select '.email-preview p', text: 'Allowed text'
+      assert_select '.email-preview script', count: 0
+      assert_select '.email-preview a[href^="javascript:"]', count: 0
+      assert_select '.email-preview img[onerror]', count: 0
+    end
+
+    [true, false].each do |enabled|
+      test "bulk #{enabled ? 'enable' : 'disable'} rolls back every pair and audit when a later pair fails" do
+        template_pair('atomic_bulk_first')
+        last, = template_pair('atomic_bulk_last')
+        EmailDelivery::ControlWriter.set_all_template_pairs(enabled: !enabled, actor: @admin, operation_id: 'bulk-prepare')
+        before_state = EmailTemplate.order(:id).pluck(:id, :enabled, :delivery_generation)
+        callback = ->(row) { raise ActiveRecord::RecordInvalid, row if row.id == last.id }
+        EmailTemplate.set_callback(:update, :after, callback)
+
+        assert_no_difference('Event.count') do
+          assert_no_enqueued_jobs(only: Letters::ReconcilePendingJob) do
+            patch(enabled ? bulk_enable_admin_email_templates_path : bulk_disable_admin_email_templates_path,
+                  headers: default_headers, params: { operation_id: 'bulk-failure' })
+          end
+        end
+
+        assert_redirected_to admin_email_templates_path
+        assert_equal I18n.t('admin.email_delivery.bulk_failed', locale: :en), flash[:alert]
+        assert_equal before_state, EmailTemplate.order(:id).pluck(:id, :enabled, :delivery_generation)
+      ensure
+        EmailTemplate.skip_callback(:update, :after, callback) if callback
+      end
+    end
+
+    test 'a retried bulk command cannot reverse a later bulk change' do
+      template_pair('bulk_retry')
+      patch bulk_disable_admin_email_templates_path, headers: default_headers, params: { operation_id: 'bulk-off' }
+      patch bulk_enable_admin_email_templates_path, headers: default_headers, params: { operation_id: 'bulk-on' }
+      before_state = EmailTemplate.order(:id).pluck(:id, :enabled, :delivery_generation)
+
+      assert_no_difference('Event.count') do
+        patch bulk_disable_admin_email_templates_path, headers: default_headers, params: { operation_id: 'bulk-off' }
+      end
+
+      assert_equal before_state, EmailTemplate.order(:id).pluck(:id, :enabled, :delivery_generation)
+      assert_equal 1, Event.where(action: 'email_templates_bulk_disabled').with_metadata(:operation_id, 'bulk-off').count
+      assert_match '0 templates changed', flash[:notice]
+    end
+
     test 'rapid distinct edits each record an audit event and an unchanged resubmit records none' do
       template = create(:email_template, :text, subject: 'Original', body: 'Body %<name>s')
       edit = lambda do |subject|
@@ -756,7 +808,7 @@ module Admin
 
       get admin_email_templates_path, headers: default_headers
 
-      assert_match 'Email suppressed: proof emails are turned off', response.body
+      assert_match 'Blocked: proof communications are turned off', response.body
     end
 
     test 'a test send follows the template category and says why it was not sent' do
@@ -770,7 +822,7 @@ module Admin
       end
 
       assert_redirected_to admin_email_template_path(en)
-      assert_equal 'Test email not sent: voucher emails are turned off.', flash[:alert]
+      assert_equal 'Test email not sent: voucher communications are turned off.', flash[:alert]
     end
 
     test 'a queued test send says queued, not delivered' do

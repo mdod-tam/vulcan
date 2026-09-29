@@ -11,6 +11,7 @@ module EmailDeliveryContextJob
 
     # The catalog key of the email this job sends; a job may override the reader.
     class_attribute :email_delivery_mail_action, instance_writer: false
+    before_enqueue { throw :abort unless delivery_allowed? }
 
     # Rails stores ActiveJob::EnqueueError, but Solid Queue raises its own error for failed inserts.
     # Normalize both at the actual enqueue boundary, including writes deferred until commit.
@@ -25,6 +26,7 @@ module EmailDeliveryContextJob
       if job.enqueue_error
         EmailDelivery::Outcome.record_enqueue_failure(job.enqueue_error, context: job.email_delivery_context,
                                                                          mail_action: job.email_delivery_mail_action)
+        job.delivery_not_sent
       end
     end
 
@@ -35,17 +37,38 @@ module EmailDeliveryContextJob
         job.email_delivery_context ||= EmailDelivery::Policy.capture(mail_action: job.email_delivery_mail_action,
                                                                      params: job.email_delivery_params)
       end
-      EmailDelivery::Current.set(context: job.email_delivery_context, queued: true, denial_decision: nil) { block.call }
+      EmailDelivery::Current.set(context: job.email_delivery_context, queued: true, denial_decision: nil) { block.call } if job.delivery_allowed?
+    rescue ApplicationMailer::DeliverySkipped => e
+      EmailDelivery::Outcome.record_not_sent(EmailDelivery::Decision.suppressed(e.reason), context: job.email_delivery_context,
+                                                                                           mail_action: job.email_delivery_mail_action)
     end
   end
 
   # Rails defers enqueue callbacks until commit. Capture here while the caller's notification
   # context and the original control generations are still available; retries keep that capture.
   def enqueue(options = {})
-    self.email_delivery_context ||= EmailDelivery::Policy.capture(mail_action: email_delivery_mail_action,
-                                                                  params: email_delivery_params)
+    if email_delivery_context.nil?
+      self.email_delivery_context = if EmailDelivery::Current.queued
+                                      EmailDelivery::Current.context
+                                    else
+                                      EmailDelivery::Policy.capture(mail_action: email_delivery_mail_action, params: email_delivery_params)
+                                    end
+    end
+    return false unless delivery_allowed?
+
     super
   end
+
+  def delivery_allowed?
+    decision = EmailDelivery::Policy.verify_any(email_delivery_mail_action, email_delivery_context)
+    return true if decision.allowed?
+
+    EmailDelivery::Outcome.record_not_sent(decision, context: email_delivery_context, mail_action: email_delivery_mail_action)
+    delivery_not_sent
+    false
+  end
+
+  def delivery_not_sent; end
 
   # Mailer params the capture needs, such as a test send's template name.
   def email_delivery_params

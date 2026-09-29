@@ -77,6 +77,8 @@ class PasswordsControllerTest < ActionDispatch::IntegrationTest
               .with(@user.phone,
                     regexp_matches(%r{MAT account access link to set your password: https?://\S+ This link expires in 20 minutes\.}),
                     sensitive: true,
+                    action: 'SmsService#account_access',
+                    delivery_context: has_entries('mail_action' => 'SmsService#account_access'),
                     context: { recipient_id: @user.id, recipient_channel: 'account_access_sms' })
               .returns(true)
 
@@ -98,6 +100,8 @@ class PasswordsControllerTest < ActionDispatch::IntegrationTest
               .with(@user.phone,
                     regexp_matches(%r{MAT account access link to set your password: http://example\.com/password/edit\?token=\S+ This link expires in 20 minutes\.}),
                     sensitive: true,
+                    action: 'SmsService#account_access',
+                    delivery_context: has_entries('mail_action' => 'SmsService#account_access'),
                     context: { recipient_id: @user.id, recipient_channel: 'account_access_sms' })
               .returns(true)
 

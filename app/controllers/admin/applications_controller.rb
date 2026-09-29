@@ -459,7 +459,8 @@ module Admin
       result = Applications::MedicalCertificationPdfService.new(
         application: @application,
         actor: current_user,
-        pdf_source: pdf_source
+        pdf_source: pdf_source,
+        request_key: params.require(:operation_id)
       ).call
 
       respond_to do |format|

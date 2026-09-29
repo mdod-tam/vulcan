@@ -22,7 +22,7 @@ A few terms help when reading the code: a **constituent** receives assistance; a
 | Account matching, guardians, or recipients | [User management](development/user_management_features.md), [guardian relationships](development/guardian_relationship_system.md), [authentication](security/authentication_system.md), and [notifications](features/notifications.md). |
 | Uploads or provider responses | [Proof review](features/proof_review_process_guide.md), [secure request links](features/secure_request_links.md), and [DocuSeal integration](development/docuseal_integration_guide.md). |
 | Forms or browser behavior | [JavaScript architecture](development/javascript_architecture.md) and [testing/debugging](development/testing_and_debugging_guide.md). |
-| Messages or delivery history | [Notifications](features/notifications.md), [email/letters](infrastructure/email_system.md), and [audit tracking](features/audit_event_tracking.md). |
+| Communication controls or delivery history | [All, Email, Printed letters and SMS controls](infrastructure/email_system.md#delivery-controls), [notifications](features/notifications.md), and [audit tracking](features/audit_event_tracking.md). |
 
 Use the source and test links in the workflow guides to trace the current path. The [security baseline](security/baseline_policy.md) distinguishes policy requirements from implemented controls; the [control catalog](security/controls.yaml) records evidence still needed.
 
@@ -52,7 +52,7 @@ Use the source and test links in the workflow guides to trace the current path. 
 
 | Guide | Use it for |
 | --- | --- |
-| [Email and letters](infrastructure/email_system.md) | Templates, Postmark, printable letters, and delivery tracking. |
+| [Outgoing communications](infrastructure/email_system.md) | All/channel/category/template controls, cancellation, email and SMS, letter release, Postmark tracking, and coordinated rollout. |
 | [Active Storage and S3](infrastructure/active_storage_s3_setup.md) | File-storage configuration and deployment options. |
 | [Backup and recovery](infrastructure/backup_and_recovery.md) | Required keys/files, settings that must match, and Heroku backup schedules and restores. |
 | [Authentication and MFA](security/authentication_system.md) | Sign-in, sessions, factors, password reset, and recovery. |

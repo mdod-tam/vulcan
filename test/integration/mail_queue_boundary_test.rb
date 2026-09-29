@@ -22,11 +22,14 @@ class MailQueueBoundaryTest < ActiveSupport::TestCase
     load_seeded_email_templates('user_mailer_password_reset')
     ActionMailer::Base.deliveries.clear
     use_queue_tables_in_application_database!
+    @original_certification_adapter = MedicalCertificationEmailJob.queue_adapter
+    MedicalCertificationEmailJob.queue_adapter = :solid_queue
     @original_adapter = EmailDelivery::MailDeliveryJob.queue_adapter
     EmailDelivery::MailDeliveryJob.queue_adapter = :solid_queue
   end
 
   teardown do
+    MedicalCertificationEmailJob.queue_adapter = @original_certification_adapter
     EmailDelivery::MailDeliveryJob.queue_adapter = @original_adapter
     drop_queue_tables!
     SolidQueue::Record.connects_to(**Rails.application.config.solid_queue.connects_to)
@@ -62,7 +65,9 @@ class MailQueueBoundaryTest < ActiveSupport::TestCase
     job = mail_jobs.sole
     control = FeatureFlag.find_by!(name: EmailDelivery::GLOBAL_CONTROL)
     scopes = job.arguments.fetch('email_delivery_context').fetch('scopes')
-    assert_includes scopes, { 'control' => control.name, 'id' => control.id, 'generation' => control.delivery_generation }
+    assert_equal({ 'control' => control.name, 'id' => control.id, 'generation' => control.delivery_generation },
+                 job.arguments.dig('email_delivery_context', 'channels', 'email'))
+    assert_includes scopes.pluck('control'), EmailDelivery::ALL_CONTROL
     assert_includes scopes.pluck('control'), EmailDelivery.category_control('account_security')
   end
 
@@ -174,6 +179,36 @@ class MailQueueBoundaryTest < ActiveSupport::TestCase
   ensure
     SolidQueue::Job.where(class_name: 'ActionMailer::MailDeliveryJob').delete_all
     ActionMailer::MailDeliveryJob.queue_adapter = legacy_adapter
+  end
+
+  test 'certification wrapper rollback leaves no request state or queue job' do
+    @application = create(:application, user: @user, medical_provider_email: 'provider@example.com')
+    original_count = @application.medical_certification_request_count
+    ActiveRecord::Base.transaction do
+      result = Applications::MedicalCertificationService.new(application: @application, actor: @admin).request_certification
+      assert_equal :deferred, result.data[:delivery_outcome]
+      raise ActiveRecord::Rollback
+    end
+    assert_equal original_count, @application.reload.medical_certification_request_count
+    assert_not Notification.exists?(notifiable: @application, action: 'medical_certification_requested')
+    assert_not SolidQueue::Job.exists?(class_name: 'MedicalCertificationEmailJob')
+  end
+
+  test 'deferred certification queue failure compensates only the committed delivery request' do
+    @application = create(:application, user: @user, medical_provider_email: 'provider@example.com', medical_certification_status: :not_requested)
+    before_state = @application.attributes.slice(*Applications::MedicalCertificationService::STATE_FIELDS)
+    SolidQueue::Record.connection.add_check_constraint(:solid_queue_jobs, "class_name <> 'MedicalCertificationEmailJob'", name: 'reject_certification_for_test')
+    ActiveRecord::Base.transaction do
+      @user.update!(first_name: 'Business committed')
+      result = Applications::MedicalCertificationService.new(application: @application, actor: @admin).request_certification
+      assert_equal :deferred, result.data[:delivery_outcome]
+    end
+    assert_equal 'Business committed', @user.reload.first_name
+    assert_equal before_state, @application.reload.attributes.slice(*Applications::MedicalCertificationService::STATE_FIELDS)
+    notification = Notification.find_by!(notifiable: @application, action: 'medical_certification_requested')
+    assert_equal 'error', notification.delivery_status
+    assert Event.exists?(action: EmailDelivery::Outcome::ENQUEUE_FAILED)
+    assert_not SolidQueue::Job.exists?(class_name: 'MedicalCertificationEmailJob')
   end
 
   private

@@ -1,0 +1,47 @@
+<%# locals: (letters:, title:, release:, confirm:) -%>
+<section class="mb-8" aria-label="<%= title %>">
+  <h2 class="mb-3 text-xl font-semibold"><%= title %> (<%= letters.size %>)</h2>
+  <% if letters.empty? %>
+    <p class="rounded bg-gray-50 p-4 text-gray-700">No letters in this group.</p>
+  <% else %>
+    <%= form_with url: download_batch_admin_print_queue_index_path, method: :post, data: { turbo: false } do %>
+      <div class="overflow-x-auto rounded-lg border border-gray-200 bg-white">
+        <table class="min-w-full divide-y divide-gray-200">
+          <thead class="bg-gray-50 text-left text-sm">
+            <tr>
+              <% if release %><th scope="col" class="p-3">Select</th><% end %>
+              <th scope="col" class="p-3">Letter</th>
+              <th scope="col" class="p-3">Recipient</th>
+              <th scope="col" class="p-3">Created</th>
+              <th scope="col" class="p-3">Details</th>
+            </tr>
+          </thead>
+          <tbody class="divide-y divide-gray-200 text-sm">
+            <% letters.each do |letter| %>
+              <tr>
+                <% if release %>
+                  <td class="p-3"><%= check_box_tag 'letter_ids[]', letter.id, @selected_letter_ids.include?(letter.id.to_s),
+                                                    id: "letter-#{letter.id}", aria: { label: "Select letter ##{letter.id} for #{letter.constituent.full_name}" },
+                                                    class: 'h-4 w-4 rounded border-gray-400 text-indigo-700' %></td>
+                <% end %>
+                <td class="p-3"><%= letter.letter_type.humanize %> #<%= letter.id %></td>
+                <td class="p-3"><%= letter.constituent.full_name %></td>
+                <td class="p-3"><%= l(letter.created_at.to_date, format: :long) %></td>
+                <td class="p-3"><%= link_to "Review letter ##{letter.id}", admin_print_queue_path(letter), class: 'text-indigo-700 underline' %></td>
+              </tr>
+            <% end %>
+          </tbody>
+        </table>
+      </div>
+      <% if release %>
+        <div class="mt-3 flex flex-wrap gap-3">
+          <%= submit_tag(confirm ? 'Download selected again' : 'Release and download selected', class: 'rounded bg-blue-700 px-4 py-2 text-white') %>
+          <% if confirm %>
+            <%= button_tag 'Mark selected as printed', type: :submit, formaction: mark_batch_as_printed_admin_print_queue_index_path,
+                                                       class: 'rounded bg-green-700 px-4 py-2 text-white' %>
+          <% end %>
+        </div>
+      <% end %>
+    <% end %>
+  <% end %>
+</section>

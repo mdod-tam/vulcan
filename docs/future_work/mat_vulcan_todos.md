@@ -287,3 +287,7 @@ Consolidated `Proof` model  [FILE-SEC-001][DATA-001][AUDIT-002]
 MAT stands for Maryland Accessible Telecommunications. Vulcan is the Roman god of the forge—a maker of equipment. Since MAT helps people get accessible telecommunications equipment, the name is a playful nod to that connection. A little mythology, a little wordplay; no relation to the Vulcans from Star Trek.
 
 “Vulcan” is an internal nickname. Public-facing pages and messages use Maryland Accessible Telecommunications. Internal module, database, deployment, and synthetic-email identifiers retain their existing names; they are not display labels. The existing TOTP issuer also remains `MatVulcan`.
+
+### Fax-provider replacement
+
+Fax sending is explicitly unavailable because the installed Twilio SDK has no fax API. Choose and verify a replacement provider before re-enabling this transport. Retain All/category enforcement, original attempt authorization, exact SID callback identity, idempotent fallback and media ownership. Historical signed callbacks remain supported; no automatic replay of legacy or canceled attempts.

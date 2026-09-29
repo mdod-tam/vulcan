@@ -185,16 +185,32 @@ class PasswordsController < ApplicationController
 
   def send_account_access_instructions(user, delivery_method)
     if delivery_method == :sms
+      action = 'SmsService#account_access'
+      denial, context = EmailDelivery.issuance(action, channel: 'sms')
+      denial&.raise_if_configuration_error!
+      if denial
+        log_account_access_attempt(user, delivery_method, 'suppressed')
+        return false
+      end
       SmsService.send_message(
         user.phone,
         account_access_sms_body(user),
         sensitive: true,
+        action: action,
+        delivery_context: context,
         context: { recipient_id: user.id, recipient_channel: 'account_access_sms' }
       )
     else
-      UserMailer.with(user: user).password_reset.deliver_later
+      outcome = EmailDelivery.deliver_later(UserMailer.with(user: user).password_reset)
+      unless outcome == :queued
+        log_account_access_attempt(user, delivery_method, outcome == :suppressed ? 'suppressed' : 'delivery_failed')
+        return false
+      end
     end
     true
+  rescue ApplicationMailer::DeliverySkipped
+    log_account_access_attempt(user, delivery_method, 'suppressed')
+    false
   rescue StandardError => e
     log_account_access_attempt(user, delivery_method, 'delivery_failed')
     Rails.logger.warn(

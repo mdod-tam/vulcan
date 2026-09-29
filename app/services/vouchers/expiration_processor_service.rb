@@ -4,6 +4,8 @@ module Vouchers
   # Warns constituents before a voucher expires and expires vouchers past their validity period.
   # The expired notice belongs to Voucher#check_status_changes, which runs for every path to expired.
   class ExpirationProcessorService < BaseService
+    WARNING_ACTION = 'expiration_warning_requested'
+    WARNING_HISTORY = [WARNING_ACTION, 'expiration_warning_sent'].freeze
     def call
       process_expiring_soon_vouchers
       process_expired_vouchers
@@ -22,13 +24,18 @@ module Vouchers
       return unless (actor = PublicAuditActor.system_audit_actor_or_report('voucher expiration warning'))
 
       vouchers_expiring_soon.find_each do |voucher|
-        next if voucher.events.exists?(action: 'expiration_warning_sent')
+        next if voucher.events.exists?(action: WARNING_HISTORY)
 
-        VoucherNotificationsMailer.with(voucher: voucher).voucher_expiring_soon.deliver_later
+        context = EmailDelivery::Policy.capture(mail_action: 'VoucherNotificationsMailer#voucher_expiring_soon')
+        outcome = EmailDelivery.deliver_later(VoucherNotificationsMailer.with(voucher: voucher).voucher_expiring_soon, context: context)
+        # Operational failures remain retryable on the next run; intentional suppression is terminal.
+        next if %i[enqueue_failed configuration_error].include?(outcome)
+
         voucher.events.create!(
           user: actor,
-          action: 'expiration_warning_sent',
-          metadata: { days_until_expiry: 7, expiration_date: voucher.expiration_date }
+          action: WARNING_ACTION,
+          metadata: { days_until_expiry: 7, expiration_date: voucher.expiration_date,
+                      delivery_outcome: outcome, delivery_request_id: context['request_id'] }
         )
       end
     end

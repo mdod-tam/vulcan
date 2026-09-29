@@ -8,6 +8,9 @@ class TwilioVerifyService
     # @param phone_number [String] Phone number in E.164 format (e.g., +12025551234)
     # @return [Hash] Result with :success, :verification_sid, :status, and :error keys
     def send_verification(phone_number)
+      action = 'TwilioVerifyService#send_verification'
+      context = EmailDelivery::Policy.capture(mail_action: action)
+      EmailDelivery.verify!(action, context: context, channel: 'sms')
       return test_mode_success(phone_number) if test_mode?
 
       unless verify_configured?
@@ -18,6 +21,7 @@ class TwilioVerifyService
       phone_e164 = format_phone_to_e164(phone_number)
       Rails.logger.info("[TwilioVerify] Sending verification to #{phone_e164}")
 
+      EmailDelivery.verify!(action, context: context, channel: 'sms')
       verification = client
                      .verify
                      .v2
@@ -37,6 +41,10 @@ class TwilioVerifyService
         to: verification.to,
         channel: verification.channel
       }
+    rescue ApplicationMailer::DeliverySkipped, EmailDelivery::ConfigurationError => e
+      { success: false, delivery_suppressed: e.is_a?(ApplicationMailer::DeliverySkipped),
+        configuration_error: e.is_a?(EmailDelivery::ConfigurationError), reason: e.reason,
+        error: I18n.t(e.is_a?(ApplicationMailer::DeliverySkipped) ? 'outbound_delivery.sms_suppressed' : 'email_delivery.configuration_error') }
     rescue Twilio::REST::RestError => e
       Rails.logger.error("[TwilioVerify] Twilio API error: #{e.message}")
       Rails.logger.error("[TwilioVerify] Error code: #{e.code}") if e.respond_to?(:code)

@@ -5,73 +5,69 @@ require 'test_helper'
 module Webhooks
   class TwilioControllerTest < ActionDispatch::IntegrationTest
     setup do
-      @application = create(:application)
+      @application = create(:application, medical_provider_email: 'doctor@example.com')
       @admin = create(:admin)
-      @notification = create(
-        :notification,
-        recipient: @application.user,
-        actor: @admin,
-        notifiable: @application,
-        action: 'medical_certification_rejected',
-        metadata: { 'fax_sid' => 'FX_TEST_123', 'rejection_reason' => 'Missing signature' }
-      )
+      ensure_system_audit_actor!
+      @notification = create(:notification, recipient: @application.user, actor: @admin, notifiable: @application,
+                                            action: 'medical_certification_rejected',
+                                            metadata: { 'fax_sid' => 'FX_TEST_123', 'rejection_reason' => 'Missing signature',
+                                                        'provider_delivery_contexts' => {
+                                                          'email' => EmailDelivery::Policy.capture(mail_action: MedicalProviderNotifier::EMAIL_ACTION)
+                                                        } })
     end
 
-    test 'fax_status updates matching notification metadata and delivery status' do
-      post webhooks_twilio_fax_status_path, params: {
-        FaxSid: 'FX_TEST_123',
-        Status: 'delivered'
-      }
-
-      assert_response :ok
-      @notification.reload
-      assert_equal 'delivered', @notification.delivery_status
-      assert_equal 'delivered', @notification.metadata['fax_status']
+    test 'provider history survives All off and out of order callbacks' do
+      toggle(false)
+      callback('delivered')
+      callback('sending')
+      callback('failed')
+      assert_equal 'delivered', @notification.reload.delivery_status
       assert_equal 'delivered', @notification.metadata['fax_status_details']
-      assert @notification.metadata['fax_status_updated_at'].present?
+      assert_nil @notification.metadata['email_fallback']
     end
 
-    test 'fax_status returns success false when fax sid is not found' do
-      post webhooks_twilio_fax_status_path, params: {
-        FaxSid: 'FX_UNKNOWN',
-        Status: 'delivered'
-      }
-
+    test 'unknown sid is acknowledged without delivery' do
+      post webhooks_twilio_fax_status_path, params: { FaxSid: 'FX_UNKNOWN', Status: 'delivered' }
       assert_response :ok
-      body = response.parsed_body
-      assert_equal false, body['success']
-      assert_equal 'Notification not found', body['error']
+      assert_equal false, response.parsed_body['success']
     end
 
-    test 'fax_status marks failed fax as error and queues email fallback once' do
-      mail = mock('mail')
-      mail.stubs(:message_id).returns('MSG-FALLBACK-1')
-      mail.expects(:deliver_later).once
-
-      mailer_proxy = mock('mailer_proxy')
-      mailer_proxy.stubs(:certification_rejected).returns(mail)
-      MedicalProviderMailer.expects(:with).with(
-        application: @application,
-        rejection_reason: 'Missing signature',
-        admin: @admin
-      ).once.returns(mailer_proxy)
-
-      2.times do
-        post webhooks_twilio_fax_status_path, params: {
-          FaxSid: 'FX_TEST_123',
-          Status: 'failed'
-        }
-        assert_response :ok
+    test 'a duplicate failure queues one fallback with original authorization' do
+      assert_enqueued_jobs 1, only: EmailDelivery::MailDeliveryJob do
+        2.times { callback('failed') }
       end
+      assert_equal 'error', @notification.reload.delivery_status
+      assert_equal 'queued', @notification.metadata.dig('email_fallback', 'status')
+    end
 
-      @notification.reload
-      assert_equal 'error', @notification.delivery_status
-      assert_equal 'failed', @notification.metadata['fax_status']
-      assert_equal 'failed', @notification.metadata['fax_status_details']
-      assert_equal 'MSG-FALLBACK-1', @notification.metadata['email_fallback_message_id']
-      assert @notification.metadata['email_fallback_sent_at'].present?
-      assert_equal 'queued', @notification.metadata['email_fallback_status']
-      assert_equal 'failed', @notification.metadata['email_fallback_trigger_status']
+    test 'off on interval suppresses fallback without overwriting fax history' do
+      toggle(false)
+      toggle(true)
+      assert_no_enqueued_jobs only: EmailDelivery::MailDeliveryJob do
+        callback('failed')
+      end
+      assert_equal 'error', @notification.reload.delivery_status
+      assert_equal 'suppressed', @notification.metadata.dig('email_fallback', 'status')
+      assert_equal 'pending_canceled', @notification.metadata.dig('email_fallback', 'reason')
+    end
+
+    test 'legacy callback cannot acquire new authorization' do
+      @notification.update!(metadata: @notification.metadata.except('provider_delivery_contexts'))
+      assert_no_enqueued_jobs only: EmailDelivery::MailDeliveryJob do
+        callback('failed')
+      end
+      assert_equal 'legacy_context_missing', @notification.reload.metadata.dig('email_fallback', 'reason')
+    end
+
+    private
+
+    def callback(status)
+      post webhooks_twilio_fax_status_path, params: { FaxSid: 'FX_TEST_123', Status: status }
+      assert_response :ok
+    end
+
+    def toggle(enabled)
+      EmailDelivery::ControlWriter.set(name: EmailDelivery::ALL_CONTROL, enabled: enabled, actor: @admin, operation_id: SecureRandom.uuid)
     end
   end
 end

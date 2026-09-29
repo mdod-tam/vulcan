@@ -10,7 +10,7 @@
 #
 # It's strongly recommended that you check this file into your version control system.
 
-ActiveRecord::Schema[8.1].define(version: 2026_09_28_140000) do
+ActiveRecord::Schema[8.1].define(version: 2026_09_28_150000) do
   # These are extensions that must be enabled in order to support this database
   enable_extension "pg_catalog.plpgsql"
 
@@ -411,15 +411,24 @@ ActiveRecord::Schema[8.1].define(version: 2026_09_28_140000) do
   create_table "print_queue_items", force: :cascade do |t|
     t.bigint "admin_id"
     t.bigint "application_id"
+    t.datetime "canceled_at"
+    t.string "cancellation_reason"
     t.bigint "constituent_id", null: false
     t.datetime "created_at", null: false
+    t.jsonb "delivery_context"
+    t.jsonb "delivery_identity"
+    t.string "delivery_key"
     t.integer "letter_type", null: false
     t.datetime "printed_at"
+    t.datetime "released_at"
+    t.bigint "secure_request_form_id"
     t.integer "status", default: 0, null: false
     t.datetime "updated_at", null: false
     t.index ["admin_id"], name: "index_print_queue_items_on_admin_id"
     t.index ["application_id"], name: "index_print_queue_items_on_application_id"
     t.index ["constituent_id"], name: "index_print_queue_items_on_constituent_id"
+    t.index ["delivery_key"], name: "index_print_queue_items_on_delivery_key", unique: true, where: "(delivery_key IS NOT NULL)"
+    t.index ["secure_request_form_id"], name: "index_print_queue_items_on_secure_request_form_id"
     t.check_constraint "letter_type >= 0 AND letter_type <= 13", name: "check_print_queue_items_on_letter_type"
   end
 
@@ -982,6 +991,7 @@ ActiveRecord::Schema[8.1].define(version: 2026_09_28_140000) do
   add_foreign_key "policy_changes", "policies"
   add_foreign_key "policy_changes", "users"
   add_foreign_key "print_queue_items", "applications"
+  add_foreign_key "print_queue_items", "secure_request_forms"
   add_foreign_key "print_queue_items", "users", column: "admin_id"
   add_foreign_key "print_queue_items", "users", column: "constituent_id"
   add_foreign_key "proof_reviews", "applications"

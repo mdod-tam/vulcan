@@ -206,7 +206,7 @@ module Admin
                 expected_version: params[:expected_version].presence
       )
       redirect_to admin_email_templates_path(anchor: helpers.email_template_pair_anchor(pair)),
-                  **template_pair_flash(result, enabled)
+                  **helpers.email_control_flash(result, label: t('admin.email_delivery.pair_label', name: @email_template.name, locale: :en))
     rescue ArgumentError => e
       redirect_to admin_email_templates_path, alert: e.message
     end
@@ -254,26 +254,12 @@ module Admin
 
     # PATCH /admin/email_templates/bulk_disable
     def bulk_disable
-      count = bulk_update_enabled_state(enabled: false)
-      AuditEventService.log(
-        actor: current_user,
-        action: 'email_templates_bulk_disabled',
-        auditable: current_user,
-        metadata: { count: count }
-      )
-      redirect_to admin_email_templates_path, notice: t('admin.email_delivery.bulk_result', count: count, locale: :en)
+      update_all_templates(enabled: false)
     end
 
     # PATCH /admin/email_templates/bulk_enable
     def bulk_enable
-      count = bulk_update_enabled_state(enabled: true)
-      AuditEventService.log(
-        actor: current_user,
-        action: 'email_templates_bulk_enabled',
-        auditable: current_user,
-        metadata: { count: count }
-      )
-      redirect_to admin_email_templates_path, notice: t('admin.email_delivery.bulk_result', count: count, locale: :en)
+      update_all_templates(enabled: true)
     end
 
     private
@@ -379,33 +365,18 @@ module Admin
       error.message.match?(/is not a valid syntax/)
     end
 
-    # Counts template pairs changed; shared fragments have no on/off setting and are skipped.
-    def bulk_update_enabled_state(enabled:)
-      operation_id = params[:operation_id].presence || SecureRandom.uuid
-      EmailTemplate.deliverable.distinct.pluck(:name, :format).count do |name, format|
-        EmailDelivery::ControlWriter.set_template_pair(
-          name: name, format: format, enabled: enabled, actor: current_user,
-          operation_id: "#{operation_id}:#{name}:#{format}"
-        ).changed?
-      end
+    def update_all_templates(enabled:)
+      count = EmailDelivery::ControlWriter.set_all_template_pairs(
+        enabled: enabled, actor: current_user, operation_id: params[:operation_id].presence || SecureRandom.uuid
+      )
+      redirect_to admin_email_templates_path, notice: t('admin.email_delivery.bulk_result', count: count, locale: :en)
+    rescue ActiveRecord::ActiveRecordError => e
+      Rails.logger.error("Template bulk change failed: #{e.class}")
+      redirect_to admin_email_templates_path, alert: t('admin.email_delivery.bulk_failed', locale: :en)
     end
 
     def boolean_param(key)
       ActiveModel::Type::Boolean.new.cast(params[key])
-    end
-
-    def template_pair_flash(result, enabled)
-      label = t('admin.email_delivery.pair_label', name: @email_template.name, locale: :en)
-      state = t(enabled ? 'admin.email_delivery.state_on' : 'admin.email_delivery.state_off', locale: :en).downcase
-      case result.status
-      when :changed
-        message = t('admin.email_delivery.changed', label: label, state: state, locale: :en)
-        message += " #{t('admin.email_delivery.canceled_pending', locale: :en)}" unless enabled
-        { notice: message }
-      when :unchanged then { notice: t('admin.email_delivery.unchanged', label: label, state: state, locale: :en) }
-      when :stale then { alert: t('admin.email_delivery.stale', label: label, locale: :en) }
-      else { notice: t('admin.email_delivery.already_applied', locale: :en) }
-      end
     end
 
     def test_mail_params

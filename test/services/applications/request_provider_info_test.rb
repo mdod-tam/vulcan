@@ -184,7 +184,7 @@ module Applications
       end
     end
 
-    test 'sms request keeps NotificationService channel compatible while recording requested channel' do
+    test 'sms request records its actual channel without a mailer dispatch' do
       @application.user.update!(phone_type: 'text', communication_preference: 'email')
       SmsService.stubs(:send_message).returns(true)
 
@@ -202,7 +202,7 @@ module Applications
         recipient: @application.user
       )
       assert_predicate secure_request_form, :recipient_channel_sms?
-      assert_equal 'email', notification.metadata.fetch('channel')
+      assert_equal 'sms', notification.metadata.fetch('channel')
       assert_equal 'sms', notification.metadata.fetch('recipient_channel')
       assert_equal 'sms', notification.metadata.fetch('requested_recipient_channel')
     end
@@ -726,8 +726,8 @@ module Applications
       end
 
       assert_not result.success?
-      assert_predicate original.reload, :status_sent?
-      assert_not original.revoked?
+      assert_predicate original.reload, :revoked?
+      assert PrintQueueItem.find_by!(secure_request_form_id: original.id).canceled?
     end
 
     # Defaults reject owner-ineligible routes as :no_contact_path before form creation.

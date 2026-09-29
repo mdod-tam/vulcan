@@ -51,14 +51,40 @@ module EmailDelivery
         next Result.new(status: :stale, control: rows) if stale?(rows, expected_enabled, expected_version)
         next Result.new(status: :unchanged, control: rows) if rows.all? { |row| row.enabled == enabled }
 
-        apply_template_pair(rows, enabled: enabled, actor: actor, operation_id: operation_id)
+        result = apply_template_pair(rows, enabled: enabled, actor: actor, operation_id: operation_id)
+        Letters::ReconcilePendingJob.schedule unless enabled
+        result
+      end
+    end
+
+    # Lock the complete batch in ID order so a failed pair or audit rolls back every
+    # setting and generation. A retry identifies the whole operation, not each pair.
+    def self.set_all_template_pairs(enabled:, actor:, operation_id:)
+      raise ArgumentError, 'operation_id is required' if operation_id.blank?
+
+      action = enabled ? 'email_templates_bulk_enabled' : 'email_templates_bulk_disabled'
+      EmailTemplate.transaction do
+        rows = EmailTemplate.deliverable.order(:id).lock.to_a
+        next 0 if applied?(operation_id, action)
+
+        changed_pairs = rows.group_by { |row| [row.name, row.format] }.values.reject do |pair|
+          pair.all? { |row| row.enabled == enabled }
+        end
+        changed_pairs.each do |pair|
+          apply_template_pair(pair, enabled: enabled, actor: actor,
+                                    operation_id: "#{operation_id}:#{pair.first.name}:#{pair.first.format}")
+        end
+        AuditEventService.log(actor: actor, action: action, auditable: actor,
+                              metadata: { count: changed_pairs.size, operation_id: operation_id })
+        Letters::ReconcilePendingJob.schedule if !enabled && changed_pairs.any?
+        changed_pairs.size
       end
     end
 
     def self.apply_template_pair(rows, enabled:, actor:, operation_id:)
       old_values = rows.to_h { |row| [row.locale, row.enabled] }
       rows.each do |row|
-        row.delivery_generation += 1 unless enabled
+        row.delivery_generation += 1 if row.enabled && !enabled
         row.email_control_write = true
         row.update!(enabled: enabled, updated_by: actor)
       end
@@ -97,6 +123,9 @@ module EmailDelivery
           canceled_pending: canceling
         }
       )
+      Letters::ReconcilePendingJob.schedule if canceling &&
+                                               (control.name == ALL_CONTROL || control.name == CHANNEL_CONTROLS['letter'] ||
+                                                control.name.start_with?(CATEGORY_PREFIX))
       Result.new(status: :changed, control: control)
     end
     private_class_method :apply

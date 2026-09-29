@@ -1,134 +1,71 @@
 # frozen_string_literal: true
 
-require 'rubygems'
-require 'zip'
-
 module Admin
   class PrintQueueController < Admin::BaseController
-    before_action :require_admin
+    rescue_from Letters::Delivery::ReleaseDenied, with: :show_release_refusal
+    rescue_from ActiveStorage::FileNotFoundError, Zip::Error, IOError, with: :show_export_failure
 
     def index
-      @pending_letters = PrintQueueItem.pending.includes(:constituent, :application).order(created_at: :desc)
-      @printed_letters = PrintQueueItem.printed.includes(:constituent, :application,
-                                                         :admin).order(printed_at: :desc).limit(50)
+      load_queue
     end
 
     def show
-      @letter = PrintQueueItem.find(params[:id])
-
-      respond_to do |format|
-        format.html
-        format.pdf do
-          if @letter.pdf_letter.attached?
-            begin
-              send_data @letter.pdf_letter.download,
-                        filename: @letter.pdf_filename,
-                        type: 'application/pdf',
-                        disposition: 'inline'
-            rescue ActiveStorage::FileNotFoundError => e
-              Rails.logger.error "[STORAGE_ERROR] PDF file missing for PrintQueueItem ##{@letter.id}: #{e.message}"
-              redirect_to admin_print_queue_index_path, alert: t('.pdf_file_missing_storage')
-            end
-          else
-            redirect_to admin_print_queue_index_path, alert: t('.pdf_not_available')
-          end
-        end
-      end
+      @letter = PrintQueueItem.includes(:constituent, :application, :admin).find(params[:id])
+      # Old embeds and bookmarks cannot initiate a release through GET.
+      redirect_to admin_print_queue_path(@letter), status: :see_other if request.format.pdf?
     end
 
-    def mark_as_printed
-      letter = PrintQueueItem.find(params[:id])
-      letter.update(status: :printed, printed_at: Time.current, admin: current_user)
-      redirect_to admin_print_queue_index_path, notice: t('.letter_marked_printed')
-    end
-
-    def mark_batch_as_printed
-      @letters = PrintQueueItem.where(id: params[:letter_ids])
-                               .includes(:constituent)
-
-      if @letters.empty?
-        # Set the correct flash notice for an empty batch as expected by the test
-        redirect_to admin_print_queue_index_path, notice: t('admin.print_queue.mark_as_printed.letter_marked_empty')
-        return
-      end
-
-      # Update all selected letters to printed status
-      @letters.update_all( # rubocop:disable Rails/SkipsModelValidations
-        status: PrintQueueItem.statuses[:printed],
-        printed_at: Time.current,
-        admin_id: current_user.id
-      )
-      redirect_to admin_print_queue_index_path,
-                  notice: "#{@letters.count} #{'letter'.pluralize(@letters.count)} marked as printed"
+    def release
+      send_export(Letters::Delivery.export!([params[:id]], actor: current_user))
     end
 
     def download_batch
-      @letters = PrintQueueItem.where(id: params[:letter_ids])
-                               .includes(:constituent, :pdf_letter_attachment)
+      return redirect_to admin_print_queue_index_path, status: :see_other unless request.post?
 
-      return redirect_empty_letters if @letters.empty?
-      return send_single_letter(@letters.first) if @letters.one?
+      send_export(Letters::Delivery.export!(selected_ids, actor: current_user))
+    end
 
-      send_multiple_letters(@letters)
+    def mark_as_printed
+      Letters::Delivery.mark_printed!([params[:id]], actor: current_user)
+      redirect_to admin_print_queue_index_path, notice: 'Letter marked as printed.'
+    end
+
+    def mark_batch_as_printed
+      Letters::Delivery.mark_printed!(selected_ids, actor: current_user)
+      redirect_to admin_print_queue_index_path, notice: 'Selected letters marked as printed.'
     end
 
     private
 
-    def require_admin
-      return if current_user&.admin?
-
-      redirect_to root_path, alert: t('alerts.unauthorized_page')
+    def load_queue
+      @selected_letter_ids = selected_ids
+      @pending_letters = PrintQueueItem.unreleased.includes(:constituent, :application).order(created_at: :desc)
+      @released_letters = PrintQueueItem.awaiting_print_confirmation.includes(:constituent, :application).order(released_at: :desc)
+      @printed_letters = PrintQueueItem.printed.includes(:constituent, :application, :admin).order(printed_at: :desc).limit(50)
+      @canceled_letters = PrintQueueItem.canceled.includes(:constituent, :application).order(canceled_at: :desc, id: :desc).limit(50)
     end
 
-    def redirect_empty_letters
-      redirect_to admin_print_queue_index_path, alert: t('admin.print_queue.redirect_empty_letters.no_selected_letters')
+    def selected_ids
+      Array(params[:letter_ids]).map(&:to_s).uniq
     end
 
-    def send_single_letter(letter)
-      send_data letter.pdf_letter.download,
-                filename: letter.pdf_filename,
-                type: 'application/pdf',
-                disposition: 'attachment',
-                stream: true
+    def send_export(export)
+      response.headers['Cache-Control'] = 'no-store, private'
+      send_data export.bytes, filename: export.filename, type: export.content_type, disposition: 'attachment'
     end
 
-    def send_multiple_letters(letters)
-      zipfile_name = "letters_batch_#{Time.zone.today.strftime('%Y%m%d')}.zip"
-
-      # Create a zip file in memory
-      zip_data = create_zip_data(letters)
-
-      # Send the data directly, avoiding file system operations
-      send_data zip_data,
-                filename: zipfile_name,
-                type: 'application/zip',
-                disposition: 'attachment'
-    rescue StandardError => e
-      handle_zip_error(e)
+    def show_release_refusal(error)
+      flash.now[:alert] = "Nothing was released. #{error.message}"
+      load_queue
+      render :index, status: :unprocessable_content
     end
 
-    # Create zip file directly in memory
-    def create_zip_data(letters)
-      # Create a StringIO to hold the zip data
-      buffer = StringIO.new
-
-      Zip::OutputStream.write_buffer(buffer) do |zos|
-        letters.each do |letter_item|
-          next unless letter_item.pdf_letter.attached?
-
-          # Add each PDF to the zip file
-          zos.put_next_entry(letter_item.pdf_filename)
-          zos.write letter_item.pdf_letter.download
-        end
-      end
-
-      # Return the binary data
-      buffer.string
-    end
-
-    def handle_zip_error(exception)
-      Rails.logger.error("PDF batch download error: #{exception.message}")
-      redirect_to admin_print_queue_index_path, alert: t(download_error)
+    def show_export_failure(error)
+      AuditEventService.log(action: 'letter_export_failed', actor: current_user,
+                            metadata: { print_queue_item_ids: selected_ids.presence || [params[:id]], error_class: error.class.name })
+      flash.now[:alert] = 'The PDF could not be prepared. Nothing was released. Review the selected letters and try again.'
+      load_queue
+      render :index, status: :unprocessable_content
     end
   end
 end

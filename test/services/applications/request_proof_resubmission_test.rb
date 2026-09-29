@@ -285,6 +285,8 @@ module Applications
         @application.user.phone,
         regexp_matches(/secure_proof_form/),
         sensitive: true,
+        action: 'SmsService#proof_resubmission',
+        delivery_context: has_entries('mail_action' => 'SmsService#proof_resubmission', 'channel' => 'sms'),
         context: has_entries(
           application_id: @application.id,
           recipient_id: @application.user_id,
@@ -307,7 +309,7 @@ module Applications
         recipient: @application.user
       )
       assert_predicate form, :recipient_channel_sms?
-      assert_equal 'email', notification.metadata.fetch('channel')
+      assert_equal 'sms', notification.metadata.fetch('channel')
       assert_equal 'sms', notification.metadata.fetch('recipient_channel')
       assert_equal 'sms', notification.metadata.fetch('requested_recipient_channel')
     end

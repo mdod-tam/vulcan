@@ -20,7 +20,7 @@ class CheckVoucherExpirationJobTest < ActiveJob::TestCase
     2.times { perform_enqueued_jobs { CheckVoucherExpirationJob.perform_now } }
 
     assert voucher.reload.voucher_active?
-    assert_equal 1, voucher.events.where(action: 'expiration_warning_sent').count
+    assert_equal 1, voucher.events.where(action: Vouchers::ExpirationProcessorService::WARNING_ACTION).count
     assert_equal [[voucher_email(voucher)]], ActionMailer::Base.deliveries.map(&:to)
   end
 
@@ -52,6 +52,42 @@ class CheckVoucherExpirationJobTest < ActiveJob::TestCase
 
     assert voucher.reload.voucher_expired?
     assert_empty ActionMailer::Base.deliveries
+  end
+
+  test 'an intentionally suppressed warning is recorded truthfully and never replayed' do
+    voucher = create_voucher(expires_in: 7.days)
+    admin = create(:admin)
+    EmailDelivery::ControlWriter.set(name: EmailDelivery::ALL_CONTROL, enabled: false, actor: admin, operation_id: SecureRandom.uuid)
+    perform_enqueued_jobs { CheckVoucherExpirationJob.perform_now }
+
+    event = voucher.events.find_by!(action: Vouchers::ExpirationProcessorService::WARNING_ACTION)
+    assert_equal 'suppressed', event.metadata['delivery_outcome']
+    assert_not voucher.events.exists?(action: 'expiration_warning_sent')
+    assert Event.with_metadata(:request_id, event.metadata['delivery_request_id']).exists?(action: EmailDelivery::Outcome::SUPPRESSED)
+    EmailDelivery::ControlWriter.set(name: EmailDelivery::ALL_CONTROL, enabled: true, actor: admin, operation_id: SecureRandom.uuid)
+    perform_enqueued_jobs { CheckVoucherExpirationJob.perform_now }
+    assert_empty ActionMailer::Base.deliveries
+    assert_equal 1, voucher.events.where(action: Vouchers::ExpirationProcessorService::WARNING_ACTION).count
+  end
+
+  test 'legacy sent-warning history still prevents duplicate warnings' do
+    voucher = create_voucher(expires_in: 7.days)
+    voucher.events.create!(user: ensure_system_audit_actor!, action: 'expiration_warning_sent')
+    perform_enqueued_jobs { CheckVoucherExpirationJob.perform_now }
+    assert_empty ActionMailer::Base.deliveries
+    assert_not voucher.events.exists?(action: Vouchers::ExpirationProcessorService::WARNING_ACTION)
+  end
+
+  test 'a queue failure does not consume the voucher warning' do
+    voucher = create_voucher(expires_in: 7.days)
+    adapter = EmailDelivery::MailDeliveryJob.queue_adapter
+    adapter.stubs(:enqueue).raises(ActiveJob::EnqueueError, 'queue unavailable')
+    CheckVoucherExpirationJob.perform_now
+    assert_not voucher.events.exists?(action: Vouchers::ExpirationProcessorService::WARNING_ACTION)
+
+    adapter.unstub(:enqueue)
+    perform_enqueued_jobs { CheckVoucherExpirationJob.perform_now }
+    assert_equal 1, ActionMailer::Base.deliveries.size
   end
 
   private

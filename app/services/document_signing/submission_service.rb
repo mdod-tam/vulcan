@@ -30,7 +30,7 @@ module DocumentSigning
       # A denied request makes no submission and changes no status, timestamp, or counter.
       if (denial = EmailDelivery.issuance_denial(EMAIL_ACTION))
         return failure('Signing request not sent: DocuSeal emails the provider, and that email is turned off ' \
-                       'in the email settings. Print the form instead, or turn email back on and try again.',
+                       'in the communication settings. Blank forms remain available; outgoing letters follow their own controls.',
                        { delivery_suppressed: true, suppression_reason: denial.reason })
       end
 

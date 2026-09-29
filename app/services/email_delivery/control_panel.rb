@@ -25,14 +25,39 @@ module EmailDelivery
 
     def global
       @global ||= begin
-        row = @controls[GLOBAL_CONTROL]
-        Control.new(name: GLOBAL_CONTROL, label: I18n.t('admin.email_delivery.global_label', locale: :en), row: row,
+        row = @controls[ALL_CONTROL]
+        Control.new(name: ALL_CONTROL, label: I18n.t('admin.email_delivery.global_label', locale: :en), row: row,
                     saved_enabled: row&.enabled, suppressed_by: row ? nil : :configuration_error)
       end
     end
 
     def categories
       Catalog::CATEGORIES.map { |category| category_control(category) }
+    end
+
+    def channels
+      CHANNEL_CONTROLS.map do |channel, name|
+        row = @controls[name]
+        Control.new(name: name, label: self.class.channel_label(channel), row: row, saved_enabled: row&.enabled,
+                    suppressed_by: upstream_suppression || (row ? nil : :configuration_error))
+      end
+    end
+
+    def self.channel_label(channel)
+      { 'email' => 'Email', 'letter' => 'Printed letters', 'sms' => 'SMS text messages' }.fetch(channel)
+    end
+
+    def pair_channel_states(pair)
+      supported = template_channels(pair.name)
+      channels.select { |control| supported.any? { |channel| CHANNEL_CONTROLS[channel] == control.name } }.to_h do |control|
+        reason = pair_channel_suppression(pair, control)
+        [control.label, reason ? self.class.reason_text(reason, category: pair.category) : 'Eligible to send']
+      end
+    end
+
+    def template_channels(name)
+      Catalog::MAIL_ACTIONS.select { |_action, entry| entry.template == name }
+                           .keys.flat_map { |action| Catalog.channels_for(action) }.uniq
     end
 
     def category_control(category)
@@ -58,10 +83,6 @@ module EmailDelivery
       end
     end
 
-    def pair_for(template)
-      pairs.find { |pair| pair.name == template.name && pair.format == template.format }
-    end
-
     def fragments
       @templates.select(&:fragment?)
     end
@@ -73,6 +94,12 @@ module EmailDelivery
     # Why an email is not going out, in words an admin can act on.
     def self.reason_text(reason, category: nil)
       case reason.to_s
+      when 'all_disabled' then 'all outgoing communications are turned off'
+      when 'letters_disabled' then 'printed letters are turned off'
+      when 'sms_disabled' then 'SMS text messages are turned off'
+      when 'delivery_identity_changed', 'artifact_changed' then 'the recipient or document changed; issue a new letter'
+      when 'request_no_longer_active' then 'the linked request is no longer active; review it before issuing a new letter'
+      when 'operator_canceled' then 'this letter was canceled'
       when 'global_disabled' then I18n.t('admin.email_delivery.reasons.global_disabled', locale: :en)
       when 'category_disabled'
         I18n.t('admin.email_delivery.reasons.category_disabled', category: category_label(category).downcase, locale: :en)
@@ -83,6 +110,13 @@ module EmailDelivery
     end
 
     private
+
+    def pair_channel_suppression(pair, control)
+      reason = pair.suppressed_by || control.suppressed_by
+      reason ||= :template_disabled unless pair.saved_enabled
+      reason ||= control.name == GLOBAL_CONTROL ? :global_disabled : :letters_disabled unless control.saved_enabled
+      reason
+    end
 
     def pair_suppression(category)
       return upstream_suppression if upstream_suppression
@@ -97,7 +131,7 @@ module EmailDelivery
     def upstream_suppression
       return :configuration_error if global.missing?
 
-      :global_disabled unless global.saved_enabled
+      :all_disabled unless global.saved_enabled
     end
   end
 end

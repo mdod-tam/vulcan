@@ -12,6 +12,30 @@ class NotificationsControllerTest < ActionDispatch::IntegrationTest
     @other_notification = create(:notification, recipient: @other_user)
   end
 
+  test 'Spanish notification outcomes and controls use channel-neutral localized text' do
+    @user.update!(locale: :es)
+    @notification.mark_delivery_suppressed!('channel_disabled', channel: :sms)
+    sign_in_for_integration_test(@user)
+
+    get notifications_path
+
+    assert_response :success
+    assert_select "#notification_#{@notification.id}", text: /No enviado/
+    assert_select "#notification_#{@notification.id}", text: /este método de envío estaba desactivado/
+    assert_select "#notification_#{@notification.id} button", text: 'Marcar como leída'
+    assert_select "#notification_#{@notification.id}", text: /suppressed|Mark as read|correo estaba desactivado/, count: 0
+    assert_select '.translation_missing', count: 0
+
+    [3.hours.ago, 40.days.ago, 3.years.ago].each do |created_at|
+      @notification.update!(created_at: created_at)
+      get notifications_path
+
+      assert_response :success
+      assert_select '.translation_missing', count: 0
+      assert_select "#notification_#{@notification.id} p", text: /Hace/
+    end
+  end
+
   test 'user can mark their own notification as read' do
     sign_in_for_integration_test(@user)
 

@@ -17,6 +17,25 @@ class SecureRequestEmailSuppressionTest < ActiveSupport::TestCase
     Current.reset
   end
 
+  test 'suppression rolls back the notification when revoking its link fails' do
+    vendor = rejected_vendor
+    form = vendor_request_for(vendor)
+    notification = create(:notification, recipient: vendor, actor: @admin, notifiable: vendor,
+                                         action: 'w9_resubmission_requested', delivery_status: nil)
+    original_metadata = notification.metadata
+    form.stubs(:revoke!).raises(ActiveRecord::RecordInvalid.new(form))
+
+    assert_no_difference('Event.count') do
+      assert_raises(ActiveRecord::RecordInvalid) do
+        SecureRequestDelivery.suppress!(request_form: form, notification: notification, actor: @admin, reason: 'global_disabled')
+      end
+    end
+
+    assert_nil notification.reload.delivery_status
+    assert_equal original_metadata, notification.metadata
+    assert form.reload.active?
+  end
+
   test 'a W9 request with email off creates no request, token, or revocation' do
     vendor = rejected_vendor
     open_request = vendor_request_for(vendor)

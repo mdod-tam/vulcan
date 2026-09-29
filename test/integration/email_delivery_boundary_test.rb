@@ -39,7 +39,6 @@ class EmailDeliveryBoundaryTest < ActionDispatch::IntegrationTest
   test 'a letter recipient requested while email is off still gets the letter' do
     @user.update!(communication_preference: 'letter')
     evaluation = create(:evaluation, constituent: @user)
-    EvaluatorMailer.queued_letters.clear
     clear_enqueued_jobs
     turn_global(false)
     Letters::TextTemplateToPdfService.any_instance.expects(:queue_for_printing).once
@@ -249,7 +248,7 @@ class EmailDeliveryBoundaryTest < ActionDispatch::IntegrationTest
 
     badge = ApplicationController.helpers.delivery_status_badge(notification)
 
-    assert_includes badge, 'suppressed'
+    assert_includes badge, I18n.t('notification_delivery.statuses.suppressed')
     assert_includes ApplicationController.helpers.format_email_status(notification), 'turned off'
   end
 

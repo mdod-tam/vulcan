@@ -30,7 +30,7 @@ namespace :email_delivery do
     puts "#{EmailDelivery::LegacyMailJobs.remove!(actor: email_delivery_task_actor)} legacy mail jobs removed."
   end
 
-  desc 'Show the master and category email controls'
+  desc 'Show All, channel and category communication controls'
   task controls: :environment do
     FeatureFlag.where(name: EmailDelivery::CONTROL_NAMES).order(:name).each do |control|
       puts "#{control.name.ljust(40)} #{control.enabled ? 'on' : 'off'} (generation #{control.delivery_generation})"
@@ -44,5 +44,27 @@ namespace :email_delivery do
     result = EmailDelivery::ControlWriter.set(name: EmailDelivery::GLOBAL_CONTROL, enabled: args[:state] == 'on',
                                               actor: email_delivery_task_actor, operation_id: "rake-set-global:#{SecureRandom.uuid}")
     puts "All email is #{result.control.enabled ? 'on' : 'off'} (#{result.status})."
+  end
+  desc 'Turn every outgoing channel off or on (usage: email_delivery:set_all[off] or [on])'
+  task :set_all, [:state] => :environment do |_task, args|
+    abort 'Usage: email_delivery:set_all[off] or email_delivery:set_all[on]' unless %w[on off].include?(args[:state])
+
+    result = EmailDelivery::ControlWriter.set(name: EmailDelivery::ALL_CONTROL, enabled: args[:state] == 'on',
+                                              actor: email_delivery_task_actor, operation_id: "rake-set-all:#{SecureRandom.uuid}")
+    puts "All outgoing communications: #{result.control.enabled ? 'on' : 'off'} (#{result.status})."
+  end
+
+  desc 'Read-only: inventory pending print items lacking current authorization'
+  task legacy_letter_report: :environment do
+    scope = PrintQueueItem.unreleased.where("delivery_context IS NULL OR delivery_context->>'version' IS DISTINCT FROM ?", EmailDelivery::Policy::CONTEXT_VERSION.to_s)
+    puts "#{scope.count} unreleased legacy letters require cancellation and deliberate reissue."
+    scope.find_each { |item| puts "  Letter ##{item.id}: #{item.letter_type}" }
+  end
+
+  desc 'Cancel ineligible unreleased letters, including legacy items; never reauthorize or replay them'
+  task reconcile_letters: :environment do
+    email_delivery_task_actor
+    Letters::Delivery.reconcile_pending!
+    puts "#{PrintQueueItem.unreleased.count} letters remain awaiting release."
   end
 end

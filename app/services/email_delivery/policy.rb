@@ -1,64 +1,95 @@
 # frozen_string_literal: true
 
 module EmailDelivery
-  # Captures the controls an email depends on when it is requested, and verifies them before it
-  # is sent: the master control, the email's category, and every locale row of its template pair.
-  # Verification compares row ids and generations, so a control or template turned off in the
-  # meantime, or a row that was recreated, cancels the email even if everything is on now.
+  # Versioned captures distinguish old email-only authorization from the All contract.
+  # Retain the namespace and mail job class so queued payloads have a deliberate disposition.
   class Policy
+    CONTEXT_VERSION = 2
+
     def self.capture(mail_action:, params: {}, request_id: SecureRandom.uuid)
-      base = { 'request_id' => request_id, 'mail_action' => mail_action.to_s, 'notification_id' => Current.notification_id }.compact
       entry = Catalog.mail_action(mail_action)
-      controls = [global_control!]
-      if entry
-        # A shared fragment is never sent on its own, not even as a test.
-        return base.merge('configuration_error' => 'unclassified_action') if EmailTemplate.fragment_name?(test_template_name(entry, params))
+      base = { 'version' => CONTEXT_VERSION, 'request_id' => request_id, 'mail_action' => mail_action.to_s,
+               'notification_id' => Current.notification_id || params[:notification_id] || params['notification_id'] }.compact
+      return base.merge('configuration_error' => 'unclassified_action') unless entry
 
-        # A test send of a template no email uses has no category; the master control and the
-        # template's own setting still apply.
-        category = Catalog.category_for(mail_action, params: params)
-        controls << category_control!(category) if category
-      end
+      name = entry.template || test_template_name(entry, params)
+      return base.merge('configuration_error' => 'unclassified_action') if EmailTemplate.fragment_name?(name)
 
-      context = base.merge('scopes' => controls.map { |control| scope_for(control) },
-                           'templates' => template_rows(entry, params).map { |row| template_scope_for(row) })
-      # An email requested while a control is off stays denied; turning the control back on
-      # authorizes only emails requested afterwards. A letter route in the same action still runs.
-      decision = verify_controls(context)
-      return context if decision.allowed?
-      return context.merge('configuration_error' => decision.reason) if decision.configuration_error?
-
-      context.merge('denied_reason' => decision.reason)
+      build_capture(entry, base, params, name)
     rescue ConfigurationError, ActiveRecord::ActiveRecordError => e
       base.merge('configuration_error' => e.class.name)
     end
 
-    def self.verify(context)
-      return Decision.suppressed(:legacy_context_missing) if context.blank?
+    def self.build_capture(entry, base, params, name)
+      mail_action = base.fetch('mail_action')
+      category = Catalog.category_for(mail_action, params: params)
+      controls = [control!(ALL_CONTROL)]
+      controls << control!(EmailDelivery.category_control(category)) if category
+      channels = Catalog.channels_for(mail_action).to_h do |channel|
+        channel_name = CHANNEL_CONTROLS[channel]
+        [channel, channel_name ? channel_scope_for(channel_name) : nil]
+      end
+      context = base.merge('category' => category, 'template_name' => name,
+                           'template_format' => (params[:format] || params['format'] || 'text').to_s,
+                           'scopes' => controls.map { |control| scope_for(control) }, 'channels' => channels,
+                           'templates' => template_rows(entry, params).map { |row| template_scope_for(row) })
+      context['denied_channels'] = initial_denials(context)
+      context
+    end
+    private_class_method :build_capture
+
+    # Email Off cannot poison an eligible letter route.
+    def self.initial_denials(context)
+      context.fetch('channels').keys.filter_map do |channel|
+        decision = verify_controls(context, channel)
+        [channel, { 'outcome' => decision.outcome.to_s, 'reason' => decision.reason }] unless decision.allowed?
+      end.to_h
+    end
+    private_class_method :initial_denials
+
+    def self.verify(context, channel: 'email')
+      return Decision.suppressed(:legacy_context_missing) if context.blank? || context['version'] != CONTEXT_VERSION
       return Decision.configuration_error(context['configuration_error']) if context['configuration_error']
-      return Decision.suppressed(context['denied_reason']) if context['denied_reason']
 
-      verify_controls(context)
+      verify_delivery(context['mail_action'], context, channel: channel)
     end
 
-    def self.verify_controls(context)
-      global_control!
-      checks = Array(context['scopes']).map { |scope| verify_scope(scope) } +
-               Array(context['templates']).map { |scope| verify_template(scope) }
-      checks.find { |decision| !decision.allowed? } || Decision.allowed
-    rescue ConfigurationError, ActiveRecord::ActiveRecordError => e
-      Decision.configuration_error(e.class.name)
+    def self.verify_delivery(mail_action, context, channel: 'email')
+      channel = channel.to_s
+      return Decision.configuration_error(:unclassified_action) unless Catalog.channels_for(mail_action).include?(channel)
+      return Decision.suppressed(:legacy_context_missing) if context.blank? || context['version'] != CONTEXT_VERSION
+      return Decision.configuration_error(context['configuration_error']) if context['configuration_error']
+      return Decision.suppressed(:delivery_identity_changed) unless context['mail_action'] == mail_action.to_s
+
+      if (denial = context.dig('denied_channels', channel))
+        return Decision.configuration_error(denial['reason']) if denial['outcome'] == 'configuration_error'
+
+        return Decision.suppressed(denial['reason'])
+      end
+
+      verify_controls(context, channel)
     end
-    private_class_method :verify_controls
 
-    # verify, plus the catalog: an action nobody classified is a configuration defect.
-    def self.verify_delivery(mail_action, context)
-      return Decision.configuration_error(:unclassified_action) if Catalog.mail_action(mail_action).nil?
+    def self.verify_any(mail_action, context)
+      decisions = Catalog.channels_for(mail_action).map { |channel| verify_delivery(mail_action, context, channel: channel) }
+      return Decision.configuration_error(:unclassified_action) if decisions.empty?
+      return Decision.allowed if decisions.any?(&:allowed?)
 
-      verify(context)
+      decisions.find(&:configuration_error?) || decisions.first
     end
 
-    # The template pair a mail action renders: every locale of that name and format.
+    # Print release locks the same controls as the writer before locking print items.
+    # Storage, rendering and network I/O must stay outside this transaction.
+    def self.with_locked_controls(contexts, channel:)
+      FeatureFlag.transaction do
+        scopes = contexts.flat_map { |context| Array(context&.dig('scopes')) + [context&.dig('channels', channel.to_s)] }.compact
+        FeatureFlag.where(id: scopes.pluck('id')).order(:id).lock.load
+        templates = contexts.flat_map { |context| Array(context&.dig('templates')) }
+        EmailTemplate.where(id: templates.pluck('id')).order(:id).lock.load
+        yield
+      end
+    end
+
     def self.template_rows(entry, params)
       return EmailTemplate.none if entry.nil?
 
@@ -69,16 +100,35 @@ module EmailDelivery
       EmailTemplate.where(name: name, format: format).order(:id)
     end
 
-    def self.test_template_name(entry, params)
-      return unless entry.category == 'from_test_template'
+    def self.verify_controls(context, channel)
+      return Decision.configuration_error(:uncaptured_channel) unless context.fetch('channels', {}).key?(channel)
 
-      params[:template_name] || params['template_name']
+      scopes = Array(context['scopes'])
+      expected = [ALL_CONTROL]
+      expected << EmailDelivery.category_control(context['category']) if context['category']
+      return Decision.configuration_error(:invalid_control_context) unless scopes.pluck('control').sort == expected.sort
+
+      channel_scope = context.dig('channels', channel)
+      return Decision.configuration_error(:invalid_channel_context) unless channel_scope&.dig('control') == CHANNEL_CONTROLS[channel]
+
+      # Explain the first applicable refusal: All, channel, category, then template.
+      [scopes.first, channel_scope, *scopes.drop(1)].compact.each do |scope|
+        decision = verify_scope(scope)
+        return decision unless decision.allowed?
+      end
+      Array(context['templates']).each do |scope|
+        decision = verify_template(scope)
+        return decision unless decision.allowed?
+      end
+      verify_template_identity(context)
+    rescue ConfigurationError, ActiveRecord::ActiveRecordError => e
+      Decision.configuration_error(e.class.name)
     end
-    private_class_method :test_template_name
+    private_class_method :verify_controls
 
     def self.verify_scope(scope)
-      control = FeatureFlag.find_by(id: scope['id'])
-      return Decision.suppressed(:pending_canceled) if control.nil? || control.name != scope['control']
+      control = control!(scope['control'])
+      return Decision.suppressed(:pending_canceled) if control.id != scope['id']
       return Decision.suppressed(disabled_reason(control)) unless control.enabled
       return Decision.suppressed(:pending_canceled) if control.delivery_generation != scope['generation']
 
@@ -88,7 +138,7 @@ module EmailDelivery
 
     def self.verify_template(scope)
       template = EmailTemplate.find_by(id: scope['id'])
-      return Decision.suppressed(:pending_canceled) if template.nil? || template.name != scope['name']
+      return Decision.suppressed(:pending_canceled) unless template && template.name == scope['name'] && template.locale == scope['locale']
       return Decision.suppressed(:template_disabled) unless template.enabled
       return Decision.suppressed(:pending_canceled) if template.delivery_generation != scope['generation']
 
@@ -96,16 +146,30 @@ module EmailDelivery
     end
     private_class_method :verify_template
 
-    def self.global_control!
-      FeatureFlag.find_by(name: GLOBAL_CONTROL) || raise(ConfigurationError, "Missing #{GLOBAL_CONTROL} control")
-    end
-    private_class_method :global_control!
+    def self.verify_template_identity(context)
+      return Decision.allowed if context['template_name'].blank?
 
-    def self.category_control!(category)
-      name = EmailDelivery.category_control(category)
+      ids = EmailTemplate.where(name: context['template_name'], format: context['template_format']).order(:id).pluck(:id)
+      return Decision.suppressed(:pending_canceled) unless ids == Array(context['templates']).pluck('id')
+
+      Decision.allowed
+    end
+    private_class_method :verify_template_identity
+
+    def self.channel_scope_for(name)
+      scope_for(control!(name))
+    rescue ConfigurationError, ActiveRecord::ActiveRecordError
+      # A missing sibling channel must not invalidate an otherwise eligible letter route.
+      { 'control' => name, 'id' => nil, 'generation' => nil }
+    end
+    private_class_method :channel_scope_for
+
+    def self.control!(name)
+      raise ConfigurationError, 'Unknown communication control' unless CONTROL_NAMES.include?(name)
+
       FeatureFlag.find_by(name: name) || raise(ConfigurationError, "Missing #{name} control")
     end
-    private_class_method :category_control!
+    private_class_method :control!
 
     def self.scope_for(control)
       { 'control' => control.name, 'id' => control.id, 'generation' => control.delivery_generation }
@@ -113,13 +177,22 @@ module EmailDelivery
     private_class_method :scope_for
 
     def self.template_scope_for(template)
-      { 'name' => template.name, 'locale' => template.locale, 'id' => template.id,
-        'generation' => template.delivery_generation }
+      { 'name' => template.name, 'locale' => template.locale, 'id' => template.id, 'generation' => template.delivery_generation }
     end
     private_class_method :template_scope_for
 
+    def self.test_template_name(entry, params)
+      params[:template_name] || params['template_name'] if entry.category == 'from_test_template'
+    end
+    private_class_method :test_template_name
+
     def self.disabled_reason(control)
-      control.name == GLOBAL_CONTROL ? :global_disabled : :category_disabled
+      return :all_disabled if control.name == ALL_CONTROL
+      return :global_disabled if control.name == GLOBAL_CONTROL
+      return :letters_disabled if control.name == CHANNEL_CONTROLS['letter']
+      return :sms_disabled if control.name == CHANNEL_CONTROLS['sms']
+
+      :category_disabled
     end
     private_class_method :disabled_reason
   end

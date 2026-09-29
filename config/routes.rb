@@ -147,10 +147,11 @@ Rails.application.routes.draw do
 
     resources :print_queue, only: %i[index show] do
       member do
+        post :release
         post :mark_as_printed
       end
       collection do
-        get :download_batch
+        match :download_batch, via: %i[get post]
         post :mark_batch_as_printed
       end
     end

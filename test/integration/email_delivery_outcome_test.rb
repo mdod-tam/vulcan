@@ -23,7 +23,7 @@ class EmailDeliveryOutcomeTest < ActionDispatch::IntegrationTest
     notification = notify_vendor
 
     assert_configuration_error(notification)
-    assert_empty enqueued_jobs
+    assert_empty(enqueued_jobs.select { |job| job[:job] == EmailDelivery::MailDeliveryJob })
     assert_empty ActionMailer::Base.deliveries
     assert Event.exists?(action: EmailDelivery::Outcome::CONFIGURATION_ERROR)
     assert_not Event.exists?(action: EmailDelivery::Outcome::SUPPRESSED)
@@ -31,11 +31,11 @@ class EmailDeliveryOutcomeTest < ActionDispatch::IntegrationTest
   end
 
   test 'a configuration read failure is not intentional suppression' do
-    EmailDelivery::Policy.stubs(:global_control!).raises(ActiveRecord::ConnectionNotEstablished, 'read unavailable')
+    EmailDelivery::Policy.stubs(:control!).raises(ActiveRecord::ConnectionNotEstablished, 'read unavailable')
 
     assert_configuration_error(notify_vendor)
 
-    assert_empty enqueued_jobs
+    assert_empty(enqueued_jobs.select { |job| job[:job] == EmailDelivery::MailDeliveryJob })
     assert_empty ActionMailer::Base.deliveries
   end
 
@@ -60,7 +60,7 @@ class EmailDeliveryOutcomeTest < ActionDispatch::IntegrationTest
     assert_equal 'global_disabled', notification.metadata.dig('delivery_suppressed', 'reason')
     assert_equal 'none', notification.metadata['actual_delivery_channel']
     assert_not Event.exists?(auditable: notification, action: 'notification_w9_approved_sent')
-    assert_empty enqueued_jobs
+    assert_empty(enqueued_jobs.select { |job| job[:job] == EmailDelivery::MailDeliveryJob })
   end
 
   test 'a synchronous configuration refusal is an operational exception' do
@@ -133,7 +133,7 @@ class EmailDeliveryOutcomeTest < ActionDispatch::IntegrationTest
     assert_redirected_to admin_email_template_path(template)
     assert_includes flash[:alert], 'settings'
     assert_not_includes flash[:alert], 'turned off'
-    assert_empty enqueued_jobs
+    assert_empty(enqueued_jobs.select { |job| job[:job] == EmailDelivery::MailDeliveryJob })
   end
 
   private

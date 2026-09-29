@@ -23,7 +23,7 @@ class ApplicationMailer < ActionMailer::Base
 
     def initialize(message = nil, reason: nil)
       @reason = reason.to_s.presence || 'suppressed'
-      super(message || "Email delivery suppressed: #{@reason}")
+      super(message || "Communication delivery suppressed: #{@reason}")
     end
   end
 
@@ -41,6 +41,7 @@ class ApplicationMailer < ActionMailer::Base
 
   # Last check before handoff, for queued and immediate deliveries alike.
   before_deliver :enforce_email_delivery_controls
+  after_deliver :record_provider_fallback_submission
 
   private
 
@@ -48,10 +49,10 @@ class ApplicationMailer < ActionMailer::Base
   def send_email(recipient_email, template, variables, mail_options = {})
     required_delivery = mail_options.delete(:required_delivery)
     unless template.enabled?
-      Rails.logger.warn("Email template '#{template.name}' is disabled. Skipping email to #{recipient_email}")
+      Rails.logger.warn("Email template '#{template.name}' is disabled. Skipping delivery")
       # No message is built, so the final check never runs; record the suppression here.
       EmailDelivery::Outcome.record_not_sent(EmailDelivery::Decision.suppressed(:template_disabled),
-                                             context: EmailDelivery::Current.context,
+                                             context: @delivery_context,
                                              mail_action: "#{self.class.name}##{action_name}")
       raise DeliverySkipped.new("Email template '#{template.name}' is disabled", reason: 'template_disabled') if required_delivery
 
@@ -78,16 +79,18 @@ class ApplicationMailer < ActionMailer::Base
     return unless @_mail_was_called
 
     mail_action = "#{self.class.name}##{action_name}"
-    context = if EmailDelivery::Current.queued
-                EmailDelivery::Current.context
-              else
-                EmailDelivery::Policy.capture(mail_action: mail_action, params: params || {})
-              end
+    context = @delivery_context
     decision = EmailDelivery::Policy.verify_delivery(mail_action, context)
     return if decision.allowed?
 
     EmailDelivery::Outcome.record_not_sent(decision, context: context, mail_action: mail_action)
     throw :abort
+  end
+
+  def record_provider_fallback_submission
+    return unless @delivery_context&.dig('provider_notification_id')
+
+    MedicalProviderNotifier.record_fallback_outcome(@delivery_context, status: :submitted)
   end
 
   def mail_with_text_body(mail_options, text_body)
@@ -125,7 +128,8 @@ class ApplicationMailer < ActionMailer::Base
   end
 
   # Secure requests pass the resolver-selected print_recipient. Other callers retain the dependent-to-guardian fallback.
-  def queue_letter_delivery(recipient:, template_name:, variables:, letter_type: nil, application: nil, print_recipient: nil)
+  def queue_letter_delivery(recipient:, template_name:, variables:, letter_type: nil, application: nil, print_recipient: nil, # rubocop:disable Metrics/ParameterLists
+                            secure_request_form: nil, delivery_key: nil)
     print_recipient ||= letter_recipient_for(recipient)
     letter_variables = common_template_variables.merge(variables.respond_to?(:to_h) ? variables.to_h.deep_symbolize_keys : variables.dup)
     letter_variables[:application] = application if application.present?
@@ -134,7 +138,10 @@ class ApplicationMailer < ActionMailer::Base
       template_name: template_name,
       recipient: print_recipient,
       variables: letter_variables,
-      letter_type: letter_type
+      letter_type: letter_type,
+      delivery_context: @delivery_context,
+      secure_request_form: secure_request_form,
+      request_key: delivery_key
     ).queue_for_printing
   end
 
@@ -185,6 +192,11 @@ class ApplicationMailer < ActionMailer::Base
   end
 
   def set_common_variables
+    @delivery_context = if EmailDelivery::Current.queued
+                          EmailDelivery::Current.context
+                        else
+                          EmailDelivery::Policy.capture(mail_action: "#{self.class.name}##{action_name}", params: params || {})
+                        end
     @current_year = Time.current.year
     @organization_name = 'Maryland Accessible Telecommunications Program'
     @organization_email = 'no_reply@mdmat.org'

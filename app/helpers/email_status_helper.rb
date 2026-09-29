@@ -5,10 +5,18 @@ module EmailStatusHelper
     return '' unless notification.email_tracking? || notification.local_delivery_outcome?
 
     badge_class = delivery_status_badge_class(notification)
-    status_text = notification.delivery_status || 'Pending'
+    status_text = delivery_status_text(notification)
 
     content_tag(:span, status_text,
                 class: "ml-2 inline-flex items-center px-2 py-0.5 rounded text-xs font-medium #{badge_class}")
+  end
+
+  def notification_viewer_locale
+    current_user.locale.presence || I18n.locale
+  end
+
+  def delivery_status_text(notification, locale: I18n.locale)
+    t("notification_delivery.statuses.#{notification.delivery_status || 'pending'}", locale: locale)
   end
 
   def format_email_status(notification)

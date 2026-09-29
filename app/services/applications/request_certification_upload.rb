@@ -150,10 +150,8 @@ module Applications
       resolver.known_recipients.find { |recipient| recipient.id == default_recipient_id } || application.user
     end
 
-    # The email was stopped on purpose: revoke the unsent link, keep no cooldown, and say why.
     def delivery_suppressed(request_form, reason)
-      tracking_notification_for(request_form)&.mark_delivery_suppressed!(reason)
-      request_form.revoke!(actor: actor, reason: :delivery_suppressed, metadata: { suppression_reason: reason })
+      SecureRequestDelivery.suppress!(request_form: request_form, notification: tracking_notification_for(request_form), actor: actor, reason: reason)
       revert_initial_status_after_suppression(request_form)
       suppressed(reason, request_form)
     end

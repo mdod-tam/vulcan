@@ -120,7 +120,8 @@ class ApplicationNotificationsMailer < ApplicationMailer # rubocop:disable Metri
             variables: variables.merge(proof_type: proof_review.proof_type),
             letter_type: proof_rejection_letter_type(proof_review.proof_type),
             application: application,
-            print_recipient: letter_recipient
+            print_recipient: letter_recipient,
+            secure_request_form: secure_request_form
           )
           return noop_letter_delivery
         end
@@ -167,7 +168,8 @@ class ApplicationNotificationsMailer < ApplicationMailer # rubocop:disable Metri
             template_name: template_name,
             variables: variables.merge(proof_type: proof_type),
             application: application,
-            print_recipient: letter_recipient
+            print_recipient: letter_recipient,
+            secure_request_form: secure_request_form
           )
           return noop_letter_delivery
         end
@@ -378,7 +380,8 @@ class ApplicationNotificationsMailer < ApplicationMailer # rubocop:disable Metri
           variables: variables,
           letter_type: :provider_info_requested,
           application: application,
-          print_recipient: letter_recipient
+          print_recipient: letter_recipient,
+          secure_request_form: secure_request_form
         )
         return noop_letter_delivery
       end

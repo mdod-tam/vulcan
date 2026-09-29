@@ -105,26 +105,13 @@ class PrintQueueItemTest < ActiveSupport::TestCase
     assert_respond_to PrintQueueItem, :recent
   end
 
-  test 'should mark as printed' do
-    # Set up the letter for printing with mocked save
-    @pending_letter.stubs(:save).returns(true)
-    @pending_letter.id = 1 # Simulate an ID for the record
-
-    # Verify the status change
-    assert_changes -> { @pending_letter.status }, from: 'pending', to: 'printed' do
-      if respond_to?(:safe_interaction)
-        safe_interaction { @pending_letter.mark_as_printed(@admin) }
-      else
-        @pending_letter.mark_as_printed(@admin)
-      end
-    end
-
-    assert_equal @admin.id, @pending_letter.admin_id
-    assert_not_nil @pending_letter.printed_at
+  test 'mark as printed cannot create or authorize an unsaved letter' do
+    assert_raises(Letters::Delivery::ReleaseDenied) { @pending_letter.mark_as_printed(@admin) }
   end
 
-  test 'pdf_filename uses letter type and constituent id' do
-    assert_equal "registration_confirmation_#{@constituent.id}.pdf", @pending_letter.pdf_filename
+  test 'pdf filenames are unique by persisted item rather than recipient' do
+    @pending_letter.id = 123
+    assert_equal 'registration_confirmation_123.pdf', @pending_letter.pdf_filename
   end
 
   # Helper method to set up mock attachments for all PrintQueueItems

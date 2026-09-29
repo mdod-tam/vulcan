@@ -16,7 +16,7 @@ class SmsServiceSensitiveLoggingTest < ActiveSupport::TestCase
     SmsService.send_message(
       '410-555-0199',
       'Submit here: https://example.test/secure_provider_info_form?token=raw-token',
-      sensitive: true,
+      sensitive: true, action: 'SmsService#account_access',
       context: { secure_request_form_id: 123, application_id: 456 }
     )
   end
@@ -35,7 +35,7 @@ class SmsServiceSensitiveLoggingTest < ActiveSupport::TestCase
     SmsService.send_message(
       '410-555-0199',
       "MAT account access link: #{reset_url}",
-      sensitive: true,
+      sensitive: true, action: 'SmsService#account_access',
       context: { recipient_id: 42, recipient_channel: 'account_access_sms' }
     )
   end
@@ -57,7 +57,7 @@ class SmsServiceSensitiveLoggingTest < ActiveSupport::TestCase
         SmsService.send_message(
           '410-555-0199',
           "MAT account access link: #{reset_url}",
-          sensitive: true,
+          sensitive: true, action: 'SmsService#account_access',
           context: { recipient_id: 42, recipient_channel: 'account_access_sms' }
         )
       end

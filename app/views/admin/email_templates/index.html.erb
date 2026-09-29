@@ -39,6 +39,22 @@
                                  extra_params: { control: @control_panel.global.name }) %>
       </div>
 
+      <h3 class="mt-6 text-base font-semibold text-gray-900">Delivery channels</h3>
+      <p class="text-sm text-gray-700">All must be on for any channel to send. Each channel keeps its saved setting when All is off.</p>
+      <ul role="list" class="mt-3 grid gap-3 sm:grid-cols-3">
+        <% @control_panel.channels.each do |control| %>
+          <li class="flex flex-wrap items-center justify-between gap-2 rounded-md border border-gray-200 p-3" data-email-control="<%= control.name %>">
+            <div>
+              <p class="text-sm font-medium text-gray-900"><%= control.label %></p>
+              <%= email_control_state_badge(saved_enabled: control.saved_enabled, suppressed_by: control.suppressed_by) %>
+            </div>
+            <%= email_control_button(label: control.label, url: admin_email_delivery_control_path,
+                                     enabled: control.saved_enabled, version: EmailDelivery::ControlWriter.version_for(control.row),
+                                     extra_params: { control: control.name }) %>
+          </li>
+        <% end %>
+      </ul>
+
       <h3 class="mt-6 text-base font-semibold text-gray-900"><%= email_delivery_t('categories_heading') %></h3>
       <p class="text-sm text-gray-700 max-w-prose"><%= email_delivery_t('categories_help') %></p>
       <ul role="list" class="mt-3 grid gap-3 sm:grid-cols-2 lg:grid-cols-3">
@@ -49,7 +65,7 @@
               <p class="text-sm font-medium text-gray-900"><%= control.label %></p>
               <%= email_control_state_badge(saved_enabled: control.saved_enabled, suppressed_by: control.suppressed_by) %>
             </div>
-            <%= email_control_button(label: "#{control.label} emails", url: admin_email_delivery_control_path,
+            <%= email_control_button(label: "#{control.label} communications", url: admin_email_delivery_control_path,
                                      enabled: control.saved_enabled, version: EmailDelivery::ControlWriter.version_for(control.row),
                                      extra_params: { control: control.name }) %>
           </li>
@@ -84,6 +100,9 @@
                     </span>
                   <% end %>
                 </div>
+                <% @control_panel.pair_channel_states(pair).each do |channel, state| %>
+                  <p class="mt-1 text-xs text-gray-700"><%= channel %>: <%= state %></p>
+                <% end %>
               </div>
               <div class="flex flex-wrap items-center gap-3">
                 <%= link_to t('shared.view'), admin_email_template_path(pair.primary_row),

@@ -1,7 +1,7 @@
 # frozen_string_literal: true
 
 class NotificationService
-  VALID_CHANNELS = %i[email letter].freeze
+  VALID_CHANNELS = %i[email letter sms].freeze
 
   # ---- Public API (backward-compatible) --------------------------------------
 
@@ -340,6 +340,12 @@ class NotificationService
     # Recipient-facing mailers resolve the final route to honor communication preference.
     return false unless VALID_CHANNELS.include?(channel)
 
+    # SMS tracking is record-only here; secure-request owners call SmsService themselves.
+    if channel == :sms
+      notification.mark_delivery_not_sent!(EmailDelivery::Decision.configuration_error(:sms_requires_delivery_owner), channel: :sms)
+      return false
+    end
+
     if NOOP_DELIVERY_ACTIONS.include?(notification.action)
       Rails.logger.info "NotificationService: No email for '#{notification.action}' (audit-only action) — Notification ##{notification.id}"
       persist_delivery_routing_metadata(notification, actual_delivery_channel: 'none', delivery_route_reason: 'no_email_action')
@@ -413,6 +419,16 @@ class NotificationService
   end
 
   def send_notification_email(notification, mailer_class, method_name, requested_channel:)
+    EmailDelivery::Current.set(notification_id: notification.id) do
+      process_notification_mail(notification, mailer_class, method_name, requested_channel: requested_channel)
+    end
+  rescue ApplicationMailer::DeliverySkipped, EmailDelivery::ConfigurationError => e
+    decision = e.is_a?(EmailDelivery::ConfigurationError) ? EmailDelivery::Decision.configuration_error(e.reason) : EmailDelivery::Decision.suppressed(e.reason)
+    notification.mark_delivery_not_sent!(decision, channel: inferred_actual_delivery_channel(notification))
+    ['none', notification.reload.metadata['delivery_route_reason']]
+  end
+
+  def process_notification_mail(notification, mailer_class, method_name, requested_channel:)
     mail_delivery = build_mail_delivery(notification, mailer_class, method_name)
     actual_delivery_channel = resolve_actual_delivery_channel(mail_delivery, notification: notification)
     explicit_reason = mail_delivery.is_a?(ApplicationMailer::NoopDelivery) ? mail_delivery.reason : nil
@@ -421,7 +437,7 @@ class NotificationService
 
     raise StandardError, "Mailer '#{mailer_class}' method '#{method_name}' returned an invalid delivery object" unless mail_delivery.respond_to?(:deliver_later)
 
-    outcome = EmailDelivery::Current.set(notification_id: notification.id) { queue_mail_delivery(mail_delivery) }
+    outcome = queue_mail_delivery(mail_delivery)
     redact_temp_password(notification) if notification.metadata&.dig('temp_password').present?
     raise StandardError, "Mail job for '#{notification.action}' could not be queued" if outcome == :enqueue_failed
 

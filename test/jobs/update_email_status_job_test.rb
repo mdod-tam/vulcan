@@ -98,7 +98,7 @@ class UpdateEmailStatusJobTest < ActiveJob::TestCase
 
     badge = ApplicationController.helpers.delivery_status_badge(@notification)
 
-    assert_includes badge, 'submitted'
+    assert_includes badge, I18n.t('notification_delivery.statuses.submitted')
   end
 
   private

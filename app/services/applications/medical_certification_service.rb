@@ -2,6 +2,9 @@
 
 module Applications
   class MedicalCertificationService < BaseService
+    ACTION = 'MedicalProviderMailer#request_certification'
+    STATE_FIELDS = %w[medical_certification_status medical_certification_requested_at medical_certification_request_count].freeze
+
     attr_reader :application, :actor
 
     def initialize(application:, actor:)
@@ -11,143 +14,96 @@ module Applications
     end
 
     def request_certification
-      # Validate medical provider email
-      return failure(message: 'Medical provider email is required') if application.medical_provider_email.blank?
+      return failure('Medical provider email is required') if application.medical_provider_email.blank?
 
-      # Get current time once to ensure consistency
-      current_time = Time.current
+      decision, context = EmailDelivery.issuance(ACTION)
+      return refusal(decision) if decision
 
-      begin
-        # Main updates in a transaction
-        ApplicationRecord.transaction do
-          update_certification_status(current_time)
-          increment_request_count(current_time)
+      notification = nil
+      application.with_lock do
+        previous = application.attributes.slice(*STATE_FIELDS)
+        timestamp = Time.current
+        Current.instance.set(skip_proof_validation: true) do
+          application.update!(medical_certification_status: :requested, medical_certification_requested_at: timestamp,
+                              medical_certification_request_count: application.medical_certification_request_count.to_i + 1)
         end
-
-        # Ensure application is reloaded after transaction commits
         application.reload
+        notification = create_notification(previous)
+        AuditEventService.log(action: 'medical_certification_requested', actor: actor, auditable: application,
+                              metadata: { old_status: previous['medical_certification_status'], new_status: 'requested',
+                                          change_type: 'medical_certification', notification_id: notification.id,
+                                          submission_method: 'email', delivery_outcome: 'pending_enqueue' })
+        context = context.merge('notification_id' => notification.id)
+        ApplicationStatusChange.create!(application: application, user: actor,
+                                        from_status: previous['medical_certification_status'], to_status: 'requested',
+                                        change_type: 'medical_certification',
+                                        metadata: { notification_id: notification.id, change_type: 'medical_certification' })
+      end
+      deferred = ActiveRecord::Base.current_transaction.open?
+      job = EmailDelivery::Current.set(context: context, queued: true) do
+        MedicalCertificationEmailJob.perform_later(application_id: application.id,
+                                                   timestamp: application.medical_certification_requested_at.iso8601(6),
+                                                   notification_id: notification.id)
+      end
+      if job.respond_to?(:successfully_enqueued?) && job.successfully_enqueued?
+        return success(deferred ? 'Certification email scheduled after commit.' : 'Certification email queued.',
+                       { delivery_outcome: deferred ? :deferred : :queued })
+      end
 
-        # Create notification outside the transaction
-        notification = create_notification(current_time)
+      decision = EmailDelivery::Policy.verify(context)
+      return refusal(decision) unless decision.allowed?
 
-        # Send email with notification for tracking
-        send_email(notification)
+      self.class.restore_unsent_request(notification)
+      failure('Certification email could not be queued.', { delivery_outcome: :enqueue_failed })
+    rescue StandardError => e
+      self.class.restore_unsent_request(notification) if notification
+      log_error(e, "Application ID: #{application.id}")
+      failure('Certification email could not be queued.', { delivery_outcome: :enqueue_failed })
+    end
 
-        success(message: 'Disability certification requested successfully.')
-      rescue StandardError => e
-        log_error(e, "Application ID: #{application.id}")
-        failure(message: "Failed to request disability certification: #{e.message}")
+    # Only this owner's unchanged request can be compensated. A newer secure-link or DocuSeal
+    # request wins, including another request within the same second.
+    def self.restore_unsent_request(notification)
+      state = notification.metadata&.dig('certification_request_state')
+      return unless state && notification.notifiable.is_a?(Application)
+
+      application = notification.notifiable
+      application.with_lock do
+        issued_at = Time.iso8601(state.fetch('issued_at'))
+        next unless application.medical_certification_status_requested?
+        next unless application.medical_certification_requested_at == issued_at
+        next unless application.medical_certification_request_count == state['issued_count']
+        next if application.document_signing_requested_at && application.document_signing_requested_at >= issued_at
+        next if MedicalProviderSecureRequestForm.open_certification_upload_for_application(application_id: application.id)
+                                                .exists?(created_at: issued_at..)
+
+        Current.instance.set(skip_proof_validation: true) { application.update!(state.fetch('previous')) }
+        ApplicationStatusChange.create!(application: application, user: notification.actor,
+                                        from_status: 'requested', to_status: application.medical_certification_status,
+                                        change_type: 'medical_certification',
+                                        metadata: { change_type: 'medical_certification', reason: 'delivery_not_sent', notification_id: notification.id })
       end
     end
 
     private
 
-    def update_certification_status(timestamp)
-      previous_status = application.medical_certification_status
-
-      # Update the application columns directly to bypass callbacks
-      application.update_columns( # rubocop:disable Rails/SkipsModelValidations
-        medical_certification_requested_at: timestamp,
-        medical_certification_status: Application.medical_certification_statuses[:requested],
-        updated_at: timestamp # Ensure timestamp is updated for audit purposes
-      )
-
-      # Create ApplicationStatusChange record for activity history
-      ApplicationStatusChange.create!(
-        application: application,
-        user: actor,
-        from_status: previous_status || 'not_requested',
-        to_status: 'requested',
-        metadata: {
-          change_type: 'medical_certification',
-          requested_at: timestamp.iso8601,
-          requested_by_id: actor&.id,
-          provider_name: application.medical_provider_name,
-          provider_email: application.medical_provider_email
-        }
-      )
-
-      # Create event for audit trail with clear context
-      AuditEventService.log(
-        action: 'medical_certification_requested',
-        actor: actor,
-        auditable: application,
-        metadata: {
-          old_status: previous_status || 'not_requested',
-          new_status: 'requested',
-          change_type: 'medical_certification',
-          provider_name: application.medical_provider_name,
-          submission_method: 'email'
-        }
-      )
+    def refusal(decision)
+      failure(decision.configuration_error? ? EmailDelivery::ConfigurationError::MESSAGE : I18n.t('outbound_delivery.delivery_suppressed'),
+              { delivery_outcome: decision.outcome.to_sym, reason: decision.reason })
     end
 
-    def increment_request_count(timestamp)
-      new_count = (application.medical_certification_request_count || 0) + 1
-      application.update_columns( # rubocop:disable Rails/SkipsModelValidations
-        medical_certification_request_count: new_count,
-        updated_at: timestamp
-      )
-    end
-
-    def create_notification(_timestamp)
-      # Check for existing notification with this request count
-      request_count = application.medical_certification_request_count
-      recipient = tracking_notification_recipient
-      existing_notification = Notification.find_by(
-        recipient: recipient,
-        action: 'medical_certification_requested',
-        notifiable: application,
-        metadata: { 'request_count' => request_count }
-      )
-
-      if existing_notification
-        # Log the attempt to create a duplicate
-        Rails.logger.warn "Prevented duplicate notification for Application ##{application.id} request_count=#{request_count}"
-
-        # Return the existing notification
-        return existing_notification
-      end
-
-      # Use NotificationService for centralized notification creation
-      NotificationService.create_and_deliver!(
-        type: 'medical_certification_requested',
-        recipient: recipient,
-        actor: actor,
-        notifiable: application,
-        metadata: {
-          request_count: request_count,
-          provider: application.medical_provider_name,
-          provider_email: application.medical_provider_email
-        },
-        channel: :email,
-        deliver: false
-      )
-    rescue StandardError => e
-      # Log but don't fail the process
-      log_error(e, 'Failed to create notification')
-      nil
-    end
-
-    def tracking_notification_recipient
+    def create_notification(previous)
       resolver = Applications::SecureRequestRecipientResolver.new(application: application)
-      default_recipient_id = resolver.default_recipient_ids.first
-
-      resolver.known_recipients.find { |recipient| recipient.id == default_recipient_id } || application.user
-    end
-
-    def send_email(notification)
-      # Queue email delivery to background job instead of immediate delivery
-      # This prevents email failures from blocking the request process
-      MedicalCertificationEmailJob.perform_later(
-        application_id: application.id,
-        timestamp: Time.current.iso8601,
-        notification_id: notification&.id
-      )
-    rescue StandardError => e
-      # Still log the error if job enqueuing fails
-      log_error(e, 'Failed to enqueue email job')
-      # We don't re-raise here to prevent job failures from stopping the process
+      recipient = resolver.known_recipients.find { |user| user.id == resolver.default_recipient_ids.first } || application.user
+      NotificationService.create_and_deliver!(
+        type: 'medical_certification_requested', recipient: recipient, actor: actor, notifiable: application,
+        metadata: { request_count: application.medical_certification_request_count,
+                    provider: application.medical_provider_name, provider_email: application.medical_provider_email,
+                    certification_request_state: { previous: previous,
+                                                   issued_at: application.medical_certification_requested_at.iso8601(6),
+                                                   issued_count: application.medical_certification_request_count } },
+        channel: :email, deliver: false
+      ) || raise('Could not create certification tracking notification')
     end
   end
 end

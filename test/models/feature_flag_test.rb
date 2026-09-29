@@ -24,7 +24,7 @@ class FeatureFlagTest < ActiveSupport::TestCase
   end
 
   test 'enabled? returns false when flag is disabled' do
-    disabled_flag = create(:feature_flag, name: 'disabled_feature', enabled: false)
+    create(:feature_flag, name: 'disabled_feature', enabled: false)
     assert_not FeatureFlag.enabled?('disabled_feature')
   end
 
@@ -97,5 +97,17 @@ class FeatureFlagTest < ActiveSupport::TestCase
     assert_not control.update(delivery_generation: 5)
     assert control.reload.enabled
     assert_equal 0, control.delivery_generation
+  end
+
+  test 'generic flag helpers cannot recreate missing communication controls' do
+    [EmailDelivery::GLOBAL_CONTROL, EmailDelivery::ALL_CONTROL, EmailDelivery::CHANNEL_CONTROLS['sms']].each do |name|
+      FeatureFlag.find_by!(name: name).destroy!
+      %i[enable! disable!].each do |operation|
+        assert_no_difference ['FeatureFlag.count', 'Event.count'] do
+          assert_raises(ActiveRecord::RecordInvalid) { FeatureFlag.public_send(operation, name) }
+        end
+        assert_not FeatureFlag.exists?(name: name)
+      end
+    end
   end
 end

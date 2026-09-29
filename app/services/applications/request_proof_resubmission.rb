@@ -3,6 +3,7 @@
 module Applications
   class RequestProofResubmission < BaseService
     include SecureFormLocaleResolver
+    include SecureRequestDeliveryPolicy
 
     MESSAGE_SCOPE = 'applications.proof_resubmission.messages'
     PROOF_KIND_BY_TYPE = {
@@ -11,7 +12,7 @@ module Applications
       income: :income_proof_resubmission
     }.freeze
 
-    Delivery = Struct.new(:secure_request_form, :raw_token, :candidate, :proof_review)
+    Delivery = Struct.new(:secure_request_form, :raw_token, :candidate, :proof_review, :context, :notification_id)
 
     attr_reader :application, :actor, :proof_type, :recipient_ids, :channel_overrides, :resend_of, :public_recovery,
                 :deliver_request
@@ -43,6 +44,7 @@ module Applications
     end
 
     def call
+      Letters::Delivery.reconcile_pending!(scope: PrintQueueItem.unreleased.where(application_id: application.id))
       return failure(message(:invalid_proof_type)) unless proof_kind
       return failure(message(:request_not_needed)) unless requestable_proof_state?
 
@@ -55,7 +57,7 @@ module Applications
         return delivery_result if delivery_result.failure?
       end
 
-      return email_denial_result(deliveries) if email_configuration_error?
+      return delivery_denial_result(deliveries) if denied_candidates.any?
 
       result
     rescue ActiveRecord::RecordNotUnique,
@@ -101,8 +103,8 @@ module Applications
         end
 
         deliveries = create_requests_for(result.data)
-        result = if deliveries.empty? && denied_email_candidates.any?
-                   email_denial_result(deliveries)
+        result = if deliveries.empty? && denied_candidates.any?
+                   delivery_denial_result(deliveries)
                  else
                    success(message(:request_created), result_data_for(deliveries))
                  end
@@ -216,12 +218,12 @@ module Applications
       failure(message(:needs_managing_guardian))
     end
 
-    # A denied email candidate gets no request, token, or revocation; letter and SMS candidates proceed.
+    # Refuse each denied channel before token creation; eligible recipients still proceed.
     def create_requests_for(candidates)
       request_batch_id = SecureRandom.uuid
       candidates.filter_map do |candidate|
-        if email_denied_for?(candidate)
-          denied_email_candidates << candidate
+        if delivery_denied_for?(candidate)
+          denied_candidates << candidate
           next
         end
 
@@ -273,12 +275,14 @@ module Applications
         raise
       end
 
-      create_tracking_notification(secure_request_form)
+      notification = create_tracking_notification(secure_request_form)
       Delivery.new(
         secure_request_form: secure_request_form,
         raw_token: raw_token,
         candidate: candidate,
-        proof_review: proof_request_rejected? ? latest_rejection_review : nil
+        proof_review: proof_request_rejected? ? latest_rejection_review : nil,
+        context: authorization_for(candidate).last,
+        notification_id: notification&.id
       )
     end
 
@@ -348,15 +352,6 @@ module Applications
       latest_rejection_review&.rejection_reason
     end
 
-    def notification_channel_for(secure_request_form)
-      case secure_request_form.recipient_channel
-      when 'letter'
-        :letter
-      when 'sms'
-        :email
-      end || :email
-    end
-
     def deliver_requests(deliveries)
       delivery_failures = []
       suppression_reason = nil
@@ -370,6 +365,10 @@ module Applications
         when :letter
           deliver_letter(delivery)
         end
+        Notification.find_by(id: delivery.notification_id)&.record_delivery_handoff!(
+          channel: delivery.secure_request_form.recipient_channel,
+          state: delivery.secure_request_form.recipient_channel == 'letter' ? :queued : :submitted
+        )
       rescue ApplicationMailer::DeliverySkipped => e
         suppression_reason = e.reason
         suppress_delivery(delivery, e.reason)
@@ -392,49 +391,8 @@ module Applications
           delivery,
           secure_upload_url: secure_url_for(delivery.raw_token)
         ),
-        context: email_issuance.last
+        context: delivery_context_for(delivery)
       )
-    end
-
-    # The email was stopped on purpose after its request was prepared: revoke the unsent link and
-    # keep no cooldown. Other recipients in the batch are unaffected.
-    def suppress_delivery(delivery, reason)
-      request_form = delivery.secure_request_form
-      Notification.where(notifiable: application, action: 'proof_resubmission_requested')
-                  .where("metadata->>'secure_request_form_id' = ?", request_form.id.to_s)
-                  .order(created_at: :desc).first
-                  &.mark_delivery_suppressed!(reason)
-      request_form.revoke!(actor: actor, reason: :delivery_suppressed, metadata: { suppression_reason: reason })
-    end
-
-    def email_denied_for?(candidate)
-      deliver_request && candidate.channel.to_s == 'email' && email_denial.present?
-    end
-
-    def email_denial
-      email_issuance.first
-    end
-
-    def email_configuration_error?
-      denied_email_candidates.any? && email_denial.configuration_error?
-    end
-
-    # Checked once per call; the context is the authorization each email delivery is verified against.
-    def email_issuance
-      @email_issuance ||= EmailDelivery.issuance(delivery_mail_action)
-    end
-
-    def denied_email_candidates
-      @denied_email_candidates ||= []
-    end
-
-    def email_denial_result(deliveries)
-      return suppressed(email_denial.reason) unless email_denial.configuration_error?
-
-      failure(I18n.t('email_delivery.configuration_error', locale: secure_form_locale_for(actor)),
-              { delivery_error: true, configuration_error: true, reason: email_denial.reason,
-                secure_request_forms: Array(deliveries).map(&:secure_request_form),
-                failed_recipient_ids: denied_email_candidates.map { |candidate| candidate.recipient.id } })
     end
 
     def suppressed(reason)
@@ -445,8 +403,11 @@ module Applications
       proof_request_rejected? ? 'ApplicationNotificationsMailer#proof_rejected' : 'ApplicationNotificationsMailer#proof_requested'
     end
 
+    def delivery_requested? = deliver_request
+    def sms_action = 'SmsService#proof_resubmission'
+
     def deliver_letter(delivery)
-      proof_request_mail(delivery, secure_upload_url: nil).deliver_now
+      EmailDelivery.deliver_now!(proof_request_mail(delivery, secure_upload_url: nil), context: delivery_context_for(delivery))
     end
 
     def deliver_sms(delivery)
@@ -455,6 +416,8 @@ module Applications
         secure_request_form.recipient_phone,
         sms_message(secure_url_for(delivery.raw_token), secure_request_form),
         sensitive: true,
+        action: sms_action,
+        delivery_context: delivery_context_for(delivery),
         context: {
           secure_request_form_id: secure_request_form.id,
           application_id: application.id,

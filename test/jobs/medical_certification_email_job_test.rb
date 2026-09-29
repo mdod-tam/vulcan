@@ -39,28 +39,14 @@ class MedicalCertificationEmailJobTest < ActiveJob::TestCase
     assert_nil notification.metadata&.dig('delivery_error', 'message')
   end
 
-  test 'fallback notification creation does not trigger delivery error and still sends email' do
-    timestamp = Time.current.iso8601
-
-    assert_difference "Notification.where(action: 'medical_certification_requested').count", 1 do
-      assert_emails 1 do
-        MedicalCertificationEmailJob.perform_now(
-          application_id: @application.id,
-          timestamp: timestamp
-        )
+  test 'an unowned direct request does not invent a tracking recipient' do
+    assert_no_difference 'Notification.count' do
+      assert_no_emails do
+        assert_raises(ArgumentError) do
+          MedicalCertificationEmailJob.perform_now(application_id: @application.id, timestamp: Time.current.iso8601)
+        end
       end
     end
-
-    notification = Notification.where(action: 'medical_certification_requested', notifiable: @application)
-                               .order(created_at: :desc)
-                               .first
-
-    assert_not_nil notification
-    assert notification.recipient.admin?
-    assert_equal notification.recipient, notification.actor
-    assert_equal 'email', notification.metadata['channel']
-    assert_nil notification.delivery_status
-    assert_nil notification.metadata&.dig('delivery_error', 'message')
   end
 
   private
