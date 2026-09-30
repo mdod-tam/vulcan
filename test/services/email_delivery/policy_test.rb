@@ -45,6 +45,25 @@ module EmailDelivery
       assert_equal 'legacy_context_missing', Policy.verify(nil).reason
     end
 
+    test 'both verification entrypoints refuse invalid captures before reading their delivery controls' do
+      [nil, {}, @context.except('version')].each do |context|
+        assert_equal 'legacy_context_missing', Policy.verify(context).reason
+        assert_equal 'legacy_context_missing', Policy.verify_delivery(@context['mail_action'], context).reason
+      end
+
+      context = @context.merge('configuration_error' => 'capture_failed')
+      assert_equal 'capture_failed', Policy.verify(context).reason
+      assert_equal 'capture_failed', Policy.verify_delivery(@context['mail_action'], context).reason
+    end
+
+    test 'captured verification preserves its error while explicit delivery rejects an unclassified action' do
+      context = @context.merge('mail_action' => 'UnknownMailer#notice', 'configuration_error' => 'capture_failed')
+
+      assert_equal 'capture_failed', Policy.verify(context).reason
+      assert_equal 'unclassified_action', Policy.verify_delivery(context['mail_action'], context).reason
+      assert_equal 'unclassified_action', Policy.verify_delivery(context['mail_action'], nil).reason
+    end
+
     test 'turning a category off stops only that category, including actions in a mixed mailer' do
       proof = Policy.capture(mail_action: 'ApplicationNotificationsMailer#proof_received')
       registration = Policy.capture(mail_action: 'ApplicationNotificationsMailer#account_created')

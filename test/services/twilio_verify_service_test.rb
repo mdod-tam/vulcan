@@ -5,6 +5,23 @@ require 'test_helper'
 class TwilioVerifyServiceTest < ActiveSupport::TestCase
   TwilioErrorResponse = Struct.new(:status_code, :body)
 
+  test 'SMS setup configuration errors use SMS guidance in the current locale' do
+    FeatureFlag.find_by!(name: EmailDelivery::CHANNEL_CONTROLS.fetch('sms')).destroy!
+    TwilioVerifyService.expects(:client).never
+
+    %i[en es].each do |locale|
+      I18n.with_locale(locale) do
+        result = TwilioVerifyService.send_verification('+15551234567', purpose: :setup)
+
+        assert_not result[:success]
+        assert result[:configuration_error]
+        assert_not result[:delivery_suppressed]
+        assert_equal I18n.t('outbound_delivery.sms_configuration_error'), result[:error]
+        assert_not_equal I18n.t('email_delivery.configuration_error'), result[:error]
+      end
+    end
+  end
+
   test 'verification check params use verification sid when provided' do
     assert_equal(
       { verification_sid: 'VEaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa', code: '123456' },

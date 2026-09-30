@@ -2,6 +2,18 @@ es:
   delivery_visibility:
     time_format: "%d/%m/%Y %H:%M"
     details: Detalles
+    details_for: 'Detalles de %{record}, %{channel}: %{status}'
+    attempt_for: 'intento n.º %{id} de %{record}'
+    records:
+      notification: 'notificación n.º %{id}'
+      secure_request_form: 'solicitud segura n.º %{id}'
+      medical_provider_secure_request_form: 'solicitud de carga de certificación n.º %{id}'
+      vendor_secure_request_form: 'solicitud W9 n.º %{id}'
+      email_delivery_attempt: 'intento de entrega n.º %{id}'
+      invoice: 'factura n.º %{id}'
+      voucher: 'vale n.º %{id}'
+      evaluation: 'evaluación n.º %{id}'
+      training_session: 'sesión de capacitación n.º %{id}'
     channel: 'Canal: %{channel}'
     destination: 'Destino: %{destination}'
     owner: 'Titular del contacto: %{owner}'
@@ -21,6 +33,7 @@ es:
       que una persona leyó el mensaje.
     attention: La entrega necesita atención
     history: Entrega de mensajes
+    certification_history: Entrega de mensajes de certificación
     channels:
       email: Correo electrónico
       sms: Mensaje de texto

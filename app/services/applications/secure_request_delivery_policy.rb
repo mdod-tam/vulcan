@@ -4,7 +4,11 @@ module Applications
   # Secure-request issuers share the same per-recipient delivery contract.
   # The hosts retain recipient resolution, request creation, token handling and workflow rules.
   module SecureRequestDeliveryPolicy
-    Delivery = Data.define(:secure_request_form, :raw_token, :context, :notification_id)
+    Delivery = Data.define(:secure_request_form, :raw_token, :context, :notification_id, :candidate, :proof_review) do
+      def initialize(candidate: nil, proof_review: nil, **)
+        super
+      end
+    end
 
     private
 
@@ -144,13 +148,15 @@ module Applications
       forms = Array(deliveries).map(&:secure_request_form)
       context = {
         error_class: error.class.name,
-        application_id: application.id,
         secure_request_form_ids: forms.map(&:id),
-        recipient_ids: forms.map(&:recipient_id),
-        recipient_channels: forms.map(&:recipient_channel)
-      }
+        recipient_channels: Array(deliveries).map { |delivery| delivery_channel(delivery).to_s }
+      }.merge(delivery_failure_details(forms))
       context.merge!(configuration_error: true, reason: error.reason) if error.is_a?(EmailDelivery::ConfigurationError)
       context
+    end
+
+    def delivery_failure_details(forms)
+      { application_id: application.id, recipient_ids: forms.map(&:recipient_id) }
     end
 
     def delivery_denied_for?(candidate)

@@ -204,10 +204,19 @@
   </div>
 </div>
 
-<% if @certification_delivery_notifications&.first %>
+<% if @certification_delivery_attempts&.any? || @certification_local_delivery_notifications&.any? %>
   <div class="mt-4" id="latest-certification-delivery">
-    <h3 class="text-sm font-medium text-gray-900">Latest certification email</h3>
-    <%= delivery_visibility(@certification_delivery_notifications.first) %>
+    <h3 class="text-sm font-medium text-gray-900"><%= t('delivery_visibility.certification_history') %></h3>
+    <% @certification_delivery_attempts.each do |attempt| %>
+      <div id="<%= dom_id(attempt) %>">
+        <%= render 'shared/delivery/status', presenter: DeliveryStatusPresenter.new(attempt, attempt: attempt) %>
+      </div>
+    <% end %>
+    <% @certification_local_delivery_notifications.each do |notification| %>
+      <div id="<%= dom_id(notification, :certification_delivery) %>">
+        <%= render 'shared/delivery/status', presenter: DeliveryStatusPresenter.new(notification) %>
+      </div>
+    <% end %>
   </div>
 <% end %>
 

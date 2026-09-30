@@ -10,7 +10,7 @@
 #
 # It's strongly recommended that you check this file into your version control system.
 
-ActiveRecord::Schema[8.1].define(version: 2026_09_30_120000) do
+ActiveRecord::Schema[8.1].define(version: 2026_09_30_130000) do
   # These are extensions that must be enabled in order to support this database
   enable_extension "pg_catalog.plpgsql"
 
@@ -253,9 +253,10 @@ ActiveRecord::Schema[8.1].define(version: 2026_09_30_120000) do
     t.index ["notification_id"], name: "index_email_delivery_attempts_on_notification_id"
     t.index ["origin_type", "origin_id"], name: "index_email_delivery_attempts_on_origin"
     t.index ["recipient_id"], name: "index_email_delivery_attempts_on_recipient_id"
+    t.index ["server_id", "last_checked_at", "id"], name: "index_email_delivery_attempts_on_pollable", order: { last_checked_at: "NULLS FIRST" }, where: "((delivered_at IS NULL) AND (bounced_at IS NULL) AND (complained_at IS NULL) AND ((state)::text <> 'failed'::text) AND (provider_message_id IS NOT NULL) AND (check_count < 8))"
     t.index ["server_id", "provider_message_id", "recipient_key"], name: "email_attempt_provider_recipient", unique: true
     t.check_constraint "check_count >= 0", name: "email_attempt_check_count"
-    t.check_constraint "state::text = ANY (ARRAY['unknown'::character varying, 'accepted'::character varying, 'failed'::character varying]::text[])", name: "email_attempt_state"
+    t.check_constraint "state::text = ANY (ARRAY['unknown'::character varying::text, 'accepted'::character varying::text, 'failed'::character varying::text])", name: "email_attempt_state"
   end
 
   create_table "email_delivery_receipts", force: :cascade do |t|
@@ -267,7 +268,7 @@ ActiveRecord::Schema[8.1].define(version: 2026_09_30_120000) do
     t.datetime "updated_at", null: false
     t.index ["email_delivery_attempt_id", "event_key"], name: "email_receipt_event", unique: true
     t.index ["email_delivery_attempt_id"], name: "index_email_delivery_receipts_on_email_delivery_attempt_id"
-    t.check_constraint "kind::text = ANY (ARRAY['delivered'::character varying, 'bounced'::character varying, 'complained'::character varying, 'opened'::character varying, 'delayed'::character varying]::text[])", name: "email_receipt_kind"
+    t.check_constraint "kind::text = ANY (ARRAY['delivered'::character varying::text, 'bounced'::character varying::text, 'complained'::character varying::text, 'opened'::character varying::text, 'delayed'::character varying::text])", name: "email_receipt_kind"
   end
 
   create_table "email_templates", force: :cascade do |t|
@@ -1031,6 +1032,12 @@ ActiveRecord::Schema[8.1].define(version: 2026_09_30_120000) do
   add_foreign_key "duplicate_review_case_candidates", "users", column: "candidate_user_id"
   add_foreign_key "duplicate_review_cases", "users", column: "resolved_by_id"
   add_foreign_key "duplicate_review_cases", "users", column: "subject_user_id"
+  add_foreign_key "email_delivery_attempts", "applications", on_delete: :nullify
+  add_foreign_key "email_delivery_attempts", "events", column: "bounce_event_id", on_delete: :nullify
+  add_foreign_key "email_delivery_attempts", "notifications", on_delete: :nullify
+  add_foreign_key "email_delivery_attempts", "users", column: "delivery_owner_id", on_delete: :nullify
+  add_foreign_key "email_delivery_attempts", "users", column: "recipient_id", on_delete: :nullify
+  add_foreign_key "email_delivery_receipts", "email_delivery_attempts", on_delete: :cascade
   add_foreign_key "email_templates", "users", column: "updated_by_id"
   add_foreign_key "evaluations", "applications"
   add_foreign_key "evaluations", "users", column: "constituent_id"
@@ -1090,10 +1097,4 @@ ActiveRecord::Schema[8.1].define(version: 2026_09_30_120000) do
   add_foreign_key "w9_reviews", "users", column: "admin_id"
   add_foreign_key "w9_reviews", "users", column: "vendor_id"
   add_foreign_key "webauthn_credentials", "users"
-  add_foreign_key "email_delivery_attempts", "applications", on_delete: :nullify
-  add_foreign_key "email_delivery_attempts", "events", column: "bounce_event_id", on_delete: :nullify
-  add_foreign_key "email_delivery_attempts", "notifications", on_delete: :nullify
-  add_foreign_key "email_delivery_attempts", "users", column: "delivery_owner_id", on_delete: :nullify
-  add_foreign_key "email_delivery_attempts", "users", column: "recipient_id", on_delete: :nullify
-  add_foreign_key "email_delivery_receipts", "email_delivery_attempts", on_delete: :cascade
 end

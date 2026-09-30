@@ -2,7 +2,10 @@
 <div class="mt-2 text-sm" data-delivery-status="<%= presenter.status %>">
   <span class="inline-flex rounded px-2 py-1 text-xs font-medium <%= presenter.badge_class %>"><%= presenter.label %></span>
   <details class="mt-1">
-    <summary class="cursor-pointer rounded text-indigo-700 underline focus:outline-none focus:ring-2 focus:ring-indigo-500"><%= presenter.text('details') %></summary>
+    <summary aria-label="<%= presenter.details_label %>"
+             class="cursor-pointer rounded text-indigo-700 underline focus:outline-none focus:ring-2 focus:ring-indigo-500">
+      <%= presenter.text('details') %>
+    </summary>
     <div class="mt-2 space-y-1 text-gray-700 break-words">
       <p><%= presenter.description %></p>
       <p><%= presenter.text('channel', channel: presenter.text("channels.#{presenter.channel}", default: presenter.channel)) %></p>

@@ -1,5 +1,7 @@
 # frozen_string_literal: true
 
+require_relative '../../lib/webhooks/email_events_parameter_filter'
+
 # Be sure to restart your server when you modify this file.
 
 # Configure parameters to be partially matched (e.g. passw matches password) and filtered from the log file.
@@ -36,12 +38,12 @@ Rails.application.config.filter_parameters += [
   /_encrypted\z/, /_encrypted_iv\z/,
 
   # Authentication credential secrets
-  :secret,
+  :secret, /\A(?:HTTP_)?Authorization\z/i,
   # NOTE: public_key omitted as it's not secret data in cryptographic terms
 
   # Legacy broad filters (be careful with these)
   /passw/, /\btoken\z/, /_key\z/, /crypt/, /salt/, /certificate/, /\botp\z/, /\bssn\z/, /cvv/, /cvc/
 ]
 
-# Postmark feedback may contain full messages and server diagnostics; retain neither in request logs.
-Rails.application.config.filter_parameters += %i[Authorization Content HtmlBody TextBody Body Details Description Subject Metadata Recipient Email From]
+# Install before request logging so rejected Postmark callbacks are also redacted.
+Rails.application.config.middleware.insert_before Rails::Rack::Logger, Webhooks::EmailEventsParameterFilter

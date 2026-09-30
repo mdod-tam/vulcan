@@ -29,6 +29,22 @@ module Applications
       Current.reset
     end
 
+    test 'nonrequired income proof cannot issue a request for either missing or rejected proof' do
+      @application.update!(income_proof_required: false)
+      @mailer_delivery.expects(:deliver_now).never
+
+      %w[not_reviewed rejected].each do |proof_status|
+        @application.update!(income_proof_status: proof_status)
+        assert_not @application.proof_requestable_via_secure_form?(:income)
+
+        result = nil
+        assert_no_difference ['SecureRequestForm.count', 'Notification.count', 'Event.count'] do
+          result = RequestProofResubmission.new(application: @application, actor: @actor, proof_type: :income).call
+        end
+        assert_predicate result, :failure?
+      end
+    end
+
     test 'delivery_confirmed_for_review? reflects active secure request forms' do
       assert_not RequestProofResubmission.delivery_confirmed_for_review?(@proof_review)
 

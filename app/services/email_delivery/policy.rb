@@ -52,17 +52,29 @@ module EmailDelivery
     private_class_method :initial_denials
 
     def self.verify(context, channel: 'email')
-      return Decision.suppressed(:legacy_context_missing) if context.blank? || context['version'] != CONTEXT_VERSION
-      return Decision.configuration_error(context['configuration_error']) if context['configuration_error']
-
-      verify_delivery(context['mail_action'], context, channel: channel)
+      channel = channel.to_s
+      context_denial(context) || action_denial(context['mail_action'], channel) ||
+        verify_captured_delivery(context['mail_action'], context, channel)
     end
 
     def self.verify_delivery(mail_action, context, channel: 'email')
       channel = channel.to_s
-      return Decision.configuration_error(:unclassified_action) unless Catalog.channels_for(mail_action).include?(channel)
+      action_denial(mail_action, channel) || context_denial(context) || verify_captured_delivery(mail_action, context, channel)
+    end
+
+    def self.context_denial(context)
       return Decision.suppressed(:legacy_context_missing) if context.blank? || context['version'] != CONTEXT_VERSION
-      return Decision.configuration_error(context['configuration_error']) if context['configuration_error']
+
+      Decision.configuration_error(context['configuration_error']) if context['configuration_error']
+    end
+    private_class_method :context_denial
+
+    def self.action_denial(mail_action, channel)
+      Decision.configuration_error(:unclassified_action) unless Catalog.channels_for(mail_action).include?(channel)
+    end
+    private_class_method :action_denial
+
+    def self.verify_captured_delivery(mail_action, context, channel)
       return Decision.suppressed(:delivery_identity_changed) unless context['mail_action'] == mail_action.to_s
 
       if (denial = context.dig('denied_channels', channel))
@@ -73,6 +85,7 @@ module EmailDelivery
 
       verify_controls(context, channel)
     end
+    private_class_method :verify_captured_delivery
 
     def self.verify_any(mail_action, context)
       decisions = Catalog.channels_for(mail_action).map { |channel| verify_delivery(mail_action, context, channel: channel) }

@@ -48,7 +48,7 @@ class TwilioVerifyService
     rescue ApplicationMailer::DeliverySkipped, EmailDelivery::ConfigurationError => e
       { success: false, delivery_suppressed: e.is_a?(ApplicationMailer::DeliverySkipped),
         configuration_error: e.is_a?(EmailDelivery::ConfigurationError), reason: e.reason,
-        error: I18n.t(e.is_a?(ApplicationMailer::DeliverySkipped) ? 'outbound_delivery.sms_suppressed' : 'email_delivery.configuration_error') }
+        error: I18n.t(e.is_a?(ApplicationMailer::DeliverySkipped) ? 'outbound_delivery.sms_suppressed' : 'outbound_delivery.sms_configuration_error') }
     rescue Twilio::REST::RestError => e
       Rails.logger.error("[TwilioVerify] Twilio API error: #{e.message}")
       Rails.logger.error("[TwilioVerify] Error code: #{e.code}") if e.respond_to?(:code)

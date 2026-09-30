@@ -71,6 +71,7 @@ module ProofManageable
   # Secure proof links serve a rejected proof or a proof that was never uploaded.
   # Issuance, the admin send button, and public submission all use this rule.
   def proof_requestable_via_secure_form?(proof_type)
+    return false if proof_type.to_s == 'income' && !income_proof_required?
     return false if public_send("#{proof_type}_proof_status_approved?")
     return true if public_send("#{proof_type}_proof_status_rejected?")
 

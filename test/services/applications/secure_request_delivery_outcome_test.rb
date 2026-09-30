@@ -78,7 +78,13 @@ class SecureRequestDeliveryOutcomeTest < ActiveSupport::TestCase
       assert_predicate result, :failure?
       assert result.data[:delivery_error]
       assert result.data[:configuration_error]
-      assert_equal 'EmailDelivery::ConfigurationError', result.data[:delivery_failures].first[:error_class]
+      delivery_failure = result.data[:delivery_failures].first
+      assert_equal 'EmailDelivery::ConfigurationError', delivery_failure[:error_class]
+      assert_equal application.id, delivery_failure[:application_id]
+      assert_equal [form.id], delivery_failure[:secure_request_form_ids]
+      assert_equal [form.recipient_id], delivery_failure[:recipient_ids]
+      assert_equal ['email'], delivery_failure[:recipient_channels]
+      assert_equal 'id', delivery_failure[:proof_type] if service_class == Applications::RequestProofResubmission
       assert_predicate form, :revoked?
       assert_equal 'delivery_configuration_error', event.metadata['reason']
       assert_equal 'error', notification.delivery_status
@@ -110,6 +116,15 @@ class SecureRequestDeliveryOutcomeTest < ActiveSupport::TestCase
       form = result.data.fetch(form_key).reload
       notification = Notification.find_by!(notifiable: owner, action: action)
       assert result.data[:configuration_error]
+      delivery_failure = result.data.fetch(:delivery_failure)
+      owner_key = service_class == Applications::RequestCertificationUpload ? :application_id : :vendor_id
+      assert_equal owner.id, delivery_failure.fetch(owner_key)
+      assert_equal form.id, delivery_failure.fetch(:"#{form_key}_id")
+      assert_equal form.request_batch_id, delivery_failure.fetch(:request_batch_id)
+      assert_equal [form.id], delivery_failure.fetch(:secure_request_form_ids)
+      assert_empty delivery_failure.fetch(:recipient_ids)
+      assert_equal ['email'], delivery_failure.fetch(:recipient_channels)
+      assert_equal 'missing_control', delivery_failure.fetch(:reason)
       assert_predicate form, :revoked?
       assert_equal 'delivery_configuration_error', Event.where(action: form.revocation_audit_action).order(:id).last.metadata['reason']
       assert_equal 'error', notification.delivery_status

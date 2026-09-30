@@ -8,8 +8,6 @@ module Applications
     MESSAGE_SCOPE = 'applications.provider_info.messages'
     TEMPLATE_NAME = 'application_notifications_provider_info_requested'
 
-    Delivery = Struct.new(:secure_request_form, :raw_token, :candidate, :context, :notification_id)
-
     attr_reader :application, :actor, :recipient_ids, :channel_overrides, :resend_of, :public_recovery
 
     def initialize(application:, actor:, recipient_ids: nil, channel_overrides: {}, resend_of: nil, public_recovery: false)

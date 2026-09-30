@@ -37,7 +37,7 @@
         </thead>
         <tbody class="divide-y divide-gray-100">
           <% secure_request_forms.each do |form| %>
-            <tr>
+            <tr id="<%= dom_id(form) %>">
               <td class="px-3 py-3 text-gray-700">
                 <%= link_to secure_request_issued_recipient_label(form), admin_user_path(form.recipient),
                             class: 'text-indigo-700 underline', data: { turbo_frame: '_top' } %>

@@ -12,6 +12,12 @@ class DeliveryStatusPresenter
   def label = text("statuses.#{status}")
   def text(key, **) = I18n.t("delivery_visibility.#{key}", locale: locale, **)
 
+  def details_label
+    reference = text("records.#{record.model_name.i18n_key}", id: record.id)
+    reference = text('attempt_for', id: attempt.id, record: reference) if attempt && record != attempt
+    text('details_for', record: reference, channel: text("channels.#{channel}", default: channel), status: label)
+  end
+
   def status
     return local_status || channel_status unless attempt
 

@@ -12,8 +12,6 @@ module Applications
       income: :income_proof_resubmission
     }.freeze
 
-    Delivery = Struct.new(:secure_request_form, :raw_token, :candidate, :proof_review, :context, :notification_id)
-
     attr_reader :application, :actor, :proof_type, :recipient_ids, :channel_overrides, :resend_of, :public_recovery,
                 :deliver_request
 
@@ -391,7 +389,7 @@ module Applications
       )
     end
 
-    def delivery_failure_context(error, deliveries)
+    def delivery_failure_details(forms)
       super.merge(proof_type: proof_type.to_s)
     end
 

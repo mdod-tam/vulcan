@@ -2,6 +2,18 @@ en:
   delivery_visibility:
     time_format: "%b %-d, %Y %H:%M"
     details: Details
+    details_for: 'Details for %{record}, %{channel}: %{status}'
+    attempt_for: 'attempt #%{id} for %{record}'
+    records:
+      notification: 'notification #%{id}'
+      secure_request_form: 'secure request #%{id}'
+      medical_provider_secure_request_form: 'certification upload request #%{id}'
+      vendor_secure_request_form: 'W9 request #%{id}'
+      email_delivery_attempt: 'delivery attempt #%{id}'
+      invoice: 'invoice #%{id}'
+      voucher: 'voucher #%{id}'
+      evaluation: 'evaluation #%{id}'
+      training_session: 'training session #%{id}'
     channel: 'Channel: %{channel}'
     destination: 'Destination: %{destination}'
     owner: 'Contact owner: %{owner}'
@@ -20,6 +32,7 @@ en:
       that a person read the message.
     attention: Delivery needs attention
     history: Message delivery
+    certification_history: Certification message delivery
     channels:
       email: Email
       sms: Text message

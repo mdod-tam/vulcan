@@ -39,6 +39,64 @@ module Webhooks
       assert_nil @attempt.reload.delivered_at
     end
 
+    test 'rejected callbacks redact bodies credentials and query values before request logging' do
+      private_fields = { TextBody: 'private-message-body', Description: 'private-provider-description',
+                         From: 'private-sender@example.test', NewDiagnostic: 'private-new-diagnostic' }
+      headers = { 'Authorization' => ActionController::HttpAuthentication::Basic.encode_credentials('private-username', 'private-password') }
+      log = capture_webhook_logs do
+        post "#{webhooks_email_events_path}.json?Description=private-query-description",
+             params: @payload.merge(private_fields), headers: headers, as: :json
+      end
+
+      assert_response :unauthorized
+      assert_nil @attempt.reload.delivered_at
+      assert_includes log, '[FILTERED]'
+      private_fields.each_value { |value| assert_not_includes log, value }
+      assert_not_includes log, 'private-query-description'
+      assert_not_includes log, headers['Authorization']
+      assert_equal '[FILTERED]', request.filtered_env['HTTP_AUTHORIZATION']
+      assert_equal '[FILTERED]', request.filtered_parameters['NewDiagnostic']
+    end
+
+    test 'accepted callbacks do not log hostile type metadata through webhook instrumentation' do
+      log = capture_webhook_logs do
+        post webhooks_email_events_path, params: @payload.merge(type: 'private-webhook-type'), headers: @headers, as: :json
+      end
+
+      assert_response :ok
+      assert @attempt.reload.delivered_at
+      assert_includes log, 'Webhook received: Webhooks::EmailEventsController#create'
+      assert_includes log, 'Type=[FILTERED]'
+      assert_not_includes log, 'private-webhook-type'
+    end
+
+    test 'malformed callback bodies remain private even when debug logging is enabled' do
+      log = capture_webhook_logs do
+        Rails.logger.level = :debug
+        post webhooks_email_events_path,
+             params: 'private-malformed-body',
+             headers: @headers.merge('CONTENT_TYPE' => 'application/json'),
+             env: { 'action_dispatch.log_rescued_responses' => true }
+      end
+
+      assert_response :bad_request
+      assert_equal 'Bad Request', response.body
+      assert_not_includes log, 'private-malformed-body'
+      assert_nil @attempt.reload.delivered_at
+    end
+
+    test 'invalid callback content types return a private bad request before framework error logging' do
+      log = capture_webhook_logs do
+        Rails.logger.level = :debug
+        post webhooks_email_events_path, params: '{}', headers: @headers.merge('CONTENT_TYPE' => 'private-invalid-content-type')
+      end
+
+      assert_response :bad_request
+      assert_equal 'Bad Request', response.body
+      assert_not_includes log, 'private-invalid-content-type'
+      assert_nil @attempt.reload.delivered_at
+    end
+
     test 'missing or blank server configuration cannot mutate delivery' do
       [nil, '', ' '].each do |server_id|
         ENV['POSTMARK_SERVER_ID'] = server_id
@@ -62,6 +120,21 @@ module Webhooks
       post webhooks_email_events_path, params: @payload, headers: @headers, as: :json
       assert_response :unauthorized
       assert_nil @attempt.reload.delivered_at
+    end
+
+    private
+
+    def capture_webhook_logs(&)
+      original_logger = ActionController::Base.logger
+      original_request_logger = Rails.application.env_config['action_dispatch.logger']
+      capture_rails_logs do
+        ActionController::Base.logger = Rails.logger
+        Rails.application.env_config['action_dispatch.logger'] = Rails.logger
+        yield
+      end
+    ensure
+      ActionController::Base.logger = original_logger
+      Rails.application.env_config['action_dispatch.logger'] = original_request_logger
     end
   end
 end

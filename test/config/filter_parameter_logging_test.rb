@@ -3,6 +3,26 @@
 require 'test_helper'
 
 class FilterParameterLoggingTest < ActiveSupport::TestCase
+  test 'Postmark filters do not hide unrelated request diagnostics' do
+    parameters = {
+      'content_type' => 'application/json', 'description' => 'equipment category',
+      'from_date' => '2026-09-01', 'subject_type' => 'Application', 'metadata_kind' => 'delivery'
+    }
+
+    assert_equal parameters, ActiveSupport::ParameterFilter.new(Rails.application.config.filter_parameters).filter(parameters)
+  end
+
+  test 'authorization credentials remain filtered globally without matching unrelated keys' do
+    filtered = ActiveSupport::ParameterFilter.new(Rails.application.config.filter_parameters).filter(
+      'Authorization' => 'Basic private-credential', 'HTTP_AUTHORIZATION' => 'Bearer private-token',
+      'authorization_method' => 'basic'
+    )
+
+    assert_equal '[FILTERED]', filtered['Authorization']
+    assert_equal '[FILTERED]', filtered['HTTP_AUTHORIZATION']
+    assert_equal 'basic', filtered['authorization_method']
+  end
+
   test 'autosave logs retain the field and revision but redact its value and page id' do
     filtered = ActiveSupport::ParameterFilter.new(Rails.application.config.filter_parameters).filter(
       'field_name' => 'application[medical_provider_email]', 'field_value' => 'doctor@example.com',

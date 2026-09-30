@@ -59,8 +59,8 @@
                 Unknown Applicant
               <% end %>
             </div>
-            <% if @delivery_attention&.fetch(application.id, [])&.any? %>
-              <%= link_to t('delivery_visibility.attention'), admin_application_path(application.id, anchor: 'main-content'),
+            <% if (attention_attempt = @delivery_attention&.fetch(application.id, [])&.first) %>
+              <%= link_to t('delivery_visibility.attention'), application_delivery_attention_path(application, attention_attempt),
                           class: 'block mt-2 text-amber-900 underline', data: { turbo_frame: '_top' } %>
             <% end %>
           </td>

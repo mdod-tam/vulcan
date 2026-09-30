@@ -155,14 +155,11 @@ module Applications
       super.merge(suppressed_delivery_data(deliveries), delivery_failure: delivery_failures.first)
     end
 
-    def delivery_failure_context(error, deliveries)
-      request_form = Array(deliveries).first.secure_request_form
-      context = { error_class: error.class.name, application_id: application.id,
-                  medical_provider_secure_request_form_id: request_form.id, request_batch_id: request_form.request_batch_id,
-                  secure_request_form_ids: [request_form.id], recipient_ids: [], recipient_channels: ['email'],
-                  template_name: rejection_delivery? ? 'medical_provider_certification_rejected' : 'medical_provider_request_certification' }
-      context.merge!(configuration_error: true, reason: error.reason) if error.is_a?(EmailDelivery::ConfigurationError)
-      context
+    def delivery_failure_details(forms)
+      request_form = forms.first
+      { application_id: application.id, medical_provider_secure_request_form_id: request_form.id,
+        request_batch_id: request_form.request_batch_id, recipient_ids: [],
+        template_name: rejection_delivery? ? 'medical_provider_certification_rejected' : 'medical_provider_request_certification' }
     end
 
     def deliver_email(delivery)

@@ -1,6 +1,11 @@
 # frozen_string_literal: true
 
 module EmailStatusHelper
+  def application_delivery_attention_path(application, attempt)
+    anchor = dom_id(attempt.origin_type == 'Application' ? attempt : attempt.origin)
+    admin_application_path(application.id, anchor: anchor)
+  end
+
   def delivery_visibility(record, locale: I18n.locale)
     attempts = record.email_delivery_attempts.sort_by(&:id)
     return ''.html_safe if attempts.empty? && record.is_a?(Notification) && DeliveryStatusPresenter.new(record).status == 'unknown'

@@ -3,6 +3,30 @@
 require 'test_helper'
 
 class DeliveryStatusPresenterTest < ActiveSupport::TestCase
+  test 'details controls identify their record and individual attempt in both locales' do
+    notification = create(:notification, delivery_status: :queued)
+    attempts = 2.times.map do
+      notification.email_delivery_attempts.create!(correlation_id: SecureRandom.uuid, destination: 'private@example.test',
+                                                   recipient_key: EmailDeliveryAttempt.recipient_key('private@example.test'),
+                                                   server_id: '23', mail_action: 'UserMailer#password_reset', attempted_at: Time.current)
+    end
+
+    %i[en es].each do |locale|
+      labels = attempts.map do |attempt|
+        presenter = DeliveryStatusPresenter.new(notification, attempt: attempt, locale: locale)
+        html = ApplicationController.render(partial: 'shared/delivery/status', locals: { presenter: presenter })
+        summary = Nokogiri::HTML.fragment(html).at_css('summary')
+        assert_equal I18n.t('delivery_visibility.details', locale: locale), summary.text.strip
+        assert_includes summary['aria-label'], notification.id.to_s
+        assert_includes summary['aria-label'], attempt.id.to_s
+        assert_not_includes summary['aria-label'], 'private@example.test'
+        assert_not_includes summary['aria-label'], 'translation missing'
+        summary['aria-label']
+      end
+      assert_equal labels.size, labels.uniq.size
+    end
+  end
+
   test 'legacy provider and placeholder IDs cannot establish a sent or delivered state' do
     notification = create(:notification, message_id: 'backfilled-123', delivery_status: :delivered)
     presenter = DeliveryStatusPresenter.new(notification)

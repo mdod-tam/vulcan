@@ -61,7 +61,7 @@ module Webhooks
         'webhook_received',
         controller: self.class.name,
         action: action_name,
-        type: params[:type], &
+        type: request.filtered_parameters['type'], &
       )
     end
   end

@@ -141,14 +141,10 @@ module Vendors
       super.merge(suppressed_delivery_data(deliveries), delivery_failure: delivery_failures.first)
     end
 
-    def delivery_failure_context(error, deliveries)
-      request_form = Array(deliveries).first.secure_request_form
-      context = { error_class: error.class.name, vendor_id: vendor.id,
-                  vendor_secure_request_form_id: request_form.id, request_batch_id: request_form.request_batch_id,
-                  secure_request_form_ids: [request_form.id], recipient_ids: [], recipient_channels: ['email'],
-                  template_name: delivery_template_name }
-      context.merge!(configuration_error: true, reason: error.reason) if error.is_a?(EmailDelivery::ConfigurationError)
-      context
+    def delivery_failure_details(forms)
+      request_form = forms.first
+      { vendor_id: vendor.id, vendor_secure_request_form_id: request_form.id,
+        request_batch_id: request_form.request_batch_id, recipient_ids: [], template_name: delivery_template_name }
     end
 
     def deliver_email(delivery)
