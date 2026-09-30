@@ -13,18 +13,26 @@ module Admin
       @secure_request_default_recipient_ids = provider_info_default_recipient_ids(application, relationships)
     end
 
+    def load_certification_delivery_data
+      @medical_provider_secure_request_forms = EmailDelivery::Visibility.preload(@application.medical_provider_secure_request_forms.order(created_at: :desc))
+      @certification_delivery_notifications = EmailDelivery::Visibility.preload(
+        Notification.where(notifiable: @application, action: 'medical_certification_requested').includes(:actor).order(created_at: :desc)
+      )
+    end
+
     def load_provider_info_request_data(application)
+      @delivery_secure_request_forms = EmailDelivery::Visibility.preload(
+        application.secure_request_forms.includes(:recipient, :delivery_owner).order(sent_at: :desc)
+      )
+      application.association(:secure_request_forms).target = @delivery_secure_request_forms
+      application.association(:secure_request_forms).loaded!
       unless application.provider_info_requests_visible?
         @secure_request_forms = []
         @active_secure_request_form_batch_counts = {}
         return
       end
 
-      @secure_request_forms = application
-                              .secure_request_forms
-                              .provider_info
-                              .includes(:recipient, :delivery_owner)
-                              .order(sent_at: :desc)
+      @secure_request_forms = @delivery_secure_request_forms.select(&:kind_provider_info_request?)
       @active_secure_request_form_batch_counts = application
                                                  .secure_request_forms
                                                  .provider_info

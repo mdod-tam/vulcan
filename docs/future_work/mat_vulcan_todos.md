@@ -157,7 +157,7 @@ Admin notices for recurring jobs  [AUDIT-001]
 - [ ] Decide whether admins need an "invoice ready for review" notice and an expired-voucher report. Invoice generation and voucher expiration called a nonexistent `AdminNotificationsMailer`; those calls were removed. Building them needs a mailer, EN templates, and catalog entries.
 
 Bounce/complaint webhook  [AUDIT-001]
-- [ ] `/webhooks/email_events` fails on the missing `MedicalProviderEmail` model and production Postmark does not target it (checked 2026-09-28). Remove the route and handler, or rebuild them against `Notification`, before configuring any outbound webhook.
+- [ ] Deploy the attempt-based delivery feedback implementation and configure authenticated outbound webhooks after following the [Postmark rollout runbook](../infrastructure/postmark_delivery_visibility.md). The route no longer depends on `MedicalProviderEmail`; production stream configuration remains an operations step.
 
 Certification queue visibility  [DATA-001]
 - [ ] DCF escalation no longer requests certification automatically. Consider an admin filter for applications that are `awaiting_dcf` with certification Not Requested.

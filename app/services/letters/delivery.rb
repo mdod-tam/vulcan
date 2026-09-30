@@ -115,8 +115,13 @@ module Letters
 
     def self.reconcile_pending!(scope: PrintQueueItem.unreleased)
       scope.find_each do |item|
-        decision = item.delivery_decision
-        cancel!(item, reason: decision.reason) if decision.suppressed?
+        with_locked_items([item], controls: true) do |locked|
+          current = locked.first
+          next unless current&.pending? && current.released_at.nil?
+
+          decision = current.delivery_decision
+          record_refusal(current, decision) if decision.suppressed? && current.cancel_unreleased!(reason: decision.reason, actor: nil)
+        end
       end
     end
 

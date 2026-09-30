@@ -208,23 +208,23 @@ class EmailDeliveryBoundaryTest < ActionDispatch::IntegrationTest
 
     assert_empty ActionMailer::Base.deliveries
     assert_equal 'suppressed', notifications.first.reload.delivery_status
-    assert_nil notifications.last.reload.delivery_status
+    assert_equal 'queued', notifications.last.reload.delivery_status
   end
 
-  test 'a stale Postmark response cannot move an opened notification back or overwrite suppression' do
+  test 'feedback on an old attempt does not overwrite a local suppression on its notification' do
     notification = Notification.create!(recipient: @admin, actor: @admin, action: 'medical_certification_requested',
-                                        notifiable: create(:application), message_id: 'pm-1', metadata: {})
-    stale = Notification.find(notification.id)
-    notification.update!(delivery_status: 'opened', opened_at: 1.hour.ago)
-
-    UpdateEmailStatusJob.new.send(:apply_status, stale, { status: 'Sent' })
-    assert_equal 'opened', notification.reload.delivery_status
-
-    stale = Notification.find(notification.id)
+                                        notifiable: create(:application), metadata: {})
+    attempt = EmailDeliveryAttempt.create!(notification: notification, correlation_id: SecureRandom.uuid,
+                                           recipient_key: EmailDeliveryAttempt.recipient_key('original@example.test'), destination: 'original@example.test',
+                                           server_id: 'default', mail_action: 'MedicalProviderMailer#request_certification', attempted_at: Time.current,
+                                           provider_message_id: 'pm-1', opened_at: 1.hour.ago)
     notification.mark_delivery_suppressed!('global_disabled')
-    UpdateEmailStatusJob.new.send(:apply_status, stale, { status: 'Sent' })
-    UpdateEmailStatusJob.new.send(:handle_error, stale, stale.id, StandardError.new('late failure'))
+    fact = EmailDelivery::Feedback.webhook('RecordType' => 'Delivery', 'MessageID' => 'pm-1',
+                                           'Recipient' => attempt.destination, 'DeliveredAt' => Time.current.iso8601)
+    EmailDelivery::Feedback.apply(fact)
     assert_equal 'suppressed', notification.reload.delivery_status
+    assert attempt.reload.opened_at
+    assert attempt.delivered_at
   end
 
   test 'an admin test send refused at queueing reports suppression' do
@@ -248,8 +248,8 @@ class EmailDeliveryBoundaryTest < ActionDispatch::IntegrationTest
 
     badge = ApplicationController.helpers.delivery_status_badge(notification)
 
-    assert_includes badge, I18n.t('notification_delivery.statuses.suppressed')
-    assert_includes ApplicationController.helpers.format_email_status(notification), 'turned off'
+    assert_includes badge, I18n.t('delivery_visibility.statuses.suppressed')
+    assert_includes DeliveryStatusPresenter.new(notification).description, 'switched off'
   end
 
   private

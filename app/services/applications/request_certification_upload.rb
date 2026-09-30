@@ -329,6 +329,7 @@ module Applications
 
     # Delivers to the provider email recorded on the request row.
     def deliver_request_email!(request_form, raw_token)
+      @email_context = @email_context.merge('notification_id' => tracking_notification_for(request_form)&.id)
       secure_upload_url = secure_upload_url_for(raw_token)
 
       mail =

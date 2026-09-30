@@ -116,6 +116,39 @@ module Letters
       assert item.reload.released_at
     end
 
+    test 'reconciliation rechecks identity after waiting for a profile edit' do
+      item = queue { StringIO.new('%PDF letter') }
+      original_name = @recipient.first_name
+      @recipient.update!(first_name: 'Temporarily changed')
+      ready = Queue.new
+      release = Queue.new
+      holder_pids = Queue.new
+      holder = on_own_connection do
+        holder_pids << backend_pid
+        User.transaction do
+          User.find(@recipient.id).update!(first_name: original_name)
+          ready << true
+          release.pop
+        end
+      end
+      holder_pid = wait_for_signal(holder_pids, thread: holder)
+      wait_for_signal(ready, thread: holder)
+      contender_pids = Queue.new
+      contender = on_own_connection do
+        contender_pids << backend_pid
+        Delivery.reconcile_pending!(scope: PrintQueueItem.where(id: item.id))
+      end
+      confirm_blocked_then_release(wait_for_signal(contender_pids, thread: contender), holder_pid: holder_pid,
+                                                                                       release_queue: release, holder_thread: holder, contender_thread: contender)
+
+      assert_predicate item.reload, :pending?
+      assert_nil item.canceled_at
+      assert_predicate item.delivery_decision, :allowed?
+    ensure
+      release << true if holder&.alive?
+      [holder, contender].compact.each { |thread| reap_thread(thread, timeout: 5, suppress_errors: true) }
+    end
+
     private
 
     def queue(&)

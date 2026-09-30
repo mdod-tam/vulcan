@@ -83,7 +83,7 @@ class MedicalProviderNotifierTest < ActiveSupport::TestCase
     notifier = MedicalProviderNotifier.new(@application)
     mail = mock('certification_rejected_mail')
     mail.expects(:deliver_now).returns(true)
-    mail.expects(:message_id).returns('MSG-SECURE')
+    mail.expects(:[]).with('X-PM-Message-Id').returns(stub(value: 'MSG-SECURE'))
     mail.expects(:deliver_later).never
     mailer_proxy = mock('medical_provider_mailer_proxy')
     mailer_proxy.expects(:certification_rejected).returns(mail)

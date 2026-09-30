@@ -33,7 +33,8 @@ module Letters
 
     attr_reader :template_name, :format, :template, :variables, :recipient, :letter_type_override
 
-    def initialize(template_name:, recipient:, variables: {}, letter_type: nil, delivery_context: nil, secure_request_form: nil, request_key: nil) # rubocop:disable Metrics/ParameterLists
+    def initialize(template_name:, recipient:, variables: {}, locale: nil, letter_type: nil, delivery_context: nil, secure_request_form: nil, request_key: nil) # rubocop:disable Metrics/ParameterLists
+      @locale = locale
       @delivery_context = delivery_context
       @secure_request_form = secure_request_form
       @request_key = request_key
@@ -264,8 +265,8 @@ module Letters
     end
 
     def resolved_locale
-      locale = recipient.locale if recipient.respond_to?(:locale)
-      normalized = normalize_locale(locale)
+      recipient_locale = recipient.locale if recipient.respond_to?(:locale)
+      normalized = normalize_locale(@locale) || normalize_locale(recipient_locale)
       normalized || I18n.default_locale.to_s
     end
 

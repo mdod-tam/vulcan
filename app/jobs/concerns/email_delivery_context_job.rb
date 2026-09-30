@@ -23,6 +23,8 @@ module EmailDeliveryContextJob
         job.successfully_enqueued = false
       end
 
+      job.record_queued_notification if job.successfully_enqueued?
+
       if job.enqueue_error
         EmailDelivery::Outcome.record_enqueue_failure(job.enqueue_error, context: job.email_delivery_context,
                                                                          mail_action: job.email_delivery_mail_action)
@@ -33,6 +35,8 @@ module EmailDeliveryContextJob
     # A job run directly with perform_now was never queued, so it is checked like an immediate send.
     # A queued job that arrives without a context was queued before capture existed and is not sent.
     around_perform do |job, block|
+      next if EmailDeliveryAttempt.previously_attempted?(job.email_delivery_context)
+
       if job.enqueued_at.nil?
         job.email_delivery_context ||= EmailDelivery::Policy.capture(mail_action: job.email_delivery_mail_action,
                                                                      params: job.email_delivery_params)
@@ -66,6 +70,12 @@ module EmailDeliveryContextJob
     EmailDelivery::Outcome.record_not_sent(decision, context: email_delivery_context, mail_action: email_delivery_mail_action)
     delivery_not_sent
     false
+  end
+
+  def record_queued_notification
+    Notification.find_by(id: email_delivery_context&.dig('notification_id'))&.record_delivery_queued!
+  rescue StandardError => e
+    Rails.logger.error("Queued email tracking failed: #{e.class.name}")
   end
 
   def delivery_not_sent; end

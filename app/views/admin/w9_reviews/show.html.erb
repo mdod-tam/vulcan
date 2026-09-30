@@ -114,3 +114,10 @@
     </div>
   </div>
 </div>
+
+<% if @vendor_secure_request_forms.present? %>
+  <section class="mt-6 rounded border p-4" aria-label="W9 request delivery">
+    <h2 class="text-lg font-semibold">W9 request delivery</h2>
+    <% @vendor_secure_request_forms.each do |form| %><%= delivery_visibility(form) %><% end %>
+  </section>
+<% end %>

@@ -1,0 +1,91 @@
+en:
+  delivery_visibility:
+    time_format: "%b %-d, %Y %H:%M"
+    details: Details
+    channel: 'Channel: %{channel}'
+    destination: 'Destination: %{destination}'
+    owner: 'Contact owner: %{owner}'
+    requested_on: Requested on %{time}
+    sent_on: Sent on %{time}
+    attempted_on: Attempted on %{time}
+    last_update: 'Last provider update: %{time}'
+    last_check: 'Last checked: %{time}'
+    bounce_reason: 'Bounce category: %{reason}'
+    never_tracked: Delivery was not tracked for this request. Its outcome is unknown.
+    stale: No recent tracking update is available. The last known delivery facts are
+      unchanged.
+    configuration_error: Could not send because communication settings are missing
+      or misconfigured.
+    open_detected: Open detected. This signal can be automated and does not prove
+      that a person read the message.
+    attention: Delivery needs attention
+    history: Message delivery
+    channels:
+      email: Email
+      sms: Text message
+      letter: Letter
+      docuseal: DocuSeal
+      none: None
+    statuses:
+      queued: Waiting to send
+      accepted: Sent — awaiting confirmation
+      delivered: Delivered
+      delayed: Delivery delayed
+      bounced: Bounced
+      suppressed: Not sent — switched off
+      failed: Couldn't send
+      complained: Reported as spam
+      unknown: Delivery unknown
+      letter_printed: Letter marked printed
+      letter_released: Letter released for printing
+      letter_canceled: Letter canceled before release
+      sms_submitted: Text message submitted
+      docuseal: DocuSeal invitation requested
+      letter_blocked: Letter blocked — awaiting cancellation
+    descriptions:
+      queued: The message is waiting for its delivery channel.
+      accepted: Postmark accepted the email. Delivery to the receiving server has
+        not been confirmed.
+      delivered: The receiving server accepted the email. This does not prove inbox
+        placement or that a person read it.
+      delayed: Delivery has not been confirmed. Review the destination before deciding
+        whether to contact the recipient another way.
+      bounced: The receiving service reported a bounce for this attempt. The request
+        itself may still be active.
+      failed: This attempt could not be sent.
+      complained: The provider reported a spam complaint for this attempt.
+      unknown: The send outcome could not be confirmed. Investigate before sending
+        again.
+      letter_printed: Staff marked the letter printed; receipt by the recipient is
+        not confirmed.
+      letter_released: The letter was released to the print process.
+      letter_canceled: The letter was canceled before release.
+      sms_submitted: The text message was submitted to its provider; receipt is not
+        confirmed here.
+      docuseal: DocuSeal owns this invitation. Postmark feedback does not establish
+        its delivery.
+      letter_blocked: The letter is blocked by delivery controls and has not yet been
+        canceled in the print queue.
+    reasons:
+      all_disabled: All communications are switched off.
+      global_disabled: Email is switched off.
+      letters_disabled: Letters are switched off.
+      sms_disabled: Text messages are switched off.
+      category_disabled: This communication category is switched off.
+      template_disabled: This message template is switched off.
+      pending_canceled: The communication settings changed after this request was
+        prepared.
+      legacy_context_missing: This queued request predates the current delivery controls.
+      delivery_identity_changed: The message identity changed after preparation.
+      suppressed: The delivery controls prevented this message from being sent.
+    bounce_categories:
+      HardBounce: Permanent delivery failure
+      SoftBounce: Temporary delivery failure
+      Transient: Temporary server problem
+      DNSFailure: Destination server not found
+      SpamNotification: Spam policy rejection
+      SpamComplaint: Spam complaint
+      Blocked: Blocked by receiving service
+      ManualDeactivation: Address disabled at provider
+      Unsubscribe: Recipient unsubscribed
+      Other: Delivery rejected

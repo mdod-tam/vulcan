@@ -71,7 +71,6 @@ class MedicalProviderMailer < ApplicationMailer
     log_debug_variables('request_certification', variables)
 
     mail_options = provider_mail_options(required_delivery: params[:secure_upload_url].present?)
-    add_notification_tracking(mail_options, params[:notification_id])
     send_email(provider_recipient_email(params[:application]), template, variables, mail_options)
   rescue StandardError => e
     log_certification_error('request_certification', params[:application]&.medical_provider_email, e)
@@ -224,13 +223,6 @@ class MedicalProviderMailer < ApplicationMailer
   # A secure request passes the email recorded on its request row.
   def provider_recipient_email(application)
     params[:recipient_email].presence || application.medical_provider_email
-  end
-
-  def add_notification_tracking(mail_options, notification_id)
-    return if notification_id.blank?
-
-    notification = Notification.find_by(id: notification_id)
-    mail_options[:message_id] = notification.message_id if notification&.message_id.present?
   end
 
   def log_debug_variables(context, variables)

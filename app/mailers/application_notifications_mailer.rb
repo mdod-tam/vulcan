@@ -23,6 +23,7 @@ class ApplicationNotificationsMailer < ApplicationMailer # rubocop:disable Metri
 
       if prefers_letter_delivery?(@user)
         queue_letter_delivery(
+          locale: locale,
           recipient: @user,
           template_name: template_name,
           variables: variables,
@@ -52,6 +53,7 @@ class ApplicationNotificationsMailer < ApplicationMailer # rubocop:disable Metri
 
       if prefers_letter_delivery?(admin)
         queue_letter_delivery(
+          locale: locale,
           recipient: admin,
           template_name: template_name,
           variables: variables,
@@ -76,6 +78,7 @@ class ApplicationNotificationsMailer < ApplicationMailer # rubocop:disable Metri
 
       if prefers_letter_delivery?(recipient)
         queue_letter_delivery(
+          locale: locale,
           recipient: recipient,
           template_name: template_name,
           variables: variables.merge(proof_type: proof_review.proof_type),
@@ -115,6 +118,7 @@ class ApplicationNotificationsMailer < ApplicationMailer # rubocop:disable Metri
       if secure_request_form.present?
         if secure_request_form.recipient_channel_letter?
           queue_letter_delivery(
+            locale: locale,
             recipient: recipient,
             template_name: template_name,
             variables: variables.merge(proof_type: proof_review.proof_type),
@@ -131,6 +135,7 @@ class ApplicationNotificationsMailer < ApplicationMailer # rubocop:disable Metri
 
       if prefers_letter_delivery?(recipient)
         queue_letter_delivery(
+          locale: locale,
           recipient: recipient,
           template_name: template_name,
           variables: variables.merge(proof_type: proof_review.proof_type),
@@ -164,6 +169,7 @@ class ApplicationNotificationsMailer < ApplicationMailer # rubocop:disable Metri
       if secure_request_form.present?
         if secure_request_form.recipient_channel_letter?
           queue_letter_delivery(
+            locale: locale,
             recipient: recipient,
             template_name: template_name,
             variables: variables.merge(proof_type: proof_type),
@@ -179,6 +185,7 @@ class ApplicationNotificationsMailer < ApplicationMailer # rubocop:disable Metri
 
       if prefers_letter_delivery?(recipient)
         queue_letter_delivery(
+          locale: locale,
           recipient: recipient,
           template_name: template_name,
           variables: variables.merge(proof_type: proof_type),
@@ -205,6 +212,7 @@ class ApplicationNotificationsMailer < ApplicationMailer # rubocop:disable Metri
 
       if prefers_letter_delivery?(application.user)
         queue_letter_delivery(
+          locale: locale,
           recipient: application.user,
           template_name: template_name,
           variables: variables,
@@ -246,6 +254,7 @@ class ApplicationNotificationsMailer < ApplicationMailer # rubocop:disable Metri
 
       if prefers_letter_delivery?(constituent)
         queue_letter_delivery(
+          locale: locale,
           recipient: constituent,
           template_name: template_name,
           variables: variables,
@@ -281,6 +290,7 @@ class ApplicationNotificationsMailer < ApplicationMailer # rubocop:disable Metri
       notification_pref = notification_params[:communication_preference] || notification_params['communication_preference']
       if prefers_letter_delivery?(constituent_params, override: notification_pref.presence)
         queue_letter_delivery(
+          locale: locale,
           recipient: constituent_params,
           template_name: template_name,
           variables: variables,
@@ -303,6 +313,7 @@ class ApplicationNotificationsMailer < ApplicationMailer # rubocop:disable Metri
 
       if prefers_letter_delivery?(user)
         queue_letter_delivery(
+          locale: locale,
           recipient: user,
           template_name: template_name,
           variables: variables,
@@ -325,6 +336,7 @@ class ApplicationNotificationsMailer < ApplicationMailer # rubocop:disable Metri
 
       if prefers_letter_delivery?(application.user)
         queue_letter_delivery(
+          locale: locale,
           recipient: application.user,
           template_name: template_name,
           variables: variables.merge(proof_type: proof_type),
@@ -346,6 +358,7 @@ class ApplicationNotificationsMailer < ApplicationMailer # rubocop:disable Metri
 
       if prefers_letter_delivery?(application.user)
         queue_letter_delivery(
+          locale: locale,
           recipient: application.user,
           template_name: template_name,
           variables: variables,
@@ -375,6 +388,7 @@ class ApplicationNotificationsMailer < ApplicationMailer # rubocop:disable Metri
 
       if secure_request_form.recipient_channel_letter?
         queue_letter_delivery(
+          locale: locale,
           recipient: recipient,
           template_name: template_name,
           variables: variables,

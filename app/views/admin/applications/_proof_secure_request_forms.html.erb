@@ -25,7 +25,7 @@
               <%= t('admin.applications.secure_request_forms.table.status') %>
             </th>
             <th scope="col" class="px-3 py-2 text-left font-semibold text-gray-900">
-              <%= t('admin.applications.secure_request_forms.table.sent') %>
+              <%= t('delivery_visibility.requested_on', time: '').strip %>
             </th>
             <th scope="col" class="px-3 py-2 text-left font-semibold text-gray-900">
               <%= t('admin.applications.secure_request_forms.table.expires') %>
@@ -47,7 +47,8 @@
               </td>
               <td class="px-3 py-3 text-gray-700"><%= secure_request_masked_contact(form) %></td>
               <td class="px-3 py-3 text-gray-700"><%= secure_request_channel_label(form) %></td>
-              <td class="px-3 py-3 text-gray-700"><%= secure_request_status_label(form) %></td>
+              <td class="px-3 py-3 text-gray-700"><span><%= secure_request_status_label(form) %></span>
+                <%= delivery_visibility(form) %></td>
               <td class="px-3 py-3 text-gray-700"><%= l(form.sent_at, format: :short) %></td>
               <td class="px-3 py-3 text-gray-700"><%= l(form.expires_at, format: :short) %></td>
               <td class="px-3 py-3 text-right">

@@ -3,6 +3,7 @@
 # Manages the application lifecycle including proof submission, review,
 # medical certification, training sessions, evaluations, and voucher issuance
 class Application < ApplicationRecord
+  has_many :email_delivery_attempts, dependent: :nullify
   # Constants
   # Definition for Medical Provider Info struct
   MedicalProviderInfo = Struct.new(:name, :phone, :fax, :email, keyword_init: true) do # rubocop:disable Style/RedundantStructKeywordInit
@@ -161,6 +162,7 @@ class Application < ApplicationRecord
   # Callbacks
   before_create :stamp_workflow_defaults!
   before_create :ensure_managing_guardian_set
+  after_update :reconcile_pending_letters_after_owner_change
 
   # Scopes
   scope :draft, -> { where(status: :draft) }
@@ -706,6 +708,12 @@ class Application < ApplicationRecord
   end
 
   private
+
+  def reconcile_pending_letters_after_owner_change
+    return unless saved_changes.keys.intersect?(PrintQueueItem::APPLICATION_IDENTITY_FIELDS)
+
+    Letters::ReconcilePendingJob.schedule(application_id: id)
+  end
 
   def stamp_workflow_defaults!
     self.fulfillment_type = FeatureFlag.enabled?(:vouchers_enabled) ? :voucher : :equipment

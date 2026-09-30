@@ -32,7 +32,7 @@ module SecureRequestFormsHelper
 
   def secure_request_status_label(secure_request_form)
     if secure_request_form.recipient_channel == 'letter' && secure_request_form.active?
-      item = secure_request_form.print_queue_items.order(:id).last
+      item = secure_request_form.print_queue_items.max_by(&:id)
       return t("outbound_delivery.letter_#{item.display_delivery_state}") if item
     end
     t("admin.applications.secure_request_forms.statuses.#{secure_request_form.display_status}")

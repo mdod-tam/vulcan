@@ -12,6 +12,15 @@ class User < ApplicationRecord
   include UserEmailSearch
   include UserMergeIntegrity
 
+  after_update :reconcile_pending_letters_after_identity_change
+
+  def reconcile_pending_letters_after_identity_change
+    return unless saved_changes.keys.intersect?(PrintQueueItem::RECIPIENT_IDENTITY_FIELDS)
+
+    Letters::ReconcilePendingJob.schedule(recipient_id: id)
+  end
+  private :reconcile_pending_letters_after_identity_change
+
   attr_accessor :needs_duplicate_review unless column_names.include?('needs_duplicate_review')
   attr_accessor :portal_self_registration
 

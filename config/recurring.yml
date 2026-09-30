@@ -2,6 +2,11 @@
 # Format: https://github.com/rails/solid_queue#recurring-tasks
 
 production:
+  poll_email_delivery:
+    class: EmailDelivery::PollJob
+    schedule: "15 * * * *"
+    description: "Bounded fallback checks for unconfirmed Postmark attempts"
+
   cleanup_unattached_uploads:
     class: CleanupUnattachedUploadsJob
     schedule: "0 4 * * *"

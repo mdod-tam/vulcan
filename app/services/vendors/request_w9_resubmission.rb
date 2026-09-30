@@ -219,6 +219,7 @@ module Vendors
     # Delivers to the email recorded on the request row. deliver_now keeps the
     # bearer URL out of job arguments.
     def deliver_request_email!(request_form, raw_token)
+      @email_context = @email_context.merge('notification_id' => tracking_notification_for(request_form)&.id)
       secure_upload_url = secure_upload_url_for(raw_token)
 
       mailer = VendorNotificationsMailer.with(

@@ -1,6 +1,8 @@
 # frozen_string_literal: true
 
 class ApplicationMailer < ActionMailer::Base
+  abstract!
+
   include SecureErrorSanitizer
 
   class NoopDelivery
@@ -41,7 +43,13 @@ class ApplicationMailer < ActionMailer::Base
 
   # Last check before handoff, for queued and immediate deliveries alike.
   before_deliver :enforce_email_delivery_controls
+  around_deliver :capture_delivery_attempt
   after_deliver :record_provider_fallback_submission
+
+  def process(action, *args, **kwargs)
+    @delivery_subject = args.find { |argument| argument.is_a?(ApplicationRecord) && argument.respond_to?(:email_delivery_attempts) }
+    super
+  end
 
   private
 
@@ -78,13 +86,26 @@ class ApplicationMailer < ActionMailer::Base
   def enforce_email_delivery_controls
     return unless @_mail_was_called
 
-    mail_action = "#{self.class.name}##{action_name}"
     context = @delivery_context
+    throw :abort if EmailDeliveryAttempt.previously_attempted?(context)
+
+    mail_action = "#{self.class.name}##{action_name}"
     decision = EmailDelivery::Policy.verify_delivery(mail_action, context)
     return if decision.allowed?
 
     EmailDelivery::Outcome.record_not_sent(decision, context: context, mail_action: mail_action)
     throw :abort
+  end
+
+  def capture_delivery_attempt(&block)
+    return block.call unless @_mail_was_called && message.perform_deliveries
+
+    @delivery_context['delivery_correlation_id'] ||= EmailDeliveryAttempt.correlation_for(@delivery_context)
+    subject = @delivery_subject || %i[application voucher invoice evaluation training_session].filter_map do |name|
+      params[name] || instance_variable_get("@#{name}")
+    end.first
+    recipient = params[:user] || @user || params[:vendor] || @vendor
+    EmailDelivery::Capture.new(message: message, context: @delivery_context, subject: subject, recipient: recipient, contacts: @delivery_contacts || {}).deliver(&block)
   end
 
   def record_provider_fallback_submission
@@ -108,27 +129,21 @@ class ApplicationMailer < ActionMailer::Base
   end
 
   def prefers_letter_delivery?(recipient, override: nil)
-    return override.to_s == 'letter' if override.present?
-
-    preference =
-      if recipient.respond_to?(:effective_communication_preference)
-        recipient.effective_communication_preference
-      elsif recipient.respond_to?(:communication_preference)
-        recipient.communication_preference
-      end
-
-    preference.to_s == 'letter'
+    EmailDelivery::Routing.prefers_letter?(recipient, override: override)
   end
 
   def recipient_email_for(recipient)
-    return recipient.effective_email if recipient.respond_to?(:effective_email) && recipient.effective_email.present?
-    return recipient.email if recipient.respond_to?(:email)
-
-    nil
+    contact = recipient.dependent_email_contact(contact_guardian: recipient.guardian_for_contact) if recipient.respond_to?(:dependent?) && recipient.dependent?
+    address = contact&.value.presence || (recipient.effective_email if recipient.respond_to?(:effective_email)).presence || recipient.email
+    if address.present?
+      @delivery_contacts ||= {}
+      @delivery_contacts[address.downcase] = { recipient: recipient, owner: contact&.owner || recipient }
+    end
+    address
   end
 
   # Secure requests pass the resolver-selected print_recipient. Other callers retain the dependent-to-guardian fallback.
-  def queue_letter_delivery(recipient:, template_name:, variables:, letter_type: nil, application: nil, print_recipient: nil, # rubocop:disable Metrics/ParameterLists
+  def queue_letter_delivery(recipient:, template_name:, variables:, locale:, letter_type: nil, application: nil, print_recipient: nil, # rubocop:disable Metrics/ParameterLists
                             secure_request_form: nil, delivery_key: nil)
     print_recipient ||= letter_recipient_for(recipient)
     letter_variables = common_template_variables.merge(variables.respond_to?(:to_h) ? variables.to_h.deep_symbolize_keys : variables.dup)
@@ -137,6 +152,7 @@ class ApplicationMailer < ActionMailer::Base
     Letters::TextTemplateToPdfService.new(
       template_name: template_name,
       recipient: print_recipient,
+      locale: locale,
       variables: letter_variables,
       letter_type: letter_type,
       delivery_context: @delivery_context,
@@ -147,10 +163,10 @@ class ApplicationMailer < ActionMailer::Base
 
   # Queues a printed letter when the recipient prefers mail. Returns true when the letter route
   # handles the message, so the caller sends no email.
-  def queue_letter_if_preferred(recipient, template_name, variables, application: nil)
+  def queue_letter_if_preferred(recipient, template_name, variables, locale:, application: nil)
     return false unless prefers_letter_delivery?(recipient)
 
-    queue_letter_delivery(recipient: recipient, template_name: template_name, variables: variables, application: application)
+    queue_letter_delivery(recipient: recipient, template_name: template_name, variables: variables, locale: locale, application: application)
     true
   end
 
@@ -226,7 +242,7 @@ class ApplicationMailer < ActionMailer::Base
     fallback.to_s
   end
 
-  def log_mail_error(error, user, template_name, variables)
+  def log_mail_error(error, user, template_name)
     AuditEventService.log(
       actor: user,
       action: 'email_delivery_error',
@@ -237,17 +253,11 @@ class ApplicationMailer < ActionMailer::Base
         error_message: sanitize_secure_error_message(error.message),
         error_class: error.class.name,
         template_name: template_name,
-        variables: sanitized_mail_variables(variables),
+        mail_action: "#{self.class.name}##{action_name}",
         backtrace: sanitize_secure_value(error.backtrace&.first(5))
       }
     )
-  end
-
-  def sanitized_mail_variables(variables)
-    redact_sensitive_mail_value(variables.to_h.deep_dup)
-  end
-
-  def redact_sensitive_mail_value(value, key = nil)
-    sanitize_secure_value(value, key)
+  rescue StandardError => e
+    Rails.logger.error("Mailer error audit failed: #{e.class}; original error: #{error.class}")
   end
 end

@@ -522,18 +522,7 @@ class NotificationService
   def letter_preference_route?(notification)
     return false unless PREFERENCE_ROUTED_ACTIONS.include?(notification.action.to_s)
 
-    recipient_prefers_letter?(notification.recipient)
-  end
-
-  def recipient_prefers_letter?(recipient)
-    preference =
-      if recipient.respond_to?(:effective_communication_preference)
-        recipient.effective_communication_preference
-      elsif recipient.respond_to?(:communication_preference)
-        recipient.communication_preference
-      end
-
-    preference.to_s == 'letter'
+    EmailDelivery::Routing.prefers_letter?(notification.recipient)
   end
 
   def delivery_route_reason_for(notification, requested_channel, actual_delivery_channel)

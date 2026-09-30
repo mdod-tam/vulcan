@@ -1,0 +1,93 @@
+es:
+  delivery_visibility:
+    time_format: "%d/%m/%Y %H:%M"
+    details: Detalles
+    channel: 'Canal: %{channel}'
+    destination: 'Destino: %{destination}'
+    owner: 'Titular del contacto: %{owner}'
+    requested_on: Solicitado el %{time}
+    sent_on: Enviado el %{time}
+    attempted_on: Intento el %{time}
+    last_update: 'Última actualización del proveedor: %{time}'
+    last_check: 'Última consulta: %{time}'
+    bounce_reason: 'Categoría del rechazo: %{reason}'
+    never_tracked: No se registró el seguimiento de entrega de esta solicitud. Se
+      desconoce el resultado.
+    stale: No hay una actualización reciente del seguimiento. Los últimos datos de
+      entrega no han cambiado.
+    configuration_error: No se pudo enviar porque falta la configuración de comunicaciones
+      o es incorrecta.
+    open_detected: Se detectó una apertura. Esta señal puede ser automática y no demuestra
+      que una persona leyó el mensaje.
+    attention: La entrega necesita atención
+    history: Entrega de mensajes
+    channels:
+      email: Correo electrónico
+      sms: Mensaje de texto
+      letter: Carta
+      docuseal: DocuSeal
+      none: Ninguno
+    statuses:
+      queued: En espera de envío
+      accepted: Enviado — esperando confirmación
+      delivered: Entregado
+      delayed: Entrega demorada
+      bounced: Rechazado
+      suppressed: No enviado — desactivado
+      failed: No se pudo enviar
+      complained: Marcado como correo no deseado
+      unknown: Entrega desconocida
+      letter_printed: Carta marcada como impresa
+      letter_released: Carta liberada para impresión
+      letter_canceled: Carta cancelada antes de liberarse
+      sms_submitted: Mensaje de texto enviado al proveedor
+      docuseal: Invitación de DocuSeal solicitada
+      letter_blocked: Carta bloqueada — esperando cancelación
+    descriptions:
+      queued: El mensaje está esperando su canal de entrega.
+      accepted: Postmark aceptó el correo. No se ha confirmado la entrega al servidor
+        de destino.
+      delivered: El servidor de destino aceptó el correo. Esto no demuestra que llegó
+        a la bandeja de entrada ni que una persona lo leyó.
+      delayed: No se ha confirmado la entrega. Revise el destino antes de decidir
+        si debe contactar al destinatario por otro medio.
+      bounced: El servicio de destino informó un rechazo para este intento. La solicitud
+        puede seguir activa.
+      failed: No se pudo enviar este intento.
+      complained: El proveedor informó que este intento se marcó como correo no deseado.
+      unknown: No se pudo confirmar el resultado del envío. Investigue antes de enviarlo
+        de nuevo.
+      letter_printed: El personal marcó la carta como impresa; no se ha confirmado
+        su recepción.
+      letter_released: La carta se liberó al proceso de impresión.
+      letter_canceled: La carta se canceló antes de liberarse.
+      sms_submitted: El mensaje de texto se envió a su proveedor; aquí no se confirma
+        su recepción.
+      docuseal: DocuSeal gestiona esta invitación. Los datos de Postmark no confirman
+        su entrega.
+      letter_blocked: Los controles de entrega bloquean la carta y aún no se ha cancelado
+        en la cola de impresión.
+    reasons:
+      all_disabled: Todas las comunicaciones están desactivadas.
+      global_disabled: El correo electrónico está desactivado.
+      letters_disabled: Las cartas están desactivadas.
+      sms_disabled: Los mensajes de texto están desactivados.
+      category_disabled: Esta categoría de comunicación está desactivada.
+      template_disabled: Esta plantilla de mensaje está desactivada.
+      pending_canceled: La configuración de comunicaciones cambió después de preparar
+        esta solicitud.
+      legacy_context_missing: Esta solicitud en cola es anterior a los controles actuales
+        de entrega.
+      delivery_identity_changed: La identidad del mensaje cambió después de prepararlo.
+      suppressed: Los controles de entrega impidieron enviar este mensaje.
+    bounce_categories:
+      HardBounce: Fallo permanente de entrega
+      SoftBounce: Fallo temporal de entrega
+      Transient: Problema temporal del servidor
+      DNSFailure: Servidor de destino no encontrado
+      SpamNotification: Rechazo por política de correo no deseado
+      SpamComplaint: Queja de correo no deseado
+      Blocked: Bloqueado por el servicio de destino
+      ManualDeactivation: Dirección desactivada en el proveedor
+      Unsubscribe: El destinatario canceló la suscripción
+      Other: Entrega rechazada

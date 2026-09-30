@@ -20,9 +20,9 @@ class VendorNotificationsMailer < ApplicationMailer
     variables = build_invoice_variables(invoice, vendor, transactions)
     attachments["invoice-#{invoice.invoice_number}.pdf"] = generate_invoice_pdf(invoice, vendor, transactions)
 
-    send_template_email(vendor.email, text_template, variables)
+    send_template_email(recipient_email_for(vendor), text_template, variables)
   rescue StandardError => e
-    log_mail_error(e, vendor, 'vendor_notifications_invoice_generated', variables.to_h.except(:transactions_html_table, :transactions_text_list))
+    log_mail_error(e, vendor, 'vendor_notifications_invoice_generated')
     raise e
   end
 
@@ -34,9 +34,9 @@ class VendorNotificationsMailer < ApplicationMailer
     text_template = find_text_template('vendor_notifications_payment_issued', locale: locale)
     variables = build_payment_variables(invoice, vendor)
 
-    send_template_email(vendor.email, text_template, variables)
+    send_template_email(recipient_email_for(vendor), text_template, variables)
   rescue StandardError => e
-    log_mail_error(e, vendor, 'vendor_notifications_payment_issued', variables.to_h)
+    log_mail_error(e, vendor, 'vendor_notifications_payment_issued')
     raise e
   end
 
@@ -56,9 +56,9 @@ class VendorNotificationsMailer < ApplicationMailer
       subject_variables: { vendor_business_name: vendor.business_name },
       locale: locale
     )
-    send_template_email(vendor.email, text_template, variables)
+    send_template_email(recipient_email_for(vendor), text_template, variables)
   rescue StandardError => e
-    log_mail_error(e, vendor, template_name, variables.to_h.except(:status_box_html, :header_html, :footer_html))
+    log_mail_error(e, vendor, template_name)
     raise e
   end
 
@@ -96,7 +96,7 @@ class VendorNotificationsMailer < ApplicationMailer
     send_template_email(secure_request_recipient_email(vendor), text_template, variables,
                         required_delivery: secure_upload_url.present?)
   rescue StandardError => e
-    log_mail_error(e, vendor, template_name, variables.to_h.except(:status_box_html, :header_html, :footer_html))
+    log_mail_error(e, vendor, template_name)
     raise e
   end
 
@@ -122,11 +122,7 @@ class VendorNotificationsMailer < ApplicationMailer
 
     send_mail(secure_request_recipient_email(vendor), subject, body, content_type: 'text/plain')
   rescue StandardError => e
-    log_mail_error(e, vendor, template_name, {
-      vendor_business_name: vendor&.business_name,
-      secure_upload_url: secure_upload_url,
-      support_email: support_email
-    }.compact)
+    log_mail_error(e, vendor, template_name)
     raise e
   end
 
@@ -165,9 +161,9 @@ class VendorNotificationsMailer < ApplicationMailer
                   vendor_portal_url: resolve_vendor_portal_url
                 )
 
-    send_template_email(vendor.email, text_template, variables)
+    send_template_email(recipient_email_for(vendor), text_template, variables)
   rescue StandardError => e
-    log_mail_error(e, vendor, template_name, variables.to_h.except(:status_box_warning_html, :status_box_info_html, :header_html, :footer_html))
+    log_mail_error(e, vendor, template_name)
     raise e
   end
 
@@ -204,9 +200,9 @@ class VendorNotificationsMailer < ApplicationMailer
                   vendor_portal_url: resolve_vendor_portal_url
                 )
 
-    send_template_email(vendor.email, text_template, variables)
+    send_template_email(recipient_email_for(vendor), text_template, variables)
   rescue StandardError => e
-    log_mail_error(e, vendor, template_name, variables.to_h.except(:status_box_warning_html, :status_box_info_html, :header_html, :footer_html))
+    log_mail_error(e, vendor, template_name)
     raise e
   end
 

@@ -199,3 +199,14 @@
     <% end %>
   </div>
 </div>
+
+<% if @certification_delivery_notifications&.first %>
+  <div class="mt-4" id="latest-certification-delivery">
+    <h3 class="text-sm font-medium text-gray-900">Latest certification email</h3>
+    <%= delivery_visibility(@certification_delivery_notifications.first) %>
+  </div>
+<% end %>
+
+<% if @application.document_signing_service == 'docuseal' && @application.document_signing_submission_id.present? %>
+  <p class="mt-3 text-sm text-gray-700">DocuSeal invitation requested. Signing status: <%= @application.document_signing_status.humanize %>. Email delivery is not confirmed by this integration.</p>
+<% end %>

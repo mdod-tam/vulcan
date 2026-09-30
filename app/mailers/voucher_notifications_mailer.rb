@@ -55,11 +55,11 @@ class VoucherNotificationsMailer < ApplicationMailer
       support_email: footer_contact_email
     }.compact
 
-    return noop_letter_delivery if queue_letter_if_preferred(user, template_name, variables, application: voucher.application)
+    return noop_letter_delivery if queue_letter_if_preferred(user, template_name, variables, locale: locale, application: voucher.application)
 
     send_email(recipient_email_for(user), text_template, variables)
   rescue StandardError => e
-    record_delivery_error(e, user: user, template_name: template_name)
+    log_mail_error(e, user, template_name)
     raise e
   end
 
@@ -135,11 +135,11 @@ class VoucherNotificationsMailer < ApplicationMailer
       support_email: footer_contact_email
     }.compact
 
-    return noop_letter_delivery if queue_letter_if_preferred(user, template_name, variables, application: voucher.application)
+    return noop_letter_delivery if queue_letter_if_preferred(user, template_name, variables, locale: locale, application: voucher.application)
 
     send_email(recipient_email_for(user), text_template, variables)
   rescue StandardError => e
-    record_delivery_error(e, user: user, template_name: template_name)
+    log_mail_error(e, user, template_name)
     raise e
   end
 
@@ -201,11 +201,11 @@ class VoucherNotificationsMailer < ApplicationMailer
       show_automated_message: footer_show_automated_message # Optional
     }.compact
 
-    return noop_letter_delivery if queue_letter_if_preferred(user, template_name, variables, application: voucher.application)
+    return noop_letter_delivery if queue_letter_if_preferred(user, template_name, variables, locale: locale, application: voucher.application)
 
     send_email(recipient_email_for(user), text_template, variables)
   rescue StandardError => e
-    record_delivery_error(e, user: user, template_name: template_name)
+    log_mail_error(e, user, template_name)
     raise e
   end
 
@@ -281,22 +281,11 @@ class VoucherNotificationsMailer < ApplicationMailer
       support_email: footer_contact_email
     }.compact
 
-    return noop_letter_delivery if queue_letter_if_preferred(user, template_name, variables, application: voucher.application)
+    return noop_letter_delivery if queue_letter_if_preferred(user, template_name, variables, locale: locale, application: voucher.application)
 
     send_email(recipient_email_for(user), text_template, variables)
   rescue StandardError => e
-    record_delivery_error(e, user: user, template_name: template_name)
+    log_mail_error(e, user, template_name)
     raise e
-  end
-
-  private
-
-  def record_delivery_error(error, user:, template_name:)
-    AuditEventService.log(
-      actor: user, action: 'email_delivery_error', auditable: user,
-      metadata: { user_agent: Current.user_agent, ip_address: Current.ip_address,
-                  error_message: error.message, error_class: error.class.name,
-                  template_name: template_name, backtrace: error.backtrace&.first(5) }
-    )
   end
 end

@@ -220,24 +220,15 @@ class VendorNotificationsMailerTest < ActionMailer::TestCase
         :log_mail_error,
         StandardError.new("boom #{raw_url}"),
         @vendor,
-        'vendor_notifications_w9_rejected',
-        {
-          secure_upload_url: raw_url,
-          w9_resubmission_instructions: "Upload securely here: #{raw_url}",
-          nested: { secure_url: raw_url }
-        }
+        'vendor_notifications_w9_rejected'
       )
     end
 
     event = Event.where(action: 'email_delivery_error', auditable: @vendor).last
-    variables_json = event.metadata.fetch('variables').to_json
 
     assert_includes event.metadata.fetch('error_message'), '[REDACTED_URL]'
     assert_not_includes event.metadata.fetch('error_message'), raw_url
-    assert_not_includes variables_json, raw_url
-    assert_not_includes variables_json, 'secret-token'
-    assert_includes variables_json, '[REDACTED]'
-    assert_includes variables_json, '[REDACTED_URL]'
+    assert_not event.metadata.key?('variables')
   end
 
   test 'w9_expiring_soon renders stored template with required variables' do

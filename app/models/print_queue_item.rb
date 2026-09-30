@@ -50,31 +50,35 @@ class PrintQueueItem < ApplicationRecord
   scope :unreleased, -> { pending.where(released_at: nil) }
   scope :awaiting_print_confirmation, -> { pending.where.not(released_at: nil) }
 
-  attr_accessor :delivery_write
+  attr_accessor :delivery_write, :preloaded_delivery_state
 
   validate :delivery_changes_use_owner, on: :update
 
+  RECIPIENT_IDENTITY_FIELDS = %w[first_name last_name physical_address_1 physical_address_2 city state zip_code
+                                 locale status merged_into_user_id].freeze
+  APPLICATION_IDENTITY_FIELDS = %w[user_id managing_guardian_id].freeze
+
   def self.identity_for(recipient:, application: nil, secure_request_form: nil)
-    fields = recipient.attributes.slice('first_name', 'last_name', 'physical_address_1', 'physical_address_2',
-                                        'city', 'state', 'zip_code', 'locale', 'status', 'merged_into_user_id')
+    fields = recipient.attributes.slice(*RECIPIENT_IDENTITY_FIELDS)
     { 'recipient_id' => recipient.id, 'recipient_digest' => Digest::SHA256.hexdigest(fields.sort.to_json),
       'application_user_id' => application&.user_id, 'managing_guardian_id' => application&.managing_guardian_id,
       'request_recipient_id' => secure_request_form&.recipient_id,
       'delivery_owner_id' => secure_request_form&.delivery_owner_id }.compact
   end
 
-  def display_delivery_state
+  def display_delivery_state(active_request_ids: nil)
+    return preloaded_delivery_state if preloaded_delivery_state
     return :printed if printed?
     return :released if released_at
     return :canceled if canceled?
 
-    decision = delivery_decision
+    decision = delivery_decision(active_request_ids: active_request_ids)
     return :configuration_error if decision.configuration_error?
 
-    decision.allowed? ? :queued : :canceled
+    decision.allowed? ? :queued : :blocked
   end
 
-  def delivery_decision
+  def delivery_decision(active_request_ids: nil)
     return EmailDelivery::Decision.suppressed(cancellation_reason || :pending_canceled) if canceled?
 
     decision = EmailDelivery::Policy.verify(delivery_context, channel: :letter)
@@ -82,9 +86,11 @@ class PrintQueueItem < ApplicationRecord
 
     current_identity = self.class.identity_for(recipient: constituent, application: application, secure_request_form: secure_request_form)
     return EmailDelivery::Decision.suppressed(:delivery_identity_changed) unless delivery_identity == current_identity
-    if released_at.nil? && secure_request_form && !SecureRequestForm.active.exists?(id: secure_request_form_id)
-      return EmailDelivery::Decision.suppressed(:request_no_longer_active)
-    end
+
+    request_active = if secure_request_form_id
+                       active_request_ids ? active_request_ids.include?(secure_request_form_id) : SecureRequestForm.active.exists?(id: secure_request_form_id)
+                     end
+    return EmailDelivery::Decision.suppressed(:request_no_longer_active) if released_at.nil? && secure_request_form && !request_active
 
     EmailDelivery::Decision.allowed
   end

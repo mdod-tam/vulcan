@@ -102,7 +102,6 @@ require 'webauthn/fake_client'
 
 # Test-only controllers & routes
 require_relative 'controllers/webhooks/test_base_controller'
-require_relative 'controllers/webhooks/test_email_events_controller'
 
 # Generator test-case destination root
 require_relative 'lib/generators/test_case_config'

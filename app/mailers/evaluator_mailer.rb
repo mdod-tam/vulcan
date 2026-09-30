@@ -20,9 +20,9 @@ class EvaluatorMailer < ApplicationMailer
 
     text_template = load_email_template(template_name, locale: locale)
     variables = build_new_evaluation_variables(evaluation, template: text_template, locale: locale)
-    send_email(evaluation.evaluator.email, text_template, variables)
+    send_email(recipient_email_for(evaluation.evaluator), text_template, variables)
   rescue StandardError => e
-    log_email_error(e, evaluation&.evaluator, template_name, variables)
+    log_mail_error(e, evaluation&.evaluator, template_name)
     raise
   end
 
@@ -36,11 +36,11 @@ class EvaluatorMailer < ApplicationMailer
     text_template = load_email_template(template_name, locale: locale)
     variables = build_submission_confirmation_variables(evaluation, template: text_template, locale: locale)
 
-    return noop_letter_delivery if queue_letter_if_needed(evaluation, template_name, variables)
+    return noop_letter_delivery if queue_letter_if_needed(evaluation, template_name, variables, locale: locale)
 
     send_email(recipient_email_for(evaluation.constituent), text_template, variables)
   rescue StandardError => e
-    log_submission_error(e, evaluation)
+    log_mail_error(e, evaluation&.constituent, template_name)
     raise
   end
 
@@ -185,11 +185,12 @@ class EvaluatorMailer < ApplicationMailer
 
   # Queue letter if constituent prefers print communication. True means the letter route
   # handled this message, including a letter queued earlier, so no email follows.
-  def queue_letter_if_needed(evaluation, template_name, variables)
+  def queue_letter_if_needed(evaluation, template_name, variables, locale:)
     constituent = evaluation.constituent
     return false unless prefers_letter_delivery?(constituent)
 
     queue_letter_delivery(
+      locale: locale,
       recipient: constituent,
       template_name: template_name,
       variables: variables,
@@ -198,30 +199,5 @@ class EvaluatorMailer < ApplicationMailer
       application: evaluation.application
     )
     true
-  end
-
-  # Log submission confirmation errors
-  def log_submission_error(error, evaluation)
-    Rails.logger.error("Failed to send evaluation submission confirmation email for evaluation #{evaluation&.id}: #{error.message}")
-    Rails.logger.error(error.backtrace.join("\n"))
-  end
-
-  # Log email delivery errors
-  def log_email_error(error, evaluator, template_name, variables = {})
-    AuditEventService.log(
-      actor: evaluator,
-      action: 'email_delivery_error',
-      auditable: evaluator,
-      metadata: {
-        user_agent: Current.user_agent,
-        ip_address: Current.ip_address,
-        error_message: error.message,
-        error_class: error.class.name,
-        template_name: template_name,
-        variables: variables.except(:header_html, :header_text, :footer_html, :footer_text, :constituent_disabilities_html_list,
-                                    :constituent_disabilities_text_list),
-        backtrace: error.backtrace&.first(5)
-      }
-    )
   end
 end

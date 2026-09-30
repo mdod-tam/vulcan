@@ -20,7 +20,7 @@ module Admin
 
     def show
       @w9_reviews = @vendor.w9_reviews.includes(:admin).order(created_at: :desc)
-      @vendor_secure_request_forms = @vendor.vendor_secure_request_forms.order(sent_at: :desc)
+      @vendor_secure_request_forms = EmailDelivery::Visibility.preload(@vendor.vendor_secure_request_forms.order(sent_at: :desc))
       @w9_secure_request_notifications = Notification
                                          .where(notifiable: @vendor,
                                                 action: 'w9_resubmission_requested')

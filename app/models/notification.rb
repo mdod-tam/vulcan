@@ -1,6 +1,7 @@
 # frozen_string_literal: true
 
 class Notification < ApplicationRecord
+  has_many :email_delivery_attempts, dependent: :nullify
   attr_accessor :delivery_successful
 
   # Suffix: true generates methods like `delivered_status?` and scopes like `delivered_status`.
@@ -32,10 +33,9 @@ class Notification < ApplicationRecord
   end
 
   # Email status methods for medical certification requests.
-  # These methods depend on the `message_id` column in the `notifications` table
-  # and the existence of an `UpdateEmailStatusJob`.
+  # Refresh only linked attempts with remaining checks; legacy IDs do not prove a send.
   def email_tracking?
-    message_id.present?
+    email_delivery_attempts.any?(&:check_available?)
   end
 
   # An outcome recorded here without the provider: suppressed, or failed before handoff.
@@ -55,6 +55,14 @@ class Notification < ApplicationRecord
     return 'Unknown error' unless metadata.is_a?(Hash)
 
     metadata.fetch('delivery_error', {}).fetch('message', 'Unknown error')
+  end
+
+  def record_delivery_queued!
+    with_lock do
+      next if local_delivery_outcome? || email_delivery_attempts.exists?
+
+      update!(delivery_status: :queued)
+    end
   end
 
   def record_delivery_handoff!(channel:, state: :submitted)
@@ -91,7 +99,8 @@ class Notification < ApplicationRecord
     with_lock do
       update!(delivery_status: status,
               metadata: metadata.to_h.except('delivery_suppressed', 'delivery_error').merge(
-                key => details, 'actual_delivery_channel' => 'none', 'delivery_route_reason' => route
+                key => details, 'actual_delivery_channel' => 'none', 'delivery_route_reason' => route,
+                'requested_channel' => metadata.to_h['requested_channel'] || metadata.to_h['channel'] || channel.to_s
               ))
     end
   end

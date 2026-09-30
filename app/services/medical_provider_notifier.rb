@@ -191,7 +191,7 @@ class MedicalProviderNotifier
 
     if secure_upload_url.present?
       EmailDelivery.deliver_now!(mail, context: @delivery_contexts.fetch('email'))
-      { success: true, method: EMAIL_METHOD, outcome: :submitted, message_id: mail.message_id }
+      { success: true, method: EMAIL_METHOD, outcome: :submitted, message_id: mail['X-PM-Message-Id']&.value }
     else
       outcome = EmailDelivery.deliver_later(mail, context: @delivery_contexts.fetch('email'))
       { success: %i[queued deferred].include?(outcome), method: EMAIL_METHOD, outcome: outcome }

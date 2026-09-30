@@ -45,6 +45,7 @@ module Admin
       page_applications = page_of_apps.to_a
       # The array avoids PostgreSQL JSON DISTINCT errors when the relation has joins.
       attachments_index = preload_attachments_for_applications(page_applications)
+      @delivery_attention = EmailDelivery::Visibility.application_attention(page_applications)
       @provider_info_request_summaries = provider_info_request_summaries_for(page_applications)
 
       @applications = decorate_applications_with_storage(page_applications, attachments_index)
@@ -71,8 +72,7 @@ module Admin
       @reserved_training_sessions_count = @application.reserved_training_sessions_count
       @remaining_training_sessions = @application.remaining_training_sessions
       load_provider_info_request_data(@application)
-      @medical_provider_secure_request_forms = @application.medical_provider_secure_request_forms
-                                                           .order(created_at: :desc)
+      load_certification_delivery_data
     end
 
     def edit; end
@@ -147,6 +147,7 @@ module Admin
       if result.success?
         handle_successful_review(result)
       else
+        load_certification_delivery_data
         handle_error_response(
           error_message: result.message,
           html_render_action: :show
@@ -574,6 +575,7 @@ module Admin
 
     def prepare_turbo_stream_data
       @application = reload_application_and_associations(@application)
+      load_certification_delivery_data
       load_attachment_data
       audit_log_builder = Applications::AuditLogBuilder.new(@application)
       @audit_logs = audit_log_builder.build_audit_logs

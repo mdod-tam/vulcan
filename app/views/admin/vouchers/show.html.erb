@@ -87,8 +87,8 @@
             <dd class="mt-1 text-sm text-gray-900">
               <% if @voucher.vendor %>
                 <%= link_to @voucher.vendor.business_name,
-                    [:admin, @voucher.vendor],
-                    class: "text-indigo-600 hover:text-indigo-900" %>
+                            admin_vendor_path(@voucher.vendor),
+                            class: 'text-indigo-600 hover:text-indigo-900' %>
               <% else %>
                 <span class="text-gray-400">Unassigned</span>
               <% end %>
@@ -143,8 +143,8 @@
                           <%= number_to_currency(transaction.amount) %>
                           processed by
                           <%= link_to transaction.vendor.business_name,
-                              [:admin, transaction.vendor],
-                              class: "font-medium text-gray-900" %>
+                                      admin_vendor_path(transaction.vendor),
+                                      class: 'font-medium text-gray-900' %>
                         </div>
                         <div class="mt-1 text-sm text-gray-500 flex items-center">
                           <span><%= transaction.processed_at.strftime("%B %d, %Y %I:%M %p") %></span>
@@ -201,8 +201,8 @@
                             <span class="font-medium text-gray-900"><%= event.user.full_name %></span>
                           <% else %>
                             <%= link_to event.user.full_name,
-                                [:admin, event.user],
-                                class: "font-medium text-gray-900" %>
+                                        admin_user_path(event.user),
+                                        class: 'font-medium text-gray-900' %>
                           <% end %>
                         </div>
                         <div class="mt-1 text-sm text-gray-500">
@@ -234,3 +234,10 @@
     </div>
   </div>
 </div>
+
+<% if @voucher.email_delivery_attempts.any? %>
+  <section class="mt-6 rounded border border-gray-200 p-4" aria-label="<%= t('delivery_visibility.history') %>">
+    <h2 class="text-lg font-semibold"><%= t('delivery_visibility.history') %></h2>
+    <%= delivery_visibility(@voucher) %>
+  </section>
+<% end %>

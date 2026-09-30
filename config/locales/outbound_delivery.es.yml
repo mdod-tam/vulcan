@@ -7,5 +7,6 @@ es:
     letter_released: "Carta entregada para impresión"
     letter_printed: "Carta marcada como impresa"
     letter_canceled: "Carta cancelada antes de la impresión"
+    letter_blocked: "Carta bloqueada: pendiente de cancelación"
     partial_suppression: "Se procesaron los destinatarios habilitados. Algunos mensajes no se enviaron porque su método de entrega está desactivado."
     letter_configuration_error: "Carta bloqueada: la configuración de comunicaciones no está disponible"

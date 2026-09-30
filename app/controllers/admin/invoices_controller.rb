@@ -35,6 +35,7 @@ module Admin
     end
 
     def show
+      EmailDelivery::Visibility.preload([@invoice])
       @transactions = @invoice.voucher_transactions
                               .includes(:voucher)
                               .order(processed_at: :desc)

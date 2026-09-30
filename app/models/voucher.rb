@@ -2,6 +2,7 @@
 
 # Represents a voucher that can be redeemed by constituents for accessible telecommunications products
 class Voucher < ApplicationRecord
+  has_many :email_delivery_attempts, as: :origin, dependent: :nullify
   belongs_to :application
   belongs_to :vendor, optional: true, class_name: 'User'
   belongs_to :invoice, optional: true

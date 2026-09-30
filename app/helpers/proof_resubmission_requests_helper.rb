@@ -40,10 +40,12 @@ module ProofResubmissionRequestsHelper
     proof_type = proof_type.to_s
     return SecureRequestForm.none unless ProofReview.reviewable_proof_type?(proof_type)
 
-    application.secure_request_forms
+    return application.secure_request_forms.select { |form| form.kind == "#{proof_type}_proof_resubmission" } if application.association(:secure_request_forms).loaded?
+
+    EmailDelivery::Visibility.preload(application.secure_request_forms
                .public_send("#{proof_type}_proof")
                .includes(:recipient, :delivery_owner)
-               .order(sent_at: :desc)
+               .order(sent_at: :desc))
   end
 
   def proof_secure_request_forms_label(proof_type)

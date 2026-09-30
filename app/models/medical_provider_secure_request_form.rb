@@ -1,6 +1,9 @@
 # frozen_string_literal: true
 
 class MedicalProviderSecureRequestForm < ApplicationRecord
+  attr_accessor :delivery_notification
+
+  has_many :email_delivery_attempts, as: :origin, dependent: :nullify
   include SecureTokenizable
 
   encrypts :provider_email, deterministic: true

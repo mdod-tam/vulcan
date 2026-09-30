@@ -59,6 +59,10 @@
                 Unknown Applicant
               <% end %>
             </div>
+            <% if @delivery_attention&.fetch(application.id, [])&.any? %>
+              <%= link_to t('delivery_visibility.attention'), admin_application_path(application.id, anchor: 'main-content'),
+                          class: 'block mt-2 text-amber-900 underline', data: { turbo_frame: '_top' } %>
+            <% end %>
           </td>
           <td class="px-2 py-2 text-sm text-gray-900 overflow-hidden" role="cell">
             <% if application.managing_guardian.present? %>

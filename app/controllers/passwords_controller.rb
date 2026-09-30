@@ -203,13 +203,22 @@ class PasswordsController < ApplicationController
     else
       outcome = EmailDelivery.deliver_later(UserMailer.with(user: user).password_reset)
       unless outcome == :queued
-        log_account_access_attempt(user, delivery_method, outcome == :suppressed ? 'suppressed' : 'delivery_failed')
+        status = case outcome
+                 when :suppressed then 'suppressed'
+                 when :configuration_error then 'configuration_error'
+                 else 'delivery_failed'
+                 end
+        metadata = outcome == :configuration_error ? { reason: EmailDelivery::Current.denial_decision&.reason } : {}
+        log_account_access_attempt(user, delivery_method, status, metadata)
         return false
       end
     end
     true
   rescue ApplicationMailer::DeliverySkipped
     log_account_access_attempt(user, delivery_method, 'suppressed')
+    false
+  rescue EmailDelivery::ConfigurationError => e
+    log_account_access_attempt(user, delivery_method, 'configuration_error', reason: e.reason)
     false
   rescue StandardError => e
     log_account_access_attempt(user, delivery_method, 'delivery_failed')

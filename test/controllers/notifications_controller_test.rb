@@ -21,7 +21,7 @@ class NotificationsControllerTest < ActionDispatch::IntegrationTest
 
     assert_response :success
     assert_select "#notification_#{@notification.id}", text: /No enviado/
-    assert_select "#notification_#{@notification.id}", text: /este método de envío estaba desactivado/
+    assert_select "#notification_#{@notification.id}", text: /Los controles de entrega impidieron enviar este mensaje/
     assert_select "#notification_#{@notification.id} button", text: 'Marcar como leída'
     assert_select "#notification_#{@notification.id}", text: /suppressed|Mark as read|correo estaba desactivado/, count: 0
     assert_select '.translation_missing', count: 0

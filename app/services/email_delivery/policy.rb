@@ -8,7 +8,7 @@ module EmailDelivery
 
     def self.capture(mail_action:, params: {}, request_id: SecureRandom.uuid)
       entry = Catalog.mail_action(mail_action)
-      base = { 'version' => CONTEXT_VERSION, 'request_id' => request_id, 'mail_action' => mail_action.to_s,
+      base = { 'version' => CONTEXT_VERSION, 'request_id' => request_id, 'delivery_correlation_id' => SecureRandom.uuid, 'mail_action' => mail_action.to_s,
                'notification_id' => Current.notification_id || params[:notification_id] || params['notification_id'] }.compact
       return base.merge('configuration_error' => 'unclassified_action') unless entry
 

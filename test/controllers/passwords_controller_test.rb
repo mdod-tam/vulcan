@@ -30,6 +30,20 @@ class PasswordsControllerTest < ActionDispatch::IntegrationTest
     puts "PasswordsControllerTest #{name} took #{@execution_time.round(2)}s"
   end
 
+  %i[phone email].each do |contact|
+    test "account recovery configuration classification for #{contact}" do
+      @user.update!(phone_type: 'text')
+      FeatureFlag.where(name: EmailDelivery.category_control(:account_security)).delete_all
+      SmsService.expects(:send_message).never
+      assert_difference -> { Event.where(action: 'email_delivery_configuration_error').count }, 1 do
+        assert_difference -> { Event.where(action: 'account_access_instructions_configuration_error', user: @user).count }, 1 do
+          post password_path, params: { contact: @user.public_send(contact) }
+        end
+      end
+      assert_redirected_to sign_in_path
+    end
+  end
+
   def test_should_get_edit
     get edit_password_path
     assert_response :success

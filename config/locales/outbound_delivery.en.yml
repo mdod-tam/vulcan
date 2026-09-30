@@ -7,5 +7,6 @@ en:
     letter_released: "Letter released for printing"
     letter_printed: "Letter marked printed"
     letter_canceled: "Letter canceled before release"
+    letter_blocked: "Letter blocked—awaiting cancellation"
     partial_suppression: "Eligible recipients were processed. Some messages were not sent because their delivery settings are off."
     letter_configuration_error: "Letter blocked: communication settings are unavailable"

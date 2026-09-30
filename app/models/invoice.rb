@@ -1,6 +1,7 @@
 # frozen_string_literal: true
 
 class Invoice < ApplicationRecord
+  has_many :email_delivery_attempts, as: :origin, dependent: :nullify
   belongs_to :vendor, class_name: 'User'
   has_many :vouchers, dependent: :nullify
   has_many :voucher_transactions, dependent: :nullify

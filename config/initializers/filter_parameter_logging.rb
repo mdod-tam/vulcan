@@ -42,3 +42,6 @@ Rails.application.config.filter_parameters += [
   # Legacy broad filters (be careful with these)
   /passw/, /\btoken\z/, /_key\z/, /crypt/, /salt/, /certificate/, /\botp\z/, /\bssn\z/, /cvv/, /cvc/
 ]
+
+# Postmark feedback may contain full messages and server diagnostics; retain neither in request logs.
+Rails.application.config.filter_parameters += %i[Authorization Content HtmlBody TextBody Body Details Description Subject Metadata Recipient Email From]
