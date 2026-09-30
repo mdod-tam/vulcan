@@ -66,7 +66,6 @@ class MedicalCertificationEmailJob < ApplicationJob
       return
     end
 
-    notification.update_metadata!('delivery_error', { 'message' => error.message, 'error_class' => error.class.name })
-    notification.update(delivery_status: 'error')
+    notification.mark_delivery_failed!(error)
   end
 end

@@ -19,4 +19,16 @@ class EmailStatusHelperTest < ActionView::TestCase
                                                  destination: 'a@example.test', server_id: '23', mail_action: 'UserMailer#password_reset', attempted_at: Time.current)
     assert_includes delivery_visibility(notification), 'data-delivery-status="unknown"'
   end
+
+  test 'a local send failure renders safe error text without transport diagnostics' do
+    notification = create(:notification)
+    notification.mark_delivery_failed!(StandardError.new('transport error https://example.test/upload?token=secret'))
+
+    html = delivery_visibility(notification)
+
+    assert_includes html, 'data-delivery-status="failed"'
+    assert_includes html, I18n.t('delivery_visibility.descriptions.failed')
+    assert_not_includes html, 'secret'
+    assert_not_includes html, 'transport error'
+  end
 end

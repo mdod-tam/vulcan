@@ -76,27 +76,41 @@ module Applications
       failure('Certification email could not be queued.', { delivery_outcome: :enqueue_failed })
     end
 
-    # Only this owner's unchanged request can be compensated. A newer secure-link or DocuSeal
-    # request wins, including another request within the same second.
+    # JSON's default timestamp format drops microseconds needed for exact restoration.
+    def self.request_state(application, previous:)
+      {
+        'previous' => previous.merge('medical_certification_requested_at' => previous['medical_certification_requested_at']&.iso8601(6)),
+        'issued_at' => application.medical_certification_requested_at.iso8601(6),
+        'issued_count' => application.medical_certification_request_count
+      }
+    end
+
+    # Restore only this notification's unchanged request after its email was not sent.
+    # An open secure request or a newer DocuSeal request still owns the requested state.
     def self.restore_unsent_request(notification)
-      state = notification.metadata&.dig('certification_request_state')
+      state = notification&.metadata&.dig('certification_request_state')
       return unless state && notification.notifiable.is_a?(Application)
 
       application = notification.notifiable
-      application.with_lock do
+      application.with_lock(requires_new: true) do
         issued_at = Time.iso8601(state.fetch('issued_at'))
         next unless application.medical_certification_status_requested?
         next unless application.medical_certification_requested_at == issued_at
         next unless application.medical_certification_request_count == state['issued_count']
         next if application.document_signing_requested_at && application.document_signing_requested_at >= issued_at
-        next if MedicalProviderSecureRequestForm.open_certification_upload_for_application(application_id: application.id)
-                                                .exists?(created_at: issued_at..)
+        next if MedicalProviderSecureRequestForm.open_certification_upload_for_application(application_id: application.id).exists?
 
         Current.instance.set(skip_proof_validation: true) { application.update!(state.fetch('previous')) }
+        metadata = { change_type: 'medical_certification', reason: 'delivery_not_sent', notification_id: notification.id }
+        request_form_id = notification.metadata['medical_provider_secure_request_form_id']
+        metadata[:medical_provider_secure_request_form_id] = request_form_id if request_form_id
         ApplicationStatusChange.create!(application: application, user: notification.actor,
                                         from_status: 'requested', to_status: application.medical_certification_status,
                                         change_type: 'medical_certification',
-                                        metadata: { change_type: 'medical_certification', reason: 'delivery_not_sent', notification_id: notification.id })
+                                        metadata: metadata)
+        AuditEventService.log(action: 'medical_certification_request_not_sent', actor: notification.actor, auditable: application,
+                              metadata: metadata.merge(old_status: 'requested', new_status: application.medical_certification_status,
+                                                       operation_id: "medical-certification-not-sent-#{notification.id}"))
       end
     end
 
@@ -118,9 +132,7 @@ module Applications
         type: 'medical_certification_requested', recipient: recipient, actor: actor, notifiable: application,
         metadata: { request_count: application.medical_certification_request_count,
                     provider: application.medical_provider_name, provider_email: application.medical_provider_email,
-                    certification_request_state: { previous: previous,
-                                                   issued_at: application.medical_certification_requested_at.iso8601(6),
-                                                   issued_count: application.medical_certification_request_count } },
+                    certification_request_state: self.class.request_state(application, previous: previous) },
         channel: :email, deliver: false
       ) || raise('Could not create certification tracking notification')
     end

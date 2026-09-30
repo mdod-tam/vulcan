@@ -39,6 +39,18 @@ module Webhooks
       assert_nil @attempt.reload.delivered_at
     end
 
+    test 'missing or blank server configuration cannot mutate delivery' do
+      [nil, '', ' '].each do |server_id|
+        ENV['POSTMARK_SERVER_ID'] = server_id
+        assert_no_difference 'EmailDeliveryReceipt.count' do
+          post webhooks_email_events_path, params: @payload, headers: @headers, as: :json
+        end
+        assert_response :unauthorized
+        assert_nil @attempt.reload.delivered_at
+        assert_nil @attempt.provider_message_id
+      end
+    end
+
     test 'missing configuration fails closed and wrong server or malformed payload is rejected' do
       post webhooks_email_events_path, params: @payload.merge(ServerID: 99), headers: @headers, as: :json
       assert_response :unprocessable_content

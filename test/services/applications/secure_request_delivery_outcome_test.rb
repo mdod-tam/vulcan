@@ -85,4 +85,76 @@ class SecureRequestDeliveryOutcomeTest < ActiveSupport::TestCase
       assert_match(/configuration_error/, notification.metadata['delivery_route_reason'])
     end
   end
+
+  [Applications::RequestCertificationUpload, Vendors::RequestW9Resubmission].each do |service_class|
+    test "#{service_class} rolls back its request when required tracking cannot be created" do
+      service, owner, = single_request_service(service_class)
+      NotificationService.stubs(:create_and_deliver!).returns(nil)
+
+      result = assert_no_difference ['Notification.count', 'MedicalProviderSecureRequestForm.count', 'VendorSecureRequestForm.count',
+                                     'ApplicationStatusChange.count', 'Event.count'] do
+        service.call
+      end
+
+      assert_predicate result, :failure?
+      assert_predicate owner.reload, :medical_certification_status_not_requested? if service_class == Applications::RequestCertificationUpload
+    end
+
+    test "#{service_class} restores and revokes on late configuration refusal" do
+      service, owner, form_key, action = single_request_service(service_class)
+      EmailDelivery::Policy.stubs(:verify_delivery).returns(EmailDelivery::Decision.allowed)
+                           .then.returns(EmailDelivery::Decision.configuration_error(:missing_control))
+
+      result = service.call
+
+      form = result.data.fetch(form_key).reload
+      notification = Notification.find_by!(notifiable: owner, action: action)
+      assert result.data[:configuration_error]
+      assert_predicate form, :revoked?
+      assert_equal 'delivery_configuration_error', Event.where(action: form.revocation_audit_action).order(:id).last.metadata['reason']
+      assert_equal 'error', notification.delivery_status
+      assert_equal 'missing_control', notification.metadata.dig('delivery_error', 'reason')
+      next unless service_class == Applications::RequestCertificationUpload
+
+      assert_predicate owner.reload, :medical_certification_status_not_requested?
+      assert_equal 0, owner.medical_certification_request_count
+      assert_nil owner.medical_certification_requested_at
+      assert_equal 'delivery_not_sent', owner.status_changes.order(:id).last.metadata['reason']
+      assert Event.exists?(action: 'medical_certification_request_not_sent', auditable: owner)
+    end
+
+    test "#{service_class} revokes despite failure tracking being unavailable" do
+      service, owner, form_key, action = single_request_service(service_class)
+      mail = mock('failed secure request email')
+      mail.stubs(:deliver_now).raises(StandardError, 'transport failed')
+      mailer = mock('secure request mailer')
+      if service_class == Applications::RequestCertificationUpload
+        MedicalProviderMailer.stubs(:with).returns(mailer)
+        mailer.stubs(:request_certification).returns(mail)
+      else
+        VendorNotificationsMailer.stubs(:with).returns(mailer)
+        mailer.stubs(:w9_upload_requested).returns(mail)
+      end
+      Notification.any_instance.stubs(:mark_delivery_failed!).raises(StandardError, 'tracking write failed')
+
+      result = service.call
+
+      assert result.data[:delivery_error]
+      assert_predicate result.data.fetch(form_key).reload, :revoked?
+      assert Notification.exists?(notifiable: owner, action: action)
+    end
+  end
+
+  private
+
+  def single_request_service(service_class)
+    if service_class == Applications::RequestCertificationUpload
+      application = create(:application, :in_progress, medical_provider_name: 'Dr. Provider', medical_provider_email: 'provider@example.test')
+      [service_class.new(application: application, actor: @actor, deliver_email: true), application,
+       :medical_provider_secure_request_form, 'cert_upload_requested']
+    else
+      vendor = create(:vendor, w9_status: :not_submitted)
+      [service_class.new(vendor: vendor, actor: @actor), vendor, :vendor_secure_request_form, 'w9_resubmission_requested']
+    end
+  end
 end

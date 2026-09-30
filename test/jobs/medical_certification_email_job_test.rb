@@ -49,6 +49,30 @@ class MedicalCertificationEmailJobTest < ActiveJob::TestCase
     end
   end
 
+  test 'transport failure without a linked attempt records one safe notification outcome' do
+    notification = Notification.create!(
+      recipient: @constituent, actor: @admin, action: 'medical_certification_requested',
+      notifiable: @application, metadata: { 'channel' => 'email', 'workflow' => 'preserved' }
+    )
+    diagnostic = 'Rejected https://example.test/request/secret-token'
+    Mail::TestMailer.any_instance.expects(:deliver!).raises(StandardError, diagnostic)
+
+    assert_raises(StandardError) do
+      MedicalCertificationEmailJob.perform_now(application_id: @application.id, timestamp: Time.current.iso8601,
+                                               notification_id: notification.id)
+    end
+
+    notification.reload
+    assert_equal 'error', notification.delivery_status
+    assert_equal 'Email could not be sent.', notification.email_error_message
+    assert_equal 'StandardError', notification.metadata.dig('delivery_error', 'error_class')
+    assert_equal 'preserved', notification.metadata['workflow']
+    assert_equal 'none', notification.metadata['actual_delivery_channel']
+    assert_equal 'email_delivery_failed', notification.metadata['delivery_route_reason']
+    assert_empty notification.email_delivery_attempts
+    assert_not_includes notification.metadata.to_json, 'secret-token'
+  end
+
   private
 
   def ensure_request_certification_template!

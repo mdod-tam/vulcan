@@ -133,7 +133,7 @@ class EmailDeliveryBoundaryTest < ActionDispatch::IntegrationTest
     application.reload
     assert application.medical_certification_status_not_requested?
     assert_nil application.medical_certification_requested_at
-    assert Event.exists?(action: 'medical_certification_request_suppressed', auditable: application)
+    assert Event.exists?(action: 'medical_certification_request_not_sent', auditable: application)
   end
 
   test 'a late certification stop does not undo a status this request did not set' do

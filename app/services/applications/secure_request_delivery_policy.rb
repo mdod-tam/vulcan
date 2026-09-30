@@ -1,17 +1,37 @@
 # frozen_string_literal: true
 
 module Applications
-  # Proof and provider-info issuance share the same per-recipient delivery contract.
+  # Secure-request issuers share the same per-recipient delivery contract.
   # The hosts retain recipient resolution, request creation, token handling and workflow rules.
   module SecureRequestDeliveryPolicy
+    Delivery = Data.define(:secure_request_form, :raw_token, :context, :notification_id)
+
     private
+
+    def authorize_delivery
+      decision, @email_context = delivery_authorization(:email)
+      return unless decision
+
+      return configuration_failure(decision.reason) if decision.configuration_error?
+
+      suppressed(decision.reason)
+    end
+
+    def delivery_authorization(channel)
+      EmailDelivery.issuance(channel.to_s == 'sms' ? sms_action : delivery_mail_action, channel: channel.to_s)
+    end
+
+    def configuration_failure(reason, data = {})
+      failure(I18n.t('email_delivery.configuration_error', locale: delivery_result_locale),
+              data.merge(delivery_error: true, configuration_error: true, reason: reason))
+    end
 
     def deliver_requests(deliveries)
       delivery_failures = []
       suppression_reason = nil
 
       Array(deliveries).each do |delivery|
-        case delivery.secure_request_form.recipient_channel.to_sym
+        case delivery_channel(delivery).to_sym
         when :email
           deliver_email(delivery)
         when :sms
@@ -32,12 +52,12 @@ module Applications
       if delivery_failures.any?
         data = delivery_failure_data(delivery_failures, deliveries)
         if (configuration = delivery_failures.find { |item| item[:configuration_error] })
-          return failure(I18n.t('email_delivery.configuration_error', locale: secure_form_locale_for(actor)),
-                         data.merge(configuration_error: true, reason: configuration[:reason]))
+          return configuration_failure(configuration[:reason], data)
         end
+
         return failure(message(:delivery_failed), data)
       end
-      return suppressed(suppression_reason) if suppression_reason
+      return suppressed(suppression_reason, deliveries) if suppression_reason
 
       success
     end
@@ -45,16 +65,21 @@ module Applications
     # Transport completed. Bookkeeping failure must not revoke a link already sent.
     def record_delivery_handoff(delivery)
       Notification.find_by(id: delivery.notification_id)&.record_delivery_handoff!(
-        channel: delivery.secure_request_form.recipient_channel,
-        state: delivery.secure_request_form.recipient_channel == 'letter' ? :queued : :submitted
+        channel: delivery_channel(delivery),
+        state: delivery_channel(delivery).to_s == 'letter' ? :queued : :submitted
       )
     rescue StandardError => e
       Rails.logger.error("Secure request handoff tracking failed: #{e.class.name}")
     end
 
-    def suppressed(reason)
-      failure(message(:delivery_suppressed), { delivery_suppressed: true, suppression_reason: reason })
+    def suppressed(reason, deliveries = [])
+      failure(message(:delivery_suppressed), suppressed_delivery_data(deliveries).merge(delivery_suppressed: true, suppression_reason: reason))
     end
+
+    def suppressed_delivery_data(_deliveries) = {}
+    def delivery_result_locale = secure_form_locale_for(actor)
+    def delivery_channel(delivery) = delivery.secure_request_form.recipient_channel
+    def after_delivery_not_sent(_delivery); end
 
     def report_delivery_failure(error, deliveries)
       context = delivery_failure_context(error, deliveries)
@@ -76,24 +101,31 @@ module Applications
     def revoke_failed_deliveries(deliveries, error)
       Array(deliveries).each do |delivery|
         request_form = delivery.secure_request_form
-        next unless request_form&.active?
-
         configuration_error = error.is_a?(EmailDelivery::ConfigurationError)
-        request_form.revoke!(
-          actor: actor,
-          reason: configuration_error ? :delivery_configuration_error : :delivery_failure,
-          metadata: { delivery_failure: delivery_failure_context(error, [delivery]) }
-        )
-        # Keep tracking outside revoke!'s transaction so its failure does not undo revocation.
-        if configuration_error
-          Notification.find_by(id: delivery.notification_id)&.mark_delivery_not_sent!(
-            EmailDelivery::Decision.configuration_error(error.reason), channel: request_form.recipient_channel
+        if request_form&.active?
+          request_form.revoke!(
+            actor: actor,
+            reason: configuration_error ? :delivery_configuration_error : :delivery_failure,
+            metadata: { delivery_failure: delivery_failure_context(error, [delivery]) }
           )
         end
+        # Keep tracking outside revoke!'s transaction so its failure does not undo revocation.
+        persist_delivery_failure(delivery, error)
       rescue StandardError => e
         Rails.logger.error(
           "Secure request delivery failure cleanup failed: #{sanitize_secure_error_message(e.message)}"
         )
+      ensure
+        after_delivery_not_sent(delivery) if configuration_error
+      end
+    end
+
+    def persist_delivery_failure(delivery, error)
+      notification = Notification.find_by(id: delivery.notification_id)
+      if error.is_a?(EmailDelivery::ConfigurationError)
+        notification&.mark_delivery_not_sent!(EmailDelivery::Decision.configuration_error(error.reason), channel: delivery_channel(delivery))
+      else
+        notification&.mark_delivery_failed!(error, channel: delivery_channel(delivery), details: delivery_failure_context(error, [delivery]))
       end
     end
 
@@ -131,7 +163,7 @@ module Applications
     def authorization_for(candidate)
       @delivery_authorizations ||= {}
       @delivery_authorizations[[candidate.recipient.id, candidate.channel.to_s]] ||=
-        EmailDelivery.issuance(candidate.channel.to_s == 'sms' ? sms_action : delivery_mail_action, channel: candidate.channel.to_s)
+        delivery_authorization(candidate.channel)
     end
 
     def denied_candidates
@@ -151,8 +183,7 @@ module Applications
       data = { secure_request_forms: Array(deliveries).map(&:secure_request_form),
                failed_recipient_ids: denied_candidates.map { |candidate| candidate.recipient.id } }
       if delivery_configuration_error?
-        failure(I18n.t('email_delivery.configuration_error', locale: secure_form_locale_for(actor)),
-                data.merge(delivery_error: true, configuration_error: true, reason: delivery_denial.reason))
+        configuration_failure(delivery_denial.reason, data)
       else
         key = deliveries.present? ? 'outbound_delivery.partial_suppression' : 'outbound_delivery.delivery_suppressed'
         failure(I18n.t(key, locale: secure_form_locale_for(actor)),
@@ -161,9 +192,9 @@ module Applications
     end
 
     def delivery_context_for(delivery)
-      delivery.context.merge('request_id' => "secure-request-#{delivery.secure_request_form.id}",
+      delivery.context.merge('request_id' => "secure-request-#{delivery.secure_request_form.model_name.singular}-#{delivery.secure_request_form.id}",
                              'notification_id' => delivery.notification_id,
-                             'channel' => delivery.secure_request_form.recipient_channel)
+                             'channel' => delivery_channel(delivery))
     end
 
     def notification_channel_for(request_form)
@@ -173,7 +204,8 @@ module Applications
     def suppress_delivery(delivery, reason)
       request_form = delivery.secure_request_form
       SecureRequestDelivery.suppress!(request_form: request_form, notification: Notification.find_by(id: delivery.notification_id),
-                                      actor: actor, reason: reason, channel: request_form.recipient_channel)
+                                      actor: actor, reason: reason, channel: delivery_channel(delivery))
+      after_delivery_not_sent(delivery)
     end
   end
 end

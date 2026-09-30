@@ -126,29 +126,24 @@ class NotificationServiceTest < ActiveSupport::TestCase
     end
   end
 
-  test 'handle_delivery_error updates notification status on mailer failure' do
-    # Stub the mailer to raise an error
-    ApplicationNotificationsMailer.stubs(:proof_rejected).raises(Net::SMTPAuthenticationError, 'SMTP auth error')
+  test 'mailer failure records a safe local outcome through the notification owner' do
+    diagnostic = 'SMTP auth error for https://example.test/request/secret-token'
+    ApplicationNotificationsMailer.stubs(:proof_rejected).raises(Net::SMTPAuthenticationError, diagnostic)
 
-    assert_no_difference 'Notification.count' do # Should not create a new notification on failure, but update existing one
-      # We expect it to fail, so we check the created notification afterwards
-    end
-
-    # Manually create the notification to simulate the state right before delivery
-    notification = Notification.create!(
-      recipient: @constituent,
-      actor: @admin,
-      action: 'proof_rejected',
-      notifiable: @application,
-      metadata: { proof_type: 'income', delivery_path: 'legacy' }
+    notification = NotificationService.create_and_deliver!(
+      type: :proof_rejected, recipient: @constituent, actor: @admin, notifiable: @application,
+      metadata: { proof_type: 'income', delivery_path: 'legacy' }, channel: :email
     )
-
-    # Call the delivery part which should fail and handle the error
-    NotificationService.send(:deliver_notification!, notification, channel: :email)
 
     notification.reload
     assert_equal 'error', notification.delivery_status
-    assert_equal 'SMTP auth error', notification.metadata.dig('delivery_error', 'message')
+    assert_equal 'Email could not be sent.', notification.email_error_message
+    assert_equal 'Net::SMTPAuthenticationError', notification.metadata.dig('delivery_error', 'error_class')
+    assert_equal 'email', notification.metadata.dig('delivery_error', 'channel')
+    assert_equal 'income', notification.metadata['proof_type']
+    assert_equal 'none', notification.metadata['actual_delivery_channel']
+    assert_equal 'email_delivery_failed', notification.metadata['delivery_route_reason']
+    assert_not_includes notification.metadata.to_json, 'secret-token'
   end
 
   test 'create_and_deliver! returns nil and logs error when creation fails' do

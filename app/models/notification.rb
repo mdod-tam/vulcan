@@ -115,14 +115,14 @@ class Notification < ApplicationRecord
 
   # The adapter can fail after the caller commits and finishes recording its intended route.
   def mark_delivery_enqueue_failed!(error)
-    with_lock do
-      unless local_delivery_outcome?
-        update!(delivery_status: :error, metadata: metadata.to_h.merge(
-          'actual_delivery_channel' => 'none', 'delivery_route_reason' => 'email_enqueue_failed',
-          'delivery_error' => { 'message' => 'Email could not be queued.', 'error_class' => error.class.name }
-        ))
-      end
-    end
+    record_delivery_failure!(error, channel: :email, route: 'email_enqueue_failed', message: 'Email could not be queued.')
+  end
+
+  # Errors before handoff belong here; linked attempts own transport outcomes.
+  # Callers may add safe request identifiers, but never an error message containing a secure link.
+  def mark_delivery_failed!(error, channel: :email, details: {})
+    message = channel.to_s == 'email' ? 'Email could not be sent.' : 'Notification could not be sent.'
+    record_delivery_failure!(error, channel: channel, route: "#{channel}_delivery_failed", message: message, details: details)
   end
 
   # Generate a human-readable message for the notification by delegating to the NotificationComposer.
@@ -133,6 +133,21 @@ class Notification < ApplicationRecord
 
   def proof_resubmission_rejected?
     action == 'proof_resubmission_requested' && self.class.proof_resubmission_rejected_metadata?(metadata)
+  end
+
+  private
+
+  def record_delivery_failure!(error, channel:, route:, message:, details: {})
+    with_lock do
+      next if local_delivery_outcome? || email_delivery_attempts.exists?
+
+      failure = details.to_h.deep_stringify_keys.merge(
+        'message' => message, 'error_class' => error.class.name, 'channel' => channel.to_s, 'error_at' => Time.current.iso8601
+      )
+      update!(delivery_status: :error, metadata: metadata.to_h.merge(
+        'actual_delivery_channel' => 'none', 'delivery_route_reason' => route, 'delivery_error' => failure
+      ))
+    end
   end
 
   def self.metadata_value(metadata, key)

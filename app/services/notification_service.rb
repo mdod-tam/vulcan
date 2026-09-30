@@ -607,7 +607,6 @@ class NotificationService
   end
 
   def handle_delivery_error(notification, error, channel)
-    # NOTE: Standardize status writers to use lowercase enums ('delivered', 'opened', 'error').
     error_message = error.message
 
     # In test environment, be less verbose about expected SMTP failures but still update status
@@ -617,11 +616,7 @@ class NotificationService
       Rails.logger.error "NotificationService: Delivery via #{channel} failed for Notification ##{notification.id}: #{error_message}"
     end
 
-    notification.with_lock do
-      return if notification.local_delivery_outcome?
-
-      notification.update!(delivery_status: 'error', metadata: notification.metadata.to_h.merge(error_meta(error_message, channel)))
-    end
+    notification.mark_delivery_failed!(error, channel: channel)
   rescue StandardError => e
     Rails.logger.error "NotificationService: Failed persisting delivery error for Notification ##{notification.id}: #{e.message}"
   end
@@ -771,11 +766,6 @@ class NotificationService
     raise ArgumentError, "Unsupported channel: #{value}"
   end
   private :valid_channel!
-
-  def error_meta(message, channel)
-    { 'delivery_error' => { 'channel' => channel.to_s, 'message' => message, 'error_at' => Time.current.iso8601 } }
-  end
-  private :error_meta
 
   def ensure_action_contract?(notification, notifiable_class: nil, actor_presence: false, recipient_class: nil)
     errors = []
