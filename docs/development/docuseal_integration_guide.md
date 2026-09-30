@@ -62,7 +62,7 @@ webhook_secret: YOUR_WEBHOOK_SECRET
 
 `base_url` is optional and defaults to the value shown.
 
-The receiver expects a SHA-256 HMAC of the raw request body, in either `X-Webhook-Signature` or `X-DocuSeal-Signature`, with an optional `sha256=` prefix; [`Webhooks::BaseController`](../../app/controllers/webhooks/base_controller.rb) owns the shared calculation. With no secret configured the shared code falls back to a test value, which is worth knowing before assuming signature verification is active.
+The receiver expects a SHA-256 HMAC of the raw request body, in either `X-Webhook-Signature` or `X-DocuSeal-Signature`, with an optional `sha256=` prefix; [`Webhooks::BaseController`](../../app/controllers/webhooks/base_controller.rb) owns the shared calculation. A missing or blank `webhook_secret` rejects requests with HTTP 401; there is no fallback secret.
 
 The outbound payload is built in `SubmissionService#create_submission!`, and the automated tests stub the provider API — a live account's template and submission setup, and its webhook authentication, need verifying against the real service.
 

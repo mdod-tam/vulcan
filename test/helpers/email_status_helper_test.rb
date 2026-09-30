@@ -31,4 +31,19 @@ class EmailStatusHelperTest < ActionView::TestCase
     assert_not_includes html, 'secret'
     assert_not_includes html, 'transport error'
   end
+
+  test 'basic status excludes diagnostic markup and suppression reasons in both locales' do
+    notification = create(:notification)
+    notification.mark_delivery_suppressed!('all_disabled')
+
+    { en: 'Not sent', es: 'No enviado' }.each do |locale, label|
+      html = delivery_visibility(notification, locale: locale, diagnostics: false)
+      fragment = Nokogiri::HTML.fragment(html)
+
+      assert_equal label, fragment.at_css('[data-delivery-status="suppressed"] span').text
+      assert_empty fragment.css('details, summary')
+      assert_not_includes html, I18n.t('delivery_visibility.reasons.all_disabled', locale: locale)
+      assert_not_includes html, 'translation missing'
+    end
+  end
 end

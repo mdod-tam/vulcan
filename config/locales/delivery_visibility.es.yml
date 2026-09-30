@@ -40,6 +40,12 @@ es:
       letter: Carta
       docuseal: DocuSeal
       none: Ninguno
+    recipient_statuses:
+      suppressed: No enviado
+      letter_blocked: No enviado
+      letter_canceled: No enviado
+      bounced: Fallo de entrega
+      docuseal: Invitación para firmar solicitada
     statuses:
       queued: En espera de envío
       accepted: Enviado — esperando confirmación

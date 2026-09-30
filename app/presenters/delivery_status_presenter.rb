@@ -9,7 +9,12 @@ class DeliveryStatusPresenter
     @locale = locale
   end
 
-  def label = text("statuses.#{status}")
+  def label(diagnostics: true)
+    return text("statuses.#{status}") if diagnostics
+
+    text("recipient_statuses.#{status}", default: text("statuses.#{status}"))
+  end
+
   def text(key, **) = I18n.t("delivery_visibility.#{key}", locale: locale, **)
 
   def details_label

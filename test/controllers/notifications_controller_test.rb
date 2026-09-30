@@ -21,7 +21,9 @@ class NotificationsControllerTest < ActionDispatch::IntegrationTest
 
     assert_response :success
     assert_select "#notification_#{@notification.id}", text: /No enviado/
-    assert_select "#notification_#{@notification.id}", text: /Los controles de entrega impidieron enviar este mensaje/
+    assert_select "#notification_#{@notification.id} [data-delivery-status='suppressed'] span", text: 'No enviado'
+    assert_select "#notification_#{@notification.id} details", count: 0
+    assert_select "#notification_#{@notification.id}", text: /Los controles de entrega/, count: 0
     assert_select "#notification_#{@notification.id} button", text: 'Marcar como leída'
     assert_select "#notification_#{@notification.id}", text: /suppressed|Mark as read|correo estaba desactivado/, count: 0
     assert_select '.translation_missing', count: 0
@@ -62,6 +64,51 @@ class NotificationsControllerTest < ActionDispatch::IntegrationTest
       post check_email_status_notification_path(@other_notification)
     end
 
+    assert_response :forbidden
+  end
+
+  test 'constituents cannot refresh their own tracked notifications by HTML or Turbo requests' do
+    create_tracked_attempt
+    sign_in_for_integration_test(@user)
+
+    [nil, 'text/vnd.turbo-stream.html'].each do |accept|
+      assert_no_enqueued_jobs only: UpdateEmailStatusJob do
+        post check_email_status_notification_path(@notification), headers: accept ? { 'Accept' => accept } : {}
+      end
+      assert_response :forbidden
+    end
+  end
+
+  test 'constituent list and mark-read replacement contain basic status without diagnostics or refresh' do
+    create_tracked_attempt
+    sign_in_for_integration_test(@user)
+
+    get notifications_path(scope: 'all')
+
+    assert_select "#notification_#{@notification.id} [data-delivery-status='accepted']", count: 1
+    assert_select "#notification_#{@other_notification.id}", count: 0
+    assert_recipient_delivery_visibility
+
+    post mark_as_read_notification_path(@notification), headers: { 'Accept' => 'text/vnd.turbo-stream.html' }
+
+    assert_response :success
+    assert_select "turbo-stream[action='replace'][target='notification_#{@notification.id}']", count: 1
+    assert_select "#notification_#{@notification.id} [data-delivery-status='accepted']", count: 1
+    assert_recipient_delivery_visibility
+    assert_not_nil @notification.reload.read_at
+  end
+
+  test 'admin retains delivery details and can refresh a recipients tracked notification' do
+    create_tracked_attempt
+    sign_in_for_integration_test(create(:admin))
+
+    get notifications_path
+
+    assert_select "#notification_#{@notification.id} summary", count: 1
+    assert_select "form[action='#{check_email_status_notification_path(@notification)}']", count: 1
+    assert_enqueued_with(job: UpdateEmailStatusJob, args: [@notification.id]) do
+      post check_email_status_notification_path(@notification)
+    end
     assert_redirected_to root_path
   end
 
@@ -91,5 +138,22 @@ class NotificationsControllerTest < ActionDispatch::IntegrationTest
     assert_select 'a[href=?]', constituent_portal_dashboard_path, text: 'Back to Dashboard'
     assert_select 'a[href=?]', constituent_portal_application_path(application), text: /Application ##{application.id}/
     assert_select 'a[href=?]', admin_application_path(application), count: 0
+  end
+
+  private
+
+  def create_tracked_attempt
+    @notification.email_delivery_attempts.create!(
+      correlation_id: SecureRandom.uuid, destination: @user.email,
+      recipient_key: EmailDeliveryAttempt.recipient_key(@user.email), delivery_owner: @user,
+      server_id: '23', provider_message_id: 'tracked-message', mail_action: 'UserMailer#password_reset',
+      attempted_at: 2.hours.ago, accepted_at: 2.hours.ago
+    )
+  end
+
+  def assert_recipient_delivery_visibility
+    assert_select "#notification_#{@notification.id} details", count: 0
+    assert_select "form[action='#{check_email_status_notification_path(@notification)}']", count: 0
+    assert_select "#notification_#{@notification.id}", text: /Contact owner:|Destination:|Last checked:|Open detected/, count: 0
   end
 end

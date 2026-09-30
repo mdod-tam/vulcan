@@ -2,6 +2,7 @@
 
 module Webhooks
   class InvalidPayloadError < StandardError; end
+  class MissingWebhookSecretError < StandardError; end
 
   class BaseController < ApplicationController
     skip_before_action :authenticate_user!
@@ -12,6 +13,9 @@ module Webhooks
     around_action :log_webhook
 
     rescue_from InvalidPayloadError, with: :handle_invalid_payload
+    rescue_from MissingWebhookSecretError do
+      head :unauthorized
+    end
 
     private
 
@@ -48,7 +52,9 @@ module Webhooks
     end
 
     def compute_signature(payload)
-      secret = Rails.application.credentials.webhook_secret || 'test_webhook_secret'
+      secret = Rails.application.credentials.webhook_secret
+      raise MissingWebhookSecretError if secret.blank?
+
       OpenSSL::HMAC.hexdigest(
         'sha256',
         secret,

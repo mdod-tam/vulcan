@@ -39,6 +39,12 @@ en:
       letter: Letter
       docuseal: DocuSeal
       none: None
+    recipient_statuses:
+      suppressed: Not sent
+      letter_blocked: Not sent
+      letter_canceled: Not sent
+      bounced: Delivery failed
+      docuseal: Signing invitation requested
     statuses:
       queued: Waiting to send
       accepted: Sent — awaiting confirmation

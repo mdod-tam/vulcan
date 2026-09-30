@@ -1,6 +1,7 @@
-<%# locals: (presenter:) -%>
+<%# locals: (presenter:, diagnostics: true) -%>
 <div class="mt-2 text-sm" data-delivery-status="<%= presenter.status %>">
-  <span class="inline-flex rounded px-2 py-1 text-xs font-medium <%= presenter.badge_class %>"><%= presenter.label %></span>
+  <span class="inline-flex rounded px-2 py-1 text-xs font-medium <%= presenter.badge_class %>"><%= presenter.label(diagnostics: diagnostics) %></span>
+  <% if diagnostics %>
   <details class="mt-1">
     <summary aria-label="<%= presenter.details_label %>"
              class="cursor-pointer rounded text-indigo-700 underline focus:outline-none focus:ring-2 focus:ring-indigo-500">
@@ -41,4 +42,5 @@
       <% end %>
     </div>
   </details>
+  <% end %>
 </div>

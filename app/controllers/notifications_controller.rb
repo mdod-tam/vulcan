@@ -6,6 +6,7 @@ class NotificationsController < ApplicationController
   include NotificationPreloading
 
   before_action :authenticate_user!
+  before_action :authorize_delivery_refresh, only: :check_email_status
   before_action :set_notification, only: %i[check_email_status mark_as_read]
 
   def index
@@ -64,6 +65,10 @@ class NotificationsController < ApplicationController
   end
 
   private
+
+  def authorize_delivery_refresh
+    head :forbidden unless current_user.admin?
+  end
 
   def set_notification
     scope = current_user.admin? ? Notification.all : current_user.received_notifications
