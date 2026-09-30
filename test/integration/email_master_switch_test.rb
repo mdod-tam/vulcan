@@ -85,6 +85,25 @@ class EmailMasterSwitchTest < ActionDispatch::IntegrationTest
     assert_not Event.exists?(action: EmailDelivery::Outcome::SUPPRESSED)
   end
 
+  test 'required account access sends with All and Account security disabled' do
+    request_account_access
+    [EmailDelivery::ALL_CONTROL, EmailDelivery.category_control('account_security')].each do |name|
+      EmailDelivery::ControlWriter.set(name: name, enabled: false, actor: @admin, operation_id: SecureRandom.uuid)
+    end
+    perform_enqueued_jobs
+    assert_equal [[@user.email]], ActionMailer::Base.deliveries.map(&:to)
+
+    ActionMailer::Base.deliveries.clear
+    request_account_access
+    assert_redirected_to sign_in_path
+    perform_enqueued_jobs
+    assert_equal [[@user.email]], ActionMailer::Base.deliveries.map(&:to)
+    assert_not Event.exists?(action: EmailDelivery::Outcome::SUPPRESSED)
+    events = Event.where(action: 'essential_communication_submitted')
+    assert_equal 2, events.count
+    assert(events.all? { |event| event.metadata['mail_action'] == 'UserMailer#password_reset' })
+  end
+
   private
 
   def request_account_access

@@ -49,8 +49,8 @@ class EmailDeliveryBoundaryTest < ActionDispatch::IntegrationTest
   end
 
   test 'turning a queued template off records a suppression when the job runs' do
-    UserMailer.with(user: @user).password_reset.deliver_later
-    EmailDelivery::ControlWriter.set_template_pair(name: 'user_mailer_password_reset', format: :text, enabled: false,
+    VendorNotificationsMailer.with(vendor: create(:vendor)).w9_approved.deliver_later
+    EmailDelivery::ControlWriter.set_template_pair(name: 'vendor_notifications_w9_approved', format: :text, enabled: false,
                                                    actor: @admin, operation_id: 'op-1')
 
     perform_enqueued_jobs
@@ -221,7 +221,7 @@ class EmailDeliveryBoundaryTest < ActionDispatch::IntegrationTest
     notification.mark_delivery_suppressed!('global_disabled')
     fact = EmailDelivery::Feedback.webhook('RecordType' => 'Delivery', 'MessageID' => 'pm-1',
                                            'Recipient' => attempt.destination, 'DeliveredAt' => Time.current.iso8601)
-    EmailDelivery::Feedback.apply(fact)
+    EmailDelivery::Feedback.apply(fact, server_id: attempt.server_id)
     assert_equal 'suppressed', notification.reload.delivery_status
     assert attempt.reload.opened_at
     assert attempt.delivered_at

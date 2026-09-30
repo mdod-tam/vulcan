@@ -31,13 +31,20 @@ class EmailDeliveryAttempt < ApplicationRecord
     context['delivery_correlation_id'] || Digest::SHA256.hexdigest(context['request_id'])
   end
 
-  def self.previously_attempted?(context)
+  def self.replay_blocked?(context)
     correlation = correlation_for(context)
-    correlation && exists?(correlation_id: correlation)
+    return false unless correlation
+
+    attempts = where(correlation_id: correlation).to_a
+    attempts.any? && !attempts.all?(&:retryable?)
   end
 
   def self.recipient_key(address)
     OpenSSL::HMAC.hexdigest('SHA256', Rails.application.key_generator.generate_key('email-delivery-destination'), address.to_s.strip.downcase)
+  end
+
+  def retryable?
+    state == 'failed' && [provider_message_id, accepted_at, feedback_at, delivered_at, bounced_at, complained_at, opened_at].all?(&:blank?)
   end
 
   def confirmed?

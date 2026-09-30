@@ -66,7 +66,7 @@ module EmailDelivery
     end
     private_class_method :validate_message_id!
 
-    def self.apply(fact, server_id: ENV.fetch('POSTMARK_SERVER_ID', 'default'))
+    def self.apply(fact, server_id: EmailDelivery.postmark_server_id!)
       scope = EmailDeliveryAttempt.where(server_id: server_id, recipient_key: EmailDeliveryAttempt.recipient_key(fact.recipient))
       attempt = scope.find_by(provider_message_id: fact.message_id)
       attempt ||= scope.find_by(correlation_id: fact.correlation_id) if fact.correlation_id

@@ -3,11 +3,15 @@
 require 'test_helper'
 
 class UpdateEmailStatusJobTest < ActiveJob::TestCase
+  teardown { ENV['POSTMARK_SERVER_ID'] = @previous_server_id }
+
   setup do
+    @previous_server_id = ENV.fetch('POSTMARK_SERVER_ID', nil)
+    ENV['POSTMARK_SERVER_ID'] = '23'
     @notification = Notification.create!(recipient: create(:constituent), notifiable: create(:application), action: 'medical_certification_requested', message_id: 'legacy-rfc-id')
     @attempt = EmailDeliveryAttempt.create!(notification: @notification, correlation_id: SecureRandom.uuid,
                                             recipient_key: EmailDeliveryAttempt.recipient_key('provider@example.test'), destination: 'provider@example.test',
-                                            server_id: 'default', mail_action: 'MedicalProviderMailer#request_certification',
+                                            server_id: '23', mail_action: 'MedicalProviderMailer#request_certification',
                                             attempted_at: Time.current, provider_message_id: 'provider-id', state: 'accepted')
     @client = mock
     Postmark::ApiClient.stubs(:new).returns(@client)

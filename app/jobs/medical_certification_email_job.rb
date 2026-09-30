@@ -6,7 +6,6 @@ class MedicalCertificationEmailJob < ApplicationJob
   queue_as :default
   self.enqueue_after_transaction_commit = true
   self.email_delivery_mail_action = 'MedicalProviderMailer#request_certification'
-  retry_on Net::SMTPError, wait: :polynomially_longer, attempts: 3
 
   def email_delivery_params
     arguments.first.to_h.slice(:notification_id, 'notification_id')
@@ -59,7 +58,7 @@ class MedicalCertificationEmailJob < ApplicationJob
     Rails.logger.error "Failed to send certification email for application #{application_id}: #{error.message}"
     Rails.logger.error error.backtrace.join("\n")
 
-    return if notification.blank?
+    return if notification.blank? || notification.email_delivery_attempts.exists?
 
     if error.is_a?(EmailDelivery::ConfigurationError)
       notification.mark_delivery_not_sent!(EmailDelivery::Decision.configuration_error(error.reason))

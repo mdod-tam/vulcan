@@ -9,6 +9,8 @@ module EmailDeliveryContextJob
   included do
     attr_accessor :email_delivery_context
 
+    retry_on EmailDelivery::RetryableFailure, wait: :polynomially_longer, attempts: 3
+
     # The catalog key of the email this job sends; a job may override the reader.
     class_attribute :email_delivery_mail_action, instance_writer: false
     before_enqueue { throw :abort unless delivery_allowed? }
@@ -35,7 +37,7 @@ module EmailDeliveryContextJob
     # A job run directly with perform_now was never queued, so it is checked like an immediate send.
     # A queued job that arrives without a context was queued before capture existed and is not sent.
     around_perform do |job, block|
-      next if EmailDeliveryAttempt.previously_attempted?(job.email_delivery_context)
+      next if EmailDeliveryAttempt.replay_blocked?(job.email_delivery_context)
 
       if job.enqueued_at.nil?
         job.email_delivery_context ||= EmailDelivery::Policy.capture(mail_action: job.email_delivery_mail_action,

@@ -13,7 +13,7 @@ module EmailDelivery
       proof registration voucher vendor certification training evaluation account_security application
     ].freeze
 
-    MailAction = Data.define(:key, :category, :routing, :template, :owner) do
+    MailAction = Data.define(:key, :category, :routing, :template, :owner, :essential) do
       def email_only? = routing == :email_only
     end
 
@@ -22,6 +22,15 @@ module EmailDelivery
     NotificationAction = Data.define(:action, :mail_action, :adapter, :routing, :owner) do
       def audit_only? = mail_action.nil?
     end
+
+    ESSENTIAL_ACTIONS = {
+      'UserMailer#password_reset' => :recovery,
+      'ApplicationNotificationsMailer#security_key_recovery_approved' => :recovery,
+      'SmsService#account_access' => :recovery,
+      'TwoFactor#sms_login' => :sms_only_login
+    }.freeze
+
+    def self.required_account_access?(action) = mail_action(action)&.essential.present?
 
     PROOF_REVIEW_OWNER = 'Applications::RequestProofResubmission'
     W9_REQUEST_OWNER = 'Vendors::RequestW9Resubmission'
@@ -73,7 +82,7 @@ module EmailDelivery
       # Sent by DocuSeal, not Action Mailer; DocumentSigning::SubmissionService consults the policy.
       'DocuSeal#signing_request' => [:certification, :email_only, nil, 'DocumentSigning::SubmissionService']
     }.to_h do |key, (category, routing, template, owner)|
-      [key, MailAction.new(key: key, category: category.to_s, routing: routing, template: template, owner: owner)]
+      [key, MailAction.new(key: key, category: category.to_s, routing: routing, template: template, owner: owner, essential: ESSENTIAL_ACTIONS[key])]
     end.freeze
 
     # Provider/letter entrypoints share classification with mailers, but are not mailer methods.
@@ -81,11 +90,12 @@ module EmailDelivery
       'SmsService#account_access' => [:account_security, :sms, nil, 'PasswordsController'],
       'SmsService#proof_resubmission' => [:proof, :sms, nil, PROOF_REVIEW_OWNER],
       'SmsService#provider_info' => [:certification, :sms, nil, 'Applications::RequestProviderInfo'],
-      'TwilioVerifyService#send_verification' => [:account_security, :sms, nil, 'TwoFactor'],
+      'TwoFactor#sms_login' => [:account_security, :sms, nil, 'TwoFactor::SmsLoginChallenge'],
+      'TwoFactor#sms_setup' => [:account_security, :sms, nil, 'TwoFactor::PendingSmsSetupChallenge'],
       'FaxService#certification_rejected' => [:certification, :fax, nil, 'MedicalProviderNotifier'],
       'Letters#medical_certification_form' => [:certification, :letter, nil, 'Applications::MedicalCertificationPdfService']
     }.to_h do |key, (category, routing, template, owner)|
-      [key, MailAction.new(key: key, category: category.to_s, routing: routing, template: template, owner: owner)]
+      [key, MailAction.new(key: key, category: category.to_s, routing: routing, template: template, owner: owner, essential: ESSENTIAL_ACTIONS[key])]
     end.freeze
 
     PROOF_REJECTION = ['ApplicationNotificationsMailer#proof_rejected', :proof_review, :preference, PROOF_REVIEW_OWNER].freeze

@@ -17,6 +17,13 @@ module Admin
 
       assert_text 'Outgoing communications'
       assert_selector '#email-delivery [data-email-control]', count: EmailDelivery::CONTROL_NAMES.size
+      within('[data-email-control="communications.global"]') do
+        assert_text 'only factor is verified SMS'
+        assert_text 'recovery messages for all users'
+        assert_text 'SMS enrollment follows all controls.'
+      end
+      within('[data-email-control="communications.sms"]') { assert_text 'Off also stops sign-in codes and SMS recovery.' }
+      assert_no_text 'All must be on for any channel to send.'
       take_screenshot('email-controls-index', html: true)
 
       within('[data-email-control="email.category.proof"]') do
@@ -54,6 +61,8 @@ module Admin
         assert_text 'Blocked: all outgoing communications are turned off'
       end
       take_screenshot('email-controls-master-off', html: true)
+      find('[data-email-control="communications.sms"]').scroll_to(:center)
+      take_screenshot('email-controls-sms-emergency-stop', html: true)
 
       page.current_window.resize_to(390, 844)
       visit admin_email_templates_path
@@ -70,18 +79,29 @@ module Admin
       sign_in(@admin)
       visit notifications_path
 
-      assert_text I18n.t('notification_delivery.statuses.suppressed', locale: :en)
-      assert_text I18n.t('notification_delivery.suppressed', locale: :en)
+      assert_text I18n.t('delivery_visibility.statuses.suppressed', locale: :en)
+      find('[data-delivery-status="suppressed"] summary').click
+      assert_text I18n.t('delivery_visibility.reasons.global_disabled', locale: :en)
       assert_no_button I18n.t('notification_delivery.check_status', locale: :en)
       take_screenshot('notification-suppressed-status', html: true)
 
       @admin.update!(locale: :es)
       visit notifications_path
-      assert_text I18n.t('notification_delivery.statuses.suppressed', locale: :es)
-      assert_text I18n.t('notification_delivery.suppressed', locale: :es)
+      assert_text I18n.t('delivery_visibility.statuses.suppressed', locale: :es)
+      find('[data-delivery-status="suppressed"] summary').click
+      assert_text I18n.t('delivery_visibility.reasons.global_disabled', locale: :es)
       assert_no_selector '.translation_missing'
       assert_no_text 'Translation missing'
       take_screenshot('notification-suppressed-status-es', html: true)
+    end
+
+    test 'an untracked notification shows its message without a delivery panel' do
+      create(:notification, recipient: @admin, actor: @admin, action: 'medical_certification_requested', notifiable: create(:application), delivery_status: nil)
+      sign_in(@admin)
+      visit notifications_path
+      assert_text 'Disability certification requested'
+      assert_no_selector '[data-delivery-status]'
+      take_screenshot('notification-untracked-no-panel', html: true)
     end
 
     test 'a failed bulk change keeps settings and allows a fresh retry' do

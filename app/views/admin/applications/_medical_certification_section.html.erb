@@ -16,6 +16,10 @@
   </div>
 </div>
 
+<% if @application.dcf_auto_request_not_sent? %>
+  <p role="status" class="mt-4 rounded bg-amber-50 p-4 text-amber-900">Auto-send not sent — request manually. Check the provider email and communication settings before sending the request below.</p>
+<% end %>
+
 <div class="mt-6 space-y-4">
   <!-- Disability Certification Upload Form (Visible unless approved) -->
   <%= render 'medical_certification_upload' %>

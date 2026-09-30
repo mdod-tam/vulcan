@@ -112,7 +112,7 @@ module TwoFactor
     end
 
     def send_and_store!(user)
-      result = TwilioVerifyService.send_verification(credential.phone_number)
+      result = TwilioVerifyService.send_verification(credential.phone_number, purpose: :login, sms_credential_id: credential.id)
       return :suppressed if result[:delivery_suppressed]
       return :configuration_error if result[:configuration_error]
       return false unless result[:success] && result[:verification_sid].present?

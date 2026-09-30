@@ -2,7 +2,7 @@
 
 class PostmarkEmailTracker
   def self.refresh(attempt)
-    return unless attempt.server_id == ENV.fetch('POSTMARK_SERVER_ID', 'default')
+    return unless attempt.server_id == EmailDelivery.postmark_server_id!
 
     claimed = false
     attempt.with_lock do

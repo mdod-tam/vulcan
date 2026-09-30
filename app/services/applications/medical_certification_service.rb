@@ -13,7 +13,20 @@ module Applications
       @actor = actor
     end
 
-    def request_certification
+    def auto_request_certification
+      application.reload
+      result = request_certification(automatic: true)
+      unless result.success?
+        AuditEventService.log(action: 'dcf_auto_request_not_sent', actor: actor, auditable: application,
+                              metadata: { reason: result.message, delivery_outcome: result.data&.dig(:delivery_outcome) })
+      end
+      result
+    rescue StandardError => e
+      Rails.logger.error("DCF auto-request failed for application #{application.id}: #{e.class.name}")
+      failure('Auto-send not sent — request manually.')
+    end
+
+    def request_certification(automatic: false)
       return failure('Medical provider email is required') if application.medical_provider_email.blank?
 
       decision, context = EmailDelivery.issuance(ACTION)
@@ -21,6 +34,8 @@ module Applications
 
       notification = nil
       application.with_lock do
+        return failure('Auto-send is no longer applicable.') if automatic && !auto_requestable?
+
         previous = application.attributes.slice(*STATE_FIELDS)
         timestamp = Time.current
         Current.instance.set(skip_proof_validation: true) do
@@ -86,6 +101,10 @@ module Applications
     end
 
     private
+
+    def auto_requestable?
+      application.status_awaiting_dcf? && application.required_proofs_for_dcf_approved? && application.medical_certification_status_not_requested?
+    end
 
     def refusal(decision)
       failure(decision.configuration_error? ? EmailDelivery::ConfigurationError::MESSAGE : I18n.t('outbound_delivery.delivery_suppressed'),

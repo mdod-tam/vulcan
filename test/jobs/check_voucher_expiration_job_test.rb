@@ -35,8 +35,10 @@ class CheckVoucherExpirationJobTest < ActiveJob::TestCase
     assert_equal [voucher_email(voucher)], ActionMailer::Base.deliveries.first.to
   end
 
-  test 'a voucher due today is left for the expired run without a separate notice' do
-    voucher = create_voucher(expires_in: 12.hours)
+  test 'a voucher between the warning and expiry windows receives no notice' do
+    # Month-end clipping can remove up to three days; this target still expires in one to four days.
+    voucher = Voucher.create!(application: create(:application, :completed), initial_value: 500, remaining_value: 500,
+                              status: :active, issued_at: 4.days.from_now.utc - VALIDITY_MONTHS.months)
 
     perform_enqueued_jobs { CheckVoucherExpirationJob.perform_now }
 

@@ -11,6 +11,7 @@ def seed_feature_flags
   # `email.global` is the master email control; the migration creates it in deployed databases.
   feature_flags = {
     'vouchers_enabled' => false,
+    'dcf_auto_request_certification' => false,
     'email.global' => true
   }.merge(EmailDelivery::CONTROL_NAMES.index_with(true))
   existing_email = FeatureFlag.find_by(name: EmailDelivery::GLOBAL_CONTROL)

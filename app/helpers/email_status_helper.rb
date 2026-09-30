@@ -3,6 +3,8 @@
 module EmailStatusHelper
   def delivery_visibility(record, locale: I18n.locale)
     attempts = record.email_delivery_attempts.sort_by(&:id)
+    return ''.html_safe if attempts.empty? && record.is_a?(Notification) && DeliveryStatusPresenter.new(record).status == 'unknown'
+
     attempts = [nil] if attempts.empty?
     attempts += [nil] if attempts.compact.any? && record.is_a?(Notification) && record.local_delivery_outcome?
     safe_join(attempts.map do |attempt|

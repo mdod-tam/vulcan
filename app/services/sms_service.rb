@@ -17,7 +17,10 @@ class SmsService
 
     # In test/development without Twilio credentials, just log and return success
     unless twilio_configured?
-      return true if Rails.env.local?
+      if Rails.env.local?
+        EmailDelivery::Outcome.record_essential_handoff(context: delivery_context, channel: :sms)
+        return true
+      end
 
       raise EmailDelivery::ConfigurationError.new(reason: 'sms_provider_unconfigured')
     end
@@ -41,6 +44,7 @@ class SmsService
       else
         Rails.logger.info("SMS sent successfully to #{delivery_phone_number} via Twilio")
       end
+      EmailDelivery::Outcome.record_essential_handoff(context: delivery_context, channel: :sms)
       true
     rescue Twilio::REST::RestError => e
       log_sms_error('Twilio SMS delivery failed', e)

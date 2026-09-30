@@ -87,7 +87,7 @@ class ApplicationMailer < ActionMailer::Base
     return unless @_mail_was_called
 
     context = @delivery_context
-    throw :abort if EmailDeliveryAttempt.previously_attempted?(context)
+    throw :abort if EmailDeliveryAttempt.replay_blocked?(context)
 
     mail_action = "#{self.class.name}##{action_name}"
     decision = EmailDelivery::Policy.verify_delivery(mail_action, context)
@@ -100,12 +100,19 @@ class ApplicationMailer < ActionMailer::Base
   def capture_delivery_attempt(&block)
     return block.call unless @_mail_was_called && message.perform_deliveries
 
+    handoff = lambda do
+      result = block.call
+      EmailDelivery::Outcome.record_essential_handoff(context: @delivery_context, channel: :email)
+      result
+    end
+    return handoff.call unless message.delivery_method.is_a?(Mail::Postmark)
+
     @delivery_context['delivery_correlation_id'] ||= EmailDeliveryAttempt.correlation_for(@delivery_context)
     subject = @delivery_subject || %i[application voucher invoice evaluation training_session].filter_map do |name|
       params[name] || instance_variable_get("@#{name}")
     end.first
     recipient = params[:user] || @user || params[:vendor] || @vendor
-    EmailDelivery::Capture.new(message: message, context: @delivery_context, subject: subject, recipient: recipient, contacts: @delivery_contacts || {}).deliver(&block)
+    EmailDelivery::Capture.new(message: message, context: @delivery_context, subject: subject, recipient: recipient, contacts: @delivery_contacts || {}).deliver(&handoff)
   end
 
   def record_provider_fallback_submission

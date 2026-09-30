@@ -4,12 +4,18 @@
   <% if letters.empty? %>
     <p class="rounded bg-gray-50 p-4 text-gray-700">No letters in this group.</p>
   <% else %>
-    <%= form_with url: download_batch_admin_print_queue_index_path, method: :post, data: { turbo: false } do %>
+    <%= form_with url: download_batch_admin_print_queue_index_path, method: :post,
+                  data: { turbo: false, controller: 'print-release', action: 'submit->print-release#download' } do %>
       <div class="overflow-x-auto rounded-lg border border-gray-200 bg-white">
         <table class="min-w-full divide-y divide-gray-200">
           <thead class="bg-gray-50 text-left text-sm">
             <tr>
-              <% if release %><th scope="col" class="p-3">Select</th><% end %>
+              <% if release %>
+                <th scope="col" class="p-3">
+                  <input type="checkbox" aria-label="Select all letters in <%= title %>" data-print-release-target="all"
+                         data-action="change->print-release#selectAll" class="h-4 w-4 rounded border-gray-400 text-indigo-700">
+                </th>
+              <% end %>
               <th scope="col" class="p-3">Letter</th>
               <th scope="col" class="p-3">Recipient</th>
               <th scope="col" class="p-3">Created</th>
@@ -21,6 +27,7 @@
               <tr>
                 <% if release %>
                   <td class="p-3"><%= check_box_tag 'letter_ids[]', letter.id, @selected_letter_ids.include?(letter.id.to_s),
+                                                    data: { print_release_target: 'letter', action: 'change->print-release#selectionChanged' },
                                                     id: "letter-#{letter.id}", aria: { label: "Select letter ##{letter.id} for #{letter.constituent.full_name}" },
                                                     class: 'h-4 w-4 rounded border-gray-400 text-indigo-700' %></td>
                 <% end %>
@@ -35,12 +42,14 @@
       </div>
       <% if release %>
         <div class="mt-3 flex flex-wrap gap-3">
-          <%= submit_tag(confirm ? 'Download selected again' : 'Release and download selected', class: 'rounded bg-blue-700 px-4 py-2 text-white') %>
+          <%= submit_tag(confirm ? 'Download selected again' : 'Release and download selected', data: { print_release_target: 'submit' },
+                                                                                                class: 'rounded bg-blue-700 px-4 py-2 text-white disabled:opacity-50') %>
           <% if confirm %>
             <%= button_tag 'Mark selected as printed', type: :submit, formaction: mark_batch_as_printed_admin_print_queue_index_path,
-                                                       class: 'rounded bg-green-700 px-4 py-2 text-white' %>
+                                                       data: { print_release_target: 'submit' }, class: 'rounded bg-green-700 px-4 py-2 text-white disabled:opacity-50' %>
           <% end %>
         </div>
+        <p data-print-release-target="status" role="status" class="mt-2 text-sm text-gray-700"></p>
       <% end %>
     <% end %>
   <% end %>

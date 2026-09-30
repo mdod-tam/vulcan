@@ -33,6 +33,10 @@ module EmailDelivery
                            'template_format' => (params[:format] || params['format'] || 'text').to_s,
                            'scopes' => controls.map { |control| scope_for(control) }, 'channels' => channels,
                            'templates' => template_rows(entry, params).map { |row| template_scope_for(row) })
+      if entry.essential == :sms_only_login
+        context['sms_credential_id'] = params[:sms_credential_id]
+        context['sms_destination_key'] = EmailDeliveryAttempt.recipient_key(SmsCredential.normalize_phone_number(params[:phone_number]))
+      end
       context['denied_channels'] = initial_denials(context)
       context
     end
@@ -111,20 +115,50 @@ module EmailDelivery
       channel_scope = context.dig('channels', channel)
       return Decision.configuration_error(:invalid_channel_context) unless channel_scope&.dig('control') == CHANNEL_CONTROLS[channel]
 
-      # Explain the first applicable refusal: All, channel, category, then template.
-      [scopes.first, channel_scope, *scopes.drop(1)].compact.each do |scope|
-        decision = verify_scope(scope)
-        return decision unless decision.allowed?
-      end
+      context.delete('essential_bypassed_controls')
+      decision, bypassed = verify_control_scopes(context, [scopes.first, channel_scope, *scopes.drop(1)].compact)
+      return decision unless decision.allowed?
+
       Array(context['templates']).each do |scope|
         decision = verify_template(scope)
         return decision unless decision.allowed?
       end
-      verify_template_identity(context)
+      decision = verify_template_identity(context)
+      context['essential_bypassed_controls'] = bypassed if decision.allowed? && bypassed.any?
+      decision
     rescue ConfigurationError, ActiveRecord::ActiveRecordError => e
       Decision.configuration_error(e.class.name)
     end
     private_class_method :verify_controls
+
+    def self.verify_control_scopes(context, scopes)
+      bypassed = []
+      essential = essential_access?(context)
+      scopes.each do |scope|
+        decision = verify_scope(scope)
+        next if decision.allowed?
+
+        return [decision, []] unless essential && decision.suppressed? && [ALL_CONTROL, EmailDelivery.category_control('account_security')].include?(scope['control'])
+
+        bypassed << scope['control']
+      end
+      [Decision.allowed, bypassed]
+    end
+    private_class_method :verify_control_scopes
+
+    def self.essential_access?(context)
+      case Catalog.mail_action(context['mail_action'])&.essential
+      when :recovery then true
+      when :sms_only_login
+        SmsCredential.uncached do
+          credential = SmsCredential.find_by(id: context['sms_credential_id'])
+          credential&.verified? && EmailDeliveryAttempt.recipient_key(credential.phone_number) == context['sms_destination_key'] &&
+            !credential.user.totp_credentials.exists? && !credential.user.webauthn_credentials.exists?
+        end
+      else false
+      end
+    end
+    private_class_method :essential_access?
 
     def self.verify_scope(scope)
       control = control!(scope['control'])

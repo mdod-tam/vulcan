@@ -1,6 +1,6 @@
 <div class="container mx-auto px-4 py-8">
   <h1 class="text-2xl font-bold mb-6">Feature Flags</h1>
-  
+
   <div class="bg-white shadow rounded-lg overflow-hidden">
     <table class="min-w-full divide-y divide-gray-200">
       <thead class="bg-gray-50">
@@ -12,12 +12,17 @@
       </thead>
       <tbody class="bg-white divide-y divide-gray-200">
         <% @feature_flags.each do |flag| %>
-          <tr>
-            <td class="px-6 py-4 whitespace-nowrap text-sm font-medium text-gray-900">
-              <%= flag.name.humanize.titleize %>
+          <tr data-feature-flag="<%= flag.name %>">
+            <td class="px-6 py-4 text-sm font-medium text-gray-900">
+              <% if flag.name == 'dcf_auto_request_certification' %>
+                Auto-send DCF provider request
+                <p class="mt-2 max-w-prose font-normal text-gray-700">Applies to future moves to DCF when required proofs are approved and certification has not been requested. Existing applications awaiting DCF are unchanged. All, Email, Certification and template controls still apply. When disabled, staff request certification from the application page.</p>
+              <% else %>
+                <%= flag.name.humanize.titleize %>
+              <% end %>
             </td>
             <td class="px-6 py-4 whitespace-nowrap">
-              <span class="px-2 inline-flex text-xs leading-5 font-semibold rounded-full 
+              <span class="px-2 inline-flex text-xs leading-5 font-semibold rounded-full
                           <%= flag.enabled ? 'bg-green-100 text-green-800' : 'bg-red-100 text-red-800' %>">
                 <%= flag.enabled ? 'Enabled' : 'Disabled' %>
               </span>
@@ -25,7 +30,7 @@
             <td class="px-6 py-4 whitespace-nowrap text-sm text-gray-500">
               <%= form_with(model: [:admin, flag], local: true, method: :patch) do |f| %>
                 <%= f.hidden_field :enabled, value: !flag.enabled %>
-                <%= f.submit flag.enabled ? 'Disable' : 'Enable', 
+                <%= f.submit flag.enabled ? 'Disable' : 'Enable',
                              class: "text-sm #{flag.enabled ? 'text-red-600 hover:text-red-900' : 'text-green-600 hover:text-green-900'}" %>
               <% end %>
             </td>

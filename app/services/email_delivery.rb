@@ -1,7 +1,7 @@
 # frozen_string_literal: true
 
-# Email delivery controls. An email may be sent only while every control captured for it
-# is enabled and still at the generation it had when the email was requested.
+# Shared delivery policy preserves captured control generations, with explicit
+# catalog exceptions for required account access.
 module EmailDelivery
   GLOBAL_CONTROL = 'email.global'
   ALL_CONTROL = 'communications.global'
@@ -10,6 +10,10 @@ module EmailDelivery
   CONTROL_PREFIXES = [CONTROL_PREFIX, 'communications.'].freeze
   CATEGORY_PREFIX = 'email.category.'
   CONTROL_NAMES = ([ALL_CONTROL] + CHANNEL_CONTROLS.values + Catalog::CATEGORIES.map { |category| "#{CATEGORY_PREFIX}#{category}" }).freeze
+
+  def self.postmark_server_id!
+    ENV['POSTMARK_SERVER_ID'].presence || raise(ConfigurationError.new('POSTMARK_SERVER_ID is required', reason: 'postmark_server_missing'))
+  end
 
   def self.category_control(category)
     "#{CATEGORY_PREFIX}#{category}"

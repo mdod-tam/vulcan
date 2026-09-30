@@ -7,11 +7,14 @@ class TwilioVerifyService
     # Send a verification code via SMS
     # @param phone_number [String] Phone number in E.164 format (e.g., +12025551234)
     # @return [Hash] Result with :success, :verification_sid, :status, and :error keys
-    def send_verification(phone_number)
-      action = 'TwilioVerifyService#send_verification'
-      context = EmailDelivery::Policy.capture(mail_action: action)
+    def send_verification(phone_number, purpose:, sms_credential_id: nil)
+      action = { login: 'TwoFactor#sms_login', setup: 'TwoFactor#sms_setup' }.fetch(purpose)
+      context = EmailDelivery::Policy.capture(mail_action: action, params: { sms_credential_id: sms_credential_id, phone_number: phone_number })
       EmailDelivery.verify!(action, context: context, channel: 'sms')
-      return test_mode_success(phone_number) if test_mode?
+      if test_mode?
+        EmailDelivery::Outcome.record_essential_handoff(context: context, channel: :sms)
+        return test_mode_success(phone_number)
+      end
 
       unless verify_configured?
         Rails.logger.warn('[TwilioVerify] Verify not configured, skipping verification send')
@@ -32,6 +35,7 @@ class TwilioVerifyService
                        to: phone_e164
                      )
 
+      EmailDelivery::Outcome.record_essential_handoff(context: context, channel: :sms)
       Rails.logger.info("[TwilioVerify] Verification sent successfully, SID: #{verification.sid}, Status: #{verification.status}")
 
       {

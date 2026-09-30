@@ -31,6 +31,23 @@ module EmailDelivery
       Rails.logger.error("EmailDelivery: could not record #{action} for #{mail_action}: #{e.class}")
     end
 
+    def self.record_essential_handoff(context:, channel:)
+      controls = Array(context&.dig('essential_bypassed_controls'))
+      return if controls.empty?
+
+      action = 'essential_communication_submitted'
+      request_id = context.fetch('request_id')
+      return if recorded?(action, request_id)
+      return unless (actor = audit_actor(action, context['mail_action']))
+
+      Event.create!(user: actor, action: action,
+                    metadata: { request_id: request_id, mail_action: context['mail_action'], channel: channel.to_s,
+                                bypassed_controls: controls, outcome: 'submitted_under_control_exception',
+                                delivery_correlation_id: context['delivery_correlation_id'], sms_credential_id: context['sms_credential_id'] }.compact)
+    rescue StandardError => e
+      Rails.logger.error("Essential communication audit failed: #{e.class.name}")
+    end
+
     ENQUEUE_FAILED = 'email_delivery_enqueue_failed'
 
     # The email was requested but never reached the queue. Nothing was sent or claimed as queued.

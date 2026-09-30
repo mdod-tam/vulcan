@@ -79,6 +79,34 @@ module Admin
       take_full_page_screenshot('outbound-sms-setup-retried')
     end
 
+    test 'select all releases a batch and refreshes the queue after downloading' do
+      second = Letters::Delivery.queue!(recipient: @recipient, application: @application, letter_type: :medical_certification_form,
+                                        context: EmailDelivery::Policy.capture(mail_action: 'Letters#medical_certification_form'), actor: @admin) do
+        StringIO.new('%PDF second letter')
+      end
+      sign_in(@admin)
+      visit admin_print_queue_index_path
+      assert_button 'Release and download selected', disabled: true
+      within('section[aria-label="Awaiting release"]') do
+        check 'Select all letters in Awaiting release'
+        assert_selector 'input[name="letter_ids[]"]:checked', count: 2
+        take_full_page_screenshot('print-batch-selected')
+        click_button 'Release and download selected'
+      end
+      within('section[aria-label="Awaiting release"]') { assert_text 'No letters in this group.' }
+      within('section[aria-label="Released — awaiting print confirmation"]') do
+        assert_link "Review letter ##{@letter.id}"
+        assert_link "Review letter ##{second.id}"
+      end
+      assert @letter.reload.released_at
+      assert second.reload.released_at
+      take_full_page_screenshot('print-batch-refreshed')
+      page.current_window.resize_to(390, 844)
+      take_full_page_screenshot('print-batch-phone')
+    ensure
+      page.current_window.resize_to(1200, 800)
+    end
+
     test 'a storage failure retains the batch selection and allows a deliberate retry' do
       sign_in(@admin)
       visit admin_print_queue_index_path
@@ -92,11 +120,12 @@ module Admin
 
       ActiveStorage::Blob.any_instance.unstub(:download)
       find("#letter-#{@letter.id}").uncheck
+      assert_button 'Release and download selected', disabled: true
       assert_no_selector "#letter-#{@letter.id}:checked"
       find("#letter-#{@letter.id}").check
       click_button 'Release and download selected'
-      visit admin_print_queue_path(@letter)
-      assert_text 'Release authorized'
+      within('section[aria-label="Awaiting release"]') { assert_text 'No letters in this group.' }
+      within('section[aria-label="Released — awaiting print confirmation"]') { assert_link "Review letter ##{@letter.id}" }
       take_full_page_screenshot('outbound-print-storage-retried')
     end
 

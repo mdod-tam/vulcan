@@ -79,7 +79,7 @@ module EmailDelivery
       @pairs ||= @templates.reject(&:fragment?).group_by { |row| [row.name, row.format] }.map do |(name, format), rows|
         category = Catalog.template_categories[name] || UNASSIGNED
         Pair.new(name: name, format: format, rows: rows, category: category, saved_enabled: rows.all?(&:enabled),
-                 mixed: rows.map(&:enabled).uniq.size > 1, suppressed_by: pair_suppression(category))
+                 mixed: rows.map(&:enabled).uniq.size > 1, suppressed_by: pair_suppression(category, essential: required_access_template?(name)))
       end
     end
 
@@ -112,20 +112,27 @@ module EmailDelivery
     private
 
     def pair_channel_suppression(pair, control)
-      reason = pair.suppressed_by || control.suppressed_by
+      reason = pair.suppressed_by
+      reason ||= control.suppressed_by unless required_access_template?(pair.name)
+      reason ||= :configuration_error if control.missing?
       reason ||= :template_disabled unless pair.saved_enabled
       reason ||= control.name == GLOBAL_CONTROL ? :global_disabled : :letters_disabled unless control.saved_enabled
       reason
     end
 
-    def pair_suppression(category)
-      return upstream_suppression if upstream_suppression
+    def required_access_template?(name)
+      Catalog::MAIL_ACTIONS.any? { |action, entry| entry.template == name && Catalog.required_account_access?(action) }
+    end
+
+    def pair_suppression(category, essential: false)
+      upstream = upstream_suppression
+      return upstream if upstream && !(essential && upstream == :all_disabled)
       return if category == UNASSIGNED
 
       control = category_control(category)
       return :configuration_error if control.missing?
 
-      :category_disabled unless control.saved_enabled
+      :category_disabled unless control.saved_enabled || (essential && category == 'account_security')
     end
 
     def upstream_suppression

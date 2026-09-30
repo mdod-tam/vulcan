@@ -29,6 +29,8 @@ module EmailDelivery
         report_tracking_failure(e)
       else
         record_failure(e)
+        raise RetryableFailure, e.class.name if RetryableFailure.transient?(e) && @attempts.any? && @attempts.all? { |attempt| attempt.reload.retryable? }
+
         raise
       end
     end
@@ -37,7 +39,9 @@ module EmailDelivery
 
     def claim
       correlation = @context.fetch('delivery_correlation_id')
-      return false if EmailDeliveryAttempt.exists?(correlation_id: correlation)
+      return false if EmailDeliveryAttempt.replay_blocked?(@context)
+
+      @server_id = EmailDelivery.postmark_server_id!
 
       notification = Notification.find_by(id: @context['notification_id'] || @context['provider_notification_id'])
       origin = request_origin(notification) || @subject || notification&.notifiable
@@ -45,15 +49,24 @@ module EmailDelivery
       EmailDeliveryAttempt.transaction do
         # Serialize the envelope, including retries whose rebuilt destination has changed.
         lock_envelope(correlation)
-        next if EmailDeliveryAttempt.exists?(correlation_id: correlation)
-
-        @attempts = Array(@message.destinations).map(&:downcase).uniq.sort.map do |address|
-          EmailDeliveryAttempt.create!(attempt_attributes(address, correlation, notification, origin, identity))
-        end
+        existing = EmailDeliveryAttempt.where(correlation_id: correlation).order(:recipient_key).lock.to_a
+        addresses = Array(@message.destinations).map(&:downcase).uniq.sort
+        @attempts = if existing.any?
+                      reclaim_failed_attempts(existing, addresses)
+                    else
+                      addresses.map { |address| EmailDeliveryAttempt.create!(attempt_attributes(address, correlation, notification, origin, identity)) }
+                    end
       end
       @attempts.any?
     rescue ActiveRecord::RecordNotUnique
       false
+    end
+
+    def reclaim_failed_attempts(existing, addresses)
+      return [] unless existing.all?(&:retryable?) && existing.map(&:destination).sort == addresses && existing.all? { |attempt| attempt.server_id == @server_id }
+
+      existing.each { |attempt| attempt.update!(state: 'unknown', attempted_at: Time.current) }
+      existing
     end
 
     def lock_envelope(correlation)
@@ -67,7 +80,7 @@ module EmailDelivery
       explicit_request = REQUEST_KEYS.value?(origin.class)
       contact = (identity if primary && explicit_request) || @contacts[address] || (identity if primary) || {}
       { correlation_id: correlation, recipient_key: EmailDeliveryAttempt.recipient_key(address), destination: address,
-        server_id: ENV.fetch('POSTMARK_SERVER_ID', 'default'), mail_action: @context.fetch('mail_action'), attempted_at: Time.current,
+        server_id: @server_id, mail_action: @context.fetch('mail_action'), attempted_at: Time.current,
         notification: notification, origin: origin, application: identity[:application],
         recipient: contact[:recipient], delivery_owner: contact[:owner] }
     end
@@ -112,7 +125,13 @@ module EmailDelivery
     end
 
     def record_failure(error)
-      @attempts.each { |attempt| attempt.update!(state: 'failed') }
+      return unless RetryableFailure.rejected?(error)
+
+      @attempts.each do |attempt|
+        attempt.with_lock do
+          attempt.update!(state: 'failed') if attempt.provider_message_id.blank? && attempt.accepted_at.nil? && attempt.feedback_at.nil?
+        end
+      end
     rescue StandardError => e
       report_tracking_failure(e)
       Rails.logger.error("Email delivery transport failed: #{error.class.name}")

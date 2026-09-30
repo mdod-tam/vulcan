@@ -6,7 +6,7 @@ module EmailDelivery
   class PolicyTest < ActiveSupport::TestCase
     setup do
       @admin = create(:admin)
-      @context = Policy.capture(mail_action: 'UserMailer#password_reset')
+      @context = Policy.capture(mail_action: 'VendorNotificationsMailer#w9_approved')
     end
 
     test 'an email captured while email is on may be sent' do
@@ -24,7 +24,7 @@ module EmailDelivery
       set(true, 'op-2')
 
       assert_equal 'pending_canceled', Policy.verify(@context).reason
-      assert Policy.verify(Policy.capture(mail_action: 'UserMailer#password_reset')).allowed?
+      assert Policy.verify(Policy.capture(mail_action: 'VendorNotificationsMailer#w9_approved')).allowed?
     end
 
     test 'a recreated control does not authorize mail captured under the old row' do
@@ -38,7 +38,7 @@ module EmailDelivery
       FeatureFlag.find_by!(name: GLOBAL_CONTROL).destroy!
 
       assert Policy.verify(@context).configuration_error?
-      assert Policy.verify(Policy.capture(mail_action: 'UserMailer#password_reset')).configuration_error?
+      assert Policy.verify(Policy.capture(mail_action: 'VendorNotificationsMailer#w9_approved')).configuration_error?
     end
 
     test 'a queued email without a context is not sent' do
@@ -63,18 +63,18 @@ module EmailDelivery
     end
 
     test 'turning a template pair off cancels mail for both locales, and turning it on does not revive it' do
-      pair = %w[en es].map { |locale| template_row('user_mailer_password_reset', locale) }
-      context = Policy.capture(mail_action: 'UserMailer#password_reset')
+      pair = %w[en es].map { |locale| template_row('vendor_notifications_w9_approved', locale) }
+      context = Policy.capture(mail_action: 'VendorNotificationsMailer#w9_approved')
       assert_equal pair.map(&:id), context['templates'].pluck('id')
 
-      ControlWriter.set_template_pair(name: 'user_mailer_password_reset', format: :text, enabled: false, actor: @admin,
+      ControlWriter.set_template_pair(name: 'vendor_notifications_w9_approved', format: :text, enabled: false, actor: @admin,
                                       operation_id: 'op-1')
       assert_equal 'template_disabled', Policy.verify(context).reason
 
-      ControlWriter.set_template_pair(name: 'user_mailer_password_reset', format: :text, enabled: true, actor: @admin,
+      ControlWriter.set_template_pair(name: 'vendor_notifications_w9_approved', format: :text, enabled: true, actor: @admin,
                                       operation_id: 'op-2')
       assert_equal 'pending_canceled', Policy.verify(context).reason
-      assert Policy.verify(Policy.capture(mail_action: 'UserMailer#password_reset')).allowed?
+      assert Policy.verify(Policy.capture(mail_action: 'VendorNotificationsMailer#w9_approved')).allowed?
     end
 
     test 'a test send follows the category of the template being tested' do

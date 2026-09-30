@@ -57,7 +57,17 @@ module Admin
     def show_release_refusal(error)
       flash.now[:alert] = "Nothing was released. #{error.message}"
       load_queue
-      render :index, status: :unprocessable_content
+      render_release_error
+    end
+
+    def render_release_error
+      respond_to do |format|
+        format.html { render :index, status: :unprocessable_content }
+        format.turbo_stream do
+          render turbo_stream: turbo_stream.replace('print-queue-content', partial: 'admin/print_queue/queue', locals: { error: flash[:alert] }),
+                 status: :unprocessable_content
+        end
+      end
     end
 
     def show_export_failure(error)
@@ -65,7 +75,7 @@ module Admin
                             metadata: { print_queue_item_ids: selected_ids.presence || [params[:id]], error_class: error.class.name })
       flash.now[:alert] = 'The PDF could not be prepared. Nothing was released. Review the selected letters and try again.'
       load_queue
-      render :index, status: :unprocessable_content
+      render_release_error
     end
   end
 end

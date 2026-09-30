@@ -3,10 +3,14 @@
 require 'test_helper'
 
 class EmailDeliveryFeedbackTest < ActiveSupport::TestCase
+  teardown { ENV['POSTMARK_SERVER_ID'] = @previous_server_id }
+
   setup do
+    @previous_server_id = ENV.fetch('POSTMARK_SERVER_ID', nil)
+    ENV['POSTMARK_SERVER_ID'] = '23'
     ensure_system_audit_actor!
     @attempt = EmailDeliveryAttempt.create!(correlation_id: SecureRandom.uuid, recipient_key: EmailDeliveryAttempt.recipient_key('original@example.test'),
-                                            destination: 'original@example.test', server_id: 'default', mail_action: 'UserMailer#password_reset',
+                                            destination: 'original@example.test', server_id: '23', mail_action: 'UserMailer#password_reset',
                                             attempted_at: Time.current, provider_message_id: 'provider-1', state: 'accepted')
   end
 

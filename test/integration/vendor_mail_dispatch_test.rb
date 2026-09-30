@@ -19,7 +19,8 @@ class VendorMailDispatchTest < ActiveSupport::TestCase
     end
 
     notification = Notification.find_by!(action: 'w9_approved', recipient: @vendor)
-    assert_nil notification.delivery_status
+    assert_equal 'queued', notification.delivery_status
+    assert_empty notification.email_delivery_attempts
     assert_equal 'email', notification.metadata['actual_delivery_channel']
     assert_equal [[@vendor.email]], ActionMailer::Base.deliveries.map(&:to)
   end
