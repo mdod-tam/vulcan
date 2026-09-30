@@ -5,6 +5,9 @@ module Webhooks
   # Extends the existing webhook base infrastructure with DocuSeal-specific handling
   class DocusealController < BaseController
     def medical_certification
+      @system_actor = User.system_user
+      return head :service_unavailable unless @system_actor
+
       event_type = params[:event_type]
       data       = params[:data] || {}
 
@@ -70,7 +73,7 @@ module Webhooks
       app.update!(document_signing_status: :opened)
       AuditEventService.log(
         action: 'document_signing_viewed',
-        actor: User.system_user,
+        actor: @system_actor,
         auditable: app,
         metadata: {
           document_signing_service: 'docuseal',
@@ -87,7 +90,7 @@ module Webhooks
 
       AuditEventService.log(
         action: 'document_signing_started',
-        actor: User.system_user,
+        actor: @system_actor,
         auditable: app,
         metadata: {
           document_signing_service: 'docuseal',
@@ -109,7 +112,7 @@ module Webhooks
 
       AuditEventService.log(
         action: 'document_signing_completed',
-        actor: User.system_user,
+        actor: @system_actor,
         auditable: app,
         metadata: {
           document_signing_service: 'docuseal',
@@ -137,7 +140,7 @@ module Webhooks
       app.update!(document_signing_status: :declined)
       AuditEventService.log(
         action: 'document_signing_declined',
-        actor: User.system_user,
+        actor: @system_actor,
         auditable: app,
         metadata: {
           document_signing_service: 'docuseal',
@@ -170,7 +173,7 @@ module Webhooks
         blob: blob,
         submission_method: :docuseal,
         requested_at: app.document_signing_requested_at,
-        admin: User.system_user,
+        admin: @system_actor,
         metadata: {
           document_signing_service: 'docuseal',
           document_signing_submission_id: app.document_signing_submission_id,
@@ -234,7 +237,7 @@ module Webhooks
     def log_attachment_failure(app, reason, details)
       AuditEventService.log(
         action: 'document_signing_attachment_failed',
-        actor: User.system_user,
+        actor: @system_actor,
         auditable: app,
         metadata: {
           document_signing_service: 'docuseal',

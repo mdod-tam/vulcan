@@ -20,7 +20,7 @@ class SecureRequestResendController < SecurePublicFormController
     if resend_allowed?
       if rate_limited?
         Rails.logger.warn("#{resend_log_label} resend rate limited: #{resend_log_context.merge(remote_ip: request.remote_ip).inspect}")
-      else
+      elsif (@resend_actor = @secure_request_form.requested_by || User.system_user)
         result = request_replacement_link
         Rails.logger.warn("#{resend_log_label} resend request failed: #{resend_log_context.merge(message: result.message).inspect}") if result.failure?
       end
@@ -36,6 +36,8 @@ class SecureRequestResendController < SecurePublicFormController
   end
 
   private
+
+  attr_reader :resend_actor
 
   def set_secure_request_form
     @token = params[:token]

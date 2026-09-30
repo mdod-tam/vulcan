@@ -476,13 +476,12 @@ class UserTest < ActiveSupport::TestCase
     Current.user = nil
   end
 
-  test 'system_user does not trust a remembered row whose id now belongs to someone else' do
-    system = User.system_user
-    stale = Users::Administrator.instantiate(system.attributes.merge('id' => create(:constituent).id))
-    User.instance_variable_set(:@system_user, stale)
-
+  test 'system_user rechecks the configured account on each lookup' do
+    system = ensure_system_audit_actor!
     assert_equal system, User.system_user
-  ensure
-    User.instance_variable_set(:@system_user, nil)
+
+    system.update!(email: 'former-system@example.test')
+
+    assert_no_difference('User.count') { assert_nil User.system_user }
   end
 end

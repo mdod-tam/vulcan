@@ -24,9 +24,12 @@ class SecureFormExpirationRecorder < BaseService
     forms.expiration_unrecorded.find_each do |form|
       # Forms expired before the marker existed may already have their event.
       unless expiration_event_recorded?(form)
+        actor = form.requested_by || User.system_user
+        next unless actor
+
         AuditEventService.log(
           action: form.expiration_audit_action,
-          actor: form.requested_by || User.system_user,
+          actor: actor,
           auditable: form.audit_subject,
           metadata: form.audit_metadata.merge(expires_at: form.expires_at.iso8601),
           created_at: form.expires_at

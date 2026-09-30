@@ -3,6 +3,7 @@
 namespace :db do
   desc 'Seed policies for production (does not require FactoryBot)'
   task seed_policies: :environment do
+    actor = User.system_user || abort('Provision the system audit administrator before seeding policies.')
     puts '📋 Creating policies...'
 
     # IMPORTANT: All policy keys used in the application MUST be defined here
@@ -60,7 +61,7 @@ namespace :db do
       elsif policy.value != value
         old_value = policy.value
         policy.value = value
-        policy.updated_by = User.system_user
+        policy.updated_by = actor
         policy.save!
         updated_count += 1
         puts "  ✓ Updated policy: #{key} (#{old_value} → #{value})"

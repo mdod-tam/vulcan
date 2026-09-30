@@ -62,6 +62,7 @@ class SecureFormExpirationRecorderTest < ActiveSupport::TestCase
   end
 
   test 'records expiration events with system actor when requester is missing' do
+    ensure_system_audit_actor!
     application = create(:application)
     form = create(:secure_request_form,
                   application: application,
@@ -108,6 +109,28 @@ class SecureFormExpirationRecorderTest < ActiveSupport::TestCase
       result = SecureFormExpirationRecorder.new.call
       assert_predicate result, :success?
     end
+  end
+
+  test 'missing system actor leaves an expiration pending until attribution is available' do
+    User.where(email: PublicAuditActor::SYSTEM_AUDIT_EMAIL).find_each do |user|
+      user.update!(email: "displaced-#{user.id}@example.test")
+    end
+    form = create(:secure_request_form, kind: :income_proof_resubmission, requested_by: nil, expires_at: 1.hour.ago)
+
+    assert_no_difference ['User.count', 'Event.count'] do
+      result = SecureFormExpirationRecorder.new.call
+      assert_predicate result, :success?
+      assert_equal 0, result.data[:proof]
+    end
+    assert_nil form.reload.expiration_recorded_at
+
+    actor = ensure_system_audit_actor!
+    assert_difference("Event.where(action: 'proof_resubmission_request_expired').count", 1) do
+      SecureFormExpirationRecorder.new.call
+      SecureFormExpirationRecorder.new.call
+    end
+    assert_not_nil form.reload.expiration_recorded_at
+    assert_equal actor, Event.find_by!(action: 'proof_resubmission_request_expired', auditable: form.application).user
   end
 
   test 'marks recorded forms so later runs no longer scan them' do

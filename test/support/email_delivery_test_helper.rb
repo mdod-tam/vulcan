@@ -4,7 +4,7 @@
 # one, so tests that assert those events provision it first.
 module EmailDeliveryTestHelper
   def ensure_system_audit_actor!
-    User.find_by_email(PublicAuditActor::SYSTEM_AUDIT_EMAIL) ||
+    PublicAuditActor.system_audit_actor ||
       create(:admin, email: PublicAuditActor::SYSTEM_AUDIT_EMAIL)
   end
 end

@@ -5,8 +5,7 @@ require 'test_helper'
 module Webhooks
   class DocusealControllerTest < ActionDispatch::IntegrationTest
     setup do
-      @system_user = create(:admin, email: 'system@example.com')
-      User.stubs(:system_user).returns(@system_user)
+      @system_user = ensure_system_audit_actor!
 
       @application = create(:application, :in_progress,
                             document_signing_service: 'docuseal',
