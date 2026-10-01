@@ -62,6 +62,7 @@ class WebauthnSignInTest < ApplicationSystemTestCase
     fill_in 'Password', with: 'password123'
     fill_in 'Confirm Password', with: 'password123'
     fill_in 'Phone Number', with: '555-555-5555'
+    choose 'Text/SMS' # Phone type is required once a phone number is entered
 
     # Fill in Date of Birth (native date field expects YYYY-MM-DD format)
     fill_in 'Date of Birth', with: '1990-01-01'
@@ -184,7 +185,7 @@ class WebauthnSignInTest < ApplicationSystemTestCase
     visit new_credential_two_factor_authentication_path(type: 'webauthn')
     assert_text 'Set up Device or Security Key'
 
-    fill_in 'Nickname', with: 'My UI Key'
+    fill_in 'Name for this device or key', with: 'My UI Key'
 
     # For system tests, we can't access session data directly like in integration tests
     # Instead, we'll create the credential directly in the database to simulate successful setup
@@ -225,16 +226,16 @@ class WebauthnSignInTest < ApplicationSystemTestCase
 
     # Should be redirected to WebAuthn verification
     assert_current_path verify_method_two_factor_authentication_path(type: 'webauthn')
-    assert_text 'Security Key Verification' # Match the actual heading in the view
+    assert_text I18n.t('security_key_verification.page.heading')
     take_screenshot('webauthn-verification-page')
 
     # Test UI elements are present and functional
-    assert_selector 'button', text: 'Verify with Device or Security Key'
-    assert_text 'Use your registered security key to verify your identity'
+    assert_selector 'button', text: I18n.t('security_key_verification.page.submit')
+    assert_text I18n.t('security_key_verification.page.key_description')
 
     # Test instructions are displayed
-    assert_text 'Make sure your security key is ready'
-    assert_text 'Click the button below to start the verification'
+    assert_text I18n.t('security_key_verification.page.prepare')
+    assert_text I18n.t('security_key_verification.page.click_button')
 
     # Test that the verification button is clickable (but don't complete verification)
     verification_button = find('button', text: 'Verify with Device or Security Key')
@@ -273,8 +274,8 @@ class WebauthnSignInTest < ApplicationSystemTestCase
     # For system tests, we focus on testing the UI behavior for failed verification
 
     # Verify the UI shows the correct verification elements
-    assert_selector 'button', text: 'Verify with Device or Security Key'
-    assert_text 'Use your registered security key to verify your identity'
+    assert_selector 'button', text: I18n.t('security_key_verification.page.submit')
+    assert_text I18n.t('security_key_verification.page.key_description')
 
     # Take a screenshot to verify the UI state
     take_screenshot('webauthn-login-ui-fail-prompt')
