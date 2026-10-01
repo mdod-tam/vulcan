@@ -12,7 +12,7 @@ class SecureProofFormResendsController < SecureRequestResendController
   def request_replacement_link
     Applications::RequestProofResubmission.new(
       application: @secure_request_form.application,
-      actor: @secure_request_form.requested_by || User.system_user,
+      actor: resend_actor,
       proof_type: Applications::SubmitProofResubmission::KIND_TO_PROOF_TYPE.fetch(@secure_request_form.kind),
       resend_of: @secure_request_form,
       public_recovery: true

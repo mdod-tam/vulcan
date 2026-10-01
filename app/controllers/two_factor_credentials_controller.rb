@@ -149,7 +149,7 @@ class TwoFactorCredentialsController < ApplicationController
     else
       handle_error_response(
         html_redirect_path: verify_pending_sms_credential_two_factor_authentication_path,
-        error_message: 'Could not send verification code'
+        error_message: sms_delivery_error(resend_result)
       )
     end
   end
@@ -348,11 +348,18 @@ class TwoFactorCredentialsController < ApplicationController
     )
   end
 
+  def sms_delivery_error(outcome)
+    return t("outbound_delivery.sms_#{outcome}") if %i[suppressed configuration_error].include?(outcome)
+
+    t('two_factor_verification.sms.send_failed')
+  end
+
   def send_pending_sms_setup_verification(phone_number)
     Rails.logger.info("[2FA_CREDENTIAL] SMS credential setup pending verification for user #{current_user.id}")
 
     challenge = pending_sms_setup_challenge(phone_number)
-    case challenge.prepare!
+    outcome = challenge.prepare!
+    case outcome
     when :active
       handle_success_response(
         html_redirect_path: verify_pending_sms_credential_two_factor_authentication_path,
@@ -377,7 +384,7 @@ class TwoFactorCredentialsController < ApplicationController
       log_sms_send_failure
       handle_error_response(
         html_render_action: 'sms_credentials/new',
-        error_message: 'Could not send verification code'
+        error_message: sms_delivery_error(outcome)
       )
     end
   end

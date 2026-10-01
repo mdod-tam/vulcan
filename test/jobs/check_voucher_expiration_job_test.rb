@@ -2,136 +2,110 @@
 
 require 'test_helper'
 
+# Runs the real processor and mail jobs. The expiration queries use the database clock,
+# so issue dates are set relative to the current time rather than frozen Ruby time.
 class CheckVoucherExpirationJobTest < ActiveJob::TestCase
+  VALIDITY_MONTHS = 6
+
   setup do
-    # Create a stub for the legacy pending_activation method that's not in the current model
-    Voucher.stubs(:pending_activation).returns(Voucher.none)
-
-    # Set up mailer mocks for verification (relaxed expectations)
-    @expiring_soon_mail_mock = mock('mail')
-    @expiring_soon_mail_mock.stubs(:deliver_later).returns(true)
-
-    @expired_mail_mock = mock('mail')
-    @expired_mail_mock.stubs(:deliver_later).returns(true)
-
-    @expiring_today_mail_mock = mock('mail')
-    @expiring_today_mail_mock.stubs(:deliver_later).returns(true)
-
-    # Stub the actual mailer methods (no strict expectations)
-    VoucherNotificationsMailer.stubs(:voucher_expiring_soon).returns(@expiring_soon_mail_mock)
-    VoucherNotificationsMailer.stubs(:voucher_expired).returns(@expired_mail_mock)
-    VoucherNotificationsMailer.stubs(:voucher_expiring_today).returns(@expiring_today_mail_mock)
-
-    # Mock event creation to avoid DB dependency
-    @events_mock = mock('events')
-    @events_mock.stubs(:create!).returns(true)
-    Voucher.any_instance.stubs(:events).returns(@events_mock)
-
-    # Prepare a Policy value that will be used
-    Policy.stubs(:get).with('voucher_validity_period_months').returns(3)
+    ensure_system_audit_actor!
+    Policy.find_or_initialize_by(key: 'voucher_validity_period_months').update!(value: VALIDITY_MONTHS)
+    load_seeded_email_templates('voucher_notifications_voucher_expiring_soon', 'voucher_notifications_voucher_expired')
+    ActionMailer::Base.deliveries.clear
   end
 
-  teardown do
-    Voucher.unstub(:pending_activation)
-    VoucherNotificationsMailer.unstub(:voucher_expiring_soon)
-    VoucherNotificationsMailer.unstub(:voucher_expired)
-    VoucherNotificationsMailer.unstub(:voucher_expiring_today)
-    Voucher.any_instance.unstub(:events)
-    Policy.unstub(:get)
+  test 'warns a voucher inside the expiring-soon window once across repeated runs' do
+    voucher = create_voucher(expires_in: 7.days)
+
+    2.times { perform_enqueued_jobs { CheckVoucherExpirationJob.perform_now } }
+
+    assert voucher.reload.voucher_active?
+    assert_equal 1, voucher.events.where(action: Vouchers::ExpirationProcessorService::WARNING_ACTION).count
+    assert_equal [[voucher_email(voucher)]], ActionMailer::Base.deliveries.map(&:to)
   end
 
-  test 'identifies vouchers expiring soon and sends notifications' do
-    application = FactoryBot.create(:application, :completed)
+  test 'expires a past-due voucher and sends exactly one expired notice' do
+    voucher = create_voucher(expires_in: -1.day)
 
-    # Create a voucher that's expiring in ~6.5 days to be safely within the 6-8 day window
-    # issued_at + 3.months should equal 6.5.days.from_now
-    # So: issued_at = 6.5.days.from_now - 3.months = 3.months.ago + 6.5.days
-    issued_at = 3.months.ago + 6.5.days
+    2.times { perform_enqueued_jobs { CheckVoucherExpirationJob.perform_now } }
 
-    # The expectation is relaxed - the voucher might or might not be found due to timing precision
-    # We'll just verify the job runs without error instead of strict mailer expectations
-    VoucherNotificationsMailer.stubs(:voucher_expiring_soon).returns(@expiring_soon_mail_mock)
+    assert voucher.reload.voucher_expired?
+    assert_equal 1, voucher.events.where(action: 'expired').count
+    assert_equal 1, ActionMailer::Base.deliveries.size
+    assert_equal [voucher_email(voucher)], ActionMailer::Base.deliveries.first.to
+  end
 
+  test 'a voucher between the warning and expiry windows receives no notice' do
+    # Month-end clipping can remove up to three days; this target still expires in one to four days.
+    voucher = Voucher.create!(application: create(:application, :completed), initial_value: 500, remaining_value: 500,
+                              status: :active, issued_at: 4.days.from_now.utc - VALIDITY_MONTHS.months)
+
+    perform_enqueued_jobs { CheckVoucherExpirationJob.perform_now }
+
+    assert voucher.reload.voucher_active?
+    assert_empty ActionMailer::Base.deliveries
+  end
+
+  test 'a disabled expired template still expires the voucher without mail' do
+    EmailTemplate.where(name: 'voucher_notifications_voucher_expired').update_all(enabled: false)
+    voucher = create_voucher(expires_in: -1.day)
+
+    perform_enqueued_jobs { CheckVoucherExpirationJob.perform_now }
+
+    assert voucher.reload.voucher_expired?
+    assert_empty ActionMailer::Base.deliveries
+  end
+
+  test 'an intentionally suppressed warning is recorded truthfully and never replayed' do
+    voucher = create_voucher(expires_in: 7.days)
+    admin = create(:admin)
+    EmailDelivery::ControlWriter.set(name: EmailDelivery::ALL_CONTROL, enabled: false, actor: admin, operation_id: SecureRandom.uuid)
+    perform_enqueued_jobs { CheckVoucherExpirationJob.perform_now }
+
+    event = voucher.events.find_by!(action: Vouchers::ExpirationProcessorService::WARNING_ACTION)
+    assert_equal 'suppressed', event.metadata['delivery_outcome']
+    assert_not voucher.events.exists?(action: 'expiration_warning_sent')
+    assert Event.with_metadata(:request_id, event.metadata['delivery_request_id']).exists?(action: EmailDelivery::Outcome::SUPPRESSED)
+    EmailDelivery::ControlWriter.set(name: EmailDelivery::ALL_CONTROL, enabled: true, actor: admin, operation_id: SecureRandom.uuid)
+    perform_enqueued_jobs { CheckVoucherExpirationJob.perform_now }
+    assert_empty ActionMailer::Base.deliveries
+    assert_equal 1, voucher.events.where(action: Vouchers::ExpirationProcessorService::WARNING_ACTION).count
+  end
+
+  test 'legacy sent-warning history still prevents duplicate warnings' do
+    voucher = create_voucher(expires_in: 7.days)
+    voucher.events.create!(user: ensure_system_audit_actor!, action: 'expiration_warning_sent')
+    perform_enqueued_jobs { CheckVoucherExpirationJob.perform_now }
+    assert_empty ActionMailer::Base.deliveries
+    assert_not voucher.events.exists?(action: Vouchers::ExpirationProcessorService::WARNING_ACTION)
+  end
+
+  test 'a queue failure does not consume the voucher warning' do
+    voucher = create_voucher(expires_in: 7.days)
+    adapter = EmailDelivery::MailDeliveryJob.queue_adapter
+    adapter.stubs(:enqueue).raises(ActiveJob::EnqueueError, 'queue unavailable')
+    CheckVoucherExpirationJob.perform_now
+    assert_not voucher.events.exists?(action: Vouchers::ExpirationProcessorService::WARNING_ACTION)
+
+    adapter.unstub(:enqueue)
+    perform_enqueued_jobs { CheckVoucherExpirationJob.perform_now }
+    assert_equal 1, ActionMailer::Base.deliveries.size
+  end
+
+  private
+
+  def create_voucher(expires_in:)
+    application = create(:application, :completed)
     Voucher.create!(
       application: application,
-      code: 'TEST12345678',
       initial_value: 500,
       remaining_value: 500,
       status: :active,
-      issued_at: issued_at
+      issued_at: VALIDITY_MONTHS.months.ago + expires_in
     )
-
-    # Run the job - main goal is to verify it doesn't crash
-    assert_nothing_raised do
-      CheckVoucherExpirationJob.perform_now
-    end
   end
 
-  test 'marks expired vouchers as expired and sends notification' do
-    # We need to stub the original check_status_changes method to prevent automatic notifications
-    # This is because the job code AND the voucher model both try to send notifications
-    Voucher.any_instance.stubs(:check_status_changes).returns(nil)
-
-    # Create a voucher in active status that is expired
-    application = FactoryBot.create(:application, :completed)
-    voucher = Voucher.create!(
-      application: application,
-      code: 'TEST87654321',
-      initial_value: 500,
-      remaining_value: 500,
-      status: :active,
-      issued_at: 3.months.ago - 1.day # Definitely expired
-    )
-
-    # Set up expectation for the specific voucher
-    expired_mail = mock('expired_mail')
-    expired_mail.expects(:deliver_later).once
-
-    # This expectation is specifically for our voucher - must be with the same object
-    VoucherNotificationsMailer.expects(:voucher_expired)
-                              .with { |v| v.id == voucher.id } # Match by ID
-                              .once
-                              .returns(expired_mail)
-
-    # Verify it starts as active
-    assert_equal 'active', voucher.status
-
-    # Run the job
-    CheckVoucherExpirationJob.perform_now
-
-    # Reload the voucher and check its status
-    voucher.reload
-    assert_equal 'expired', voucher.status
-  end
-
-  test 'does not change active vouchers that are not expired' do
-    # For this test, we expect voucher_expired to NOT be called
-    VoucherNotificationsMailer.unstub(:voucher_expired)
-    VoucherNotificationsMailer.expects(:voucher_expired).never
-
-    # Ensure the non-expiring voucher doesn't get any expiring_soon notification
-    VoucherNotificationsMailer.unstub(:voucher_expiring_soon)
-    VoucherNotificationsMailer.expects(:voucher_expiring_soon).never
-
-    # Create a voucher in active status that is not expired (very recent)
-    application = FactoryBot.create(:application, :completed)
-    voucher = Voucher.create!(
-      application: application,
-      code: 'TESTACTIVE123',
-      initial_value: 500,
-      remaining_value: 500,
-      status: :active,
-      issued_at: 1.day.ago # Very recent
-    )
-
-    # Verify it starts as active
-    assert_equal 'active', voucher.status
-
-    # Run the job
-    CheckVoucherExpirationJob.perform_now
-
-    # Reload the voucher and check its status - should still be active
-    voucher.reload
-    assert_equal 'active', voucher.status, 'Voucher should remain active if not expired'
+  def voucher_email(voucher)
+    voucher.application.user.email
   end
 end

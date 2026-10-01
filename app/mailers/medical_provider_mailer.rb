@@ -35,10 +35,7 @@ class MedicalProviderMailer < ApplicationMailer
     variables = build_approval_variables
     log_debug_variables('certification_approved', variables)
 
-    subject, body = template.render(**variables)
-    log_rendered_output('certification_approved', subject, body)
-
-    send_approval_email(subject, body)
+    send_email(params[:application].medical_provider_email, template, variables, provider_mail_options)
   rescue StandardError => e
     log_certification_error('certification_approved', params[:application]&.medical_provider_email, e)
     raise e
@@ -56,10 +53,8 @@ class MedicalProviderMailer < ApplicationMailer
     variables = build_rejection_variables(locale)
     log_debug_variables('certification_rejected', variables)
 
-    subject, body = template.render(**variables)
-    log_rendered_output('certification_rejected', subject, body)
-
-    send_rejection_email(subject, body)
+    send_email(provider_recipient_email(params[:application]), template, variables,
+               provider_mail_options(required_delivery: params[:secure_upload_url].present?))
   rescue StandardError => e
     log_certification_error('certification_rejected', params[:application]&.medical_provider_email, e)
     raise e
@@ -75,10 +70,8 @@ class MedicalProviderMailer < ApplicationMailer
     variables = build_request_certification_variables
     log_debug_variables('request_certification', variables)
 
-    subject, body = template.render(**variables)
-    log_rendered_output('request_certification', subject, body)
-
-    send_request_certification_email(subject, body)
+    mail_options = provider_mail_options(required_delivery: params[:secure_upload_url].present?)
+    send_email(provider_recipient_email(params[:application]), template, variables, mail_options)
   rescue StandardError => e
     log_certification_error('request_certification', params[:application]&.medical_provider_email, e)
     raise e
@@ -221,44 +214,10 @@ class MedicalProviderMailer < ApplicationMailer
     '#'
   end
 
-  def send_approval_email(subject, body)
-    application = params[:application]
-
-    mail_with_text_body(
-      {
-        to: application.medical_provider_email,
-        from: 'no_reply@mdmat.org',
-        reply_to: support_email,
-        subject: subject,
-        message_stream: 'outbound'
-      },
-      body.to_s
-    )
-  end
-
-  def send_rejection_email(subject, body)
-    application = params[:application]
-
-    mail_with_text_body(
-      {
-        to: provider_recipient_email(application),
-        from: 'no_reply@mdmat.org',
-        reply_to: support_email,
-        subject: subject,
-        message_stream: 'outbound'
-      },
-      body.to_s
-    )
-  end
-
-  def send_request_certification_email(subject, body)
-    application = params[:application]
-    notification_id = params[:notification_id]
-
-    mail_options = build_request_mail_options(application, subject)
-    add_notification_tracking(mail_options, notification_id)
-
-    mail_with_text_body(mail_options, body.to_s)
+  # Provider emails come from no_reply on the outbound stream. A message carrying a secure link
+  # must be sent or reported, so a disabled template raises DeliverySkipped.
+  def provider_mail_options(required_delivery: false)
+    { from: 'no_reply@mdmat.org', reply_to: support_email, message_stream: 'outbound', required_delivery: required_delivery }
   end
 
   # A secure request passes the email recorded on its request row.
@@ -266,31 +225,8 @@ class MedicalProviderMailer < ApplicationMailer
     params[:recipient_email].presence || application.medical_provider_email
   end
 
-  def build_request_mail_options(application, subject)
-    {
-      to: provider_recipient_email(application),
-      from: 'no_reply@mdmat.org',
-      reply_to: support_email,
-      subject: subject,
-      message_stream: 'outbound'
-    }
-  end
-
-  def add_notification_tracking(mail_options, notification_id)
-    return if notification_id.blank?
-
-    notification = Notification.find_by(id: notification_id)
-    mail_options[:message_id] = notification.message_id if notification&.message_id.present?
-  end
-
   def log_debug_variables(context, variables)
     Rails.logger.debug { "DEBUG: #{context} - Variables: #{sanitized_mail_variables(variables).inspect}" } unless Rails.env.production?
-  end
-
-  def log_rendered_output(context, subject, body)
-    Rails.logger.debug { "DEBUG: #{context} - Rendered Subject: #{subject.inspect}" } unless Rails.env.production?
-    Rails.logger.debug { "DEBUG: #{context} - Rendered Body: [REDACTED_SECURE_LINK_BODY]" } if log_body_redacted?(body)
-    Rails.logger.debug { "DEBUG: #{context} - Rendered Body: #{body.inspect}" } if log_body_plain?(body)
   end
 
   def sanitized_mail_variables(variables)
@@ -299,14 +235,6 @@ class MedicalProviderMailer < ApplicationMailer
 
   def redact_sensitive_mail_value(value, key = nil)
     sanitize_secure_value(value, key)
-  end
-
-  def log_body_redacted?(body)
-    !Rails.env.production? && body.to_s.match?(%r{https?://\S+})
-  end
-
-  def log_body_plain?(body)
-    !Rails.env.production? && !log_body_redacted?(body)
   end
 
   def support_email

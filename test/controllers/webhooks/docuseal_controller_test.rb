@@ -5,8 +5,7 @@ require 'test_helper'
 module Webhooks
   class DocusealControllerTest < ActionDispatch::IntegrationTest
     setup do
-      @system_user = create(:admin, email: 'system@example.com')
-      User.stubs(:system_user).returns(@system_user)
+      @system_user = ensure_system_audit_actor!
 
       @application = create(:application, :in_progress,
                             document_signing_service: 'docuseal',
@@ -86,6 +85,40 @@ module Webhooks
 
     def compute_signature(payload)
       OpenSSL::HMAC.hexdigest('SHA256', @webhook_secret, payload)
+    end
+
+    test 'missing or blank webhook credentials reject completion without changing application or delivery records' do
+      [nil, '', ' '].each do |secret|
+        Rails.application.credentials.stubs(:webhook_secret).returns(secret)
+
+        assert_rejected_completion(webhook_headers(compute_signature(@completed_payload.to_json)))
+        assert_rejected_completion(webhook_headers("sha256=#{compute_signature(@completed_payload.to_json)}", 'X-DocuSeal-Signature'))
+      end
+    end
+
+    test 'missing or invalid webhook signatures reject completion without changing application or delivery records' do
+      [nil, '', 'wrong-signature'].each do |signature|
+        assert_rejected_completion(webhook_headers(signature))
+      end
+      assert_rejected_completion(webhook_headers('wrong-signature', 'X-DocuSeal-Signature'))
+    end
+
+    test 'configured secret authenticates supported signature headers and prefixed signatures' do
+      [['X-Webhook-Signature', ''], ['X-DocuSeal-Signature', ''], ['X-DocuSeal-Signature', 'sha256=']].each_with_index do |(header, prefix), index|
+        application = create(:application, :in_progress, user: @application.user,
+                                                         document_signing_service: 'docuseal', document_signing_submission_id: "signature_#{index}",
+                                                         document_signing_status: :sent, medical_certification_status: :requested)
+        payload = @viewed_payload.deep_dup
+        payload[:data]['submission_id'] = application.document_signing_submission_id
+        signature = compute_signature(payload.to_json)
+
+        assert_difference -> { Event.where(action: 'document_signing_viewed', auditable: application).count }, 1 do
+          post webhooks_docuseal_medical_certification_path, params: payload, headers: webhook_headers("#{prefix}#{signature}", header), as: :json
+        end
+
+        assert_response :ok
+        assert_equal 'opened', application.reload.document_signing_status
+      end
     end
 
     test 'accepts valid form.viewed event' do
@@ -496,6 +529,20 @@ module Webhooks
     end
 
     private
+
+    def assert_rejected_completion(headers)
+      assert_no_difference ['Event.count', 'Notification.count', 'ActiveStorage::Attachment.count', 'ActiveStorage::Blob.count'] do
+        post webhooks_docuseal_medical_certification_path, params: @completed_payload, headers: headers, as: :json
+      end
+
+      assert_response :unauthorized
+      @application.reload
+      assert_equal 'sent', @application.document_signing_status
+      assert_equal 'requested', @application.medical_certification_status
+      assert_nil @application.document_signing_signed_at
+      assert_nil @application.document_signing_document_url
+      assert_not @application.medical_certification.attached?
+    end
 
     def record_certification_rejection(at:)
       @application.update!(medical_certification_status: :rejected)

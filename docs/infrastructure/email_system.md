@@ -1,4 +1,4 @@
-# Email and Letters
+# Outgoing communications: email, letters and SMS
 
 Message templates live in the database, not in `app/views`.
 
@@ -22,7 +22,7 @@ A variable has to be both declared and supplied by the sending workflow: editing
 | Command | Effect |
 | --- | --- |
 | `bin/rails db:seed_manual_email_templates` | Initializes templates from the [checked-in files](../../lib/tasks/seed_manual_email_templates.rake); deletes existing templates first, including staff edits. |
-| `bin/rails email_templates:audit` | Read-only comparison of expected seed and `MAILER_MAP` keys against the database; does not seed or update templates. |
+| `bin/rails email_templates:audit` | Read-only comparison of expected seed and catalog template keys against the database; does not seed or update templates. |
 | `bin/rails db:seed_policies` | Initializes the application's program policy defaults; see [baseline setup](setup_and_maintenance.md#baseline-seeds). |
 
 The seeds are initialization tasks. Policy seeding updates differing values if rows already exist; template seeding replaces existing copy. Use the audit on its own to investigate template mismatches. It exits nonzero for missing or unexpected template keys. [Heroku setup](setup_and_maintenance.md#heroku-deployment-and-operations) includes the remote commands.
@@ -33,17 +33,114 @@ The seeds are initialization tasks. Policy seeding updates differing values if r
 
 Provider certification requests are queued by [`MedicalCertificationService`](../../app/services/applications/medical_certification_service.rb) as [`MedicalCertificationEmailJob`](../../app/jobs/medical_certification_email_job.rb), which sends via `MedicalProviderMailer` and records delivery errors on the notification when there is one ([job tests](../../test/jobs/medical_certification_email_job_test.rb)).
 
-The job configures three total attempts, including the initial execution. Its `wait: :exponentially_longer` setting is unsupported by Rails 8.1, so an SMTP failure currently raises during retry scheduling instead of queuing the next attempt.
+The job configures three total attempts with Rails polynomial backoff. It defers enqueue until commit and binds the exact notification. Early policy refusal creates no delivery-owned request state; late refusal or enqueue failure restores only that attempt’s unchanged state. A newer request, including a DocuSeal request in the same second, takes precedence.
 
-Letters are the same templates rendered to PDF: [`TextTemplateToPdfService`](../../app/services/letters/text_template_to_pdf_service.rb) produces a Prawn document attached to a `PrintQueueItem`, which staff print from `/admin/print_queue`. Template validation and locale fallback are shared with the email path.
+Letters are the same templates rendered to PDF: [`TextTemplateToPdfService`](../../app/services/letters/text_template_to_pdf_service.rb) produces a Prawn document attached to a `PrintQueueItem`, which staff print from `/admin/print_queue`. Mailers pass their resolved message locale into PDF rendering so the template, shared fragments and PDF labels agree even when a guardian owns the postal address. Secure requests use their recorded delivery owner's locale. Both rendering paths validate templates and fall back to the default-locale template when the requested translation is missing.
+
+Mailer error audits store the action, template and sanitized diagnostics, without template variables. Proof and provider-info requests share delivery execution and failure cleanup; their issuing services retain recipient, token and cooldown rules. Configuration refusals remain distinct from transport errors and intentional suppression in service results and revocation audits. Password recovery records the same distinction internally while keeping its public response uniform.
 
 Password-reset mail builds links from [`CanonicalPublicUrlOptions`](../../app/services/canonical_public_url_options.rb) rather than the request host. Those links are bearer credentials: they stay out of stored notification metadata, and delivery errors are sanitized. Registration confirmation is a plain message, not an email-verification flow.
+
+## Delivery controls
+
+Ordinary delivery requires **All → channel → category → applicable template → original authorization**. Staff manage these on `/admin/email_templates`:
+
+1. `communications.global`: **All outgoing communications**. Off blocks ordinary email, SMS enrollment and other workflow texts, letter admission and PDF release. It dominates a channel saved as On.
+2. Independent channels: `email.global` (**Email**, preserving the existing key), `communications.letters` (**Printed letters**), and `communications.sms` (**SMS**).
+3. Existing `email.category.*` controls apply across channels: proof, registration, voucher, vendor, certification, training, evaluation, account security, application. Password recovery remains separate from registration and is exempt from All and Account security, as described below.
+4. A template switch controls EN/ES together for email and letters that render it. Template-less SMS/provider actions use catalog categories without a fictitious template.
+
+Each change preserves settings underneath it. The page shows saved and effective state; a missing control is a configuration error, never a normal Off setting or a reason to send. Turning Email off leaves eligible letters/SMS working; turning All off stops ordinary messages on all three. Sample previews, public blank DCF forms and ordinary record/invoice PDFs remain available. No refusal silently reroutes a letter to email.
+
+Required access has two explicit catalog exceptions, both enforced by `EmailDelivery::Policy`: password/account recovery for every user, and SMS sign-in for a user with a verified SMS credential and no TOTP or WebAuthn credential. The SMS-only condition and destination are rechecked at the final provider gate. SMS enrollment has its own action and no exception. These actions bypass **All** and **Account security**, including their cancellation generations; **Email**, **SMS**, and applicable template switches still stop them. SMS is the emergency stop for all outgoing texts, including sign-in codes. Existing authentication and `AuthRateLimit` protections still apply to recovery. Each successful exceptional handoff records `essential_communication_submitted`, with its action, channel, request ID and bypassed controls, through the configured audit actor. This means provider submission, not recipient delivery.
+
+Bulk template enable/disable applies the existing template pairs in one transaction, including their cancellation generations, individual audit events and one summary. A failed pair or audit leaves the entire batch unchanged and displays an error. Retrying the same operation does not reverse a later change. A successful bulk disable schedules one letter-reconciliation job after commit; release checks remain authoritative while it waits. The bulk buttons change templates only; use All to stop ordinary template-less provider and SMS actions too. Required access exceptions still apply.
+
+Committed changes to a recipient's captured identity fields, or an application's applicant/guardian ownership, schedule scoped reconciliation of unreleased letters. The worker rechecks eligibility under locks and preserves valid replacement letters and released history. Pending letters that are no longer eligible display as blocked awaiting cancellation; cancellation is shown only after it is persisted. Rollbacks and unrelated edits do not schedule reconciliation. Failed scheduling is reported through `letter_reconciliation_enqueue_failed` when the system audit actor is available; the release gate still refuses stale letters.
+
+Fax sending is explicitly unavailable: the installed Twilio SDK (7.10.4) has no fax resource. Provider replacement is a separate follow-up, not part of this control rollout. Signed callbacks still record matching historical fax outcomes. Legacy callbacks without captured authorization cannot create email fallback; captured attempts cannot regain authorization after an off/on interval. Fallback outcomes are separate from fax history. A claimed-but-unfinished fallback requires staff investigation and deliberate reissue, never automatic replay.
+
+Shared headers and footers (`email_header_text`, `email_footer_text`) are fragments rendered inside other templates. They are never sent on their own, have no on/off setting, cannot be test-sent, and are skipped by the bulk buttons; their stored `enabled` value is ignored. Browser previews always work; a test send follows All, Email, the category of the template being tested, and that template's setting, and the page says whether it was queued or why it was not sent.
+
+The test-email page sanitizes HTML-format preview snippets, preserving safe formatting while removing scripts and event handlers. Voucher dates and generated message fragments use the recipient locale in both email and printed-letter rendering.
+
+Deduplication lookups for email request ids and control operation ids use `Event.with_metadata`, backed by the existing JSONB GIN index.
+
+Only [`EmailDelivery::ControlWriter`](../../app/services/email_delivery/control_writer.rb) changes a control or a template pair. Turning one off bumps its generation in the same transaction and records `email_control_changed` or `email_template_pair_toggled` with the operation id; a retried operation id is applied once, and a form submitted against a setting someone else has since changed is refused. The generic feature-flag screen, `features:enable`/`features:disable`, and direct model updates cannot change a communication control or a template's `enabled` value.
+
+| Task | Use |
+| --- | --- |
+| `bin/rails email_delivery:controls` | Show All, channel and category controls and their generations. |
+| `bin/rails 'email_delivery:set_global[off]'` / `[on]` | Change only the Email channel. Use `set_all` to stop ordinary work across channels; required access exceptions remain. |
+| `bin/rails 'email_delivery:set_all[off]'` / `[on]` | Stop or permit ordinary requests across channels, preserving saved channel settings and required access exceptions. |
+| `bin/rails email_delivery:legacy_letter_report` | Inventory unreleased letters lacking version-2 authorization. |
+| `bin/rails email_delivery:reconcile_letters` | Cancel ineligible unreleased letters; revoke only their unreleased secure requests. Never reauthorize an old PDF. |
+| `bin/rails email_delivery:template_pair_report` | Read-only list of template pairs whose English and Spanish settings disagree, and which locale would stop sending. |
+| `bin/rails email_delivery:reconcile_template_pairs` | Turn those pairs off (the approved conservative policy). Each change is audited and cancels that pair's pending email; a rerun changes nothing. |
+
+Until a mismatched pair is reconciled, the policy already treats it as off, because every locale row of the pair must be on.
+
+Queued mail runs through [`EmailDelivery::MailDeliveryJob`](../../app/jobs/email_delivery/mail_delivery_job.rb), which captures context before Rails defers enqueue callbacks until commit. The capture includes the originating notification id and the row id and generation of All, each supported channel, the category, and every locale row of its template when the message is requested. `ApplicationMailer`'s `before_deliver` check verifies that capture right before handoff; immediate deliveries capture and verify at that moment. Except for the required-access exemptions from All and Account security, mail captured before a control was turned off stays canceled after it is turned back on, a channel denied when requested stays denied (an independently eligible letter route may still run), and a recreated control row does not authorize it.
+
+The policy decision retains both its outcome and its reason through issuance, enqueue, and delivery. Intentional refusal records `email_delivery_suppressed`; missing or unreadable configuration records `email_delivery_configuration_error`. Both prevent transmission. When there is a tracking notification, the locked outcome writer sets channel `none` and either `suppressed` or `error`, with a readable reason. Routing and error-handler updates cannot overwrite a worker's refusal with stale metadata. Suppression is visible even without a provider message id; configuration failure is not described as an administrator turning email off.
+
+Email outcome events, invoice job events, and voucher job events use the configured system audit account without creating or promoting one. The voucher status callback uses the current actor when present and otherwise the same lookup-only system attribution. If that account is absent, invoices and expirations still run but unattributable events are skipped and logged. Voucher expiry warnings are skipped because their audit event is what limits each voucher to one warning. New warnings record `expiration_warning_requested` with the enqueue outcome and request ID, not a claim of delivery. Intentional suppression consumes that warning; immediate configuration or queue errors leave it eligible for a later run. Existing `expiration_warning_sent` history still prevents duplicates. `PublicAuditActor` emits `system_audit_actor_missing`; the email outcome recorder emits `email_delivery_audit_actor_missing.email_delivery`. Provision the system administrator explicitly before rollout; normal business operations must never repair its identity or privileges.
+
+### Catalog
+
+[`EmailDelivery::Catalog`](../../app/services/email_delivery/catalog.rb) lists every mailer action with its category, routing (`email_only`, `preference`, or `email`), template, and owning service, and every notification action with the argument adapter `NotificationService` uses. `NotificationService`'s action lists and the template audit's aliases are derived from it. An action missing from the catalog is blocked at delivery as an `unclassified_action` configuration error. [The catalog test](../../test/services/email_delivery/catalog_test.rb) fails CI when a mailer action is unclassified, a catalog entry no longer exists, or an adapter's arguments do not fit its mailer; add the catalog entry in the same change as a new mailer action.
+
+An `email_only` action that is denied is never queued. A `preference` action may queue when at least one of its channels is eligible. The mailer resolves the recipient’s preference and checks that channel; an eligible sibling channel does not authorize the selected one or silently change the preference.
+
+### Secure-link requests
+
+The four secure-link owners (`Vendors::RequestW9Resubmission`, `Applications::RequestCertificationUpload`, `Applications::RequestProofResubmission`, `Applications::RequestProviderInfo`) use `Applications::SecureRequestDeliveryPolicy` for channel authorization, suppression, failure cleanup and notification handoff tracking. They check the selected channel before creating its request. An intentional denial creates no request, token, revocation, or status change, and returns a `delivery_suppressed` result; independently eligible recipients in the same batch proceed, and prepare-only calls are unaffected. When an email is stopped after its request was prepared — a disabled template or a control changed at the last moment — the owner revokes the unsent link with reason `delivery_suppressed` instead of reporting a delivery failure. A revoked request starts no resend cooldown. The owners keep the context they checked and pass it to `EmailDelivery.deliver_now!`, so the final check verifies the authorization the link was prepared under; a control turned off and on in between still cancels it. A message stopped there becomes `ApplicationMailer::DeliverySkipped` for the owner. When a proof rejection's upload request is suppressed, the rejection still stands, its `proof_resubmission_request_failed` event carries `delivery_suppressed`, and the admin sees that the email was turned off rather than that delivery failed.
+
+Configuration refusal is separate from intentional suppression. An early refusal creates no request for the affected channel and reports a settings error; independently eligible recipients in a batch still proceed. At synchronous handoff, it raises `EmailDelivery::ConfigurationError`, and the request owner uses its delivery-failure cleanup to revoke the unsent link without starting a cooldown. It does not become `DeliverySkipped`. Admin test sends and DocuSeal report the settings error without claiming a switch is off. Prepare-only behavior and public account-recovery responses stay unchanged.
+
+The **Auto-send DCF provider request** workflow flag appears under `/admin/feature_flags` and defaults to disabled. Its admin changes use the existing `feature_flag_toggled` audit. When enabled, future eligible escalations schedule `Applications::MedicalCertificationService#request_certification` only after the outer transaction commits. Both proof approval and document requests use this path. It creates the normal notification, request count/timestamp and audit; the communication controls still apply. A refusal never undoes the move to `awaiting_dcf`. When no request was queued, or a later refusal restores the request state, the application says **Auto-send not sent — request manually**. Enabling the flag does not revisit applications already awaiting DCF.
+
+`MedicalCertificationEmailJob` sends its email inside its own job, so it captures the controls when it is queued ([`EmailDeliveryContextJob`](../../app/jobs/concerns/email_delivery_context_job.rb)); a suppressed send is recorded on its notification and is not retried.
+
+Both the queued certification email and the secure certification upload issuer restore an unsent request through `MedicalCertificationService.restore_unsent_request`. The tracking notification saves the previous certification status, timestamp and count. Suppression or configuration refusal restores that snapshot only while the issued state still matches, no secure certification link remains open, and no newer DocuSeal request owns the state. Restoration records status-history reason `delivery_not_sent` and audit action `medical_certification_request_not_sent`; repeating restoration does not add another reversal. Transport failures retain the requested state.
+
+Local failures before handoff use Notification’s locked `mark_delivery_failed!` or `mark_delivery_enqueue_failed!` methods. They preserve an existing refusal or linked provider attempt and store safe error text with string metadata keys; diagnostic exception messages stay out of notification metadata.
+
+Rails reports `successfully_enqueued?` optimistically inside an open transaction. The shared job's `around_enqueue` callback observes the actual write after commit: it records both Rails' stored `ActiveJob::EnqueueError` and Solid Queue's raised `SolidQueue::Job::EnqueueError` as `email_delivery_enqueue_failed`. It also marks the originating notification `error`, with channel `none` and a readable queue-failure message. Adapter exception messages are not stored because they can contain serialized arguments. Other exceptions propagate normally.
+
+`EmailDelivery.deliver_later` distinguishes `queued`, `deferred`, `suppressed`, `configuration_error`, and `enqueue_failed`. `deferred` is an intent inside an open transaction; the post-commit callback records a later refusal or queue failure on the notification. Outside a transaction, `queued` means accepted by the queue, not delivered. Invoice, evaluation, and training business changes remain committed when their email cannot be queued. Preference-routed messages can still be refused by the worker after it resolves the channel. Production's Solid Queue tables live in the application database but use their own connection, so the queue write is never part of the application transaction; [the queue boundary test](../../test/integration/mail_queue_boundary_test.rb) runs against that arrangement, including real database insert failures.
+
+The check applies at handoff, so it cannot recall a message a provider already accepted. Mail jobs queued by a release before this job class existed bypass the capture and must be cleared during rollout.
+
+### Releasing the delivery controls
+
+The application has no production data. Initial deployment needs no historical-notification backfill or legacy queue reconciliation.
+
+1. Run migrations and seed the communication controls, template pairs and program policies. Provision `system@mdmat.org` explicitly as described above.
+2. Configure provider credentials and `POSTMARK_SERVER_ID` consistently on web and worker processes before allowing email sends. Deploy matching web, worker and recurring-job code.
+3. Exercise All Off with controlled records: ordinary email, SMS enrollment and print release must stop; SMS-only sign-in and account recovery remain available. Then verify that the SMS switch stops sign-in codes and the Email switch stops email recovery. TOTP/passkey verification and blank/reference downloads remain available.
+4. Set the intended channels/categories/templates. The separate `dcf_auto_request_certification` workflow flag defaults to disabled. Enable it only if future DCF escalations should request certification automatically.
+5. Monitor configuration and enqueue errors, unconfirmed provider outcomes, missing audit actors and failed letter reconciliation. Investigate uncertain sends before a deliberate new request.
+
+To roll back, stop every sender first. Keep the additive schema and cancellation history; reverting to old code reopens bypasses even when All is Off. Reconcile jobs and physical artifacts before restoring traffic. Do not run the destructive down migration or restore/reset control IDs while pending requests exist. App/queue transactions and provider handoffs are not atomic; `released_at` records authorized release, not proof that a browser received or printed bytes. Batch selection supports Select all. A successful batch download refreshes the queue; a preparation failure preserves selection for retry. A lost response asks staff to refresh and check release status before downloading again.
+
+### Printed-letter lifecycle
+
+Both template letters and manual DCF requests use `Letters::Delivery`. Renderers retain their layouts. A database-unique logical request key replaces process-local deduplication; retries keep the same key and canceled work never resurrects. Manual DCF forms include an operation ID; a deliberate new form submission creates a new request. Evaluator confirmations use the evaluation/submission identity.
+
+Admission captures controls and a digest of recipient/address/locale and owner identity. Release rechecks that identity, the original controls, attachment identity and active secure request. Address changes and duplicate merges cancel unreleased work; released/printed history is not reassigned. Secure-request cancellation revokes only the exact unreleased form and removes its active cooldown claim. `sent_at` remains the issuance timestamp, not physical delivery evidence.
+
+`/admin/print_queue` separates awaiting release, released awaiting print confirmation, printed and canceled items. GET displays metadata only. Authenticated, CSRF-protected POST prepares the entire PDF/ZIP before atomically authorizing release; failed or partially ineligible batches release nothing. Every ZIP entry includes its item ID. Staff mark printed only after physical printing. Re-downloads obey current and original authorization without erasing prior release history. Print attachments cannot bypass release through public Active Storage blob/proxy/disk routes; ordinary uploads and historical fax media retain their contracts. Previously downloaded bytes or external signed URLs cannot be revoked by this switch.
+
+### Historical imports
+
+No importer exists in this repository (checked at the start of this work), so these controls govern the application's own sending paths and do not by themselves prove anything about an import. An importer added later must mark the records it creates as imported, suppress any email, request, or workflow step triggered only because a record was imported, keep that suppression when email is turned back on and when the import or a job is retried, and still let the person's later, unrelated email (a password reset, a new application) follow the normal controls. It must not use `Current.paper_context`, disabled callbacks, or raw status writes to do so.
 
 ## Collecting documents
 
 Documents arrive through secure forms or staff upload. No Action Mailbox implementation collects proofs or certifications.
 
-A disabled template normally skips its email. Proof and provider information emails that carry a secure link fail instead, so the issuing service revokes the unsent link; see [secure request links](../features/secure_request_links.md). Provider certification emails use the default locale.
+A disabled template pair skips its email (including recovery email) and records `email_delivery_suppressed`. For the secure-link emails the issuing service creates no link in the first place, or revokes one prepared just before the template was turned off; see [secure request links](../features/secure_request_links.md). Provider certification emails use the default locale.
 
 | Request | Issuing / submitting |
 | --- | --- |
@@ -75,8 +172,8 @@ Two resolver reasons explain most delivery refusals: `invalid_channel_override` 
 | Adapter and credential | [Application config](../../config/application.rb), `credentials.postmark_api_token` |
 | Message stream | `ApplicationMailer` defaults to `notifications`; [`UserMailer`](../../app/mailers/user_mailer.rb) uses `outbound` for password resets |
 | Tracking | [postmark_format.rb](../../config/initializers/postmark_format.rb) — open tracking on, link tracking off |
-| Stored status | [`UpdateEmailStatusJob`](../../app/jobs/update_email_status_job.rb) polls only `medical_certification_requested` notifications that have a message ID |
-| Bounce/complaint webhook | [`EmailEventsController`](../../app/controllers/webhooks/email_events_controller.rb) → [`EmailEventHandler`](../../app/services/email_event_handler.rb) |
+| Stored facts | [`EmailDeliveryAttempt`](../../app/models/email_delivery_attempt.rb) stores acceptance and independent recipient feedback |
+| Delivery/bounce/complaint/open webhook | [`EmailEventsController`](../../app/controllers/webhooks/email_events_controller.rb) → [`EmailDelivery::Feedback`](../../app/services/email_delivery/feedback.rb) |
 
 For a new Postmark server:
 
@@ -85,19 +182,25 @@ For a new Postmark server:
 3. Run `bin/rails email_templates:audit`, then test both streams with controlled records and recipient addresses: a proof-resubmission request sent by email exercises `notifications`; a password reset exercises `outbound` and the generated public-host link. `/admin/email_templates` also supports queued test sends, but those use Postmark's default stream and do not verify the workflow's stream selection.
 4. Confirm the password-reset job runs and both messages arrive; proof-resubmission requests send synchronously. On Heroku, inspect `heroku ps --app your-app-name` and `heroku logs --tail --dyno worker --app your-app-name`; the [worker setup](setup_and_maintenance.md#heroku-deployment-and-operations) is separate from the token and template setup.
 
-The webhook path is incomplete: it references `MedicalProviderEmail`, which has no model in this repository, and never updates `Notification` rows. Delivery and open tracking therefore exist for one notification type, not generally.
+The email-specific endpoint uses required HTTP Basic credentials and a matching Postmark server ID. Other webhook controllers keep their existing authentication. Enable feedback only after following the [deployment and rollback runbook](postmark_delivery_visibility.md). This code change does not configure production webhooks or send test messages.
 
 [`PostmarkDebugger`](../../config/initializers/postmark_debugger.rb) logs redacted payloads under `POSTMARK_DEBUG_PAYLOADS=true`, with bodies, contact values, URLs, and token fields removed — worth reaching for after the queued job, stream, template, and provider result have been ruled out.
 
 ## Delivery tracking
 
-To refresh stored delivery status for medical-certification emails:
+[`ApplicationMailer`](../../app/mailers/application_mailer.rb) records a durable attempt before the common synchronous/queued transport boundary. Provider acceptance uses `X-PM-Message-Id`; the RFC `Message-ID` is stored separately. A notification can link several attempts, and mail without a notification still has transport history. The [runbook](postmark_delivery_visibility.md) explains correlation, retries, destination ownership, privacy and rollout.
+
+Authenticated webhooks are the primary feedback path. To queue a bounded fallback check:
 
 ```bash
 bin/rails notification_tracking:check_all
 ```
 
-This queues `UpdateEmailStatusJob` for notifications with non-placeholder message IDs. A worker must process the jobs, which query Postmark and update notification records. Notifications without message IDs are skipped.
+The hourly job handles at most 100 eligible attempts per run. Each unconfirmed attempt gets at most eight checks, at least an hour apart, within seven days. Confirmed delivery, bounce, complaint or definite transport failure ends routine polling. Opens never keep polling alive. A failed check preserves last-known facts and records tracking unavailability separately.
+
+Shared EN/ES delivery badges and keyboard-accessible details appear in notification and request histories and the relevant authorized detail screens. Request lifecycle, provider delivery, print handling and DocuSeal remain separate facts. Application/contact attention only includes actionable requests; a bounce at an old address does not label a replacement address bad. Delivered means receiving-server acceptance; an open signal is not proof of human reading.
+
+Notifications with no delivery evidence have no delivery panel. A recorded queue, suppression, error or non-email outcome stays visible; an actual attempt with an uncertain outcome shows **Delivery unknown**. Placeholder or RFC message IDs do not establish a send. `notification_tracking:backfill` and `:analyze` report these records without changing them; `:fix_duplicates` is retired without deleting history. The notification's existing enum remains the owner of local queue, suppression and configuration outcomes. Provider facts never overwrite it.
 
 ## Tests
 

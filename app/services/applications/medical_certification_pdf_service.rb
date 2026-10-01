@@ -10,57 +10,27 @@ module Applications
     # @param application [Application]
     # @param actor [User] The admin triggering the action
     # @param pdf_source [Hash] Optional: { type: :pregenerated, source: <IO|String|Pathname> } or { type: :generated }
-    def initialize(application:, actor: nil, pdf_source: { type: :generated })
+    def initialize(application:, actor: nil, request_key: SecureRandom.uuid, pdf_source: { type: :generated })
       super()
+      @request_key = request_key
       @application = application
       @actor = actor
       @pdf_source = pdf_source || { type: :generated }
     end
 
     def call
-      tempfile = prepare_pdf_tempfile
-      return failure('Failed to prepare DCF PDF') unless tempfile
-
-      item = PrintQueueItem.new(
-        constituent: application.user,
-        application: application,
-        letter_type: :medical_certification_form,
-        admin: actor
-      )
-
-      item.pdf_letter.attach(
-        io: File.open(tempfile.path),
-        filename: "dcf_#{application.id}.pdf",
-        content_type: 'application/pdf'
-      )
-
-      item.save!
-
-      # Create audit event for tracking
-      AuditEventService.log(
-        action: 'medical_certification_requested',
-        actor: actor || User.system_user,
-        auditable: application,
-        metadata: {
-          change_type: 'medical_certification',
-          provider_name: application.medical_provider_name,
-          submission_method: 'mail',
-          letter_queued: true,
-          print_queue_item_id: item.id
-        }
-      )
-
+      context = EmailDelivery::Policy.capture(mail_action: 'Letters#medical_certification_form', request_id: @request_key)
+      item = Letters::Delivery.queue!(recipient: application.user, application: application,
+                                      letter_type: :medical_certification_form, context: context,
+                                      actor: actor, request_key: @request_key) { prepare_pdf_tempfile }
       success('DCF queued for printing', item)
+    rescue ApplicationMailer::DeliverySkipped => e
+      failure(I18n.t('outbound_delivery.delivery_suppressed'), { delivery_suppressed: true, reason: e.reason })
+    rescue EmailDelivery::ConfigurationError => e
+      failure(e.message, { configuration_error: true })
     rescue StandardError => e
       log_error(e, application_id: application&.id)
       failure('Unexpected error while queuing DCF for printing')
-    ensure
-      begin
-        tempfile&.close
-        tempfile&.unlink
-      rescue StandardError
-        # ignore cleanup errors
-      end
     end
 
     private

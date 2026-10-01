@@ -10,22 +10,22 @@ module Users
     end
 
     def call
-      send_confirmation
-      success(nil, { method: preferred_communication_method.to_s })
+      outcome = EmailDelivery.deliver_later(ApplicationNotificationsMailer.registration_confirmation(user))
+      data = { method: preferred_communication_method.to_s, delivery_outcome: outcome }
+      return success(nil, data) if %i[queued deferred].include?(outcome)
+      return failure(I18n.t('outbound_delivery.delivery_suppressed'), data.merge(delivery_suppressed: true)) if outcome == :suppressed
+
+      failure('Registration confirmation could not be queued.', data)
     rescue StandardError => e
       failure("Failed to send registration confirmation: #{e.message}")
     end
 
-                                                  private
+    private
 
     attr_reader :user, :request
 
     def preferred_communication_method
       user.effective_communication_preference.to_s
-    end
-
-    def send_confirmation
-      ApplicationNotificationsMailer.registration_confirmation(user).deliver_later
     end
   end
 end

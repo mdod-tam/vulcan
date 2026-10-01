@@ -47,7 +47,7 @@ module DashboardMetricsLoading # rubocop:disable Metrics/ModuleLength
       metrics
     end
 
-    cached.merge(print_queue_pending_count: PrintQueueItem.pending.count)
+    cached.merge(print_queue_pending_count: PrintQueueItem.unreleased.count)
   rescue StandardError => e
     Rails.logger.error "Dashboard metric error: #{e.message}"
     # Return default values hash on error
@@ -83,7 +83,7 @@ module DashboardMetricsLoading # rubocop:disable Metrics/ModuleLength
 
   # Loads count for print queue
   def load_print_queue_count
-    safe_assign(:print_queue_pending_count, cached_count('print_queue_pending') { PrintQueueItem.pending.count })
+    safe_assign(:print_queue_pending_count, cached_count('print_queue_pending') { PrintQueueItem.unreleased.count })
   end
 
   # Loads counts for proofs needing review

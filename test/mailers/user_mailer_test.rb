@@ -132,17 +132,11 @@ class UserMailerTest < ActionMailer::TestCase
     end
 
     event = Event.where(action: 'email_delivery_error', auditable: user).last
-    variables = event.metadata.fetch('variables')
-    variables_json = event.metadata.fetch('variables').to_json
 
     assert_includes event.metadata.fetch('error_message'), '[REDACTED_URL]'
     assert_includes event.metadata.fetch('error_message'), '[REDACTED_EMAIL]'
     assert_not_includes event.metadata.fetch('error_message'), raw_url
     assert_not_includes event.metadata.fetch('error_message'), user.email
-    assert_equal '[REDACTED]', variables.fetch('user_email')
-    assert_not_includes variables_json, user.email
-    assert_not_includes variables_json, raw_url
-    assert_not_includes variables_json, 'secret-token'
-    assert_includes variables_json, '[REDACTED]'
+    assert_not event.metadata.key?('variables')
   end
 end

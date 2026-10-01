@@ -93,28 +93,33 @@ module ApplicationStatusManagement
     end
   end
 
-  # Consolidates DCF escalation: transitions to awaiting_dcf and conditionally
-  # requests medical certification. Safe to call from any path — idempotent,
-  # locked, and self-healing (repairs a missing cert request on re-entry).
+  # Moves to awaiting_dcf; the optional policy requests certification through its normal owner.
+  # Safe to call from any path: idempotent and locked.
   def escalate_to_dcf!(actor:, trigger: nil)
     with_lock do
       reload
 
-      return if status_approved? || status_rejected? || status_archived?
+      return if status_approved? || status_rejected? || status_archived? || status_awaiting_dcf?
 
+      auto_request = FeatureFlag.enabled?(:dcf_auto_request_certification, default: false) &&
+                     required_proofs_for_dcf_approved? && medical_certification_status_not_requested?
       transition_status!(
         :awaiting_dcf,
         actor: actor,
-        notes: 'Requesting medical certification documents',
-        metadata: { trigger: trigger&.to_s }.compact
-      ) unless status_awaiting_dcf?
-
-      return unless required_proofs_for_dcf_approved?
-      return unless medical_certification_status_not_requested?
-
-      update!(medical_certification_status: :requested)
-      MedicalProviderMailer.request_certification(self).deliver_later
+        notes: 'Awaiting disability certification',
+        metadata: { trigger: trigger&.to_s, dcf_auto_request: auto_request }.compact
+      )
+      if auto_request
+        ActiveRecord.after_all_transactions_commit do
+          Applications::MedicalCertificationService.new(application: self, actor: actor).auto_request_certification
+        end
+      end
     end
+  end
+
+  def dcf_auto_request_not_sent?
+    status_awaiting_dcf? && medical_certification_status_not_requested? &&
+      status_changes.where(to_status: 'awaiting_dcf').order(:id).last&.metadata&.dig('dcf_auto_request') == true
   end
 
   private

@@ -129,8 +129,7 @@ class UserEncryptedValidationTest < ActiveSupport::TestCase
   end
 
   test 'system_user method works with encryption' do
-    # Clear any memoized system user
-    User.instance_variable_set(:@system_user, nil)
+    ensure_system_audit_actor!
 
     system_user = User.system_user
 
@@ -141,8 +140,7 @@ class UserEncryptedValidationTest < ActiveSupport::TestCase
   end
 
   test 'system_user method returns same user on subsequent calls' do
-    # Clear memoization
-    User.instance_variable_set(:@system_user, nil)
+    ensure_system_audit_actor!
 
     user1 = User.system_user
     user2 = User.system_user

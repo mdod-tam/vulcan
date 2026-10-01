@@ -12,6 +12,15 @@ class User < ApplicationRecord
   include UserEmailSearch
   include UserMergeIntegrity
 
+  after_update :reconcile_pending_letters_after_identity_change
+
+  def reconcile_pending_letters_after_identity_change
+    return unless saved_changes.keys.intersect?(PrintQueueItem::RECIPIENT_IDENTITY_FIELDS)
+
+    Letters::ReconcilePendingJob.schedule(recipient_id: id)
+  end
+  private :reconcile_pending_letters_after_identity_change
+
   attr_accessor :needs_duplicate_review unless column_names.include?('needs_duplicate_review')
   attr_accessor :portal_self_registration
 
@@ -34,28 +43,8 @@ class User < ApplicationRecord
   end
 
   def self.system_user
-    if @system_user.nil? || !system_user_valid?(@system_user)
-      @system_user = find_by_email('system@mdmat.org')
-      if @system_user.nil?
-        @system_user = User.create!(
-          first_name: 'System',
-          last_name: 'User',
-          email: 'system@mdmat.org',
-          password: SecureRandom.hex(32),
-          type: 'Users::Administrator',
-          verified: true
-        )
-      elsif !@system_user.admin?
-        @system_user.update!(type: 'Users::Administrator')
-      end
-    end
-    @system_user
+    PublicAuditActor.system_audit_actor_or_report('system operation')
   end
-
-  def self.system_user_valid?(user)
-    user.persisted? && user.admin? && exists?(user.id)
-  end
-  private_class_method :system_user_valid?
 
   def self.find_by_email(email_value)
     normalized_email = normalize_email(email_value)

@@ -3,7 +3,9 @@
 class SmsService
   extend SecureErrorSanitizer
 
-  def self.send_message(phone_number, message, sensitive: false, context: {})
+  def self.send_message(phone_number, message, sensitive: false, context: {}, action: nil, delivery_context: nil)
+    delivery_context ||= EmailDelivery::Policy.capture(mail_action: action)
+    EmailDelivery.verify!(action, context: delivery_context, channel: 'sms')
     delivery_phone_number = format_phone_to_e164(phone_number)
 
     # Log the SMS attempt
@@ -14,7 +16,14 @@ class SmsService
     end
 
     # In test/development without Twilio credentials, just log and return success
-    return true unless twilio_configured?
+    unless twilio_configured?
+      if Rails.env.local?
+        EmailDelivery::Outcome.record_essential_handoff(context: delivery_context, channel: :sms)
+        return true
+      end
+
+      raise EmailDelivery::ConfigurationError.new(reason: 'sms_provider_unconfigured')
+    end
 
     # Send via Twilio in production with proper credentials
     begin
@@ -23,6 +32,7 @@ class SmsService
         Rails.application.config.twilio[:auth_token]
       )
 
+      EmailDelivery.verify!(action, context: delivery_context, channel: 'sms')
       client.messages.create(
         from: Rails.application.config.twilio[:sms_from_number],
         to: delivery_phone_number,
@@ -34,12 +44,15 @@ class SmsService
       else
         Rails.logger.info("SMS sent successfully to #{delivery_phone_number} via Twilio")
       end
+      EmailDelivery::Outcome.record_essential_handoff(context: delivery_context, channel: :sms)
       true
     rescue Twilio::REST::RestError => e
       log_sms_error('Twilio SMS delivery failed', e)
       Rails.logger.error("Twilio error code: #{e.code}") if e.respond_to?(:code)
       raise
     end
+  rescue ApplicationMailer::DeliverySkipped
+    raise
   rescue StandardError => e
     log_sms_error('SMS delivery failed', e)
     log_sms_backtrace(e)

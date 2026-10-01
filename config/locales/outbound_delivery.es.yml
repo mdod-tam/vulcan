@@ -1,0 +1,12 @@
+es:
+  outbound_delivery:
+    sms_suppressed: "Los mensajes de texto están desactivados. Use otro método de verificación disponible o comuníquese con el personal del programa."
+    delivery_suppressed: "No se envió el mensaje porque este método de envío está desactivado en la configuración de comunicaciones."
+    sms_configuration_error: "Los mensajes de texto no están disponibles temporalmente. Use otro método de verificación disponible o comuníquese con el personal del programa."
+    letter_queued: "Carta pendiente de entrega para impresión"
+    letter_released: "Carta entregada para impresión"
+    letter_printed: "Carta marcada como impresa"
+    letter_canceled: "Carta cancelada antes de la impresión"
+    letter_blocked: "Carta bloqueada: pendiente de cancelación"
+    partial_suppression: "Se procesaron los destinatarios habilitados. Algunos mensajes no se enviaron porque su método de entrega está desactivado."
+    letter_configuration_error: "Carta bloqueada: la configuración de comunicaciones no está disponible"

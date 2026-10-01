@@ -14,6 +14,25 @@ class EmailTemplate < ApplicationRecord
   scope :enabled, -> { where(enabled: true) }
   scope :disabled_templates, -> { where(enabled: false) }
 
+  # Shared header/footer text rendered inside other templates. They are never sent on their own,
+  # so they have no delivery control; their stored enabled value is ignored.
+  FRAGMENT_NAMES = %w[email_header_text email_footer_text].freeze
+  scope :fragments, -> { where(name: FRAGMENT_NAMES) }
+  scope :deliverable, -> { where.not(name: FRAGMENT_NAMES) }
+
+  def self.fragment_name?(name)
+    FRAGMENT_NAMES.include?(name.to_s)
+  end
+
+  def fragment?
+    self.class.fragment_name?(name)
+  end
+
+  # Set only by EmailDelivery::ControlWriter.
+  attr_accessor :email_control_write
+
+  validate :enablement_changed_through_writer, on: :update
+
   validates :name, presence: true, uniqueness: { scope: %i[format locale] }
   validates :subject, presence: true
   validates :body, presence: true
@@ -245,5 +264,13 @@ class EmailTemplate < ApplicationRecord
 
   def stale_translation_content_changing?
     description_changed? || variables_changed? || (syntax_column_available? && syntax_changed?)
+  end
+
+  # Turning a sendable template off must cancel its pending mail, which only the writer does.
+  def enablement_changed_through_writer
+    return if fragment? || email_control_write
+    return unless enabled_changed? || delivery_generation_changed?
+
+    errors.add(:enabled, 'changes only through EmailDelivery::ControlWriter')
   end
 end

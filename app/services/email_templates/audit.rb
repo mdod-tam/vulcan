@@ -1,33 +1,13 @@
 # frozen_string_literal: true
 
 module EmailTemplates
-  # Read-only preflight: seed files + MAILER_MAP aliases vs live DB rows.
+  # Read-only preflight: seed files + catalog template aliases vs live DB rows.
   class Audit
     SEED_DIR = Rails.root.join('db/seeds/email_templates').freeze
     EXCLUDED_SEED_FILES = %w[email_template_helper.rb].freeze
 
-    ACTION_TEMPLATE_ALIASES = {
-      'proof_rejected' => 'application_notifications_proof_rejected',
-      'id_proof_rejected' => 'application_notifications_proof_rejected',
-      'income_proof_rejected' => 'application_notifications_proof_rejected',
-      'residency_proof_rejected' => 'application_notifications_proof_rejected',
-      'id_proof_attached' => 'application_notifications_proof_received',
-      'income_proof_attached' => 'application_notifications_proof_received',
-      'residency_proof_attached' => 'application_notifications_proof_received',
-      'account_created' => 'application_notifications_account_created',
-      'w9_approved' => 'vendor_notifications_w9_approved',
-      'w9_rejected' => 'vendor_notifications_w9_rejected',
-      'training_requested' => 'application_notifications_training_requested',
-      'trainer_assigned' => 'training_session_notifications_trainer_assigned',
-      'training_scheduled' => 'training_session_notifications_training_scheduled',
-      'training_rescheduled' => 'training_session_notifications_training_rescheduled',
-      'training_cancelled' => 'training_session_notifications_training_cancelled',
-      'training_missed' => 'training_session_notifications_training_no_show',
-      'security_key_recovery_approved' => 'application_notifications_security_key_recovery_approved',
-      'medical_certification_requested' => 'medical_provider_request_certification',
-      'medical_certification_not_provided' => 'application_notifications_medical_certification_not_provided',
-      'max_rejections_warning' => 'application_notifications_max_rejections_reached'
-    }.freeze
+    # Derived from EmailDelivery::Catalog.
+    ACTION_TEMPLATE_ALIASES = EmailDelivery::Catalog.notification_template_aliases.freeze
 
     # Kept aligned with the planned PR 2 staff-only template copy/lint list.
     STAFF_ONLY_TEMPLATE_NAMES = %w[

@@ -9,7 +9,7 @@ class SecureW9FormResendsController < SecureRequestResendController
   def request_replacement_link
     Vendors::RequestW9Resubmission.new(
       vendor: @secure_request_form.vendor,
-      actor: @secure_request_form.requested_by || User.system_user,
+      actor: resend_actor,
       resend_of: @secure_request_form,
       public_recovery: true
     ).call

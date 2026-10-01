@@ -27,7 +27,7 @@ The application timeline combines events, status changes, proof reviews, selecte
 
 Each business event still needs a single owner. Neither layer substitutes for that: creation-time deduplication is a five-second window, not a concurrency guarantee, and display deduplication only hides what two writers already stored.
 
-Fingerprints are what separate a legitimate repeated action from a duplicate — the blob for an attachment, the case ID for duplicate review, the retired user ID for a merge, the step name for a paper follow-up failure. The creation and display fingerprints are computed separately, so a new action can be distinguished in one layer and collapsed in the other.
+Fingerprints are what separate a legitimate repeated action from a duplicate — the blob for an attachment, the case ID for duplicate review, the retired user ID for a merge, the step name for a paper follow-up failure. A caller that passes `operation_id` in metadata gets one event per operation, however close together, and a retry of that operation is suppressed; email template edits and toggles use this. The creation and display fingerprints are computed separately, so a new action can be distinguished in one layer and collapsed in the other.
 
 ## Event ownership
 
@@ -40,9 +40,13 @@ Fingerprints are what separate a legitimate repeated action from a duplicate —
 | Paper identity decisions | Case services record `duplicate_review_case_opened` and `duplicate_review_case_resolved` for self-applicant, guardian, and dependent decisions, in the business transaction. Keep-separate records one case per actual pair; existing-person selection creates no second user. See [paper intake](../development/paper_application_architecture.md). |
 | Paper follow-up failure | `PaperApplicationService` attempts an `application_post_creation_step_failed` event after a confirmed commit, identifying the failed step and error class. Failure to record this warning must not invite duplicate intake. |
 | Communication | `NotificationService` audits notification creation/delivery only when `audit: true`; most callers leave the domain event with its workflow owner. |
+| Delivery controls | [ControlWriter](../../app/services/email_delivery/control_writer.rb) owns `email_control_changed` and `email_template_pair_toggled`. Bulk template changes include each pair event and one `email_templates_bulk_enabled` or `email_templates_bulk_disabled` summary in the same transaction. Operation IDs prevent a replay from reversing a later change. |
+| Delivery refusals and enqueue failures | [EmailDelivery::Outcome](../../app/services/email_delivery/outcome.rb) owns `email_delivery_suppressed`, `email_delivery_configuration_error`, and `email_delivery_enqueue_failed`, keyed by the original delivery request. The job records adapter failures at the actual enqueue boundary, including after commit. These events do not claim provider delivery. |
 | Contact changes | [ContactChangeAudit](../../app/models/concerns/contact_change_audit.rb) records `alternate_contact_updated`, and `medical_provider_info_updated` for a submitted application, from every write path. These events store old and new values so staff can see what was replaced. A secure provider information submission that replaces a value on file sets `review_required`. |
 | Vendor W9 | A change to a W-9 field (business name, tax ID, or address) while the W9 is approved or under review records `w9_details_changed` with field names only. Only a newly attached W9 moves the status to pending review. |
 | Secure request links | Revocation and expiration events come from each form model's audit hooks; see [secure request links](secure_request_links.md). |
+
+[SecureRequestDelivery](../../app/services/secure_request_delivery.rb) pairs late-suppression notification updates with link revocation in one transaction. The issuing service still owns recipient selection, cooldown rules and any application-state compensation. Invoice/evaluation workflow events retain domain attribution and errors before enqueue; they are distinct from the shared transport outcome. Voucher warnings record `expiration_warning_requested` with the request ID and enqueue outcome; historical `expiration_warning_sent` rows remain part of warning deduplication.
 
 `paper_identity_no_match_confirmed` remains readable as historical evidence and has no new writer. Historical audit-only rows are not automatically treated as pair decisions.
 

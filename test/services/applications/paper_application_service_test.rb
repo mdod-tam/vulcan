@@ -409,7 +409,7 @@ module Applications
       # and our mocked rejection service was called
     end
 
-    test 'paper submission requests medical certification once required proofs are approved' do
+    test 'paper submission moves to awaiting_dcf without requesting certification once required proofs are approved' do
       test_timestamp = Time.now.to_i
       unique_email = "test-paper-dcf-#{test_timestamp}@example.com"
       unique_phone = "202571#{test_timestamp.to_s[-4..]}"
@@ -434,21 +434,19 @@ module Applications
 
       AuditEventService.stubs(:recent_duplicate_exists?).returns(false)
 
-      request_mail = mock('request_mail')
-      request_mail.expects(:deliver_later).once
-      MedicalProviderMailer.expects(:request_certification).with(instance_of(Application)).returns(request_mail).once
+      MedicalProviderMailer.expects(:request_certification).never
 
       service = PaperApplicationService.new(params: confirmed_paper_params(service_params, admin: @admin), admin: @admin)
       result = service.create
 
-      assert result, "Failed to create paper application that should request certification: #{service.errors.inspect}"
+      assert result, "Failed to create paper application that should await certification: #{service.errors.inspect}"
 
       application = Constituent.find_by!(email: unique_email).applications.order(:created_at).last
       assert_not_nil application, 'Application should be created'
 
       application.reload
       assert_equal 'awaiting_dcf', application.status
-      assert_equal 'requested', application.medical_certification_status
+      assert_equal 'not_requested', application.medical_certification_status
     end
 
     test 'uses Other custom rejection reason text as income rejection reason' do

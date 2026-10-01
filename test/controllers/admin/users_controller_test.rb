@@ -95,7 +95,7 @@ module Admin
     end
 
     test 'admin cannot delete mfa tokens for system user' do
-      system_user = User.system_user
+      system_user = ensure_system_audit_actor!
       create(:webauthn_credential, user: system_user)
 
       assert_difference -> { Event.where(action: 'admin_user_mfa_tokens_blocked').count }, 1 do
@@ -158,7 +158,7 @@ module Admin
     end
 
     test 'admin cannot delete system user' do
-      system_user = User.system_user
+      system_user = ensure_system_audit_actor!
 
       assert_difference -> { Event.where(action: 'admin_user_deletion_blocked').count }, 1 do
         assert_no_difference('User.count') do

@@ -82,6 +82,11 @@ class AuditEventService < BaseService
   def self.create_event_fingerprint(action, metadata) # rubocop:disable Metrics/CyclomaticComplexity, Metrics/PerceivedComplexity
     base = action.to_s
 
+    # A caller that names its mutation gets one event per mutation, however close together;
+    # a retry of that same mutation reuses the id and is suppressed.
+    operation_id = metadata['operation_id'] || metadata[:operation_id]
+    return "#{base}_operation_#{operation_id}" if operation_id.present?
+
     # For proof submission events, include proof_type and submission_method
     if action.to_s.include?('proof_submitted') || action.to_s.include?('proof_attached')
       proof_type = metadata['proof_type'] || metadata[:proof_type]

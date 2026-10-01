@@ -7,6 +7,7 @@ module Applications
     include ActionDispatch::TestProcess::FixtureFile
 
     setup do
+      ensure_system_audit_actor!
       @application = create(:application, :in_progress,
                             medical_provider_name: 'Dr. Provider',
                             medical_provider_email: 'provider@example.com')

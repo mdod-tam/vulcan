@@ -71,15 +71,11 @@ class InvoiceTest < ActiveSupport::TestCase
   test 'sends payment notification when payment details added' do
     @invoice.update!(status: :invoice_approved)
 
-    # Test that the notification is sent (call directly since callback may be disabled)
-    assert_enqueued_jobs 1, only: ActionMailer::MailDeliveryJob do
+    assert_enqueued_jobs 1, only: EmailDelivery::MailDeliveryJob do
       @invoice.update!(
         status: :invoice_paid,
         gad_invoice_reference: 'GAD-123456'
       )
-
-      # Call the notification directly since the callback isn't working
-      VendorNotificationsMailer.payment_issued(@invoice).deliver_later
     end
   end
 
@@ -151,5 +147,14 @@ class InvoiceTest < ActiveSupport::TestCase
                           end_date: period_end)
 
     assert other_invoice.valid?
+  end
+
+  test 'allows the next period to start where the previous one ended' do
+    period_end = 2.weeks.from_now.end_of_day
+    create(:invoice, vendor: @vendor, start_date: Time.current.beginning_of_day, end_date: period_end)
+
+    next_invoice = build(:invoice, vendor: @vendor, start_date: period_end, end_date: 4.weeks.from_now.end_of_day)
+
+    assert next_invoice.valid?, next_invoice.errors.full_messages.to_sentence
   end
 end

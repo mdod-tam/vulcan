@@ -53,6 +53,8 @@ class ProofAttachmentMetricsJob < ApplicationJob
 
     # Re-fetch system user and admins immediately before use to ensure they are current
     current_system_user = User.system_user
+    return unless current_system_user
+
     current_admins = User.where(type: 'Users::Administrator')
     Rails.logger.debug { "ProofAttachmentMetricsJob: Found #{current_admins.count} administrators." }
 

@@ -31,7 +31,7 @@ module Admin
 
       assert_no_difference -> { Notification.where(notifiable: @application, action: 'income_proof_attached').count } do
         assert_no_difference -> { Notification.where(notifiable: @application, action: 'proof_submitted').count } do
-          assert_enqueued_jobs 1, only: ActionMailer::MailDeliveryJob do
+          assert_enqueued_jobs 1, only: EmailDelivery::MailDeliveryJob do
             assert_difference 'Event.count', 1 do # Controller creates one proof_submitted event; service audit event is skipped
               post admin_application_scanned_proofs_path(@application),
                    params: {

@@ -2,7 +2,7 @@
 
 module Admin
   class EmailTemplatesController < Admin::BaseController
-    include Pagy::Backend # Include Pagy for pagination
+    TEST_MAIL_ACTION = 'AdminTestMailer#test_email'
 
     before_action :set_template,
                   only: %i[show edit update new_test_email send_test toggle_disabled mark_synced create_counterpart
@@ -10,30 +10,9 @@ module Admin
     before_action :load_locale_templates, only: %i[show edit update preview]
 
     # GET /admin/email_templates
+    # Email controls, then template pairs grouped by category, then shared components.
     def index
-      # Fetch all templates, including both HTML and text formats
-      # Group by name, but grab just one locale variant per name as the main representation.
-      # The show/edit views will handle loading both variants together.
-      templates = EmailTemplate.where(locale: 'en').or(EmailTemplate.where(locale: 'es'))
-                               .select('DISTINCT ON (name, format) *')
-                               .order(:name, :format, :locale)
-
-      # Group templates by name for better organization
-      grouped_templates = templates.group_by(&:name).map do |_name, group|
-        # Sort within each group - html first, then text
-        group.sort_by(&:format)
-      end.flatten
-
-      # Apply pagination to the sorted list - use pagy_array for Array objects
-      @pagy, @email_templates = pagy_array(
-        grouped_templates,
-        items: 50
-      )
-
-      # Log the count of templates by format for diagnostics
-      Rails.logger.info "Templates loaded - HTML: #{templates.count(&:html?)}, TEXT: #{templates.count do |t|
-        t.format.to_s == 'text'
-      end}, Total: #{templates.length}"
+      @control_panel = EmailDelivery::ControlPanel.new
     end
 
     # GET /admin/email_templates/:id
@@ -189,31 +168,47 @@ module Admin
     def send_test
       @test_email_form = ::Admin::TestEmailForm.new(test_email_params)
 
-      if @test_email_form.valid?
-        send_test_email
+      return handle_invalid_form unless @test_email_form.valid?
+
+      # A test email follows the same controls as the real email for this template.
+      denial = EmailDelivery.issuance_denial(TEST_MAIL_ACTION, params: test_mail_params)
+      return redirect_to admin_email_template_path(@email_template), alert: test_send_suppressed_message(denial.reason) if denial
+
+      case EmailDelivery.deliver_later(test_mail_delivery)
+      when :queued
         log_audit_event('email_template_test_sent', test_email_metadata)
         redirect_to admin_email_template_path(@email_template),
-                    notice: "Test email sent successfully to #{@test_email_form.email}."
+                    notice: t('admin.email_delivery.test_send.queued', email: @test_email_form.email, locale: :en)
+      when :configuration_error
+        EmailDelivery::Current.denial_decision.raise_if_configuration_error!
+      when :suppressed
+        # A setting changed between the check above and queueing.
+        redirect_to admin_email_template_path(@email_template),
+                    alert: test_send_suppressed_message(EmailDelivery::Current.denial_reason)
       else
-        handle_invalid_form
+        redirect_to admin_email_template_path(@email_template), alert: t('admin.email_delivery.test_send.failed', locale: :en)
       end
+    rescue EmailDelivery::ConfigurationError
+      redirect_to admin_email_template_path(@email_template), alert: t('email_delivery.configuration_error', locale: :en)
     rescue StandardError => e
       handle_test_email_error(e)
     end
 
     # PATCH /admin/email_templates/:id/toggle_disabled
+    # Turns the EN and ES versions of this template on or off together.
     def toggle_disabled
-      new_state = !@email_template.enabled
-
-      if @email_template.update(enabled: new_state, updated_by: current_user)
-        action = new_state ? 'enabled' : 'disabled'
-        log_audit_event('email_template_toggled', enabled: new_state)
-        redirect_to admin_email_templates_path,
-                    notice: "Email template '#{@email_template.name}' has been #{action}."
-      else
-        redirect_to admin_email_templates_path,
-                    alert: "Failed to update template: #{@email_template.errors.full_messages.join(', ')}"
-      end
+      pair = { name: @email_template.name, format: @email_template.format }
+      enabled = params.key?(:enabled) ? boolean_param(:enabled) : !EmailTemplate.where(pair).all?(&:enabled)
+      result = EmailDelivery::ControlWriter.set_template_pair(
+        **pair, enabled: enabled, actor: current_user,
+                operation_id: params[:operation_id].presence || SecureRandom.uuid,
+                expected_enabled: params.key?(:expected_enabled) ? boolean_param(:expected_enabled) : nil,
+                expected_version: params[:expected_version].presence
+      )
+      redirect_to admin_email_templates_path(anchor: helpers.email_template_pair_anchor(pair)),
+                  **helpers.email_control_flash(result, label: t('admin.email_delivery.pair_label', name: @email_template.name, locale: :en))
+    rescue ArgumentError => e
+      redirect_to admin_email_templates_path, alert: e.message
     end
 
     # PATCH /admin/email_templates/:id/mark_synced
@@ -259,28 +254,12 @@ module Admin
 
     # PATCH /admin/email_templates/bulk_disable
     def bulk_disable
-      count = bulk_update_enabled_state(enabled: false)
-      AuditEventService.log(
-        actor: current_user,
-        action: 'email_templates_bulk_disabled',
-        auditable: current_user,
-        metadata: { count: count }
-      )
-      redirect_to admin_email_templates_path,
-                  notice: "All #{count} email templates have been disabled."
+      update_all_templates(enabled: false)
     end
 
     # PATCH /admin/email_templates/bulk_enable
     def bulk_enable
-      count = bulk_update_enabled_state(enabled: true)
-      AuditEventService.log(
-        actor: current_user,
-        action: 'email_templates_bulk_enabled',
-        auditable: current_user,
-        metadata: { count: count }
-      )
-      redirect_to admin_email_templates_path,
-                  notice: "All #{count} email templates have been enabled."
+      update_all_templates(enabled: true)
     end
 
     private
@@ -299,8 +278,12 @@ module Admin
       template.update(email_template_params.merge(updated_by: current_user))
     end
 
+    # A resubmitted form that changes nothing is not a new edit.
     def log_template_update_event
-      log_audit_event('email_template_updated', changes: template_changes)
+      changes = template_changes
+      return if changes.empty?
+
+      log_audit_event('email_template_updated', changes: changes, operation_id: template_operation_id)
     end
 
     def template_changes
@@ -335,8 +318,8 @@ module Admin
 
     def draft_preview_locals_for(template)
       sample_data = view_context.sample_data_for_email_template(template,
-                                                               locale: template.locale,
-                                                               subject: template.subject)
+                                                                locale: template.locale,
+                                                                subject: template.subject)
       rendered_subject, rendered_body = template.render(**sample_data)
 
       {
@@ -382,18 +365,28 @@ module Admin
       error.message.match?(/is not a valid syntax/)
     end
 
-    def bulk_update_enabled_state(enabled:)
-      scope = enabled ? EmailTemplate.disabled_templates : EmailTemplate.enabled
-      count = 0
+    def update_all_templates(enabled:)
+      count = EmailDelivery::ControlWriter.set_all_template_pairs(
+        enabled: enabled, actor: current_user, operation_id: params[:operation_id].presence || SecureRandom.uuid
+      )
+      redirect_to admin_email_templates_path, notice: t('admin.email_delivery.bulk_result', count: count, locale: :en)
+    rescue ActiveRecord::ActiveRecordError => e
+      Rails.logger.error("Template bulk change failed: #{e.class}")
+      redirect_to admin_email_templates_path, alert: t('admin.email_delivery.bulk_failed', locale: :en)
+    end
 
-      EmailTemplate.transaction do
-        scope.find_each do |template|
-          template.update!(enabled: enabled, updated_by: current_user)
-          count += 1
-        end
-      end
+    def boolean_param(key)
+      ActiveModel::Type::Boolean.new.cast(params[key])
+    end
 
-      count
+    def test_mail_params
+      { template_name: @email_template.name, format: @email_template.format }
+    end
+
+    def test_send_suppressed_message(reason)
+      category = EmailDelivery::Catalog.category_for(TEST_MAIL_ACTION, params: test_mail_params)
+      reason_text = EmailDelivery::ControlPanel.reason_text(reason || 'configuration_error', category: category)
+      t('admin.email_delivery.test_send.suppressed', reason: reason_text, locale: :en)
     end
 
     def set_template
@@ -428,7 +421,12 @@ module Admin
       )
     end
 
-    def send_test_email
+    # Each saved edit or toggle moves updated_at, so it names that mutation.
+    def template_operation_id
+      "email_template:#{@email_template.id}:#{@email_template.updated_at.utc.iso8601(6)}"
+    end
+
+    def test_mail_delivery
       sample_data = helpers.sample_data_for_template(
         @email_template.name,
         locale: @email_template.locale,
@@ -444,7 +442,7 @@ module Admin
         subject: rendered_subject,
         body: rendered_body,
         format: @email_template.format
-      ).test_email.deliver_later
+      ).test_email
     end
 
     def test_email_metadata

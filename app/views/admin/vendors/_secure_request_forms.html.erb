@@ -29,7 +29,7 @@
             <tr>
               <th scope="col" class="px-3 py-2 text-left font-semibold text-gray-900"><%= t('admin.vendors.vendor_secure_request_forms.table.email') %></th>
               <th scope="col" class="px-3 py-2 text-left font-semibold text-gray-900"><%= t('admin.vendors.vendor_secure_request_forms.table.status') %></th>
-              <th scope="col" class="px-3 py-2 text-left font-semibold text-gray-900"><%= t('admin.vendors.vendor_secure_request_forms.table.sent') %></th>
+              <th scope="col" class="px-3 py-2 text-left font-semibold text-gray-900"><%= t('delivery_visibility.requested_on', time: '').strip %></th>
               <th scope="col" class="px-3 py-2 text-left font-semibold text-gray-900"><%= t('admin.vendors.vendor_secure_request_forms.table.expires') %></th>
               <th scope="col" class="px-3 py-2 text-right font-semibold text-gray-900"><%= t('admin.vendors.vendor_secure_request_forms.table.actions') %></th>
             </tr>
@@ -38,7 +38,8 @@
             <% @vendor_secure_request_forms.each do |form| %>
               <tr>
                 <td class="px-3 py-3 text-gray-700"><%= secure_request_masked_email(form.recipient_email) %></td>
-                <td class="px-3 py-3 text-gray-700"><%= t("admin.vendors.vendor_secure_request_forms.statuses.#{form.display_status}") %></td>
+                <td class="px-3 py-3 text-gray-700"><%= t("admin.vendors.vendor_secure_request_forms.statuses.#{form.display_status}") %>
+                <%= delivery_visibility(form) %></td>
                 <td class="px-3 py-3 text-gray-700"><%= l(form.sent_at, format: :short) %></td>
                 <td class="px-3 py-3 text-gray-700"><%= l(form.expires_at, format: :short) %></td>
                 <td class="px-3 py-3 text-right">

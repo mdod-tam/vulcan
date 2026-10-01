@@ -475,4 +475,13 @@ class UserTest < ActiveSupport::TestCase
     # Clean up Current.user to avoid affecting other tests
     Current.user = nil
   end
+
+  test 'system_user rechecks the configured account on each lookup' do
+    system = ensure_system_audit_actor!
+    assert_equal system, User.system_user
+
+    system.update!(email: 'former-system@example.test')
+
+    assert_no_difference('User.count') { assert_nil User.system_user }
+  end
 end

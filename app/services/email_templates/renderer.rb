@@ -9,6 +9,8 @@ module EmailTemplates
     SYNTAXES = [LEGACY_SYNTAX, LIQUID_SYNTAX].freeze
 
     LEGACY_PLACEHOLDER_PATTERN = /%[<{]([a-zA-Z_]\w*)[>}]s?/
+    # %{name} does not take a trailing s; %<name>s and %<name> do.
+    LEGACY_SUBSTITUTION_PATTERN = /%\{([a-zA-Z_]\w*)\}|%<([a-zA-Z_]\w*)>s?/
     LIQUID_TAG_PATTERN = /\{%-?.*?-?%\}/m
     LIQUID_OUTPUT_PATTERN = /\{\{-?(.*?)-?\}\}/m
     LIQUID_PATH_PATTERN = /\A[a-zA-Z_]\w*(?:\.[a-zA-Z_]\w*)*\z/
@@ -167,17 +169,15 @@ module EmailTemplates
       ]
     end
 
+    # One pass over the template's own placeholders. Values are inserted literally and never
+    # re-scanned, so backslashes and placeholder-shaped text in a value stay as supplied.
     def render_legacy_text(text)
-      rendered_text = text.to_s.dup
+      values = variables.to_h.transform_keys(&:to_s)
 
-      variables.each do |key, value|
-        key = key.to_s
-        rendered_text = rendered_text.gsub("%{#{key}}", value.to_s)
-        rendered_text = rendered_text.gsub("%<#{key}>s", value.to_s)
-        rendered_text = rendered_text.gsub("%<#{key}>", value.to_s)
+      text.to_s.gsub(LEGACY_SUBSTITUTION_PATTERN) do
+        key = Regexp.last_match(1) || Regexp.last_match(2)
+        values.key?(key) ? values[key].to_s : ''
       end
-
-      rendered_text.gsub(LEGACY_PLACEHOLDER_PATTERN, '')
     end
 
     def render_liquid

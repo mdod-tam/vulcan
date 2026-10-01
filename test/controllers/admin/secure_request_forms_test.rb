@@ -67,7 +67,8 @@ module Admin
     test 'staff can send every proof type explicitly by SMS with provider data complete' do
       recipient = build_sms_only_constituent
       application = create(:application, :in_progress, user: recipient)
-      SmsService.expects(:send_message).with(recipient.phone, anything, sensitive: true, context: anything).times(3).returns(true)
+      SmsService.expects(:send_message).with(recipient.phone, anything, sensitive: true, action: 'SmsService#proof_resubmission',
+                                                                        delivery_context: has_entries('mail_action' => 'SmsService#proof_resubmission'), context: anything).times(3).returns(true)
 
       %w[income residency id].each do |proof_type|
         assert_difference('SecureRequestForm.count', 1) do

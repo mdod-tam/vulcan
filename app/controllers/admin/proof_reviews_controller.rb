@@ -96,7 +96,10 @@ module Admin
 
     def proof_review_success_flash(result)
       flash_options = { notice: t('.proof_completed') }
-      flash_options[:alert] = t('admin.proof_reviews.create.resubmission_not_delivered', locale: :en) if proof_resubmission_delivery_failed?(result)
+      if proof_resubmission_delivery_failed?(result)
+        key = result.data[:resubmission_suppressed] ? 'resubmission_suppressed' : 'resubmission_not_delivered'
+        flash_options[:alert] = t("admin.proof_reviews.create.#{key}", locale: :en)
+      end
       flash_options
     end
 

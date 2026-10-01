@@ -14,10 +14,12 @@ module Evaluations
         prepare_evaluation
         save_evaluation!
         create_event!
-        notify_constituent
       end
 
-      success('Evaluation submitted successfully.', { evaluation: @evaluation })
+      # The submission is committed; a confirmation that cannot be queued does not undo it.
+      notification = notify_constituent
+
+      success('Evaluation submitted successfully.', { evaluation: @evaluation, notification: notification })
     rescue ActiveRecord::RecordInvalid => e
       Rails.logger.error "Evaluation submission FAILED for ID #{@evaluation&.id}: #{e.message}"
       failure(e.message)
@@ -77,7 +79,22 @@ module Evaluations
     end
 
     def notify_constituent
-      EvaluatorMailer.evaluation_submission_confirmation(@evaluation).deliver_later
+      outcome = EmailDelivery.deliver_later(EvaluatorMailer.with(evaluation: @evaluation).evaluation_submission_confirmation)
+      record_confirmation_enqueue_failure('ActiveJob::EnqueueError') if outcome == :enqueue_failed
+      outcome
+    rescue StandardError => e
+      record_confirmation_enqueue_failure(e.class.name)
+      :enqueue_failed
+    end
+
+    def record_confirmation_enqueue_failure(error_class)
+      Rails.logger.error("Evaluation submission confirmation not queued for evaluation #{@evaluation.id}: #{error_class}")
+      AuditEventService.log(
+        action: 'evaluation_submission_confirmation_enqueue_failed',
+        actor: @actor,
+        auditable: @evaluation,
+        metadata: { error_class: error_class }
+      )
     end
   end
 end

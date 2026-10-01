@@ -57,5 +57,19 @@ module Admin
       assert_equal I18n.t('admin.proof_reviews.create.proof_completed'), flash[:notice]
       assert_equal I18n.t('admin.proof_reviews.create.resubmission_not_delivered'), flash[:alert]
     end
+
+    test 'create says the resubmission email was turned off rather than undeliverable' do
+      ProofReviewService.any_instance.stubs(:call).returns(
+        BaseService::Result.new(true, 'Income proof rejected successfully.',
+                                { resubmission_delivered: false, resubmission_suppressed: true })
+      )
+
+      post admin_proof_reviews_path, params: {
+        application_id: @application.id,
+        proof_review: { proof_type: 'income', status: 'rejected', rejection_reason: 'Income documentation is not acceptable.' }
+      }
+
+      assert_equal I18n.t('admin.proof_reviews.create.resubmission_suppressed', locale: :en), flash[:alert]
+    end
   end
 end

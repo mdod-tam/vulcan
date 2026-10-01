@@ -1,6 +1,10 @@
 # frozen_string_literal: true
 
 class SecureRequestForm < ApplicationRecord
+  attr_accessor :delivery_notification
+
+  has_many :email_delivery_attempts, as: :origin, dependent: :nullify
+  has_many :print_queue_items, dependent: :restrict_with_error
   include SecureTokenizable
 
   DELIVERY_SOURCES = %w[constituent dependent_contact managing_guardian guardian_relationship].freeze

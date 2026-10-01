@@ -13,18 +13,36 @@ module Admin
       @secure_request_default_recipient_ids = provider_info_default_recipient_ids(application, relationships)
     end
 
+    def load_certification_delivery_data
+      @medical_provider_secure_request_forms = EmailDelivery::Visibility.preload(@application.medical_provider_secure_request_forms.order(created_at: :desc))
+      @certification_delivery_attempts = @application.email_delivery_attempts.where(origin: @application)
+                                                     .where('mail_action LIKE ?', 'MedicalProviderMailer#%')
+                                                     .includes(:delivery_owner).order(attempted_at: :desc, id: :desc).to_a
+      notifications = EmailDelivery::Visibility.preload(
+        Notification.where(notifiable: @application,
+                           action: %w[medical_certification_requested medical_certification_rejected medical_certification_approved])
+                    .includes(:actor).order(created_at: :desc, id: :desc)
+      )
+      @certification_delivery_notifications = notifications.select { |notification| notification.action == 'medical_certification_requested' }
+      @certification_local_delivery_notifications = notifications.select do |notification|
+        (notification.email_delivery_attempts.empty? || notification.local_delivery_outcome?) &&
+          DeliveryStatusPresenter.new(notification).status != 'unknown'
+      end
+    end
+
     def load_provider_info_request_data(application)
+      @delivery_secure_request_forms = EmailDelivery::Visibility.preload(
+        application.secure_request_forms.includes(:recipient, :delivery_owner).order(sent_at: :desc)
+      )
+      application.association(:secure_request_forms).target = @delivery_secure_request_forms
+      application.association(:secure_request_forms).loaded!
       unless application.provider_info_requests_visible?
         @secure_request_forms = []
         @active_secure_request_form_batch_counts = {}
         return
       end
 
-      @secure_request_forms = application
-                              .secure_request_forms
-                              .provider_info
-                              .includes(:recipient, :delivery_owner)
-                              .order(sent_at: :desc)
+      @secure_request_forms = @delivery_secure_request_forms.select(&:kind_provider_info_request?)
       @active_secure_request_form_batch_counts = application
                                                  .secure_request_forms
                                                  .provider_info

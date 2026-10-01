@@ -48,7 +48,7 @@ module TwoFactor
       begin
         return :active if hydrate_from_cache! && active_session?
 
-        send_and_store! ? :sent : false
+        send_and_store!
       ensure
         release_lock
       end
@@ -77,7 +77,7 @@ module TwoFactor
         return false unless active_session?
         return :waiting if resend_wait_seconds.positive?
 
-        send_and_store! ? :sent : false
+        send_and_store!
       ensure
         release_lock
       end
@@ -171,12 +171,14 @@ module TwoFactor
     end
 
     def send_and_store!
-      result = TwilioVerifyService.send_verification(phone_number)
+      result = TwilioVerifyService.send_verification(phone_number, purpose: :setup)
+      return :suppressed if result[:delivery_suppressed]
+      return :configuration_error if result[:configuration_error]
       return false unless result[:success] && result[:verification_sid].present?
 
       store_result!(result)
       Rails.logger.info("[SMS] Sent setup verification code to user #{user.id} via Twilio Verify")
-      true
+      :sent
     end
 
     def challenge_data

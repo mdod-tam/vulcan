@@ -48,6 +48,19 @@ class TwoFactorAuthenticationCredentialTest < ActionDispatch::IntegrationTest
     Rails.cache = @original_cache_store if @original_cache_store
   end
 
+  test 'disabled SMS setup retains the phone form without creating a credential or successful challenge' do
+    admin = create(:admin)
+    EmailDelivery::ControlWriter.set(name: EmailDelivery::CHANNEL_CONTROLS['sms'], enabled: false, actor: admin, operation_id: SecureRandom.uuid)
+    TwilioVerifyService.expects(:client).never
+    assert_no_difference 'SmsCredential.count' do
+      post create_credential_two_factor_authentication_path(type: 'sms'), params: { phone_number: '555-123-4567' }
+    end
+    assert_response :unprocessable_content
+    assert_includes response.body, I18n.t('outbound_delivery.sms_suppressed')
+    assert_select 'input[name="phone_number"][value="555-123-4567"]'
+    assert_nil Rails.cache.read(TwoFactor::PendingSmsSetupChallenge.cache_key(@user.id, '555-123-4567'))
+  end
+
   test 'should get new credential form' do
     # Step 1: Access the credential creation form for WebAuthn
     # This is the page where users begin the security key registration process

@@ -1,32 +1,37 @@
 <main class="container mx-auto px-4 py-8" role="main" aria-labelledby="test-email-title">
   <div class="max-w-3xl mx-auto">
-    <%# Header Section %>
     <div class="flex flex-col md:flex-row justify-between items-start md:items-center mb-6">
       <h1 id="test-email-title" class="text-3xl font-bold text-gray-900 mb-4 md:mb-0">
         Send Test Email: <%= @email_template.name %> (<%= template_syntax_label(@email_template) %>)
       </h1>
       <div>
         <%= link_to admin_email_template_path(@email_template),
-            class: "inline-flex items-center px-4 py-2 border border-gray-300 rounded-md shadow-sm text-sm font-medium text-gray-700 bg-white hover:bg-gray-50 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-indigo-500",
-            aria: { label: "Return to template details" } do %>
+                    class: [
+                      'inline-flex items-center px-4 py-2 border border-gray-300 rounded-md shadow-sm text-sm font-medium text-gray-700 bg-white',
+                      'hover:bg-gray-50 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-indigo-500'
+                    ],
+                    aria: { label: 'Return to template details' } do %>
           <span>Back to Template</span>
         <% end %>
       </div>
     </div>
 
-    <%# Form Section %>
     <div class="bg-white rounded-lg shadow p-6">
       <h2 class="text-xl font-semibold text-gray-900 mb-4">Test Email Details</h2>
-      
-      <p class="text-sm text-gray-600 mb-6">
+
+      <p class="text-sm text-gray-600 mb-2">
         Send a test email using this template. The email will be rendered with sample data to showcase how the template will appear to recipients.
       </p>
+      <p class="text-sm text-gray-700 mb-6" id="test-send-controls-note">
+        <%= email_delivery_t('test_send.explanation') %>
+      </p>
 
-      <%= form_with model: @test_email_form, url: send_test_admin_email_template_path(@email_template), method: :post, class: "space-y-6" do |form| %>
+      <%= form_with model: @test_email_form, url: send_test_admin_email_template_path(@email_template), method: :post, class: 'space-y-6' do |form| %>
         <div>
-          <%= form.label :email, "Recipient Email Address", class: "block text-sm font-medium text-gray-700" %>
+          <%= form.label :email, 'Recipient Email Address', class: 'block text-sm font-medium text-gray-700' %>
           <div class="mt-1">
-            <%= form.email_field :email, class: "shadow-sm focus:ring-indigo-500 focus:border-indigo-500 block w-full sm:text-sm border-gray-300 rounded-md", required: true %>
+            <%= form.email_field :email, class: 'shadow-sm focus:ring-indigo-500 focus:border-indigo-500 block w-full sm:text-sm border-gray-300 rounded-md',
+                                         required: true %>
           </div>
           <p class="mt-1 text-sm text-gray-500">
             Enter the email address where you'd like to receive the test email.
@@ -36,21 +41,25 @@
         <%= form.hidden_field :template_id %>
 
         <div class="bg-gray-50 -mx-6 -mb-6 px-6 py-3 flex justify-end">
-          <%= form.submit "Send Test Email", class: "ml-3 inline-flex justify-center py-2 px-4 border border-transparent shadow-sm text-sm font-medium rounded-md text-white bg-indigo-600 hover:bg-indigo-700 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-indigo-500" %>
+          <%= form.submit 'Send Test Email',
+                          class: [
+                            'ml-3 inline-flex justify-center py-2 px-4 border border-transparent shadow-sm text-sm font-medium rounded-md',
+                            'text-white bg-indigo-600 hover:bg-indigo-700 focus:outline-none focus:ring-2 focus:ring-offset-2',
+                            'focus:ring-indigo-500'
+                          ] %>
         </div>
       <% end %>
     </div>
 
-    <%# Template Preview Section %>
     <div class="bg-white rounded-lg shadow p-6 mt-6">
       <h2 class="text-xl font-semibold text-gray-900 mb-4">Template Preview</h2>
-      
+
       <div class="mb-4">
         <h3 class="text-lg font-medium text-gray-700 mb-2">
           Subject: <span class="font-normal"><%= @rendered_subject %></span>
         </h3>
       </div>
-      
+
       <div class="prose max-w-none mb-4">
         <h3 class="text-lg font-medium text-gray-700 mb-2">
           Template Format
@@ -58,22 +67,22 @@
         <p class="font-medium text-sm text-indigo-600 mb-4">
           <%= @email_template.format.titleize %> · <%= template_syntax_label(@email_template) %>
         </p>
-        
+
         <h3 class="text-lg font-medium text-gray-700 mb-2">
           Body Preview (first 300 characters)
         </h3>
-        
+
         <div class="border border-gray-300 rounded-lg shadow-sm p-4 bg-gray-50">
           <% if @email_template.format == 'html' %>
             <div class="email-preview" style="max-height: 300px; overflow-y: auto;">
-              <%= raw @rendered_body.truncate(1000, omission: "...") %>
+              <%= sanitize(@rendered_body.truncate(1000, omission: '...')) %>
             </div>
           <% else %>
-            <pre class="whitespace-pre-wrap text-sm"><%= @rendered_body.truncate(300, omission: "...") %></pre>
+            <pre class="whitespace-pre-wrap text-sm"><%= @rendered_body.truncate(300, omission: '...') %></pre>
           <% end %>
         </div>
       </div>
-      
+
       <div class="text-sm text-gray-600 mt-4 italic">
         <p>The test email will include all required variables filled with sample data.</p>
       </div>

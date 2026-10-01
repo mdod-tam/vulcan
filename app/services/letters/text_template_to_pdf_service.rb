@@ -33,7 +33,11 @@ module Letters
 
     attr_reader :template_name, :format, :template, :variables, :recipient, :letter_type_override
 
-    def initialize(template_name:, recipient:, variables: {}, letter_type: nil)
+    def initialize(template_name:, recipient:, variables: {}, locale: nil, letter_type: nil, delivery_context: nil, secure_request_form: nil, request_key: nil) # rubocop:disable Metrics/ParameterLists
+      @locale = locale
+      @delivery_context = delivery_context
+      @secure_request_form = secure_request_form
+      @request_key = request_key
       @template_name = template_name
       @format = :text
       @recipient = recipient
@@ -67,29 +71,16 @@ module Letters
     end
 
     def queue_for_printing
-      pdf_tempfile = generate_pdf
-      return nil unless pdf_tempfile
+      action = EmailDelivery::Catalog.letter_action_for(template_name)
+      context = @delivery_context || if EmailDelivery::Current.queued
+                                       EmailDelivery::Current.context
+                                     else
+                                       EmailDelivery::Policy.capture(mail_action: action)
+                                     end
+      raise EmailDelivery::ConfigurationError.new(reason: 'template_identity_changed') unless context.nil? || context['template_name'] == template_name
 
-      letter_type = determine_letter_type
-
-      print_queue_item = PrintQueueItem.new(
-        constituent: recipient,
-        application: variables[:application],
-        letter_type: letter_type
-      )
-
-      # Attach the PDF to the queue item
-      print_queue_item.pdf_letter.attach(
-        io: File.open(pdf_tempfile.path),
-        filename: print_queue_item.pdf_filename,
-        content_type: 'application/pdf'
-      )
-
-      print_queue_item.save!
-      pdf_tempfile.close
-      pdf_tempfile.unlink
-
-      print_queue_item
+      Delivery.queue!(recipient: recipient, application: variables[:application], letter_type: determine_letter_type,
+                      context: context, secure_request_form: @secure_request_form, request_key: @request_key) { generate_pdf }
     end
 
     private
@@ -274,8 +265,8 @@ module Letters
     end
 
     def resolved_locale
-      locale = recipient.locale if recipient.respond_to?(:locale)
-      normalized = normalize_locale(locale)
+      recipient_locale = recipient.locale if recipient.respond_to?(:locale)
+      normalized = normalize_locale(@locale) || normalize_locale(recipient_locale)
       normalized || I18n.default_locale.to_s
     end
 

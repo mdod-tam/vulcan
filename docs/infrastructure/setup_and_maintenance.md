@@ -6,7 +6,7 @@ The [project README](../../README.md#installation) covers prerequisites, credent
 
 ## Baseline seeds
 
-These tasks initialize the baseline records for a new environment. Run them after migrations, in the intended Rails environment; for a standalone production install, prefix each command with `RAILS_ENV=production`. The [Heroku sequence](#heroku-deployment-and-operations) runs them against the selected app.
+These tasks initialize the baseline records for a new environment. Run them after migrations and [initial account setup](#initial-accounts), in the intended Rails environment; for a standalone production install, prefix each command with `RAILS_ENV=production`. The [Heroku sequence](#heroku-deployment-and-operations) runs them against the selected app.
 
 | Task | Effect |
 | --- | --- |
@@ -24,7 +24,16 @@ Products come from [products.yml](../../test/fixtures/products.yml) in the demo 
 In the target environment's Rails console (`RAILS_ENV=production bin/rails console`, or `heroku run bin/rails console --app your-app-name`), provision the system audit account and the first staff administrator:
 
 ```ruby
-User.system_user
+system_actor = User.find_by(email: PublicAuditActor::SYSTEM_AUDIT_EMAIL)
+raise 'System audit address belongs to a non-admin; resolve the conflict manually' if system_actor && !system_actor.admin?
+
+system_actor ||= Users::Administrator.create!(
+  email: PublicAuditActor::SYSTEM_AUDIT_EMAIL,
+  password: SecureRandom.hex(32),
+  first_name: 'System',
+  last_name: 'User',
+  verified: true
+)
 raise 'System audit account missing' unless PublicAuditActor.system_audit_actor
 
 Users::Administrator.create!(
@@ -36,9 +45,11 @@ Users::Administrator.create!(
 )
 ```
 
-`User.system_user` provisions `system@mdmat.org` for audit attribution. Public requests deliberately do not create it: without it, public audit events are skipped and registrations requiring duplicate review roll back. The staff administrator is a separate account and must [enroll in MFA](../security/authentication_system.md#second-factors) on first sign-in.
+The explicit command above provisions `system@mdmat.org` for audit attribution and refuses to promote a conflicting account. `User.system_user` only looks up an existing administrator; runtime requests and jobs never provision it. Without it, public audit events and metrics alerts are skipped, expiration audits remain pending, secure-link recovery cannot issue a replacement without its original requester, certification uploads fail before storage, and DocuSeal callbacks return HTTP 503 for retry. Registrations requiring duplicate review roll back. Policy seeding stops before making changes. The staff administrator is a separate account and must [enroll in MFA](../security/authentication_system.md#second-factors) on first sign-in.
 
 ## Heroku deployment and operations
+
+The first release that includes the email delivery controls needs sending stopped during the deploy; follow [Releasing the delivery controls](email_system.md#releasing-the-delivery-controls).
 
 The checked-in [Procfile](../../Procfile) defines web, worker, and release processes. Start with a Heroku app and attached Postgres database; [Heroku's Rails guide](https://devcenter.heroku.com/articles/getting-started-with-rails8#create-a-heroku-app) covers provisioning. Set the [production configuration](../../README.md#production-essentials), including storage and integration credentials, then deploy the intended checkout:
 
@@ -51,17 +62,16 @@ git push heroku HEAD:main
 heroku releases --app "$MAT_APP"
 ```
 
-The [release phase](https://devcenter.heroku.com/articles/release-phase) runs `bin/rails db:migrate`; check that it succeeded before initializing data. For the first deployment:
+The [release phase](https://devcenter.heroku.com/articles/release-phase) runs `bin/rails db:migrate`; check that it succeeded, then use `heroku run bin/rails console --app "$MAT_APP"` for [initial account setup](#initial-accounts). Provision the system audit account before seeding or starting web and worker processes. For the first deployment, run the remaining initialization commands:
 
 ```bash
 heroku run bin/rails db:seed_policies --app "$MAT_APP"
 heroku run bin/rails db:seed_feature_flags --app "$MAT_APP"
 heroku run bin/rails db:seed_manual_email_templates --app "$MAT_APP"
 heroku run bin/rails db:seed_rejection_reasons --app "$MAT_APP"
-heroku run bin/rails console --app "$MAT_APP"
 ```
 
-Use that console for [initial accounts](#initial-accounts). Then check the baseline data and start the web and worker processes:
+Then check the baseline data and start the web and worker processes:
 
 ```bash
 heroku run bin/rails email_templates:audit --app "$MAT_APP"

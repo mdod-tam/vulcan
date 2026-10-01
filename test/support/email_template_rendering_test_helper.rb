@@ -16,6 +16,17 @@ module EmailTemplateRenderingTestHelper
            },
            enabled: true)
   end
+
+  # Loads the production seed rows (both locales when present) for real-rendering tests.
+  def load_seeded_email_templates(*names)
+    names.each do |name|
+      EmailTemplate.where(name: name, format: :text).destroy_all
+      ['', '_es'].each do |suffix|
+        path = Rails.root.join("db/seeds/email_templates/#{name}#{suffix}.rb")
+        load path if path.exist?
+      end
+    end
+  end
 end
 
 ActiveSupport::TestCase.include EmailTemplateRenderingTestHelper

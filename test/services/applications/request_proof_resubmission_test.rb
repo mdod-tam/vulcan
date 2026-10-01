@@ -29,6 +29,22 @@ module Applications
       Current.reset
     end
 
+    test 'nonrequired income proof cannot issue a request for either missing or rejected proof' do
+      @application.update!(income_proof_required: false)
+      @mailer_delivery.expects(:deliver_now).never
+
+      %w[not_reviewed rejected].each do |proof_status|
+        @application.update!(income_proof_status: proof_status)
+        assert_not @application.proof_requestable_via_secure_form?(:income)
+
+        result = nil
+        assert_no_difference ['SecureRequestForm.count', 'Notification.count', 'Event.count'] do
+          result = RequestProofResubmission.new(application: @application, actor: @actor, proof_type: :income).call
+        end
+        assert_predicate result, :failure?
+      end
+    end
+
     test 'delivery_confirmed_for_review? reflects active secure request forms' do
       assert_not RequestProofResubmission.delivery_confirmed_for_review?(@proof_review)
 
@@ -285,6 +301,8 @@ module Applications
         @application.user.phone,
         regexp_matches(/secure_proof_form/),
         sensitive: true,
+        action: 'SmsService#proof_resubmission',
+        delivery_context: has_entries('mail_action' => 'SmsService#proof_resubmission', 'channel' => 'sms'),
         context: has_entries(
           application_id: @application.id,
           recipient_id: @application.user_id,
@@ -307,7 +325,7 @@ module Applications
         recipient: @application.user
       )
       assert_predicate form, :recipient_channel_sms?
-      assert_equal 'email', notification.metadata.fetch('channel')
+      assert_equal 'sms', notification.metadata.fetch('channel')
       assert_equal 'sms', notification.metadata.fetch('recipient_channel')
       assert_equal 'sms', notification.metadata.fetch('requested_recipient_channel')
     end

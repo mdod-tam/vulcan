@@ -17,7 +17,7 @@
               <%= t('admin.applications.medical_provider_secure_request_forms.table.status') %>
             </th>
             <th scope="col" class="px-3 py-2 text-left font-semibold text-gray-900">
-              <%= t('admin.applications.medical_provider_secure_request_forms.table.sent') %>
+              <%= t('delivery_visibility.requested_on', time: '').strip %>
             </th>
             <th scope="col" class="px-3 py-2 text-left font-semibold text-gray-900">
               <%= t('admin.applications.medical_provider_secure_request_forms.table.expires') %>
@@ -29,12 +29,13 @@
         </thead>
         <tbody class="divide-y divide-gray-100">
           <% @medical_provider_secure_request_forms.each do |form| %>
-            <tr>
+            <tr id="<%= dom_id(form) %>">
               <td class="px-3 py-3 text-gray-700">
                 <%= secure_request_masked_email(form.provider_email) %>
               </td>
               <td class="px-3 py-3 text-gray-700">
                 <%= t("admin.applications.medical_provider_secure_request_forms.statuses.#{form.display_status}") %>
+                <%= delivery_visibility(form) %>
               </td>
               <td class="px-3 py-3 text-gray-700"><%= l(form.sent_at, format: :short) %></td>
               <td class="px-3 py-3 text-gray-700"><%= l(form.expires_at, format: :short) %></td>

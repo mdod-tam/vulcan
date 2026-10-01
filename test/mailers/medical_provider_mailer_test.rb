@@ -15,11 +15,13 @@ class MedicalProviderMailerTest < ActionMailer::TestCase
     # Stub render to accept the variables hash and return the expected subject and body strings
     request_cert_template_mock.stubs(:render).returns(["Mock Request Cert Subject for #{@constituent.full_name}",
                                                        "Mock Request Cert Body for #{@constituent.full_name}"])
+    request_cert_template_mock.stubs(:enabled?).returns(true)
     EmailTemplate.stubs(:find_by!).with(name: 'medical_provider_request_certification', format: :text, locale: 'en').returns(request_cert_template_mock)
 
     rejected_template_mock = mock('rejected_template')
     rejected_template_mock.stubs(:render).returns(["Certification Rejected: #{@constituent.full_name}",
                                                    'Text Rejection Reason: Incomplete documentation, Expired license'])
+    rejected_template_mock.stubs(:enabled?).returns(true)
     EmailTemplate.stubs(:find_by!).with(name: 'medical_provider_certification_rejected', format: :text, locale: 'en').returns(rejected_template_mock)
   end
 
@@ -155,6 +157,7 @@ class MedicalProviderMailerTest < ActionMailer::TestCase
 
     english_template = mock('english_rejected_template')
     english_template.stubs(:render).returns(['Certificacion rechazada', 'Motivo traducido'])
+    english_template.stubs(:enabled?).returns(true)
     EmailTemplate.expects(:find_by!).with(
       name: 'medical_provider_certification_rejected',
       format: :text,

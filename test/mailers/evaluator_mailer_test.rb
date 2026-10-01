@@ -112,8 +112,20 @@ class EvaluatorMailerTest < ActionMailer::TestCase
     assert_no_emails do
       email.deliver_later
     end
+  end
 
-    # Basic email assertions can still be included if desired
-    assert_match 'Evaluation has been Submitted', email.subject
+  test 'a repeated submission confirmation for a letter recipient stays on the letter route' do
+    @constituent.update!(communication_preference: 'letter')
+    EmailTemplate.unstub(:find_by!)
+    EmailTemplate.where(name: 'evaluator_mailer_evaluation_submission_confirmation', format: :text).first_or_create!(
+      locale: 'en', subject: 'Evaluation submitted', body: 'Your evaluation is complete.',
+      description: 'Evaluation confirmation', variables: { required: [], optional: [] }, version: 1
+    )
+
+    assert_no_emails do
+      assert_difference 'PrintQueueItem.count', 1 do
+        2.times { EvaluatorMailer.with(evaluation: @evaluation).evaluation_submission_confirmation.deliver_now }
+      end
+    end
   end
 end

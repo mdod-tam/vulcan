@@ -1,6 +1,8 @@
 # frozen_string_literal: true
 
 class ApplicationMailer < ActionMailer::Base
+  abstract!
+
   include SecureErrorSanitizer
 
   class NoopDelivery
@@ -15,9 +17,17 @@ class ApplicationMailer < ActionMailer::Base
     def deliver_now = self
   end
 
-  # Raised when a delivery that carries a secure link cannot be sent, so the
-  # issuing service revokes the unsent link and records the failure.
-  class DeliverySkipped < StandardError; end
+  # Raised when a delivery that carries a secure link is intentionally not sent (a disabled
+  # template or an email control), so the issuing service revokes the unsent link and records
+  # a suppression rather than a failure.
+  class DeliverySkipped < StandardError
+    attr_reader :reason
+
+    def initialize(message = nil, reason: nil)
+      @reason = reason.to_s.presence || 'suppressed'
+      super(message || "Communication delivery suppressed: #{@reason}")
+    end
+  end
 
   helper :mailer
 
@@ -29,12 +39,30 @@ class ApplicationMailer < ActionMailer::Base
   layout 'mailer'
   before_action :set_common_variables
 
+  self.delivery_job = EmailDelivery::MailDeliveryJob
+
+  # Last check before handoff, for queued and immediate deliveries alike.
+  before_deliver :enforce_email_delivery_controls
+  around_deliver :capture_delivery_attempt
+  after_deliver :record_provider_fallback_submission
+
+  def process(action, *args, **kwargs)
+    @delivery_subject = args.find { |argument| argument.is_a?(ApplicationRecord) && argument.respond_to?(:email_delivery_attempts) }
+    super
+  end
+
+  private
+
   # Pass required_delivery: true in mail_options when the email carries a secure link.
   def send_email(recipient_email, template, variables, mail_options = {})
     required_delivery = mail_options.delete(:required_delivery)
     unless template.enabled?
-      Rails.logger.warn("Email template '#{template.name}' is disabled. Skipping email to #{recipient_email}")
-      raise DeliverySkipped, "Email template '#{template.name}' is disabled" if required_delivery
+      Rails.logger.warn("Email template '#{template.name}' is disabled. Skipping delivery")
+      # No message is built, so the final check never runs; record the suppression here.
+      EmailDelivery::Outcome.record_not_sent(EmailDelivery::Decision.suppressed(:template_disabled),
+                                             context: @delivery_context,
+                                             mail_action: "#{self.class.name}##{action_name}")
+      raise DeliverySkipped.new("Email template '#{template.name}' is disabled", reason: 'template_disabled') if required_delivery
 
       return
     end
@@ -54,7 +82,44 @@ class ApplicationMailer < ActionMailer::Base
     mail_with_text_body(default_options.merge(mail_options), rendered_text_body)
   end
 
-  private
+  # A letter route never calls mail, so it has nothing to stop here.
+  def enforce_email_delivery_controls
+    return unless @_mail_was_called
+
+    context = @delivery_context
+    throw :abort if EmailDeliveryAttempt.replay_blocked?(context)
+
+    mail_action = "#{self.class.name}##{action_name}"
+    decision = EmailDelivery::Policy.verify_delivery(mail_action, context)
+    return if decision.allowed?
+
+    EmailDelivery::Outcome.record_not_sent(decision, context: context, mail_action: mail_action)
+    throw :abort
+  end
+
+  def capture_delivery_attempt(&block)
+    return block.call unless @_mail_was_called && message.perform_deliveries
+
+    handoff = lambda do
+      result = block.call
+      EmailDelivery::Outcome.record_essential_handoff(context: @delivery_context, channel: :email)
+      result
+    end
+    return handoff.call unless message.delivery_method.is_a?(Mail::Postmark)
+
+    @delivery_context['delivery_correlation_id'] ||= EmailDeliveryAttempt.correlation_for(@delivery_context)
+    subject = @delivery_subject || %i[application voucher invoice evaluation training_session].filter_map do |name|
+      params[name] || instance_variable_get("@#{name}")
+    end.first
+    recipient = params[:user] || @user || params[:vendor] || @vendor
+    EmailDelivery::Capture.new(message: message, context: @delivery_context, subject: subject, recipient: recipient, contacts: @delivery_contacts || {}).deliver(&handoff)
+  end
+
+  def record_provider_fallback_submission
+    return unless @delivery_context&.dig('provider_notification_id')
+
+    MedicalProviderNotifier.record_fallback_outcome(@delivery_context, status: :submitted)
+  end
 
   def mail_with_text_body(mail_options, text_body)
     mail(mail_options) do |format|
@@ -71,27 +136,22 @@ class ApplicationMailer < ActionMailer::Base
   end
 
   def prefers_letter_delivery?(recipient, override: nil)
-    return override.to_s == 'letter' if override.present?
-
-    preference =
-      if recipient.respond_to?(:effective_communication_preference)
-        recipient.effective_communication_preference
-      elsif recipient.respond_to?(:communication_preference)
-        recipient.communication_preference
-      end
-
-    preference.to_s == 'letter'
+    EmailDelivery::Routing.prefers_letter?(recipient, override: override)
   end
 
   def recipient_email_for(recipient)
-    return recipient.effective_email if recipient.respond_to?(:effective_email) && recipient.effective_email.present?
-    return recipient.email if recipient.respond_to?(:email)
-
-    nil
+    contact = recipient.dependent_email_contact(contact_guardian: recipient.guardian_for_contact) if recipient.respond_to?(:dependent?) && recipient.dependent?
+    address = contact&.value.presence || (recipient.effective_email if recipient.respond_to?(:effective_email)).presence || recipient.email
+    if address.present?
+      @delivery_contacts ||= {}
+      @delivery_contacts[address.downcase] = { recipient: recipient, owner: contact&.owner || recipient }
+    end
+    address
   end
 
   # Secure requests pass the resolver-selected print_recipient. Other callers retain the dependent-to-guardian fallback.
-  def queue_letter_delivery(recipient:, template_name:, variables:, letter_type: nil, application: nil, print_recipient: nil)
+  def queue_letter_delivery(recipient:, template_name:, variables:, locale:, letter_type: nil, application: nil, print_recipient: nil, # rubocop:disable Metrics/ParameterLists
+                            secure_request_form: nil, delivery_key: nil)
     print_recipient ||= letter_recipient_for(recipient)
     letter_variables = common_template_variables.merge(variables.respond_to?(:to_h) ? variables.to_h.deep_symbolize_keys : variables.dup)
     letter_variables[:application] = application if application.present?
@@ -99,9 +159,22 @@ class ApplicationMailer < ActionMailer::Base
     Letters::TextTemplateToPdfService.new(
       template_name: template_name,
       recipient: print_recipient,
+      locale: locale,
       variables: letter_variables,
-      letter_type: letter_type
+      letter_type: letter_type,
+      delivery_context: @delivery_context,
+      secure_request_form: secure_request_form,
+      request_key: delivery_key
     ).queue_for_printing
+  end
+
+  # Queues a printed letter when the recipient prefers mail. Returns true when the letter route
+  # handles the message, so the caller sends no email.
+  def queue_letter_if_preferred(recipient, template_name, variables, locale:, application: nil)
+    return false unless prefers_letter_delivery?(recipient)
+
+    queue_letter_delivery(recipient: recipient, template_name: template_name, variables: variables, locale: locale, application: application)
+    true
   end
 
   def letter_recipient_for(recipient)
@@ -142,6 +215,11 @@ class ApplicationMailer < ActionMailer::Base
   end
 
   def set_common_variables
+    @delivery_context = if EmailDelivery::Current.queued
+                          EmailDelivery::Current.context
+                        else
+                          EmailDelivery::Policy.capture(mail_action: "#{self.class.name}##{action_name}", params: params || {})
+                        end
     @current_year = Time.current.year
     @organization_name = 'Maryland Accessible Telecommunications Program'
     @organization_email = 'no_reply@mdmat.org'
@@ -162,31 +240,16 @@ class ApplicationMailer < ActionMailer::Base
     candidate.tr('_', '-').split('-').first.downcase
   end
 
-  def interpolate_template_text(template_text, variables = {})
-    rendered_text = template_text.to_s.dup
-    variables.each do |key, value|
-      rendered_text = rendered_text.gsub("%{#{key}}", value.to_s)
-      rendered_text = rendered_text.gsub("%<#{key}>s", value.to_s)
-    end
-    rendered_text
-  end
-
   def header_title_from_template_subject(template:, subject_variables: {}, fallback: '')
     return fallback.to_s if template.blank?
 
-    rendered_subject =
-      if template.respond_to?(:render_subject) && template.respond_to?(:render_syntax)
-        template.render_subject(**subject_variables)
-      else
-        interpolate_template_text(template.subject, subject_variables)
-      end
-    rendered_subject = rendered_subject.to_s.strip
+    rendered_subject = template.render_subject(**subject_variables).to_s.strip
     rendered_subject.presence || fallback.to_s
   rescue StandardError
     fallback.to_s
   end
 
-  def log_mail_error(error, user, template_name, variables)
+  def log_mail_error(error, user, template_name)
     AuditEventService.log(
       actor: user,
       action: 'email_delivery_error',
@@ -197,17 +260,11 @@ class ApplicationMailer < ActionMailer::Base
         error_message: sanitize_secure_error_message(error.message),
         error_class: error.class.name,
         template_name: template_name,
-        variables: sanitized_mail_variables(variables),
+        mail_action: "#{self.class.name}##{action_name}",
         backtrace: sanitize_secure_value(error.backtrace&.first(5))
       }
     )
-  end
-
-  def sanitized_mail_variables(variables)
-    redact_sensitive_mail_value(variables.to_h.deep_dup)
-  end
-
-  def redact_sensitive_mail_value(value, key = nil)
-    sanitize_secure_value(value, key)
+  rescue StandardError => e
+    Rails.logger.error("Mailer error audit failed: #{e.class}; original error: #{error.class}")
   end
 end

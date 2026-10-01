@@ -71,11 +71,18 @@ module Admin
       assert_not es_template.locale_needs_sync?
     end
 
-    test 'out-of-sync template allows enabled-only update' do
+    test 'out-of-sync template can still be turned off through the control writer' do
       @template_text.update_columns(locale_needs_sync: true)
-      @template_text.reload
 
-      assert @template_text.update!(enabled: false)
+      result = EmailDelivery::ControlWriter.set_template_pair(name: @template_text.name, format: @template_text.format,
+                                                              enabled: false, actor: create(:admin), operation_id: 'op-1')
+
+      assert result.changed?
+      assert_not @template_text.reload.enabled
+    end
+
+    test 'enabled cannot change outside the control writer' do
+      assert_raises(ActiveRecord::RecordInvalid) { @template_text.update!(enabled: false) }
     end
 
     test 'template blocked from saving when locale_needs_sync is true and content is unchanged' do

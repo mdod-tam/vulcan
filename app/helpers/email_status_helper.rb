@@ -1,98 +1,34 @@
 # frozen_string_literal: true
 
 module EmailStatusHelper
+  def application_delivery_attention_path(application, attempt)
+    anchor = dom_id(attempt.origin_type == 'Application' ? attempt : attempt.origin)
+    admin_application_path(application.id, anchor: anchor)
+  end
+
+  def delivery_visibility(record, locale: I18n.locale, diagnostics: true)
+    attempts = record.email_delivery_attempts.sort_by(&:id)
+    return ''.html_safe if attempts.empty? && record.is_a?(Notification) && DeliveryStatusPresenter.new(record).status == 'unknown'
+
+    attempts = [nil] if attempts.empty?
+    attempts += [nil] if attempts.compact.any? && record.is_a?(Notification) && record.local_delivery_outcome?
+    safe_join(attempts.map do |attempt|
+      render 'shared/delivery/status', presenter: DeliveryStatusPresenter.new(record, attempt: attempt, locale: locale), diagnostics: diagnostics
+    end)
+  end
+
   def delivery_status_badge(notification)
-    return '' unless notification.email_tracking?
-
-    badge_class = notification.delivery_status_badge_class
-    status_text = notification.delivery_status || 'Pending'
-
-    content_tag(:span, status_text,
-                class: "ml-2 inline-flex items-center px-2 py-0.5 rounded text-xs font-medium #{badge_class}")
+    presenter = DeliveryStatusPresenter.new(notification, attempt: notification.email_delivery_attempts.max_by(&:id))
+    content_tag(:span, presenter.label, class: "inline-flex rounded px-2 py-1 text-xs #{presenter.badge_class}")
   end
 
-  def format_email_status(notification)
-    return '' unless notification.email_tracking?
-
-    html = []
-    html << build_delivery_status_section(notification)
-    html << build_open_information_section(notification) if notification.opened_at.present?
-    html << build_manual_check_button(notification) if show_manual_check_button?(notification)
-
-    safe_join(html)
+  def delivery_status_text(notification, locale: I18n.locale)
+    DeliveryStatusPresenter.new(notification, attempt: notification.email_delivery_attempts.max_by(&:id), locale: locale).label
   end
 
-  private
+  def format_email_status(notification) = delivery_visibility(notification)
 
-  def build_delivery_status_section(notification)
-    content_tag(:div, class: 'mt-2 text-sm') do
-      case notification.delivery_status
-      when 'error'
-        build_error_message(notification)
-      when nil
-        content_tag(:p, 'Delivery status: Pending')
-      else
-        build_delivered_message(notification)
-      end
-    end
-  end
-
-  def build_error_message(notification)
-    content_tag(:p, class: 'text-red-600') do
-      "Delivery failed: #{notification.email_error_message}"
-    end
-  end
-
-  def build_delivered_message(notification)
-    return content_tag(:p, 'Delivery status: Pending') if notification.delivered_at.blank?
-
-    content_tag(:p, "Delivered on #{notification.delivered_at.strftime('%B %d, %Y at %I:%M %p')}")
-  end
-
-  def build_open_information_section(notification)
-    open_info = []
-    open_info << content_tag(:p, "Opened on #{notification.opened_at.strftime('%B %d, %Y at %I:%M %p')}")
-    open_info.concat(build_client_and_location_info(notification))
-
-    content_tag(:div, class: 'mt-1 text-sm text-blue-600') do
-      safe_join(open_info)
-    end
-  end
-
-  def build_client_and_location_info(notification)
-    info = []
-    info << build_client_info(notification)
-    info << build_location_info(notification)
-    info.compact
-  end
-
-  def build_client_info(notification)
-    client = notification.metadata&.dig('email_details', 'Client')
-    return nil if client.blank?
-
-    content_tag(:p, "Using #{client['Name']} on #{client['Family']}")
-  end
-
-  def build_location_info(notification)
-    geo = notification.metadata&.dig('email_details', 'Geo')
-    return nil unless geo.present? && geo['City'].present? && geo['Region'].present?
-
-    content_tag(:p, "From #{geo['City']}, #{geo['Region']}")
-  end
-
-  def build_manual_check_button(notification)
-    content_tag(:div, class: 'mt-2') do
-      button_to 'Check Status',
-                check_email_status_notification_path(notification),
-                method: :post,
-                class: 'text-xs bg-gray-100 hover:bg-gray-200 text-gray-800 font-semibold py-1 px-2 rounded',
-                form: { 'data-turbo' => true, class: 'inline' }
-    end
-  end
-
-  def show_manual_check_button?(notification)
-    notification.message_id.present? &&
-      !notification.delivery_status.in?(['error']) &&
-      notification.opened_at.nil?
+  def notification_viewer_locale
+    current_user.locale.presence || I18n.locale
   end
 end

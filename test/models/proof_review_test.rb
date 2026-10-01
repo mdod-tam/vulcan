@@ -182,8 +182,6 @@ class ProofReviewTest < ActiveSupport::TestCase
     @application.user.update!(communication_preference: :letter, phone_type: :voice)
     @application.update!(income_proof_status: :rejected)
     @application.income_proof.purge if @application.income_proof.attached?
-    NotificationService.stubs(:create_and_deliver!).returns(true)
-    assert_no_orphan_proof_rejection_notification_delivery
 
     Current.paper_context = true
 
@@ -200,6 +198,7 @@ class ProofReviewTest < ActiveSupport::TestCase
         end
       end
     end
+    assert_not Notification.exists?(notifiable: @application, action: 'income_proof_rejected')
   ensure
     Current.reset
   end

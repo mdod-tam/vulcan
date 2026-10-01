@@ -6,7 +6,6 @@ class UserMailer < ApplicationMailer
   def password_reset
     user = params[:user]
     template_name = 'user_mailer_password_reset'
-    variables = {}
     token = user.generate_token_for(:password_reset)
     reset_url = edit_password_url(token: token, **CanonicalPublicUrlOptions.call)
 
@@ -23,7 +22,7 @@ class UserMailer < ApplicationMailer
     Rails.logger.error "Missing EmailTemplate (text format) for #{template_name}: #{e.message}"
     raise "Email template (text format) not found for #{template_name}"
   rescue StandardError => e
-    log_mail_error(e, user, template_name, variables)
+    log_mail_error(e, user, template_name)
     raise e
   end
 end

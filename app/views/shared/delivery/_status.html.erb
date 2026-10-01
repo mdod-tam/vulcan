@@ -1,0 +1,46 @@
+<%# locals: (presenter:, diagnostics: true) -%>
+<div class="mt-2 text-sm" data-delivery-status="<%= presenter.status %>">
+  <span class="inline-flex rounded px-2 py-1 text-xs font-medium <%= presenter.badge_class %>"><%= presenter.label(diagnostics: diagnostics) %></span>
+  <% if diagnostics %>
+  <details class="mt-1">
+    <summary aria-label="<%= presenter.details_label %>"
+             class="cursor-pointer rounded text-indigo-700 underline focus:outline-none focus:ring-2 focus:ring-indigo-500">
+      <%= presenter.text('details') %>
+    </summary>
+    <div class="mt-2 space-y-1 text-gray-700 break-words">
+      <p><%= presenter.description %></p>
+      <p><%= presenter.text('channel', channel: presenter.text("channels.#{presenter.channel}", default: presenter.channel)) %></p>
+      <% if presenter.masked_destination %>
+        <p><%= presenter.text('destination', destination: presenter.masked_destination) %></p>
+      <% end %>
+      <% if presenter.owner_label %>
+        <p><%= presenter.text('owner', owner: presenter.owner_label) %></p>
+      <% end %>
+      <% if presenter.requested_at %>
+        <p><%= presenter.text('requested_on', time: l(presenter.requested_at, format: presenter.text('time_format'), locale: presenter.locale)) %></p>
+      <% end %>
+      <% if presenter.sent_at %>
+        <p><%= presenter.text('sent_on', time: l(presenter.sent_at, format: presenter.text('time_format'), locale: presenter.locale)) %></p>
+      <% end %>
+      <% if presenter.attempted_at && !presenter.sent_at %>
+        <p><%= presenter.text('attempted_on', time: l(presenter.attempted_at, format: presenter.text('time_format'), locale: presenter.locale)) %></p>
+      <% end %>
+      <% if presenter.bounce_category %>
+        <p><%= presenter.text('bounce_reason', reason: presenter.bounce_category) %></p>
+      <% end %>
+      <% if presenter.last_update %>
+        <p><%= presenter.text('last_update', time: l(presenter.last_update, format: presenter.text('time_format'), locale: presenter.locale)) %></p>
+      <% end %>
+      <% if presenter.last_check %>
+        <p><%= presenter.text('last_check', time: l(presenter.last_check, format: presenter.text('time_format'), locale: presenter.locale)) %></p>
+      <% end %>
+      <% if presenter.stale? %>
+        <p><%= presenter.text('stale') %></p>
+      <% end %>
+      <% if presenter.opened_at %>
+        <p><%= presenter.text('open_detected') %></p>
+      <% end %>
+    </div>
+  </details>
+  <% end %>
+</div>

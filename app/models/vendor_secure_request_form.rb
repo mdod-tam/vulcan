@@ -1,6 +1,9 @@
 # frozen_string_literal: true
 
 class VendorSecureRequestForm < ApplicationRecord
+  attr_accessor :delivery_notification
+
+  has_many :email_delivery_attempts, as: :origin, dependent: :nullify
   include SecureTokenizable
 
   encrypts :recipient_email, deterministic: true

@@ -39,28 +39,38 @@ class MedicalCertificationEmailJobTest < ActiveJob::TestCase
     assert_nil notification.metadata&.dig('delivery_error', 'message')
   end
 
-  test 'fallback notification creation does not trigger delivery error and still sends email' do
-    timestamp = Time.current.iso8601
-
-    assert_difference "Notification.where(action: 'medical_certification_requested').count", 1 do
-      assert_emails 1 do
-        MedicalCertificationEmailJob.perform_now(
-          application_id: @application.id,
-          timestamp: timestamp
-        )
+  test 'an unowned direct request does not invent a tracking recipient' do
+    assert_no_difference 'Notification.count' do
+      assert_no_emails do
+        assert_raises(ArgumentError) do
+          MedicalCertificationEmailJob.perform_now(application_id: @application.id, timestamp: Time.current.iso8601)
+        end
       end
     end
+  end
 
-    notification = Notification.where(action: 'medical_certification_requested', notifiable: @application)
-                               .order(created_at: :desc)
-                               .first
+  test 'transport failure without a linked attempt records one safe notification outcome' do
+    notification = Notification.create!(
+      recipient: @constituent, actor: @admin, action: 'medical_certification_requested',
+      notifiable: @application, metadata: { 'channel' => 'email', 'workflow' => 'preserved' }
+    )
+    diagnostic = 'Rejected https://example.test/request/secret-token'
+    Mail::TestMailer.any_instance.expects(:deliver!).raises(StandardError, diagnostic)
 
-    assert_not_nil notification
-    assert notification.recipient.admin?
-    assert_equal notification.recipient, notification.actor
-    assert_equal 'email', notification.metadata['channel']
-    assert_nil notification.delivery_status
-    assert_nil notification.metadata&.dig('delivery_error', 'message')
+    assert_raises(StandardError) do
+      MedicalCertificationEmailJob.perform_now(application_id: @application.id, timestamp: Time.current.iso8601,
+                                               notification_id: notification.id)
+    end
+
+    notification.reload
+    assert_equal 'error', notification.delivery_status
+    assert_equal 'Email could not be sent.', notification.email_error_message
+    assert_equal 'StandardError', notification.metadata.dig('delivery_error', 'error_class')
+    assert_equal 'preserved', notification.metadata['workflow']
+    assert_equal 'none', notification.metadata['actual_delivery_channel']
+    assert_equal 'email_delivery_failed', notification.metadata['delivery_route_reason']
+    assert_empty notification.email_delivery_attempts
+    assert_not_includes notification.metadata.to_json, 'secret-token'
   end
 
   private
@@ -96,5 +106,22 @@ class MedicalCertificationEmailJobTest < ActiveJob::TestCase
       }
       template.version = 1
     end
+  end
+  test 'a certification email queued before an off and on interval is suppressed, not retried' do
+    notification = Notification.create!(
+      recipient: @constituent, actor: @admin, action: 'medical_certification_requested',
+      notifiable: @application, metadata: { 'channel' => 'email' }
+    )
+    MedicalCertificationEmailJob.perform_later(application_id: @application.id, timestamp: Time.current.iso8601,
+                                               notification_id: notification.id)
+    EmailDelivery::ControlWriter.set(name: EmailDelivery::GLOBAL_CONTROL, enabled: false, actor: @admin, operation_id: 'op-1')
+    EmailDelivery::ControlWriter.set(name: EmailDelivery::GLOBAL_CONTROL, enabled: true, actor: @admin, operation_id: 'op-2')
+
+    assert_no_emails do
+      assert_nothing_raised { perform_enqueued_jobs(only: MedicalCertificationEmailJob) }
+    end
+
+    assert_equal 'pending_canceled', notification.reload.metadata.dig('delivery_suppressed', 'reason')
+    assert_equal 'suppressed', notification.delivery_status
   end
 end

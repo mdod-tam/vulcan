@@ -660,9 +660,8 @@ module Users
       @summary[:evaluations_transferred] =
         Evaluation.where(constituent_id: @duplicate_user.id)
                   .update_all(constituent_id: @canonical_user.id, updated_at: Time.current) # rubocop:disable Rails/SkipsModelValidations
-      @summary[:pending_print_queue_items_transferred] =
-        PrintQueueItem.where(constituent_id: @duplicate_user.id, status: :pending)
-                      .update_all(constituent_id: @canonical_user.id, updated_at: Time.current) # rubocop:disable Rails/SkipsModelValidations
+      @summary[:pending_print_queue_items_canceled] =
+        Letters::Delivery.cancel_for_recipient_change!(recipient_id: @duplicate_user.id, actor: @actor)
     end
 
     def expire_duplicate_sessions!

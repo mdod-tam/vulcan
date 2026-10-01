@@ -33,7 +33,7 @@ class ProofAttachmentMetricsJobTest < ActiveJob::TestCase
     User.instance_variable_set(:@system_user, nil)
 
     # Create the system user and some test administrators
-    @system_user = User.system_user # This will create it if it doesn't exist
+    @system_user = ensure_system_audit_actor!
     @admin1 = create(:admin)
     @admin2 = create(:admin)
     @admin3 = create(:admin)

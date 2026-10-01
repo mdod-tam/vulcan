@@ -182,7 +182,7 @@ module Admin
         }
       )
       Event.create!(
-        user: User.system_user,
+        user: ensure_system_audit_actor!,
         auditable: @application,
         action: 'cert_submitted_via_secure_form',
         metadata: {

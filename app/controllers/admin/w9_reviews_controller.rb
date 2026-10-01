@@ -6,6 +6,7 @@ module Admin
     before_action :set_w9_review, only: [:show]
     # Don't skip checking for w9_form in tests - we need consistent behavior
     before_action :check_w9_form, only: %i[new show create]
+    before_action :load_delivery_history, only: %i[new show create]
 
     def index
       @w9_reviews = @vendor.w9_reviews.includes(:admin).order(created_at: :desc)
@@ -48,6 +49,10 @@ module Admin
     end
 
     private
+
+    def load_delivery_history
+      @vendor_secure_request_forms = EmailDelivery::Visibility.preload(@vendor.vendor_secure_request_forms.order(sent_at: :desc))
+    end
 
     def check_w9_form
       @w9_form = @vendor.w9_form

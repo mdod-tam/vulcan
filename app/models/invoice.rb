@@ -1,6 +1,7 @@
 # frozen_string_literal: true
 
 class Invoice < ApplicationRecord
+  has_many :email_delivery_attempts, as: :origin, dependent: :nullify
   belongs_to :vendor, class_name: 'User'
   has_many :vouchers, dependent: :nullify
   has_many :voucher_transactions, dependent: :nullify
@@ -98,7 +99,7 @@ class Invoice < ApplicationRecord
   end
 
   def send_payment_notification
-    VendorNotificationsMailer.payment_issued(self).deliver_later
+    VendorNotificationsMailer.with(invoice: self).payment_issued.deliver_later
 
     # Update associated records
     voucher_transactions.update_all(status: VoucherTransaction.statuses[:transaction_completed])
@@ -137,7 +138,7 @@ class Invoice < ApplicationRecord
     overlapping = self.class
                       .where(vendor_id: vendor_id)  # Only check same vendor
                       .where.not(id: id)            # Exclude self when updating
-                      .exists?(['start_date <= ? AND end_date >= ?', end_date, start_date])
+                      .exists?(['start_date < ? AND end_date > ?', end_date, start_date]) # a shared boundary is not overlap
 
     return unless overlapping
 

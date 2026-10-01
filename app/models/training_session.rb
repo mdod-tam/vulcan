@@ -1,6 +1,7 @@
 # frozen_string_literal: true
 
 class TrainingSession < ApplicationRecord
+  has_many :email_delivery_attempts, as: :origin, dependent: :nullify
   include StatusManagement
   include NotificationDelivery
 

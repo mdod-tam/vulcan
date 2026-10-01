@@ -13,7 +13,7 @@ module NotificationPreloading
   private
 
   def preload_notification_message_dependencies(notifications)
-    notification_list = notifications.to_a
+    notification_list = EmailDelivery::Visibility.preload(notifications)
 
     preload_application_notification_dependencies(notification_list)
     preload_training_session_notification_dependencies(notification_list)

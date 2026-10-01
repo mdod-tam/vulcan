@@ -68,7 +68,7 @@ class ApplicationLifecycleFlowTest < ActiveSupport::TestCase
     end
   end
 
-  test 'final proof approval moves application to awaiting_dcf and requests certification once' do
+  test 'final proof approval moves application to awaiting_dcf without requesting certification' do
     with_after_commit_callbacks do
       admin = create(:admin)
       application = create_application_with_documents
@@ -81,11 +81,7 @@ class ApplicationLifecycleFlowTest < ActiveSupport::TestCase
         medical_certification_status: :not_requested
       )
 
-      request_mail = mock('request_mail')
-      request_mail.expects(:deliver_later).once
-      MedicalProviderMailer.expects(:request_certification).with do |app|
-        app.id == application.id
-      end.returns(request_mail).once
+      MedicalProviderMailer.expects(:request_certification).never
 
       reviewer = Applications::ProofReviewer.new(application, admin)
 
@@ -97,7 +93,7 @@ class ApplicationLifecycleFlowTest < ActiveSupport::TestCase
 
       assert_equal 'approved', application.residency_proof_status
       assert_equal 'awaiting_dcf', application.status
-      assert_equal 'requested', application.medical_certification_status
+      assert_equal 'not_requested', application.medical_certification_status
 
       dcf_status_changes = ApplicationStatusChange.where(application: application, to_status: 'awaiting_dcf')
       assert_equal 1, dcf_status_changes.count
@@ -198,7 +194,7 @@ class ApplicationLifecycleFlowTest < ActiveSupport::TestCase
     end
   end
 
-  test 'explicit document request keeps documents_requested behavior and requests certification' do
+  test 'explicit document request keeps documents_requested behavior without requesting certification' do
     with_after_commit_callbacks do
       admin = create(:admin)
       application = create_application_with_documents
@@ -211,11 +207,7 @@ class ApplicationLifecycleFlowTest < ActiveSupport::TestCase
         medical_certification_status: :not_requested
       )
 
-      request_mail = mock('request_mail')
-      request_mail.expects(:deliver_later).once
-      MedicalProviderMailer.expects(:request_certification).with do |app|
-        app.id == application.id
-      end.returns(request_mail).once
+      MedicalProviderMailer.expects(:request_certification).never
 
       service = Applications::DocumentRequester.new(application, by: admin)
 
@@ -228,7 +220,7 @@ class ApplicationLifecycleFlowTest < ActiveSupport::TestCase
       application.reload
 
       assert_equal 'awaiting_dcf', application.status
-      assert_equal 'requested', application.medical_certification_status
+      assert_equal 'not_requested', application.medical_certification_status
       assert_equal 1, ApplicationStatusChange.where(application: application, to_status: 'awaiting_dcf').count
     end
   end
@@ -460,6 +452,7 @@ class ApplicationLifecycleFlowTest < ActiveSupport::TestCase
   def with_after_commit_callbacks
     DatabaseCleaner.strategy = :truncation
     DatabaseCleaner.clean
+    EmailDelivery::CONTROL_NAMES.each { |name| FeatureFlag.create!(name: name, enabled: true) }
     clear_enqueued_jobs
     clear_performed_jobs
     Current.reset

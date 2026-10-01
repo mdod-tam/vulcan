@@ -289,3 +289,10 @@
     <%= render "shared/activity_history", activity_logs: @activity_logs, title: "Activity History" %>
   </div>
 </div>
+
+<% if @evaluation.email_delivery_attempts.any? %>
+  <section class="mt-6 rounded border border-gray-200 p-4" aria-label="<%= t('delivery_visibility.history') %>">
+    <h2 class="text-lg font-semibold"><%= t('delivery_visibility.history') %></h2>
+    <%= delivery_visibility(@evaluation) %>
+  </section>
+<% end %>

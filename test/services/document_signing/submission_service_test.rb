@@ -6,6 +6,7 @@ module DocumentSigning
   class SubmissionServiceTest < ActiveSupport::TestCase
     setup do
       @admin = create(:admin)
+      ensure_system_audit_actor!
       @constituent = create(:constituent, :with_address_and_phone)
       @application = create(:application, :in_progress,
                             user: @constituent,
@@ -252,6 +253,24 @@ module DocumentSigning
       end.returns(@mock_submission)
 
       service.send(:create_submission!)
+    end
+
+    test 'with email off no DocuSeal submission is made and nothing is marked sent' do
+      EmailDelivery::ControlWriter.set(name: EmailDelivery::GLOBAL_CONTROL, enabled: false, actor: @admin, operation_id: 'op-1')
+      ::Docuseal.expects(:create_submission).never
+
+      result = DocumentSigning::SubmissionService.new(application: @application, actor: @admin).call
+
+      assert_not result.success?
+      assert result.data[:delivery_suppressed]
+      @application.reload
+      assert_nil @application.document_signing_requested_at
+      assert_nil @application.document_signing_submission_id
+      assert @application.medical_certification_status_not_requested?
+      assert_equal 0, @application.document_signing_request_count.to_i
+      assert_equal 0, @application.medical_certification_request_count.to_i
+      assert Event.exists?(action: EmailDelivery::Outcome::SUPPRESSED)
+      assert_not Event.exists?(action: 'document_signing_request_sent', auditable: @application)
     end
   end
 end

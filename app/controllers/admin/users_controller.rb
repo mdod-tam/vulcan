@@ -117,6 +117,7 @@ module Admin
 
     def show
       @user = User.find(params[:id])
+      @contact_delivery_attention = EmailDelivery::Visibility.contact_attention(@user)
       return unless @user.is_a?(Users::Constituent)
 
       load_and_enhance_user_relationships

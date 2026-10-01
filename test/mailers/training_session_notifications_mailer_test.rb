@@ -9,6 +9,7 @@ class TrainingSessionNotificationsMailerTest < ActionMailer::TestCase
 
     # Stub the render method to return [rendered_subject, rendered_body]
     # This simulates what the real EmailTemplate.render method does
+    template_instance.stubs(:enabled?).returns(true)
     template_instance.stubs(:render).with(any_parameters).returns do |**vars|
       # Handle trainer variables
       rendered_subject = subject_format
@@ -29,6 +30,7 @@ class TrainingSessionNotificationsMailerTest < ActionMailer::TestCase
 
     # Still stub subject and body for inspection if needed
     template_instance.stubs(:subject).returns(subject_format)
+    template_instance.stubs(:render_subject).returns(subject_format)
     template_instance.stubs(:body).returns(body_format)
 
     template_instance
@@ -82,7 +84,9 @@ class TrainingSessionNotificationsMailerTest < ActionMailer::TestCase
     expected_text = "Mock Body for #{@trainer.full_name} about #{@constituent.full_name}"
     trainer_assigned_template = mock('trainer_assigned_specific')
     trainer_assigned_template.stubs(:subject).returns('Trainer assigned')
+    trainer_assigned_template.stubs(:render_subject).returns('Trainer assigned')
     trainer_assigned_template.stubs(:render).returns(['Trainer assigned', expected_text])
+    trainer_assigned_template.stubs(:enabled?).returns(true)
 
     # Override stub for this test
     EmailTemplate.unstub(:find_by!)
@@ -116,7 +120,9 @@ class TrainingSessionNotificationsMailerTest < ActionMailer::TestCase
     expected_text = "English body for #{@trainer.full_name} about #{@constituent.full_name}"
     english_template = mock('trainer_assigned_english_specific')
     english_template.stubs(:subject).returns('English trainer assignment')
+    english_template.stubs(:render_subject).returns('English trainer assignment')
     english_template.stubs(:render).returns(['English trainer assignment', expected_text])
+    english_template.stubs(:enabled?).returns(true)
 
     EmailTemplate.unstub(:find_by!)
     EmailTemplate.stubs(:find_by!)
@@ -184,7 +190,9 @@ class TrainingSessionNotificationsMailerTest < ActionMailer::TestCase
     expected_text = "Mock Body for #{@constituent.full_name} with #{@trainer.full_name} on #{expected_date}"
     training_scheduled_template = mock('training_scheduled_specific')
     training_scheduled_template.stubs(:subject).returns('Training scheduled')
+    training_scheduled_template.stubs(:render_subject).returns('Training scheduled')
     training_scheduled_template.stubs(:render).returns(['Training scheduled', expected_text])
+    training_scheduled_template.stubs(:enabled?).returns(true)
 
     # Re-stub for this test only
     EmailTemplate.stubs(:find_by!)

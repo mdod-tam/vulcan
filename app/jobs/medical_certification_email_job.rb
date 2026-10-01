@@ -1,10 +1,17 @@
 # frozen_string_literal: true
 
 class MedicalCertificationEmailJob < ApplicationJob
-  queue_as :default
-  retry_on Net::SMTPError, wait: :exponentially_longer, attempts: 3
+  include EmailDeliveryContextJob
 
-  def perform(application_id:, timestamp:, notification_id: nil)
+  queue_as :default
+  self.enqueue_after_transaction_commit = true
+  self.email_delivery_mail_action = 'MedicalProviderMailer#request_certification'
+
+  def email_delivery_params
+    arguments.first.to_h.slice(:notification_id, 'notification_id')
+  end
+
+  def perform(application_id:, timestamp:, notification_id:)
     Rails.logger.info "Processing disability certification email for application #{application_id}"
 
     application = Application.find(application_id)
@@ -13,82 +20,52 @@ class MedicalCertificationEmailJob < ApplicationJob
     send_request_email(application, timestamp, notification)
 
     Rails.logger.info "Successfully sent disability certification email for application #{application_id}"
+  rescue ApplicationMailer::DeliverySkipped => e
+    # Intentionally not sent: terminal, not retried, and not an error.
+    notification&.mark_delivery_suppressed!(e.reason)
+    delivery_not_sent
+    Rails.logger.info "Disability certification email for application #{application_id} suppressed: #{e.reason}"
   rescue StandardError => e
     handle_job_error(application_id, e, notification)
     raise
   end
 
-  private
-
-  def resolve_notification(application, timestamp, notification_id)
-    return Notification.find_by(id: notification_id) if notification_id.present?
-
-    recent_notification_for(application) || create_notification(application, timestamp)
+  def delivery_not_sent
+    notification = Notification.find_by(id: email_delivery_context&.dig('notification_id'))
+    Applications::MedicalCertificationService.restore_unsent_request(notification) if notification
   end
 
-  def recent_notification_for(application)
-    Notification
-      .medical_certification_requests
-      .where(notifiable: application)
-      .where('created_at > ?', 1.minute.ago)
-      .order(created_at: :desc)
-      .first
+  private
+
+  def resolve_notification(application, _timestamp, notification_id)
+    # Legacy queued requests are rejected by the context callback; never bind to a newer notice.
+    return unless notification_id
+
+    Notification.find_by!(id: notification_id, notifiable: application, action: 'medical_certification_requested')
   end
 
   def send_request_email(application, timestamp, notification)
-    MedicalProviderMailer.with(
-      application: application,
-      timestamp: timestamp,
-      notification_id: notification&.id
-    ).request_certification.deliver_now
+    EmailDelivery.deliver_now!(
+      MedicalProviderMailer.with(
+        application: application,
+        timestamp: timestamp,
+        notification_id: notification&.id
+      ).request_certification
+    )
   end
 
   def handle_job_error(application_id, error, notification)
     Rails.logger.error "Failed to send certification email for application #{application_id}: #{error.message}"
     Rails.logger.error error.backtrace.join("\n")
 
-    return if notification.blank?
+    return if notification.blank? || notification.email_delivery_attempts.exists?
 
-    notification.update_metadata!('error_message', error.message)
-    notification.update(delivery_status: 'error')
-  end
-
-  def create_notification(application, timestamp)
-    recipient = User.admins.first || User.first
-    raise ActiveRecord::RecordNotFound, 'No users available for medical certification notification recipient' unless recipient
-
-    actor = begin
-      Current.user
-    rescue StandardError
-      nil
+    if error.is_a?(EmailDelivery::ConfigurationError)
+      notification.mark_delivery_not_sent!(EmailDelivery::Decision.configuration_error(error.reason))
+      delivery_not_sent
+      return
     end
-    actor ||= recipient
 
-    # Log the audit event
-    AuditEventService.log(
-      action: 'medical_certification_requested_notification_sent',
-      actor: actor,
-      auditable: application,
-      metadata: {
-        recipient_id: recipient.id,
-        provider: application.medical_provider_name,
-        provider_email: application.medical_provider_email
-      }
-    )
-
-    # Create record-only notification; email delivery is owned by this job
-    NotificationService.create_and_deliver!(
-      type: 'medical_certification_requested',
-      recipient: recipient,
-      actor: actor,
-      notifiable: application,
-      metadata: {
-        timestamp: timestamp,
-        provider: application.medical_provider_name,
-        provider_email: application.medical_provider_email
-      },
-      channel: :email,
-      deliver: false
-    )
+    notification.mark_delivery_failed!(error)
   end
 end

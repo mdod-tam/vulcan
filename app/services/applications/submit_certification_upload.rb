@@ -25,6 +25,9 @@ module Applications
       return invalid_request_failure unless certification_kind?
       return validation_failure unless file_valid?
 
+      @system_actor = User.system_user
+      return failure(message(:attachment_failed)) unless @system_actor
+
       result = nil
 
       ApplicationRecord.transaction do
@@ -69,7 +72,7 @@ module Applications
         blob: create_secure_upload_blob,
         submission_method: :secure_form,
         requested_at: medical_provider_secure_request_form.sent_at,
-        admin: User.system_user,
+        admin: @system_actor,
         metadata: {
           medical_provider_secure_request_form_id: medical_provider_secure_request_form.id,
           request_batch_id: medical_provider_secure_request_form.request_batch_id
@@ -119,7 +122,7 @@ module Applications
     def log_submission(attach_result)
       AuditEventService.log(
         action: 'cert_submitted_via_secure_form',
-        actor: User.system_user,
+        actor: @system_actor,
         auditable: application,
         metadata: secure_upload_metadata.merge(additional_certification_metadata(attach_result))
       )

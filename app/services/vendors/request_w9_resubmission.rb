@@ -3,6 +3,7 @@
 module Vendors
   class RequestW9Resubmission < BaseService
     include SecureFormLocaleResolver
+    include Applications::SecureRequestDeliveryPolicy
 
     MESSAGE_SCOPE = 'vendors.w9_resubmission.messages'
 
@@ -21,20 +22,23 @@ module Vendors
       return failure(message(:request_not_needed)) unless requestable_w9_state?
       return failure(message(:missing_rejection_review)) if vendor.w9_status_rejected? && latest_rejection_review.blank?
 
-      request_form = nil
-      raw_token = nil
+      denial = authorize_delivery
+      return denial if denial
+
+      delivery = nil
 
       ApplicationRecord.transaction do
         vendor.with_lock do
           ensure_cooldown_allows!
           revoke_open_requests
-          request_form, raw_token = create_request
+          delivery = create_request
         end
       end
 
-      deliver_request_email!(request_form, raw_token)
+      result = deliver_requests([delivery])
+      return result if result.failure?
 
-      success(message(:request_created), result_data(request_form, raw_token))
+      success(message(:request_created), result_data(delivery.secure_request_form, delivery.raw_token))
     rescue ActiveRecord::RecordNotUnique, ActiveRecord::RecordInvalid => e
       Rails.logger.warn("W9 resubmission request failed for vendor #{vendor.id}: #{e.message}")
       failure(message(:request_conflict))
@@ -43,8 +47,8 @@ module Vendors
 
       failure(e.message)
     rescue StandardError => e
-      Rails.logger.warn("W9 resubmission delivery failed for vendor #{vendor.id}: #{sanitize_secure_error_message(e.message)}")
-      request_form&.persisted? ? delivery_failure(request_form, e) : failure(message(:delivery_failed))
+      Rails.logger.warn("W9 resubmission request failed for vendor #{vendor.id}: #{sanitize_secure_error_message(e.message)}")
+      failure(message(:delivery_failed))
     end
 
     private
@@ -86,8 +90,8 @@ module Vendors
         raise
       end
 
-      create_tracking_notification(request_form)
-      [request_form, raw_token]
+      notification = create_tracking_notification(request_form) || raise('Could not create W9 tracking notification')
+      Delivery.new(secure_request_form: request_form, raw_token: raw_token, context: @email_context, notification_id: notification.id)
     end
 
     def request_form_attributes(raw_token)
@@ -122,64 +126,30 @@ module Vendors
       )
     end
 
-    def delivery_failure(request_form, error)
-      persist_delivery_failure(request_form, error)
-      revoke_failed_request(request_form, error)
-      failure(message(:delivery_failed), delivery_failure_data(request_form, error))
+    def delivery_mail_action
+      latest_rejection_review.present? ? 'VendorNotificationsMailer#w9_rejected' : 'VendorNotificationsMailer#w9_upload_requested'
     end
 
-    def revoke_failed_request(request_form, error)
-      return unless request_form&.active?
+    def delivery_channel(_delivery) = :email
+    def delivery_result_locale = secure_form_locale_for(vendor)
 
-      request_form.revoke!(
-        actor: actor,
-        reason: :delivery_failure,
-        metadata: { delivery_failure: delivery_failure_context(request_form, error) }
-      )
-    rescue StandardError => e
-      Rails.logger.error(
-        "W9 resubmission delivery failure revocation failed: #{sanitize_secure_error_message(e.message)}"
-      )
+    def suppressed_delivery_data(deliveries)
+      { vendor_secure_request_form: Array(deliveries).first&.secure_request_form }.compact
     end
 
-    def persist_delivery_failure(request_form, error)
-      notification = tracking_notification_for(request_form)
-      return if notification.blank?
-
-      notification.update!(
-        delivery_status: :error,
-        metadata: (notification.metadata || {}).merge(
-          delivery_error: delivery_failure_context(request_form, error)
-        )
-      )
+    def delivery_failure_data(delivery_failures, deliveries)
+      super.merge(suppressed_delivery_data(deliveries), delivery_failure: delivery_failures.first)
     end
 
-    def tracking_notification_for(request_form)
-      Notification
-        .where(notifiable: vendor, action: 'w9_resubmission_requested')
-        .where("metadata->>'vendor_secure_request_form_id' = ?", request_form.id.to_s)
-        .order(created_at: :desc)
-        .first
+    def delivery_failure_details(forms)
+      request_form = forms.first
+      { vendor_id: vendor.id, vendor_secure_request_form_id: request_form.id,
+        request_batch_id: request_form.request_batch_id, recipient_ids: [], template_name: delivery_template_name }
     end
 
-    def delivery_failure_data(request_form, error)
-      {
-        vendor_secure_request_form: request_form,
-        delivery_error: true,
-        delivery_failure: delivery_failure_context(request_form, error)
-      }
-    end
-
-    def delivery_failure_context(request_form, error)
-      {
-        error_class: error.class.name,
-        error_message: sanitize_secure_error_message(error.message),
-        vendor_secure_request_form_id: request_form.id,
-        vendor_id: vendor.id,
-        request_batch_id: request_form.request_batch_id,
-        recipient_email: request_form.recipient_email,
-        template_name: delivery_template_name
-      }
+    def deliver_email(delivery)
+      @email_context = delivery_context_for(delivery)
+      deliver_request_email!(delivery.secure_request_form, delivery.raw_token)
     end
 
     # Delivers to the email recorded on the request row. deliver_now keeps the
@@ -193,11 +163,8 @@ module Vendors
         w9_review: latest_rejection_review,
         secure_upload_url: secure_upload_url
       )
-      if latest_rejection_review.present?
-        mailer.w9_rejected.deliver_now
-      else
-        mailer.w9_upload_requested.deliver_now
-      end
+      EmailDelivery.deliver_now!(latest_rejection_review.present? ? mailer.w9_rejected : mailer.w9_upload_requested,
+                                 context: @email_context)
     end
 
     def secure_upload_url_for(raw_token)

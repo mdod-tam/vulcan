@@ -205,6 +205,7 @@ es:
         request_created: "Solicitud segura de información del proveedor enviada."
         request_conflict: "Ya hay una solicitud segura activa para este destinatario. Actualice la página e inténtelo de nuevo."
         delivery_failed: "Se creó la solicitud segura de información del proveedor, pero falló la entrega. Revise el estado del enlace seguro e intente reenviarlo."
+        delivery_suppressed: "No se envió el mensaje porque su método de envío está desactivado. No se envió ningún enlace de información del proveedor."
         submitted: "Información del proveedor enviada."
         validation_failed: "Corrija los campos resaltados."
         already_submitted: "Este formulario seguro ya fue enviado."
@@ -232,6 +233,7 @@ es:
         request_not_needed: "Solo se puede enviar un enlace seguro para subir documentos cuando este documento aún falta o debe reemplazarse."
         request_conflict: "Ya hay una solicitud segura activa para este destinatario. Actualice la página e inténtelo de nuevo."
         delivery_failed: "Se creó la solicitud segura para subir documentos, pero falló la entrega. Revise el estado del enlace seguro e intente reenviarlo."
+        delivery_suppressed: "No se envió el mensaje porque su método de envío está desactivado. No se envió ningún enlace para subir documentos."
         missing_rejection_review: "Se requiere una revisión de documento rechazada antes de enviar un enlace seguro para subir documentos."
         invalid_proof_type: "Este tipo de documento no permite enlaces seguros de carga."
         submitted: "Documento enviado."
@@ -257,6 +259,7 @@ es:
         request_created: "Solicitud segura para subir la certificación creada."
         request_conflict: "Ya hay una solicitud segura activa para este proveedor. Actualice la página e inténtelo de nuevo."
         delivery_failed: "No pudimos enviar el correo del enlace seguro para subir la certificación. Inténtelo de nuevo."
+        delivery_suppressed: "No se envió el correo porque está desactivado en la configuración de correo. No se envió ningún enlace para subir la certificación."
         resent: "Si esta solicitud se puede reenviar, se enviará un nuevo enlace seguro al proveedor."
         submitted: "Certificación subida correctamente."
         validation_failed: "Corrija los campos resaltados."
@@ -626,6 +629,7 @@ es:
         request_created: "Se envió el enlace seguro para cargar el W9."
         request_conflict: "No pudimos crear un enlace seguro para cargar el W9 en este momento. Inténtelo de nuevo."
         delivery_failed: "Creamos el enlace seguro para cargar el W9, pero no pudimos entregar el correo electrónico. Inténtelo de nuevo."
+        delivery_suppressed: "No se envió el correo porque está desactivado en la configuración de correo. No se envió ningún enlace para cargar el W9."
         cooldown_active: "Se envió recientemente un enlace seguro para cargar el W9. Espere %{minutes} minuto(s) antes de enviar otro."
         resent: "Si esta solicitud segura de W9 se puede reenviar, se enviará un nuevo enlace al destinatario original."
         invalid_request: "Este enlace seguro para cargar el W9 no es válido."
@@ -660,6 +664,42 @@ es:
         {{submitter.link}}
 
         Si tiene preguntas, comuníquese con %{support_email}.
+  datetime:
+    distance_in_words:
+      half_a_minute: "medio minuto"
+      less_than_x_seconds:
+        one: "menos de un segundo"
+        other: "menos de %{count} segundos"
+      x_seconds:
+        one: "un segundo"
+        other: "%{count} segundos"
+      less_than_x_minutes:
+        one: "menos de un minuto"
+        other: "menos de %{count} minutos"
+      x_minutes:
+        one: "un minuto"
+        other: "%{count} minutos"
+      about_x_hours:
+        one: "alrededor de una hora"
+        other: "alrededor de %{count} horas"
+      x_days:
+        one: "un día"
+        other: "%{count} días"
+      about_x_months:
+        one: "alrededor de un mes"
+        other: "alrededor de %{count} meses"
+      x_months:
+        one: "un mes"
+        other: "%{count} meses"
+      about_x_years:
+        one: "alrededor de un año"
+        other: "alrededor de %{count} años"
+      over_x_years:
+        one: "más de un año"
+        other: "más de %{count} años"
+      almost_x_years:
+        one: "casi un año"
+        other: "casi %{count} años"
   date:
     formats:
       long: "%d de %B de %Y"
@@ -694,6 +734,12 @@ es:
       - dic
   mailers:
     voucher_notifications:
+      assigned_header: "¡Su vale de MAT está listo!"
+      expired_header: "Importante: Su vale ha vencido"
+      redeemed_header: "¡Su vale ha sido canjeado!"
+      transaction_history_entry: "- %{date}: %{amount} en %{vendor}"
+      remaining_balance: "Su saldo restante es %{balance}. El monto mínimo de canje es %{minimum}."
+      fully_redeemed: "Este vale ha sido canjeado por completo."
       expiring_soon:
         header_fallback: "Importante: su vale expirara pronto."
         warning_title: "El vale expirara pronto"
@@ -935,3 +981,20 @@ es:
     item_10_title: "10. Aprobación y Capacitación"
     item_10: "Tras la aprobación de un formulario de solicitud, entiendo que se me notificará por escrito la aceptación. Si es necesario, solicitaré capacitación específica para el dispositivo que recibiré. Si soy menor, un padre/tutor me acompañará a la capacitación requerida para firmar esta declaración. Si estoy físicamente incapacitado para asistir a la capacitación, puedo llamar al 800-552-7724 (Voz/TTY) 443-453-5970 (Teléfono de Video) para organizar capacitación en un sitio alternativo."
     conclusion: "Habiendo leído las condiciones anteriores o habiéndolas leído y explicado, acepto cumplir con todos los términos y condiciones que yo, o el menor por quien firmo, es elegible para recibir el equipo solicitado teniendo (1) la certificación médica requerida de discapacidad; (2) cumplido las directrices de ingresos recibiendo actualmente SSI, SSDI, TDAP o TANF; (3) firmado la declaración de términos y condiciones para la aceptación de propiedad estatal; y (4) no recibiendo equipo similar a través de otras agencias estatales o federales, o departamentos."
+  notification_delivery:
+    mark_as_read: "Marcar como leída"
+    check_status: "Consultar estado"
+    ago: "Hace %{time}"
+    error: "Error: %{message}"
+    statuses:
+      pending: "Pendiente"
+      queued: "En cola"
+      submitted: "Enviado al proveedor"
+      delivered: "Entregado"
+      opened: "Abierto"
+      error: "Error de envío"
+      suppressed: "No enviado"
+    suppressed: "No se envió: este método de envío estaba desactivado en la configuración de comunicaciones."
+
+  email_delivery:
+    configuration_error: "No se envió el mensaje porque no se pudo verificar la configuración de envío. Comuníquese con un administrador."

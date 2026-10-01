@@ -778,7 +778,7 @@ module Users
       assert_not GuardianRelationship.exists?(guardian_id: @duplicate.id)
     end
 
-    test 'transfers evaluations and pending print queue items but preserves historical records' do
+    test 'transfers evaluations and cancels unreleased print items without rewriting delivery history' do
       duplicate_app = create(:application, user: @duplicate)
       evaluation = create(:evaluation, constituent: @duplicate, application: duplicate_app)
       pending_print_item = create(:print_queue_item, :pending, constituent: @duplicate)
@@ -791,8 +791,8 @@ module Users
 
       assert_equal @canonical.id, evaluation.reload.constituent_id,
                    'evaluation must follow the person to stay consistent with its already-transferred application'
-      assert_equal @canonical.id, pending_print_item.reload.constituent_id,
-                   'a still-pending print queue item needs an explicit, contactable owner'
+      assert_equal @duplicate.id, pending_print_item.reload.constituent_id
+      assert pending_print_item.canceled?, 'a new recipient requires a newly authorized artifact'
       assert_equal @duplicate.id, printed_item.reload.constituent_id, 'a printed letter is historical and must not be rewritten'
       assert_equal @duplicate.id, canceled_item.reload.constituent_id, 'a canceled letter is historical and must not be rewritten'
       assert_equal @duplicate.id, notification.reload.recipient_id, 'notification history is preserved, not repointed'

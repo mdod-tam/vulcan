@@ -12,16 +12,19 @@ module Applications
       ActionMailer::Base.deliveries.clear
     end
 
-    test 'a disabled provider information template revokes the unsent link and records the failure' do
+    # The email controls check the template pair before any link exists, so nothing is issued or revoked.
+    test 'a turned-off provider information template issues no link and reports suppression' do
       application = create(:application)
-      EmailTemplate.where(name: 'application_notifications_provider_info_requested').update_all(enabled: false)
+      load_seeded_email_templates('application_notifications_provider_info_requested')
+      EmailDelivery::ControlWriter.set_template_pair(name: 'application_notifications_provider_info_requested', format: :text,
+                                                     enabled: false, actor: @admin, operation_id: 'op-1')
 
-      result = RequestProviderInfo.new(application: application, actor: @admin).call
+      result = assert_no_difference(-> { application.secure_request_forms.count }) do
+        RequestProviderInfo.new(application: application, actor: @admin).call
+      end
 
       assert_not result.success?
-      form = application.secure_request_forms.provider_info.order(:sent_at).last
-      assert_predicate form, :revoked?
-      assert Event.exists?(action: 'provider_info_request_revoked', auditable: application)
+      assert_equal 'template_disabled', result.data[:suppression_reason]
       assert_empty ActionMailer::Base.deliveries
     end
 

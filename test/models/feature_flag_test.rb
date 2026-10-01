@@ -24,7 +24,7 @@ class FeatureFlagTest < ActiveSupport::TestCase
   end
 
   test 'enabled? returns false when flag is disabled' do
-    disabled_flag = create(:feature_flag, name: 'disabled_feature', enabled: false)
+    create(:feature_flag, name: 'disabled_feature', enabled: false)
     assert_not FeatureFlag.enabled?('disabled_feature')
   end
 
@@ -69,5 +69,45 @@ class FeatureFlagTest < ActiveSupport::TestCase
     assert enabled_flag.enabled?
     FeatureFlag.disable!('to_disable')
     assert_not FeatureFlag.enabled?('to_disable')
+  end
+
+  test 'a stored false stays false even when the caller defaults to true' do
+    create(:feature_flag, name: 'docusign_enabled', enabled: false)
+
+    assert_not FeatureFlag.enabled?(:docusign_enabled, default: true)
+  end
+
+  test 'vouchers_enabled reads its stored value' do
+    FeatureFlag.find_or_create_by!(name: 'vouchers_enabled').update!(enabled: true)
+    assert FeatureFlag.enabled?(:vouchers_enabled)
+
+    FeatureFlag.find_by!(name: 'vouchers_enabled').update!(enabled: false)
+    assert_not FeatureFlag.enabled?(:vouchers_enabled)
+  end
+
+  test 'general excludes email controls' do
+    assert_not_includes FeatureFlag.general.pluck(:name), EmailDelivery::GLOBAL_CONTROL
+    assert_includes FeatureFlag.general.pluck(:name), 'test_feature'
+  end
+
+  test 'an email control cannot be flipped outside the control writer' do
+    control = FeatureFlag.find_by!(name: EmailDelivery::GLOBAL_CONTROL)
+
+    assert_raises(ActiveRecord::RecordInvalid) { FeatureFlag.disable!(EmailDelivery::GLOBAL_CONTROL) }
+    assert_not control.update(delivery_generation: 5)
+    assert control.reload.enabled
+    assert_equal 0, control.delivery_generation
+  end
+
+  test 'generic flag helpers cannot recreate missing communication controls' do
+    [EmailDelivery::GLOBAL_CONTROL, EmailDelivery::ALL_CONTROL, EmailDelivery::CHANNEL_CONTROLS['sms']].each do |name|
+      FeatureFlag.find_by!(name: name).destroy!
+      %i[enable! disable!].each do |operation|
+        assert_no_difference ['FeatureFlag.count', 'Event.count'] do
+          assert_raises(ActiveRecord::RecordInvalid) { FeatureFlag.public_send(operation, name) }
+        end
+        assert_not FeatureFlag.exists?(name: name)
+      end
+    end
   end
 end

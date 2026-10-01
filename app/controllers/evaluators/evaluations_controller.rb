@@ -96,6 +96,7 @@ module Evaluators
     end
 
     def show
+      EmailDelivery::Visibility.preload([@evaluation])
       # @evaluation is set by set_evaluation
       prepare_show_context
     end

@@ -39,7 +39,7 @@ The redemption service simplifies vendor authorization in the test environment. 
 
 Vouchers have four states: `active`, `redeemed`, `expired`, and `cancelled`. Full redemption consumes the balance; expiry is calculated from issue time and the policy validity period. The model checks elapsed expiry during redemption even if status has not yet changed.
 
-[CheckVoucherExpirationJob](../../app/jobs/check_voucher_expiration_job.rb) is the entry point for batch expiration processing. Admin cancellation runs through [Admin::VouchersController](../../app/controllers/admin/vouchers_controller.rb) and `Voucher#cancel!`.
+[CheckVoucherExpirationJob](../../app/jobs/check_voucher_expiration_job.rb) is the entry point for batch expiration processing. It warns each voucher once when it enters the expiring-soon window and expires vouchers past their validity period; the expired notice comes from the `Voucher` status callback, so every path to `expired` sends it once. Admin cancellation runs through [Admin::VouchersController](../../app/controllers/admin/vouchers_controller.rb) and `Voucher#cancel!`.
 
 Issuance owns `voucher_assigned`, redemption owns `voucher_redeemed`, and the admin controller owns `voucher_cancelled` / `voucher_updated`. Model callbacks record status changes. [VoucherAuditLogBuilder](../../app/services/vouchers/voucher_audit_log_builder.rb) assembles the displayed history.
 

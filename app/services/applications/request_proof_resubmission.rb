@@ -3,6 +3,7 @@
 module Applications
   class RequestProofResubmission < BaseService
     include SecureFormLocaleResolver
+    include SecureRequestDeliveryPolicy
 
     MESSAGE_SCOPE = 'applications.proof_resubmission.messages'
     PROOF_KIND_BY_TYPE = {
@@ -10,8 +11,6 @@ module Applications
       residency: :residency_proof_resubmission,
       income: :income_proof_resubmission
     }.freeze
-
-    Delivery = Struct.new(:secure_request_form, :raw_token, :candidate, :proof_review)
 
     attr_reader :application, :actor, :proof_type, :recipient_ids, :channel_overrides, :resend_of, :public_recovery,
                 :deliver_request
@@ -43,6 +42,7 @@ module Applications
     end
 
     def call
+      Letters::Delivery.reconcile_pending!(scope: PrintQueueItem.unreleased.where(application_id: application.id))
       return failure(message(:invalid_proof_type)) unless proof_kind
       return failure(message(:request_not_needed)) unless requestable_proof_state?
 
@@ -54,6 +54,8 @@ module Applications
         delivery_result = deliver_requests(deliveries)
         return delivery_result if delivery_result.failure?
       end
+
+      return delivery_denial_result(deliveries) if denied_candidates.any?
 
       result
     rescue ActiveRecord::RecordNotUnique,
@@ -99,7 +101,11 @@ module Applications
         end
 
         deliveries = create_requests_for(result.data)
-        result = success(message(:request_created), result_data_for(deliveries))
+        result = if deliveries.empty? && denied_candidates.any?
+                   delivery_denial_result(deliveries)
+                 else
+                   success(message(:request_created), result_data_for(deliveries))
+                 end
       end
 
       [deliveries, result]
@@ -210,9 +216,15 @@ module Applications
       failure(message(:needs_managing_guardian))
     end
 
+    # Refuse each denied channel before token creation; eligible recipients still proceed.
     def create_requests_for(candidates)
       request_batch_id = SecureRandom.uuid
-      candidates.map do |candidate|
+      candidates.filter_map do |candidate|
+        if delivery_denied_for?(candidate)
+          denied_candidates << candidate
+          next
+        end
+
         ensure_cooldown_allows!(candidate)
         open_requests_for(candidate.recipient.id)
           .order(:id)
@@ -261,12 +273,14 @@ module Applications
         raise
       end
 
-      create_tracking_notification(secure_request_form)
+      notification = create_tracking_notification(secure_request_form)
       Delivery.new(
         secure_request_form: secure_request_form,
         raw_token: raw_token,
         candidate: candidate,
-        proof_review: proof_request_rejected? ? latest_rejection_review : nil
+        proof_review: proof_request_rejected? ? latest_rejection_review : nil,
+        context: authorization_for(candidate).last,
+        notification_id: notification&.id
       )
     end
 
@@ -336,48 +350,26 @@ module Applications
       latest_rejection_review&.rejection_reason
     end
 
-    def notification_channel_for(secure_request_form)
-      case secure_request_form.recipient_channel
-      when 'letter'
-        :letter
-      when 'sms'
-        :email
-      end || :email
-    end
-
-    def deliver_requests(deliveries)
-      delivery_failures = []
-
-      Array(deliveries).each do |delivery|
-        case delivery.secure_request_form.recipient_channel.to_sym
-        when :email
-          deliver_email(delivery)
-        when :sms
-          deliver_sms(delivery)
-        when :letter
-          deliver_letter(delivery)
-        end
-      rescue StandardError => e
-        report_delivery_failure(e, [delivery])
-        delivery_failures << delivery_failure_context(e, [delivery])
-        revoke_failed_deliveries([delivery], e)
-      end
-
-      return failure(message(:delivery_failed), delivery_failure_data(delivery_failures, deliveries)) if delivery_failures.any?
-
-      success
-    end
-
     def deliver_email(delivery)
       # deliver_now keeps the raw bearer URL out of Active Job arguments.
-      proof_request_mail(
-        delivery,
-        secure_upload_url: secure_url_for(delivery.raw_token)
-      ).deliver_now
+      EmailDelivery.deliver_now!(
+        proof_request_mail(
+          delivery,
+          secure_upload_url: secure_url_for(delivery.raw_token)
+        ),
+        context: delivery_context_for(delivery)
+      )
     end
 
+    def delivery_mail_action
+      proof_request_rejected? ? 'ApplicationNotificationsMailer#proof_rejected' : 'ApplicationNotificationsMailer#proof_requested'
+    end
+
+    def delivery_requested? = deliver_request
+    def sms_action = 'SmsService#proof_resubmission'
+
     def deliver_letter(delivery)
-      proof_request_mail(delivery, secure_upload_url: nil).deliver_now
+      EmailDelivery.deliver_now!(proof_request_mail(delivery, secure_upload_url: nil), context: delivery_context_for(delivery))
     end
 
     def deliver_sms(delivery)
@@ -386,6 +378,8 @@ module Applications
         secure_request_form.recipient_phone,
         sms_message(secure_url_for(delivery.raw_token), secure_request_form),
         sensitive: true,
+        action: sms_action,
+        delivery_context: delivery_context_for(delivery),
         context: {
           secure_request_form_id: secure_request_form.id,
           application_id: application.id,
@@ -395,59 +389,8 @@ module Applications
       )
     end
 
-    def report_delivery_failure(error, deliveries)
-      context = delivery_failure_context(error, deliveries)
-      if Rails.respond_to?(:error)
-        Rails.error.report(reportable_delivery_error(error), handled: true, context: context)
-      else
-        Rails.logger.error("Proof resubmission delivery failed: #{context.inspect}")
-      end
-    end
-
-    def reportable_delivery_error(error)
-      StandardError.new(sanitize_secure_error_message(error.message)).tap do |reportable_error|
-        reportable_error.set_backtrace(Array(error.backtrace).map { |line| sanitize_secure_error_message(line) })
-      end
-    end
-
-    def revoke_failed_deliveries(deliveries, error)
-      Array(deliveries).each do |delivery|
-        request_form = delivery.secure_request_form
-        next unless request_form&.active?
-
-        request_form.revoke!(
-          actor: actor,
-          reason: :delivery_failure,
-          metadata: { delivery_failure: delivery_failure_context(error, [delivery]) }
-        )
-      rescue StandardError => e
-        Rails.logger.error(
-          "Proof resubmission delivery failure revocation failed: #{sanitize_secure_error_message(e.message)}"
-        )
-      end
-    end
-
-    def delivery_failure_data(delivery_failures, deliveries)
-      {
-        secure_request_forms: Array(deliveries).map(&:secure_request_form),
-        delivery_error: true,
-        delivery_failures: delivery_failures,
-        failed_secure_request_form_ids: delivery_failures.flat_map { |failure| failure[:secure_request_form_ids] },
-        failed_recipient_ids: delivery_failures.flat_map { |failure| failure[:recipient_ids] },
-        failed_recipient_channels: delivery_failures.flat_map { |failure| failure[:recipient_channels] }
-      }
-    end
-
-    def delivery_failure_context(error, deliveries)
-      forms = Array(deliveries).map(&:secure_request_form)
-      {
-        error_class: error.class.name,
-        application_id: application.id,
-        secure_request_form_ids: forms.map(&:id),
-        recipient_ids: forms.map(&:recipient_id),
-        recipient_channels: forms.map(&:recipient_channel),
-        proof_type: proof_type.to_s
-      }
+    def delivery_failure_details(forms)
+      super.merge(proof_type: proof_type.to_s)
     end
 
     def result_data_for(deliveries)

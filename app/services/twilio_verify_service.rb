@@ -3,12 +3,20 @@
 # Service for interacting with Twilio Verify API for 2FA
 # Twilio Verify documentation: https://www.twilio.com/docs/verify/quickstarts/ruby-rails
 class TwilioVerifyService
+  extend SecureErrorSanitizer
+
   class << self
     # Send a verification code via SMS
     # @param phone_number [String] Phone number in E.164 format (e.g., +12025551234)
     # @return [Hash] Result with :success, :verification_sid, :status, and :error keys
-    def send_verification(phone_number)
-      return test_mode_success(phone_number) if test_mode?
+    def send_verification(phone_number, purpose:, sms_credential_id: nil)
+      action = { login: 'TwoFactor#sms_login', setup: 'TwoFactor#sms_setup' }.fetch(purpose)
+      context = EmailDelivery::Policy.capture(mail_action: action, params: { sms_credential_id: sms_credential_id, phone_number: phone_number })
+      EmailDelivery.verify!(action, context: context, channel: 'sms')
+      if test_mode?
+        EmailDelivery::Outcome.record_essential_handoff(context: context, channel: :sms)
+        return test_mode_success(phone_number)
+      end
 
       unless verify_configured?
         Rails.logger.warn('[TwilioVerify] Verify not configured, skipping verification send')
@@ -16,8 +24,9 @@ class TwilioVerifyService
       end
 
       phone_e164 = format_phone_to_e164(phone_number)
-      Rails.logger.info("[TwilioVerify] Sending verification to #{phone_e164}")
+      Rails.logger.info("[TwilioVerify] Sending verification to #{sanitize_secure_error_message(phone_e164)}")
 
+      EmailDelivery.verify!(action, context: context, channel: 'sms')
       verification = client
                      .verify
                      .v2
@@ -28,6 +37,7 @@ class TwilioVerifyService
                        to: phone_e164
                      )
 
+      EmailDelivery::Outcome.record_essential_handoff(context: context, channel: :sms)
       Rails.logger.info("[TwilioVerify] Verification sent successfully, SID: #{verification.sid}, Status: #{verification.status}")
 
       {
@@ -37,14 +47,20 @@ class TwilioVerifyService
         to: verification.to,
         channel: verification.channel
       }
+    rescue ApplicationMailer::DeliverySkipped, EmailDelivery::ConfigurationError => e
+      { success: false, delivery_suppressed: e.is_a?(ApplicationMailer::DeliverySkipped),
+        configuration_error: e.is_a?(EmailDelivery::ConfigurationError), reason: e.reason,
+        error: I18n.t(e.is_a?(ApplicationMailer::DeliverySkipped) ? 'outbound_delivery.sms_suppressed' : 'outbound_delivery.sms_configuration_error') }
     rescue Twilio::REST::RestError => e
-      Rails.logger.error("[TwilioVerify] Twilio API error: #{e.message}")
+      error_message = sanitize_secure_error_message(e.message)
+      Rails.logger.error("[TwilioVerify] Twilio API error: #{error_message}")
       Rails.logger.error("[TwilioVerify] Error code: #{e.code}") if e.respond_to?(:code)
-      { success: false, error: e.message, error_code: e.code }
+      { success: false, error: error_message, error_code: e.code }
     rescue StandardError => e
-      Rails.logger.error("[TwilioVerify] Unexpected error: #{e.message}")
-      Rails.logger.error("[TwilioVerify] Backtrace: #{e.backtrace.first(5).join("\n")}")
-      { success: false, error: e.message }
+      error_message = sanitize_secure_error_message(e.message)
+      Rails.logger.error("[TwilioVerify] Unexpected error: #{error_message}")
+      Rails.logger.error("[TwilioVerify] Backtrace: #{sanitize_secure_error_message(e.backtrace.first(5).join("\n"))}") if e.backtrace.present?
+      { success: false, error: error_message }
     end
 
     # Check a verification code
@@ -64,7 +80,7 @@ class TwilioVerifyService
       end
 
       phone_e164 = format_phone_to_e164(phone_number)
-      Rails.logger.info("[TwilioVerify] Checking verification for SID #{verification_sid} and phone #{phone_e164}")
+      Rails.logger.info("[TwilioVerify] Checking verification for SID #{verification_sid} and phone #{sanitize_secure_error_message(phone_e164)}")
 
       verification_check = client
                            .verify
@@ -83,19 +99,21 @@ class TwilioVerifyService
         to: verification_check.to
       }
     rescue Twilio::REST::RestError => e
-      Rails.logger.error("[TwilioVerify] Verification check error: #{e.message}")
+      error_message = sanitize_secure_error_message(e.message)
+      Rails.logger.error("[TwilioVerify] Verification check error: #{error_message}")
       Rails.logger.error("[TwilioVerify] Error code: #{e.code}") if e.respond_to?(:code)
 
       # Error 60200 is returned for invalid Verify check inputs.
       # Error 60202 means "Max check attempts reached"
-      return { success: true, status: 'invalid_input', valid: false, error: e.message } if e.code == 60_200
-      return { success: true, status: 'max_attempts_reached', valid: false, error: e.message } if e.code == 60_202
-      return { success: true, status: 'not_found', valid: false, error: e.message } if read_twilio_attribute(e, :status_code) == 404
+      return { success: true, status: 'invalid_input', valid: false, error: error_message } if e.code == 60_200
+      return { success: true, status: 'max_attempts_reached', valid: false, error: error_message } if e.code == 60_202
+      return { success: true, status: 'not_found', valid: false, error: error_message } if read_twilio_attribute(e, :status_code) == 404
 
-      { success: false, error: e.message, error_code: e.code }
+      { success: false, error: error_message, error_code: e.code }
     rescue StandardError => e
-      Rails.logger.error("[TwilioVerify] Unexpected error: #{e.message}")
-      { success: false, error: e.message }
+      error_message = sanitize_secure_error_message(e.message)
+      Rails.logger.error("[TwilioVerify] Unexpected error: #{error_message}")
+      { success: false, error: error_message }
     end
 
     private
@@ -157,7 +175,7 @@ class TwilioVerifyService
 
     # Test mode methods - used when Verify is not configured or in test environment
     def test_mode_success(phone_number)
-      Rails.logger.info("[TwilioVerify] TEST MODE: Simulating verification send to #{phone_number}")
+      Rails.logger.info("[TwilioVerify] TEST MODE: Simulating verification send to #{sanitize_secure_error_message(phone_number)}")
       {
         success: true,
         verification_sid: "TEST_#{SecureRandom.hex(8)}",
@@ -170,7 +188,7 @@ class TwilioVerifyService
     def test_mode_check(code)
       # In test mode, accept '123456' as valid code
       is_valid = code == '123456'
-      Rails.logger.info("[TwilioVerify] TEST MODE: Checking code #{code}, Valid: #{is_valid}")
+      Rails.logger.info("[TwilioVerify] TEST MODE: Verification check valid: #{is_valid}")
       {
         success: true,
         status: is_valid ? 'approved' : 'failed',

@@ -91,6 +91,7 @@ module Trainers
     end
 
     def show
+      EmailDelivery::Visibility.preload([@training_session])
       prepare_show_context
     end
 

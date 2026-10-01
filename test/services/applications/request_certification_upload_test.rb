@@ -368,7 +368,7 @@ module Applications
       assert_equal form.id, delivery_error.fetch('medical_provider_secure_request_form_id')
       assert_equal form.request_batch_id, delivery_error.fetch('request_batch_id')
       assert_equal 'StandardError', delivery_error.fetch('error_class')
-      assert_includes delivery_error.fetch('error_message'), '[REDACTED_URL]'
+      assert_equal 'Email could not be sent.', delivery_error.fetch('message')
       assert_not_includes notification.metadata.to_json, 'secret'
       assert_not notification.metadata.key?('secure_upload_url')
     end

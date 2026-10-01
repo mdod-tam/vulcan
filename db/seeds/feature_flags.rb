@@ -8,9 +8,14 @@ def seed_feature_flags
   # `vouchers_enabled` is the single switch for the voucher fulfillment workflow.
   # Income proof requirement is derived from it: income is NOT required when
   # vouchers are enabled, and required when they are disabled.
+  # `email.global` is the master email control; the migration creates it in deployed databases.
   feature_flags = {
-    'vouchers_enabled' => false
-  }
+    'vouchers_enabled' => false,
+    'dcf_auto_request_certification' => false,
+    'email.global' => true
+  }.merge(EmailDelivery::CONTROL_NAMES.index_with(true))
+  existing_email = FeatureFlag.find_by(name: EmailDelivery::GLOBAL_CONTROL)
+  feature_flags[EmailDelivery::ALL_CONTROL] = existing_email.enabled if existing_email
 
   feature_flags.each do |name, enabled|
     FeatureFlag.find_or_create_by!(name: name) do |flag|

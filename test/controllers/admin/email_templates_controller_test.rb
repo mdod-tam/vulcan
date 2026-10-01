@@ -155,10 +155,145 @@ module Admin
 
       patch toggle_disabled_admin_email_template_path(template), headers: default_headers
 
-      assert_redirected_to admin_email_templates_path
+      assert_redirected_to admin_email_templates_path(anchor: "template-#{template.name}-text".parameterize)
       template.reload
       assert_not template.enabled
       assert_equal original_version, template.version
+    end
+
+    test 'toggle off, on, and off within seconds records three audit events' do
+      template = create(:email_template, :text, enabled: true)
+
+      3.times { patch toggle_disabled_admin_email_template_path(template), headers: default_headers }
+
+      events = Event.where(action: EmailDelivery::ControlWriter::TEMPLATE_AUDIT_ACTION, auditable: template).order(:id)
+      assert_equal([false, true, false], events.map { |event| event.metadata['new_value'] })
+      assert_equal 3, events.map { |event| event.metadata['operation_id'] }.uniq.size
+    end
+
+    test 'turning a template off turns off English and Spanish together and cancels their pending mail' do
+      en, es = template_pair('pair_toggle_test')
+
+      patch toggle_disabled_admin_email_template_path(en), headers: default_headers,
+                                                           params: { enabled: false, expected_enabled: true, operation_id: 'op-1' }
+
+      [en, es].each(&:reload)
+      assert_not en.enabled
+      assert_not es.enabled
+      assert_equal [1, 1], [en.delivery_generation, es.delivery_generation]
+      assert_match 'canceled', flash[:notice]
+    end
+
+    test 'a stale template form does not reverse a newer change' do
+      en, es = template_pair('pair_stale_test')
+      EmailDelivery::ControlWriter.set_template_pair(name: en.name, format: en.format, enabled: false, actor: @admin,
+                                                     operation_id: 'op-1')
+
+      patch toggle_disabled_admin_email_template_path(es), headers: default_headers,
+                                                           params: { enabled: false, expected_enabled: true, operation_id: 'op-2' }
+
+      assert_match 'changed', flash[:alert]
+      assert_equal 1, en.reload.delivery_generation
+    end
+
+    test 'a resubmitted template toggle is applied once' do
+      en, = template_pair('pair_retry_test')
+      form = { enabled: false, expected_enabled: true, operation_id: 'op-1' }
+
+      2.times { patch toggle_disabled_admin_email_template_path(en), headers: default_headers, params: form }
+
+      assert_equal 1, en.reload.delivery_generation
+      assert_equal 1, Event.where(action: EmailDelivery::ControlWriter::TEMPLATE_AUDIT_ACTION, auditable: en).count
+    end
+
+    test 'a shared header or footer has no on/off setting' do
+      fragment = EmailTemplate.find_by(name: 'email_header_text', locale: 'en') ||
+                 create(:email_template, :text, name: 'email_header_text', locale: 'en')
+
+      patch toggle_disabled_admin_email_template_path(fragment), headers: default_headers
+
+      assert_match 'fragment', flash[:alert]
+      assert fragment.reload.enabled
+    end
+
+    test 'bulk off counts template pairs and skips shared components' do
+      template_pair('bulk_pair_one')
+      template_pair('bulk_pair_two')
+
+      patch bulk_disable_admin_email_templates_path, headers: default_headers, params: { operation_id: 'bulk-1' }
+
+      assert EmailTemplate.deliverable.none?(&:enabled)
+      assert(EmailTemplate.fragments.all?(&:enabled))
+      assert_match "#{EmailTemplate.deliverable.distinct.count(:name)} templates changed", flash[:notice]
+    end
+
+    test 'HTML test previews keep formatting without executable template markup' do
+      template = create(:email_template, :html, subject: 'Preview', variables: { required: [], optional: [] },
+                                                body: '<p>Allowed text</p><script>alert(1)</script><a href="javascript:alert(1)">Link</a><img src="x" onerror="alert(1)">')
+
+      get new_test_email_admin_email_template_path(template), headers: default_headers
+
+      assert_response :success
+      assert_select '.email-preview p', text: 'Allowed text'
+      assert_select '.email-preview script', count: 0
+      assert_select '.email-preview a[href^="javascript:"]', count: 0
+      assert_select '.email-preview img[onerror]', count: 0
+    end
+
+    [true, false].each do |enabled|
+      test "bulk #{enabled ? 'enable' : 'disable'} rolls back every pair and audit when a later pair fails" do
+        template_pair('atomic_bulk_first')
+        last, = template_pair('atomic_bulk_last')
+        EmailDelivery::ControlWriter.set_all_template_pairs(enabled: !enabled, actor: @admin, operation_id: 'bulk-prepare')
+        before_state = EmailTemplate.order(:id).pluck(:id, :enabled, :delivery_generation)
+        callback = ->(row) { raise ActiveRecord::RecordInvalid, row if row.id == last.id }
+        EmailTemplate.set_callback(:update, :after, callback)
+
+        assert_no_difference('Event.count') do
+          assert_no_enqueued_jobs(only: Letters::ReconcilePendingJob) do
+            patch(enabled ? bulk_enable_admin_email_templates_path : bulk_disable_admin_email_templates_path,
+                  headers: default_headers, params: { operation_id: 'bulk-failure' })
+          end
+        end
+
+        assert_redirected_to admin_email_templates_path
+        assert_equal I18n.t('admin.email_delivery.bulk_failed', locale: :en), flash[:alert]
+        assert_equal before_state, EmailTemplate.order(:id).pluck(:id, :enabled, :delivery_generation)
+      ensure
+        EmailTemplate.skip_callback(:update, :after, callback) if callback
+      end
+    end
+
+    test 'a retried bulk command cannot reverse a later bulk change' do
+      template_pair('bulk_retry')
+      patch bulk_disable_admin_email_templates_path, headers: default_headers, params: { operation_id: 'bulk-off' }
+      patch bulk_enable_admin_email_templates_path, headers: default_headers, params: { operation_id: 'bulk-on' }
+      before_state = EmailTemplate.order(:id).pluck(:id, :enabled, :delivery_generation)
+
+      assert_no_difference('Event.count') do
+        patch bulk_disable_admin_email_templates_path, headers: default_headers, params: { operation_id: 'bulk-off' }
+      end
+
+      assert_equal before_state, EmailTemplate.order(:id).pluck(:id, :enabled, :delivery_generation)
+      assert_equal 1, Event.where(action: 'email_templates_bulk_disabled').with_metadata(:operation_id, 'bulk-off').count
+      assert_match '0 templates changed', flash[:notice]
+    end
+
+    test 'rapid distinct edits each record an audit event and an unchanged resubmit records none' do
+      template = create(:email_template, :text, subject: 'Original', body: 'Body %<name>s')
+      edit = lambda do |subject|
+        patch admin_email_template_path(template), headers: default_headers, params: {
+          locale: template.locale,
+          email_template: { subject: subject, body: 'Body %<name>s', description: template.description }
+        }
+      end
+
+      edit.call('First')
+      edit.call('Second')
+      edit.call('Second')
+
+      events = Event.where(action: 'email_template_updated', auditable: template).order(:id)
+      assert_equal(%w[First Second], events.map { |event| event.metadata.dig('changes', 'subject', 'to') })
     end
 
     test 'update stores previous content when resolving out-of-sync locale template' do
@@ -598,7 +733,7 @@ module Admin
 
       patch toggle_disabled_admin_email_template_path(template), headers: default_headers
 
-      assert_redirected_to admin_email_templates_path
+      assert_redirected_to admin_email_templates_path(anchor: "template-#{template.name}-text".parameterize)
       assert_not template.reload.enabled?
     end
 
@@ -652,6 +787,61 @@ module Admin
       assert disabled_template.reload.enabled
       assert enabled_template.reload.enabled
       assert_equal enabled_updated_at.to_i, enabled_template.updated_at.to_i
+    end
+
+    test 'the index shows email controls, templates by category, and shared components' do
+      template_pair('application_notifications_proof_approved')
+
+      get admin_email_templates_path, headers: default_headers
+
+      assert_response :success
+      assert_select '#email-delivery [data-email-control=?]', EmailDelivery::GLOBAL_CONTROL
+      assert_select '#email-delivery [data-email-control]', EmailDelivery::CONTROL_NAMES.size
+      assert_select '#templates-proof-heading', text: 'Proof'
+      assert_select "##{'template-application_notifications_proof_approved-text'.parameterize}"
+    end
+
+    test 'the index shows a template as suppressed while its category is off' do
+      template_pair('application_notifications_proof_approved')
+      EmailDelivery::ControlWriter.set(name: EmailDelivery.category_control('proof'), enabled: false, actor: @admin,
+                                       operation_id: 'op-1')
+
+      get admin_email_templates_path, headers: default_headers
+
+      assert_match 'Blocked: proof communications are turned off', response.body
+    end
+
+    test 'a test send follows the template category and says why it was not sent' do
+      en, = template_pair('voucher_notifications_voucher_assigned')
+      EmailDelivery::ControlWriter.set(name: EmailDelivery.category_control('voucher'), enabled: false, actor: @admin,
+                                       operation_id: 'op-1')
+
+      assert_no_enqueued_jobs(only: EmailDelivery::MailDeliveryJob) do
+        post send_test_admin_email_template_path(en), headers: default_headers,
+                                                      params: { admin_test_email_form: { email: 'tester@example.com', template_id: en.id } }
+      end
+
+      assert_redirected_to admin_email_template_path(en)
+      assert_equal 'Test email not sent: voucher communications are turned off.', flash[:alert]
+    end
+
+    test 'a queued test send says queued, not delivered' do
+      load_seeded_email_templates('voucher_notifications_voucher_assigned')
+      en = EmailTemplate.find_by!(name: 'voucher_notifications_voucher_assigned', format: :text, locale: 'en')
+
+      post send_test_admin_email_template_path(en), headers: default_headers,
+                                                    params: { admin_test_email_form: { email: 'tester@example.com', template_id: en.id } }
+
+      assert_match 'Queued does not mean delivered', flash[:notice]
+    end
+
+    private
+
+    def template_pair(name)
+      %w[en es].map do |locale|
+        EmailTemplate.find_by(name: name, format: :text, locale: locale) ||
+          create(:email_template, :text, name: name, locale: locale, enabled: true)
+      end
     end
   end
 end

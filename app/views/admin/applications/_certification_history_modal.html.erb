@@ -2,35 +2,16 @@
 <dialog id="viewCertificationHistoryModal" class="backdrop:bg-gray-500 backdrop:bg-opacity-75 bg-white rounded-lg max-w-3xl w-full shadow-xl p-0" data-action="click->modal#clickOutside" aria-labelledby="viewCertificationHistoryModal-heading">
     <div class="p-6">
       <h3 id="viewCertificationHistoryModal-heading" class="text-lg font-medium text-gray-900 mb-4">Medical Certification Request History</h3>
-      <% certification_requests = Notification.where(
-          notifiable: @application, 
-          action: "medical_certification_requested"
-        ).order(created_at: :desc) 
-      %>
-      
+
       <div class="overflow-y-auto max-h-96">
-        <% if certification_requests.any? %>
+        <% if @certification_delivery_notifications.any? %>
           <ul class="space-y-4">
-            <% certification_requests.each_with_index do |request, index| %>
-              <% 
-                # Get timestamp from metadata if available, otherwise use notification created_at
-                timestamp = nil
-                if request.metadata.present? && request.metadata.is_a?(Hash) && request.metadata['timestamp'].present?
-                  begin
-                    timestamp = Time.zone.parse(request.metadata['timestamp'])
-                  rescue
-                    timestamp = request.created_at
-                  end
-                else
-                  timestamp = request.created_at
-                end
-              %>
+            <% @certification_delivery_notifications.each_with_index do |request, index| %>
               <li class="bg-gray-50 p-4 rounded-md" id="notification_<%= request.id %>">
                 <div class="flex justify-between items-start">
                   <div class="flex-1">
                     <p class="text-sm font-medium text-gray-900">
-                      Request #<%= certification_requests.size - index %>
-                      <%= delivery_status_badge(request) %>
+                      Request #<%= @certification_delivery_notifications.size - index %>
                       <% if index == 0 %>
                         <span class="ml-2 inline-flex items-center px-2 py-0.5 rounded text-xs font-medium bg-blue-100 text-blue-800">
                           Most Recent
@@ -39,7 +20,7 @@
                     </p>
                     
                     <p class="text-sm text-gray-600 mt-1">
-                      Sent on <%= timestamp.strftime("%B %d, %Y at %I:%M %p") %>
+                      Requested on <%= l(request.created_at, format: :short) %>
                     </p>
                     
                     <%= format_email_status(request) %>

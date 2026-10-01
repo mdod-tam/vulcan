@@ -3,10 +3,11 @@
 module Applications
   class RequestCertificationUpload < BaseService
     include SecureFormLocaleResolver
+    include Applications::SecureRequestDeliveryPolicy
 
     MESSAGE_SCOPE = 'applications.certification_upload.messages'
 
-    attr_reader :application, :actor, :channel, :resend_of, :public_recovery, :deliver_email
+    attr_reader :application, :actor, :channel, :resend_of, :public_recovery
 
     def initialize(application:, actor:, channel: :email, resend_of: nil, public_recovery: false, deliver_email: false)
       super()
@@ -22,21 +23,28 @@ module Applications
       return failure(message(:provider_email_required)) if provider_email.blank?
       return failure(message(:unsupported_channel)) unless channel == :email
 
-      request_form = nil
-      raw_token = nil
+      if @deliver_email
+        denial = authorize_delivery
+        return denial if denial
+      end
+
+      delivery = nil
 
       ApplicationRecord.transaction do
         application.with_lock do
           ensure_cooldown_allows!
           revoke_open_requests
-          request_form, raw_token = create_request
-          transition_initial_status_if_needed
+          delivery = create_request
+          transition_initial_status_if_needed(delivery)
         end
       end
 
-      deliver_request_email!(request_form, raw_token) if deliver_email
+      if @deliver_email
+        result = deliver_requests([delivery])
+        return result if result.failure?
+      end
 
-      success(message(:request_created), result_data(request_form, raw_token))
+      success(message(:request_created), result_data(delivery.secure_request_form, delivery.raw_token))
     rescue ActiveRecord::RecordNotUnique, ActiveRecord::RecordInvalid => e
       Rails.logger.warn("Certification upload request failed for application #{application.id}: #{e.message}")
       failure(message(:request_conflict))
@@ -45,8 +53,8 @@ module Applications
 
       failure(e.message)
     rescue StandardError => e
-      Rails.logger.warn("Certification upload delivery failed for application #{application.id}: #{sanitize_secure_error_message(e.message)}")
-      request_form&.persisted? ? delivery_failure(request_form, e) : failure(message(:delivery_failed))
+      Rails.logger.warn("Certification upload request failed for application #{application.id}: #{sanitize_secure_error_message(e.message)}")
+      failure(message(:delivery_failed))
     end
 
     private
@@ -86,8 +94,8 @@ module Applications
         raise
       end
 
-      create_tracking_notification(request_form)
-      [request_form, raw_token]
+      notification = create_tracking_notification(request_form) || raise('Could not create certification tracking notification')
+      Delivery.new(secure_request_form: request_form, raw_token: raw_token, context: @email_context, notification_id: notification.id)
     end
 
     def request_form_attributes(raw_token)
@@ -133,77 +141,52 @@ module Applications
       resolver.known_recipients.find { |recipient| recipient.id == default_recipient_id } || application.user
     end
 
-    def delivery_failure(request_form, error)
-      persist_delivery_failure(request_form, error)
-      revoke_failed_request(request_form, error)
-      failure(message(:delivery_failed), delivery_failure_data(request_form, error))
+    def delivery_mail_action
+      rejection_delivery? ? 'MedicalProviderMailer#certification_rejected' : 'MedicalProviderMailer#request_certification'
     end
 
-    def revoke_failed_request(request_form, error)
-      return unless request_form&.active?
+    def delivery_channel(_delivery) = :email
 
-      request_form.revoke!(
-        actor: actor,
-        reason: :delivery_failure,
-        metadata: { delivery_failure: delivery_failure_context(request_form, error) }
-      )
-    rescue StandardError => e
-      Rails.logger.error(
-        "Certification upload delivery failure revocation failed: #{sanitize_secure_error_message(e.message)}"
-      )
+    def suppressed_delivery_data(deliveries)
+      { medical_provider_secure_request_form: Array(deliveries).first&.secure_request_form }.compact
     end
 
-    def persist_delivery_failure(request_form, error)
-      notification = tracking_notification_for(request_form)
-      return if notification.blank?
-
-      notification.update!(
-        delivery_status: :error,
-        metadata: (notification.metadata || {}).merge(
-          delivery_error: delivery_failure_context(request_form, error)
-        )
-      )
+    def delivery_failure_data(delivery_failures, deliveries)
+      super.merge(suppressed_delivery_data(deliveries), delivery_failure: delivery_failures.first)
     end
 
-    def tracking_notification_for(request_form)
-      Notification
-        .where(notifiable: application, action: 'cert_upload_requested')
-        .where("metadata->>'medical_provider_secure_request_form_id' = ?", request_form.id.to_s)
-        .order(created_at: :desc)
-        .first
+    def delivery_failure_details(forms)
+      request_form = forms.first
+      { application_id: application.id, medical_provider_secure_request_form_id: request_form.id,
+        request_batch_id: request_form.request_batch_id, recipient_ids: [],
+        template_name: rejection_delivery? ? 'medical_provider_certification_rejected' : 'medical_provider_request_certification' }
     end
 
-    def delivery_failure_data(request_form, error)
-      {
-        medical_provider_secure_request_form: request_form,
-        delivery_error: true,
-        delivery_failure: delivery_failure_context(request_form, error)
-      }
+    def deliver_email(delivery)
+      @email_context = delivery_context_for(delivery)
+      deliver_request_email!(delivery.secure_request_form, delivery.raw_token)
     end
 
-    def delivery_failure_context(request_form, error)
-      {
-        error_class: error.class.name,
-        error_message: sanitize_secure_error_message(error.message),
-        application_id: application.id,
-        medical_provider_secure_request_form_id: request_form.id,
-        request_batch_id: request_form.request_batch_id,
-        provider_email: request_form.provider_email,
-        template_name: rejection_delivery? ? 'medical_provider_certification_rejected' : 'medical_provider_request_certification'
-      }
+    def after_delivery_not_sent(delivery)
+      MedicalCertificationService.restore_unsent_request(Notification.find_by(id: delivery.notification_id))
     end
 
-    def transition_initial_status_if_needed
+    def transition_initial_status_if_needed(delivery)
       return unless application.medical_certification_status_not_requested?
 
-      previous_status = application.medical_certification_status
+      previous = application.attributes.slice(*MedicalCertificationService::STATE_FIELDS)
       with_proof_validation_skipped do
         application.update!(
           medical_certification_status: :requested,
           medical_certification_requested_at: Time.current
         )
       end
-      record_status_transition(previous_status)
+      application.reload
+      Notification.find(delivery.notification_id).update_metadata!(
+        'certification_request_state',
+        MedicalCertificationService.request_state(application, previous: previous)
+      )
+      record_status_transition(previous['medical_certification_status'])
     end
 
     def with_proof_validation_skipped
@@ -254,22 +237,24 @@ module Applications
     def deliver_request_email!(request_form, raw_token)
       secure_upload_url = secure_upload_url_for(raw_token)
 
-      if rejection_delivery?
-        MedicalProviderMailer.with(
-          application: application,
-          recipient_email: request_form.provider_email,
-          rejection_reason: rejection_reason_for_delivery,
-          admin: actor,
-          secure_upload_url: secure_upload_url
-        ).certification_rejected.deliver_now
-      else
-        MedicalProviderMailer.with(
-          application: application,
-          recipient_email: request_form.provider_email,
-          timestamp: Time.current.iso8601,
-          secure_upload_url: secure_upload_url
-        ).request_certification.deliver_now
-      end
+      mail =
+        if rejection_delivery?
+          MedicalProviderMailer.with(
+            application: application,
+            recipient_email: request_form.provider_email,
+            rejection_reason: rejection_reason_for_delivery,
+            admin: actor,
+            secure_upload_url: secure_upload_url
+          ).certification_rejected
+        else
+          MedicalProviderMailer.with(
+            application: application,
+            recipient_email: request_form.provider_email,
+            timestamp: Time.current.iso8601,
+            secure_upload_url: secure_upload_url
+          ).request_certification
+        end
+      EmailDelivery.deliver_now!(mail, context: @email_context)
     end
 
     def rejection_delivery?

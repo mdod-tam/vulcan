@@ -16,14 +16,13 @@ class VendorNotificationsMailer < ApplicationMailer
     locale       = resolve_template_locale(recipient: vendor)
     transactions = invoice.voucher_transactions.includes(:voucher)
 
+    text_template = find_text_template('vendor_notifications_invoice_generated', locale: locale)
     variables = build_invoice_variables(invoice, vendor, transactions)
-    subject, body = render_template('vendor_notifications_invoice_generated', variables, locale: locale)
-
     attachments["invoice-#{invoice.invoice_number}.pdf"] = generate_invoice_pdf(invoice, vendor, transactions)
 
-    send_mail(vendor.email, subject, body)
+    send_template_email(recipient_email_for(vendor), text_template, variables)
   rescue StandardError => e
-    log_mail_error(e, vendor, 'vendor_notifications_invoice_generated', variables.except(:transactions_html_table, :transactions_text_list))
+    log_mail_error(e, vendor, 'vendor_notifications_invoice_generated')
     raise e
   end
 
@@ -32,12 +31,12 @@ class VendorNotificationsMailer < ApplicationMailer
     vendor  = invoice.vendor
     locale  = resolve_template_locale(recipient: vendor)
 
+    text_template = find_text_template('vendor_notifications_payment_issued', locale: locale)
     variables = build_payment_variables(invoice, vendor)
-    subject, body = render_template('vendor_notifications_payment_issued', variables, locale: locale)
 
-    send_mail(vendor.email, subject, body)
+    send_template_email(recipient_email_for(vendor), text_template, variables)
   rescue StandardError => e
-    log_mail_error(e, vendor, 'vendor_notifications_payment_issued', variables)
+    log_mail_error(e, vendor, 'vendor_notifications_payment_issued')
     raise e
   end
 
@@ -57,11 +56,9 @@ class VendorNotificationsMailer < ApplicationMailer
       subject_variables: { vendor_business_name: vendor.business_name },
       locale: locale
     )
-    subject, body = text_template.render(**variables)
-
-    send_mail(vendor.email, subject, body)
+    send_template_email(recipient_email_for(vendor), text_template, variables)
   rescue StandardError => e
-    log_mail_error(e, vendor, template_name, variables.except(:status_box_html, :header_html, :footer_html))
+    log_mail_error(e, vendor, template_name)
     raise e
   end
 
@@ -96,10 +93,10 @@ class VendorNotificationsMailer < ApplicationMailer
                   )
                 )
 
-    subject, body = text_template.render(**variables)
-    send_mail(secure_request_recipient_email(vendor), subject, body, content_type: 'text/plain')
+    send_template_email(secure_request_recipient_email(vendor), text_template, variables,
+                        required_delivery: secure_upload_url.present?)
   rescue StandardError => e
-    log_mail_error(e, vendor, template_name, variables.except(:status_box_html, :header_html, :footer_html))
+    log_mail_error(e, vendor, template_name)
     raise e
   end
 
@@ -125,11 +122,7 @@ class VendorNotificationsMailer < ApplicationMailer
 
     send_mail(secure_request_recipient_email(vendor), subject, body, content_type: 'text/plain')
   rescue StandardError => e
-    log_mail_error(e, vendor, template_name, {
-      vendor_business_name: vendor&.business_name,
-      secure_upload_url: secure_upload_url,
-      support_email: support_email
-    }.compact)
+    log_mail_error(e, vendor, template_name)
     raise e
   end
 
@@ -168,10 +161,9 @@ class VendorNotificationsMailer < ApplicationMailer
                   vendor_portal_url: resolve_vendor_portal_url
                 )
 
-    subject, body = text_template.render(**variables)
-    send_mail(vendor.email, subject, body, content_type: 'text/plain')
+    send_template_email(recipient_email_for(vendor), text_template, variables)
   rescue StandardError => e
-    log_mail_error(e, vendor, template_name, variables.except(:status_box_warning_html, :status_box_info_html, :header_html, :footer_html))
+    log_mail_error(e, vendor, template_name)
     raise e
   end
 
@@ -208,10 +200,9 @@ class VendorNotificationsMailer < ApplicationMailer
                   vendor_portal_url: resolve_vendor_portal_url
                 )
 
-    subject, body = text_template.render(**variables)
-    send_mail(vendor.email, subject, body, content_type: 'text/plain')
+    send_template_email(recipient_email_for(vendor), text_template, variables)
   rescue StandardError => e
-    log_mail_error(e, vendor, template_name, variables.except(:status_box_warning_html, :status_box_info_html, :header_html, :footer_html))
+    log_mail_error(e, vendor, template_name)
     raise e
   end
 
@@ -221,8 +212,8 @@ class VendorNotificationsMailer < ApplicationMailer
     {
       vendor_business_name: vendor.business_name,
       invoice_number: invoice.invoice_number,
-      period_start_formatted: invoice.period_start.strftime('%B %d, %Y'),
-      period_end_formatted: invoice.period_end.strftime('%B %d, %Y'),
+      period_start_formatted: invoice.start_date.strftime('%B %d, %Y'),
+      period_end_formatted: invoice.end_date.strftime('%B %d, %Y'),
       total_amount_formatted: number_to_currency(invoice.total_amount),
       transactions_html_table: render_transactions_html(transactions),
       transactions_text_list: render_transactions_text(transactions),
@@ -264,9 +255,9 @@ class VendorNotificationsMailer < ApplicationMailer
   end
   # rubocop:enable Metrics/ParameterLists
 
-  def render_template(template_name, variables, locale: nil)
-    template = find_text_template(template_name, locale: locale)
-    template.render(**variables)
+  # Stored vendor templates go through send_email, which skips a disabled template.
+  def send_template_email(to, template, variables, required_delivery: false)
+    send_email(to, template, variables, message_stream: 'outbound', required_delivery: required_delivery)
   end
 
   def w9_resubmission_instructions(secure_upload_url:, vendor_portal_url:, locale:)
@@ -354,29 +345,23 @@ class VendorNotificationsMailer < ApplicationMailer
 
       # Vendor Information
       pdf.text 'Vendor:', style: :bold
-      pdf.text vendor.business_name
-      pdf.text vendor.business_tax_id
+      pdf.text vendor.business_name.to_s
+      pdf.text vendor.business_tax_id.to_s
       pdf.move_down 20
 
       # Period
       pdf.text 'Period:', style: :bold
-      pdf.text "#{invoice.period_start.strftime('%B %d, %Y')} - #{invoice.period_end.strftime('%B %d, %Y')}"
+      pdf.text "#{invoice.start_date.strftime('%B %d, %Y')} - #{invoice.end_date.strftime('%B %d, %Y')}"
       pdf.move_down 20
 
-      # Transactions Table
-      items = [%w[Date Voucher Amount]]
+      # Transactions, one line each (core Prawn has no table support)
+      pdf.text 'Date / Voucher / Amount', style: :bold
       transactions.each do |transaction|
-        items << [
-          transaction.processed_at.strftime('%Y-%m-%d'),
-          transaction.voucher.code,
-          number_to_currency(transaction.amount) # Use helper directly
-        ]
-      end
-
-      pdf.table(items, header: true) do |table|
-        table.row(0).style(background_color: 'CCCCCC')
-        table.cells.padding = 12
-        table.column_widths = [150, 200, 150]
+        pdf.text [
+          transaction.processed_at&.strftime('%Y-%m-%d'),
+          transaction.voucher&.code,
+          number_to_currency(transaction.amount)
+        ].join(' / ')
       end
 
       pdf.move_down 20

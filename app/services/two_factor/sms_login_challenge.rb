@@ -29,7 +29,7 @@ module TwoFactor
       begin
         return :active if hydrate_from_cache! && active?
 
-        send_and_store!(user) ? :sent : false
+        send_and_store!(user)
       ensure
         release_lock
       end
@@ -43,7 +43,7 @@ module TwoFactor
       begin
         return :waiting if resend_wait_seconds.positive?
 
-        send_and_store!(user) ? :sent : false
+        send_and_store!(user)
       ensure
         release_lock
       end
@@ -112,14 +112,16 @@ module TwoFactor
     end
 
     def send_and_store!(user)
-      result = TwilioVerifyService.send_verification(credential.phone_number)
+      result = TwilioVerifyService.send_verification(credential.phone_number, purpose: :login, sms_credential_id: credential.id)
+      return :suppressed if result[:delivery_suppressed]
+      return :configuration_error if result[:configuration_error]
       return false unless result[:success] && result[:verification_sid].present?
 
       new_metadata = metadata_from_result(result)
       store_challenge(result[:verification_sid], new_metadata)
       Rails.cache.write(cache_key, new_metadata, expires_in: TTL)
       Rails.logger.info("[SMS] Sent verification code to user #{user.id} via Twilio Verify")
-      true
+      :sent
     rescue StandardError => e
       Rails.logger.error("[SMS] Error: #{e.message}")
       false

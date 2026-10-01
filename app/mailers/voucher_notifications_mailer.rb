@@ -9,8 +9,6 @@ class VoucherNotificationsMailer < ApplicationMailer
     Rails.application.config.action_mailer.default_url_options
   end
 
-  # Removed prepare_email helper
-
   def voucher_assigned
     voucher = params[:voucher]
     user = voucher.application.user
@@ -29,7 +27,7 @@ class VoucherNotificationsMailer < ApplicationMailer
     header_title = header_title_from_template_subject(
       template: text_template,
       subject_variables: { voucher_code: voucher.code, user_first_name: user.first_name },
-      fallback: 'Your MAT Voucher is Ready!'
+      fallback: I18n.t('mailers.voucher_notifications.assigned_header', locale: locale)
     )
     footer_contact_email = Policy.get('support_email') || 'mat.program1@maryland.gov'
     footer_website_url = ProgramContact.website_url
@@ -45,11 +43,11 @@ class VoucherNotificationsMailer < ApplicationMailer
     variables = {
       user_first_name: user.first_name,
       voucher_code: voucher.code,
-      initial_value_formatted: number_to_currency(voucher.initial_value),
+      initial_value_formatted: number_to_currency(voucher.initial_value, locale: locale),
       # Use Policy.get for configuration values
-      expiration_date_formatted: (voucher.issued_at + (Policy.get('voucher_validity_period_months') || 6).months).strftime('%B %d, %Y'),
+      expiration_date_formatted: I18n.l(voucher.expiration_date.to_date, format: :long, locale: locale),
       validity_period_months: Policy.get('voucher_validity_period_months') || 6,
-      minimum_redemption_amount_formatted: number_to_currency(Policy.get('minimum_voucher_redemption_amount') || 0),
+      minimum_redemption_amount_formatted: number_to_currency(Policy.get('minimum_voucher_redemption_amount') || 0, locale: locale),
       header_text: header_text(title: header_title, logo_url: header_logo_url, locale: locale),
       footer_text: footer_text(contact_email: footer_contact_email, website_url: footer_website_url,
                                organization_name: organization_name, show_automated_message: footer_show_automated_message,
@@ -57,38 +55,11 @@ class VoucherNotificationsMailer < ApplicationMailer
       support_email: footer_contact_email
     }.compact
 
-    return noop_letter_delivery if queue_letter_if_preferred(user, template_name, variables, application: voucher.application)
+    return noop_letter_delivery if queue_letter_if_preferred(user, template_name, variables, locale: locale, application: voucher.application)
 
-    # Render subject and body from the text template
-    rendered_subject, rendered_text_body = text_template.render(**variables)
-
-    # Send email as non-multipart text-only
-    text_body = rendered_text_body.to_s
-    Rails.logger.debug { "DEBUG: Preparing to send voucher_assigned email with content: #{text_body.inspect}" }
-
-    mail(
-      to: recipient_email_for(user),
-      subject: rendered_subject,
-      message_stream: 'notifications',
-      body: text_body,
-      content_type: 'text/plain'
-    )
+    send_email(recipient_email_for(user), text_template, variables)
   rescue StandardError => e
-    # Log error with more details
-    AuditEventService.log(
-      actor: user,
-      action: 'email_delivery_error',
-      auditable: user,
-      metadata: {
-        user_agent: Current.user_agent,
-        ip_address: Current.ip_address,
-        error_message: e.message,
-        error_class: e.class.name,
-        template_name: template_name,
-        variables: variables,
-        backtrace: e.backtrace&.first(5)
-      }
-    )
+    log_mail_error(e, user, template_name)
     raise e
   end
 
@@ -164,38 +135,11 @@ class VoucherNotificationsMailer < ApplicationMailer
       support_email: footer_contact_email
     }.compact
 
-    return noop_letter_delivery if queue_letter_if_preferred(user, template_name, variables, application: voucher.application)
+    return noop_letter_delivery if queue_letter_if_preferred(user, template_name, variables, locale: locale, application: voucher.application)
 
-    # Render subject and body from the text template
-    rendered_subject, rendered_text_body = text_template.render(**variables)
-
-    # Send email as non-multipart text-only
-    text_body = rendered_text_body.to_s
-    Rails.logger.debug { "DEBUG: Preparing to send voucher_expiring_soon email with content: #{text_body.inspect}" }
-
-    mail(
-      to: recipient_email_for(user),
-      subject: rendered_subject,
-      message_stream: 'notifications',
-      body: text_body,
-      content_type: 'text/plain'
-    )
+    send_email(recipient_email_for(user), text_template, variables)
   rescue StandardError => e
-    # Log error with more details
-    AuditEventService.log(
-      actor: user,
-      action: 'email_delivery_error',
-      auditable: user,
-      metadata: {
-        user_agent: Current.user_agent,
-        ip_address: Current.ip_address,
-        error_message: e.message,
-        error_class: e.class.name,
-        template_name: template_name,
-        variables: variables,
-        backtrace: e.backtrace&.first(5)
-      }
-    )
+    log_mail_error(e, user, template_name)
     raise e
   end
 
@@ -217,7 +161,7 @@ class VoucherNotificationsMailer < ApplicationMailer
     header_title = header_title_from_template_subject(
       template: text_template,
       subject_variables: { voucher_code: voucher.code, user_first_name: user.first_name },
-      fallback: 'Important: Your Voucher Has Expired'
+      fallback: I18n.t('mailers.voucher_notifications.expired_header', locale: locale)
     )
     footer_contact_email = Policy.get('support_email') || 'mat.program1@maryland.gov'
     footer_website_url = ProgramContact.website_url
@@ -233,17 +177,19 @@ class VoucherNotificationsMailer < ApplicationMailer
     transaction_history_text = ''
     if voucher.transactions.any?
       transaction_history_text = voucher.transactions.order(created_at: :desc).map do |t|
-        "- #{t.created_at.strftime('%m/%d/%Y')}: #{number_to_currency(t.amount)} at #{t.vendor.business_name}"
+        I18n.t('mailers.voucher_notifications.transaction_history_entry', locale: locale,
+                                                                          date: I18n.l(t.created_at.to_date, format: :long, locale: locale),
+                                                                          amount: number_to_currency(t.amount, locale: locale), vendor: t.vendor.business_name)
       end.join("\n")
     end
 
     variables = {
       user_first_name: user.first_name,
       voucher_code: voucher.code,
-      initial_value_formatted: number_to_currency(voucher.initial_value),
-      unused_value_formatted: number_to_currency(voucher.remaining_value),
+      initial_value_formatted: number_to_currency(voucher.initial_value, locale: locale),
+      unused_value_formatted: number_to_currency(voucher.remaining_value, locale: locale),
       # Use Policy.get for configuration values
-      expiration_date_formatted: (voucher.issued_at + (Policy.get('voucher_validity_period_months') || 6).months).strftime('%B %d, %Y'),
+      expiration_date_formatted: I18n.l(voucher.expiration_date.to_date, format: :long, locale: locale),
       # Required header and footer text
       header_text: header_text(title: header_title, logo_url: header_logo_url, locale: locale),
       footer_text: footer_text(contact_email: footer_contact_email, website_url: footer_website_url,
@@ -255,42 +201,15 @@ class VoucherNotificationsMailer < ApplicationMailer
       show_automated_message: footer_show_automated_message # Optional
     }.compact
 
-    return noop_letter_delivery if queue_letter_if_preferred(user, template_name, variables, application: voucher.application)
+    return noop_letter_delivery if queue_letter_if_preferred(user, template_name, variables, locale: locale, application: voucher.application)
 
-    # Render subject and body from the text template
-    rendered_subject, rendered_text_body = text_template.render(**variables)
-
-    # Send email as non-multipart text-only
-    text_body = rendered_text_body.to_s
-    Rails.logger.debug { "DEBUG: Preparing to send voucher_expired email with content: #{text_body.inspect}" }
-
-    mail(
-      to: recipient_email_for(user),
-      subject: rendered_subject,
-      message_stream: 'notifications',
-      body: text_body,
-      content_type: 'text/plain'
-    )
+    send_email(recipient_email_for(user), text_template, variables)
   rescue StandardError => e
-    # Log error with more details
-    AuditEventService.log(
-      actor: user,
-      action: 'email_delivery_error',
-      auditable: user,
-      metadata: {
-        user_agent: Current.user_agent,
-        ip_address: Current.ip_address,
-        error_message: e.message,
-        error_class: e.class.name,
-        template_name: template_name,
-        variables: variables,
-        backtrace: e.backtrace&.first(5)
-      }
-    )
+    log_mail_error(e, user, template_name)
     raise e
   end
 
-  def voucher_redeemed # rubocop:disable Metrics/MethodLength, Metrics/PerceivedComplexity
+  def voucher_redeemed
     transaction = params[:transaction]
     voucher = transaction.voucher
     user = voucher.application.user
@@ -310,9 +229,9 @@ class VoucherNotificationsMailer < ApplicationMailer
     header_title = header_title_from_template_subject(
       template: text_template,
       subject_variables: { voucher_code: voucher.code, user_first_name: user.first_name },
-      fallback: 'Your voucher has been redeemed!'
+      fallback: I18n.t('mailers.voucher_notifications.redeemed_header', locale: locale)
     )
-    remaining_balance_formatted = number_to_currency(voucher.remaining_value) # After transaction
+    remaining_balance_formatted = number_to_currency(voucher.remaining_value, locale: locale) # After transaction
     footer_contact_email = Policy.get('support_email') || 'mat.program1@maryland.gov'
     footer_website_url = ProgramContact.website_url
     footer_show_automated_message = true
@@ -323,9 +242,9 @@ class VoucherNotificationsMailer < ApplicationMailer
       nil
     end
     # Use Policy.get for configuration values
-    expiration_date_formatted = (voucher.issued_at + (Policy.get('voucher_validity_period_months') || 6).months).strftime('%B %d, %Y')
-    minimum_redemption_amount_formatted = number_to_currency(Policy.get('minimum_voucher_redemption_amount') || 0)
-    redeemed_value_formatted = number_to_currency(transaction.amount)
+    expiration_date_formatted = I18n.l(voucher.expiration_date.to_date, format: :long, locale: locale)
+    minimum_redemption_amount_formatted = number_to_currency(Policy.get('minimum_voucher_redemption_amount') || 0, locale: locale)
+    redeemed_value_formatted = number_to_currency(transaction.amount, locale: locale)
 
     # Optional message blocks (text only)
     remaining_value_message_text = ''
@@ -333,15 +252,18 @@ class VoucherNotificationsMailer < ApplicationMailer
 
     if voucher.remaining_value.positive?
       # Simplified example - actual content depends on template placeholders
-      remaining_value_message_text = "Your remaining balance is #{remaining_balance_formatted}. Minimum redemption amount is #{minimum_redemption_amount_formatted}."
+      remaining_value_message_text = I18n.t(
+        'mailers.voucher_notifications.remaining_balance',
+        locale: locale, balance: remaining_balance_formatted, minimum: minimum_redemption_amount_formatted
+      )
     else
-      fully_redeemed_message_text = 'This voucher has been fully redeemed.'
+      fully_redeemed_message_text = I18n.t('mailers.voucher_notifications.fully_redeemed', locale: locale)
     end
 
     variables = {
       user_first_name: user.first_name,
-      transaction_date_formatted: transaction.created_at.strftime('%B %d, %Y'),
-      transaction_amount_formatted: number_to_currency(transaction.amount),
+      transaction_date_formatted: I18n.l(transaction.created_at.to_date, format: :long, locale: locale),
+      transaction_amount_formatted: number_to_currency(transaction.amount, locale: locale),
       vendor_business_name: vendor.business_name,
       transaction_reference_number: transaction.reference_number || 'N/A',
       voucher_code: voucher.code,
@@ -359,52 +281,11 @@ class VoucherNotificationsMailer < ApplicationMailer
       support_email: footer_contact_email
     }.compact
 
-    return noop_letter_delivery if queue_letter_if_preferred(user, template_name, variables, application: voucher.application)
+    return noop_letter_delivery if queue_letter_if_preferred(user, template_name, variables, locale: locale, application: voucher.application)
 
-    # Render subject and body from the text template
-    rendered_subject, rendered_text_body = text_template.render(**variables)
-
-    # Send email as non-multipart text-only
-    text_body = rendered_text_body.to_s
-    Rails.logger.debug { "DEBUG: Preparing to send voucher_redeemed email with content: #{text_body.inspect}" }
-
-    mail(
-      to: recipient_email_for(user),
-      subject: rendered_subject,
-      message_stream: 'notifications',
-      body: text_body,
-      content_type: 'text/plain'
-    )
+    send_email(recipient_email_for(user), text_template, variables)
   rescue StandardError => e
-    # Log error with more details
-    AuditEventService.log(
-      actor: user,
-      action: 'email_delivery_error',
-      auditable: user,
-      metadata: {
-        user_agent: Current.user_agent,
-        ip_address: Current.ip_address,
-        error_message: e.message,
-        error_class: e.class.name,
-        template_name: template_name,
-        variables: variables,
-        backtrace: e.backtrace&.first(5)
-      }
-    )
+    log_mail_error(e, user, template_name)
     raise e
-  end
-
-  private
-
-  def queue_letter_if_preferred(user, template_name, variables, application: nil)
-    return false unless prefers_letter_delivery?(user)
-
-    queue_letter_delivery(
-      recipient: user,
-      template_name: template_name,
-      variables: variables,
-      application: application
-    )
-    true
   end
 end

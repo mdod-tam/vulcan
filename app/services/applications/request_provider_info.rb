@@ -3,11 +3,10 @@
 module Applications
   class RequestProviderInfo < BaseService
     include SecureFormLocaleResolver
+    include SecureRequestDeliveryPolicy
 
     MESSAGE_SCOPE = 'applications.provider_info.messages'
     TEMPLATE_NAME = 'application_notifications_provider_info_requested'
-
-    Delivery = Struct.new(:secure_request_form, :raw_token, :candidate)
 
     attr_reader :application, :actor, :recipient_ids, :channel_overrides, :resend_of, :public_recovery
 
@@ -22,12 +21,15 @@ module Applications
     end
 
     def call
+      Letters::Delivery.reconcile_pending!(scope: PrintQueueItem.unreleased.where(application_id: application.id))
       deliveries, result = prepare_requests
 
       return result if result&.failure?
 
       delivery_result = deliver_requests(deliveries)
       return delivery_result if delivery_result.failure?
+
+      return delivery_denial_result(deliveries) if denied_candidates.any?
 
       result
     rescue ActiveRecord::RecordNotUnique,
@@ -76,7 +78,11 @@ module Applications
         end
 
         deliveries = create_requests_for(resolved.data)
-        result = success(message(:request_created), { secure_request_forms: deliveries.map(&:secure_request_form) })
+        result = if deliveries.empty? && denied_candidates.any?
+                   delivery_denial_result(deliveries)
+                 else
+                   success(message(:request_created), { secure_request_forms: deliveries.map(&:secure_request_form) })
+                 end
       end
 
       [deliveries, result]
@@ -160,9 +166,15 @@ module Applications
       failure(message(:needs_managing_guardian))
     end
 
+    # Refuse each denied channel before token creation; eligible recipients still proceed.
     def create_requests_for(candidates)
       request_batch_id = SecureRandom.uuid
-      candidates.map do |candidate|
+      candidates.filter_map do |candidate|
+        if delivery_denied_for?(candidate)
+          denied_candidates << candidate
+          next
+        end
+
         ensure_cooldown_allows!(candidate)
         SecureRequestForm
           .open_provider_info_for_recipient(application_id: application.id, recipient_id: candidate.recipient.id)
@@ -206,8 +218,9 @@ module Applications
         raise
       end
 
-      create_tracking_notification(secure_request_form)
-      Delivery.new(secure_request_form: secure_request_form, raw_token: raw_token, candidate: candidate)
+      notification = create_tracking_notification(secure_request_form)
+      Delivery.new(secure_request_form: secure_request_form, raw_token: raw_token, candidate: candidate, context: authorization_for(candidate).last,
+                   notification_id: notification&.id)
     end
 
     def secure_request_form_attributes(candidate, request_batch_id, raw_token)
@@ -255,55 +268,24 @@ module Applications
       )
     end
 
-    def notification_channel_for(secure_request_form)
-      case secure_request_form.recipient_channel
-      when 'letter'
-        :letter
-      when 'sms'
-        # NotificationService has no SMS transport. SmsService owns token-safe SMS delivery.
-        :email
-      end || :email
-    end
-
-    def deliver_requests(deliveries)
-      delivery_failures = []
-
-      # Transport starts after commit. One failure must not block other recipients.
-      # Failure metadata must exclude secrets.
-      Array(deliveries).each do |delivery|
-        case delivery.secure_request_form.recipient_channel.to_sym
-        when :email
-          deliver_email(delivery)
-        when :sms
-          deliver_sms(delivery)
-        when :letter
-          deliver_letter(delivery)
-        end
-      rescue StandardError => e
-        report_delivery_failure(e, [delivery])
-        delivery_failures << delivery_failure_context(e, [delivery])
-        revoke_failed_deliveries([delivery], e)
-      end
-
-      return failure(message(:delivery_failed), delivery_failure_data(delivery_failures, deliveries)) if delivery_failures.any?
-
-      success
-    end
-
     def deliver_email(delivery)
       # deliver_now keeps the raw bearer URL out of Active Job arguments.
-      ApplicationNotificationsMailer
-        .provider_info_requested(application, delivery.secure_request_form, secure_url: secure_url_for(delivery.raw_token))
-        .deliver_now
+      EmailDelivery.deliver_now!(
+        ApplicationNotificationsMailer
+          .provider_info_requested(application, delivery.secure_request_form, secure_url: secure_url_for(delivery.raw_token)),
+        context: delivery_context_for(delivery)
+      )
     end
 
+    def delivery_requested? = true
+    def delivery_mail_action = 'ApplicationNotificationsMailer#provider_info_requested'
+    def sms_action = 'SmsService#provider_info'
+
     def deliver_letter(delivery)
-      # deliver_now runs queue_letter_delivery, then receives noop_letter_delivery.
-      # The resolver selects the printed address owner.
-      ApplicationNotificationsMailer
-        .provider_info_requested(application, delivery.secure_request_form, secure_url: nil,
-                                                                            letter_recipient: delivery.candidate.address_owner)
-        .deliver_now
+      mail = ApplicationNotificationsMailer.provider_info_requested(
+        application, delivery.secure_request_form, secure_url: nil, letter_recipient: delivery.candidate.address_owner
+      )
+      EmailDelivery.deliver_now!(mail, context: delivery_context_for(delivery))
     end
 
     def deliver_sms(delivery)
@@ -312,6 +294,8 @@ module Applications
         secure_request_form.recipient_phone,
         sms_message(secure_url_for(delivery.raw_token), secure_request_form),
         sensitive: true,
+        action: sms_action,
+        delivery_context: delivery_context_for(delivery),
         context: {
           secure_request_form_id: secure_request_form.id,
           application_id: application.id,
@@ -319,60 +303,6 @@ module Applications
           recipient_channel: secure_request_form.recipient_channel
         }
       )
-    end
-
-    def report_delivery_failure(error, deliveries)
-      context = delivery_failure_context(error, deliveries)
-      if Rails.respond_to?(:error)
-        Rails.error.report(reportable_delivery_error(error), handled: true, context: context)
-      else
-        Rails.logger.error("Provider-info delivery failed: #{context.inspect}")
-      end
-    end
-
-    def reportable_delivery_error(error)
-      StandardError.new(sanitize_secure_error_message(error.message)).tap do |reportable_error|
-        reportable_error.set_backtrace(Array(error.backtrace).map { |line| sanitize_secure_error_message(line) })
-      end
-    end
-
-    def revoke_failed_deliveries(deliveries, error)
-      Array(deliveries).each do |delivery|
-        request_form = delivery.secure_request_form
-        next unless request_form&.active?
-
-        request_form.revoke!(
-          actor: actor,
-          reason: :delivery_failure,
-          metadata: { delivery_failure: delivery_failure_context(error, [delivery]) }
-        )
-      rescue StandardError => e
-        Rails.logger.error(
-          "Provider-info delivery failure revocation failed: #{sanitize_secure_error_message(e.message)}"
-        )
-      end
-    end
-
-    def delivery_failure_data(delivery_failures, deliveries)
-      {
-        secure_request_forms: Array(deliveries).map(&:secure_request_form),
-        delivery_error: true,
-        delivery_failures: delivery_failures,
-        failed_secure_request_form_ids: delivery_failures.flat_map { |failure| failure[:secure_request_form_ids] },
-        failed_recipient_ids: delivery_failures.flat_map { |failure| failure[:recipient_ids] },
-        failed_recipient_channels: delivery_failures.flat_map { |failure| failure[:recipient_channels] }
-      }
-    end
-
-    def delivery_failure_context(error, deliveries)
-      forms = Array(deliveries).map(&:secure_request_form)
-      {
-        error_class: error.class.name,
-        application_id: application.id,
-        secure_request_form_ids: forms.map(&:id),
-        recipient_ids: forms.map(&:recipient_id),
-        recipient_channels: forms.map(&:recipient_channel)
-      }
     end
 
     def secure_url_for(raw_token)

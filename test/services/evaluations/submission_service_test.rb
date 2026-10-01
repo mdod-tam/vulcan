@@ -4,22 +4,26 @@ require 'test_helper'
 
 module Evaluations
   class SubmissionServiceTest < ActiveSupport::TestCase
+    include ActiveJob::TestHelper
+
     setup do
       @evaluator = create(:evaluator)
       @product = create(:product, name: 'Accessible Tablet')
       @evaluation = create(:evaluation, evaluator: @evaluator, status: :scheduled, evaluation_date: 1.day.from_now)
+      load_seeded_email_templates('evaluator_mailer_evaluation_submission_confirmation')
+      ActionMailer::Base.deliveries.clear
     end
 
-    test 'submits evaluation and logs evaluation_completed' do
-      delivery = mock('delivery')
-      delivery.expects(:deliver_later).once
-      EvaluatorMailer.expects(:evaluation_submission_confirmation).with(@evaluation).returns(delivery)
-
+    test 'submits evaluation, logs evaluation_completed, and delivers the confirmation' do
       assert_difference('Event.where(action: "evaluation_completed").count', 1) do
-        result = SubmissionService.new(@evaluation, submission_params, actor: @evaluator).call
+        perform_enqueued_jobs do
+          result = SubmissionService.new(@evaluation, submission_params, actor: @evaluator).call
 
-        assert result.success?
+          assert result.success?
+        end
       end
+
+      assert_equal [[@evaluation.constituent.email]], ActionMailer::Base.deliveries.map(&:to)
 
       @evaluation.reload
       event = Event.order(:created_at).last
@@ -34,9 +38,6 @@ module Evaluations
 
     test 'submits confirmed evaluation' do
       @evaluation.update!(status: :confirmed)
-      delivery = mock('delivery')
-      delivery.expects(:deliver_later).once
-      EvaluatorMailer.expects(:evaluation_submission_confirmation).with(@evaluation).returns(delivery)
 
       assert_difference('Event.where(action: "evaluation_completed").count', 1) do
         result = SubmissionService.new(@evaluation, submission_params, actor: @evaluator).call
@@ -45,6 +46,21 @@ module Evaluations
       end
 
       assert_equal 'completed', @evaluation.reload.status
+    end
+
+    test 'email configuration refusal at enqueue keeps the completed evaluation' do
+      ensure_system_audit_actor!
+      FeatureFlag.find_by!(name: EmailDelivery.category_control('evaluation')).destroy!
+
+      result = SubmissionService.new(@evaluation, submission_params, actor: @evaluator).call
+      assert result.success?
+      assert_equal :configuration_error, result.data[:notification]
+      perform_enqueued_jobs
+
+      assert_equal 'completed', @evaluation.reload.status
+      assert Event.exists?(action: EmailDelivery::Outcome::CONFIGURATION_ERROR)
+      assert_not Event.exists?(action: EmailDelivery::Outcome::SUPPRESSED)
+      assert_empty ActionMailer::Base.deliveries
     end
 
     test 'does not submit requested evaluation' do
