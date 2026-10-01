@@ -206,4 +206,61 @@ describe("UploadController", () => {
     expect(progressElement.style.width).toBe("50%")
     expect(percentageElement.textContent).toBe("50%")
   })
+
+  test("shows attached display when preserved attachment exists", () => {
+    const fileDisplay = document.createElement("div")
+    fileDisplay.classList.add("hidden")
+    element.appendChild(fileDisplay)
+    Object.defineProperty(controller, 'fileDisplayTarget', { value: fileDisplay, writable: false })
+
+    const hiddenSignedId = document.createElement("input")
+    hiddenSignedId.type = "hidden"
+    hiddenSignedId.name = "signed_id"
+    hiddenSignedId.value = "preserved_blob_123"
+    element.appendChild(hiddenSignedId)
+
+    controller.connect()
+
+    expect(fileDisplay.classList.contains("hidden")).toBe(false)
+    expect(fileInput.classList.contains("hidden")).toBe(true)
+  })
+
+  test("removes file, aborts running upload, and clears signed_id field", () => {
+    const fileDisplay = document.createElement("div")
+    element.appendChild(fileDisplay)
+    Object.defineProperty(controller, 'fileDisplayTarget', { value: fileDisplay, writable: false })
+
+    const hiddenSignedId = document.createElement("input")
+    hiddenSignedId.type = "hidden"
+    hiddenSignedId.name = "signed_id"
+    hiddenSignedId.value = "signed_blob_abc"
+    element.appendChild(hiddenSignedId)
+
+    const mockXHR = {
+      abort: jest.fn(),
+      upload: { addEventListener: jest.fn() }
+    }
+    controller.cancelToken = mockXHR
+    controller.uploadInProgress = true
+
+    controller.removeFile()
+
+    expect(mockXHR.abort).toHaveBeenCalled()
+    expect(hiddenSignedId.value).toBe("")
+    expect(fileDisplay.classList.contains("hidden")).toBe(true)
+    expect(fileInput.classList.contains("hidden")).toBe(false)
+    expect(controller.uploadInProgress).toBe(false)
+  })
+
+  test("deduplicates hidden signed_id input on repeated upload success", () => {
+    const file1 = new File(["1"], "doc1.pdf", { type: "application/pdf" })
+    const file2 = new File(["2"], "doc2.pdf", { type: "application/pdf" })
+
+    controller.handleUploadSuccess({ signed_id: "blob_1" }, file1, 1)
+    controller.handleUploadSuccess({ signed_id: "blob_2" }, file2, 2)
+
+    const inputs = element.querySelectorAll('input[type="hidden"][name="signed_id"]')
+    expect(inputs.length).toBe(1)
+    expect(inputs[0].value).toBe("blob_2")
+  })
 })

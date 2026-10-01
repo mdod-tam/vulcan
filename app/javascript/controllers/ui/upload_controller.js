@@ -11,17 +11,63 @@ const EXTENSION_TO_MIME = {
 }
 
 export default class extends Controller {
-  static targets = ["input", "progress", "percentage", "cancel", "submit"]
+  static targets = [
+    "input",
+    "progress",
+    "percentage",
+    "cancel",
+    "submit",
+    "fileDisplay",
+    "filenameDisplay",
+    "signedId",
+    "filename"
+  ]
   static values = {
     directUploadUrl: String,
     allowedTypes: Array,
     invalidTypeMessage: String,
-    maxFileSize: Number
+    maxFileSize: Number,
+    signedIdParamName: String,
+    filenameParamName: String
   }
 
   connect() {
     this.cancelToken = null
     this.uploadInProgress = false
+    this.activeUploadId = 0
+
+    // If an existing signed_id is present (e.g. from validation re-render), show the display pane
+    if (this.hasPreservedAttachment()) {
+      this.showAttachedDisplay()
+    }
+  }
+
+  targetOrNull(name) {
+    const hasTarget = `has${name.charAt(0).toUpperCase() + name.slice(1)}Target`
+    if (this[hasTarget] !== undefined) {
+      return this[hasTarget] ? this[`${name}Target`] : null
+    }
+    try {
+      return this[`${name}Target`] || null
+    } catch {
+      return null
+    }
+  }
+
+  hasPreservedAttachment() {
+    const signedInput = this.findSignedIdField()
+    return signedInput && Boolean(signedInput.value && signedInput.value.trim())
+  }
+
+  showAttachedDisplay() {
+    const fileDisplay = this.targetOrNull("fileDisplay")
+    const input = this.targetOrNull("input")
+    if (fileDisplay) {
+      fileDisplay.classList.remove("hidden")
+      if (input) {
+        input.classList.add("hidden")
+      }
+    }
   }
 
   handleFileSelect(event) {
@@ -32,21 +78,30 @@ export default class extends Controller {
       return
     }
 
-    this.progressTarget.classList.remove("hidden")
-    this.cancelTarget.classList.remove("hidden")
-    this.submitTarget.disabled = true
+    this.activeUploadId += 1
+    const currentUploadId = this.activeUploadId
+
+    const progress = this.targetOrNull("progress")
+    const cancel = this.targetOrNull("cancel")
+    if (progress) progress.classList.remove("hidden")
+    if (cancel) cancel.classList.remove("hidden")
     this.uploadInProgress = true
-    this.uploadFile(file)
+    this.element.dataset.uploadInProgress = "true"
+    this.updateSubmitState()
+
+    this.dispatchFormEvent("upload:start", { file: file.name, uploadId: currentUploadId })
+    this.uploadFile(file, currentUploadId)
   }
 
   validateFile(file) {
     const maxFileSize = this.maxFileSizeValue || (5 * 1024 * 1024)
+    const input = this.targetOrNull("input")
 
     if (!this.isAllowedFileType(file)) {
       const errorMessage = this.invalidTypeMessageValue ||
         "Invalid file type. Please upload a PDF or an image file (PDF, JPEG, PNG, or HEIC/HEIF)."
       this.showNotification(errorMessage, "error")
-      this.inputTarget.value = ""
+      if (input) input.value = ""
       return false
     }
 
@@ -54,7 +109,7 @@ export default class extends Controller {
       const maxMb = Math.round(maxFileSize / (1024 * 1024))
       const errorMessage = `File is too large. Maximum size allowed is ${maxMb}MB.`
       this.showNotification(errorMessage, "error")
-      this.inputTarget.value = ""
+      if (input) input.value = ""
       return false
     }
 
@@ -62,21 +117,27 @@ export default class extends Controller {
   }
 
   isAllowedFileType(file) {
+    if (!this.allowedTypesValue || this.allowedTypesValue.length === 0) return true
     if (this.allowedTypesValue.includes(file.type)) return true
 
     const extension = file.name.split(".").pop()?.toLowerCase()
     const mimeFromExtension = EXTENSION_TO_MIME[extension]
-    return mimeFromExtension && this.allowedTypesValue.includes(mimeFromExtension)
+    return Boolean(mimeFromExtension && this.allowedTypesValue.includes(mimeFromExtension))
   }
 
-  uploadFile(file) {
+  uploadFile(file, uploadId) {
     const upload = new DirectUpload(file, this.directUploadUrlValue, this)
 
     upload.create((error, blob) => {
+      // Discard late completion if this upload was superseded, cancelled, or removed
+      if (uploadId !== this.activeUploadId) {
+        return
+      }
+
       if (error) {
         this.handleUploadError(error)
       } else {
-        this.handleUploadSuccess(blob)
+        this.handleUploadSuccess(blob, file, uploadId)
       }
     })
   }
@@ -87,18 +148,56 @@ export default class extends Controller {
   }
 
   updateProgress(event) {
-    if (event.lengthComputable) {
+    const progress = this.targetOrNull("progress")
+    const percentage = this.targetOrNull("percentage")
+    if (event.lengthComputable && progress && percentage) {
       const percent = Math.round((event.loaded / event.total) * 100)
-      this.progressTarget.querySelector("[role=progressbar]").style.width = `${percent}%`
-      this.percentageTarget.textContent = `${percent}%`
+      const progressBar = progress.querySelector("[role=progressbar]")
+      if (progressBar) progressBar.style.width = `${percent}%`
+      percentage.textContent = `${percent}%`
     }
   }
 
   cancelUpload() {
+    this.activeUploadId += 1
     if (this.cancelToken && this.uploadInProgress) {
       this.cancelToken.abort()
       this.resetUpload()
-      this.inputTarget.value = ""
+      const input = this.targetOrNull("input")
+      if (input) input.value = ""
+    }
+  }
+
+  removeFile() {
+    // Invalidate any running upload so a late callback cannot reattach
+    this.activeUploadId += 1
+    if (this.cancelToken && this.uploadInProgress) {
+      this.cancelToken.abort()
+    }
+
+    this.clearSignedIdField()
+    this.clearFilenameField()
+
+    const input = this.targetOrNull("input")
+    if (input) {
+      input.value = ""
+      input.classList.remove("hidden")
+    }
+
+    const fileDisplay = this.targetOrNull("fileDisplay")
+    if (fileDisplay) {
+      fileDisplay.classList.add("hidden")
+    }
+
+    this.resetUpload()
+    this.dispatchFormEvent("upload:removed")
+  }
+
+  replaceFile() {
+    const input = this.targetOrNull("input")
+    if (input) {
+      input.classList.remove("hidden")
+      input.click()
     }
   }
 
@@ -109,31 +208,174 @@ export default class extends Controller {
     this.resetUpload()
   }
 
-  handleUploadSuccess(blob) {
+  handleUploadSuccess(blob, file, uploadId) {
+    // Ensure only one signed_id input exists with the current value
+    const signedField = this.ensureSignedIdField()
+    signedField.value = blob.signed_id
+
+    // Also record filename for display preservation across renders if configured
+    if (this.hasFilenameParamNameValue || this.targetOrNull("filename")) {
+      const filenameField = this.ensureFilenameField()
+      filenameField.value = file.name
+    }
+
+    const filenameDisplay = this.targetOrNull("filenameDisplay")
+    if (filenameDisplay) {
+      filenameDisplay.textContent = file.name
+    }
+
+    const fileDisplay = this.targetOrNull("fileDisplay")
+    const input = this.targetOrNull("input")
+    if (fileDisplay) {
+      fileDisplay.classList.remove("hidden")
+      if (input) {
+        input.classList.add("hidden")
+      }
+    }
+
+    const progress = this.targetOrNull("progress")
+    const percentage = this.targetOrNull("percentage")
+    if (progress && percentage) {
+      const progressBar = progress.querySelector("[role=progressbar]")
+      if (progressBar) progressBar.style.width = "100%"
+      percentage.textContent = "100%"
+    }
+
+    this.uploadInProgress = false
+    delete this.element.dataset.uploadInProgress
+    this.updateSubmitState()
+
+    const cancel = this.targetOrNull("cancel")
+    setTimeout(() => {
+      if (progress) progress.classList.add("hidden")
+      if (cancel) cancel.classList.add("hidden")
+    }, 1000)
+
+    this.dispatchFormEvent("upload:complete", { signedId: blob.signed_id, filename: file.name, uploadId })
+  }
+
+  ensureSignedIdField() {
+    const fieldName = this.signedIdFieldName
+    // Find any existing signed ID fields within this element
+    const existingFields = Array.from(this.element.querySelectorAll(`input[type="hidden"][name="${fieldName}"]`))
+
+    if (existingFields.length > 0) {
+      // Remove any extra duplicates, keeping the first
+      existingFields.slice(1).forEach(el => el.remove())
+      return existingFields[0]
+    }
+
     const hiddenField = document.createElement("input")
     hiddenField.setAttribute("type", "hidden")
-    hiddenField.setAttribute("name", this.inputTarget.name)
-    hiddenField.setAttribute("value", blob.signed_id)
+    hiddenField.setAttribute("name", fieldName)
+    if (this.targetOrNull("signedId")) {
+      hiddenField.setAttribute("data-upload-target", "signedId")
+    }
     this.element.appendChild(hiddenField)
+    return hiddenField
+  }
 
-    this.progressTarget.querySelector("[role=progressbar]").style.width = "100%"
-    this.percentageTarget.textContent = "100%"
-    this.submitTarget.disabled = false
-    this.uploadInProgress = false
+  findSignedIdField() {
+    const signedId = this.targetOrNull("signedId")
+    if (signedId) return signedId
+    const fieldName = this.signedIdFieldName
+    return this.element.querySelector(`input[type="hidden"][name="${fieldName}"]`)
+  }
 
-    setTimeout(() => {
-      this.progressTarget.classList.add("hidden")
-      this.cancelTarget.classList.add("hidden")
-    }, 1000)
+  clearSignedIdField() {
+    const fieldName = this.signedIdFieldName
+    const existing = this.element.querySelectorAll(`input[type="hidden"][name="${fieldName}"]`)
+    existing.forEach(el => {
+      el.value = ""
+    })
+    const signedId = this.targetOrNull("signedId")
+    if (signedId) {
+      signedId.value = ""
+    }
+  }
+
+  ensureFilenameField() {
+    const fieldName = this.filenameParamNameValue
+    const existingFields = Array.from(this.element.querySelectorAll(`input[type="hidden"][name="${fieldName}"]`))
+
+    if (existingFields.length > 0) {
+      existingFields.slice(1).forEach(el => el.remove())
+      return existingFields[0]
+    }
+
+    const hiddenField = document.createElement("input")
+    hiddenField.setAttribute("type", "hidden")
+    hiddenField.setAttribute("name", fieldName)
+    if (this.targetOrNull("filename")) {
+      hiddenField.setAttribute("data-upload-target", "filename")
+    }
+    this.element.appendChild(hiddenField)
+    return hiddenField
+  }
+
+  clearFilenameField() {
+    if (!this.hasFilenameParamNameValue) return
+    const fieldName = this.filenameParamNameValue
+    const existing = this.element.querySelectorAll(`input[type="hidden"][name="${fieldName}"]`)
+    existing.forEach(el => {
+      el.value = ""
+    })
+    const filename = this.targetOrNull("filename")
+    if (filename) {
+      filename.value = ""
+    }
+  }
+
+  get signedIdFieldName() {
+    if (this.hasSignedIdParamNameValue && this.signedIdParamNameValue) return this.signedIdParamNameValue
+    const input = this.targetOrNull("input")
+    return (input && input.name) ? input.name : "signed_id"
   }
 
   resetUpload() {
-    this.progressTarget.querySelector("[role=progressbar]").style.width = "0%"
-    this.percentageTarget.textContent = "0%"
-    this.progressTarget.classList.add("hidden")
-    this.cancelTarget.classList.add("hidden")
-    this.submitTarget.disabled = false
+    const progress = this.targetOrNull("progress")
+    const percentage = this.targetOrNull("percentage")
+    if (progress && percentage) {
+      const progressBar = progress.querySelector("[role=progressbar]")
+      if (progressBar) progressBar.style.width = "0%"
+      percentage.textContent = "0%"
+      progress.classList.add("hidden")
+    }
+    const cancel = this.targetOrNull("cancel")
+    if (cancel) cancel.classList.add("hidden")
     this.uploadInProgress = false
+    delete this.element.dataset.uploadInProgress
+    this.updateSubmitState()
+  }
+
+  updateSubmitState() {
+    const form = this.element.closest("form") || (this.element.tagName === "FORM" ? this.element : null)
+    const formInProgress = form && form.dataset.uploadInProgress === "true"
+    const descendantInProgress = form ? form.querySelectorAll('[data-upload-in-progress="true"]').length > 0 : false
+    const anyInProgress = Boolean(formInProgress || descendantInProgress || this.uploadInProgress)
+
+    const submitBtn = this.resolveSubmitButton(form)
+    if (submitBtn) {
+      submitBtn.disabled = anyInProgress
+    }
+  }
+
+  resolveSubmitButton(form) {
+    const submit = this.targetOrNull("submit")
+    if (submit) return submit
+    if (form) {
+      return form.querySelector('button[type="submit"], input[type="submit"]')
+    }
+    return null
+  }
+
+  dispatchFormEvent(eventName, detail = {}) {
+    const event = new CustomEvent(eventName, {
+      bubbles: true,
+      cancelable: true,
+      detail: { controller: this, ...detail }
+    })
+    this.element.dispatchEvent(event)
   }
 
   showNotification(message, type = "info") {
