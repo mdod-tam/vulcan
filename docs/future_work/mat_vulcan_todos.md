@@ -220,6 +220,9 @@ Data privacy compliance  [DATA-001][DATA-002]
 
 ## System Integrations
 
+Production Bucketeer direct uploads  [FILE-SEC-001]
+- [ ] **Production Bucketeer has no CORS configuration.**  When preparing to deploy, we'll need to configure CORS for the actual production application origins, allowing `PUT` and the `Content-Type`, `Content-MD5`, and `Content-Disposition` headers. Keep the existing public-access blocks enabled. Verify a nonsensitive file uploads through a browser form, persists as an attachment, and reopens through the application; a server-side upload does not prove browser CORS. Follow the [storage guide](../infrastructure/active_storage_s3_setup.md#direct-uploads-need-bucket-cors) and [Rails CORS requirements](https://guides.rubyonrails.org/active_storage_overview.html#cross-origin-resource-sharing-cors-configuration).
+
 Medical certification document signing  [DATA-001][AUTHZ-003][AUDIT-001]
 - [ ] Docuseal artifact storage plan  [DATA-001]
 - [ ] Prototype: send signing request, receive webhook, verify signature  [AUTHZ-003]

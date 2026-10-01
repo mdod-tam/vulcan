@@ -5,11 +5,13 @@
     "rails",
     "ruby"
   ],
+  "stack": "heroku-26",
   "environments": {
     "test": {
       "buildpacks": [
+        { "url": "heroku/nodejs" },
         { "url": "heroku/ruby" },
-        { "url": "heroku-community/google-chrome" }
+        { "url": "heroku-community/chrome-for-testing" }
       ],
       "addons": [
         "bucketeer"

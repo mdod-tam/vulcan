@@ -14,10 +14,7 @@ class WebauthnSignInTest < ApplicationSystemTestCase
   def teardown
     # Rescue any browser-related errors during teardown
     super
-  # we might need to change this to work with Cuprite gem
-  rescue Selenium::WebDriver::Error::NoSuchWindowError,
-         Selenium::WebDriver::Error::InvalidArgumentError,
-         NoMethodError => e
+  rescue NoMethodError => e
     puts "Rescued error during teardown: #{e.class} - #{e.message}"
   end
 

@@ -1,5 +1,9 @@
 # Recurring tasks configuration for Solid Queue
 # Format: https://github.com/rails/solid_queue#recurring-tasks
+# Fixed-time schedules run overnight in UTC (05:00 UTC is ~1am Eastern),
+# staggered 15 minutes apart so slower jobs do not overlap; Solid Queue 1.5+
+# reads bare cron in config.time_zone (Eastern), so these pin an explicit zone.
+# Hourly schedules are timezone-invariant.
 
 production:
   poll_email_delivery:
@@ -9,26 +13,26 @@ production:
 
   cleanup_unattached_uploads:
     class: CleanupUnattachedUploadsJob
-    schedule: "0 4 * * *"
+    schedule: "0 5 * * * UTC"
     description: "Purge unattached direct uploads after seven days"
 
   generate_vendor_invoices:
     class: GenerateVendorInvoicesJob
-    schedule: "0 0 */14 * *"
+    schedule: "15 5 */14 * * UTC"
     description: "Generate biweekly invoices for vendors with pending transactions"
   <% if FeatureFlag.enabled?(:vouchers_enabled) %>
-    check_voucher_expiration:
-      class: CheckVoucherExpirationJob
-      schedule: "0 1 * * *"
-      description: "Check for expiring vouchers and notify constituents"
-      queue: "default"
-      args: []
+  check_voucher_expiration:
+    class: CheckVoucherExpirationJob
+    schedule: "30 5 * * * UTC"
+    description: "Check for expiring vouchers and notify constituents"
+    queue: "default"
+    args: []
   <% end %>
 
   
   proof_attachment_metrics:
     class: ProofAttachmentMetricsJob
-    schedule: "0 0 * * *"
+    schedule: "45 5 * * * UTC"
     description: "Generate daily metrics on proof attachment success/failure rates"
     queue: "low"
     args: []
@@ -42,10 +46,16 @@ production:
   
   proof_consistency_check:
     class: ProofConsistencyCheckJob
-    schedule: "0 3 * * 0"
+    schedule: "0 6 * * 0 UTC"
     description: "Check for inconsistent proof attachments and statuses"
     queue: "low"
     args: []
+
+  clear_solid_queue_finished_jobs:
+    command: "SolidQueue::Job.clear_finished_in_batches(sleep_between_batches: 0.3)"
+    schedule: "12 * * * *"
+    description: "Delete finished jobs older than clear_finished_jobs_after (default 1 day)"
+    queue: "low"
 
 development:
   # Development recurring tasks (if any)

@@ -53,7 +53,7 @@ module ConstituentPortal
 
       # A genuine second POST of the same request: identical body, and the key the first submission
       # carried. A guardian reaches this when the first response never lands and the browser or the
-      # user resends. Selenium will not replay a request on its own, so the rendered form is set
+      # user resends. The browser driver will not replay a request on its own, so the rendered form is set
       # back to that key rather than the fresh one this page was issued.
       visit new_constituent_portal_dependent_path
       fill_replay_form

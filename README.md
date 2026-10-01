@@ -60,7 +60,7 @@ The [documentation hub](docs/README.md) is the guide index. It covers workflows,
 
 ## Technical Stack
 
-Ruby 4.0.2 and Rails 8.1.3; PostgreSQL; ERB, Turbo, Stimulus, Tailwind, esbuild, and Propshaft; Solid Queue, Solid Cache, and Solid Cable; Active Storage; Minitest/FactoryBot, Cuprite, and Jest.
+Ruby 4.0.7 and Rails 8.1.4; PostgreSQL; ERB, Turbo, Stimulus, Tailwind, esbuild, and Propshaft; Solid Queue, Solid Cache, and Solid Cable; Active Storage; Minitest/FactoryBot, Cuprite, and Jest.
 
 External integrations are Postmark for email, Twilio for SMS/fax status handling, DocuSeal for signing, and S3-compatible storage in production. Development uses local file storage and Letter Opener for email.
 
@@ -68,7 +68,7 @@ External integrations are Postmark for email, Twilio for SMS/fax status handling
 
 - Ruby from [`.ruby-version`](.ruby-version) and Bundler.
 - PostgreSQL running locally; CI uses PostgreSQL 17.
-- Node.js 24.x and Yarn 4.12.0, pinned by [`.yarnrc.yml`](.yarnrc.yml) and `packageManager` in [package.json](package.json). The older `engines.yarn` entry still says 1.22.x.
+- Node.js 24.x (see [`.node-version`](.node-version)) and Yarn 4.12.0, pinned by [`.yarnrc.yml`](.yarnrc.yml) and `packageManager` in [package.json](package.json).
 - Chrome or Chromium when running browser tests.
 - The team credentials key, or an isolated development/test credentials setup as described below.
 
@@ -266,7 +266,7 @@ Follow the [settings comparison and recovery checklist](docs/infrastructure/back
 
 [config/deploy.yml](config/deploy.yml) is a starting configuration with placeholder server, host, image, and registry values. Set those and the production database, storage, credentials, and integrations before using `bin/kamal deploy`.
 
-The [Dockerfile](Dockerfile) still defaults to Node 22.12.0 and Yarn 1.22.22, while the local frontend setup pins Node 24 and Yarn 4.12.0. Align the container's JavaScript setup before relying on this deployment path.
+The [Dockerfile](Dockerfile) installs the Node version pinned by [`.node-version`](.node-version) and the checked-in Yarn 4 release, matching the local frontend setup.
 
 The configuration enables jobs inside Puma. Its aliases provide `bin/kamal console`, `logs`, `shell`, and `dbc`.
 
