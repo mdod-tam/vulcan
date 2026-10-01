@@ -41,7 +41,6 @@ This document lists only remaining work. Tasks are small, explicit, and testable
 
 - [ ] Choose JS test runner setup (Node + jsdom vs. headless browser) and mocking approach  [TEST-001]
 - [ ] rails_request.js tests: success (200 JSON), success (HTML), failure (4xx/5xx), network error, retry path  [TEST-001]
-- [x] Autosave controller tests: debounce, pending/saved states, error state  [TEST-001]
 - [ ] Upload controller tests: file type/size validation, progress, error/retry  [TEST-001]
 - [ ] Extract shared validation utils and document usage (README in controllers/)
 - [ ] CI wiring: ensure lint + JS tests run; document scripts in package.json  [SCA-001][PATCH-001]
@@ -65,28 +64,8 @@ Paper guardian/dependent identity-review follow-ups
 
 ## Registration & Account Integrity  [DATA-001][DATA-002][AUTHZ-002][AUDIT-002]
 
-Duplicate-review outcome contract  [AUTHZ-002][AUDIT-002]
-
-Both halves of the matrix are now **decided and enforced**. `ResolutionService` accepts neither a determination nor an action: it always records `keep_separate` and `resolved_ignored`, so no other outcome can close a case and no staff selection can steer one.
-
-- [x] Define the complete allowed action/determination matrix. Each outcome needs two separate answers: is it terminal, and if terminal does it release the submission gate. *(Decided and enforced on both halves.)*
-- [x] **Retire the `approve`/`ignore` actions and their UI together (5c-2).** *(Done. The action fieldset is gone, `resolution_action` is neither accepted nor written, and the surrounding copy names the single outcome. Absorbed PR5b.)* Three implementation constraints held:
-  - **Nothing derived to replace it.** With no consumer, `resolution_action` stopped being written outright rather than emitting a value nobody reads. No compatibility writer was added, so there is none to remove later.
-  - **A stale `resolution_action` is rejected without mutation**, alongside the existing `determination` guard. A compatible stale form — carrying the values the server would choose anyway — still resolves, so admins holding an intermediate page are not stranded.
-  - **`resolved_approved` stays mapped** in the enum, `RESOLVED_STATUSES`, and `STATUS_LABELS`. Nothing writes it, but unmapping the Rails key would load existing rows as `nil`. The schema now permits `[0, 1, 2, 3, 4]`; value 4 is the separate `resolved_superseded` lifecycle state used when a merge replaces exact-pair work without making an identity decision for that untouched pair.
-- [x] Relabel the non-merge status. *(`resolved_ignored` renders as "Resolved without merge". It previously read "Ignored" beside "Determination: Keep separate" on the resolution summary — the contradiction 5c-2 existed to remove. `resolved_approved` keeps its own "Approved" label so historical rows still read truthfully.)*
-- [x] **Was blocking 5c-2:** verify — do not assume — whether any external consumer reads `status` or `resolution_action`. *(Answered: **there are no external consumers**. The in-repo half was swept and found `resolution_action` write-only, with no reader in reports, exports, rake tasks, JSON payloads, audit-log display, webhooks, or database views; the out-of-repo half — BI exports, warehouse queries, scheduled reports, manual operational SQL — was confirmed empty. **No compatibility window is needed**: 5c-2 stops writing `resolution_action` outright and does not derive a replacement value. Revisit only if reporting is built against these fields before 5c-2 ships.)*
-- [x] Decide whether `same_person_confirmed` may terminate a case without the merge that conclusion implies. *(No — reserved to the merge service, written atomically with it; enforced.)*
-- [x] Decide whether `fraud_or_security_review` is terminal, and whether it releases submission. *(Non-terminal — no security-review queue or handoff owner exists, so closing removes the case from the only queue there is; enforced.)*
-- [x] Decide whether `authorized_relationship_confirmed` is terminal. *(No — non-terminal, and enforced as such: `ResolutionService` records only `keep_separate`, so the value cannot close a case.)* **Enabling** it later is separate work blocked on a structural gap, not a pending decision: the service receives no selected candidate, so it needs a candidate/pair identifier in the resolution contract plus an exact verified `GuardianRelationship`, never created as a side effect. `guardian_relationships` has no active/revoked state.
-- [x] Decide whether the `approve` and `ignore` actions carry operational or reporting meaning. *(Retire both; the determination holds the durable semantics. Retirement itself is 5c-2 above.)*
-- [x] Preserve historical values, and inventory cases already resolved with a combination the matrix disallows. *(No remediation set exists: no datastore holds real duplicate-review resolution history, so the inventory would return only seed artifacts. Nothing was reopened or re-blocked. This becomes live again if the customer import lands — see below.)*
-- [x] Add one behavioral test per final outcome asserting its gate result, replacing constant-shaped assertions with matrix-driven coverage. *(`NON_TERMINAL_DETERMINATIONS` was removed entirely, so no constant-shaped assertion remains. Coverage for `authorized_relationship_confirmed` succeeding stays untestable until that outcome is enabled.)*
-- [x] Decide the guardian-authority policy. *(**Ratified**: the gate follows the applicant and never the acting guardian. A guardian with their own open case may still submit for a dependent, because the guardian's unresolved identity question does not put the dependent's identity in doubt and blocking would penalize a dependent whose record was never in question. Documented in [Current Application Features](../current_application_features.md) and pinned by tests in `test/services/applications/application_creator_test.rb`.)*
-
 Customer import — post-import reconciliation  [DATA-001][DATA-002]
 
-- [x] Settle the durable reconciliation model and workflow. *(The importer remains free of identity side effects. Admins explicitly run `duplicates:report` and `duplicates:sync_review_flags`, then enter exact unordered pairs through the existing duplicate-review queue. Durable decisions use the non-gating `post_import_reconciliation` source with lower ID as subject and higher ID as its sole `name_dob` candidate. Different-person resolutions suppress only that pair; same-person decisions use the existing locked merge/retirement path. An untouched open pair containing a retired record follows the survivor without inheriting the selected pair's identity decision; equivalent work is retained through bounded supersession metadata. Guardian/dependent edges are projected under the same locks: distinct dependents and their applications remain distinct, while only exact compatible duplicate edges coalesce. Reporting and synchronization create no cases, audit events, or notifications; login and the `registration_soft_match` submission gate are unchanged.)*
 - [ ] Run the documented read-only production duplicate-review inventory grouped by source/status. *(Development inventory was empty, which does not prove production zero. Historical `paper_intake` and `admin_create` rows remain historical and are not post-import suppression state.)*
 
 Signed-in portal locale routing  [DATA-002]
@@ -106,42 +85,6 @@ MFA enrollment localization
   and the pending SMS enrollment service's duplicate-send message. Cover setup, validation
   failures, retry, and completion for each factor in English and Spanish with system tests.
   Keep public sign-in and MFA verification language tied to the request, not the matched account.
-
-Portal dependent creation: two separate outcomes  [DATA-002]
-
-These were previously tracked as one item called "idempotency", which conflated two different
-questions. They stay listed separately so neither can be marked done by the other.
-
-Guardian-scoped duplicate prevention — *may this guardian hold this dependent at all?*
-- [x] Refuse a second dependent with the same canonical name and date of birth for one guardian,
-  inside the existing guardian lock and before any write. *(Done. Equivalence is delegated to
-  `Users::Constituent.find_duplicates` rather than restated — it lower-cases names in SQL and
-  handles the encrypted `date_of_birth`, so a hand-rolled check against the portal's MM/DD/YYYY
-  input silently matches nothing. The refusal names the existing dependent and points at MAT
-  support, since a guardian with two genuinely different same-name/same-birthdate people cannot
-  resolve it themselves.)*
-
-Request-replay idempotency — *is this the same request the server already completed?*
-- [x] Persist a per-form `portal_creation_key` atomically with the relationship and return the
-  original outcome on a replay with zero writes. *(Done.)*
-- [x] Scope replay identity to `(authenticated guardian, request key)`, enforced by a partial
-  composite unique index. *(Done. A key is one guardian's request namespace, not a global value, so
-  the same raw key is independently spendable by another guardian. A global index would couple
-  unrelated accounts and could raise `RecordNotUnique` under concurrency.)*
-- [x] Distinguish a true replay from a reused key carrying changed input. *(Done via
-  `portal_creation_fingerprint`, a versioned server-keyed HMAC over everything semantically
-  submitted. HMAC rather than a plain digest because the inputs are partly low-entropy PII. A reused
-  key with different input is refused as a stale form rather than silently discarding the change.)*
-- [x] Resolve the replay ahead of the pre-lock exact-contact hard block. *(Done. A replay resends the
-  contact details of the record it already created, so detection sees a hard block against that
-  record; refusing there gave the lost-response retry a support-contact dead end.)*
-- [x] Define merge behaviour for the scoped index. *(Done, and asymmetric: retiring a guardian ends
-  that request namespace so the pair is cleared as rows are repointed; retiring a dependent leaves
-  the guardian intact so the pair is preserved.)*
-- [x] Cover both concurrently, with a barrier after pre-lock detection. *(Done: identical replays,
-  distinct requests for one identity, and the same raw key from two guardians.)*
-
-Notes: predates the PR4d atomicity work and is unchanged by it, but PR4d added the guardian lock that makes the first item possible. Cleanup is expensive today because these historical relationships are not necessarily represented by a merge-eligible case. The admin merge UI accepts `registration_soft_match` cases and strictly pair-scoped `post_import_reconciliation` cases only, so any live matching pair must first be surfaced and explicitly entered through the reconciliation queue.
 
 ## Notification System
 
@@ -221,7 +164,7 @@ Data privacy compliance  [DATA-001][DATA-002]
 ## System Integrations
 
 Production Bucketeer direct uploads  [FILE-SEC-001]
-- [ ] **Production Bucketeer has no CORS configuration.**  When preparing to deploy, we'll need to configure CORS for the actual production application origins, allowing `PUT` and the `Content-Type`, `Content-MD5`, and `Content-Disposition` headers. Keep the existing public-access blocks enabled. Verify a nonsensitive file uploads through a browser form, persists as an attachment, and reopens through the application; a server-side upload does not prove browser CORS. Follow the [storage guide](../infrastructure/active_storage_s3_setup.md#direct-uploads-need-bucket-cors) and [Rails CORS requirements](https://guides.rubyonrails.org/active_storage_overview.html#cross-origin-resource-sharing-cors-configuration).
+- [ ] Verify a nonsensitive file uploads through a browser form on dev and production, persists as an attachment, and reopens through the application; a server-side upload does not prove browser CORS.
 
 Medical certification document signing  [DATA-001][AUTHZ-003][AUDIT-001]
 - [ ] Docuseal artifact storage plan  [DATA-001]
