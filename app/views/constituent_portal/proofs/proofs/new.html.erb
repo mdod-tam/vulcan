@@ -58,7 +58,7 @@
                 Upload your <%= @proof_type.titleize %> document
               </label>
               <p class="mt-1 text-sm text-gray-500" id="file-description">
-                Acceptable formats: <%= proof_upload_formats_label %>. Maximum file size: 5MB.
+                Acceptable formats: <%= proof_upload_formats_label %>. Maximum file size: <%= proof_upload_max_size_label %>.
               </p>
               
               <div class="mt-2">
@@ -126,7 +126,7 @@
               <p class="mt-3">If you're having trouble, make sure your document:</p>
               <ul class="list-disc pl-5 space-y-2">
                 <li>Is in <%= proof_upload_formats_label %> format</li>
-                <li>Is smaller than 5MB in size</li>
+                <li>Is <%= proof_upload_max_size_label %> or smaller</li>
                 <li>Is clearly legible</li>
                 <li>Shows all required information</li>
               </ul>

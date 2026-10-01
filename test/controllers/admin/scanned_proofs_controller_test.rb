@@ -91,5 +91,41 @@ module Admin
       get new_admin_application_scanned_proof_path(@application, proof_type: 'income')
       assert_redirected_to sign_in_path
     end
+
+    def test_refuses_a_scan_over_the_proof_limit_without_changing_the_proof
+      @application.income_proof.attach(io: StringIO.new(pdf_bytes(3.kilobytes)), filename: 'previous.pdf',
+                                       content_type: 'application/pdf')
+      previous_blob = @application.income_proof.blob
+
+      post admin_application_scanned_proofs_path(@application),
+           params: { proof_type: 'income', file: pdf_fixture(7.megabytes) }
+
+      assert_redirected_to new_admin_application_scanned_proof_path(@application)
+      assert_flash_message(:alert, "File size must be #{ProofUploadFormats.proof_max_megabytes}MB or smaller")
+      assert_equal previous_blob, @application.reload.income_proof.blob
+    end
+
+    def test_accepts_a_scan_of_exactly_the_proof_limit
+      post admin_application_scanned_proofs_path(@application),
+           params: { proof_type: 'income', file: pdf_fixture(ProofUploadFormats::PROOF_MAX_BYTES) }
+
+      assert_redirected_to admin_application_path(@application)
+      assert_equal ProofUploadFormats::PROOF_MAX_BYTES, @application.reload.income_proof.blob.byte_size
+    end
+
+    private
+
+    def pdf_bytes(size)
+      header = "%PDF-1.4\n"
+      header + ('x' * (size - header.bytesize))
+    end
+
+    def pdf_fixture(size)
+      tempfile = Tempfile.new(['scan', '.pdf'])
+      tempfile.binmode
+      tempfile.write(pdf_bytes(size))
+      tempfile.close
+      fixture_file_upload(tempfile.path, 'application/pdf')
+    end
   end
 end

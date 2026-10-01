@@ -62,6 +62,24 @@ module Applications
       assert_match(/no longer available/, service.errors.join(' '))
     end
 
+    test 'an oversized direct upload is refused with the proof size limit before anything is created' do
+      header = "%PDF-1.4\n"
+      oversized = ActiveStorage::Blob.create_and_upload!(
+        io: StringIO.new(header + ('x' * (ProofUploadFormats::PROOF_MAX_BYTES + 1 - header.bytesize))),
+        filename: 'income_proof.pdf', content_type: 'application/pdf'
+      )
+      _income_blob, residency_blob = create_blobs
+      params = direct_upload_params(oversized.signed_id, residency_blob.signed_id)
+      mock_policy
+      service = PaperApplicationService.new(params: confirmed_paper_params(params, admin: @admin), admin: @admin)
+
+      assert_no_difference ['User.count', 'Application.count', 'ActiveStorage::Attachment.count'] do
+        assert_not service.create
+      end
+      assert_includes service.errors.join(' '),
+                      "The uploaded income proof is larger than #{ProofUploadFormats.proof_max_megabytes}MB. Upload a smaller file."
+    end
+
     private
 
     def create_blobs

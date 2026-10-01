@@ -187,4 +187,72 @@ class ProofAttachmentServiceTest < ActiveSupport::TestCase
       assert @application.income_proof.attached?, 'Proof should be attached'
     end
   end
+
+  test 'a signed ID submission reports the stored blob size, not the token length' do
+    blob = stored_pdf_blob(12.kilobytes)
+
+    result = attach_income(blob.signed_id)
+
+    assert result[:success], result[:error]&.message
+    assert_equal blob.byte_size, result[:blob_size]
+    event = Event.where(auditable: @application, action: 'income_proof_attached').order(:created_at).last
+    assert_equal blob.byte_size, event.metadata.fetch('blob_size')
+    assert_equal 'proof.pdf', event.metadata.fetch('filename')
+  end
+
+  test 'accepts a proof of exactly the size limit' do
+    result = attach_income(stored_pdf_blob(ProofUploadFormats::PROOF_MAX_BYTES).signed_id)
+
+    assert result[:success], result[:error]&.message
+  end
+
+  test 'refuses an oversized proof without changing the previous attachment or status' do
+    previous = stored_pdf_blob(3.kilobytes)
+    @application.income_proof.attach(previous)
+    @application.update!(income_proof_status: :rejected)
+    oversized = pdf_upload(ProofUploadFormats::PROOF_MAX_BYTES + 1)
+
+    result = assert_no_difference('ActiveStorage::Blob.count') { attach_income(oversized) }
+
+    assert_not result[:success]
+    assert_instance_of UploadedDocument::Refused, result[:error]
+    assert_equal :too_large, result[:error].reason
+    @application.reload
+    assert_equal previous, @application.income_proof.blob
+    assert_predicate @application, :income_proof_status_rejected?
+  end
+
+  test 'refuses a signed ID when the caller accepts only uploads' do
+    result = attach_income(stored_pdf_blob(3.kilobytes).signed_id, signed_ids: false)
+
+    assert_not result[:success]
+    assert_equal :unsupported, result[:error].reason
+  end
+
+  private
+
+  def attach_income(blob_or_file, **)
+    ProofAttachmentService.attach_proof(
+      application: @application, proof_type: :income, blob_or_file: blob_or_file,
+      submission_method: :web, status: :not_reviewed, **
+    )
+  end
+
+  def pdf_bytes(size)
+    header = "%PDF-1.4\n"
+    header + ('x' * (size - header.bytesize))
+  end
+
+  def stored_pdf_blob(size)
+    ActiveStorage::Blob.create_and_upload!(io: StringIO.new(pdf_bytes(size)), filename: 'proof.pdf',
+                                           content_type: 'application/pdf')
+  end
+
+  def pdf_upload(size)
+    tempfile = Tempfile.new(['proof', '.pdf'])
+    tempfile.binmode
+    tempfile.write(pdf_bytes(size))
+    tempfile.rewind
+    ActionDispatch::Http::UploadedFile.new(tempfile: tempfile, filename: 'proof.pdf', type: 'application/pdf')
+  end
 end

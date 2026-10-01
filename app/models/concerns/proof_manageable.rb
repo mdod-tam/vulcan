@@ -29,9 +29,6 @@ module ProofManageable
   # Allowed MIME types for proof documents (see ProofUploadFormats)
   ALLOWED_TYPES = ProofUploadFormats::ALLOWED_CONTENT_TYPES
 
-  # Maximum file size for proof documents (5MB)
-  MAX_FILE_SIZE = 5.megabytes
-
   # Valid proof types for the application
   PROOF_TYPES = %w[income residency].freeze
 
@@ -158,9 +155,10 @@ module ProofManageable
     ProofUploadFormats::PROOF_ATTACHMENT_TYPES.each do |proof_type|
       attachment = send("#{proof_type}_proof")
       next unless attachment.attached?
-      next if attachment.byte_size <= MAX_FILE_SIZE
+      next if ProofUploadFormats.proof_size_allowed?(attachment.byte_size)
 
-      errors.add(:"#{proof_type}_proof", 'is too large. Maximum size allowed is 5MB.')
+      errors.add(:"#{proof_type}_proof",
+                 "is too large. Maximum size allowed is #{ProofUploadFormats.proof_max_megabytes}MB.")
     end
   end
 

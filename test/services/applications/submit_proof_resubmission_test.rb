@@ -222,7 +222,56 @@ module Applications
       assert Event.exists?(auditable: @application, action: 'income_proof_attachment_failed')
     end
 
+    test 'refuses a proof over the 5 MB limit and keeps the request and proof unchanged' do
+      attach_income_proof(@application)
+      previous_blob = @application.income_proof.blob
+
+      result = submit(pdf_upload(7.megabytes))
+
+      assert_not result.success?
+      assert_equal I18n.t('applications.proof_resubmission.messages.file_too_large',
+                          max_size: ProofUploadFormats.proof_max_megabytes),
+                   result.data[:errors][:file].first
+      assert_predicate @secure_request_form.reload, :status_sent?
+      assert_equal previous_blob, @application.reload.income_proof.blob
+    end
+
+    test 'accepts a proof of exactly 5 MB' do
+      result = submit(pdf_upload(ProofUploadFormats::PROOF_MAX_BYTES))
+
+      assert_predicate result, :success?
+      assert_predicate @secure_request_form.reload, :submitted?
+    end
+
+    test 'refuses a signed blob ID sent in place of an upload' do
+      blob = ActiveStorage::Blob.create_and_upload!(io: StringIO.new(pdf_bytes(3.kilobytes)), filename: 'proof.pdf',
+                                                    content_type: 'application/pdf')
+
+      result = submit(blob.signed_id)
+
+      assert_not result.success?
+      assert_predicate @secure_request_form.reload, :status_sent?
+      assert_not_predicate @application.reload.income_proof, :attached?
+    end
+
     private
+
+    def submit(file)
+      SubmitProofResubmission.new(application: @application, secure_request_form: @secure_request_form, file: file).call
+    end
+
+    def pdf_bytes(size)
+      header = "%PDF-1.4\n"
+      header + ('x' * (size - header.bytesize))
+    end
+
+    def pdf_upload(size)
+      tempfile = Tempfile.new(['proof', '.pdf'])
+      tempfile.binmode
+      tempfile.write(pdf_bytes(size))
+      tempfile.rewind
+      ActionDispatch::Http::UploadedFile.new(tempfile: tempfile, filename: 'proof.pdf', type: 'application/pdf')
+    end
 
     def attach_income_proof(application)
       application.income_proof.attach(

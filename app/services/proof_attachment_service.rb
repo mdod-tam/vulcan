@@ -36,18 +36,22 @@ class ProofAttachmentService
   #   - :application [Application] (required) The application to attach the proof to.
   #   - :proof_type [Symbol] (required) The type of proof (:income or :residency).
   #   - :blob_or_file [ActiveStorage::Blob, String, ActionDispatch::Http::UploadedFile] (required) The file to attach.
+  #     A String is a signed blob ID; see UploadedDocument for how each input is resolved and refused.
   #   - :submission_method [Symbol] (required) The method of submission (:paper, :web, :email, etc.).
   #   - :status [Symbol] (optional, default: :not_reviewed) The status to set for the proof.
   #   - :admin [User] (optional) The admin user if this is an admin action.
   #   - :metadata [Hash] (optional) Additional metadata to store with the attachment audit.
+  #   - :signed_ids [Boolean] (optional, default: true) Whether a signed blob ID is an accepted input.
   #
-  # @return [Hash] Result hash with :success, :error, and :duration_ms keys
+  # @return [Hash] Result hash with :success, :error, and :duration_ms keys. A refused upload
+  #   leaves :error as an UploadedDocument::Refused and changes no proof state.
   def self.attach_proof(args)
     params = {
       status: :not_reviewed,
       admin: nil,
       metadata: {},
-      skip_audit_events: false
+      skip_audit_events: false,
+      signed_ids: true
     }.merge(args)
 
     context = {
@@ -221,52 +225,14 @@ class ProofAttachmentService
       end
     end
 
-    def attach_and_verify_initial_save(application, proof_type, attachment_param)
-      perform_attachment(application, proof_type, attachment_param)
+    def attach_and_verify_initial_save(application, proof_type, blob)
+      application.send(get_attachment_method_name(proof_type)).attach(blob)
       save_application_with_attachment(application)
       verify_attachment_persisted(application, proof_type)
     end
 
-    def perform_attachment(application, proof_type, attachment_param)
-      attachment_method = get_attachment_method_name(proof_type)
-      application.send(attachment_method).attach(attachment_param)
-    rescue ActiveSupport::MessageVerifier::InvalidSignature, ActiveRecord::RecordNotFound => e
-      handle_attachment_signature_error(application, proof_type, attachment_param, e)
-    end
-
     def get_attachment_method_name(proof_type)
       "#{proof_type}_proof"
-    end
-
-    def handle_attachment_signature_error(application, proof_type, attachment_param, error)
-      Rails.logger.warn "ActiveStorage signed ID error: #{error.message}. Attempting to recreate blob."
-
-      validate_recoverable_attachment_param(attachment_param, error)
-      blob = recreate_blob_from_uploaded_file(attachment_param)
-      attachment_method = get_attachment_method_name(proof_type)
-      application.send(attachment_method).attach(blob)
-    end
-
-    def validate_recoverable_attachment_param(attachment_param, error)
-      if attachment_param.is_a?(String) && attachment_param.start_with?('eyJf')
-        Rails.logger.error "Invalid signed ID detected, cannot recover. Original error: #{error.message}"
-        raise 'Failed to attach proof: Invalid or expired attachment reference'
-      end
-
-      return if attachment_param.respond_to?(:tempfile) || attachment_param.is_a?(ActionDispatch::Http::UploadedFile)
-
-      raise "Failed to attach proof: #{error.message}"
-    end
-
-    def recreate_blob_from_uploaded_file(attachment_param)
-      ActiveStorage::Blob.create_and_upload!(
-        io: attachment_param.tempfile,
-        filename: attachment_param.original_filename,
-        content_type: attachment_param.content_type
-      )
-    rescue StandardError => e
-      Rails.logger.error "Failed to recreate blob: #{e.message}"
-      raise "Failed to attach proof after retry: #{e.message}"
     end
 
     def save_application_with_attachment(application)
@@ -356,33 +322,6 @@ class ProofAttachmentService
       end
 
       result
-    end
-
-    def calculate_blob_size(blob_or_file)
-      return blob_or_file.byte_size if blob_or_file.respond_to?(:byte_size)
-      return blob_or_file.size if blob_or_file.respond_to?(:size)
-
-      0
-    end
-
-    def prepare_attachment_param(blob_or_file, _proof_type)
-      return blob_or_file if blob_or_file.is_a?(ActiveStorage::Blob)
-      return blob_or_file if blob_or_file.is_a?(String) && blob_or_file.start_with?('eyJf')
-
-      if blob_or_file.respond_to?(:tempfile) || blob_or_file.is_a?(ActionDispatch::Http::UploadedFile)
-        begin
-          blob = ActiveStorage::Blob.create_and_upload!(
-            io: blob_or_file.tempfile,
-            filename: blob_or_file.original_filename,
-            content_type: blob_or_file.content_type
-          )
-          return blob.signed_id
-        rescue StandardError => e
-          Rails.logger.error "Failed to create blob from uploaded file: #{e.message}"
-        end
-      end
-
-      blob_or_file
     end
 
     def log_attachment_events(context)
@@ -494,14 +433,23 @@ class ProofAttachmentService
       end
     end
 
+    # Resolves the submitted document before any proof state changes; a refusal raises here
     def prepare_flow_data(params)
-      blob_or_file = params.fetch(:blob_or_file)
+      application = params.fetch(:application)
+      proof_type = params.fetch(:proof_type)
+      blob = UploadedDocument.resolve!(
+        params.fetch(:blob_or_file),
+        record: application,
+        name: get_attachment_method_name(proof_type),
+        max_bytes: ProofUploadFormats::PROOF_MAX_BYTES,
+        signed_ids: params.fetch(:signed_ids)
+      )
 
       Struct.new(:application, :proof_type, :attachment_param, :blob_size, :submission_method, keyword_init: true).new( # rubocop:disable Style/RedundantStructKeywordInit
-        application: params.fetch(:application),
-        proof_type: params.fetch(:proof_type),
-        attachment_param: prepare_attachment_param(blob_or_file, params.fetch(:proof_type)),
-        blob_size: calculate_blob_size(blob_or_file),
+        application: application,
+        proof_type: proof_type,
+        attachment_param: blob,
+        blob_size: blob.byte_size,
         submission_method: params.fetch(:submission_method)
       )
     end

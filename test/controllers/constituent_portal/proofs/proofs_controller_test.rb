@@ -212,4 +212,22 @@ class ConstituentProofsSubmissionTest < ActionDispatch::IntegrationTest
     assert_redirected_to constituent_portal_dashboard_path
     assert_equal 'Application not found', flash[:alert]
   end
+
+  test 'a refused upload returns to the form with an actionable message and changes nothing' do
+    header = "%PDF-1.4\n"
+    oversized = ActiveStorage::Blob.create_and_upload!(
+      io: StringIO.new(header + ('x' * (ProofUploadFormats::PROOF_MAX_BYTES + 1 - header.bytesize))),
+      filename: 'large.pdf', content_type: 'application/pdf'
+    )
+
+    assert_no_difference -> { Event.where(auditable: @application, action: 'proof_submitted').count } do
+      post "/constituent_portal/applications/#{@application.id}/proofs/resubmit",
+           params: { proof_type: 'income', income_proof_upload: oversized.signed_id }
+    end
+
+    assert_redirected_to constituent_portal_application_new_proof_path(@application, proof_type: 'income')
+    assert_equal I18n.t('constituent_portal.proofs.upload_refused.too_large',
+                        max_size: ProofUploadFormats.proof_max_megabytes), flash[:alert]
+    assert_predicate @application.reload, :income_proof_status_rejected?
+  end
 end

@@ -13,8 +13,6 @@ module Admin
 
     ALLOWED_CONTENT_TYPES = ProofUploadFormats::ALLOWED_CONTENT_TYPES
 
-    MAX_FILE_SIZE = 10.megabytes
-
     def new
       @proof_type = params[:proof_type]
     end
@@ -90,7 +88,7 @@ module Admin
       return if valid_file_size?
 
       redirect_to(new_admin_application_scanned_proof_path(@application),
-                  alert: "File size must be under #{MAX_FILE_SIZE / 1.megabyte}MB")
+                  alert: "File size must be #{ProofUploadFormats.proof_max_megabytes}MB or smaller")
     end
 
     def valid_file_type?
@@ -98,7 +96,7 @@ module Admin
     end
 
     def valid_file_size?
-      params[:file].size <= MAX_FILE_SIZE
+      ProofUploadFormats.proof_size_allowed?(params[:file].size)
     end
 
     def attach_proof

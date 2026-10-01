@@ -7,7 +7,9 @@ const EXTENSION_TO_MIME = {
   jpeg: "image/jpeg",
   png: "image/png",
   heic: "image/heic",
-  heif: "image/heif"
+  heif: "image/heif",
+  tif: "image/tiff",
+  tiff: "image/tiff"
 }
 
 export default class extends Controller {
@@ -69,7 +71,7 @@ export default class extends Controller {
 
     if (!this.isAllowedFileType(file)) {
       const errorMessage = this.invalidTypeMessageValue ||
-        "Invalid file type. Please upload a PDF or an image file (PDF, JPEG, PNG, or HEIC/HEIF)."
+        "Invalid file type. Please upload a PDF or an image file (PDF, JPEG, PNG, TIFF, or HEIC/HEIF)."
       this.showNotification(errorMessage, "error")
       if (input) input.value = ""
       return false
