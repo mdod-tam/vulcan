@@ -9,12 +9,13 @@ echo "=============================================="
 
 # Set up special environment variables for debugging
 export DEBUG_AUTH=true
-export WEBDRIVER_TIMEOUT=15
 export RAILS_SYSTEM_TESTING_SCREENSHOT="${RAILS_SYSTEM_TESTING_SCREENSHOT:-simple}"
 export RAILS_SYSTEM_TESTING_SCREENSHOT_HTML="${RAILS_SYSTEM_TESTING_SCREENSHOT_HTML:-1}"
 
 # Display installed Chrome version (for informational purposes)
-chrome_version=$(google-chrome --version 2>/dev/null || chrome --version 2>/dev/null || echo "Unknown Chrome version")
+chrome_version=$(google-chrome --version 2>/dev/null || chrome --version 2>/dev/null \
+  || "/Applications/Google Chrome.app/Contents/MacOS/Google Chrome" --version 2>/dev/null \
+  || echo "Unknown Chrome version")
 echo "Chrome version: $chrome_version"
 
 # Run the specific test with extra debugging output
@@ -26,10 +27,6 @@ RAILS_ENV=test bin/rails test "$@" -v
 echo "=============================================="
 echo "Recent test logs:"
 tail -n 20 log/test.log 2>/dev/null || echo "No test log found"
-
-echo "=============================================="
-echo "Recent ChromeDriver logs:"
-cat tmp/chromedriver.log 2>/dev/null || echo "No ChromeDriver log found"
 
 echo "=============================================="
 echo "Test run complete"

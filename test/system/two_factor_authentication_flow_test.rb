@@ -12,9 +12,7 @@ class TwoFactorAuthenticationFlowTest < ApplicationSystemTestCase
   # Add teardown to handle any browser cleanup issues gracefully
   def teardown
     super
-  rescue Selenium::WebDriver::Error::NoSuchWindowError,
-         Selenium::WebDriver::Error::InvalidArgumentError,
-         NoMethodError => e
+  rescue NoMethodError => e
     puts "Rescued error during teardown: #{e.class} - #{e.message}"
   end
 

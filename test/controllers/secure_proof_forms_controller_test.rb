@@ -17,7 +17,7 @@ class SecureProofFormsControllerTest < ActionDispatch::IntegrationTest
 
     assert_response :success
     assert_select 'form[action*=?]', secure_proof_form_path
-    assert_select '#file_help', I18n.t('secure_proof_forms.show.file_help')
+    assert_select '#file_help', I18n.t('secure_proof_forms.show.file_help', max_size: ProofUploadFormats.proof_max_megabytes)
     assert_select 'input[type=file][name=file][aria-describedby=file_help]'
     assert_select 'button[type=submit]', I18n.t('secure_proof_forms.show.submit')
   end

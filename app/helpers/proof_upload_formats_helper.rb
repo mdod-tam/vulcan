@@ -9,11 +9,15 @@ module ProofUploadFormatsHelper
     ProofUploadFormats::HUMAN_LABEL
   end
 
+  def proof_upload_max_size_label
+    "#{ProofUploadFormats.proof_max_megabytes}MB"
+  end
+
   def proof_upload_stimulus_values
     {
       upload_allowed_types_value: ProofUploadFormats.allowed_content_types_json,
       upload_invalid_type_message_value: ProofUploadFormats::INVALID_TYPE_MESSAGE,
-      upload_max_file_size_value: ActiveStorageValidatable::MAX_FILE_SIZE
+      upload_max_file_size_value: ProofUploadFormats::PROOF_MAX_BYTES
     }
   end
 end

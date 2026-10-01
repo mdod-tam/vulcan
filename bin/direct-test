@@ -9,12 +9,14 @@ echo "=============================================="
 mkdir -p tmp
 
 # Display installed Chrome version (for informational purposes)
-chrome_version=$(chrome --version 2>/dev/null || echo "Unknown Chrome version")
+chrome_version=$(google-chrome --version 2>/dev/null || chrome --version 2>/dev/null \
+  || "/Applications/Google Chrome.app/Contents/MacOS/Google Chrome" --version 2>/dev/null \
+  || echo "Unknown Chrome version")
 echo "Chrome version: $chrome_version"
 
 echo "=============================================="
 echo "Running test: $@"
 echo "=============================================="
 
-# Run rails tests using the standard runner; Selenium Manager manages ChromeDriver automatically
+# Run rails tests using the standard runner; system tests drive Chrome through Cuprite (no ChromeDriver)
 RAILS_ENV=test bundle exec rails test "$@" -v | tee tmp/direct-test-$(date +%Y%m%d%H%M%S).log

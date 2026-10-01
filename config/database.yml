@@ -1,14 +1,13 @@
 # PostgreSQL configuration for Rails 8 with Solid Queue
 #
-# Connection pool sizing:
+# Connection pool sizing (max_connections):
 # - Primary: RAILS_MAX_THREADS (default 10)
 # - Queue: SOLID_QUEUE_POOL_SIZE (default 10, needs threads + 2 for polling/heartbeat)
 
 common: &common
   adapter: postgresql
   encoding: unicode
-  pool: <%= ENV.fetch("RAILS_MAX_THREADS", 10) %>
-  timeout: 5000
+  max_connections: <%= ENV.fetch("RAILS_MAX_THREADS", 10) %>
   connect_timeout: 10
   checkout_timeout: 30
   <% if ENV["DATABASE_PASSWORD"].to_s.strip != "" %>
@@ -26,7 +25,7 @@ development:
   queue:
     <<: *primary_development
     database: mat_vulcan_queue_development  # Separate database for Solid Queue
-    pool: <%= ENV.fetch("SOLID_QUEUE_POOL_SIZE", 10) %>
+    max_connections: <%= ENV.fetch("SOLID_QUEUE_POOL_SIZE", 10) %>
     migrations_paths: db/queue_migrate
   cable:
     <<: *primary_development
@@ -44,7 +43,7 @@ test:
   queue:
     <<: *primary_test
     database: mat_vulcan_queue_test
-    pool: <%= ENV.fetch("SOLID_QUEUE_POOL_SIZE", 10) %>
+    max_connections: <%= ENV.fetch("SOLID_QUEUE_POOL_SIZE", 10) %>
     migrations_paths: db/queue_migrate
   cable:
     <<: *primary_test
@@ -55,11 +54,11 @@ production:
   primary: &primary_production
     <<: *common
     url: <%= ENV['DATABASE_URL'] %>
-    pool: <%= ENV.fetch("RAILS_MAX_THREADS", 10) %>
+    max_connections: <%= ENV.fetch("RAILS_MAX_THREADS", 10) %>
   queue:
     <<: *primary_production
     url: <%= ENV['QUEUE_DATABASE_URL'] || ENV['DATABASE_URL'] %>
-    pool: <%= ENV.fetch("SOLID_QUEUE_POOL_SIZE", 10) %>
+    max_connections: <%= ENV.fetch("SOLID_QUEUE_POOL_SIZE", 10) %>
     migrations_paths: db/queue_migrate
   cache:
     <<: *primary_production

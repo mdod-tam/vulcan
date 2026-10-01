@@ -180,7 +180,7 @@ class ApplicationProofValidationTest < ActiveSupport::TestCase
     # Create a temporary file that exceeds the size limit
     oversized_file = Tempfile.new(['oversized', '.pdf'])
     begin
-      # Write content that exceeds 5MB (ProofManageable::MAX_FILE_SIZE)
+      # Write content that exceeds 5MB (ProofUploadFormats::PROOF_MAX_BYTES)
       content = 'X' * (5.megabytes + 1.kilobyte)
       oversized_file.write(content)
       oversized_file.rewind

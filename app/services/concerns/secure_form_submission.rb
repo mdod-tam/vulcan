@@ -53,20 +53,21 @@ module SecureFormSubmission
     failure(message(:validation_failed), { errors: form_errors })
   end
 
-  def file_valid?
+  # max_file_size is the purpose's inclusive limit; the validator's default applies until a purpose sets one
+  def file_valid?(max_file_size: ProofAttachmentValidator::MAX_FILE_SIZE)
     @form_errors = ActiveModel::Errors.new(self)
-    ProofAttachmentValidator.validate!(file)
+    ProofAttachmentValidator.validate!(file, max_file_size: max_file_size)
     true
   rescue ProofAttachmentValidator::ValidationError => e
-    form_errors.add(:file, e.error_type, message: file_validation_message(e))
+    form_errors.add(:file, e.error_type, message: file_validation_message(e, max_file_size))
     false
   end
 
-  def file_validation_message(error)
+  def file_validation_message(error, max_file_size)
     case error.error_type
     when :no_attachment then message(:file_blank)
     when :invalid_type then message(:file_type_invalid)
-    when :file_too_large then message(:file_too_large, max_size: ProofAttachmentValidator::MAX_FILE_SIZE / 1.megabyte)
+    when :file_too_large then message(:file_too_large, max_size: max_file_size / 1.megabyte)
     when :file_too_small then message(:file_too_small)
     when :suspicious_content then message(:file_suspicious)
     else message(:file_invalid)

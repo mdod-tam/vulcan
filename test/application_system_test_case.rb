@@ -11,11 +11,6 @@ begin
 rescue LoadError
   # Blank screenshot detection is skipped when the PNG parser is unavailable.
 end
-begin
-  require 'selenium/webdriver'
-rescue LoadError
-  # Selenium not available – tests will default to Cuprite
-end
 
 # --------------------------------------------------------------------------
 # SECTION 1: CAPYBARA DRIVER REGISTRATION
@@ -23,24 +18,6 @@ end
 # This is the single, authoritative place where the driver is
 # registered and configured.
 # --------------------------------------------------------------------------
-# Optional Selenium driver for isolation testing (set SYSTEM_TEST_DRIVER=selenium)
-Capybara.register_driver :selenium_chrome_headless do |app|
-  options = Selenium::WebDriver::Chrome::Options.new
-  options.add_argument('--headless=new')
-  options.add_argument('--disable-gpu')
-  options.add_argument('--no-sandbox')
-  options.add_argument('--disable-dev-shm-usage')
-  options.add_argument('--window-size=1200,800')
-  Capybara::Selenium::Driver.new(app, browser: :chrome, options: options)
-end
-
-# CupriteSessionExtensions - Add hard restart capability
-module CupriteSessionExtensions
-  def hard_restart
-    browser&.quit
-    Capybara.reset_sessions!
-  end
-end
 
 # --------------------------------------------------------------------------
 # SECTION 2: GLOBAL CAPYBARA CONFIGURATION
@@ -61,9 +38,6 @@ Capybara.configure do |config|
   # Prefer Capybara defaults; avoid auto-reloading surprises
   # config.automatic_reload = true
 end
-
-# Include CupriteSessionExtensions for hard restart capability
-Capybara::Session.include CupriteSessionExtensions
 
 # Helper Modules – defined before use
 
@@ -269,14 +243,11 @@ end
 # helpers and defines a setup/teardown lifecycle.
 # --------------------------------------------------------------------------
 class ApplicationSystemTestCase < ActionDispatch::SystemTestCase
-  # Use driver based on ENV for isolation; default to Cuprite
-  if ENV['SYSTEM_TEST_DRIVER']&.downcase == 'selenium'
-    driven_by :selenium, using: :chrome, screen_size: [1200, 800]
-  else
-    # Configure the live Rails driver; a separate :cuprite registration is replaced by Rails.
-    driven_by :cuprite, screen_size: [1200, 800],
-                        options: { js_errors: true, headless: %w[false 0].exclude?(ENV.fetch('HEADLESS', 'true')) }
-  end
+  # Configure the live Rails driver; a separate :cuprite registration is replaced by Rails.
+  # Chrome on Heroku CI (chrome-for-testing buildpack) cannot use its sandbox; CHROME_NO_SANDBOX opts in.
+  driven_by :cuprite, screen_size: [1200, 800],
+                      options: { js_errors: true, headless: %w[false 0].exclude?(ENV.fetch('HEADLESS', 'true')),
+                                 browser_options: ENV['CHROME_NO_SANDBOX'] == 'true' ? { 'no-sandbox' => nil } : {} }
 
   # Include all necessary helper modules.
   include SystemTestAuthentication
@@ -451,7 +422,8 @@ class ApplicationSystemTestCase < ActionDispatch::SystemTestCase
   def restart_browser!
     puts '🔄 Manually restarting browser...'
     capture_browser_recovery_diagnostics('manual_restart')
-    hard_restart
+    page.driver.restart # Cuprite relaunches Chrome with the same options
+    Capybara.reset_sessions!
   end
 
   # Cuprite-friendly fill_in helper that avoids "Options passed to Node#set" warnings

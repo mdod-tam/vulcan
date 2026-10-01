@@ -47,6 +47,8 @@ module ConstituentPortal
         # ProofAttachmentService manages its own transactions (we don't need an outer transaction)
         # This prevents nested transaction issues that can cause attachment rollbacks
         attach_and_update_proof
+        return if performed?
+
         track_submission
         handle_successful_submission
       rescue RateLimit::ExceededError
@@ -174,9 +176,17 @@ module ConstituentPortal
         end
 
         return if result[:success]
+        return redirect_refused_upload(result[:error]) if result[:error].is_a?(UploadedDocument::Refused)
 
         Rails.logger.error "Failed to attach proof: #{result[:error]&.message}"
         raise "Failed to attach proof: #{result[:error]&.message}"
+      end
+
+      # A refused upload changed nothing, so the constituent can choose a file and try again
+      def redirect_refused_upload(refusal)
+        redirect_to constituent_portal_application_new_proof_path(@application, proof_type: params[:proof_type]),
+                    alert: t("constituent_portal.proofs.upload_refused.#{refusal.reason}",
+                             max_size: ProofUploadFormats.proof_max_megabytes)
       end
 
       def determine_resubmission_status

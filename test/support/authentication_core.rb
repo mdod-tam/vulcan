@@ -17,7 +17,7 @@ module AuthenticationCore
     )
   end
 
-  # Deletes the session cookie from any type of driver (Capybara, Selenium, Cuprite, Rack)
+  # Deletes the session cookie from any type of driver (Capybara, Cuprite, Rack)
   # This centralizes cookie deletion logic that was duplicated across helper modules
   def delete_session_cookie
     # Rack mock session (integration tests)
@@ -35,17 +35,8 @@ module AuthenticationCore
     if defined?(page) && page.respond_to?(:driver)
       driver = page.driver
 
-      # Selenium driver
-      if driver.is_a?(Capybara::Selenium::Driver) &&
-         driver.browser.respond_to?(:manage) &&
-         driver.browser.manage.respond_to?(:delete_cookie)
-        begin
-          driver.browser.manage.delete_cookie(SESSION_COOKIE_NAME.to_s)
-        rescue StandardError => e
-          debug_auth "Warning: Selenium cookie deletion failed: #{e.message}"
-        end
       # Cuprite driver
-      elsif driver.is_a?(Capybara::Cuprite::Driver)
+      if driver.is_a?(Capybara::Cuprite::Driver)
         begin
           if driver.respond_to?(:remove_cookie)
             driver.remove_cookie(SESSION_COOKIE_NAME.to_s)

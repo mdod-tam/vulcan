@@ -1001,20 +1001,25 @@ module Applications
       upload = params[key].presence || params["#{key}_signed_id"].presence
       return upload unless upload.is_a?(String)
 
-      blob = ActiveStorage::Blob.find_signed!(upload)
-      blob.lock!
-      if !blob.attachments.exists? && blob.created_at <= CleanupUnattachedUploadsJob::RETENTION.ago
-        return add_error("The uploaded #{proof_upload_label(type)} has expired. Upload it again.")
-      end
+      UploadedDocument.resolve!(upload, record: @application, name: key, max_bytes: paper_upload_max_bytes(type))
+    rescue UploadedDocument::Refused => e
+      add_error(paper_upload_refusal(type, e.reason))
+    end
 
-      permitted_attachments = blob.attachments.where(record: @application, name: key)
-      if blob.attachments.where.not(id: permitted_attachments.select(:id)).exists?
-        return add_error("The uploaded #{proof_upload_label(type)} is already attached elsewhere. Upload it again.")
-      end
+    # Certification size limits are decided separately; proofs follow the shared proof policy
+    def paper_upload_max_bytes(type)
+      ProofUploadFormats::PROOF_MAX_BYTES unless type == :medical_certification
+    end
 
-      blob
-    rescue ActiveSupport::MessageVerifier::InvalidSignature, ActiveRecord::RecordNotFound
-      add_error("The uploaded #{proof_upload_label(type)} is no longer available. Upload it again.")
+    def paper_upload_refusal(type, reason)
+      label = proof_upload_label(type)
+      case reason
+      when :expired then "The uploaded #{label} has expired. Upload it again."
+      when :attached_elsewhere then "The uploaded #{label} is already attached elsewhere. Upload it again."
+      when :too_large then "The uploaded #{label} is larger than #{ProofUploadFormats.proof_max_megabytes}MB. Upload a smaller file."
+      when :invalid_type then "The uploaded #{label} is not a #{ProofUploadFormats::HUMAN_LABEL} file. Upload it again."
+      else "The uploaded #{label} is no longer available. Upload it again."
+      end
     end
 
     def process_reject_proof(type)

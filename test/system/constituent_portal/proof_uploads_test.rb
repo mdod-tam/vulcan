@@ -94,6 +94,51 @@ class ProofUploadsTest < ApplicationSystemTestCase
     assert @application.reload.income_proof.attached?
   end
 
+  test 'cancelling before the file is stored clears the busy state and a new file still submits' do
+    # Hold the first blob-creation request so Cancel lands before any storage request exists
+    browser = page.driver.browser
+    held_requests = Queue.new
+    hold_next = true
+    browser.network.intercept(pattern: '*/rails/active_storage/direct_uploads*')
+    browser.on(:request) do |request|
+      if hold_next
+        hold_next = false
+        held_requests << request
+      else
+        request.continue
+      end
+    end
+
+    visit constituent_portal_application_new_proof_path(@application, proof_type: 'income')
+    wait_for_turbo
+
+    attach_file 'income_proof_upload', @valid_pdf
+    held_request = held_requests.pop(timeout: 10)
+    assert held_request, 'the blob-creation request should be held'
+    assert_button 'Submit Document', disabled: true
+
+    click_button 'Cancel Upload'
+    assert_button 'Submit Document', disabled: false
+    assert_no_selector "[data-upload-target='progress']", visible: true
+
+    begin
+      held_request.continue
+    rescue Ferrum::Error
+      # The browser already dropped the aborted request
+    end
+    assert_no_selector 'input[type="hidden"][name="income_proof_upload"]', visible: :all
+
+    attach_file 'income_proof_upload', @valid_pdf
+    assert_selector 'input[type="hidden"][name="income_proof_upload"]', visible: :all, count: 1
+    assert_button 'Submit Document', disabled: false
+
+    click_button 'Submit Document'
+    wait_for_turbo
+
+    assert_success_message('Proof submitted successfully')
+    assert @application.reload.income_proof.attached?
+  end
+
   test 'shows error for invalid file type' do
     visit constituent_portal_application_new_proof_path(@application, proof_type: 'income')
     wait_for_turbo

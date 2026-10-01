@@ -37,7 +37,7 @@ Each public controller shares one flow from [`SecureRequestFormController`](../.
 - An expired link redirects to the resend page. A resend request always redirects to the same neutral page, so the response does not show whether a link exists.
 - Validation errors render with 422. Other failures show a translated message only, and the raw error goes to the log.
 
-Submission services share [`SecureFormSubmission`](../../app/services/concerns/secure_form_submission.rb). Proof, certification, and W9 uploads all use [`ProofAttachmentValidator`](../../app/services/proof_attachment_validator.rb), which checks size, type, and PDF active content. Type detection can still fall back to the file extension, so a file named `.pdf` is not proven to be a PDF.
+Submission services share [`SecureFormSubmission`](../../app/services/concerns/secure_form_submission.rb). Proof, certification, and W9 uploads all use [`ProofAttachmentValidator`](../../app/services/proof_attachment_validator.rb), which checks size, type, and PDF active content. Proof uploads use the 5 MB proof limit from [`ProofUploadFormats`](../../app/models/proof_upload_formats.rb) and accept only an uploaded file, never a signed blob ID; certification and W9 uploads use the validator's 10 MB default. Type detection can still fall back to the file extension, so a file named `.pdf` is not proven to be a PDF.
 
 Submission locks the application before the form, in the same order as issuance, and rechecks the link under that lock:
 

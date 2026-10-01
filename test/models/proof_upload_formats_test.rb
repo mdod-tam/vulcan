@@ -9,14 +9,19 @@ class ProofUploadFormatsTest < ActiveSupport::TestCase
     assert_includes ProofUploadFormats::ALLOWED_CONTENT_TYPES, 'image/png'
     assert_includes ProofUploadFormats::ALLOWED_CONTENT_TYPES, 'image/heic'
     assert_includes ProofUploadFormats::ALLOWED_CONTENT_TYPES, 'image/heif'
+    assert_includes ProofUploadFormats::ALLOWED_CONTENT_TYPES, 'image/tiff'
   end
 
   test 'accept attribute includes extensions and mime types for mobile uploads' do
     assert_includes ProofUploadFormats::ACCEPT_ATTRIBUTE, '.heic'
     assert_includes ProofUploadFormats::ACCEPT_ATTRIBUTE, 'image/heic'
+    assert_includes ProofUploadFormats::ACCEPT_ATTRIBUTE, '.tif'
+    assert_includes ProofUploadFormats::ACCEPT_ATTRIBUTE, '.tiff'
+    assert_includes ProofUploadFormats::ACCEPT_ATTRIBUTE, 'image/tiff'
   end
 
-  test 'human label mentions HEIF' do
+  test 'human label mentions HEIF and TIFF' do
     assert_includes ProofUploadFormats::HUMAN_LABEL, 'HEIF'
+    assert_includes ProofUploadFormats::HUMAN_LABEL, 'TIFF'
   end
 end

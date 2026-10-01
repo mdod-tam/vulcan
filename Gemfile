@@ -2,7 +2,7 @@
 
 source 'https://rubygems.org'
 
-ruby '4.0.2'
+ruby '4.0.7'
 
 # gem for hosting images & getting ocr functionality
 gem 'aws-sdk-s3', '~> 1.217'
@@ -38,9 +38,9 @@ gem 'prawn', '~> 2.5'
 # the modern asset pipeline for Rails [https://github.com/rails/propshaft]
 gem 'propshaft', '~> 1.3', '>= 1.3.1'
 # use the Puma web server [https://github.com/puma/puma]
-gem 'puma', '~> 7.2'
+gem 'puma', '~> 8.0'
 # rails framework
-gem 'rails', '~> 8.1.3'
+gem 'rails', '~> 8.1.4'
 # gem for one-time passwords for SMS 2fa
 gem 'rotp', '~> 6.3'
 # gem for QR code generation for TOTP
@@ -56,7 +56,7 @@ gem 'thruster', '~> 0.1.20', require: false
 # hotwire's SPA-like page accelerator [https://turbo.hotwired.dev]
 gem 'turbo-rails', '~> 2.0', '>= 2.0.23'
 # for fax capabilities
-gem 'twilio-ruby', '~> 7.10', '>= 7.10.4'
+gem 'twilio-ruby', '>= 7.11.3'
 # windows does not include zoneinfo files, so bundle the tzinfo-data gem
 gem 'tzinfo-data', '~> 1.2025', '>= 1.2025.2'
 # gem for 2fa
@@ -95,5 +95,4 @@ group :test do
   gem 'minitest-rails', '~> 8.1'
   gem 'mocha', '~> 3.1', require: false
   gem 'rails-controller-testing'
-  gem 'selenium-webdriver'
 end
