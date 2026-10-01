@@ -147,25 +147,6 @@ describe("UploadController", () => {
     expect(submitButton.disabled).toBe(false)
   })
 
-  test("handles upload cancellation", () => {
-    const file = new File(["content"], "test.pdf", { type: "application/pdf" })
-    
-    // Mock XMLHttpRequest for cancellation
-    const mockXHR = {
-      abort: jest.fn(),
-      upload: { addEventListener: jest.fn() }
-    }
-    
-    controller.handleFileSelect({ target: { files: [file] } })
-    controller.cancelToken = mockXHR // Simulate the XHR being set
-    controller.uploadInProgress = true
-    
-    controller.cancelUpload()
-
-    expect(mockXHR.abort).toHaveBeenCalled()
-    expect(progressBar.classList.contains("hidden")).toBe(true)
-    expect(cancelButton.classList.contains("hidden")).toBe(true)
-  })
 
   test("validates file type", () => {
     const invalidFile = new File(["content"], "test.txt", { type: "text/plain" })
@@ -207,85 +188,141 @@ describe("UploadController", () => {
     expect(percentageElement.textContent).toBe("50%")
   })
 
-  test("shows attached display when preserved attachment exists", () => {
-    const fileDisplay = document.createElement("div")
-    fileDisplay.classList.add("hidden")
-    element.appendChild(fileDisplay)
-    Object.defineProperty(controller, 'fileDisplayTarget', { value: fileDisplay, writable: false })
-
-    const hiddenSignedId = document.createElement("input")
-    hiddenSignedId.type = "hidden"
-    hiddenSignedId.name = "signed_id"
-    hiddenSignedId.value = "preserved_blob_123"
-    element.appendChild(hiddenSignedId)
-
-    controller.connect()
-
-    expect(fileDisplay.classList.contains("hidden")).toBe(false)
-    expect(fileInput.classList.contains("hidden")).toBe(true)
-  })
-
-  test("removes file, aborts running upload, and clears signed_id field", () => {
-    const fileDisplay = document.createElement("div")
-    element.appendChild(fileDisplay)
-    Object.defineProperty(controller, 'fileDisplayTarget', { value: fileDisplay, writable: false })
-
-    const hiddenSignedId = document.createElement("input")
-    hiddenSignedId.type = "hidden"
-    hiddenSignedId.name = "signed_id"
-    hiddenSignedId.value = "signed_blob_abc"
-    element.appendChild(hiddenSignedId)
-
-    const mockXHR = {
-      abort: jest.fn(),
-      upload: { addEventListener: jest.fn() }
-    }
-    controller.cancelToken = mockXHR
-    controller.uploadInProgress = true
-
-    controller.removeFile()
-
-    expect(mockXHR.abort).toHaveBeenCalled()
-    expect(hiddenSignedId.value).toBe("")
-    expect(fileDisplay.classList.contains("hidden")).toBe(true)
-    expect(fileInput.classList.contains("hidden")).toBe(false)
-    expect(controller.uploadInProgress).toBe(false)
-  })
-
   test("deduplicates hidden signed_id input on repeated upload success", () => {
-    const file1 = new File(["1"], "doc1.pdf", { type: "application/pdf" })
-    const file2 = new File(["2"], "doc2.pdf", { type: "application/pdf" })
-
-    controller.handleUploadSuccess({ signed_id: "blob_1" }, file1, 1)
-    controller.handleUploadSuccess({ signed_id: "blob_2" }, file2, 2)
+    controller.handleUploadSuccess({ signed_id: "blob_1" }, 1)
+    controller.handleUploadSuccess({ signed_id: "blob_2" }, 2)
 
     const inputs = element.querySelectorAll('input[type="hidden"][name="signed_id"]')
     expect(inputs.length).toBe(1)
     expect(inputs[0].value).toBe("blob_2")
   })
+  describe("request lifecycle", () => {
+    let attempts
 
-  describe("superseded upload callbacks", () => {
-    let callbacks
-
+    // Each DirectUpload records its delegate and completion callback so tests drive every phase
     beforeEach(() => {
-      // Hold each upload's completion so the test controls the order uploads finish in
-      callbacks = []
-      DirectUpload.mockImplementation(() => ({
-        create: jest.fn((callback) => callbacks.push(callback))
-      }))
+      attempts = []
+      DirectUpload.mockImplementation((file, url, delegate) => {
+        const attempt = { delegate, callback: null }
+        attempts.push(attempt)
+        return { create: jest.fn((callback) => { attempt.callback = callback }) }
+      })
     })
+
+    afterEach(() => {
+      jest.useRealTimers()
+    })
+
+    const fakeXHR = () => {
+      const listeners = {}
+      const uploadListeners = {}
+      return {
+        abort: jest.fn(),
+        addEventListener: (type, fn) => { (listeners[type] ||= []).push(fn) },
+        upload: { addEventListener: (type, fn) => { (uploadListeners[type] ||= []).push(fn) } },
+        start() { (listeners.loadstart || []).forEach(fn => fn()) },
+        progress(loaded, total) {
+          (uploadListeners.progress || []).forEach(fn => fn({ lengthComputable: true, loaded, total }))
+        }
+      }
+    }
 
     const selectFile = (name) => {
       controller.handleFileSelect({ target: { files: [new File([name], name, { type: "application/pdf" })] } })
     }
     const signedIdInputs = () => element.querySelectorAll('input[type="hidden"][name="signed_id"]')
+    const percentage = () => element.querySelector("[data-upload-target='percentage']").textContent
+    const expectIdle = () => {
+      expect(submitButton.disabled).toBe(false)
+      expect(progressBar.classList.contains("hidden")).toBe(true)
+      expect(cancelButton.classList.contains("hidden")).toBe(true)
+    }
+
+    test("cancel before any request starts clears busy state and blocks the attempt's later requests", () => {
+      selectFile("doc.pdf")
+      expect(submitButton.disabled).toBe(true)
+
+      controller.cancelUpload()
+      expectIdle()
+
+      // The checksum finishes after the cancel and the attempt announces its blob request
+      const blobRequest = fakeXHR()
+      attempts[0].delegate.directUploadWillCreateBlobWithXHR(blobRequest)
+      blobRequest.start()
+      expect(blobRequest.abort).toHaveBeenCalled()
+
+      attempts[0].callback(null, { signed_id: "cancelled_blob" })
+      expect(signedIdInputs().length).toBe(0)
+      expectIdle()
+    })
+
+    test("cancel while the blob record is being created aborts that request", () => {
+      selectFile("doc.pdf")
+      const blobRequest = fakeXHR()
+      attempts[0].delegate.directUploadWillCreateBlobWithXHR(blobRequest)
+
+      controller.cancelUpload()
+
+      expect(blobRequest.abort).toHaveBeenCalled()
+      expectIdle()
+      attempts[0].callback(null, { signed_id: "cancelled_blob" })
+      expect(signedIdInputs().length).toBe(0)
+    })
+
+    test("cancel while the file is being stored aborts the storage request", () => {
+      selectFile("doc.pdf")
+      attempts[0].delegate.directUploadWillCreateBlobWithXHR(fakeXHR())
+      const storageRequest = fakeXHR()
+      attempts[0].delegate.directUploadWillStoreFileWithXHR(storageRequest)
+
+      controller.cancelUpload()
+
+      expect(storageRequest.abort).toHaveBeenCalled()
+      expectIdle()
+      expect(fileInput.value).toBe("")
+    })
+
+    test("a new selection after a cancel uploads and can be submitted", () => {
+      selectFile("first.pdf")
+      controller.cancelUpload()
+
+      selectFile("second.pdf")
+      expect(submitButton.disabled).toBe(true)
+      attempts[1].callback(null, { signed_id: "second_blob" })
+
+      expect(signedIdInputs().length).toBe(1)
+      expect(signedIdInputs()[0].value).toBe("second_blob")
+      expect(submitButton.disabled).toBe(false)
+    })
+
+    test("a newer selection aborts the running request and ignores the older attempt's progress", () => {
+      selectFile("older.pdf")
+      const olderBlobRequest = fakeXHR()
+      attempts[0].delegate.directUploadWillCreateBlobWithXHR(olderBlobRequest)
+
+      selectFile("newer.pdf")
+      expect(olderBlobRequest.abort).toHaveBeenCalled()
+
+      // The older attempt still reaches storage; that request is stopped and its progress ignored
+      const olderStorageRequest = fakeXHR()
+      attempts[0].delegate.directUploadWillStoreFileWithXHR(olderStorageRequest)
+      olderStorageRequest.start()
+      expect(olderStorageRequest.abort).toHaveBeenCalled()
+      olderStorageRequest.progress(90, 100)
+      expect(percentage()).toBe("0%")
+
+      const newerStorageRequest = fakeXHR()
+      attempts[1].delegate.directUploadWillStoreFileWithXHR(newerStorageRequest)
+      newerStorageRequest.progress(40, 100)
+      expect(percentage()).toBe("40%")
+    })
 
     test("ignores an older upload that finishes after the newer one", () => {
       selectFile("older.pdf")
       selectFile("newer.pdf")
 
-      callbacks[1](null, { signed_id: "newer_blob" })
-      callbacks[0](null, { signed_id: "older_blob" })
+      attempts[1].callback(null, { signed_id: "newer_blob" })
+      attempts[0].callback(null, { signed_id: "older_blob" })
 
       expect(signedIdInputs().length).toBe(1)
       expect(signedIdInputs()[0].value).toBe("newer_blob")
@@ -296,56 +333,42 @@ describe("UploadController", () => {
       selectFile("older.pdf")
       selectFile("newer.pdf")
 
-      callbacks[0](null, { signed_id: "older_blob" })
+      attempts[0].callback(null, { signed_id: "older_blob" })
       expect(signedIdInputs().length).toBe(0)
       expect(submitButton.disabled).toBe(true)
 
       const consoleError = jest.spyOn(console, "error").mockImplementation(() => {})
-      callbacks[0](new Error("older failed"))
+      attempts[0].callback(new Error("older failed"))
       expect(consoleError).not.toHaveBeenCalled() // handleUploadError always logs, so it never ran
       expect(submitButton.disabled).toBe(true)
       consoleError.mockRestore()
 
-      callbacks[1](null, { signed_id: "newer_blob" })
+      attempts[1].callback(null, { signed_id: "newer_blob" })
       expect(signedIdInputs()[0].value).toBe("newer_blob")
       expect(submitButton.disabled).toBe(false)
     })
 
-    test("does not reattach a file removed while its upload was running", () => {
-      selectFile("removed.pdf")
-      controller.removeFile()
+    test("the hide timer from a finished upload leaves a newer upload's indicators visible", () => {
+      jest.useFakeTimers()
+      selectFile("first.pdf")
+      attempts[0].callback(null, { signed_id: "first_blob" })
 
-      callbacks[0](null, { signed_id: "late_blob" })
+      selectFile("second.pdf")
+      jest.advanceTimersByTime(1000)
 
-      const values = Array.from(signedIdInputs()).map(input => input.value)
-      expect(values).not.toContain("late_blob")
-    })
-  })
-
-  describe("filename field", () => {
-    test("does not create a nameless field when no filename param name is configured", () => {
-      const filenameTarget = document.createElement("input")
-      filenameTarget.type = "hidden"
-      element.appendChild(filenameTarget)
-      Object.defineProperty(controller, 'filenameTarget', { value: filenameTarget, writable: false })
-
-      controller.handleUploadSuccess({ signed_id: "blob_1" }, new File(["1"], "doc.pdf", { type: "application/pdf" }), 1)
-
-      // Only the filename target and the signed_id field; no extra field for a missing name
-      expect(element.querySelectorAll('input[type="hidden"]').length).toBe(2)
-      expect(element.querySelectorAll('input[type="hidden"][name="signed_id"]').length).toBe(1)
-      expect(filenameTarget.value).toBe("")
+      expect(progressBar.classList.contains("hidden")).toBe(false)
+      expect(cancelButton.classList.contains("hidden")).toBe(false)
+      expect(submitButton.disabled).toBe(true)
     })
 
-    test("records the filename in the configured field", () => {
-      Object.defineProperty(controller, 'hasFilenameParamNameValue', { value: true, writable: false })
-      Object.defineProperty(controller, 'filenameParamNameValue', { value: "proof_filename", writable: false })
+    test("the hide timer clears the indicators after an upload completes", () => {
+      jest.useFakeTimers()
+      selectFile("doc.pdf")
+      attempts[0].callback(null, { signed_id: "blob" })
 
-      controller.handleUploadSuccess({ signed_id: "blob_1" }, new File(["1"], "doc.pdf", { type: "application/pdf" }), 1)
+      jest.advanceTimersByTime(1000)
 
-      const fields = element.querySelectorAll('input[type="hidden"][name="proof_filename"]')
-      expect(fields.length).toBe(1)
-      expect(fields[0].value).toBe("doc.pdf")
+      expectIdle()
     })
   })
 })
