@@ -214,10 +214,8 @@ export default class extends Controller {
     signedField.value = blob.signed_id
 
     // Also record filename for display preservation across renders if configured
-    if (this.hasFilenameParamNameValue || this.targetOrNull("filename")) {
-      const filenameField = this.ensureFilenameField()
-      filenameField.value = file.name
-    }
+    const filenameField = this.ensureFilenameField()
+    if (filenameField) filenameField.value = file.name
 
     const filenameDisplay = this.targetOrNull("filenameDisplay")
     if (filenameDisplay) {
@@ -294,8 +292,11 @@ export default class extends Controller {
     }
   }
 
+  // Returns null when no field name is configured; a nameless field would never be submitted
   ensureFilenameField() {
-    const fieldName = this.filenameParamNameValue
+    const fieldName = this.filenameFieldName
+    if (!fieldName) return null
+
     const existingFields = Array.from(this.element.querySelectorAll(`input[type="hidden"][name="${fieldName}"]`))
 
     if (existingFields.length > 0) {
@@ -314,8 +315,8 @@ export default class extends Controller {
   }
 
   clearFilenameField() {
-    if (!this.hasFilenameParamNameValue) return
-    const fieldName = this.filenameParamNameValue
+    const fieldName = this.filenameFieldName
+    if (!fieldName) return
     const existing = this.element.querySelectorAll(`input[type="hidden"][name="${fieldName}"]`)
     existing.forEach(el => {
       el.value = ""
@@ -330,6 +331,12 @@ export default class extends Controller {
     if (this.hasSignedIdParamNameValue && this.signedIdParamNameValue) return this.signedIdParamNameValue
     const input = this.targetOrNull("input")
     return (input && input.name) ? input.name : "signed_id"
+  }
+
+  get filenameFieldName() {
+    if (this.hasFilenameParamNameValue && this.filenameParamNameValue) return this.filenameParamNameValue
+    const filename = this.targetOrNull("filename")
+    return (filename && filename.name) ? filename.name : null
   }
 
   resetUpload() {

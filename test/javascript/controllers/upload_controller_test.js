@@ -263,4 +263,89 @@ describe("UploadController", () => {
     expect(inputs.length).toBe(1)
     expect(inputs[0].value).toBe("blob_2")
   })
+
+  describe("superseded upload callbacks", () => {
+    let callbacks
+
+    beforeEach(() => {
+      // Hold each upload's completion so the test controls the order uploads finish in
+      callbacks = []
+      DirectUpload.mockImplementation(() => ({
+        create: jest.fn((callback) => callbacks.push(callback))
+      }))
+    })
+
+    const selectFile = (name) => {
+      controller.handleFileSelect({ target: { files: [new File([name], name, { type: "application/pdf" })] } })
+    }
+    const signedIdInputs = () => element.querySelectorAll('input[type="hidden"][name="signed_id"]')
+
+    test("ignores an older upload that finishes after the newer one", () => {
+      selectFile("older.pdf")
+      selectFile("newer.pdf")
+
+      callbacks[1](null, { signed_id: "newer_blob" })
+      callbacks[0](null, { signed_id: "older_blob" })
+
+      expect(signedIdInputs().length).toBe(1)
+      expect(signedIdInputs()[0].value).toBe("newer_blob")
+      expect(submitButton.disabled).toBe(false)
+    })
+
+    test("ignores an older upload's success or failure while the newer one is still running", () => {
+      selectFile("older.pdf")
+      selectFile("newer.pdf")
+
+      callbacks[0](null, { signed_id: "older_blob" })
+      expect(signedIdInputs().length).toBe(0)
+      expect(submitButton.disabled).toBe(true)
+
+      const consoleError = jest.spyOn(console, "error").mockImplementation(() => {})
+      callbacks[0](new Error("older failed"))
+      expect(consoleError).not.toHaveBeenCalled() // handleUploadError always logs, so it never ran
+      expect(submitButton.disabled).toBe(true)
+      consoleError.mockRestore()
+
+      callbacks[1](null, { signed_id: "newer_blob" })
+      expect(signedIdInputs()[0].value).toBe("newer_blob")
+      expect(submitButton.disabled).toBe(false)
+    })
+
+    test("does not reattach a file removed while its upload was running", () => {
+      selectFile("removed.pdf")
+      controller.removeFile()
+
+      callbacks[0](null, { signed_id: "late_blob" })
+
+      const values = Array.from(signedIdInputs()).map(input => input.value)
+      expect(values).not.toContain("late_blob")
+    })
+  })
+
+  describe("filename field", () => {
+    test("does not create a nameless field when no filename param name is configured", () => {
+      const filenameTarget = document.createElement("input")
+      filenameTarget.type = "hidden"
+      element.appendChild(filenameTarget)
+      Object.defineProperty(controller, 'filenameTarget', { value: filenameTarget, writable: false })
+
+      controller.handleUploadSuccess({ signed_id: "blob_1" }, new File(["1"], "doc.pdf", { type: "application/pdf" }), 1)
+
+      // Only the filename target and the signed_id field; no extra field for a missing name
+      expect(element.querySelectorAll('input[type="hidden"]').length).toBe(2)
+      expect(element.querySelectorAll('input[type="hidden"][name="signed_id"]').length).toBe(1)
+      expect(filenameTarget.value).toBe("")
+    })
+
+    test("records the filename in the configured field", () => {
+      Object.defineProperty(controller, 'hasFilenameParamNameValue', { value: true, writable: false })
+      Object.defineProperty(controller, 'filenameParamNameValue', { value: "proof_filename", writable: false })
+
+      controller.handleUploadSuccess({ signed_id: "blob_1" }, new File(["1"], "doc.pdf", { type: "application/pdf" }), 1)
+
+      const fields = element.querySelectorAll('input[type="hidden"][name="proof_filename"]')
+      expect(fields.length).toBe(1)
+      expect(fields[0].value).toBe("doc.pdf")
+    })
+  })
 })
