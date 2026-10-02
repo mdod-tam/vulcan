@@ -18,8 +18,6 @@ module ProofUploadFormats
 
   HUMAN_LABEL = 'PDF, JPEG, PNG, TIFF, or HEIC/HEIF'
 
-  PROOF_ATTACHMENT_TYPES = %w[income residency id].freeze
-
   # Size limits by document purpose, the same on every manual intake channel.
   PROOF_MAX_BYTES = 5.megabytes
   MAX_SIZES = {

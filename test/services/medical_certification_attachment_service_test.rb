@@ -148,7 +148,7 @@ class MedicalCertificationAttachmentServiceTest < ActiveSupport::TestCase
   end
 
   test 'a storage failure attaches nothing instead of falling back to the raw upload' do
-    ActiveStorage::Blob.stub :create_and_upload!, ->(**) { raise StandardError, 'Simulated blob creation failure' } do
+    ActiveStorage::Blob.service.stub :upload, ->(*, **) { raise StandardError, 'Simulated storage failure' } do
       assert_no_difference 'ActiveStorage::Attachment.count' do
         assert_raises(StandardError) do
           MedicalCertificationAttachmentService.attach_certification(

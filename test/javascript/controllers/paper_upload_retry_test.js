@@ -17,6 +17,9 @@ describe("paper uploads across a server review", () => {
             <div data-controller="document-upload"
                  data-action="document-upload:clear->document-upload#remove"
                  data-document-upload-retained-name-value="income_proof_signed_id"
+                 data-document-upload-retained-filename-value="original.pdf"
+                 data-document-upload-invalid-type-message-value="Upload a PDF file."
+                 data-document-upload-selected-text-value="Selected: %{filename}"
                  data-document-upload-allowed-types-value='["application/pdf"]'
                  data-document-upload-max-bytes-value="5242880"
                  data-document-upload-max-inclusive-value="true"
@@ -112,6 +115,28 @@ describe("paper uploads across a server review", () => {
     expect(new FormData(form).getAll("income_proof_signed_id")).toEqual(["first"])
     upload.remove()
     expect(new FormData(form).has("income_proof_signed_id")).toBe(false)
+  })
+
+  test("a refused choice keeps Remove and names the upload an interrupted submission still queues", () => {
+    upload.remove()
+    const choose = (name, type) => Object.defineProperty(input, "files", { value: [new File(["x"], name, { type })], configurable: true })
+    choose("first.pdf", "application/pdf")
+    upload.uploadStarted()
+    completeUpload("first")
+    upload.finished()
+    // The batch was interrupted; staff then choose a file the browser refuses
+    choose("notes.txt", "text/plain")
+    upload.select()
+    expect(upload.removeTarget.hidden).toBe(false)
+    expect(upload.statusTarget.textContent).toBe("Upload a PDF file. Uploaded: first.pdf")
+    expect(new FormData(form).get("income_proof")).toBe("first")
+  })
+
+  test("a refused choice names the server-retained upload it does not replace", () => {
+    Object.defineProperty(input, "files", { value: [new File(["x"], "notes.txt", { type: "text/plain" })], configurable: true })
+    upload.select()
+    expect(upload.removeTarget.hidden).toBe(false)
+    expect(upload.statusTarget.textContent).toBe("Upload a PDF file. Uploaded: original.pdf")
   })
 
   test("a canceled new attempt keeps the reference completed in an interrupted earlier one", () => {

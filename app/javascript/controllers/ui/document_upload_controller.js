@@ -33,6 +33,7 @@ export default class extends Controller {
   static values = {
     allowedTypes: Array,
     retainedName: String,
+    retainedFilename: String,
     maxBytes: Number,
     maxInclusive: Boolean,
     invalidTypeMessage: String,
@@ -45,6 +46,8 @@ export default class extends Controller {
   }
 
   connect() {
+    // The upload this control will submit if no new file is chosen
+    this.keptName = this.hasRetainedTarget ? this.retainedFilenameValue : null
     this.form = this.element.closest("form")
     this._release = this.release.bind(this)
     this.form?.addEventListener("direct-uploads:end", this._release)
@@ -61,7 +64,9 @@ export default class extends Controller {
     const refusal = this.refusalFor(file)
     if (refusal) {
       this.inputTarget.value = ""
-      this.statusTarget.textContent = refusal
+      // A refused choice does not replace an upload this control still submits
+      const kept = this.hasPendingUpload() ? this.fill(this.uploadedTextValue, this.keptName) : ""
+      this.statusTarget.textContent = [refusal, kept].filter(Boolean).join(" ")
     } else {
       this.statusTarget.textContent = this.fill(this.selectedTextValue, file.name)
     }
@@ -128,6 +133,7 @@ export default class extends Controller {
     const earlier = earlierReferences.filter(input => input.value).pop()
     if (earlier) this.retain(earlier.value)
     earlierReferences.forEach(input => input.remove())
+    this.keptName = name
     this.statusTarget.textContent = this.fill(this.uploadedTextValue, name)
     this.showRemove()
   }
@@ -147,6 +153,7 @@ export default class extends Controller {
     this.retainedTargets.forEach(input => input.remove())
     this.uploadedReferences().forEach(input => input.remove())
     this.inputTarget.value = ""
+    this.keptName = null
     this.statusTarget.textContent = ""
     this.removeTarget.hidden = true
     this.inputTarget.dispatchEvent(new Event("change", { bubbles: true }))
@@ -171,9 +178,14 @@ export default class extends Controller {
       .filter(input => input.name === this.inputTarget.name)
   }
 
-  // Remove is offered only when there is a chosen file or a retained upload to clear
+  // A retained upload or one Rails completed for an interrupted submission
+  hasPendingUpload() {
+    return this.hasRetainedTarget || this.uploadedReferences().some(input => input.value)
+  }
+
+  // Remove is offered whenever there is a chosen file or a pending upload to clear
   showRemove() {
-    this.removeTarget.hidden = !(this.inputTarget.files?.length || this.hasRetainedTarget)
+    this.removeTarget.hidden = !(this.inputTarget.files?.length || this.hasPendingUpload())
   }
 
   fill(text, filename) {

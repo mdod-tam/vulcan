@@ -19,6 +19,39 @@ class UploadedDocumentTest < ActiveSupport::TestCase
     assert_equal @max, blob.byte_size
   end
 
+  test 'a storage write that fails after writing leaves no object behind' do
+    service = ActiveStorage::Blob.service
+    original_upload = service.method(:upload)
+    written_key = nil
+    failing_upload = lambda do |key, io, **options|
+      original_upload.call(key, io, **options)
+      written_key = key
+      raise StandardError, 'connection reset after write'
+    end
+
+    service.stub(:upload, failing_upload) do
+      assert_raises(StandardError) do
+        ApplicationRecord.transaction { resolve(pdf_upload(1.kilobyte)) }
+      end
+    end
+
+    assert written_key, 'the object was written before the failure'
+    assert_not service.exist?(written_key)
+    assert_not ActiveStorage::Blob.exists?(key: written_key)
+  end
+
+  test 'a caller rollback after a successful write deletes the stored object' do
+    blob = nil
+    ApplicationRecord.transaction do
+      blob = resolve(pdf_upload(1.kilobyte))
+      assert ActiveStorage::Blob.service.exist?(blob.key)
+      raise ActiveRecord::Rollback
+    end
+
+    assert_not ActiveStorage::Blob.service.exist?(blob.key)
+    assert_not ActiveStorage::Blob.exists?(key: blob.key)
+  end
+
   test 'refuses a multipart upload one byte over the limit before storing it' do
     assert_no_difference 'ActiveStorage::Blob.count' do
       assert_refused(:too_large) { resolve(pdf_upload(@max + 1)) }

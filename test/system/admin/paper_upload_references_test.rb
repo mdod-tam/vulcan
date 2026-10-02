@@ -61,6 +61,24 @@ module Admin
       assert_equal 'income_proof.pdf', Application.order(:id).last.medical_certification.filename.to_s
     end
 
+    test 'a refused replacement leaves the interrupted batch upload removable and named' do
+      fill_complete_paper_application('Partial', 'Pending')
+      held = hold_blob_requests(2)
+
+      click_button 'Submit Paper Application'
+      cancel_held_upload(held, 'income_proof')
+      assert_equal 1, certification_references.size
+
+      attach_file 'medical_certification', file_fixture('invalid.exe')
+      within(upload_control('medical_certification')) do
+        assert_text I18n.t('documents.refused.invalid_type', locale: :en)
+        assert_text I18n.t('documents.upload.uploaded', filename: 'medical_certification_valid.pdf')
+        click_button I18n.t('documents.upload.remove')
+        assert_no_selector 'input[type="hidden"][name="medical_certification"]', visible: :all
+        assert_no_button I18n.t('documents.upload.remove')
+      end
+    end
+
     test 'a replacement the server refuses falls back to the upload completed in an interrupted batch' do
       fill_complete_paper_application('Partial', 'Refusal')
       held = hold_blob_requests(2)

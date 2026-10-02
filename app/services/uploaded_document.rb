@@ -121,18 +121,25 @@ class UploadedDocument
   end
 
   # The request supplies the size, so limits are checked before the file is read or stored.
-  # Outside a transaction the blob row persists unattached, where CleanupUnattachedUploadsJob finds
-  # it. Inside a caller's transaction a rollback removes the row, so the stored object goes with it.
+  # A stored object is discoverable only through its blob row, which persists unattached outside a
+  # transaction, where CleanupUnattachedUploadsJob finds it. The row is saved before the object is
+  # written, as Active Storage does, and the rollback cleanup is registered before either, so a
+  # caller's rollback after any write deletes the object. A failed write deletes whatever it stored.
   def stored_upload(file)
     check_size(file.size)
     check_content(file)
 
-    blob = ActiveStorage::Blob.create_and_upload!(
-      io: file.tempfile.tap(&:rewind),
-      filename: file.original_filename,
-      content_type: file.content_type
-    )
+    io = file.tempfile.tap(&:rewind)
+    blob = ActiveStorage::Blob.build_after_unfurling(io: io, filename: file.original_filename,
+                                                     content_type: file.content_type)
     ActiveRecord::Base.current_transaction.after_rollback { delete_stored(blob) }
+    blob.save!
+    begin
+      blob.upload_without_unfurling(io.tap(&:rewind))
+    rescue StandardError
+      delete_stored(blob)
+      raise
+    end
     blob
   end
 
