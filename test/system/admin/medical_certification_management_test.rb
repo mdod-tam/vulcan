@@ -26,7 +26,7 @@ module Admin
       @application.update!(medical_certification_status: 'requested')
       visit admin_application_path(@application)
 
-      assert_selector '[data-testid="medical-certification-upload-form"]', text: 'Upload Medical Certification'
+      assert_selector '[data-testid="medical-certification-upload-form"]', text: 'Upload Disability Certification'
       assert_no_text 'View Medical Certification Document'
       assert_no_button 'Review Certification'
     end
@@ -38,7 +38,7 @@ module Admin
       visit admin_application_path(@application)
 
       assert_no_selector '[data-testid="medical-certification-upload-form"]'
-      assert_button 'Review Certification'
+      assert_button 'Review Disability Certification'
     end
 
     test 'view link is shown when certification is approved' do
@@ -72,7 +72,7 @@ module Admin
       # Wait for form submission to complete
       wait_for_turbo
 
-      assert_text 'Medical certification successfully uploaded and approved', wait: 10
+      assert_success_message('Disability certification successfully uploaded and approved.')
       @application.reload
       assert @application.medical_certification.attached?, 'Medical certification file should be attached'
       assert_equal 'approved', @application.medical_certification_status
@@ -110,10 +110,11 @@ module Admin
       # Wait for form submission to complete
       wait_for_turbo
 
-      assert_text 'Medical certification rejected and provider notified', wait: 10
+      assert_success_message('Disability certification rejected and provider notified.')
       @application.reload
       assert_equal 'rejected', @application.medical_certification_status
-      assert_equal 'The disability certification is missing the required signature.', @application.medical_certification_rejection_reason
+      expected_reason = RejectionReason.find_by!(code: 'missing_signature', proof_type: 'medical_certification', locale: 'en').body
+      assert_equal expected_reason, @application.medical_certification_rejection_reason
       assert_audit_event('medical_certification_status_changed', actor: @admin, auditable: @application)
 
       # Clear any pending network connections to prevent timeout during teardown
@@ -133,15 +134,14 @@ module Admin
 
         assert_selector '#cert-custom-reason-area', visible: true
 
-        custom_reason = find("textarea[name='medical_certification_rejection_reason']", visible: true)
-        assert_nil custom_reason[:disabled], 'Custom certification reason should be enabled after selecting Other'
+        assert_field 'medical_certification_rejection_reason', disabled: false
         assert_selector 'label[for="medical_certification_rejection_reason"]', text: 'Custom Rejection Reason'
       end
     end
 
     # --- Validation Tests ---
 
-    test 'admin sees error when trying to approve without a file' do
+    test 'approving without a file explains why and changes nothing' do
       @application.update!(medical_certification_status: 'requested')
       visit admin_application_path(@application)
 
@@ -162,8 +162,7 @@ module Admin
       # Wait for any request processing to complete
       wait_for_turbo
 
-      # Verify error message is displayed
-      assert_text 'Please select a file to upload', wait: 10
+      assert_error_message('Please select a file to upload')
 
       # Verify status remained 'requested'
       @application.reload
@@ -173,36 +172,21 @@ module Admin
       clear_pending_network_connections if respond_to?(:clear_pending_network_connections)
     end
 
-    test 'admin sees error when trying to reject without a reason' do
+    test 'rejecting requires a reason before the form submits' do
       @application.update!(medical_certification_status: 'requested')
       visit admin_application_path(@application)
-
-      # Wait for page to be fully loaded
       wait_for_turbo
-
-      # Ensure the form is present before interacting
-      assert_selector '[data-testid="medical-certification-upload-form"]', wait: 10
 
       within '[data-testid="medical-certification-upload-form"]' do
-        # Select the "Reject" option
         choose 'Reject Certification'
-
-        # Try to submit without selecting a rejection reason
+        reason = find('select[name="rejection_reason_code"]')
+        assert reason[:required], 'a rejection reason should be required'
         click_button 'Process Certification'
+        assert_equal false, reason.evaluate_script('this.validity.valid')
       end
 
-      # Wait for any request processing to complete
-      wait_for_turbo
-
-      # Verify error message is displayed
-      assert_text 'Please select a rejection reason', wait: 10
-
-      # Verify status remained 'requested'
-      @application.reload
-      assert_equal 'requested', @application.medical_certification_status
-
-      # Clear any pending network connections to prevent timeout during teardown
-      clear_pending_network_connections if respond_to?(:clear_pending_network_connections)
+      assert_current_path admin_application_path(@application)
+      assert_equal 'requested', @application.reload.medical_certification_status
     end
 
     test 'upload form is not shown when medical certification is already attached' do

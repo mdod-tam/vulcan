@@ -333,6 +333,34 @@ module Applications
                                  locale: :en)
     end
 
+    test 'a refused document is named and explained in the applicant locale' do
+      spanish_user = create(:constituent, locale: 'es')
+      form = create_valid_form_with_proofs(spanish_user)
+      form.income_proof = fixture_file_upload('test/fixtures/files/invalid.exe', 'application/octet-stream')
+
+      result = I18n.with_locale(:en) { ApplicationCreator.call(form) }
+
+      assert result.failure?
+      assert_includes result.error_messages,
+                      "Comprobante de ingresos: #{I18n.t('documents.refused.invalid_type', locale: :es)}"
+    end
+
+    test 'a later refused document leaves no stored file behind for an earlier one' do
+      form = create_valid_form_with_proofs(@user)
+      form.income_proof = fixture_file_upload('test/fixtures/files/invalid.exe', 'application/octet-stream')
+      stored_keys = []
+      record_upload = ->(*, payload) { stored_keys << payload[:key] }
+
+      result = ActiveSupport::Notifications.subscribed(record_upload, 'service_upload.active_storage') do
+        ApplicationCreator.call(form)
+      end
+
+      assert result.failure?
+      assert_equal 1, stored_keys.size, 'only the residency proof passes the gate and is stored'
+      assert_not ActiveStorage::Blob.exists?(key: stored_keys.first)
+      assert_not ActiveStorage::Blob.service.exist?(stored_keys.first)
+    end
+
     # The submitted locale reaches the form straight from params with no allowlisting on the way
     # in, and this gate is the first thing to hand it to I18n. A locale this app does not carry
     # must therefore fall back rather than raise: an I18n::InvalidLocale here would be swallowed by

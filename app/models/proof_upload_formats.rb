@@ -18,12 +18,21 @@ module ProofUploadFormats
 
   HUMAN_LABEL = 'PDF, JPEG, PNG, TIFF, or HEIC/HEIF'
 
-  INVALID_TYPE_MESSAGE = "Invalid file type. Please upload a PDF or an image file (#{HUMAN_LABEL}).".freeze
-
   PROOF_ATTACHMENT_TYPES = %w[income residency id].freeze
 
-  # Largest income, residency, or ID proof accepted on every intake channel. Inclusive.
+  # Size limits by document purpose, the same on every manual intake channel.
   PROOF_MAX_BYTES = 5.megabytes
+  MAX_SIZES = {
+    proof: { bytes: PROOF_MAX_BYTES, inclusive: true },
+    certification: { bytes: 10.megabytes, inclusive: true },
+    w9: { bytes: 10.megabytes, inclusive: false }
+  }.freeze
+
+  # Public secure forms refuse near-empty files; other channels set no minimum.
+  SECURE_FORM_MIN_BYTES = 1.kilobyte
+
+  # Provider-generated documents keep their own acceptance contract and skip manual-upload limits.
+  GENERATED_SOURCES = %w[docuseal].freeze
 
   def self.allowed_content_types_json
     ALLOWED_CONTENT_TYPES.to_json
@@ -33,11 +42,23 @@ module ProofUploadFormats
     ALLOWED_CONTENT_TYPES.include?(content_type.to_s.split(';').first)
   end
 
-  def self.proof_size_allowed?(byte_size)
-    byte_size <= PROOF_MAX_BYTES
+  def self.max_bytes(purpose)
+    MAX_SIZES.fetch(purpose).fetch(:bytes)
   end
 
-  def self.proof_max_megabytes
-    PROOF_MAX_BYTES / 1.megabyte
+  def self.size_allowed?(purpose, byte_size)
+    max_inclusive?(purpose) ? byte_size <= max_bytes(purpose) : byte_size < max_bytes(purpose)
+  end
+
+  def self.max_inclusive?(purpose)
+    MAX_SIZES.fetch(purpose).fetch(:inclusive)
+  end
+
+  def self.max_megabytes(purpose)
+    max_bytes(purpose) / 1.megabyte
+  end
+
+  def self.generated?(blob)
+    GENERATED_SOURCES.include?(blob.metadata['source'].to_s)
   end
 end

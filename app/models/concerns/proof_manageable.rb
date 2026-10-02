@@ -26,21 +26,12 @@
 module ProofManageable
   extend ActiveSupport::Concern
 
-  # Allowed MIME types for proof documents (see ProofUploadFormats)
-  ALLOWED_TYPES = ProofUploadFormats::ALLOWED_CONTENT_TYPES
-
   # Valid proof types for the application
   PROOF_TYPES = %w[income residency].freeze
 
   included do
-    # ActiveStorage attachments for proof documents
-    has_one_attached :income_proof
-    has_one_attached :residency_proof
-    has_many_attached :documents
-
-    # Core validations for proof documents
-    validate :correct_proof_mime_type
-    validate :proof_size_within_limit
+    # Attachments are declared on Application; newly attached proofs follow the proof policy
+    validates :income_proof, :residency_proof, :id_proof, document: { purpose: :proof }
     validate :require_proof_attachments, if: :require_proof_validations?
 
     # Callbacks for proof state management
@@ -140,27 +131,6 @@ module ProofManageable
   end
 
   private
-
-  # Validates that attached proofs have correct MIME types and size limits
-  def correct_proof_mime_type
-    ProofUploadFormats::PROOF_ATTACHMENT_TYPES.each do |proof_type|
-      attachment = send("#{proof_type}_proof")
-      next unless attachment.attached?
-
-      errors.add(:"#{proof_type}_proof", "must be a PDF or an image file (#{ProofUploadFormats::HUMAN_LABEL})") unless ALLOWED_TYPES.include?(attachment.content_type)
-    end
-  end
-
-  def proof_size_within_limit
-    ProofUploadFormats::PROOF_ATTACHMENT_TYPES.each do |proof_type|
-      attachment = send("#{proof_type}_proof")
-      next unless attachment.attached?
-      next if ProofUploadFormats.proof_size_allowed?(attachment.byte_size)
-
-      errors.add(:"#{proof_type}_proof",
-                 "is too large. Maximum size allowed is #{ProofUploadFormats.proof_max_megabytes}MB.")
-    end
-  end
 
   # Validates that required proofs are attached when needed
   def require_proof_attachments

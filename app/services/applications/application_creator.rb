@@ -11,6 +11,9 @@ module Applications
     # informational notice instead of a validation error, without matching on message text.
     class PendingIdentityReviewError < IneligibleApplicantError; end
 
+    # A proof that UploadedDocument refused; the message names the document and the reason.
+    class RefusedUploadError < StandardError; end
+
     attr_reader :target_application
 
     # Result object that provides success/failure status and application access
@@ -77,7 +80,7 @@ module Applications
     rescue PendingIdentityReviewError => e
       @errors << e.message
       failure_result(@errors, pending_identity_review: true)
-    rescue IneligibleApplicantError => e
+    rescue IneligibleApplicantError, RefusedUploadError => e
       @errors << e.message
       failure_result(@errors)
     rescue ActiveRecord::RecordInvalid, StandardError => e
@@ -298,24 +301,22 @@ module Applications
       target_application.medical_provider_email = @form.medical_provider_email unless @form.medical_provider_email.nil?
     end
 
+    # Proofs from the portal form are multipart uploads, resolved through UploadedDocument before attaching
     def attach_file_uploads
-      # Attach residency proof if provided
-      if @form.residency_proof.present?
-        target_application.residency_proof.attach(@form.residency_proof)
-        target_application.residency_proof_status = 'not_reviewed' if @form.is_submission
+      { residency_proof: @form.residency_proof, income_proof: @form.income_proof, id_proof: @form.id_proof }.each do |slot, upload|
+        next if upload.blank?
+
+        target_application.public_send(slot).attach(resolved_upload(slot, upload))
+        target_application.public_send("#{slot}_status=", 'not_reviewed') if @form.is_submission
       end
+    end
 
-      # Attach income proof if provided
-      if @form.income_proof.present?
-        target_application.income_proof.attach(@form.income_proof)
-        target_application.income_proof_status = 'not_reviewed' if @form.is_submission
-      end
-
-      # Attach ID proof if provided
-      return if @form.id_proof.blank?
-
-      target_application.id_proof.attach(@form.id_proof)
-      target_application.id_proof_status = 'not_reviewed' if @form.is_submission
+    def resolved_upload(slot, upload)
+      UploadedDocument.resolve!(upload, record: target_application, name: slot, signed_ids: false)
+    rescue UploadedDocument::Refused => e
+      # In the constituent's language, like the creator's other constituent messages
+      message = I18n.with_locale(@form.message_locale) { e.user_message_for(Application.human_attribute_name(slot)) }
+      raise RefusedUploadError, message
     end
 
     def save_application_with_audit

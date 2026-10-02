@@ -39,6 +39,8 @@ module Admin
       medical_certification_action: 'Disability certification'
     }.freeze
     ACTIONS_NEEDING_A_FILE = %w[accept approved upload_only].freeze
+    # Each group's document field; its action, reasons, and retained upload share this prefix.
+    DOCUMENT_KEYS = PROOF_FILE_GROUPS.keys.map { |action| action.to_s.delete_suffix('_action') }.freeze
 
     PROOF_WORKFLOW_FIELDS = %i[
       income_proof_action residency_proof_action id_proof_action medical_certification_action
@@ -366,7 +368,6 @@ module Admin
       operation_context = Rails.env.test? ? '[TEST_BUSINESS_LOGIC] ' : '[ADMIN_OPERATION] '
       Rails.logger.error "#{operation_context}Paper application operation failed: #{error_msg}"
 
-      preserve_multipart_uploads
       repopulate_form_data(service, existing_application)
 
       handle_error_response(
@@ -375,24 +376,10 @@ module Admin
       )
     end
 
-    def preserve_multipart_uploads
-      PROOF_FILE_GROUPS.each_key do |action|
-        key = action.to_s.delete_suffix('_action')
-        upload = params[key]
-        next unless upload.is_a?(ActionDispatch::Http::UploadedFile)
-
-        upload.rewind
-        blob = ActiveStorage::Blob.create_and_upload!(
-          io: upload.tempfile, filename: upload.original_filename, content_type: upload.content_type
-        )
-        params["#{key}_signed_id"] = blob.signed_id
-      end
-    end
-
     def repopulate_form_data(service, existing_application)
       submitted_params = build_submitted_params
       @identity_review = service.identity_review
-      @uploaded_proofs = restored_uploads(submitted_params)
+      @uploaded_proofs = retained_uploads(existing_application)
 
       constituent = rebuilt_constituent(service, existing_application, submitted_params)
       application = rebuilt_application(service, existing_application, submitted_params)
@@ -471,27 +458,17 @@ module Admin
       @proofs_needing_reattachment = proof_groups_needing_reattachment(submitted_params)
     end
 
-    # Preserve available direct uploads across validation and identity review.
-    def restored_uploads(submitted)
-      %w[income_proof residency_proof id_proof medical_certification].each_with_object({}) do |key, uploads|
-        signed_id = submitted["#{key}_signed_id"]
-        next submitted.delete("#{key}_signed_id") unless signed_id.is_a?(String) && signed_id.present?
-
-        blob = ActiveStorage::Blob.find_signed(signed_id)
-        if blob && blob.created_at > CleanupUnattachedUploadsJob::RETENTION.ago && !blob.attachments.exists?
-          uploads[key] = blob
-        else
-          submitted.delete("#{key}_signed_id")
-        end
-      rescue ActiveSupport::MessageVerifier::InvalidSignature
-        submitted.delete("#{key}_signed_id")
-      end
+    # Keep usable uploads across validation and identity review; a refused file is reported in the errors
+    def retained_uploads(existing_application)
+      DOCUMENT_KEYS.index_with do |key|
+        UploadedDocument.retained(params, record: existing_application || Application, field: key)
+      end.compact
     end
 
     def proof_groups_needing_reattachment(submitted_params)
       PROOF_FILE_GROUPS.filter_map do |field, label|
         key = field.to_s.delete_suffix('_action')
-        label if ACTIONS_NEEDING_A_FILE.include?(submitted_params[field]) && !@uploaded_proofs&.key?(key)
+        label if ACTIONS_NEEDING_A_FILE.include?(submitted_params[field]) && !@uploaded_proofs.key?(key)
       end
     end
 
@@ -531,7 +508,6 @@ module Admin
         # else carries them back into a re-rendered form. All three parts are needed together: the
         # action alone restores "Reject" while losing the reason that made it meaningful.
         *PROOF_WORKFLOW_FIELDS,
-        :income_proof_signed_id, :residency_proof_signed_id, :id_proof_signed_id, :medical_certification_signed_id,
         # These two switch whole sections off. Losing them on a retry does not merely blank a field:
         # the JavaScript re-imposes the provider and income requirements they were suppressing, so an
         # otherwise unchanged retry becomes unsubmittable.
@@ -686,81 +662,14 @@ module Admin
     end
 
     def add_proof_params_from!(service_params, permitted)
-      %w[income residency id].each do |type|
-        action_key = "#{type}_proof_action"
-        file_key   = "#{type}_proof"
-        signed_key = "#{type}_proof_signed_id"
-        reason_key        = "#{type}_proof_rejection_reason"
-        custom_reason_key = "#{type}_proof_custom_rejection_reason"
-
-        service_params[action_key] = permitted[action_key]
-        file_val = permitted[file_key]
-        signed_val = permitted[signed_key]
-        service_params[file_key] = file_val if file_val.present?
-        service_params[signed_key] = signed_val if signed_val.present?
-        service_params[reason_key] = permitted[reason_key]
-        service_params[custom_reason_key] = permitted[custom_reason_key]
+      DOCUMENT_KEYS.each do |key|
+        %W[#{key}_action #{key}_rejection_reason #{key}_custom_rejection_reason].each do |name|
+          service_params[name] = permitted[name]
+        end
+        %W[#{key} #{key}_signed_id].each do |name|
+          service_params[name] = permitted[name] if permitted[name].present?
+        end
       end
-
-      # Handle medical certification (uses different naming convention)
-      service_params[:medical_certification_action] = permitted[:medical_certification_action]
-      file_val = permitted[:medical_certification]
-      signed_val = permitted[:medical_certification_signed_id]
-      service_params[:medical_certification] = file_val if file_val.present?
-      service_params[:medical_certification_signed_id] = signed_val if signed_val.present?
-      service_params[:medical_certification_rejection_reason] = permitted[:medical_certification_rejection_reason]
-      service_params[:medical_certification_custom_rejection_reason] = permitted[:medical_certification_custom_rejection_reason]
-    end
-
-    # Translate checkbox UI to email strategy parameter
-    def determine_email_strategy
-      # Check for direct strategy parameter first (for API/test compatibility)
-      return params[:email_strategy] if params[:email_strategy].present?
-
-      # For dependent applications, check the "use guardian's email" checkbox
-      if params[:applicant_type] == 'dependent' || inferred_dependent_application?
-        use_guardian_email = to_boolean(params[:use_guardian_email])
-        return use_guardian_email ? 'guardian' : 'dependent'
-      end
-
-      # For self-applications, always use their own email
-      'dependent'
-    end
-
-    # Translate checkbox UI to phone strategy parameter
-    def determine_phone_strategy
-      # Check for direct strategy parameter first (for API/test compatibility)
-      return params[:phone_strategy] if params[:phone_strategy].present?
-
-      # For dependent applications, check the "use guardian's phone" checkbox
-      if params[:applicant_type] == 'dependent' || inferred_dependent_application?
-        use_guardian_phone = to_boolean(params[:use_guardian_phone])
-        return use_guardian_phone ? 'guardian' : 'dependent'
-      end
-
-      # For self-applications, always use their own phone
-      'dependent'
-    end
-
-    # Translate checkbox UI to address strategy parameter
-    def determine_address_strategy
-      # Check for direct strategy parameter first (for API/test compatibility)
-      return params[:address_strategy] if params[:address_strategy].present?
-
-      # For dependent applications, check the "same as guardian's address" checkbox
-      if params[:applicant_type] == 'dependent' || inferred_dependent_application?
-        use_guardian_address = to_boolean(params[:use_guardian_address])
-        return use_guardian_address ? 'guardian' : 'dependent'
-      end
-
-      # For self-applications, always use their own address
-      'dependent'
-    end
-
-    # Helper to determine if this is a dependent application based on guardian presence
-    def inferred_dependent_application?
-      (params[:guardian_id].present? || params[:guardian_attributes].present?) &&
-        params[:constituent].present? && params[:constituent].is_a?(ActionController::Parameters) && params[:constituent][:first_name].present?
     end
 
     def build_constituent_params_for_notification

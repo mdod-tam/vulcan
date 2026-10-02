@@ -149,7 +149,7 @@
         <div class="px-4 py-5 sm:p-6">
           <h2 class="text-lg font-medium text-gray-900 mb-4">W9 Form</h2>
           
-          <% if @vendor.w9_form.attached? %>
+          <% if @stored_w9 %>
             <div class="mb-4 p-4 bg-gray-50 rounded-md">
               <div class="flex items-start">
                 <div class="flex-shrink-0">
@@ -159,13 +159,13 @@
                 </div>
                 <div class="ml-3">
                   <p class="text-sm text-gray-700">
-                    Current W9 form: <%= @vendor.w9_form.filename %>
+                    Current W9 form: <%= @stored_w9.filename %>
                   </p>
                   <div class="mt-2">
-                    <%= link_to "View Current W9",
-                        rails_blob_path(@vendor.w9_form, disposition: "inline"),
-                        class: "text-sm text-indigo-600 hover:text-indigo-500",
-                        target: "_blank" %>
+                    <%= link_to 'View Current W9',
+                                rails_blob_path(@stored_w9, disposition: 'inline'),
+                                class: 'text-sm text-indigo-600 hover:text-indigo-500',
+                                target: '_blank', rel: 'noopener' %>
                   </div>
                 </div>
               </div>
@@ -174,15 +174,14 @@
 
           <div class="mt-2">
             <%= f.label :w9_form, "Upload New W9", class: "block text-sm font-medium text-gray-700" %>
-            <div class="mt-1">
-              <%= f.file_field :w9_form,
-                  accept: proof_upload_accept_attribute,
-                  class: "shadow-sm focus:ring-indigo-500 focus:border-indigo-500 block w-full sm:text-sm border-gray-300 rounded-md",
-                  direct_upload: true %>
-            </div>
-            <p class="mt-2 text-sm text-gray-500">
-              Accepted formats: <%= proof_upload_formats_label %>. Maximum size 10MB.
+            <p id="w9_form_help" class="mt-1 text-sm text-gray-500">
+              Accepted formats: <%= proof_upload_formats_label %>. Files must be smaller than <%= ProofUploadFormats.max_megabytes(:w9) %>MB.
             </p>
+            <div class="mt-2">
+              <%= render 'shared/document_upload',
+                         form: f, field: 'w9_form', model: Users::Vendor, input_id: 'users_vendor_w9_form',
+                         blob: @retained_w9, described_by: 'w9_form_help' %>
+            </div>
           </div>
         </div>
       </div>

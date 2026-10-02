@@ -12,7 +12,6 @@ module ConstituentPortal
     # Key methods: render_form_errors, determine_success_message, initialize_address_and_provider_for_form
     # Flow: Handles form validation failures and success scenarios consistently
     include ApplicationFormHandling
-    include DocumentUploadHandling
     include ApplicationDataStructures
     # AddressHelper concern: Provides standardized address creation and validation methods
     # Key methods: address_from_user, address_from_params, address_with_fallback, validate_address

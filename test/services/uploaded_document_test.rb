@@ -25,8 +25,8 @@ class UploadedDocumentTest < ActiveSupport::TestCase
     end
   end
 
-  test 'refuses a multipart upload of a disallowed type before storing it' do
-    upload = pdf_upload(2.kilobytes, content_type: 'text/plain', filename: 'notes.txt')
+  test 'refuses a multipart upload whose content is a disallowed type before storing it' do
+    upload = pdf_upload(2.kilobytes, content_type: 'text/plain', filename: 'notes.txt', bytes: 'plain notes ' * 200)
 
     assert_no_difference 'ActiveStorage::Blob.count' do
       assert_refused(:invalid_type) { resolve(upload) }
@@ -107,10 +107,36 @@ class UploadedDocumentTest < ActiveSupport::TestCase
     assert_refused(:too_large) { resolve(stored_blob(@max + 1).signed_id) }
   end
 
+  test 'takes the size limit from the purpose the model declares for the slot' do
+    assert_equal :proof, UploadedDocument.declared_purpose(@application, 'income_proof')
+    assert_equal :certification, UploadedDocument.declared_purpose(Application, 'medical_certification')
+    assert_equal :w9, UploadedDocument.declared_purpose(Users::Vendor, 'w9_form')
+    assert_raises(ArgumentError) { UploadedDocument.declared_purpose(PrintQueueItem, 'pdf_letter') }
+  end
+
+  test 'restorable returns a still-usable upload and writes nothing' do
+    usable = stored_blob(3.kilobytes)
+    expired = stored_blob(3.kilobytes)
+    expired.update_column(:created_at, CleanupUnattachedUploadsJob::RETENTION.ago)
+    elsewhere = stored_blob(3.kilobytes)
+    create(:application).income_proof.attach(elsewhere)
+    missing = stored_blob(3.kilobytes)
+    missing.service.delete(missing.key)
+
+    assert_no_changes -> { usable.reload.attributes } do
+      assert_equal usable, UploadedDocument.restorable(usable.signed_id, record: nil, name: 'income_proof')
+    end
+    [expired, elsewhere, missing].each do |blob|
+      assert_nil UploadedDocument.restorable(blob.signed_id, record: nil, name: 'income_proof')
+    end
+    assert_nil UploadedDocument.restorable('not-a-signed-id', record: nil, name: 'income_proof')
+    assert_nil UploadedDocument.restorable(nil, record: nil, name: 'income_proof')
+  end
+
   private
 
   def resolve(input, name: 'income_proof', signed_ids: true)
-    UploadedDocument.resolve!(input, record: @application, name: name, max_bytes: @max, signed_ids: signed_ids)
+    UploadedDocument.resolve!(input, record: @application, name: name, signed_ids: signed_ids)
   end
 
   def assert_refused(reason, &)
@@ -123,10 +149,10 @@ class UploadedDocumentTest < ActiveSupport::TestCase
     header + ('x' * (size - header.bytesize))
   end
 
-  def pdf_upload(size, content_type: 'application/pdf', filename: 'proof.pdf')
+  def pdf_upload(size, content_type: 'application/pdf', filename: 'proof.pdf', bytes: nil)
     tempfile = Tempfile.new(['proof', File.extname(filename)])
     tempfile.binmode
-    tempfile.write(pdf_bytes(size))
+    tempfile.write(bytes || pdf_bytes(size))
     tempfile.rewind
     (@tempfiles ||= []) << tempfile
     ActionDispatch::Http::UploadedFile.new(tempfile: tempfile, filename: filename, type: content_type)

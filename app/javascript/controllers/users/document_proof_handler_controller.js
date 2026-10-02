@@ -1,11 +1,14 @@
 import { Controller } from "@hotwired/stimulus"
 import { setVisible } from "../../utils/visibility"
 
+const DECISION_CONTROLS = 'input[type="radio"], [data-document-proof-handler-target="noneButton"]'
+
 /**
  * Controller for handling document proof acceptance/rejection
- * 
- * Manages the UI for accepting or rejecting proof documents,
- * toggling file upload sections, and handling rejection reasons.
+ *
+ * Manages the decision for one document: accept, upload for later review, or reject with a reason.
+ * The file itself is handled by the shared document-upload control inside uploadSection; this
+ * controller clears it when rejection is chosen and locks its decision controls while it uploads.
  */
 class DocumentProofHandlerController extends Controller {
   static targets = [
@@ -20,20 +23,17 @@ class DocumentProofHandlerController extends Controller {
     "reasonPreview",
     "languageNotice",
     "customReasonSection",
-    "customReasonField",
-    "savedUpload",
-    "removeUpload",
-    "cancelUpload"
+    "customReasonField"
   ]
-
-  static values = {
-    type: String // "income" or "residency"
-  }
 
   connect() {
     this.uploadForm = this.element.closest('form');
-    this._releaseUploads = this.releaseUploadControls.bind(this);
-    this.uploadForm?.addEventListener('direct-uploads:end', this._releaseUploads);
+    this._lockDecisions = this.lockDecisionControls.bind(this);
+    this._unlockDecisions = this.unlockDecisionControls.bind(this);
+    this._blockLockedDecision = this.blockLockedDecision.bind(this);
+    this.element.addEventListener('direct-upload:initialize', this._lockDecisions);
+    this.element.addEventListener('click', this._blockLockedDecision, true);
+    this.uploadForm?.addEventListener('direct-uploads:end', this._unlockDecisions);
     // Restore state from form data if rejection fields have values
     this.restoreStateFromFormData();
     
@@ -48,7 +48,9 @@ class DocumentProofHandlerController extends Controller {
   }
 
   disconnect() {
-    this.uploadForm?.removeEventListener('direct-uploads:end', this._releaseUploads);
+    this.element.removeEventListener('direct-upload:initialize', this._lockDecisions);
+    this.element.removeEventListener('click', this._blockLockedDecision, true);
+    this.uploadForm?.removeEventListener('direct-uploads:end', this._unlockDecisions);
   }
 
   /**
@@ -80,79 +82,27 @@ class DocumentProofHandlerController extends Controller {
     this.updateVisibility();
   }
 
-  signedInputs() {
-    if (!this.hasFileInputTarget) return [];
-    return Array.from(this.element.querySelectorAll('input[type="hidden"]'))
-      .filter(input => input.name === this.fileInputTarget.name);
+  // A decision cannot change while its document is uploading. The controls are not disabled:
+  // Rails submits the form before it fires direct-uploads:end, and a disabled radio would be
+  // left out of that submission.
+  lockDecisionControls() {
+    this.decisionsLocked = true;
+    this.element.querySelectorAll(DECISION_CONTROLS)
+      .forEach(control => control.setAttribute('aria-disabled', 'true'));
   }
 
-  removeUpload() {
-    if (this.uploading) return;
-    this.signedInputs().forEach(input => input.remove());
-    this.fileInputTarget.value = '';
-    if (this.hasSavedUploadTarget) this.savedUploadTarget.textContent = '';
-    this.fileInputTarget.dispatchEvent(new Event('change', { bubbles: true }));
+  unlockDecisionControls() {
+    if (!this.decisionsLocked) return;
+    this.decisionsLocked = false;
+    this.element.querySelectorAll(DECISION_CONTROLS)
+      .forEach(control => control.removeAttribute('aria-disabled'));
   }
 
-  uploadStarted() {
-    this.previousUploadText = this.hasSavedUploadTarget ? this.savedUploadTarget.textContent : '';
-    this.uploading = true;
-    this.uploadError = false;
-    this.uploadCanceled = false;
-    this.uploadLockedControls = Array.from(this.element.querySelectorAll('input[type="radio"], button'))
-      .filter(control => !control.disabled);
-    this.uploadLockedControls.forEach(control => { control.disabled = true; });
-    if (this.hasRemoveUploadTarget) this.removeUploadTarget.disabled = true;
-    if (this.hasSavedUploadTarget) this.savedUploadTarget.textContent = 'Uploading document…';
-    if (this.hasCancelUploadTarget) {
-      this.cancelUploadTarget.disabled = false;
-      this.cancelUploadTarget.hidden = false;
-    }
-  }
-
-  rememberUploadRequest(event) {
-    this.uploadXHR = event.detail.xhr;
-    // Active Storage handles network errors, but does not subscribe to XHR aborts.
-    this.uploadXHR.addEventListener('abort', () => event.detail.xhr.dispatchEvent(new Event('error')), { once: true });
-    if (this.uploadCanceled) queueMicrotask(() => event.detail.xhr.abort());
-  }
-
-  cancelUpload() {
-    this.uploadCanceled = true;
-    this.uploadXHR?.abort();
-  }
-
-  uploadFailed(event) {
+  // A canceled click leaves a radio unchanged, whether it came from the mouse, a label, or the keyboard
+  blockLockedDecision(event) {
+    if (!this.decisionsLocked || !event.target.closest(DECISION_CONTROLS)) return;
     event.preventDefault();
-    this.uploadError = true;
-    if (this.hasSavedUploadTarget) {
-      this.savedUploadTarget.textContent = this.uploadCanceled
-        ? 'Upload canceled. Any previous upload is retained.'
-        : 'Upload failed. Retry or choose another file. Any previous upload is retained.';
-    }
-  }
-
-  uploadFinished() {
-    this.releaseUploadControls();
-    if (this.uploadError) return;
-
-    // Active Storage inserts the completed reference immediately before its file input.
-    const completed = this.fileInputTarget.previousElementSibling;
-    if (completed?.type !== 'hidden' || !completed.value) return;
-    this.signedInputs().filter(input => input !== completed).forEach(input => input.remove());
-    if (this.hasSavedUploadTarget) {
-      this.savedUploadTarget.textContent = `Uploaded: ${this.fileInputTarget.files[0]?.name || 'document'}`;
-    }
-  }
-
-  releaseUploadControls() {
-    if (!this.uploading) return;
-    if (!this.uploadError && this.hasSavedUploadTarget) this.savedUploadTarget.textContent = this.previousUploadText;
-    this.uploading = false;
-    this.uploadXHR = null;
-    if (this.hasCancelUploadTarget) this.cancelUploadTarget.hidden = true;
-    this.uploadLockedControls?.forEach(control => { control.disabled = false; });
-    if (this.hasRemoveUploadTarget) this.removeUploadTarget.disabled = false;
+    event.stopImmediatePropagation();
   }
 
   /**
@@ -202,13 +152,10 @@ class DocumentProofHandlerController extends Controller {
       const target = this.fileInputTarget;
       target.disabled = !(isAccepted || isUploadOnly);
 
+      // A rejection carries no file, so any pending upload is cleared
       if (isRejected) {
-        // Clear file when switching to reject
-        if (target.value) {
-          target.value = '';
-        }
-        this.signedInputs().forEach(input => input.remove());
-        if (this.hasSavedUploadTarget) this.savedUploadTarget.textContent = '';
+        this.uploadSectionTarget.querySelector('[data-controller~="document-upload"]')
+          ?.dispatchEvent(new CustomEvent('document-upload:clear'));
       }
     }
 

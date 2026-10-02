@@ -293,20 +293,11 @@ module Admin
 
     def update_certification_status
       status = @application.normalize_certification_status(params[:status])
-      update_type = @application.determine_certification_update_type(status, params)
-
-      case update_type
-      when :rejection
+      # New certification files arrive only through upload_medical_certification
+      if @application.rejection_requested?(status, params)
         process_certification_rejection
-      when :status_update
-        update_existing_certification_status(status)
-      when :new_upload
-        upload_new_certification(status)
       else
-        handle_error_response(
-          error_message: 'Invalid certification update type',
-          html_redirect_path: admin_application_path(@application)
-        )
+        update_existing_certification_status(status)
       end
     end
 
@@ -357,25 +348,6 @@ module Admin
       else
         handle_error_response(
           error_message: "Failed to update certification status: #{result[:error]&.message}",
-          html_redirect_path: admin_application_path(@application)
-        )
-      end
-    end
-
-    # @param status [Symbol] The normalized certification status
-    def upload_new_certification(status)
-      success = @application.update_certification!(
-        certification: params[:medical_certification],
-        status: status,
-        verified_by: current_user,
-        rejection_reason: params[:medical_certification_rejection_reason]
-      )
-
-      if success
-        handle_successful_status_update(status)
-      else
-        handle_error_response(
-          error_message: 'Failed to update certification status.',
           html_redirect_path: admin_application_path(@application)
         )
       end
@@ -514,8 +486,6 @@ module Admin
     end
 
     def process_accepted_certification
-      log_certification_params unless Rails.env.production?
-
       if params[:medical_certification].blank?
         redirect_to admin_application_path(@application),
                     alert: t('.c_file_select')
@@ -533,6 +503,10 @@ module Admin
       end
 
       handle_certification_result(result)
+    rescue UploadedDocument::Refused => e
+      redirect_to admin_application_path(@application), alert: e.user_message_for('Disability certification')
+    rescue MedicalCertificationAttachmentService::StaffUploadNotAllowed
+      redirect_to admin_application_path(@application), alert: t('.m_not_allowed')
     end
 
     def extract_submission_method
@@ -607,41 +581,6 @@ module Admin
                @application.id.to_s,
                { application_id: @application.id }.to_json)
         .order(created_at: :desc)
-    end
-
-    def log_param_class
-      cls = params[:medical_certification].class.name
-      Rails.logger.info "PARAM CLASS: #{cls}"
-    end
-
-    def log_upload_type
-      file_param = params[:medical_certification]
-
-      upload_type_message =
-        if file_param.respond_to?(:content_type)
-          "Regular file upload with content_type: #{file_param.content_type}"
-        elsif file_param.respond_to?(:[]) && file_param[:signed_id].present?
-          'Direct upload with signed_id'
-        elsif file_param.is_a?(String)
-          'String input (potential direct upload signed ID)'
-        else
-          "Unknown structure: #{file_param.class.name}"
-        end
-
-      Rails.logger.info "Upload type: #{upload_type_message}"
-    end
-
-    def log_certification_params
-      return unless Rails.env.local?
-
-      Rails.logger.info "DISABILITY CERTIFICATION PARAMS: #{params.to_unsafe_h.inspect}"
-      Rails.logger.info "DISABILITY CERTIFICATION FILE PARAM: #{params[:medical_certification].inspect}"
-
-      return if params[:medical_certification].blank?
-
-      log_param_class
-      log_upload_type
-      Rails.logger.info "REQUEST CONTENT TYPE: #{request.content_type}"
     end
 
     def load_audit_logs_with_service

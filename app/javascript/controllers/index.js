@@ -32,7 +32,6 @@ import TrainingDurationConfirmationController from "./forms/training_duration_co
 
 // Review Controllers
 import EvaluationManagementController from "./reviews/evaluation_management_controller"
-import ProofStatusController from "./reviews/proof_status_controller"
 import W9ReviewController from "./reviews/w9_review_controller"
 
 // UI Controllers
@@ -44,7 +43,7 @@ import ErrorSummaryController from "./ui/error_summary_controller"
 import MobileMenuController from "./ui/mobile_menu_controller"
 import ModalController from "./ui/modal_controller"
 import PdfLoaderController from "./ui/pdf_loader_controller"
-import UploadController from "./ui/upload_controller"
+import DocumentUploadController from "./ui/document_upload_controller"
 import VisibilityController from "./ui/visibility_controller"
 import StreamReadyController from "./ui/stream_ready_controller"
 
@@ -86,7 +85,6 @@ application.register("training-duration-confirmation", TrainingDurationConfirmat
 
 // Review Controllers
 application.register("evaluation-management", EvaluationManagementController)
-application.register("proof-status", ProofStatusController)
 application.register("w9-review", W9ReviewController)
 
 // UI Controllers
@@ -98,7 +96,7 @@ application.register("error-summary", ErrorSummaryController)
 application.register("mobile-menu", MobileMenuController)
 application.register("modal", ModalController)
 application.register("pdf-loader", PdfLoaderController)
-application.register("upload", UploadController)
+application.register("document-upload", DocumentUploadController)
 application.register("visibility", VisibilityController)
 application.register("stream-ready", StreamReadyController)
 

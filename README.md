@@ -173,7 +173,7 @@ Start with a focused test, then expand to the affected area:
 
 ```bash
 bin/rails test test/models/user_contact_predicates_test.rb
-yarn test test/javascript/controllers/upload_controller_test.js --runInBand
+yarn test test/javascript/controllers/document_upload_controller_test.js --runInBand
 bin/rubocop --cache false app/models/user.rb
 ```
 

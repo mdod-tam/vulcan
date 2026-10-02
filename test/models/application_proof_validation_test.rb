@@ -104,9 +104,8 @@ class ApplicationProofValidationTest < ActiveSupport::TestCase
         content_type: 'text/plain'
       )
 
-      # Directly test the validation method itself
-      application.errors.clear
-      application.send(:correct_proof_mime_type)
+      # The document backstop checks the newly attached proof
+      application.valid?
 
       # Verify that validation failed for the income proof with the exact error message
       assert_includes application.errors[:income_proof],
@@ -161,9 +160,8 @@ class ApplicationProofValidationTest < ActiveSupport::TestCase
       assert_equal 'text/plain', application.residency_proof.content_type, 'Content type should be text/plain'
       assert application.income_proof.attached?, 'Valid PDF should be attached for income proof'
 
-      # Directly call the MIME type validation
-      application.errors.clear
-      application.send(:correct_proof_mime_type)
+      # The document backstop checks the newly attached proof
+      application.valid?
 
       # Verify that validation failed for the residency proof with the exact error message
       assert_includes application.errors[:residency_proof],

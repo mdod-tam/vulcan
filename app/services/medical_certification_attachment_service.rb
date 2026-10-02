@@ -7,11 +7,18 @@
 # and consistent status tracking.
 #
 # Key responsibilities:
-# 1. Handle blob/file conversion for different input types
+# 1. Resolve manually submitted certifications through UploadedDocument before anything changes
 # 2. Provide a unified interface for attaching medical certifications
 # 3. Maintain audit records for all attachment operations
 # 4. Provide consistent error handling and logging
 class MedicalCertificationAttachmentService
+  # Staff may not replace a certification that awaits review or is already approved
+  class StaffUploadNotAllowed < StandardError
+    def initialize(msg = 'This certification is awaiting review or already approved.')
+      super
+    end
+  end
+
   # Updates only the status of a medical certification without touching the attachment
   #
   # @param application [Application] The application whose certification status to update
@@ -50,20 +57,20 @@ class MedicalCertificationAttachmentService
     result
   end
 
-  # Attaches a medical certification document to an application
+  # Attaches a certification staff submitted. Under the application lock, the same lock a provider
+  # submission takes, it refuses when a certification awaits review or is approved
+  # (StaffUploadNotAllowed), then resolves the file through UploadedDocument (UploadedDocument::Refused).
+  # Either refusal changes nothing.
   def self.attach_certification(application:, blob_or_file:, status: :approved,
                                 admin: nil, submission_method: :admin_upload, metadata: {})
-    attachment_params = {
-      application: application,
-      blob_or_file: blob_or_file,
-      status: status,
-      admin: admin,
-      submission_method: submission_method,
-      metadata: metadata
-    }
-
     execute_with_timing(status) do
-      process_attachment(attachment_params)
+      application.with_lock do
+        raise StaffUploadNotAllowed unless application.staff_certification_upload_allowed?
+
+        blob = UploadedDocument.resolve!(blob_or_file, record: application, name: 'medical_certification')
+        process_attachment(application: application, blob: blob, status: status, admin: admin,
+                           submission_method: submission_method, metadata: metadata)
+      end
     end
   end
 
@@ -84,8 +91,12 @@ class MedicalCertificationAttachmentService
     application.with_lock do
       retention_reason = submission_retention_reason(application, requested_at)
       if retention_reason.nil?
-        result = attach_certification(application: application, blob_or_file: blob, status: :received,
-                                      admin: admin, submission_method: submission_method, metadata: metadata)
+        # The caller already resolved the blob: the secure form through UploadedDocument, or a
+        # provider-generated document that keeps its own acceptance contract.
+        result = execute_with_timing(:received) do
+          process_attachment(application: application, blob: blob, status: :received, admin: admin,
+                             submission_method: submission_method, metadata: metadata)
+        end
         next result.merge(placement: :primary)
       end
 
@@ -132,19 +143,6 @@ class MedicalCertificationAttachmentService
     execute_with_timing(:rejected) do
       process_rejection(rejection_params)
     end
-  end
-
-  def self.process_attachment_param(blob_or_file)
-    log_input_details(blob_or_file)
-
-    return blob_or_file if blob_or_file.is_a?(String) && blob_or_file.present?
-    return process_parameters(blob_or_file) if action_controller_parameters?(blob_or_file)
-    return blob_or_file.signed_id if blob_or_file.is_a?(ActiveStorage::Blob)
-    return process_uploaded_file(blob_or_file) if uploaded_file?(blob_or_file)
-
-    # Fallback for other types
-    log_fallback_details(blob_or_file)
-    blob_or_file
   end
 
   def self.attachment_verified?(application)
@@ -310,11 +308,9 @@ class MedicalCertificationAttachmentService
 
   # Main attachment processing logic
   def self.process_attachment(params)
-    blob_size = calculate_blob_size(params[:blob_or_file])
-    log_attachment_context(params)
+    blob_size = params[:blob].byte_size
 
-    attachment_param = process_attachment_param(params[:blob_or_file])
-    perform_attachment(params[:application], attachment_param)
+    perform_attachment(params[:application], params[:blob])
     update_certification_status_only(params[:application], params[:status], params[:admin],
                                      params[:submission_method], params[:metadata])
     verify_final_attachment(params[:application])
@@ -429,84 +425,6 @@ class MedicalCertificationAttachmentService
     )
   end
 
-  # Input processing helper methods
-  def self.log_input_details(blob_or_file)
-    Rails.logger.info "DISABILITY CERTIFICATION ATTACHMENT INPUT: Type=#{blob_or_file.class.name}"
-  end
-
-  def self.process_parameters(blob_or_file)
-    Rails.logger.info 'Processing ActionController::Parameters from direct upload'
-    extract_signed_id_from_parameters(blob_or_file) || blob_or_file
-  end
-
-  def self.extract_signed_id_from_parameters(params)
-    return params[:signed_id] if params[:signed_id].present?
-    return params['signed_id'] if params['signed_id'].present?
-    return params[:blob_signed_id] if params.key?(:blob_signed_id)
-
-    find_signed_id_in_parameters(params)
-  end
-
-  def self.find_signed_id_in_parameters(params)
-    return nil unless params.respond_to?(:each_value)
-
-    params.each_value do |value|
-      next unless value.is_a?(String) && value.start_with?('eyJf')
-
-      return value
-    end
-
-    Rails.logger.info 'Could not find signed_id in parameters, using as-is'
-    nil
-  end
-
-  def self.process_uploaded_file(blob_or_file)
-    log_upload_info(blob_or_file)
-    create_blob_from_upload(blob_or_file) || blob_or_file
-  end
-
-  def self.log_upload_info(blob_or_file)
-    if blob_or_file.respond_to?(:original_filename)
-      Rails.logger.info "UPLOAD INFO: Filename=#{blob_or_file.original_filename}, Content-Type=#{blob_or_file.content_type}, Size=#{blob_or_file.size}"
-    end
-    Rails.logger.info "Using direct file upload attachment: #{blob_or_file.class.name}"
-  end
-
-  def self.create_blob_from_upload(blob_or_file)
-    Rails.logger.info 'Creating blob from uploaded file'
-
-    blob = ActiveStorage::Blob.create_and_upload!(
-      io: blob_or_file.tempfile,
-      filename: blob_or_file.original_filename,
-      content_type: blob_or_file.content_type
-    )
-
-    Rails.logger.info "Successfully created blob for medical_certification: #{blob.id}"
-    blob.signed_id
-  rescue StandardError => e
-    Rails.logger.error "Failed to create blob from uploaded file: #{e.message}"
-    Rails.logger.info 'Falling back to direct file parameter'
-    nil
-  end
-
-  def self.log_fallback_details(blob_or_file)
-    Rails.logger.info "ATTACHMENT PARAM TYPE: #{blob_or_file.class.name}"
-    begin
-      Rails.logger.info "ATTACHMENT PARAM DETAILS: #{blob_or_file.inspect[0..100]}"
-    rescue StandardError
-      Rails.logger.info 'Could not inspect blob_or_file'
-    end
-  end
-
-  # Type checking helper methods
-  def self.action_controller_parameters?(blob_or_file)
-    defined?(ActionController::Parameters) && blob_or_file.is_a?(ActionController::Parameters)
-  end
-
-  def self.uploaded_file?(blob_or_file)
-    blob_or_file.respond_to?(:tempfile) || blob_or_file.is_a?(ActionDispatch::Http::UploadedFile)
-  end
-
   # Metrics helper methods
   def self.log_operation_result(result, status)
     if result[:success]
@@ -533,17 +451,6 @@ class MedicalCertificationAttachmentService
     context[:error_class] = error.class.name
     context[:error_message] = error.message
     context[:error_backtrace] = error.backtrace.first(3) if error.backtrace
-  end
-
-  # Attachment processing helper methods
-  def self.calculate_blob_size(blob_or_file)
-    blob_or_file.byte_size if blob_or_file.respond_to?(:byte_size)
-  end
-
-  def self.log_attachment_context(params)
-    Rails.logger.info "MEDICAL CERTIFICATION ATTACHMENT INPUT TYPE: #{params[:blob_or_file].class.name}"
-    Rails.logger.info "MEDICAL CERTIFICATION ENVIRONMENT: #{Rails.env}"
-    Rails.logger.info "MEDICAL CERTIFICATION STORAGE SERVICE: #{ActiveStorage::Blob.service.class.name}"
   end
 
   def self.perform_attachment(application, attachment_param)

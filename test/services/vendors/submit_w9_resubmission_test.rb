@@ -57,7 +57,7 @@ module Vendors
       assert_not result.success?
       assert_equal I18n.t('vendors.w9_resubmission.messages.validation_failed', locale: @vendor.effective_locale),
                    result.message
-      assert_equal [I18n.t('vendors.w9_resubmission.messages.file_blank', locale: @vendor.effective_locale)],
+      assert_equal [I18n.t('documents.refused.missing', locale: @vendor.effective_locale)],
                    result.data.fetch(:errors).messages.fetch(:file)
     end
 
@@ -94,7 +94,7 @@ module Vendors
         ).call
 
         assert_not result.success?
-        assert_equal I18n.t('vendors.w9_resubmission.messages.file_type_invalid', locale: @vendor.effective_locale),
+        assert_equal I18n.t('documents.refused.invalid_type', locale: @vendor.effective_locale),
                      result.data.fetch(:errors).messages.fetch(:file).first
       end
     end
@@ -113,10 +113,27 @@ module Vendors
         ).call
 
         assert_not result.success?
-        assert_equal I18n.t('vendors.w9_resubmission.messages.file_suspicious', locale: @vendor.effective_locale),
+        assert_equal I18n.t('documents.refused.suspicious_content', locale: @vendor.effective_locale),
                      result.data.fetch(:errors).messages.fetch(:file).first
         assert_equal original_blob_id, @vendor.reload.w9_form.blob.id
       end
+    end
+    test 'a W-9 of exactly 10 MB is refused and the request stays active' do
+      previous_w9 = @vendor.w9_form.blob
+      tempfile = Tempfile.new(['w9', '.pdf'])
+      tempfile.binmode
+      tempfile.write("%PDF-1.4\n#{'x' * (ProofUploadFormats.max_bytes(:w9) - 9)}")
+      tempfile.rewind
+      file = ActionDispatch::Http::UploadedFile.new(tempfile: tempfile, filename: 'w9.pdf', type: 'application/pdf')
+
+      result = SubmitW9Resubmission.new(vendor: @vendor, vendor_secure_request_form: @secure_request_form, file: file).call
+
+      assert_not result.success?
+      assert_equal :too_large, result.data[:errors].details[:file].first[:error]
+      assert_not_predicate @secure_request_form.reload, :submitted?
+      assert_equal previous_w9, @vendor.reload.w9_form.blob
+    ensure
+      tempfile&.close!
     end
   end
 end

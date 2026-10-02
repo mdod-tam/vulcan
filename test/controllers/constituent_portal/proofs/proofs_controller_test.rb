@@ -47,7 +47,7 @@ class ConstituentProofsSubmissionTest < ActionDispatch::IntegrationTest
       assert_difference 'Event.count', 2 do # ProofAttachmentService creates income_proof_attached, tracking creates proof_submitted
         # Using the new namespace path directly
         post "/constituent_portal/applications/#{@application.id}/proofs/resubmit",
-             params: { proof_type: 'income', income_proof_upload: @valid_pdf }
+             params: { proof_type: 'income', income_proof: @valid_pdf }
 
         # Verify redirect
         assert_redirected_to constituent_portal_application_path(@application)
@@ -112,38 +112,6 @@ class ConstituentProofsSubmissionTest < ActionDispatch::IntegrationTest
   # The application already includes before_action :authenticate_user! in all controllers
   # through the Application controller, which we've tested elsewhere
 
-  test 'direct_upload creates blob for direct upload' do
-    post "/constituent_portal/applications/#{@application.id}/proofs/direct_upload",
-         params: {
-           blob: {
-             filename: 'test.pdf',
-             byte_size: 1024,
-             checksum: 'checksum123',
-             content_type: 'application/pdf',
-             metadata: { test: 'data' }
-           }
-         },
-         as: :json
-
-    assert_response :success
-    json_response = response.parsed_body
-    assert_not_nil json_response['signed_id']
-    assert_not_nil json_response['direct_upload']['url']
-    assert_not_nil json_response['direct_upload']['headers']
-  end
-
-  test 'direct_upload returns error for invalid params' do
-    # Unskipped - was failing due to authentication issues
-
-    post "/constituent_portal/applications/#{@application.id}/proofs/direct_upload",
-         params: { invalid: 'params' },
-         as: :json
-
-    assert_response :unprocessable_content
-    json_response = response.parsed_body
-    assert_not_nil json_response['error']
-  end
-
   test 'resubmit handles rate limit exceeded' do
     # Unskipped - fixed authentication issues
 
@@ -152,7 +120,7 @@ class ConstituentProofsSubmissionTest < ActionDispatch::IntegrationTest
 
     # The request should not raise an exception because the controller handles it
     post "/constituent_portal/applications/#{@application.id}/proofs/resubmit",
-         params: { proof_type: 'income', income_proof_upload: @valid_pdf }
+         params: { proof_type: 'income', income_proof: @valid_pdf }
 
     # The controller redirects to the application path with an alert
     assert_redirected_to constituent_portal_application_path(@application)
@@ -168,7 +136,7 @@ class ConstituentProofsSubmissionTest < ActionDispatch::IntegrationTest
     # This should raise an exception because we're purposely testing error handling
     assert_raises StandardError do
       post "/constituent_portal/applications/#{@application.id}/proofs/resubmit",
-           params: { proof_type: 'income', income_proof_upload: @valid_pdf }
+           params: { proof_type: 'income', income_proof: @valid_pdf }
     end
   end
 
@@ -184,7 +152,7 @@ class ConstituentProofsSubmissionTest < ActionDispatch::IntegrationTest
     # Guardian should be able to submit proof for dependent's application
     assert_difference 'Event.count', 2 do
       post "/constituent_portal/applications/#{dependent_application.id}/proofs/resubmit",
-           params: { proof_type: 'income', income_proof_upload: @valid_pdf }
+           params: { proof_type: 'income', income_proof: @valid_pdf }
     end
   
     # Verify redirect and flash
@@ -222,12 +190,36 @@ class ConstituentProofsSubmissionTest < ActionDispatch::IntegrationTest
 
     assert_no_difference -> { Event.where(auditable: @application, action: 'proof_submitted').count } do
       post "/constituent_portal/applications/#{@application.id}/proofs/resubmit",
-           params: { proof_type: 'income', income_proof_upload: oversized.signed_id }
+           params: { proof_type: 'income', income_proof: oversized.signed_id }
     end
 
-    assert_redirected_to constituent_portal_application_new_proof_path(@application, proof_type: 'income')
-    assert_equal I18n.t('constituent_portal.proofs.upload_refused.too_large',
-                        max_size: ProofUploadFormats.proof_max_megabytes), flash[:alert]
+    assert_response :unprocessable_content
+    assert_equal I18n.t('documents.refused.too_large',
+                        max_size: ProofUploadFormats.max_megabytes(:proof)), flash[:alert]
     assert_predicate @application.reload, :income_proof_status_rejected?
+    # An oversized upload is not reusable, so the form offers no retained document
+    assert_select 'input[name="income_proof_signed_id"]', count: 0
+    assert_select 'input[type="file"][name="income_proof"]'
+  end
+
+  test 'a refused upload keeps an earlier usable upload for the next attempt' do
+    usable = ActiveStorage::Blob.create_and_upload!(
+      io: file_fixture('income_proof.pdf').open, filename: 'income_proof.pdf', content_type: 'application/pdf'
+    )
+
+    post "/constituent_portal/applications/#{@application.id}/proofs/resubmit",
+         params: { proof_type: 'income', income_proof: fixture_file_upload('invalid.exe', 'application/octet-stream'),
+                   income_proof_signed_id: usable.signed_id }
+
+    assert_response :unprocessable_content
+    assert_equal I18n.t('documents.refused.invalid_type'), flash[:alert]
+    assert_select "input[name='income_proof_signed_id'][value='#{usable.signed_id}']"
+    assert_select 'p[role="status"]', text: I18n.t('documents.upload.uploaded', filename: 'income_proof.pdf')
+
+    post "/constituent_portal/applications/#{@application.id}/proofs/resubmit",
+         params: { proof_type: 'income', income_proof_signed_id: usable.signed_id }
+
+    assert_redirected_to constituent_portal_application_path(@application)
+    assert_equal usable, @application.reload.income_proof.blob
   end
 end

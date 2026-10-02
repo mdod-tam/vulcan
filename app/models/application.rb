@@ -20,17 +20,6 @@ class Application < ApplicationRecord
     end
   end
 
-  # Definition for ProofResult struct
-  ProofResult = Struct.new(:success, :type, :message, :error, keyword_init: true) do # rubocop:disable Style/RedundantStructKeywordInit
-    def success?
-      success == true
-    end
-
-    def error_message
-      error&.message || message
-    end
-  end
-
   # Field encryption - URLs contain PII-adjacent data and should be encrypted at rest
   encrypts :document_signing_audit_url
   encrypts :document_signing_document_url
@@ -135,6 +124,7 @@ class Application < ApplicationRecord
   # Stores duplicate medical certification submissions from the second completed channel:
   # late DocuSeal PDFs after secure upload, or late secure uploads after DocuSeal.
   has_many_attached :additional_medical_certifications
+  validates :medical_certification, :additional_medical_certifications, document: { purpose: :certification }
 
   # Validations
   validates :application_date, presence: true

@@ -45,7 +45,7 @@ class ProofSubmissionFlowTest < ActionDispatch::IntegrationTest
           assert_difference 'Event.count', 2 do # ProofAttachmentService creates income_proof_attached, tracking creates proof_submitted
             # Use the direct path
             post "/constituent_portal/applications/#{@application.id}/proofs/resubmit",
-                 params: { proof_type: 'income', income_proof_upload: @valid_pdf }
+                 params: { proof_type: 'income', income_proof: @valid_pdf }
 
             # Verify response and flash
             assert_response :redirect
@@ -81,7 +81,7 @@ class ProofSubmissionFlowTest < ActionDispatch::IntegrationTest
       assert_no_difference 'Event.count' do
         # Use the direct path
         post "/constituent_portal/applications/#{@application.id}/proofs/resubmit",
-             params: { proof_type: 'income', income_proof_upload: @valid_pdf }
+             params: { proof_type: 'income', income_proof: @valid_pdf }
 
         # Verify response and flash
         assert_response :redirect
@@ -130,7 +130,7 @@ class ProofSubmissionFlowTest < ActionDispatch::IntegrationTest
     assert_not @application.income_proof.attached?, 'Setup: Income proof should not be attached initially'
 
     # A. Authenticated POST: Should succeed and attach the proof.
-    post path, params: { proof_type: 'income', income_proof_upload: @valid_pdf }
+    post path, params: { proof_type: 'income', income_proof: @valid_pdf }
     assert_response :redirect
     @application.reload
     assert @application.income_proof.attached?, 'Proof should be attached after authenticated post'
@@ -153,7 +153,7 @@ class ProofSubmissionFlowTest < ActionDispatch::IntegrationTest
     assert_authentication_required
 
     # D. Unauthenticated POST: Should redirect unauthenticated user to sign_in and NOT attach any proof.
-    post path, params: { proof_type: 'income', income_proof_upload: @valid_pdf }
+    post path, params: { proof_type: 'income', income_proof: @valid_pdf }
 
     # Check for redirect to sign in
     assert_response :redirect

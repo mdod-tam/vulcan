@@ -49,23 +49,4 @@ module ApplicationDataStructures
       }
     end
   end
-
-  # Represents a result from document attachment operations
-  ProofResult = Struct.new(:success, :type, :message, keyword_init: true) do
-    def success?
-      success == true
-    end
-
-    def failure?
-      !success?
-    end
-
-    def to_h
-      {
-        success: success,
-        type: type,
-        message: message
-      }
-    end
-  end
 end

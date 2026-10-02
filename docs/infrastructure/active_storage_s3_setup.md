@@ -43,7 +43,7 @@ USE_S3=true S3_BUCKET=… S3_ACCESS_KEY_ID=… S3_SECRET_ACCESS_KEY=… bin/dev
 
 ## Direct uploads need bucket CORS
 
-Paper intake, portal proof submission, and vendor W-9 upload all use Active Storage direct upload: the browser `PUT`s the file to the bucket itself, and only the signed blob ID reaches Rails. The bucket therefore needs a CORS rule allowing `PUT` from the application's origin, which nothing in this repository can set — it is bucket-side configuration. A direct upload that fails only in the browser, with the Rails log showing nothing after the `/rails/active_storage/direct_uploads` call, is the usual sign that the rule is missing or does not cover the origin.
+Paper intake, portal proof submission, vendor W-9 upload, and admin certification upload all use Active Storage direct upload: the browser `PUT`s the file to the bucket itself, and only the signed blob ID reaches Rails. The bucket therefore needs a CORS rule allowing `PUT` from the application's origin, which nothing in this repository can set — it is bucket-side configuration. A direct upload that fails only in the browser, with the Rails log showing nothing after the `/rails/active_storage/direct_uploads` call, is the usual sign that the rule is missing or does not cover the origin.
 
 These documents contain personal information, so keep the bucket private. The app serves attachments through [Rails proxy URLs](../../config/initializers/active_storage.rb) with signed blob IDs and no default expiry. S3 service URL expiry does not make those Rails links expire.
 

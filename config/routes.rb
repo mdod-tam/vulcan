@@ -204,7 +204,6 @@ Rails.application.routes.draw do
       end
 
       resources :notes, only: %i[create update], controller: 'application_notes'
-      resources :scanned_proofs, only: %i[new create] # Added missing routes
       resources :secure_request_forms,
                 only: [:create],
                 controller: 'application_secure_request_forms' do
@@ -259,10 +258,6 @@ Rails.application.routes.draw do
     resources :constituents_dashboard, only: %i[index show]
 
     resources :proof_reviews, only: %i[index show new create]
-    resources :proofs, only: %i[new create] do
-      post :resubmit, on: :collection
-    end
-
     resources :policies, only: %i[index show edit update create] do
       collection do
         get :changes
@@ -436,7 +431,6 @@ Rails.application.routes.draw do
 
       member do
         patch :autosave_field
-        patch :upload_documents
         post :resubmit_proof
         post :update # Handle form submissions that POST to update path
         post :request_training
@@ -445,7 +439,6 @@ Rails.application.routes.draw do
       scope module: :proofs do
         get 'proofs/new/:proof_type', to: 'proofs#new', as: :new_proof
         post 'proofs/resubmit', to: 'proofs#resubmit'
-        post 'proofs/direct_upload', to: 'proofs#direct_upload'
       end
     end
 

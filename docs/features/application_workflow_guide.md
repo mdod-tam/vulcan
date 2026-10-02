@@ -55,7 +55,7 @@ Fulfillment type and whether income proof is required are stamped at creation fr
 
 **Income, residency, and ID:** [ProofAttachmentService](../../app/services/proof_attachment_service.rb) and [ProofReview](../../app/models/proof_review.rb) own attachment/review behavior. Approval requires a file; rejection can record a missing document. Rejection delivery goes through `Applications::RequestProofResubmission`, which issues a secure upload request. A delivery failure does not erase the saved review.
 
-**Disability certification:** provider requests, secure uploads, staff uploads, and DocuSeal have their own services. Certification progresses through `not_requested`, `requested`, `received`, `approved`, or `rejected`. Receipt or a completed signature is separate from approval. Incoming fax/postal documents require staff upload.
+**Disability certification:** provider requests, secure uploads, staff uploads, and DocuSeal have their own services. Certification progresses through `not_requested`, `requested`, `received`, `approved`, or `rejected`. Receipt or a completed signature is separate from approval. Incoming fax/postal documents require staff upload. Staff upload is unavailable while a certification awaits review (`received`) or is approved, so it cannot replace one; it returns once a certification is rejected. `MedicalCertificationAttachmentService.attach_certification` checks this under the same application lock a provider submission takes, so a submission that arrives mid-request is not displaced. Secure provider forms follow their own request rules.
 
 See [proof review](proof_review_process_guide.md) and [DocuSeal integration](../development/docuseal_integration_guide.md) for those workflows.
 

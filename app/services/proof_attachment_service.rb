@@ -42,6 +42,7 @@ class ProofAttachmentService
   #   - :admin [User] (optional) The admin user if this is an admin action.
   #   - :metadata [Hash] (optional) Additional metadata to store with the attachment audit.
   #   - :signed_ids [Boolean] (optional, default: true) Whether a signed blob ID is an accepted input.
+  #   - :min_bytes [Integer, nil] (optional) Smallest accepted file, for channels that require one.
   #
   # @return [Hash] Result hash with :success, :error, and :duration_ms keys. A refused upload
   #   leaves :error as an UploadedDocument::Refused and changes no proof state.
@@ -51,7 +52,8 @@ class ProofAttachmentService
       admin: nil,
       metadata: {},
       skip_audit_events: false,
-      signed_ids: true
+      signed_ids: true,
+      min_bytes: nil
     }.merge(args)
 
     context = {
@@ -210,7 +212,7 @@ class ProofAttachmentService
         # Reconcile inside the transaction/paper context block to ensure atomicity.
         # We check original_paper_context because if the caller (e.g. PaperApplicationService)
         # already set paper_context=true, we want to skip reconciliation here and let the caller
-        # do it once at the end. But if the caller didn't set it (e.g. ScannedProofsController),
+        # do it once at the end. But if the caller didn't set it (e.g. a portal or secure-form upload),
         # we want to reconcile here, even though we temporarily set paper_context=true for the attachment.
         if params.fetch(:status).to_sym == :approved && !original_paper_context
           reconcile_if_approved(
@@ -275,8 +277,14 @@ class ProofAttachmentService
       Rails.logger.error(backtrace || 'No backtrace available') unless Rails.env.test?
     end
 
+    # Runs after the caller's transaction ends. The in-memory application may hold rolled-back
+    # changes, or may have been created in the rolled-back transaction and no longer exist, so the
+    # event is written against a fresh read of the stored record; auditing the in-memory object
+    # would save it, and its graph, again.
     def log_failure_audit_event(error, context)
-      application = context.fetch(:application)
+      application = Application.find_by(id: context.fetch(:application).id)
+      return unless application
+
       proof_type = context.fetch(:proof_type)
 
       result_for_context = { success: false, error: error }
@@ -441,8 +449,8 @@ class ProofAttachmentService
         params.fetch(:blob_or_file),
         record: application,
         name: get_attachment_method_name(proof_type),
-        max_bytes: ProofUploadFormats::PROOF_MAX_BYTES,
-        signed_ids: params.fetch(:signed_ids)
+        signed_ids: params.fetch(:signed_ids),
+        min_bytes: params.fetch(:min_bytes)
       )
 
       Struct.new(:application, :proof_type, :attachment_param, :blob_size, :submission_method, keyword_init: true).new( # rubocop:disable Style/RedundantStructKeywordInit

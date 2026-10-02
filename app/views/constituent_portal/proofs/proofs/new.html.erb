@@ -42,61 +42,31 @@
             </div>
           </div>
 
-          <%= form_with url: constituent_portal_application_proofs_resubmit_path(@application), 
-                        method: :post, 
-                        html: { 
-                          class: "space-y-6",
-                          data: {
-                            controller: "upload",
-                            upload_direct_upload_url_value: rails_direct_uploads_path
-                          }.merge(proof_upload_stimulus_values)
-                        } do |form| %>
+          <%= form_with url: constituent_portal_application_proofs_resubmit_path(@application), method: :post, class: 'space-y-6' do |form| %>
             <%= hidden_field_tag :proof_type, @proof_type %>
-            
+
             <div>
-              <label for="<%= "#{@proof_type}_proof_upload" %>" class="block text-sm font-medium text-gray-700">
+              <label for="<%= "#{@proof_type}_proof" %>" class="block text-sm font-medium text-gray-700">
                 Upload your <%= @proof_type.titleize %> document
               </label>
               <p class="mt-1 text-sm text-gray-500" id="file-description">
                 Acceptable formats: <%= proof_upload_formats_label %>. Maximum file size: <%= proof_upload_max_size_label %>.
               </p>
-              
-              <div class="mt-2">
-                <%= form.file_field "#{@proof_type}_proof_upload", 
-                    class: "block w-full text-sm text-gray-900 border border-gray-300 rounded-md shadow-sm focus:ring-indigo-500 focus:border-indigo-500",
-                    accept: proof_upload_accept_attribute,
-                    "aria-describedby": "file-description",
-                    data: { 
-                      upload_target: "input",
-                      action: "change->upload#handleFileSelect"
-                    } %>
-              </div>
 
-              <!-- Progress Bar -->
-              <div data-upload-target="progress" class="hidden mt-3">
-                <div class="bg-gray-200 rounded-full h-2">
-                  <div class="bg-indigo-600 h-2 rounded-full transition-all duration-300" role="progressbar" style="width: 0%"></div>
-                </div>
-                <p class="text-sm text-gray-500 mt-1">
-                  Uploading: <span data-upload-target="percentage">0%</span>
-                </p>
-                <button type="button" 
-                        data-upload-target="cancel"
-                        data-action="click->upload#cancelUpload"
-                        class="hidden mt-2 text-sm text-red-600 hover:text-red-800">
-                  Cancel Upload
-                </button>
+              <div class="mt-2">
+                <%= render 'shared/document_upload',
+                           form: form, field: "#{@proof_type}_proof", model: Application, blob: @retained_upload,
+                           described_by: 'file-description' %>
               </div>
             </div>
-            
+
             <div class="flex justify-end">
-              <button type="button" 
+              <button type="button"
                 class="mr-3 inline-flex items-center px-4 py-2 border border-gray-300 shadow-sm text-sm font-medium rounded-md text-gray-700 bg-white hover:bg-gray-50 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-indigo-500"
                 onclick="window.history.back()">
                 Cancel
               </button>
-              <%= form.submit "Submit Document", 
-                  data: { upload_target: "submit" },
+              <%= form.submit 'Submit Document',
                   class: "inline-flex items-center px-4 py-2 border border-transparent text-sm font-medium rounded-md shadow-sm text-white bg-indigo-600 hover:bg-indigo-700 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-indigo-500" %>
             </div>
           <% end %>

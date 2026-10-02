@@ -52,7 +52,7 @@ Server-rendered HTML goes through Turbo frames and streams. Authentication and a
 | [paper-application](../../app/javascript/controllers/forms/paper_application_controller.js) | Staff intake readiness, applicant verification, proof choices, upload progress |
 | [adult-picker](../../app/javascript/controllers/users/adult_picker_controller.js) / [guardian-picker](../../app/javascript/controllers/users/guardian_picker_controller.js) | Existing-person selection plus the eligibility and relationship context the server returns |
 | [applicant-type](../../app/javascript/controllers/users/applicant_type_controller.js) / [dependent-fields](../../app/javascript/controllers/forms/dependent_fields_controller.js) | Self/dependent branch switching and dependent contact choices |
-| [upload](../../app/javascript/controllers/ui/upload_controller.js) | Direct upload, progress, replacement, removal |
+| [document-upload](../../app/javascript/controllers/ui/document_upload_controller.js) | One document field: selection-time type and size checks, upload progress and cancel, the retained upload, removal |
 
 These coordinate by event, not by reference: `income-validation` dispatches `income-validation:validated` with `{ exceedsThreshold, income, threshold, householdSize }` and the gate recomputes.
 
@@ -69,7 +69,9 @@ The paper form uses Rails automatic direct uploads for its four documents. Norma
 
 Review choices use normal submit buttons, a rationale, and a short-lived `identity_review_receipt`. Rails locks and recomputes the facts at the write; changed or expired facts require a fresh review. Guardian quick-create posts through `admin-user-search`, receiving an HTML review fragment on refusal or the saved/selected guardian as JSON on success.
 
-[`document-proof-handler`](../../app/javascript/controllers/users/document_proof_handler_controller.js) displays saved paper uploads, replaces a reference only after a successful upload, and clears it on explicit removal or rejection. Failed or canceled replacements retain the prior upload. Proof actions are locked while an upload is pending; Rails owns the form-wide upload lifecycle. Native file inputs cannot be repopulated.
+Every document field — paper intake, portal proof resubmission, the vendor W-9, and admin certification upload — renders [`shared/_document_upload`](../../app/views/shared/_document_upload.html.erb) with the [`document-upload`](../../app/javascript/controllers/ui/document_upload_controller.js) controller. The file uploads when the form is submitted. Its type and size limits and refusal wording come from the purpose the model declares for the slot, the same ones [`UploadedDocument`](../../app/services/uploaded_document.rb) enforces. A retained upload rides in `<field>_signed_id` and stays in the submission even after a new upload finishes, because storage accepting a file is not the server accepting it: the server prefers the new upload and falls back to the retained one if it refuses the new one. Remove clears every reference the control owns, including the hidden inputs Rails adds for completed uploads, and a reference completed in an interrupted earlier submission is kept until a new upload of that field succeeds, then moves into `<field>_signed_id` so the server can still fall back to it. Native file inputs cannot be repopulated.
+
+[`document-proof-handler`](../../app/javascript/controllers/users/document_proof_handler_controller.js) owns the accept, upload-only, and reject decision around a field and clears the field when rejection is chosen. Decisions are locked while an upload is pending by canceling clicks, not by disabling: Rails submits the form before it fires `direct-uploads:end`, and a disabled radio would be left out of the submission. Rails owns the form-wide upload lifecycle.
 
 ## Password visibility
 
@@ -101,6 +103,6 @@ Jest on jsdom ([jest.config.js](../../jest.config.js)), with `@rails/request.js`
 yarn test test/javascript/controllers/final_submit_gate_controller_test.js
 ```
 
-[Request-service tests](../../test/javascript/services/rails_request_service_test.js) cover the three `perform()` outcomes; [upload](../../test/javascript/controllers/upload_controller_test.js) and [paper-form](../../test/javascript/controllers/paper_application_controller_test.js) tests cover the more stateful controllers.
+[Request-service tests](../../test/javascript/services/rails_request_service_test.js) cover the three `perform()` outcomes; [document-upload](../../test/javascript/controllers/document_upload_controller_test.js), [paper upload retry](../../test/javascript/controllers/paper_upload_retry_test.js), and [paper-form](../../test/javascript/controllers/paper_application_controller_test.js) tests cover the more stateful controllers.
 
 Native form submission, focus, layout, and Turbo frame replacement are not real under jsdom — those belong in system tests ([testing and debugging](testing_and_debugging_guide.md)).
