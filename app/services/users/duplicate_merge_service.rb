@@ -1,30 +1,26 @@
 # frozen_string_literal: true
 
 module Users
-  # Same-person merge of a duplicate constituent record into a canonical survivor.
+  # Merges a duplicate constituent into a canonical survivor after same-person confirmation.
   #
   # Contract:
-  # - Requires an admin actor, an open merge-eligible duplicate review case,
-  #   explicit same-person confirmation, a rationale, evidence/reason codes, and explicit
-  #   contact and delivery decisions. Exact shared values may arrive as agreement markers,
-  #   which are rechecked under the same locks before any mutation.
-  # - Locks the actor, both users, the case, its candidate row, and the complete
-  #   application and guardian/dependent relationship inventories (in that order);
-  #   preflights every blocker against the
-  #   requalified locked state; then performs all mutations with bang persistence inside a
-  #   single transaction and rolls back on failure.
-  # - Carries other open exact-pair post-import cases from the retiring record to the
-  #   survivor without deciding them. Cases outside that narrow contract still fail closed.
-  # - Retires (deactivates) the duplicate and points it at the canonical survivor; it is
-  #   never destroyed.
-  # - Emits exactly one +duplicate_user_merged+ audit event.
+  # - Requires an active admin, an open eligible case, confirmation, a rationale,
+  #   reason/evidence codes, and explicit contact and delivery choices.
+  #   Agreement markers must match the locked records before mutation.
+  # - Locks User participants by id, then cases and candidates, applications,
+  #   and guardian relationships. Revalidates locked state before mutation.
+  #   Pre-commit failures roll back the transaction.
+  # - Carries forward or supersedes other open exact-pair post-import cases
+  #   without a same/different-person decision. Other related cases involving the duplicate block the merge.
+  # - Deactivates the duplicate and records its survivor without deletion.
+  # - Emits exactly one +duplicate_user_merged+ audit event per successful merge.
   #
-  # Concept boundaries preserved:
-  # - Login identity: the canonical survivor keeps a real email if it was email-backed;
-  #   synthetic/effective fallback values never become stored contact truth.
-  # - Delivery route: chosen independently from login identity.
-  # - Auth artifacts (WebAuthn/TOTP/SMS credentials, reset/recovery state) are never
-  #   transferred; the canonical user's auth state is preserved and duplicate sessions expire.
+  # Identity and delivery boundaries:
+  # - An email-backed survivor keeps its real login email. Synthetic and effective
+  #   contact fallbacks do not become stored contact facts.
+  # - The delivery choice is independent of login identity.
+  # - WebAuthn/TOTP/SMS credentials and reset/recovery state do not transfer.
+  #   Canonical credentials remain on their record. Duplicate sessions expire.
   class DuplicateMergeService < BaseService
     class MergeError < StandardError; end
     class IntegrityInventoryChanged < MergeError; end
@@ -68,11 +64,9 @@ module Users
 
     private
 
-    # A relationship or related case can commit after the advisory participant scan but
-    # before the participant User locks are acquired. The locked inventory detects that
-    # race without taking a late, out-of-order User lock. Restart the whole transaction
-    # once so the newly committed participant is included in the canonical lock order.
-    # Persistent inventory churn still fails closed with the existing retryable message.
+    # A case or relationship can commit between the participant scan and the User locks.
+    # Retry the transaction once to include new participants in the lock order.
+    # Further inventory changes fail with a retryable error.
     def merge_with_integrity_inventory_retry!
       retries = 0
 
@@ -141,8 +135,8 @@ module Users
       nil
     end
 
-    # Defense in depth mirroring the controller's pair scoping: the pair must be the case
-    # subject plus one of its recorded candidates, never an off-UI candidate/candidate pair.
+    # Like the controller, require the case subject and one recorded candidate.
+    # A candidate/candidate pair is outside the merge contract.
     def subject_in_pair?
       [@canonical_user.id, @duplicate_user.id].include?(@duplicate_review_case.subject_user_id)
     end
@@ -153,9 +147,8 @@ module Users
       @duplicate_review_case.duplicate_review_case_candidates.pluck(:candidate_user_id).compact.include?(other_id)
     end
 
-    # PR4b's merge path accepts online-registration probable duplicates and the narrowly
-    # pair-scoped post-import reconciliation source. Staff-initiated
-    # support_claim/paper_intake/admin_create cases remain outside this contract.
+    # Only registration_soft_match and exact-pair post_import_reconciliation cases qualify.
+    # support_claim, paper_intake, and admin_create cases require separate resolution.
     def merge_eligible_source?
       MERGE_ELIGIBLE_SOURCES.include?(@duplicate_review_case.source)
     end
@@ -171,8 +164,7 @@ module Users
       'The post-import reconciliation pair no longer has the supported name-and-date-of-birth match'
     end
 
-    # The survivor must be a live, active record. Merging into a retired, inactive, or
-    # suspended account would corrupt merge chains or apply contact to a dead record.
+    # An inactive, suspended, or merged survivor cannot receive contact or extend a merge chain.
     def canonical_eligibility_error
       return 'The canonical survivor has already been merged into another record' if @canonical_user.merged?
       return 'The canonical survivor must be an active record (not inactive or suspended)' unless @canonical_user.public_login_active?
@@ -180,10 +172,8 @@ module Users
       nil
     end
 
-    # Both identities' active/retired status are requalified under lock, not just the
-    # canonical's: a suspended or already-inactive duplicate is a distinct admin condition
-    # (e.g. a fraud/security hold) that merging must not silently absorb or launder through
-    # retirement. Staff resolve that condition on its own terms before merging.
+    # Revalidate the duplicate under lock too. Inactive or suspended status can indicate
+    # an unresolved security hold that a merge must not absorb.
     def duplicate_eligibility_error
       return 'The duplicate record has already been merged' if @duplicate_user.merged?
       return 'The duplicate record must be an active record (not inactive or suspended) to merge' unless @duplicate_user.public_login_active?
@@ -191,12 +181,9 @@ module Users
       nil
     end
 
-    # Login identity invariant (both halves): if the duplicate is email-backed and the
-    # canonical is not, the wrong record was chosen as canonical -- the duplicate already
-    # carries the password/MFA the person authenticates with. And whenever the canonical
-    # *is* email-backed (whether or not the duplicate also is), its own email must survive;
-    # replacing it with the duplicate's would grant portal access under credentials the
-    # person never set, even though the canonical's password/MFA never move.
+    # Choose the email-backed record as canonical so its login email, password, and MFA stay together.
+    # An email-backed canonical must retain its own email, even if both records have email.
+    # The duplicate's email must not gain access through the canonical's credentials.
     def login_authority_error
       return 'The email-backed record must be chosen as canonical so its password and MFA survive the merge' if wrong_record_chosen_as_canonical?
       return "The canonical record's own login email must survive the merge; it cannot be replaced with the duplicate's email" if canonical_email_would_be_replaced?
@@ -220,10 +207,8 @@ module Users
       reason_code_error || duplicate_eligibility_error
     end
 
-    # Reason codes become immutable resolution metadata and audit evidence, so they are checked
-    # against the server-owned vocabulary here -- as a clean preflight failure the admin can act
-    # on -- rather than only at the model, where ResolutionService#resolve_case!-style update!
-    # calls would surface an unhandled RecordInvalid instead.
+    # Reason codes become immutable case metadata and audit evidence.
+    # Validate them before mutation to return specific preflight errors to the admin.
     def reason_code_error
       return "Too many reason/evidence codes (maximum #{DuplicateReviewCase::MAX_REASON_CODES})" if
         @reason_codes.length > DuplicateReviewCase::MAX_REASON_CODES
@@ -234,10 +219,8 @@ module Users
       "Unsupported reason/evidence code: #{unsupported.join(', ')}"
     end
 
-    # Each contact fact must be an explicit admin decision or a current exact agreement,
-    # never an inferred default. A missing or garbage value must block the merge rather
-    # than silently resolve to "canonical" and let the audit metadata misrepresent what
-    # the admin reviewed.
+    # Require explicit choices or current agreement so audit metadata reflects the admin's review.
+    # Missing or invalid values must not default to canonical.
     def contact_choice_error
       %i[email phone address].each do |field|
         source = @contact_choices[field].to_s.presence
@@ -249,9 +232,8 @@ module Users
       nil
     end
 
-    # Delivery remains independent from login identity (see the merge inventory). The
-    # form either records a choice between differing values or claims exact agreement;
-    # a missing or invalid value must not silently fall back to canonical.
+    # Delivery remains independent of login identity. Require an explicit choice or current
+    # agreement, with no default to canonical for missing or invalid values.
     def delivery_choice_error
       return 'An explicit delivery route choice or current agreement is required' if @delivery_choice.blank?
       return 'Invalid delivery route choice' unless CONTACT_SOURCES.include?(@delivery_choice)
@@ -259,9 +241,8 @@ module Users
       nil
     end
 
-    # A collapsed form row is a claim about both locked records, not permission to silently pick
-    # one. Recheck every such claim after the standard merge-integrity locks and fail before any
-    # contact capture, mutation, or audit if the page is stale or the marker was forged.
+    # A collapsed form row claims exact agreement between both records.
+    # After the locks, reject stale or forged agreement before contact capture, mutation, or audit.
     def agreement_recheck_error
       checks = {
         phone: final_phone_source,
@@ -287,7 +268,6 @@ module Users
       }.fetch(fact)
     end
 
-    # Blockers that depend on live, locked state.
     def live_preflight
       return 'Case is no longer open' unless @duplicate_review_case.open?
       return duplicate_eligibility_error if duplicate_eligibility_error
@@ -314,8 +294,7 @@ module Users
 
     # --- Contact resolution --------------------------------------------------
 
-    # Preflight's contact_choice_error already rejected blank/invalid values, so these
-    # always resolve an explicit admin choice by the time mutations run.
+    # contact_choice_error validates source choices before contact capture or mutation.
     def final_email_source
       @contact_choices[:email].to_s
     end
@@ -340,9 +319,8 @@ module Users
       final_address_source == 'duplicate' ? @duplicate_user : @canonical_user
     end
 
-    # Snapshot the surviving contact facts under lock, before the duplicate releases
-    # any moved email/phone, so applying them to the canonical record cannot read a
-    # value that was just nulled to satisfy the unique indexes.
+    # Capture selected contact values under lock before the duplicate clears its email and phone
+    # for the unique indexes. The canonical update must use this snapshot.
     def capture_final_contact!
       @captured_email = email_source_user.email
       @captured_phone = phone_source_user.phone
@@ -389,9 +367,7 @@ module Users
       !final_phone_real?
     end
 
-    # An email-backed record's login email must survive the merge. Whenever either the
-    # canonical or the retiring duplicate is an email-backed portal account, the surviving
-    # canonical must end with a real email; otherwise the person loses their login.
+    # If either record has email-backed portal access, the survivor needs a real email to preserve login access.
     def strands_portal_account?
       return false unless either_is_email_backed_portal?
 
@@ -406,11 +382,8 @@ module Users
       final_phone_real? && final_phone_type.blank?
     end
 
-    # Only a real telephone route may survive as the canonical's phone_type. The full
-    # phone_type enum also carries the legacy non-phone contact modes contact_email and
-    # contact_letter, which the merge form never offers -- accepting them would let a forged
-    # request store "reach this person by email" as the canonical's phone preference, which
-    # then renders as their preferred contact method in evaluator and trainer notifications.
+    # Exclude legacy contact_email and contact_letter values from phone_type, as the form does.
+    # These values describe other delivery routes. Notifications display phone_type as the preferred contact method.
     def phone_type_invalid?
       return false if final_phone_type.blank?
 
@@ -419,13 +392,10 @@ module Users
 
     # --- Mutations -----------------------------------------------------------
 
-    # Deterministic lock order (plan section 2): actor, canonical, and duplicate through
-    # base User ordered by id; then the selected case and its candidate row; then the
-    # complete application inventory owned or managed by either participant. Every online
-    # writer that must serialize with merge (portal submission/autosave, contact edits,
-    # secure-request issuance) locks User rows through the same
-    # +User.lock_for_merge_integrity!+ entry point, so this order can never deadlock against
-    # a hardened writer.
+    # Lock participants through +User.lock_for_merge_integrity!+ in ascending id order.
+    # Include the actor, merge pair, relationship neighbors, and related case participants.
+    # Then lock cases, candidates, applications, and guardian relationships.
+    # Portal submission/autosave, contact edits, and secure-request issuance share the User lock order.
     def lock_records!
       integrity_user_ids = [
         @actor.id,
@@ -489,9 +459,8 @@ module Users
       relationship_inventory_scope.pluck(:guardian_id, :dependent_id).flatten.uniq
     end
 
-    # A guardian merge can coalesce one of several relationships attached to the same dependent.
-    # Include every co-guardian for those dependents so contact-priority checks operate on the
-    # complete relationship set under the same User/relationship lock inventory.
+    # A guardian merge can coalesce relationships for the same dependent.
+    # Include all co-guardians so contact-priority checks use the complete locked relationship set.
     def relationship_inventory_scope
       participant_ids = [@canonical_user.id, @duplicate_user.id]
       affected_dependent_ids = GuardianRelationship.where(guardian_id: participant_ids).select(:dependent_id)
@@ -500,8 +469,8 @@ module Users
                           .or(GuardianRelationship.where(dependent_id: affected_dependent_ids))
     end
 
-    # Locks (without mutating) every application either participant owns or manages, so a
-    # concurrent portal writer touching that inventory blocks until this transaction ends.
+    # Lock owned and managed applications before conflict checks or transfer.
+    # Concurrent writers that need these locks wait until the transaction ends.
     def lock_application_inventory!
       participant_ids = [@canonical_user.id, @duplicate_user.id]
       @locked_applications = Application.where(user_id: participant_ids)
@@ -511,9 +480,8 @@ module Users
                                         .load
     end
 
-    # Every relationship whose endpoint can change is locked before the projection is
-    # derived. Relationship creation also locks both User endpoints first, so no new edge
-    # can be attached to either participant between this inventory read and retirement.
+    # Build the relationship projection from locked rows.
+    # +create_guardian_relationship+ locks both User endpoints first, so it waits until this merge ends.
     def lock_guardian_relationship_inventory!
       @locked_guardian_relationships = relationship_inventory_scope.order(:id).lock('FOR UPDATE').load
       @guardian_relationship_plan = DuplicateMergeRelationshipPlan.new(
@@ -523,10 +491,9 @@ module Users
       )
     end
 
-    # Related case/relationship writers lock their User participants first. If one committed
-    # between the advisory pre-scan and our User lock, the locked inventory can name a newly
-    # discovered participant. Acquiring that missing User lock now could violate ascending lock
-    # order, so fail closed and let a clean retry include the complete set from the start.
+    # Case and relationship writers lock their User participants first.
+    # A commit before our User locks can add a participant to the inventory.
+    # A late lock could violate ascending order. Retry with the complete participant set instead.
     def ensure_integrity_inventory_is_fully_locked!
       relationship_user_ids = @locked_guardian_relationships.flat_map do |relationship|
         [relationship.guardian_id, relationship.dependent_id]
@@ -543,9 +510,8 @@ module Users
       raise IntegrityInventoryChanged, 'Related records changed while the merge was being prepared; reload and try again'
     end
 
-    # A lock does not validate a stale decision (plan section 2): every authorization,
-    # role, and pair fact used by static_preflight is re-derived against the freshly locked
-    # rows, not the pre-lock instances the controller originally loaded.
+    # Locks alone do not validate stale decisions.
+    # Revalidate actor authority, constituent roles, pair membership, and survivor eligibility from the locked rows.
     def post_lock_identity_recheck
       return 'An admin actor is required' unless admin_actor?
       return 'Only constituent records can be merged' unless both_constituents?
@@ -553,17 +519,14 @@ module Users
       pair_membership_error || canonical_eligibility_error || login_authority_error
     end
 
-    # A retired identity retains no primary contact truth. Snapshotting happens before this
-    # mutation, so the selected survivor values are already safe to apply to the canonical
-    # row. Clearing every duplicate email/phone (not only values selected for transfer)
-    # releases uniqueness ownership, prevents public registration from treating the retired
-    # identity as an existing account, and invalidates password-reset tokens, whose purpose
-    # fingerprint covers the normalized login email and phone.
+    # Clear both duplicate contacts, including values that do not transfer, to release unique
+    # values and remove the retired record from public contact lookup.
+    # Selected values are safe in the snapshot from +capture_final_contact!+.
     #
-    # The same fingerprint is what revokes reset authority on the *canonical* survivor: this
-    # merge may replace its phone (or its delivery route), and a reset link already emailed or
-    # texted to a discarded contact must stop working. See +apply_canonical_contact!+ and
-    # UserAuthentication's :password_reset token block.
+    # UserAuthentication fingerprints normalized email and phone for :password_reset tokens.
+    # Contact removal invalidates duplicate tokens that include those contacts.
+    # A changed canonical phone invalidates tokens sent to the discarded number.
+    # A delivery-preference change alone does not change this fingerprint.
     def release_duplicate_contact!
       mark_duplicate_retiring!
       @duplicate_user.update!(email: nil, phone: nil, phone_type: nil)
@@ -604,12 +567,9 @@ module Users
       transfer_managed_applications!
     end
 
-    # FK-only repoint of the duplicate's owned applications, preserving each application's
-    # lifecycle status, history, and audit trail. A person cannot manage their own
-    # application, so if the canonical was the managing guardian of one of these apps,
-    # clear the guardian first: update_all skips managing_guardian_cannot_be_applicant,
-    # which would otherwise let a self-managed application persist silently. Scoped to the
-    # ids from the already-requalified locked inventory, not a fresh re-query.
+    # Transfer ownership from the locked inventory without changes to lifecycle status, history, or audit.
+    # update_all skips managing_guardian_cannot_be_applicant. Clear the canonical guardian first
+    # so an applicant cannot manage their own application.
     def transfer_owned_applications!
       ids = selected_application_ids
       @summary[:applications_transferred] = ids.size
@@ -621,9 +581,8 @@ module Users
       owned.update_all(user_id: @canonical_user.id, updated_at: Time.current) # rubocop:disable Rails/SkipsModelValidations
     end
 
-    # Repoint applications the duplicate manages as guardian. Apps already owned by the
-    # canonical would become self-managed, so drop the guardian on those instead of
-    # pointing it back at the applicant. Scoped to ids from the locked inventory.
+    # Transfer guardian management from the locked inventory.
+    # Clear the guardian on canonical-owned applications to prevent self-management.
     def transfer_managed_applications!
       managed = @locked_applications.select { |app| app.managing_guardian_id == @duplicate_user.id }
       self_managed_ids = managed.select { |app| app.user_id == @canonical_user.id }.map(&:id)
@@ -635,10 +594,8 @@ module Users
       Application.where(id: transferable_ids).update_all(managing_guardian_id: @canonical_user.id, updated_at: Time.current) if transferable_ids.any? # rubocop:disable Rails/SkipsModelValidations
     end
 
-    # A merge always transfers every application the duplicate owns. Partial transfer
-    # would leave applications stranded on a retired record and could dodge the
-    # active-application conflict check, so there is no selectable subset. Derived from the
-    # locked inventory rather than a fresh query.
+    # Transfer all duplicate-owned applications from the locked inventory.
+    # A partial transfer could strand applications on the retired record or evade the conflict check.
     def selected_application_ids
       @locked_applications.select { |app| app.user_id == @duplicate_user.id }.map(&:id)
     end
@@ -647,15 +604,9 @@ module Users
       @summary.merge!(@guardian_relationship_plan.apply!)
     end
 
-    # Same-person records that reference the duplicate directly (not through an
-    # application) must follow the person to the canonical survivor only where that
-    # doesn't rewrite history. Evaluations belong to an already-transferred application,
-    # so they must move with it or evaluation.constituent would drift from
-    # evaluation.application.user. Print queue items and notifications are historical
-    # delivery/communication records ("Events / notifications / audit: Historical
-    # records are preserved" per the merge inventory) and must not be repointed after
-    # the fact -- except a still-pending print queue item, which is undelivered work
-    # that needs an explicit, contactable owner going forward.
+    # Evaluations follow the transferred applications so evaluation.constituent matches evaluation.application.user.
+    # Print items and notifications retain their historical owners. Cancel unreleased print items
+    # because a new recipient requires a newly authorized artifact.
     def reconcile_person_references!
       @summary[:evaluations_transferred] =
         Evaluation.where(constituent_id: @duplicate_user.id)
@@ -686,9 +637,8 @@ module Users
       @summary.merge!(@related_case_reconciler.apply!)
     end
 
-    # The selected merge-eligible case records the identity decision. Other open exact-pair
-    # post-import cases may be carried forward or superseded, but never receive a same/different
-    # determination from this merge.
+    # Only the selected case receives the same-person decision.
+    # Other open exact-pair post-import cases can move or become superseded without a same/different determination.
     def resolve_selected_case!(audit_event)
       @duplicate_review_case.update!(
         status: :resolved_merged,
@@ -788,8 +738,7 @@ module Users
       end
     end
 
-    # Derived from the locked inventory (lock_application_inventory!) rather than a fresh
-    # query, so this decision reflects exactly the rows this transaction requalified.
+    # Use the locked inventory so conflict detection and application transfer cover the same rows.
     def application_conflict?
       canonical_blocking = @locked_applications.count { |app| app.user_id == @canonical_user.id && app.blocking_new_submission? }
       duplicate_blocking = @locked_applications.count { |app| app.user_id == @duplicate_user.id && app.blocking_new_submission? }

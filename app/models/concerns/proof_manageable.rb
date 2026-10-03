@@ -1,19 +1,8 @@
 # frozen_string_literal: true
 
-# ProofManageable provides proof document management capabilities for applications.
-#
-# This concern handles the core model-level responsibilities for income and residency
-# proof documents, including:
-# - ActiveStorage attachment definitions
-# - Basic validation of file types and sizes
-# - Status checking methods for proof approval states
-# - Model-level callbacks for proof state changes
-#
-# For complex operations like attachment processing, review workflows, and audit
-# trails, this concern delegates to dedicated services:
-# - ProofAttachmentService: Handles file uploads and audit trails
-# - Applications::ProofReviewer: Manages the review process
-# - ProofReviewService: Orchestrates proof reviews
+# Provides proof attachments, content type and size validation, required-attachment validation,
+# approval checks, and review timestamps.
+# Attachment and review services own their workflows.
 #
 # @example Basic usage
 #   application = Application.find(123)
@@ -26,41 +15,32 @@
 module ProofManageable
   extend ActiveSupport::Concern
 
-  # Allowed MIME types for proof documents (see ProofUploadFormats)
   ALLOWED_TYPES = ProofUploadFormats::ALLOWED_CONTENT_TYPES
 
-  # Valid proof types for the application
   PROOF_TYPES = %w[income residency].freeze
 
   included do
-    # ActiveStorage attachments for proof documents
     has_one_attached :income_proof
     has_one_attached :residency_proof
     has_many_attached :documents
 
-    # Core validations for proof documents
     validate :correct_proof_mime_type
     validate :proof_size_within_limit
     validate :require_proof_attachments, if: :require_proof_validations?
 
-    # Callbacks for proof state management
     after_save :set_needs_review_timestamp, if: :proof_attachments_changed?
   end
 
-  # Checks if all required proofs have been approved (delegates to Application predicate)
-  # @return [Boolean] true if all required proofs are approved
+  # Alias of Application#required_proofs_approved?.
   def all_proofs_approved?
     required_proofs_approved?
   end
 
-  # Checks if all currently required proofs for DCF request have been approved
-  # @return [Boolean] true if required proofs are approved
+  # Alias of Application#required_proofs_approved? for the DCF escalation trigger.
   def required_proofs_for_dcf_approved?
     required_proofs_approved?
   end
 
-  # Checks if the application can submit proof documents
-  # @return [Boolean] true if application is in a valid state for proof submission
   def can_submit_proof?
     !status_archived? && !status_approved?
   end
@@ -80,7 +60,7 @@ module ProofManageable
     public_send("#{proof_type}_proof_status_rejected?")
   end
 
-  # Updates proof status directly (for testing and admin operations)
+  # Writes the status with no review record or audit. Only tests call it now.
   # @param proof_type [String] The type of proof ('income' or 'residency')
   # @param status [String] The new status ('approved', 'rejected', 'not_reviewed')
   def update_proof_status!(proof_type, status)
@@ -88,14 +68,12 @@ module ProofManageable
     update!(status_attr => status)
   end
 
-  # Rejects a proof without requiring an attachment (used for paper applications)
-  # This is a model-level method that just updates the status - the service handles orchestration
+  # Records rejection status without a file. ProofAttachmentService owns rejection orchestration.
+  # Do not call ProofAttachmentService from here, because that service calls this method.
   def reject_proof_without_attachment!(proof_type, admin: nil, reason: 'other', notes: nil)
-    # Just update the proof status - avoid circular calls to ProofAttachmentService
     status_attr = "#{proof_type}_proof_status"
     update!(status_attr => :rejected)
 
-    # Log basic info about rejection (params used to avoid unused warnings)
     Rails.logger.info "Rejected #{proof_type} proof for app #{id} by #{admin&.id || 'system'} (#{reason})"
     Rails.logger.debug { "Rejection notes: #{notes}" } if notes.present?
 
@@ -103,16 +81,13 @@ module ProofManageable
   end
   # rubocop:enable Naming/PredicateMethod
 
-  # Purges all proof attachments (admin action)
-  # Delegates to ProofAttachmentService for consistency
-  # @param admin_user [User] The admin user performing the purge
-  # @return [Boolean] true if purge succeeded, false otherwise
+  # Purges all proof attachments. Resets only the income and residency statuses.
+  # @param admin_user [User] must be an admin
+  # @return [Boolean] false if the purge fails
   def purge_proofs(admin_user)
-    # This complex operation should be handled by a dedicated service
     # TODO: Create ProofPurgeService to handle this logic
     raise ArgumentError, 'Admin user required' unless admin_user&.admin?
 
-    # For now, simplified inline implementation
     transaction do
       income_proof.purge if income_proof.attached?
       residency_proof.purge if residency_proof.attached?
@@ -126,9 +101,7 @@ module ProofManageable
     false
   end
 
-  # Purges a specific rejected proof attachment
-  # Called by ProofReviewer after setting status to rejected
-  # @param proof_type_key [String] The type of proof to purge
+  # Applications::ProofReviewer calls this after it sets the rejected status.
   def purge_rejected_proof(proof_type_key)
     attachment_name = :"#{proof_type_key}_proof"
     attachment = public_send(attachment_name)
@@ -141,7 +114,7 @@ module ProofManageable
 
   private
 
-  # Validates that attached proofs have correct MIME types and size limits
+  # These validations check only blob metadata, on every validation of an attached proof.
   def correct_proof_mime_type
     ProofUploadFormats::PROOF_ATTACHMENT_TYPES.each do |proof_type|
       attachment = send("#{proof_type}_proof")
@@ -162,7 +135,7 @@ module ProofManageable
     end
   end
 
-  # Validates that required proofs are attached when needed
+  # A rejected proof can have no attachment until the constituent resubmits.
   def require_proof_attachments
     return if new_record? || status_draft?
 
@@ -175,8 +148,6 @@ module ProofManageable
     errors.add(:residency_proof, 'must be attached. Please upload your proof of Maryland residency.')
   end
 
-  # Determines if proof attachment validations should be required
-  # @return [Boolean] true if validations should run
   def require_proof_validations?
     return false if skip_validation_contexts?
     return false if new_record? || status_draft?
@@ -197,12 +168,9 @@ module ProofManageable
     saved_change_to_status? && status_before_last_save == 'draft'
   end
 
-  # Detects if proof attachments have changed
-  # @return [Boolean] true if attachments were recently changed
   def proof_attachments_changed?
     return false if new_record?
 
-    # Check for attachment changes using Rails' built-in detection
     if respond_to?(:attachment_changes) && attachment_changes.present?
       return (FeatureFlag.income_proof_required? && attachment_changes['income_proof'].present?) ||
              attachment_changes['residency_proof'].present? ||
@@ -212,7 +180,7 @@ module ProofManageable
     false
   end
 
-  # Sets the needs_review_since timestamp when proofs are attached
+  # update! runs after_save again. The flag stops that recursion.
   def set_needs_review_timestamp
     return if @setting_review_timestamp
     return if Current.proof_attachment_service_context?

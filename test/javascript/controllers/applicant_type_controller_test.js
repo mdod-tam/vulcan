@@ -1,6 +1,5 @@
 import ApplicantTypeController from "../../../app/javascript/controllers/users/applicant_type_controller"
 
-// Mock the visibility utility
 jest.mock('../../../app/javascript/utils/visibility', () => ({
   setVisible: jest.fn((element, visible, options = {}) => {
     if (visible) {
@@ -9,7 +8,6 @@ jest.mock('../../../app/javascript/utils/visibility', () => ({
       element.classList.add('hidden')
     }
 
-    // Handle required attribute for form fields
     if (options.required !== undefined) {
       if (options.required) {
         element.setAttribute('required', '')
@@ -20,7 +18,6 @@ jest.mock('../../../app/javascript/utils/visibility', () => ({
   })
 }))
 
-// Mock the debounce utility
 jest.mock('../../../app/javascript/utils/debounce', () => ({
   debounce: jest.fn((fn) => {
     const debouncedFn = fn
@@ -33,7 +30,6 @@ describe("ApplicantTypeController", () => {
   let controller, fixture
 
   beforeEach(() => {
-    // Set up DOM fixture with all required targets
     document.body.innerHTML = `
       <div id="test-container">
         <div id="radioSection">
@@ -78,17 +74,14 @@ describe("ApplicantTypeController", () => {
 
     fixture = document.querySelector('#test-container')
 
-    // Create controller instance directly
     controller = new ApplicantTypeController()
 
-    // Mock controller properties using Object.defineProperty
     Object.defineProperty(controller, 'element', {
       value: fixture,
       writable: false,
       configurable: true
     })
 
-    // Mock target properties
     Object.defineProperty(controller, 'radioTargets', {
       value: Array.from(fixture.querySelectorAll('input[type="radio"]')),
       writable: false,
@@ -137,7 +130,6 @@ describe("ApplicantTypeController", () => {
       configurable: true
     })
 
-    // Mock the has target methods
     Object.defineProperty(controller, 'hasRadioSectionTarget', {
       value: true,
       writable: false,
@@ -180,7 +172,6 @@ describe("ApplicantTypeController", () => {
       configurable: true
     })
 
-    // Mock outlet properties (initially no outlets)
     Object.defineProperty(controller, 'hasGuardianPickerOutlet', {
       get: () => false,
       configurable: true
@@ -197,10 +188,8 @@ describe("ApplicantTypeController", () => {
       configurable: true
     })
 
-    // Mock the dispatch method
     controller.dispatch = jest.fn()
 
-    // Call connect manually
     controller.connect()
   })
 
@@ -212,19 +201,16 @@ describe("ApplicantTypeController", () => {
     jest.clearAllMocks()
   })
 
-  // Helper function to mock the guardian picker outlet
   function createMockGuardianPickerOutlet(selectedValue = false) {
     const mockOutlet = {
       selectedValue: selectedValue
     }
 
-    // Mock the hasGuardianPickerOutlet getter
     Object.defineProperty(controller, 'hasGuardianPickerOutlet', {
       get: () => true,
       configurable: true
     })
 
-    // Mock the guardianPickerOutlet getter
     Object.defineProperty(controller, 'guardianPickerOutlet', {
       get: () => mockOutlet,
       configurable: true
@@ -248,10 +234,8 @@ describe("ApplicantTypeController", () => {
 
   describe("dependent section visibility logic", () => {
     it("shows dependent sections when dependent radio selected AND guardian chosen", () => {
-      // Mock guardian picker outlet with guardian selected
       createMockGuardianPickerOutlet(true)
 
-      // Ensure dependent radio is selected
       const dependentRadio = fixture.querySelector('#dependentRadio')
       dependentRadio.checked = true
 
@@ -262,10 +246,8 @@ describe("ApplicantTypeController", () => {
     })
 
     it("hides dependent sections when guardian NOT chosen", () => {
-      // Mock guardian picker outlet with no guardian selected
       createMockGuardianPickerOutlet(false)
 
-      // Ensure dependent radio is selected
       const dependentRadio = fixture.querySelector('#dependentRadio')
       dependentRadio.checked = true
 
@@ -276,10 +258,8 @@ describe("ApplicantTypeController", () => {
     })
 
     it("hides dependent sections when self radio selected", () => {
-      // Mock guardian picker outlet with guardian selected
       createMockGuardianPickerOutlet(true)
 
-      // Select self radio instead
       const selfRadio = fixture.querySelector('#selfRadio')
       const dependentRadio = fixture.querySelector('#dependentRadio')
       selfRadio.checked = true
@@ -316,7 +296,6 @@ describe("ApplicantTypeController", () => {
 
   describe("guardian picker events", () => {
     beforeEach(() => {
-      // Ensure dependent radio is selected
       const dependentRadio = fixture.querySelector('#dependentRadio')
       dependentRadio.checked = true
     })
@@ -324,7 +303,6 @@ describe("ApplicantTypeController", () => {
     it("responds to guardian picker selection change events", () => {
       const refreshSpy = jest.spyOn(controller, 'refresh')
 
-      // Simulate guardian picker selection change event
       const selectionChangeEvent = new CustomEvent('guardian-picker:selectionChange', {
         detail: { selectedValue: true }
       })
@@ -335,32 +313,26 @@ describe("ApplicantTypeController", () => {
     })
 
     it("shows dependent sections after guardian selection event", () => {
-      // Start with no guardian selected
       let mockOutlet = createMockGuardianPickerOutlet(false)
       controller.executeRefresh()
 
       let dependentSections = fixture.querySelector('#sectionsForDependentWithGuardian')
       expect(dependentSections.classList.contains('hidden')).toBe(true)
 
-      // Simulate guardian selection
       mockOutlet.selectedValue = true
 
-      // Simulate the selection change event
       const selectionChangeEvent = new CustomEvent('guardian-picker:selectionChange', {
         detail: { selectedValue: true }
       })
 
       controller.guardianPickerSelectionChange(selectionChangeEvent)
 
-      // Check that dependent sections are visible
       expect(dependentSections.classList.contains('hidden')).toBe(false)
     })
 
     it("dispatches applicantTypeChanged event when dependent sections become visible", () => {
-      // Mock guardian picker outlet with guardian selected
       createMockGuardianPickerOutlet(true)
 
-      // Clear previous dispatch calls
       controller.dispatch.mockClear()
 
       controller.executeRefresh()
@@ -426,7 +398,6 @@ describe("ApplicantTypeController", () => {
 
   describe("error handling", () => {
     it("handles missing targets gracefully", () => {
-      // Remove a target to simulate missing DOM element
       fixture.querySelector('#guardianSection').remove()
 
       expect(() => {
@@ -437,12 +408,10 @@ describe("ApplicantTypeController", () => {
     it("handles guardian picker outlet connection/disconnection", () => {
       const mockOutletInstance = { selectedValue: false }
 
-      // Test outlet connection
       expect(() => {
         controller.guardianPickerOutletConnected(mockOutletInstance, fixture)
       }).not.toThrow()
 
-      // Test outlet disconnection
       expect(() => {
         controller.guardianPickerOutletDisconnected(mockOutletInstance, fixture)
       }).not.toThrow()
@@ -454,12 +423,10 @@ describe("ApplicantTypeController", () => {
       const dependentRadio = fixture.querySelector('#dependentRadio')
       const selfRadio = fixture.querySelector('#selfRadio')
 
-      // Test dependent selected
       dependentRadio.checked = true
       selfRadio.checked = false
       expect(controller.isDependentRadioChecked()).toBe(true)
 
-      // Test self selected
       dependentRadio.checked = false
       selfRadio.checked = true
       expect(controller.isDependentRadioChecked()).toBe(false)

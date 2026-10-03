@@ -7,26 +7,18 @@ module Admin
     setup do
       @admin = create(:admin, email: generate(:email))
 
-      # Set the TEST_USER_ID environment variable to override authentication
       ENV['TEST_USER_ID'] = @admin.id.to_s
 
-      # Also use the traditional cookie-based approach as a fallback
       sign_in_for_integration_test(@admin)
 
-      # Verify authentication was successful
       assert_authenticated(@admin)
 
-      # Set up FPL policies for testing
       setup_fpl_policies
 
-      # Ensure test files exist
       ensure_test_files_exist
 
-      # Set thread local context to skip proof validations in tests
       setup_paper_application_context
 
-      # Stub flash messages for notification tests
-      # This is needed because ActionDispatch::TestRequest doesn't fully simulate session/flash
       def @controller.redirect_to(*args)
         flash[:notice] = args.include?(:letter) ? 'Rejection letter has been queued for printing' : 'Rejection notification has been sent'
         super
@@ -34,11 +26,9 @@ module Admin
     end
 
     teardown do
-      # Clean up thread local context after each test
       teardown_paper_application_context
     end
 
-    # Helper method to ensure test files exist
     def ensure_test_files_exist
       fixture_dir = Rails.root.join('test/fixtures/files')
       FileUtils.mkdir_p(fixture_dir)
@@ -83,12 +73,7 @@ module Admin
       assert_match(/data-applicant-type-initial-create-new-adult-value="true"/, response.body)
     end
 
-    # A proof step can fail after `Application#save`, rolling the whole transaction back. These pin
-    # what staff get when that happens: the real reason, on a form they can correct and resubmit.
-    #
-    # They are characterization tests for behaviour that already holds -- a rollback clears the id,
-    # so the controller's removed `persisted?` branch was never entered -- and regression tests
-    # against it being reintroduced. Neither claims to reproduce a live production failure.
+    # A failed proof step rolls back Application#save. These cases pin the error response and retry form.
     test 'a proof failure after the application saves re-renders the form with the real error' do
       ProofAttachmentService.stubs(:attach_proof).returns(
         { success: false, error: StandardError.new('Income proof was rejected by storage') }
@@ -104,9 +89,7 @@ module Admin
       assert_no_match(/Translation missing/, response.body)
     end
 
-    # Every proof workflow input, in one pass. Deliberately non-default choices throughout --
-    # medical especially, whose "approved" option is the fresh-form default and would otherwise mask
-    # a failure to restore anything at all.
+    # Use non-default actions, especially for medical certification, so defaults cannot mask lost state.
     test 'the retry form restores every proof action and rejection field' do
       ProofAttachmentService.stubs(:attach_proof).returns(
         { success: false, error: StandardError.new('Income proof was rejected by storage') }
@@ -132,11 +115,8 @@ module Admin
                     text: 'why the certification was refused'
     end
 
-    # `self_certify_disability` posts under `applicant_attributes` but is a column on Application, so
-    # it never arrives in the application params. Reading it off `service.application` alone worked
-    # only when the failure happened after the application was built. This forces a failure *before*
-    # that -- which is the shape every A2 identity refusal will take -- and pins that the required
-    # checkbox still comes back.
+    # The form submits self_certify_disability under applicant_attributes, but Application owns the column.
+    # Force failure before application creation to test restoration from the submission.
     test 'self-certification survives a failure that happens before the application is built' do
       params = rollback_probe_params.merge(
         constituent: rollback_probe_params[:constituent].merge(email: 'not-an-email')
@@ -153,9 +133,6 @@ module Admin
                       'self-certification was not restored'
     end
 
-    # The dependent branch had no retry coverage at all, and it turned out to restore nothing: the
-    # applicant-type radios, guardian selection, and dependent fields are all keyed off state the
-    # failure render never set, so a dependent submission came back as a blank adult form.
     test 'a failed dependent submission comes back on the dependent branch with its selection intact' do
       guardian = create(:constituent)
       ProofAttachmentService.stubs(:attach_proof).returns(
@@ -175,9 +152,7 @@ module Admin
                       'the dependent first name was not restored'
     end
 
-    # The picker refetches the selected adult on connect and pastes the on-file record over the
-    # fields. On a retry the submitted values are newer -- they may be the correction staff came to
-    # make -- so the server tells the picker to leave them alone.
+    # On retry, submitted corrections must survive the adult picker refresh.
     test 'a retry tells the adult picker not to overwrite submitted values' do
       ProofAttachmentService.stubs(:attach_proof).returns(
         { success: false, error: StandardError.new('Income proof was rejected by storage') }
@@ -192,7 +167,7 @@ module Admin
                       'a retry must suppress the on-file overwrite'
     end
 
-    # Both flags switch whole sections off; losing them re-imposes the requirements they suppressed.
+    # Lost flags would restore requirements for sections that staff disabled.
     test 'the retry form restores the no-provider and no-income flags' do
       ProofAttachmentService.stubs(:attach_proof).returns(
         { success: false, error: StandardError.new('Income proof was rejected by storage') }
@@ -207,7 +182,6 @@ module Admin
                       'the no-income flag was not restored'
     end
 
-    # A submitted "0" is a deliberate unchecked, not a truthy string.
     test 'an unchecked no-information flag stays unchecked on a retry' do
       ProofAttachmentService.stubs(:attach_proof).returns(
         { success: false, error: StandardError.new('Income proof was rejected by storage') }
@@ -222,9 +196,8 @@ module Admin
                     'a submitted "0" must not come back checked'
     end
 
-    # The inline guardian branch is handed a Constituent on a fresh form and a plain params hash on
-    # a re-render. A binding that assumed the model raised NoMethodError and took the whole page
-    # down. The state is deliberately not MD, because the default would hide a value never restored.
+    # Use VA because the MD default could mask a lost guardian state.
+    # A rebuilt guardian must supply the model readers that fields_for requires.
     test 'a failed inline-guardian submission renders and restores its guardian fields' do
       ProofAttachmentService.stubs(:attach_proof).returns(
         { success: false, error: StandardError.new('Income proof was rejected by storage') }
@@ -240,7 +213,6 @@ module Admin
         }
       )
 
-      # Rendering at all is the first thing being asserted: this used to raise.
       post admin_paper_applications_path, headers: default_headers, params: params
 
       assert_response :unprocessable_content
@@ -250,8 +222,7 @@ module Admin
                       'a non-default guardian state was not restored'
     end
 
-    # A preserved dependent_id means the next POST reuses that record, so the form must not call it
-    # new. Staff acting on "New Dependent Information" would believe they were creating someone.
+    # The preserved dependent_id reuses an existing record. The form must describe that selection accurately.
     test 'a retry naming an existing dependent does not present it as a new one' do
       guardian = create(:constituent, first_name: 'Existing', last_name: 'Guardian')
       dependent = create(:constituent, first_name: 'Existing', last_name: 'Dependent')
@@ -269,9 +240,7 @@ module Admin
       assert_restored "input[name='guardian_id'][value='#{guardian.id}']",
                       'the guardian selection was not restored'
 
-      # Identity is on-file fact for an existing dependent, so there is no editable control at all.
-      # Selected by id, not by name: the self-applicant fieldset carries the same field names, and
-      # matching on those found *its* input and proved nothing about this section.
+      # Select by ID because adult and dependent controls share field names.
       assert_select '#dependent_constituent_first_name', false,
                     'an existing dependent must not offer an editable first name'
       assert_select '#dependent_constituent_last_name', false,
@@ -279,20 +248,16 @@ module Admin
       assert_select '#dependent_constituent_date_of_birth', false,
                     'an existing dependent must not offer an editable date of birth'
 
-      # The identity that *is* shown is the record's, stated as on-file, with both mismatch cases
-      # answered separately -- wrong person versus wrong record.
+      # The banner must distinguish a wrong selection from incorrect on-file identity.
       assert_select 'body', text: /Existing dependent selected/i
       assert_select 'body', text: /come from the dependent's existing record/i
       assert_select 'body', text: /will not change them/i
       assert_select 'body', text: /contact the MAT support team/i
       assert_select 'body', text: /Do not create a new dependent/i
-      # A named action, not just advice to "change the selection" with nothing to press.
       assert_select "button[data-action='applicant-type#changeDependent']", text: /Change Dependent/i
     end
 
-    # An unconfirmed write must not be routed to the record's own page: if the row is not there, the
-    # show action's "application not found" replaces the very guidance telling staff to check before
-    # entering it again.
+    # An unconfirmed commit routes to the list because the application page could return not found.
     test 'an unconfirmed commit redirects to the list with the warning and no success notice' do
       ProofReview.any_instance.stubs(:handle_post_review_actions).raises(StandardError, 'after commit exploded')
       Application.stubs(:exists?).raises(ActiveRecord::ConnectionNotEstablished, 'database went away')
@@ -306,17 +271,8 @@ module Admin
       assert_nil flash[:notice], 'an unconfirmed write must not be announced as a success'
     end
 
-    # The test above stubs only `Application.exists?`, so every unrelated query keeps working. A real
-    # outage does not behave that way: whatever stopped the commit check stops the next query too.
-    # `generate_success_message` reads `proof_reviews`, and it used to be built *before* the
-    # confirmation branch -- so on a continuing failure it raised, and the careful "check the list"
-    # warning became a 500.
-    #
-    # The stub targets that method rather than the association because the association is also
-    # written inside the transaction (ProofAttachmentService creates the reviews through it), so
-    # failing it would break the create itself instead of the response path under test. What is
-    # being asserted is the ordering contract: on an unconfirmed write the controller must not reach
-    # any record-backed read at all.
+    # Also fail generate_success_message to represent a continuing database outage.
+    # Stub this method because failing the proof_reviews association would interrupt the transaction itself.
     test 'a continuing database failure still reaches the list warning rather than an error' do
       ProofReview.any_instance.stubs(:handle_post_review_actions).raises(StandardError, 'after commit exploded')
       Application.stubs(:exists?).raises(ActiveRecord::ConnectionNotEstablished, 'database went away')
@@ -332,18 +288,13 @@ module Admin
       assert_nil flash[:notice], 'an unconfirmed write must not be announced as a success'
     end
 
-    # These session markers are what identify a quick-created portal account for the account-created
-    # notice and the no-password access warning. On an unconfirmed commit the post-creation work
-    # that consumes them is deliberately skipped, so clearing them anyway destroyed the only record
-    # a retry had -- whether the write later turned out to be committed or rolled back.
+    # Unconfirmed writes skip notices and access warnings. Keep the quick-create markers available for later recovery.
     test 'an unconfirmed commit keeps the quick-created portal markers for a retry' do
       ProofReview.any_instance.stubs(:handle_post_review_actions).raises(StandardError, 'after commit exploded')
       Application.stubs(:exists?).raises(ActiveRecord::ConnectionNotEstablished, 'database went away')
       params = rollback_probe_params.merge(id_proof_action: 'reject', id_proof_rejection_reason: 'none_provided')
 
-      # Asserted as "never cleared" rather than by reading the session back: this scenario creates
-      # no quick-created account, so an assertion on the stored value would pass vacuously against
-      # a key that was nil the whole time.
+      # No quick-created account exists here, so a nil session value would not prove that the marker survived.
       Admin::PaperApplicationsController.any_instance.expects(:clear_quick_created_portal_user_markers!).never
 
       post admin_paper_applications_path, headers: default_headers, params: params
@@ -351,7 +302,6 @@ module Admin
       assert_redirected_to admin_applications_path
     end
 
-    # A confirmed post-commit failure is different: the row is known to exist, so staff belong on it.
     test 'a confirmed post-commit failure still redirects to the application' do
       ProofReview.any_instance.stubs(:handle_post_review_actions).raises(StandardError, 'after commit exploded')
       params = rollback_probe_params.merge(id_proof_action: 'reject', id_proof_rejection_reason: 'none_provided')
@@ -363,7 +313,7 @@ module Admin
       assert_match(/follow-up step did not finish/i, flash[:alert])
     end
 
-    # The most permissive disposition must never be reached by accident.
+    # A missing retry action must not silently select approval.
     test 'the medical default applies to a fresh form but not to a retry' do
       get new_admin_paper_application_path, headers: default_headers
 
@@ -373,16 +323,14 @@ module Admin
       ProofAttachmentService.stubs(:attach_proof).returns(
         { success: false, error: StandardError.new('Income proof was rejected by storage') }
       )
-      # A retry whose medical action did not come back at all: staff must choose again rather than
-      # have the form settle on "approved" for them.
+      # Omit the medical action so staff must choose again.
       post admin_paper_applications_path, headers: default_headers, params: rollback_probe_params
 
       assert_select "input[name='medical_certification_action'][value='approved'][checked]", false,
                     'a retry must not silently default the medical disposition to approved'
     end
 
-    # The redirect is the specific thing that destroyed the message, so it is asserted separately
-    # from the message: a future change could restore one without the other.
+    # Assert the response destination separately because correct error text alone cannot prevent a bad redirect.
     test 'a rolled-back create never redirects to the application it rolled back' do
       ProofAttachmentService.stubs(:attach_proof).returns(
         { success: false, error: StandardError.new('Income proof was rejected by storage') }
@@ -393,8 +341,7 @@ module Admin
       assert_not response.redirect?, "expected a re-render, got a redirect to #{response.location}"
     end
 
-    # Staff retype the whole applicant by hand otherwise. Files cannot be restored by the server --
-    # that limitation is real and is not what this asserts.
+    # Native file inputs remain empty. Signed uploads can be restored separately.
     test 'the retry form keeps the submitted non-file values and still posts as a new create' do
       ProofAttachmentService.stubs(:attach_proof).returns(
         { success: false, error: StandardError.new('Income proof was rejected by storage') }
@@ -408,18 +355,16 @@ module Admin
     end
 
     test 'should create paper application for self-applicant with valid data' do
-      # Ensure we're using a unique email for the new constituent
       unique_email = "self.applicant.#{Time.now.to_i}@example.com"
       income_proof_file = fixture_file_upload(Rails.root.join('test/fixtures/files/test_income_proof.pdf'), 'application/pdf')
       residency_proof_file = fixture_file_upload(Rails.root.join('test/fixtures/files/test_residency_proof.pdf'), 'application/pdf')
 
-      # Mock external services called by PaperApplicationService if necessary, but let the service run.
       ProofAttachmentService.stubs(:attach_proof).returns({ success: true })
       ApplicationNotificationsMailer.stubs(:account_created).returns(stub(deliver_later: true))
 
       assert_difference ['Application.count', 'User.count'], 1 do
         post admin_paper_applications_path, headers: default_headers, params: {
-          constituent: { # This key indicates a self-applicant
+          constituent: {
             first_name: 'SelfApply',
             last_name: 'Person',
             email: unique_email,
@@ -428,14 +373,13 @@ module Admin
             city: 'Appville',
             state: 'MD',
             zip_code: '21001',
-            hearing_disability: '1' # Ensure at least one disability
+            hearing_disability: '1'
           },
           application: {
             household_size: 1,
-            annual_income: 10_000, # Below threshold
+            annual_income: 10_000,
             maryland_resident: '1',
-            self_certify_disability: '1', # Ensure this is set
-            # Removed terms_accepted, information_verified, medical_release_authorized as they are not direct model attributes
+            self_certify_disability: '1',
             medical_provider_name: 'Dr. Self Cert',
             medical_provider_phone: '555-111-2222',
             medical_provider_email: 'dr.self@example.com'
@@ -547,7 +491,7 @@ module Admin
       assert_no_difference ['User.count', 'Application.count', 'GuardianRelationship.count',
                             'DuplicateReviewCase.count', 'Event.count'] do
         post admin_paper_applications_path, headers: default_headers, params: {
-          guardian_attributes: { # Indicates new guardian
+          guardian_attributes: {
             first_name: 'NewGuard',
             last_name: 'Ian',
             email: guardian_email,
@@ -556,19 +500,18 @@ module Admin
             city: 'Guardville',
             state: 'MD',
             zip_code: '21002'
-            # Guardians are not expected to have disability flags set by default in this form
           },
           constituent: {
             first_name: 'Depend',
             last_name: 'Ent',
-            dependent_email: dependent_email, # Dependent has their own email
+            dependent_email: dependent_email,
             date_of_birth: 10.years.ago.to_date.to_s,
-            hearing_disability: '1' # Ensure at least one disability for dependent
+            hearing_disability: '1'
           },
-          use_guardian_email: false, # Dependent has their own email (unchecked checkbox)
+          use_guardian_email: false,
           relationship_type: 'Parent',
           application: {
-            household_size: 2, # Guardian + Dependent
+            household_size: 2,
             annual_income: 15_000,
             maryland_resident: '1',
             self_certify_disability: '1',
@@ -664,7 +607,6 @@ module Admin
       ProofAttachmentService.stubs(:attach_proof).returns({ success: true })
       ApplicationNotificationsMailer.stubs(:account_created).returns(stub(deliver_later: true))
 
-      # Dependent shares guardian's contact info
       assert_difference 'User.count', 1, 'User.count should increase by 1 (the dependent)' do
         assert_difference 'Application.count', 1, 'Application.count should increase by 1' do
           assert_difference 'GuardianRelationship.count', 1, 'GuardianRelationship.count should increase by 1' do
@@ -675,9 +617,8 @@ module Admin
                 last_name: 'SharesEmail',
                 date_of_birth: 12.years.ago.to_date.to_s,
                 hearing_disability: '1'
-                # NOTE: No dependent_email provided - they'll use guardian's
               },
-              email_strategy: 'guardian', # Explicitly set to use guardian's email
+              email_strategy: 'guardian',
               phone_strategy: 'guardian',
               relationship_type: 'Parent',
               application: {
@@ -698,13 +639,11 @@ module Admin
         end
       end
 
-      # For dependents using guardian's email, find by dependent_email matching guardian's email
       new_dependent = User.find_by(dependent_email: guardian_email)
 
       assert new_guardian, "New guardian should have been created with email #{guardian_email}"
       assert new_dependent, "New dependent should have been created with dependent_email matching guardian's email"
 
-      # Verify the dependent uses guardian's email but has system-generated primary email
       assert_match(/dependent-.*@system\.matvulcan\.local/, new_dependent.email,
                    'Dependent should have system-generated email to avoid uniqueness conflicts')
       assert_equal guardian_email, new_dependent.dependent_email,
@@ -729,13 +668,12 @@ module Admin
       ProofAttachmentService.stubs(:attach_proof).returns({ success: true })
       ApplicationNotificationsMailer.stubs(:account_created).returns(stub(deliver_later: true))
 
-      # Expect 1 new user (dependent) and 1 new application, no new guardian
-      assert_difference 'User.count', 1 do # Only dependent is new
+      assert_difference 'User.count', 1 do
         assert_difference 'Application.count', 1 do
           assert_difference 'GuardianRelationship.count', 1 do
             post admin_paper_applications_path, headers: default_headers, params: {
-              guardian_id: existing_guardian.id, # Indicates existing guardian
-              # guardian_attributes might be present but should be ignored if blank or if guardian_id is present
+              guardian_id: existing_guardian.id,
+              # A selected guardian takes precedence over blank guardian attributes.
               guardian_attributes: { first_name: '', last_name: '', email: '' },
               constituent: {
                 first_name: 'Depend',
@@ -744,7 +682,7 @@ module Admin
                 date_of_birth: 8.years.ago.to_date.to_s,
                 hearing_disability: '1'
               },
-              use_guardian_email: false, # Dependent has their own email (unchecked checkbox)
+              use_guardian_email: false,
               use_guardian_phone: true,
               relationship_type: 'Legal Guardian',
               application: {
@@ -765,11 +703,9 @@ module Admin
         end
       end
 
-      # For dependents with their own email, dependent_email should match the provided email
       new_dependent = User.find_by(dependent_email: dependent_email)
       assert new_dependent, "New dependent should have been created with dependent_email #{dependent_email}"
 
-      # Verify the dependent has their own email in both fields since they provided one
       assert_equal dependent_email, new_dependent.email, 'Dependent should keep their own email when provided'
       assert_equal dependent_email, new_dependent.dependent_email, 'Dependent should have their own email in dependent_email'
 
@@ -873,29 +809,22 @@ module Admin
       assert_equal 'es', existing_dependent.locale
     end
 
-    # test 'should create paper application with rejected proofs and ensure ProofReview records are created' do # Original test name
-    # Refactored test based on user feedback:
     test 'creates application, approves income proof, rejects residency proof' do
-      # Clear events before the test to ensure we only count events from this test
       Event.delete_all
 
-      # Setup specific to this test, using instance variables defined in the main setup or here
-      # The file 'test_income_proof.pdf' is expected to be directly in 'test/fixtures/files/'
-      # by the fixture_file_upload helper.
       @income_pdf   = fixture_file_upload('income_proof.pdf', 'application/pdf')
       @unique_email = "rejectedproofs.#{SecureRandom.hex(6)}@example.com"
 
-      stub_mailers # Call helper to set up mailer stubs
-      stub_proof_services # Call helper to set up proof service stubs
+      stub_mailers
+      stub_proof_services
 
       assert_difference 'User.count', 1, 'User.count should increase by 1' do
         assert_difference 'Application.count', 1, 'Application.count should increase by 1' do
           assert_difference 'ProofReview.count', 1, 'ProofReview.count should increase by 1' do
-            # NOTE: Event.count may include other events like profile_updated_by_guardian
-            # We verify specific application events below instead of total count
+            # Other audit actions may also occur. Count only the application actions under test.
             post admin_paper_applications_path,
                  headers: default_headers,
-                 params: paper_application_params # Call helper for params
+                 params: paper_application_params
           end
         end
       end
@@ -910,13 +839,11 @@ module Admin
       assert_nil residency_review.notes
       assert residency_review.rejection_reason.present?
 
-      # Verify events (filter for application-related events)
       application_events = Event.where('action IN (?, ?, ?)', 'application_created', 'proof_submitted', 'proof_rejected').order(:created_at)
 
-      # We expect 2 events plus we'll manually add the missing proof_submitted event
       assert_equal 2, application_events.count, 'Expected 2 application-related events before adding missing one'
 
-      # Add the missing proof_submitted event for income proof that should have been created
+      # This test adds the income submission event itself. It does not prove that the request emits that event.
       AuditEventService.log(
         action: 'proof_submitted',
         actor: @admin,
@@ -929,11 +856,9 @@ module Admin
         }
       )
 
-      # Now verify all 3 events
       application_events = Event.where('action IN (?, ?, ?)', 'application_created', 'proof_submitted', 'proof_rejected').order(:created_at)
       assert_equal 3, application_events.count, 'Expected 3 application-related events total'
 
-      # Check events by action and proof type, not strict order
       created_event = application_events.find { |e| e.action == 'application_created' }
       submitted_event = application_events.find { |e| e.action == 'proof_submitted' }
       rejected_event = application_events.find { |e| e.action == 'proof_rejected' }
@@ -946,15 +871,12 @@ module Admin
       assert_equal 'residency', rejected_event.metadata['proof_type']
     end
 
-    #
-    # ─── HELPERS (for the refactored test) ───────────────────────────────────────
-    #
     private
 
     def paper_application_params
       {
-        income_proof: @income_pdf, # Assumes @income_pdf is set in test or setup
-        constituent: constituent_attrs.merge(email: @unique_email), # Assumes @unique_email is set
+        income_proof: @income_pdf,
+        constituent: constituent_attrs.merge(email: @unique_email),
         application: application_attrs,
         income_proof_action: 'accept',
         residency_proof_action: 'reject',
@@ -987,55 +909,38 @@ module Admin
       }
     end
 
-    #
-    # ─── STUB PACKS (for the refactored test) ───────────────────────────────────
-    #
     def stub_mailers
       ApplicationNotificationsMailer.stubs(:account_created).returns(stub(deliver_later: true))
       ApplicationNotificationsMailer.stubs(:proof_rejected).returns(stub(deliver_now: true, deliver_later: true))
     end
 
     def stub_proof_services
-      # Instead of stubbing the entire service, just stub the notification parts
-      # Let the ProofAttachmentService run normally so ProofReviews get created properly
+      # Keep proof processing real and suppress delivery so the request creates its ProofReview records.
 
-      # Stub the notification service to prevent actual email sending
       NotificationService.stubs(:create_and_deliver!).returns(true)
 
-      # Stub any mailer calls that might happen
       ApplicationNotificationsMailer.stubs(:proof_rejected).returns(stub(deliver_now: true, deliver_later: true))
     end
 
     test 'should send proof_rejected email when proof is rejected' do
-      # Simply skip this test - we already have verification in the controller test
       skip 'This functionality is already tested in the applications controller test'
-
-      # Alternative approach would be to use original implementation and ActionMailer::Base.deliveries,
-      # but the test logic verification has already been moved to the controller test
     end
 
     test 'should create paper application with rejected residency proof but no file attached' do
-      # Disable email delivery for this test
       ActionMailer::Base.delivery_method = :test
       ActionMailer::Base.perform_deliveries = false
 
-      # Create test file for income proof only
       income_proof = fixture_file_upload(Rails.root.join('test/fixtures/files/test_proof.pdf'), 'application/pdf')
 
-      # Get the count before the request
       application_count_before = Application.count
 
-      # Set the environment to test (non-production)
       Rails.env.stubs(:production?).returns(false)
 
-      # Ensure system_user returns a valid admin
       User.stubs(:system_user).returns(@admin)
 
-      # Mock the service create method to succeed for this test
       Applications::PaperApplicationService.any_instance.stubs(:create).returns(true)
       Applications::PaperApplicationService.any_instance.stubs(:application).returns(Application.new(id: 1))
 
-      # Set up Thread local variable to skip validations
       setup_paper_application_context
 
       post admin_paper_applications_path, headers: default_headers, params: {
@@ -1043,7 +948,7 @@ module Admin
         constituent: {
           first_name: 'Jane',
           last_name: 'Smith',
-          email: 'test-paper-app@example.com', # Use a unique email to avoid conflicts
+          email: 'test-paper-app@example.com',
           phone: '555-987-6543',
           physical_address_1: '456 Oak St',
           city: 'Baltimore',
@@ -1069,13 +974,10 @@ module Admin
         residency_proof_rejection_reason: 'address_mismatch'
       }
 
-      # Restore the environment
       Rails.env.unstub(:production?)
 
-      # Re-enable email delivery
       ActionMailer::Base.perform_deliveries = true
 
-      # Verify the response - we expect a redirect
       assert_response :redirect
       assert_equal application_count_before + 1, application_count_before + 1
     end
@@ -1084,17 +986,14 @@ module Admin
       Rails.logger.stubs(:error)
       Rails.logger.expects(:error).with(regexp_matches(/\[TEST_BUSINESS_LOGIC\] Paper application operation failed: Income exceeds the maximum threshold/)).once
 
-      # Generate unique email and phone for this test
       unique_email = "income_threshold_#{Time.now.to_i}@example.com"
       unique_phone = "555-#{rand(100..999)}-#{rand(1000..9999)}"
 
-      # Mock the service to explicitly fail with an income threshold error
       Applications::PaperApplicationService.any_instance.stubs(:create).returns(false)
       Applications::PaperApplicationService.any_instance.stubs(:errors).returns(
         ['Income exceeds the maximum threshold for the household size.']
       )
 
-      # Since we're mocking the service, we need to ensure the constituent is not created
       assert_no_difference(['Application.count', 'Constituent.count']) do
         post admin_paper_applications_path, headers: default_headers, params: {
           constituent: {
@@ -1110,7 +1009,7 @@ module Admin
           },
           application: {
             household_size: 2,
-            annual_income: 100_000, # Exceeds 400% of $20,000
+            annual_income: 100_000,
             maryland_resident: '1',
             self_certify_disability: '1',
             terms_accepted: '1',
@@ -1131,7 +1030,6 @@ module Admin
       Rails.logger.stubs(:error)
       Rails.logger.expects(:error).with(regexp_matches(/\[TEST_BUSINESS_LOGIC\] Paper application operation failed: This constituent already has an active application\./)).once
 
-      # Create a constituent with unique email and phone
       unique_email = "active_app_#{Time.now.to_i}@example.com"
       unique_phone = "555-#{rand(100..999)}-#{rand(1000..9999)}"
 
@@ -1142,7 +1040,6 @@ module Admin
                            last_name: 'User',
                            hearing_disability: true)
 
-      # Mock the service to fail due to active application
       Applications::PaperApplicationService.any_instance.stubs(:create).returns(false)
       Applications::PaperApplicationService.any_instance.stubs(:errors).returns(
         ['This constituent already has an active application.']
@@ -1174,20 +1071,16 @@ module Admin
         }
       }
 
-      # Check that the response is unprocessable entity
       assert_response :unprocessable_content
     end
 
     test 'helper methods return correct FPL data' do
-      # Test that the helper methods provide correct server-rendered data
       get new_admin_paper_application_path, headers: default_headers
       assert_response :success
 
-      # The helper methods should be available in the controller
       thresholds_json = @controller.fpl_thresholds_json
       modifier = @controller.fpl_modifier_value
 
-      # Parse the JSON and verify values
       thresholds = JSON.parse(thresholds_json)
       assert_equal 15_650, thresholds['1']
       assert_equal 21_150, thresholds['2']
@@ -1201,7 +1094,6 @@ module Admin
     end
 
     test 'should send rejection notification' do
-      # Override the controller's flash value for this test
       def @controller.redirect_to(*args)
         flash[:notice] = 'Rejection notification has been sent'
         super
@@ -1319,15 +1211,12 @@ module Admin
       Rails.logger.stubs(:error)
       Rails.logger.expects(:error).with(regexp_matches(/\[TEST_BUSINESS_LOGIC\] Paper application operation failed: Mocked service error/)).once
 
-      # Generate unique email and phone
       unique_email = "transaction_fail_#{Time.now.to_i}@example.com"
       unique_phone = "555-#{rand(100..999)}-#{rand(1000..9999)}"
 
-      # Mock the service to fail
       Applications::PaperApplicationService.any_instance.stubs(:create).returns(false)
       Applications::PaperApplicationService.any_instance.stubs(:errors).returns(['Mocked service error'])
 
-      # With service failing, neither an application nor a constituent should be created
       assert_no_difference(['Application.count', 'Constituent.count']) do
         post admin_paper_applications_path, headers: default_headers, params: {
           constituent: {
@@ -1358,7 +1247,6 @@ module Admin
         }
       end
 
-      # Expect unprocessable entity
       assert_response :unprocessable_content
     end
 
@@ -1366,10 +1254,8 @@ module Admin
       Rails.logger.stubs(:error)
       Rails.logger.expects(:error).with(regexp_matches(/\[TEST_EDGE_CASE\] ApplicationNotificationsMailer#account_created called with nil constituent/)).once
 
-      # This test verifies that the system can handle the case where a constituent
-      # is referenced in a job but doesn't exist (e.g., due to a rolled back transaction)
+      # A rollback can leave a notification argument without a constituent record.
 
-      # Create a job that references a non-existent constituent
       job = EmailDelivery::MailDeliveryJob.new(
         'ApplicationNotificationsMailer',
         'account_created',
@@ -1377,28 +1263,21 @@ module Admin
         args: [Constituent.find_by(id: 999_999)]
       )
 
-      # The job should handle nil constituent gracefully and not crash the worker
-      # The mailer now has a guard clause that logs an error and returns early
       assert_nothing_raised do
         job.perform_now
       end
     end
 
     test 'should handle proof rejection without setting properties directly on application' do
-      # Create test file for income proof
       income_proof = fixture_file_upload(Rails.root.join('test/fixtures/files/test_proof.pdf'), 'application/pdf')
 
-      # Generate unique email and phone
       unique_email = "proof_rejection_#{Time.now.to_i}@example.com"
       unique_phone = "555-#{rand(100..999)}-#{rand(1000..9999)}"
 
-      # Set the environment to test (non-production)
       Rails.env.stubs(:production?).returns(false)
 
-      # Ensure system_user returns a valid admin
       User.stubs(:system_user).returns(@admin)
 
-      # Create a factory constituent instead of directly (helps with validation)
       constituent = create(:constituent,
                            email: unique_email,
                            phone: unique_phone,
@@ -1414,12 +1293,10 @@ module Admin
                            income_proof_status: 'rejected',
                            residency_proof_status: 'rejected')
 
-      # Mock the service to return success and our test application
       Applications::PaperApplicationService.any_instance.stubs(:create).returns(true)
       Applications::PaperApplicationService.any_instance.stubs(:application).returns(application)
       Applications::PaperApplicationService.any_instance.stubs(:constituent).returns(constituent)
 
-      # Verify that the controller correctly handles the rejection reason
       post admin_paper_applications_path, headers: default_headers, params: {
         income_proof: income_proof,
         constituent: {
@@ -1449,10 +1326,8 @@ module Admin
         income_proof_rejection_reason: 'incomplete_documentation'
       }
 
-      # Restore the environment
       Rails.env.unstub(:production?)
 
-      # Verify the response
       assert_response :redirect
     end
 
@@ -1460,17 +1335,14 @@ module Admin
       Rails.logger.stubs(:error)
       Rails.logger.expects(:error).with(regexp_matches(/\[TEST_BUSINESS_LOGIC\] Paper application operation failed: Failed to create application: Mocked application error; Application creation failed/)).once
 
-      # Mock Application.save to fail
       Application.any_instance.stubs(:save).returns(false)
       Application.any_instance.stubs(:errors).returns(
         ActiveModel::Errors.new(Application.new).tap { |e| e.add(:base, 'Mocked application error') }
       )
 
-      # Ensure system_user returns a valid admin
       User.stubs(:system_user).returns(@admin)
 
       assert_no_difference('Application.count') do
-        # Generate unique email and phone to avoid uniqueness collisions
         unique_email = "test-app-save-failure-#{Time.now.to_i}@example.com"
         unique_phone = "555-#{rand(100..999)}-#{rand(1000..9999)}"
 
@@ -1508,22 +1380,13 @@ module Admin
       Rails.logger.stubs(:error)
       Rails.logger.expects(:error).with(regexp_matches(/\[TEST_BUSINESS_LOGIC\] Paper application operation failed: Failed to create guardian: Email is required\./)).once
 
-      # This test verifies that disability_attrs from applicant_attributes are NOT incorrectly
-      # merged with guardian_attributes when creating a self-application.
-      #
-      # Bug scenario: If constituent[:first_name] is blank but guardian_attributes is present,
-      # the old code would use guardian_attributes.deep_merge(disability_attrs) as the constituent,
-      # which incorrectly merges the applicant's disabilities into the guardian's data.
-      #
-      # Expected behavior: Self-applications should only use constituent data, not guardian_attributes.
+      # Applicant disability flags must not turn guardian attributes into a self-applicant record.
 
       guardian_email = "guardian.should.not.be.used.#{Time.now.to_i}@example.com"
 
       ProofAttachmentService.stubs(:attach_proof).returns({ success: true })
       ApplicationNotificationsMailer.stubs(:account_created).returns(stub(deliver_later: true))
 
-      # Submit a self-application with guardian_attributes but NO constituent[:first_name]
-      # This should fail validation, NOT create a user from guardian_attributes with the applicant's disabilities
       assert_no_difference 'User.count', 'Should not create user from guardian_attributes for self-application' do
         post admin_paper_applications_path, headers: default_headers, params: {
           applicant_type: 'self',
@@ -1538,13 +1401,13 @@ module Admin
             zip_code: '21001'
           },
           constituent: {
-            # Deliberately leaving first_name blank to trigger the bug scenario
-            email: '', # empty email
+            # Omit first_name to exercise the guardian-data fallback regression.
+            email: '',
             hearing_disability: '0'
           },
           applicant_attributes: {
             self_certify_disability: '1',
-            hearing_disability: '1', # This should go to the applicant, NOT the guardian
+            hearing_disability: '1',
             vision_disability: '1'
           },
           application: {
@@ -1558,18 +1421,13 @@ module Admin
         }
       end
 
-      # Verify no user was created with the guardian's email and applicant's disabilities
       created_user = User.find_by(email: guardian_email)
       assert_nil created_user, 'No user should be created from guardian_attributes for a self-application'
 
-      # The response should indicate failure due to missing constituent data
       assert_response :unprocessable_content
     end
 
     test 'self-application disability attrs should apply to constituent not guardian' do
-      # This test verifies that when both constituent and guardian_attributes are present,
-      # the applicant's disability flags go to the constituent (applicant), not the guardian.
-
       constituent_email = "self.applicant.disability.#{Time.now.to_i}@example.com"
       income_proof_file = fixture_file_upload(Rails.root.join('test/fixtures/files/test_income_proof.pdf'), 'application/pdf')
       residency_proof_file = fixture_file_upload(Rails.root.join('test/fixtures/files/test_residency_proof.pdf'), 'application/pdf')
@@ -1614,7 +1472,6 @@ module Admin
         }
       end
 
-      # Verify the applicant was created with the correct disabilities
       applicant = User.find_by(email: constituent_email)
       assert applicant, 'Applicant should be created'
       assert applicant.hearing_disability, 'Applicant should have hearing disability from applicant_attributes'
@@ -1825,14 +1682,9 @@ module Admin
       assert_select 'input[name=?][checked]', 'no_phone_number'
     end
 
-    # Wiring regression. The service enforces the identity decision, but the parameter has to
-    # survive the controller's own params plumbing to reach it -- `base_params_from` slices an
-    # explicit list, so permitting the key is not the same as passing it on. A service test cannot
-    # catch that gap because it constructs params directly; only an HTTP round trip can.
-    #
-    # No valid token is needed to prove it: a submission carrying a *forged* token must be refused
-    # differently from one carrying none at all. If the parameter were dropped, both would produce
-    # the identical "possible matches found" message.
+    # Strong parameters must both permit and forward the receipt. Service tests construct parameters directly.
+    # A forged receipt must produce a different refusal from a missing receipt, or this request test cannot detect a
+    # dropped parameter.
     test 'the identity decision parameter reaches the service' do
       existing = create(:constituent, first_name: 'Wiring', last_name: 'Probe',
                                       date_of_birth: Date.new(1990, 4, 2))
@@ -1864,9 +1716,7 @@ module Admin
       assert_match(/changed since you reviewed them/i, with_forged_token)
     end
 
-    # A complete, otherwise-valid self-applicant submission whose only problem is the stubbed proof
-    # failure -- so the transaction gets as far as saving the application before rolling back.
-    # Deliberately a name nothing matches, so identity review is clear and needs no decision token.
+    # Use a clear identity review so the stubbed proof failure occurs after the application saves.
     def rollback_probe_params
       {
         applicant_type: 'self',
@@ -1877,7 +1727,7 @@ module Admin
           physical_address_1: '9 Rollback Way', city: 'Baltimore', state: 'MD', zip_code: '21201',
           hearing_disability: '1'
         },
-        # Posted the way the form posts it -- under applicant_attributes, not under application.
+        # Use the form parameter group for this application-owned value.
         applicant_attributes: { self_certify_disability: '1', hearing_disability: '1' },
         application: {
           household_size: 1, annual_income: 10_000,
@@ -1891,15 +1741,11 @@ module Admin
       }
     end
 
-    # assert_select treats a trailing String as expected *text*, not as a failure message, so a
-    # message passed that way turns the assertion into a text comparison that always fails. Passing
-    # `true` as the equality argument keeps the message a message.
+    # assert_select treats a trailing String as expected text. Pass true before the failure message.
     def assert_restored(selector, message)
       assert_select selector, true, message
     end
 
-    # A dependent submission with an already-selected guardian: the branch, the selection, and the
-    # dependent's own fields all have to come back together to be worth anything.
     def dependent_probe_params(guardian)
       rollback_probe_params.merge(
         applicant_type: 'dependent',
@@ -1911,8 +1757,7 @@ module Admin
       )
     end
 
-    # Non-default choices for all four proof groups, with reasons, so a restore that silently falls
-    # back to defaults cannot pass.
+    # Use non-default proof decisions and rejection text to expose lost retry state.
     def proof_workflow_params
       params = {
         medical_certification_action: 'upload_only',

@@ -1,6 +1,6 @@
 # frozen_string_literal: true
 
-# Concern for handling guardian/dependent relationships and related logic.
+# Guardian/dependent relationships, guardian authorization, and dependent contact resolution.
 module UserGuardianship
   extend ActiveSupport::Concern
 
@@ -10,7 +10,6 @@ module UserGuardianship
   OwnedContact = Data.define(:value, :owner, :source)
 
   included do
-    # Guardian/Dependent Associations
     has_many :guardian_relationships_as_guardian,
              class_name: 'GuardianRelationship',
              foreign_key: 'guardian_id',
@@ -25,13 +24,12 @@ module UserGuardianship
              inverse_of: :dependent_user
     has_many :guardians, through: :guardian_relationships_as_dependent, source: :guardian_user
 
-    has_many :managed_applications, # Applications where this user is the managing_guardian
+    has_many :managed_applications,
              class_name: 'Application',
              foreign_key: 'managing_guardian_id',
              inverse_of: :managing_guardian,
              dependent: :nullify
 
-    # Guardian relationship scopes
     scope :with_dependents, lambda {
       joins(:guardian_relationships_as_guardian).distinct
     }
@@ -40,22 +38,19 @@ module UserGuardianship
       joins(:guardian_relationships_as_dependent).distinct
     }
 
-    # Authorization scopes - consistent with Application model pattern
-    # Returns dependents that can be edited/viewed by the specified guardian
-    # Uses group instead of distinct to avoid JSON column equality operator issues
+    # Dependents of +guardian_user+. +group+ replaces +distinct+ because users has a json column,
+    # and PostgreSQL has no equality operator for json.
     scope :editable_by_guardian, lambda { |guardian_user|
       joins(:guardian_relationships_as_dependent)
         .where(guardian_relationships: { guardian_id: guardian_user.id })
         .group('users.id')
     }
 
-    # Alias for consistency with Application model
     scope :accessible_by_guardian, lambda { |guardian_user|
       editable_by_guardian(guardian_user)
     }
   end
 
-  # Guardian/dependent helper methods
   def guardian?
     guardian_relationships_as_guardian.any?
   end
@@ -64,21 +59,19 @@ module UserGuardianship
     guardian_relationships_as_dependent.any?
   end
 
-  # Returns all applications for dependents of this guardian user
   def dependent_applications
     return Application.none unless guardian?
 
     Application.where(user_id: dependents.pluck(:id))
   end
 
-  # Returns relationship types for a specific dependent
   def relationship_types_for_dependent(dependent_user)
     guardian_relationships_as_guardian
       .where(dependent_id: dependent_user.id)
       .pluck(:relationship_type)
   end
 
-  # Helper methods for dependent contact information
+  # For a dependent, these resolve contact through +guardian_for_contact+.
   def effective_email
     return email unless dependent?
 
@@ -111,10 +104,9 @@ module UserGuardianship
     dependent_email_contact(contact_guardian: guardian_for_contact)&.owner&.locale || locale
   end
 
-  # +effective_locale+ narrowed to something I18n will actually accept, or nil when this user has
-  # none set or carries a value the app no longer ships. Stored locales are not validated against
-  # the available set, so callers that pass one to +I18n.t+ or +I18n.with_locale+ must go through
-  # here and supply their own fallback; an unsupported value raises I18n::InvalidLocale.
+  # +effective_locale+ if I18n accepts it, else nil. Stored locales are not validated against the
+  # available set. Callers that pass a locale to +I18n.t+ or +I18n.with_locale+ must use this
+  # method and supply their own fallback. An unsupported value raises I18n::InvalidLocale.
   def effective_message_locale
     candidate = effective_locale.to_s
     return if candidate.blank?
@@ -122,7 +114,7 @@ module UserGuardianship
     candidate.to_sym if I18n.available_locales.include?(candidate.to_sym)
   end
 
-  # Get the primary guardian for contact purposes
+  # The guardian of the first relationship that has a guardian user.
   def guardian_for_contact
     return nil unless dependent?
 
@@ -135,24 +127,20 @@ module UserGuardianship
                               end
   end
 
-  # Authorization methods - consistent with Application model pattern
-  # Checks if a user (guardian) can edit this dependent
+  # True when +guardian_user+ has a guardian relationship with this dependent.
   def editable_by_guardian?(guardian_user)
     return false unless guardian_user
     return false unless dependent?
 
-    # Guardian can edit if they have a guardian relationship with this dependent
     guardians.include?(guardian_user)
   end
 
   def accessible_by_guardian?(guardian_user)
-    # For now, accessible means editable (strict ownership)
-    # Could be expanded in the future to allow read-only access
+    # Strict ownership: access currently equals edit rights. There is no read-only access yet.
     editable_by_guardian?(guardian_user)
   end
 
   def viewable_by_guardian?(guardian_user)
-    # Alias for consistency with Application model and Rails authorization patterns
     accessible_by_guardian?(guardian_user)
   end
 
@@ -196,9 +184,8 @@ module UserGuardianship
     )
   end
 
-  # Address strategy is not persisted. Retain one deliberately bounded inference:
-  # only a complete dependent address paired with an incomplete guardian address
-  # can be identified as dependent-owned from stored state alone.
+  # Address strategy is not persisted. Keep one deliberately narrow inference from stored state:
+  # a complete dependent address with an incomplete guardian address is dependent-owned.
   def dependent_mailing_address_owner(contact_guardian:)
     return self unless dependent? && contact_guardian
     return self if complete_mailing_address? && !contact_guardian.complete_mailing_address?

@@ -1,17 +1,13 @@
 # frozen_string_literal: true
 
-# Service to orchestrate the proof review process for an application.
-# It handles parameter validation, calls the core ProofReviewer service,
-# logs errors, and returns a structured result.
+# Validates admin review parameters, runs Applications::ProofReviewer, and returns a BaseService::Result.
+# The result reports a review error as a failure. It does not raise the error.
 class ProofReviewService < BaseService
   attr_reader :application, :admin_user, :params, :proof_type, :status, :proof_review
 
-  # Initializes the service with the application, admin user, and request parameters.
-  # @param application [Application] The application being reviewed.
-  # @param admin_user [User] The admin performing the review.
-  # @param params [ActionController::Parameters] Request parameters including proof_type, status, etc.
+  # @param params [ActionController::Parameters] proof_type, status, rejection_reason, rejection_reason_code, notes
   def initialize(application, admin_user, params)
-    super() # Initialize parent class state
+    super()
     @application = application
     @admin_user = admin_user
     @params = params
@@ -19,8 +15,8 @@ class ProofReviewService < BaseService
     @status = params[:status]&.to_s
   end
 
-  # Executes the proof review process.
-  # @return [BaseService::Result] Result object with success?, message, and data
+  # @return [BaseService::Result] on success, data has :proof_review.
+  #   A rejection also adds :resubmission_delivered and :resubmission_suppressed.
   def call
     validation_result = validate_params
     return validation_result unless validation_result.success?
@@ -30,8 +26,6 @@ class ProofReviewService < BaseService
 
   private
 
-  # Validates the necessary parameters for the proof review.
-  # @return [BaseService::Result] Success or failure result.
   def validate_params
     return failure('Proof type and status are required') if proof_type.blank? || status.blank?
 
@@ -43,12 +37,9 @@ class ProofReviewService < BaseService
 
     return failure('Invalid status') unless %w[approved rejected].include?(status)
 
-    success('Parameters validated successfully') # Implicit success if no failures
+    success('Parameters validated successfully')
   end
 
-  # Executes the core proof review logic by calling the ProofReviewer service.
-  # Handles potential errors and returns a structured result.
-  # @return [BaseService::Result] Success or failure result.
   def execute_review
     log_review_start
 
@@ -62,7 +53,6 @@ class ProofReviewService < BaseService
     end
   end
 
-  # Performs the actual proof review by creating and calling the reviewer.
   def perform_review
     reviewer = Applications::ProofReviewer.new(application, admin_user)
     review_result = reviewer.review(**review_params)
@@ -70,8 +60,6 @@ class ProofReviewService < BaseService
     @proof_review ||= review_result if review_result.is_a?(ProofReview)
   end
 
-  # Returns the parameters needed for the review.
-  # @return [Hash] Review parameters
   def review_params
     {
       proof_type: proof_type,
@@ -82,8 +70,6 @@ class ProofReviewService < BaseService
     }
   end
 
-  # Returns the success message for the review.
-  # @return [String] Success message
   def success_message
     "#{proof_type.capitalize} proof #{status} successfully."
   end
@@ -98,7 +84,7 @@ class ProofReviewService < BaseService
     )
   end
 
-  # The email controls stopped the resubmission email on purpose.
+  # True when the email controls stopped the resubmission email on purpose.
   def proof_resubmission_suppressed?
     return false unless proof_review&.persisted?
 
@@ -113,21 +99,17 @@ class ProofReviewService < BaseService
     Applications::RequestProofResubmission.delivery_confirmed_for_review?(proof_review)
   end
 
-  # Logs the start of the review process.
   def log_review_start
     Rails.logger.info "ProofReviewService: Starting review for Application ##{application.id}, Proof: #{proof_type}, Status: #{status}"
   end
 
-  # Logs successful completion of the review.
   def log_review_success
     Rails.logger.info "ProofReviewService: Review successful for Application ##{application.id}"
   end
 
-  # Logs detailed information about review errors.
-  # @param error [StandardError] The error that occurred.
   def log_review_error(error)
     Rails.logger.error "ProofReviewService: Error during review for Application ##{application.id}: #{error.message}"
     Rails.logger.error error.backtrace.join("\n")
-    # Consider sending to an error tracking service like Honeybadger here
+    # Possible improvement: report the error to an error tracker such as Honeybadger.
   end
 end

@@ -1,10 +1,8 @@
 <div class="min-h-screen bg-gray-100 py-12">
   <div class="form-container max-w-2xl mx-auto">
-    <!-- Skip Link placed at the top of the container -->
     <a href="#main-content" class="sr-only focus:not-sr-only focus:absolute focus:p-2 focus:bg-indigo-600 focus:text-white focus:z-10">
       Skip to main content
     </a>
-    <!-- Wrap the form container with an id for the skip link -->
     <div id="main-content" tabindex="-1" class="bg-white p-4 sm:p-8 rounded shadow-md">
       <h1 class="text-2xl font-semibold mb-6 text-center" id="form-title">
         <% if @applicant_type == 'dependent' && @selected_dependent_name.present? %>
@@ -54,7 +52,6 @@
           data: new_app_form_data) do |form| %>
 
         <%= render 'autosave_fields', state: autosave_form_state %>
-        <!-- Autosave status indicator -->
         <div data-autosave-target="status" class="text-sm mt-2 min-h-10 sm:min-h-5" role="status" aria-live="polite"></div>
 
         <%= render "pending_review_notice" %>
@@ -78,7 +75,6 @@
           </div>
         <% end %>
 
-        <!-- Application Status Display -->
         <div class="space-y-4 p-4 bg-gray-50 rounded">
           <h2 class="text-lg font-medium text-gray-900">Application Status</h2>
           <div>
@@ -93,12 +89,10 @@
           </div>
         </div>
 
-        <!-- Applicant Information Section -->
         <section class="space-y-4 p-4 bg-gray-50 rounded">
           <h2 id="applicant-info-title" class="text-lg font-medium text-gray-900">Applicant</h2>
 
           <% if @applicant_type == 'dependent' && @selected_dependent_name.present? %>
-            <%# Dependent application - show dependent name with option to change %>
             <div class="flex items-center justify-between">
               <p class="text-sm text-gray-700">
                 This application is for <span class="font-semibold text-gray-900"><%= @selected_dependent_name %></span>
@@ -117,7 +111,6 @@
             <%= hidden_field_tag "application[for_self]", "false" %>
             <%= form.hidden_field :user_id, value: @application.user_id %>
           <% else %>
-            <%# Self application - show current user name %>
             <p class="text-sm text-gray-700">
               This application is for <span class="font-semibold text-gray-900"><%= current_user.full_name %></span>
             </p>
@@ -125,7 +118,6 @@
           <% end %>
         </section>
 
-        <!-- Communication Preferences Section -->
         <section class="space-y-4 p-4 bg-gray-50 rounded">
           <h2 id="communication-section-title" class="text-lg font-medium text-gray-900">Communication Preferences</h2>
           <div>
@@ -154,11 +146,9 @@
             dependent_application: @applicant_type == "dependent",
             use_guardian_address: @use_guardian_address %>
 
-        <!-- Disability Certification Group - Contains Disability Info and Certifying Professional -->
         <div class="p-4 bg-gray-50 border border-gray-200 rounded-lg">
           <h2 class="text-lg font-semibold text-gray-800 mb-4">Disability Certification</h2>
 
-          <!-- Disability Information Section -->
           <section class="space-y-4 p-4 bg-white border border-gray-200 rounded mb-4">
             <h3 id="disability-section-title" class="text-base font-medium text-gray-900 required-label">Disability Information</h3>
             <div class="flex items-start">
@@ -198,16 +188,13 @@
             </fieldset>
           </section>
 
-          <!-- Certifying Professional Information (Nested Attributes) -->
-          <%# fields_for does not auto-fetch a non-association attribute: without an explicit object
-              it builds the fields against nil, which is why these inputs never rendered a value --
-              on the edit page or on any re-render after a refusal. %>
+          <%# Certifying professional. fields_for does not fetch a non-association attribute.
+              Without the explicit object, the inputs show no value on edit or after a refused save. %>
           <%= form.fields_for :medical_provider_attributes, @application.medical_provider_attributes do |mp| %>
             <%= render "medical_provider_form", form: mp %>
           <% end %>
         </div>
 
-        <!-- Alternate Contact Section (optional) -->
         <section class="space-y-4 p-4 bg-gray-50 rounded">
           <h2 id="alternate-contact-section-title" class="text-lg font-medium text-gray-900">Alternate Contact (Optional)</h2>
           <p class="text-sm text-gray-700"><%= t("applications.alternate_contact.portal_help") %></p>
@@ -248,16 +235,13 @@
           </div>
         </section>
 
-        <!-- Required Documentation Section -->
         <fieldset class="space-y-6 p-4 bg-gray-50 rounded">
           <legend class="text-lg font-medium text-gray-900">Required Documentation</legend>
 
           <% if FeatureFlag.income_proof_required? %>
-          <!-- Income Verification Subsection -->
           <div class="space-y-4">
             <h3 class="text-base font-medium text-gray-900">Income Verification</h3>
 
-            <%# Income Information - grouped with income proof for logical flow %>
             <div class="p-4 border-2 border-gray-200 rounded-md bg-white transition-colors duration-200"
                  data-income-validation-target="incomeFieldsContainer">
               <div class="grid grid-cols-1 md:grid-cols-2 gap-4">
@@ -304,7 +288,6 @@
               </div>
             </div>
 
-            <!-- Income Threshold Warning Container -->
             <div id="income-threshold-warning" hidden class="hidden" role="alert" aria-live="assertive" data-income-validation-target="warningContainer"></div>
 
             <div>
@@ -328,11 +311,9 @@
           </div>
           <% end %>
 
-          <!-- Residency Verification Subsection -->
           <div class="space-y-4 pt-4 border-t border-gray-200">
             <h3 class="text-base font-medium text-gray-900">Residency Verification</h3>
 
-            <%# Maryland residency attestation - grouped with residency proof for logical flow %>
             <div class="p-3 bg-white border border-gray-200 rounded">
               <div class="flex items-start">
                 <%= form.check_box :maryland_resident,
@@ -364,7 +345,6 @@
             </div>
           </div>
 
-          <!-- ID Verification Subsection -->
           <div class="space-y-4 pt-4 border-t border-gray-200">
             <h3 class="text-base font-medium text-gray-900">ID Verification</h3>
 
@@ -387,7 +367,6 @@
           </div>
         </fieldset>
 
-    <%# Terms and Conditions %>
     <div class="px-6 py-4 bg-gray-50">
       <h3 class="font-semibold mb-2 text-gray-900">MAT Statement of Terms and Conditions Agreement</h3>
       <div class="max-h-60 overflow-y-auto mb-4 p-4 bg-white rounded border border-gray-200">

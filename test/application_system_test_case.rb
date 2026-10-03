@@ -12,36 +12,20 @@ rescue LoadError
   # Blank screenshot detection is skipped when the PNG parser is unavailable.
 end
 
-# --------------------------------------------------------------------------
-# SECTION 1: CAPYBARA DRIVER REGISTRATION
-# --------------------------------------------------------------------------
-# This is the single, authoritative place where the driver is
-# registered and configured.
-# --------------------------------------------------------------------------
-
-# --------------------------------------------------------------------------
-# SECTION 2: GLOBAL CAPYBARA CONFIGURATION
-# --------------------------------------------------------------------------
-# This block sets the global configuration for Capybara itself.
-# --------------------------------------------------------------------------
+# Global Capybara configuration
 Capybara.configure do |config|
   config.default_driver = :cuprite
   config.javascript_driver = :cuprite
-  config.default_max_wait_time = 10 # Default time Capybara waits for elements
+  config.default_max_wait_time = 10
   config.server = :puma, { Silent: true }
-  config.server_host = '127.0.0.1' # Use localhost instead of 0.0.0.0
-  # Use dynamic port allocation for parallel testing (avoids port conflicts)
-  config.server_port = nil # Let Capybara choose available ports
+  config.server_host = '127.0.0.1'
+  # Dynamic ports avoid conflicts between parallel workers.
+  config.server_port = nil
   config.save_path = Rails.root.join('tmp/capybara')
-  config.disable_animation = true # Speeds up tests
+  config.disable_animation = true
   config.enable_aria_label = true
-  # Prefer Capybara defaults; avoid auto-reloading surprises
-  # config.automatic_reload = true
 end
 
-# Helper Modules – defined before use
-
-# SeedLookupHelpers -----------------------------------------------------------
 module SeedLookupHelpers
   EMAILS = {
     admin: 'admin@example.com',
@@ -64,7 +48,6 @@ module SeedLookupHelpers
   def users(sym)
     email = EMAILS.fetch(sym) { raise ArgumentError, "Unknown user #{sym}" }
 
-    # Determine the correct class and attributes based on the symbol
     user_class, attributes = case sym
                              when :admin, :admin_david
                                [Users::Administrator, {
@@ -80,33 +63,32 @@ module SeedLookupHelpers
                                  password: 'password123',
                                  first_name: sym.to_s.titleize.split('_').first,
                                  last_name: 'User',
-                                 status: :active  # Evaluators have active status
+                                 status: :active
                                }]
                              when :trainer
                                [Users::Trainer, {
                                  password: 'password123',
                                  first_name: sym.to_s.titleize.split('_').first,
                                  last_name: 'User',
-                                 status: :active  # Trainers have active status
+                                 status: :active
                                }]
                              when :medical_provider
                                [Users::MedicalProvider, {
                                  password: 'password123',
                                  first_name: sym.to_s.titleize.split('_').first,
                                  last_name: 'User',
-                                 status: :active  # Medical providers inherit from base User
+                                 status: :active
                                }]
                              when :vendor_ray, :vendor_teltex
                                [Users::Vendor, {
                                  password: 'password123',
                                  first_name: sym.to_s.titleize.split('_').first,
-                                 last_name: 'Vendor', # Match the factory pattern
-                                 status: :active, # Ensure vendor can authenticate
-                                 vendor_authorization_status: :approved, # vendor_authorization_status for vendor authorization to participate in voucher program
+                                 last_name: 'Vendor',
+                                 status: :active,
+                                 vendor_authorization_status: :approved,
                                  business_name: "#{sym.to_s.titleize.split('_').first} Business",
                                  business_tax_id: "#{sym.to_s.upcase.gsub('_', '')}123456",
                                  terms_accepted_at: Time.current,
-                                 # w9_status is handled by the factory's after(:create) callback
                                  verified: true,
                                  email_verified: true
                                }]
@@ -116,18 +98,15 @@ module SeedLookupHelpers
                                  first_name: sym.to_s.titleize.split('_').first,
                                  last_name: 'User',
                                  status: (sym == :unconfirmed_user ? :inactive : :active),
-                                 hearing_disability: true # Set default disability to pass validation
+                                 hearing_disability: true # This default satisfies the disability validation when it applies.
                                }]
                              end
 
-    # Use the specific class to find or create the user
     user = user_class.find_or_create_by!(email: email) do |u|
       attributes.each { |key, value| u.send("#{key}=", value) }
     end
 
-    # If we found an existing user (not just created), update its attributes to match what tests expect
-    # This ensures test users have the correct attributes even if they were seeded differently
-    # Skip this for vendor users since the factory handles all the complex w9_status logic correctly
+    # Normalize test attributes, but preserve the stored vendor state.
     if user.persisted? && !user.is_a?(Users::Vendor)
       needs_update = attributes.any? { |key, value| user.send(key) != value }
       if needs_update
@@ -140,6 +119,7 @@ module SeedLookupHelpers
   end
 
   def applications(kind = :any)
+    # Prefer the requested state, then use the branch's fallback when seeds lack a match.
     scope = Application.all
     case kind.to_sym
     when :in_progress
@@ -147,7 +127,6 @@ module SeedLookupHelpers
         scope.first ||
         raise(ArgumentError, 'No applications found in seeds (expected in_progress)')
     when :submitted_application
-      # Try multiple possible statuses that indicate a submitted application
       scope.where(status: %w[in_progress awaiting_dcf]).first ||
         scope.first ||
         raise(ArgumentError, 'No applications found in seeds (expected in_progress or awaiting_dcf)')
@@ -160,19 +139,16 @@ module SeedLookupHelpers
         scope.first ||
         raise(ArgumentError, 'No applications found in seeds (expected awaiting_proof or awaiting_dcf)')
     when :pending_with_proofs
-      # Find a pending application that has both income and residency proofs attached
       scope.joins(:income_proof_attachment, :residency_proof_attachment)
            .where(status: %w[awaiting_proof awaiting_dcf]).first ||
         scope.first ||
         raise(ArgumentError, 'No applications found in seeds (expected pending with proofs)')
     when :waiting_period
-      # Look for applications that are in waiting period (approved but within 3 year window)
       scope.where(status: 'approved').where('created_at > ?', 3.years.ago).first ||
         scope.where(status: 'approved').first ||
         raise(ArgumentError, 'No applications found in seeds (expected waiting_period)')
     when :training_request
-      # Since training_request status doesn't exist, look for approved applications
-      # that would likely need training (approved with all proofs approved)
+      # There is no training_request status. Prefer approved income and residency proofs.
       scope.where(status: 'approved', income_proof_status: 'approved', residency_proof_status: 'approved').first ||
         scope.where(status: 'approved').first ||
         scope.first ||
@@ -192,25 +168,20 @@ module SeedLookupHelpers
   end
 end
 
-# MemorySafeTestHelpers -------------------------------------------------------
-# Lightweight wrappers around FactoryBot that avoid memory-intensive operations
 module MemorySafeTestHelpers
   SPECIAL_TRAITS = %i[confirmed with_webauthn_credential].freeze
 
   def create(factory_name, *traits_and_attrs)
     traits, attrs = traits_and_attrs.partition { |t| t.is_a?(Symbol) }
 
-    # Handle special user traits that need conversion
     if factory_name == :user && traits.intersect?(SPECIAL_TRAITS)
       attrs_hash = attrs.first || {}
       attrs_hash[:status] = :active if traits.include?(:confirmed)
-      # Add webauthn credential handling if needed
+      # TODO: Add support for the :with_webauthn_credential trait.
       traits -= SPECIAL_TRAITS
 
-      # Delegate to FactoryBot for proper validation and better error messages
       FactoryBot.create(factory_name, *traits, attrs_hash)
     else
-      # Delegate to FactoryBot for proper validation and better error messages
       FactoryBot.create(factory_name, *traits_and_attrs)
     end
   end
@@ -219,10 +190,6 @@ module MemorySafeTestHelpers
     FactoryBot.create_list(factory_name, count, *)
   end
 
-  # Helper method to create lightweight blob stubs for ActiveStorage
-  # Removed duplicate create_lightweight_blob – unified in ActiveSupport::TestCase
-
-  # Helper to attach a lightweight blob to a model (direct attach without explicit blob)
   def attach_lightweight_proof(model, attachment_name, filename: 'test.pdf')
     model.public_send(attachment_name).attach(
       io: StringIO.new('stub'),
@@ -236,33 +203,21 @@ module MemorySafeTestHelpers
   end
 end
 
-# --------------------------------------------------------------------------
-# SECTION 3: THE BASE TEST CASE CLASS
-# --------------------------------------------------------------------------
-# All system tests will inherit from this class. It includes all necessary
-# helpers and defines a setup/teardown lifecycle.
-# --------------------------------------------------------------------------
 class ApplicationSystemTestCase < ActionDispatch::SystemTestCase
-  # Configure the live Rails driver; a separate :cuprite registration is replaced by Rails.
-  # Chrome on Heroku CI (chrome-for-testing buildpack) cannot use its sandbox; CHROME_NO_SANDBOX opts in.
+  # Rails registers this driver and replaces any prior :cuprite registration.
+  # Heroku CI sets CHROME_NO_SANDBOX for the chrome-for-testing buildpack.
   driven_by :cuprite, screen_size: [1200, 800],
                       options: { js_errors: true, headless: %w[false 0].exclude?(ENV.fetch('HEADLESS', 'true')),
                                  browser_options: ENV['CHROME_NO_SANDBOX'] == 'true' ? { 'no-sandbox' => nil } : {} }
 
-  # Include all necessary helper modules.
   include SystemTestAuthentication
   include SystemTestHelpers
   include FplPolicyHelpers
-  include SeedLookupHelpers            # users(:admin) etc. (defined above)
-  include MemorySafeTestHelpers        # create() wrapper that uses FactoryBot (defined above)
+  include SeedLookupHelpers
+  include MemorySafeTestHelpers
 
-  # SeedLookupHelper is in test_helper.rb for global access.
-
-  # Modal helpers consolidated into SystemTestHelpers
-
-  # Use guarded default worker count. Ruby 3.4.x + pg 1.6.x can segfault on
-  # concurrent connection setup (observed in connect_start). Default to 1
-  # worker for that combo; allow override via SYSTEM_TEST_WORKERS.
+  # Ruby 3.4 with pg 1.6 had segfaults in connect_start during concurrent connection setup.
+  # That combination defaults to one worker. SYSTEM_TEST_WORKERS overrides the default.
   begin
     ruby_34 = Gem::Version.new(RUBY_VERSION).segments.first(2) == [3, 4]
     pg_spec = Gem.loaded_specs['pg']
@@ -273,16 +228,13 @@ class ApplicationSystemTestCase < ActionDispatch::SystemTestCase
   end
   parallelize(workers: ENV.fetch('SYSTEM_TEST_WORKERS', default_workers).to_i, with: :processes)
 
-  # Database cleaning strategy for system tests
   if defined?(DatabaseCleaner)
-    # Setup per parallel worker - removed app_host setting per Stack Overflow best practices
     parallelize_setup do
-      # Let Capybara manage its own server configuration
+      # Server configuration stays with Capybara.
     end
 
     setup do
-      # Use truncation for system tests since the app server runs in
-      # a separate thread/process and won’t see transactional data.
+      # The app server uses another connection and cannot read uncommitted test data.
       DatabaseCleaner.strategy = :truncation
       DatabaseCleaner.start
     end
@@ -292,18 +244,15 @@ class ApplicationSystemTestCase < ActionDispatch::SystemTestCase
     end
   end
 
-  # --- Test Lifecycle Hooks ---
+  # Test lifecycle
 
   setup do
-    # 0. Track Chrome processes at test start
     track_chrome_processes('TEST_SETUP_START')
 
-    # 1. Store and set validation flag to prevent leaking to other test types
+    # The saved validation flag lets teardown restore the prior value.
     @skip_flag_original = Application.skip_wait_period_validation
     Application.skip_wait_period_validation = true
 
-    # 2. Reset Capybara session state to ensure a clean browser.
-    # Enhanced debugging for browser state corruption
     debug_browser_state('SETUP START')
     track_chrome_processes('BEFORE_SESSION_RESET')
     begin
@@ -314,10 +263,8 @@ class ApplicationSystemTestCase < ActionDispatch::SystemTestCase
       track_chrome_processes('SESSION_RESET_FAILED')
     end
 
-    # 3. Clear any lingering authentication state from previous tests.
     clear_test_identity
 
-    # 4. Clear any pending network connections from previous tests
     clear_pending_network_connections if respond_to?(:clear_pending_network_connections, true)
     track_chrome_processes('AFTER_CONNECTION_CLEAR')
 
@@ -341,32 +288,26 @@ class ApplicationSystemTestCase < ActionDispatch::SystemTestCase
   end
 
   teardown do
-    # 0. Track Chrome processes at teardown start
     track_chrome_processes('TEST_TEARDOWN_START')
 
-    # 1. Log test failure details
     if failed?
       puts "\n"
       puts "Failure in: #{self.class.name}##{name}"
       track_chrome_processes('TEST_FAILED')
     end
 
-    # 2. Ensure the user is signed out and the session is fully cleared.
     system_test_sign_out
     track_chrome_processes('AFTER_SIGN_OUT')
 
-    # 3. Restore the original validation flag to prevent leaking into other tests
+    # Restore the original flag to avoid leakage into later tests.
     Application.skip_wait_period_validation = @skip_flag_original
     track_chrome_processes('TEST_TEARDOWN_COMPLETE')
   end
 
-  # DB cleaning – truncation is required because browser ≠ test thread
   def self.use_transactional_tests?
     false
   end
 
-  # --- Helper Methods ---
-  # Helper to safely skip wait period validation with automatic cleanup
   def with_wait_period_skipped
     original_value = Application.skip_wait_period_validation
     Application.skip_wait_period_validation = true
@@ -375,7 +316,7 @@ class ApplicationSystemTestCase < ActionDispatch::SystemTestCase
     Application.skip_wait_period_validation = original_value
   end
 
-  # Keep Rails 8 keyword support while preserving the repo's named screenshot calls.
+  # This override preserves named screenshot calls and Rails' html: and screenshot: keywords.
   def take_screenshot(name = nil, html: false, screenshot: nil)
     return nil unless page&.driver
 
@@ -418,27 +359,23 @@ class ApplicationSystemTestCase < ActionDispatch::SystemTestCase
     @capturing_browser_recovery_diagnostics = false
   end
 
-  # Helper to manually restart browser when tests detect issues
   def restart_browser!
     puts '🔄 Manually restarting browser...'
     capture_browser_recovery_diagnostics('manual_restart')
-    page.driver.restart # Cuprite relaunches Chrome with the same options
+    page.driver.restart
     Capybara.reset_sessions!
   end
 
-  # Cuprite-friendly fill_in helper that avoids "Options passed to Node#set" warnings
+  # send_keys avoids Cuprite's "Options passed to Node#set" warnings.
   def cuprite_fill_in(locator, value)
     element = find_field(locator)
-    # Use Capybara's own methods to avoid warnings
     element.click.send_keys([:control, 'a'], value.to_s) if value.present?
   end
 
-  # Helper for tests that need JS to reach across threads (file uploads, ActionCable, etc.)
   def using_truncation(&)
     DatabaseCleaner.cleaning(&)
   end
 
-  # Auth assertion helpers – many tests rely on these
   def assert_authenticated_as(user, msg = nil)
     assert_no_match(/Sign (In|Up)/i, page.text, msg || 'Found sign‑in link for authenticated user')
     assert_includes page.text, 'Sign Out', msg || 'Missing sign‑out link'
@@ -460,28 +397,23 @@ class ApplicationSystemTestCase < ActionDispatch::SystemTestCase
     system_test_sign_out
   end
 
-  # Use the connection clearing method from SystemTestHelpers consistently
   def clear_pending_connections
     clear_pending_network_connections
   end
 
-  # Sign in method that doesn't require a block and doesn't automatically sign out
-  # This is for tests that manage their own authentication lifecycle
+  # Callers manage sign-out for this helper.
   def sign_in(user)
     system_test_sign_in(user)
   end
 
-  # Misc utilities kept for backwards compatibility ------------------------------------
   def toggle_password_visibility?(field_id)
     field = find("input##{field_id}")
-    # Find the button within the same container (parent div with data-controller="visibility")
     container = field.ancestor('[data-controller="visibility"]')
     button = container.find('button[data-action="visibility#togglePassword"]')
     page.execute_script('arguments[0].click()', button)
-    true # Return true to make assertions work
+    true
   end
 
-  # Alias without question mark for test compatibility
   def toggle_password_visibility(field_id)
     toggle_password_visibility?(field_id)
   end
@@ -495,7 +427,6 @@ class ApplicationSystemTestCase < ActionDispatch::SystemTestCase
     take_screenshot
   end
 
-  # Helper to wait for an arbitrary condition without ad-hoc sleeps.
   # Usage: wait_until(time: seconds) { page.current_path == expected_path }
   def wait_until(time: Capybara.default_max_wait_time)
     Timeout.timeout(time) do
@@ -508,8 +439,7 @@ class ApplicationSystemTestCase < ActionDispatch::SystemTestCase
 
   private
 
-  # These methods intentionally extend Rails' private ScreenshotHelper internals
-  # so labels, sidecars, and Rails' own html:/screenshot: options share one artifact name.
+  # These overrides use Rails' private ScreenshotHelper so images, HTML, and sidecars share one artifact name.
   def image_name
     label = @screenshot_artifact_label
     return super if label.blank?
@@ -699,9 +629,7 @@ class ApplicationSystemTestCase < ActionDispatch::SystemTestCase
     nil
   end
 
-  # ============================================================================
-  # CHROME PROCESS MANAGEMENT
-  # ============================================================================
+  # Chrome process management
 
   def track_chrome_processes(_context)
     return unless ENV['ALLOW_CHROME_CLEANUP']
@@ -710,24 +638,20 @@ class ApplicationSystemTestCase < ActionDispatch::SystemTestCase
       chrome_processes = `ps aux | grep -i chrome | grep -v grep`.split("\n")
       process_count = chrome_processes.count
 
-      # Auto-cleanup if we hit critical thresholds
-      emergency_chrome_cleanup if process_count > 200 # Critical threshold
+      emergency_chrome_cleanup if process_count > 200
     rescue StandardError
-      # Silently handle process check errors
+      # Process inspection errors do not interrupt the test lifecycle.
     end
   end
 
-  # Emergency Chrome process cleanup
   def emergency_chrome_cleanup
     return unless ENV['ALLOW_CHROME_CLEANUP']
 
-    # Get all Chrome processes
     chrome_processes = `ps aux | grep -i chrome | grep -v grep`.split("\n")
     initial_count = chrome_processes.count
 
     return if initial_count.zero?
 
-    # Extract PIDs and terminate gracefully first
     pids = chrome_processes.map { |proc| proc.split[1] }.compact
     pids.each do |pid|
       next unless pid.match?(/^\d+$/)
@@ -735,13 +659,12 @@ class ApplicationSystemTestCase < ActionDispatch::SystemTestCase
       begin
         Process.kill('TERM', pid.to_i)
       rescue Errno::ESRCH
-        # Process already dead, ignore
+        # The process can exit after the PID list is read.
       rescue StandardError
-        # Silently handle termination errors
+        # Cleanup continues with the remaining PIDs after a TERM failure.
       end
     end
 
-    # Force kill any remaining processes
     remaining_processes = `ps aux | grep -i chrome | grep -v grep`.split("\n")
     if remaining_processes.any?
       remaining_processes.each do |proc|
@@ -751,20 +674,17 @@ class ApplicationSystemTestCase < ActionDispatch::SystemTestCase
         begin
           Process.kill('KILL', pid.to_i)
         rescue Errno::ESRCH
-          # Ignore errors - process cleanup
+          # The process can exit before the KILL request.
         end
       end
     end
 
-    # Reset Capybara completely after emergency cleanup
     capybara_nuclear_reset if defined?(Capybara)
   rescue StandardError
-    # Silently handle emergency cleanup errors
+    # Emergency cleanup errors do not interrupt the test lifecycle.
   end
 
-  # Nuclear reset of all Capybara state
   def capybara_nuclear_reset
-    # Access private session pool and quit all drivers
     if Capybara.respond_to?(:session_pool, true)
       session_pool = Capybara.send(:session_pool)
 
@@ -775,66 +695,52 @@ class ApplicationSystemTestCase < ActionDispatch::SystemTestCase
           session.driver.browser.quit
         end
       rescue StandardError
-        # Silently handle session quit errors
+        # One failed quit does not stop cleanup of the remaining sessions.
       end
 
-      # Clear the session pool
       session_pool.clear
     end
 
-    # Force garbage collection
     GC.start
   rescue StandardError
-    # Silently handle nuclear reset errors
+    # Recovery errors do not interrupt the test lifecycle.
   end
 
-  # Comprehensive Capybara session cleanup using documented APIs
   def capybara_session_cleanup
-    # Step 1: Use the documented approach from Capybara docs
-    # "Capybara.send(:session_pool).each { |name, ses| ses.driver.quit }"
+    # Capybara cleanup pattern: Capybara.send(:session_pool).each { |name, ses| ses.driver.quit }
     if Capybara.respond_to?(:session_pool, true)
       session_pool = Capybara.send(:session_pool)
       session_count = session_pool.size
       if session_count.positive?
         session_pool.each_value do |session|
-          # Use documented quit method on driver
           session.driver.quit if session&.driver.respond_to?(:quit)
-          # Use documented reset method (also known as cleanup!, reset_session!)
           if session.respond_to?(:reset!)
             session.reset!
           elsif session.respond_to?(:cleanup!)
             session.cleanup!
           end
         rescue StandardError
-          # Silently handle session cleanup errors
+          # One session cleanup error does not stop cleanup of other sessions.
         end
-        # Clear the session pool after individual cleanup
         session_pool.clear
       end
     end
 
-    # Step 2: Use standard Capybara reset as documented
     Capybara.reset_sessions! if defined?(Capybara) && Capybara.respond_to?(:reset_sessions!)
-    # Step 3: Force garbage collection to clean up any lingering references
     GC.start
   end
 
-  # ============================================================================
-  # BROWSER CORRUPTION DEBUGGING
-  # ============================================================================
+  # Browser diagnostics
 
   def debug_browser_state(_context)
     return unless ENV['VERBOSE_TESTS'] || ENV['DEBUG_BROWSER']
 
-    # Check if page exists and is responsive
     begin
       return unless defined?(page) && page
 
-      # Check driver state
       browser = (page.driver.browser if page.driver.respond_to?(:browser))
 
       if browser
-        # Try to get browser status
         if browser.respond_to?(:contexts)
           begin
             browser.contexts.count
@@ -852,24 +758,22 @@ class ApplicationSystemTestCase < ActionDispatch::SystemTestCase
         end
       end
 
-      # Try a simple page interaction
       begin
         page.current_url
       rescue StandardError
-        # Silently handle URL check errors
+        # A failed URL read does not stop the remaining diagnostics.
       end
 
-      # Check session pool
       if defined?(Capybara.session_pool)
         Capybara.session_pool.size
       end
     rescue StandardError
-      # Silently handle debug errors
+      # Diagnostic errors do not interrupt the test lifecycle.
     end
   end
 
   def force_browser_restart(reason)
-    # Minimal reset; do not kill external Chrome processes
+    # Limit recovery to Capybara sessions. External Chrome processes stay alive.
     capture_browser_recovery_diagnostics(reason)
     capybara_session_cleanup
   end

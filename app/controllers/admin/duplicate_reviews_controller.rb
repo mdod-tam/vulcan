@@ -1,9 +1,8 @@
 # frozen_string_literal: true
 
 module Admin
-  # Admin workflow for resolving flagged duplicate records: review queue, case detail, the audited
-  # non-merge resolution that records the two records as different people, and same-person merge.
-  # All data mutation happens in the service layer; this controller only translates the form.
+  # Admin duplicate review: queue, case detail, keep-separate resolution, and same-person merge.
+  # Services do all data changes. This controller only translates form parameters.
   class DuplicateReviewsController < BaseController
     before_action :set_review_case, only: %i[show resolve merge]
 
@@ -49,9 +48,8 @@ module Admin
       result = DuplicateReviewCases::ResolutionService.new(
         duplicate_review_case: @review_case,
         actor: current_user,
-        # Neither the determination nor the action is passed: the service owns both. The only
-        # handling of a submitted value is the rollover guard above, which rejects conflicts
-        # rather than storing them.
+        # The service owns the determination and the action. Submitted values only feed the
+        # stale-form guard above.
         rationale: params[:rationale],
         reason_codes: ['admin_reviewed']
       ).call
@@ -116,16 +114,10 @@ module Admin
 
     private
 
-    # Rollover guard for the resolve form. `ResolutionService` accepts neither a determination nor
-    # an action -- the server owns both -- so these two parameters are read only to decide whether
-    # the submitting page is stale. Absent, or carrying the value the server would choose anyway,
-    # proceeds; any conflicting value is rejected without mutation.
-    #
-    # Rejecting rather than ignoring is the point. A cached or long-open page can still offer
-    # outcomes the server no longer accepts, and treating those as inert would hand the admin a
-    # keep-separate resolution when they asked for something else -- the opposite of their stated
-    # intent, on a decision that releases a submission gate. The guard is inert once every rendered
-    # form is current.
+    # Stale-form guard. These parameters only tell if the page is stale. An absent value or the
+    # server's own value continues. Any other value is rejected with no change.
+    # Do not ignore a conflict. An old page can offer outcomes the server no longer accepts.
+    # Ignoring them would apply keep-separate against the admin's choice and release a submission gate.
     def reject_stale_resolution_form?
       determination = params[:determination]
       action = params[:resolution_action]
@@ -152,9 +144,8 @@ module Admin
           .order(:last_name, :first_name)
     end
 
-    # Only the case subject and its recorded candidates are mergeable, so a forged id
-    # cannot pull an unrelated user into a merge. The merge form scopes each comparison to
-    # a two-record pair and the admin picks which record survives as canonical.
+    # Only the case subject and its recorded candidates can merge, so a forged id cannot add
+    # an unrelated user. The form sends one two-record pair and the admin's canonical choice.
     def merge_pair
       allowed = allowed_pair_ids
       pair_ids = Array(params[:pair_ids]).map(&:to_i).uniq
@@ -162,8 +153,7 @@ module Admin
       return [nil, nil] unless pair_ids.size == 2
       return [nil, nil] unless (pair_ids - allowed).empty?
       return [nil, nil] unless pair_ids.include?(canonical_id)
-      # The UI only ever renders subject <-> candidate comparisons, so a valid merge must
-      # include the case subject. This blocks a forged candidate <-> candidate pairing.
+      # The UI shows only subject-to-candidate pairs. This blocks a forged candidate-to-candidate pair.
       return [nil, nil] unless pair_ids.include?(@review_case.subject_user_id)
 
       duplicate_id = (pair_ids - [canonical_id]).first
@@ -178,8 +168,7 @@ module Admin
 
     def merge_contact_choices(canonical:, duplicate:)
       {
-        # Login identity is never a transferable contact choice. The selected canonical
-        # always keeps its own email/password/MFA authority.
+        # Login identity never transfers. The canonical user keeps its email, password, and MFA.
         email: 'canonical',
         phone: merge_contact_source(:phone, canonical:, duplicate:),
         phone_type: merge_phone_type_choice,
@@ -187,9 +176,8 @@ module Admin
       }
     end
 
-    # Agreement markers come only from collapsed, read-only rows. They are intentionally still
-    # untrusted: DuplicateMergeService reloads both users under lock and refuses the merge unless
-    # the corresponding current facts remain equal.
+    # Agreement markers come from collapsed read-only rows but are untrusted. DuplicateMergeService
+    # locks both users and refuses the merge unless the current values are still equal.
     def merge_contact_source(field, canonical:, duplicate:)
       return Users::DuplicateMergeService::AGREED_SOURCE if params.dig(:contact, :"#{field}_agreed") == '1'
 
@@ -208,10 +196,8 @@ module Admin
       source_for_pair_user_id(params[:delivery_user_id], canonical:, duplicate:)
     end
 
-    # The case already owns the bounded evidence that caused this comparison to be opened.
-    # Presenting those codes as editable checkboxes created a fake choice and let a forged request
-    # rewrite merge audit metadata. The admin's actual same-person judgment belongs in the required
-    # explanation; the source evidence remains server-owned here.
+    # Reason codes come from the case, not the form, so a forged request cannot rewrite merge
+    # audit metadata. The admin records the same-person judgment in the required rationale.
     def merge_reason_codes
       reason_codes = Array(@review_case.metadata['reason_codes']).map(&:to_s).compact_blank.uniq
       return reason_codes if reason_codes.any?

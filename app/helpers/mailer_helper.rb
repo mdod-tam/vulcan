@@ -1,7 +1,7 @@
 # frozen_string_literal: true
 
 module MailerHelper
-  # Get the color values for a status box
+  # Returns colors and an icon for a status box.
   # @param status [Symbol] The status (:success, :warning, :error, :info)
   # @return [Hash] The color values for the status
   def status_box_colors(status)
@@ -10,25 +10,25 @@ module MailerHelper
         bg: '#ebf8ff',      # Light blue background
         border: '#90cdf4',  # Medium blue border
         text: '#2b6cb0',    # Dark blue text
-        icon: '✓'           # Success icon
+        icon: '✓'
       },
       warning: {
         bg: '#fffaf0',      # Light orange background
         border: '#fbd38d',  # Medium orange border
         text: '#c05621',    # Dark orange text
-        icon: '⚠'           # Warning icon
+        icon: '⚠'
       },
       error: {
         bg: '#fff5f5',      # Light red background
         border: '#feb2b2',  # Medium red border
         text: '#c53030',    # Dark red text
-        icon: '✗'           # Error icon
+        icon: '✗'
       },
       info: {
         bg: '#ebf4ff',      # Light blue background
         border: '#c3dafe',  # Medium blue border
         text: '#434190',    # Dark blue text
-        icon: 'ℹ'           # Info icon
+        icon: 'ℹ'
       }
     }
 
@@ -36,7 +36,7 @@ module MailerHelper
     colors[status] || colors[:info]
   end
 
-  # Format a date consistently across all mailers
+  # Formats a date for mailer templates.
   # @param date [Date, Time, DateTime, String] The date to format
   # @param format [Symbol] The format to use (:short, :long, :full)
   # @return [String] The formatted date
@@ -49,7 +49,7 @@ module MailerHelper
     format_date_str(date, format)
   end
 
-  # Format a currency value consistently across all mailers
+  # Formats a currency value for mailer templates.
   # @param amount [Numeric] The amount to format
   # @param precision [Integer] The number of decimal places
   # @return [String] The formatted currency
@@ -57,16 +57,14 @@ module MailerHelper
     number_to_currency(amount, precision: precision)
   end
 
-  # Format a phone number consistently across all mailers
+  # Formats a phone number for mailer templates.
   # @param phone [String] The phone number to format
   # @return [String] The formatted phone number
   def format_phone(phone)
     return '' if phone.blank?
 
-    # Remove all non-numeric characters
     digits = phone.to_s.gsub(/\D/, '')
 
-    # Format based on length
     case digits.length
     when 10
       "(#{digits[0..2]}) #{digits[3..5]}-#{digits[6..9]}"
@@ -77,11 +75,11 @@ module MailerHelper
         digits
       end
     else
-      phone # Return original if we can't format it
+      phone
     end
   end
 
-  # Format an address consistently across all mailers
+  # Returns an HTML address with line breaks.
   # @param address1 [String] Address line 1
   # @param address2 [String] Address line 2 (optional)
   # @param city [String] City
@@ -95,7 +93,7 @@ module MailerHelper
     address.html_safe
   end
 
-  # Format an address for plain text emails
+  # Returns an address for plain text email.
   # @param address1 [String] Address line 1
   # @param address2 [String] Address line 2 (optional)
   # @param city [String] City
@@ -109,20 +107,19 @@ module MailerHelper
     address
   end
 
-  # Format a proof type consistently across all mailers
-  # @param proof_type [String, Symbol, Integer] The proof type
+  # Returns the localized name of a proof type.
+  # @param proof_type [String, Symbol, Integer, ProofReview] The proof type
   # @return [String] The formatted proof type
   def format_proof_type(proof_type)
     return '' if proof_type.nil?
 
-    # If it's a ProofReview instance, get the proof_type before type cast
+    # A ProofReview supplies the value before its enum type cast.
     type_value = if proof_type.respond_to?(:proof_type_before_type_cast)
                    proof_type.proof_type_before_type_cast
                  else
                    proof_type
                  end
 
-    # Convert to string and handle both symbol and integer cases
     normalized_type = case type_value.to_s
                       when '0', 'income'
                         'income'
@@ -140,8 +137,7 @@ module MailerHelper
     )
   end
 
-  # Returns the appropriate text for training session scheduling information
-  # based on whether a session has been scheduled or not
+  # Returns schedule information or an instruction to arrange a training session.
   # @param training_session [TrainingSession] The training session
   # @return [String] The formatted scheduling information text
   def training_session_schedule_text(training_session)
@@ -153,9 +149,9 @@ module MailerHelper
     end
   end
 
-  # Parses a date string into a Date or Time object if possible.
-  # @param [Date, Time, DateTime, String] date the date or date string to parse
-  # @return [Date, Time, DateTime, String] the parsed date or the original value if parsing fails
+  # Parses date strings. ArgumentError and TypeError preserve the original value.
+  # @param [Date, Time, DateTime, String] date the date or string to parse
+  # @return [Date, Time, DateTime, String] the parsed date or the original value after a rescued error
   def parse_date(date)
     return date unless date.is_a?(String)
 
@@ -166,10 +162,10 @@ module MailerHelper
     end
   end
 
-  # Formats a date using strftime based on the provided format.
+  # Formats a date with strftime.
   #
   # @param [Date, Time, DateTime] date the date object to format
-  # @param [Symbol] format the format type (:short, :long, :full)
+  # @param [Symbol] format the format (:short, :long, :full)
   # @return [String] the formatted date string
   def format_date_str(date, format)
     case format

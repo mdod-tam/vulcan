@@ -1,23 +1,19 @@
 # frozen_string_literal: true
 
-# Global test-suite boot-strap
 ENV['RAILS_ENV'] ||= 'test'
 require_relative '../config/environment'
-Rails.application.eager_load! # ensure Zeitwerk loads *everything* the suite touches
+Rails.application.eager_load!
 require 'rails/test_help'
 
-# Reduce test log noise
-# Only show important logs during tests (errors, warnings)
+# Suppress info and debug logs unless VERBOSE_TESTS is set.
 Rails.logger.level = :warn unless ENV['VERBOSE_TESTS']
 ActiveRecord::Base.logger.level = :warn unless ENV['VERBOSE_TESTS']
 
-# Disable ActiveStorage logging in tests
 ActiveStorage.logger.level = :error if defined?(ActiveStorage.logger)
 
-# Disable verbose query logs and caller tracking in tests
 Rails.application.config.active_record.verbose_query_logs = false unless ENV['VERBOSE_TESTS']
 
-# One-time DB sanitisation (before seeds are loaded)
+# Truncate the database before seeds load.
 begin
   require 'database_cleaner/active_record'
   DatabaseCleaner.clean_with(:truncation)
@@ -25,22 +21,18 @@ rescue LoadError
   warn "⚠️  DatabaseCleaner not found.  Add `gem 'database_cleaner-active_record', group: :test`."
 end
 
-# Seed the database once, and only once, for the entire test suite.
-# Using a constant to ensure this block runs only one time.
+# SEEDS_LOADED guards seed loading within this process.
 unless defined?(SEEDS_LOADED)
   if Rails.env.test?
-    # Eagerly load the Invoice model to ensure its callbacks are registered before we try to modify them.
-    # This prevents an 'undefined callback' error during seeding.
+    # Resolve Invoice before the code changes its callbacks.
     Invoice.name
 
-    # Prevent the :send_payment_notification callback from firing during test seeding.
-    # This callback sends emails and updates records, which is unnecessary and slow for setting up test data.
-    # We rescue from ArgumentError in case the callback definition changes or is removed in the future,
-    # which would otherwise break the entire test suite.
+    # Seeds do not need payment email or updates to related invoice records.
+    # Suppress :send_payment_notification during seed loading.
+    # If the callback changes or disappears, log the problem and let seed loading continue.
     begin
       Invoice.skip_callback(:save, :after, :send_payment_notification)
     rescue ArgumentError => e
-      # It's possible the callback is already removed or renamed. We can safely ignore this.
       Rails.logger.warn "Could not skip :send_payment_notification callback on Invoice: #{e.message}"
     end
   end
@@ -50,10 +42,8 @@ unless defined?(SEEDS_LOADED)
   SEEDS_LOADED = true
 end
 
-# Loads only the critical email templates needed by all mailers
-# Used after database truncation in parallel tests
+# Parallel workers restore shared text headers and footers after truncation.
 def load_critical_email_templates
-  # Header template
   EmailTemplate.find_or_create_by!(name: 'email_header_text', format: :text) do |template|
     template.subject = 'Email Header Text'
     template.description = 'Standard text header used in all email templates'
@@ -67,7 +57,6 @@ def load_critical_email_templates
     template.version = 1
   end
 
-  # Footer template
   EmailTemplate.find_or_create_by!(name: 'email_footer_text', format: :text) do |template|
     template.subject = 'Email Footer Text'
     template.description = 'Standard text footer used in all email templates'
@@ -84,7 +73,7 @@ def load_critical_email_templates
     template.version = 1
   end
 rescue StandardError => e
-  # In parallel tests, log but don't fail if template creation fails
+  # Template creation failures produce a warning and do not abort the worker.
   Rails.logger.warn "Failed to create critical email templates: #{e.message}"
 end
 
@@ -95,7 +84,7 @@ require 'capybara/rails'
 
 Capybara.default_max_wait_time = 5
 
-# Support helpers (autoloaded from test/support/**)
+# Support helpers
 Rails.root.glob('test/support/**/*.rb').each { |f| require f }
 
 require 'webauthn/fake_client'
@@ -107,14 +96,14 @@ require_relative 'controllers/webhooks/test_base_controller'
 require_relative 'lib/generators/test_case_config'
 TestCaseConfig.configure_generator_test_case(Rails::Generators::TestCase)
 
-# ActionDispatch::IntegrationTest — add default headers (safe prepend)
+# Integration requests use default headers and restore Current.user afterward.
 module DefaultHeadersRequestPatch
   %i[get post put patch delete].each do |method|
     define_method(method) do |path, **args|
       normalized_path = normalize_request_path(path, args)
       result = super(normalized_path, **merge_default_headers(args))
 
-      # After request completes, restore Current.user for verify_authentication_state
+      # Authentication assertions use Current.user after the request.
       restore_current_user_after_request
 
       result
@@ -158,25 +147,21 @@ module DefaultHeadersRequestPatch
   end
 
   def restore_current_user_after_request
-    # If we already have @authenticated_user from helpers, use it
-    # This includes header-based authentication which should take precedence
+    # An explicit helper user takes precedence over other sources.
     if defined?(@authenticated_user) && @authenticated_user.present?
       Current.user = @authenticated_user if defined?(Current)
       return
     end
 
-    # If Current.test_user_id is set, use it to restore Current.user
     if defined?(Current.test_user_id) && Current.test_user_id.present?
       test_user = User.find_by(id: Current.test_user_id)
       Current.user = test_user if test_user && defined?(Current)
       return
     end
 
-    # For form-based authentication, look up the user from the most recent session
-    # Shouldn't need to decrypt cookies
+    # The fallback uses a recent Session instead of cookie decryption.
     return unless defined?(Session) && defined?(User)
 
-    # Find the most recent session created in the last few seconds (current test)
     recent_session = Session.includes(:user)
                             .where('created_at > ?', 5.seconds.ago)
                             .order(created_at: :desc)
@@ -208,7 +193,6 @@ module ActiveSupport
     include FplPolicyHelpers
     include PaperApplicationContextHelpers
 
-    # Shortcut occasionally used in controller tests
     attr_reader :product
 
     # Disable parallel tests due to pg gem segfault with Ruby 3.4.5-3.4.7 (maybe due to ARM compilation issue?)
@@ -218,21 +202,16 @@ module ActiveSupport
     # parallelize(workers: parallel_workers, with: :processes)
     parallelize(workers: 1)
 
-    # Optimized DatabaseCleaner strategy
     if defined?(DatabaseCleaner)
-      # Per-worker truncation (expensive but thorough isolation)
       parallelize_setup do |_worker|
         DatabaseCleaner.clean_with(:truncation)
-        # After truncation, we need to re-seed critical templates that mailers depend on
         load_critical_email_templates
       end
 
-      # Per-test transactions (fast and sufficient for most cases)
       setup do
         DatabaseCleaner.strategy = :transaction
         DatabaseCleaner.start
-        # Ensure the single workflow feature flag exists with its default so that
-        # stamp_workflow_defaults! and scrub_income_fields behave correctly.
+        # Provide the default flag for stamp_workflow_defaults! and scrub_income_fields.
         FeatureFlag.find_or_create_by!(name: 'vouchers_enabled') { |f| f.enabled = false }
         # Email is on unless a test turns it off through EmailDelivery::ControlWriter.
         EmailDelivery::CONTROL_NAMES.each { |name| FeatureFlag.find_or_create_by!(name: name) { |f| f.enabled = true } }
@@ -241,32 +220,28 @@ module ActiveSupport
       teardown { DatabaseCleaner.clean }
     end
 
-    # Lightweight blob creation helper - skip MIME sniffing for performance
+    # Skip MIME identification to reduce work for test blobs.
     def create_lightweight_blob(filename: 'test.pdf', content_type: 'application/pdf', content: 'stub')
       ActiveStorage::Blob.create_after_upload!(
         io: StringIO.new(content),
         filename: filename,
         content_type: content_type,
-        identify: false # Skip `file` process - saves ~3s per 1k blobs
+        identify: false
       )
     end
 
-    # Clear authentication state between tests to prevent test pollution
+    # Remove authentication and paper context between tests.
     teardown do
-      # Clear Current attributes
       Current.reset if defined?(Current)
       Current.test_user_id = nil if defined?(Current)
 
-      # Ensure any paper application context flags are cleared between tests (per testing guide)
       Thread.current[:paper_application_context] = nil
       Thread.current[:skip_proof_validation] = nil
 
-      # Clear instance variables that might leak between tests
       @authenticated_user = nil
       @test_user_id = nil
       @session_token = nil
 
-      # Clear ENV variable for backward compatibility
       ENV['TEST_USER_ID'] = nil if ENV['TEST_USER_ID'].present?
     end
 
@@ -288,22 +263,19 @@ module ActiveSupport
       assert_operator assertions, :>=, 1, 'Test is missing assertions'
     end
 
-    # Default headers for Integration tests
     def default_headers
       base = {
         'HTTP_USER_AGENT' => 'Rails Testing',
         'REMOTE_ADDR' => '127.0.0.1'
       }
-      # Do not set a raw Cookie header here — it replaces the integration cookie jar and
-      # drops the Rails session cookie (including test-only keys like skip_2fa).
-      # Auth is restored via X-Test-User-Id; session_token is set on the cookie jar in sign-in helpers.
+      # Do not set a raw Cookie header here.
+      # It replaces the cookie jar and removes the Rails session cookie, including skip_2fa.
+      # X-Test-User-Id restores test authentication. Sign-in helpers set session_token in the cookie jar.
       base['X-Test-User-Id'] = @test_user_id.to_s if defined?(@test_user_id) && @test_user_id.present?
 
       base
     end
 
-    # "Smoke" test-only route so Minitest sees at least one assertion
-    # Only run these tests when VERBOSE_TESTS is enabled to reduce noise
     if ENV['VERBOSE_TESTS']
       test 'ensure test_auth_status route is recognised' do
         if Rails.application.routes.url_helpers.respond_to?(:test_auth_status_path)
@@ -315,7 +287,7 @@ module ActiveSupport
       end
     end
 
-    # ActiveStorage host setup for url_for helpers
+    # url_for needs a host for ActiveStorage URLs.
     setup { ActiveStorage::Current.url_options = { host: 'localhost:3000' } }
   end
 end

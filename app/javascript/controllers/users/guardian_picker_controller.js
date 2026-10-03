@@ -1,7 +1,7 @@
 import { Controller } from "@hotwired/stimulus";
 import { setVisible, setFieldValue } from "../../utils/visibility";
 
-// Handles guardian‑selection UI toggling and central state.
+// Admin paper intake: guardian selection, the dependents frame, and last-application reuse.
 export default class extends Controller {
   static targets = [
     "searchPane",
@@ -29,7 +29,7 @@ export default class extends Controller {
     }
   }
 
-  /* Public API ----------------------------------------------------------- */
+  // selectGuardian and clearSelection are called by admin user search through its outlet.
   selectGuardian(id, displayHTML) {
     if (this.hasGuardianIdFieldTarget) this.guardianIdFieldTarget.value = id;
     const box = this.selectedPaneTarget.querySelector(".guardian-details-container");
@@ -52,7 +52,6 @@ export default class extends Controller {
     this.hideLastApplicationSummary();
   }
 
-  /* Internal helpers ----------------------------------------------------- */
   togglePanes() {
     const hideSearch = this.selectedValue;
     setVisible(this.searchPaneTarget, !hideSearch);
@@ -151,23 +150,19 @@ export default class extends Controller {
     const dependentId = button.dataset.dependentId;
     if (!dependentId) return;
 
-    // Set hidden field
     if (this.hasDependentIdFieldTarget) {
       this.dependentIdFieldTarget.value = dependentId;
     }
 
-    // Ensure dependent radio is checked
     if (this.hasApplicantTypeRadioDependentTarget) {
       this.applicantTypeRadioDependentTarget.checked = true;
     }
 
-    // Load pre-filled form via Turbo Frame (Rails handles the rendering)
     this.loadDependentForm(dependentId);
 
     this.dispatchSelectionChange();
   }
 
-  // Load dependent form via Turbo Frame
   loadDependentForm(dependentId) {
     const frame = document.getElementById('dependent_info_form');
     if (!frame) return;
@@ -177,15 +172,14 @@ export default class extends Controller {
   }
 
   /**
-   * Lands focus on the on-file dependent list.
+   * Moves focus to the on-file dependent list, not to the blank First Name field.
    *
-   * Prefers the list over the blank name field: "Change Dependent" usually means "wrong person,
-   * pick the right one", and the card staff just dismissed warns them not to create a duplicate to
-   * work around a bad record -- dropping the caret into an empty First Name box would nudge toward
-   * exactly that. The new-dependent form remains a Tab away for anyone who does need it.
+   * "Change Dependent" usually means "pick the right person". The dismissed card warns staff not to
+   * create a duplicate to work around a bad record, and an empty name field would push them toward
+   * that. The new-dependent form stays one Tab away.
    *
-   * If the list has not rendered its chooser yet, the frame itself takes focus. It is labelled and
-   * carries tabindex="-1", so focus lands somewhere announced rather than on <body>.
+   * If the list has not rendered its chooser yet, the frame takes focus. The frame has a label and
+   * tabindex="-1", so focus goes to an announced element, not to <body>.
    * @private
    */
   _focusDependentChooser() {
@@ -200,22 +194,18 @@ export default class extends Controller {
     this.dependentsFrameTarget.focus()
   }
 
-  // Clear dependent selection and reload blank form
   /**
-   * Staff intent: "this is the wrong dependent, let me pick another." Public because the dependent
-   * card's button reaches it through the applicant-type outlet, and named for the intention rather
-   * than the mechanism -- `clearDependentSelection` below stays the internal operation, so callers
-   * are not distinguished by whether their argument happens to be an Event.
+   * Staff intent: "this is the wrong dependent, let me pick another." The dependent card's button
+   * calls it through the applicant-type outlet. `clearDependentSelection` stays the internal
+   * operation, so callers are not told apart by whether their argument is an Event.
    *
-   * Turbo is about to replace the frame the button lives in, so focus is moved deliberately;
-   * without it the clicked element is destroyed and focus falls back to <body>, stranding a
-   * keyboard user at the top of a very long form.
+   * Turbo replaces the frame that holds the button. Without an explicit focus move, focus falls
+   * to <body>, and a keyboard user is left at the top of a very long form.
    */
   changeDependent() {
-    // Focus first, synchronously. The destination -- the chooser in the dependents frame -- lives
-    // outside the frame being reloaded and is unaffected by the update, so there is nothing to wait
-    // for. Moving focus before the swap also means it never rests on the button Turbo is about to
-    // destroy, so a slow or failed response cannot strand a keyboard user on <body>.
+    // Move focus first, synchronously. The chooser is outside the frame that reloads, so there is
+    // nothing to wait for. Focus then never rests on the button that Turbo destroys, so a slow or
+    // failed response cannot leave a keyboard user on <body>.
     this._focusDependentChooser()
     this.clearDependentSelection()
   }
@@ -225,7 +215,6 @@ export default class extends Controller {
       this.dependentIdFieldTarget.value = "";
     }
 
-    // Load blank form via Turbo Frame
     this.loadDependentForm(null);
 
     if (this.hasDisplaySelectionTarget) {

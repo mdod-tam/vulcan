@@ -1,28 +1,12 @@
 # frozen_string_literal: true
 
 module Invoices
-  # Service to generate invoices for vendors with uninvoiced transactions
-  #
-  # LOGIC FLOW:
-  # 1. Find all vendors with uninvoiced transactions (VoucherTransaction.completed.where(invoice_id: nil))
-  # 2. For each vendor:
-  #    a. Calculate date range (from last invoice end_date or 14 days ago)
-  #    b. Find uninvoiced transactions in that date range
-  #    c. Create Invoice record with calculated totals
-  #    d. Associate transactions with the new invoice
-  #    e. Create audit event for the invoice
-  #    f. After commit, queue the vendor notice
-  #
-  # MODELS USED:
-  # - VoucherTransaction (finding uninvoiced transactions)
-  # - Invoice (creating new invoices, finding latest for date range)
-  #
-  # MAILERS USED:
-  # - VendorNotificationsMailer.invoice_generated (notifies vendor)
-  #
-  # CALLED BY:
-  # - GenerateVendorInvoicesJob (app/jobs/generate_vendor_invoices_job.rb)
-  #
+  # Called by GenerateVendorInvoicesJob. For each vendor with completed, uninvoiced transactions:
+  # 1. The period starts at the last invoice end_date, or 14 days ago if the vendor has no invoice.
+  # 2. One transaction creates the invoice, links the transactions in the period, sets the total,
+  #    and records the audit event.
+  # 3. After commit, VendorNotificationsMailer.invoice_generated is queued.
+  # A failure for one vendor does not stop the other vendors.
   class GenerationService < BaseService
     def call
       vendor_ids = find_vendors_with_uninvoiced_transactions
@@ -67,7 +51,7 @@ module Invoices
         created
       end
 
-      # The invoice is committed; a notice that cannot be queued does not undo it.
+      # The invoice is committed. A notice that cannot be queued does not undo it.
       notification = queue_vendor_notification(invoice)
       success('Invoice generated successfully', { invoice: invoice, notification: notification })
     rescue StandardError => e
@@ -106,7 +90,7 @@ module Invoices
       end
     end
 
-    # The invoice stands even when no system audit account is configured; that gap is reported.
+    # With no system audit account, the invoice still saves and PublicAuditActor reports the gap.
     def create_invoice_event(invoice, date_range)
       return unless (actor = PublicAuditActor.system_audit_actor_or_report('invoice generated event'))
 
@@ -124,7 +108,7 @@ module Invoices
       )
     end
 
-    # Policy refusals keep their :suppressed or :configuration_error result; only queue failures get an invoice enqueue event.
+    # Policy refusals return :suppressed or :configuration_error. Only queue failures get an enqueue-failure event.
     def queue_vendor_notification(invoice)
       outcome = EmailDelivery.deliver_later(VendorNotificationsMailer.with(invoice: invoice).invoice_generated)
       record_notification_enqueue_failure(invoice, 'ActiveJob::EnqueueError') if outcome == :enqueue_failed

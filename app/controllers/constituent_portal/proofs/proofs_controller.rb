@@ -1,22 +1,12 @@
 # frozen_string_literal: true
 
-# Controller for handling proof submissions from constituents through the portal
-#
-# This controller handles the constituent-facing proof submission workflow:
-# 1. Initial proof upload setup
-# 2. Direct upload for client-side uploading to S3
-# 3. Proof resubmission (after rejection)
-#
-# Note: This controller handles the UI and workflow for proof submission, and
-# the actual attachment is delegated to ProofAttachmentService to maintain
-# consistency with the paper application submission path. Both constituent portal
-# and paper submissions use ProofAttachmentService as the single source of truth for proof attachments.
+# Lets a constituent replace a rejected proof. It also has a direct upload endpoint.
+# ProofAttachmentService attaches the proof, as it does for paper intake.
 module ConstituentPortal
   module Proofs
     class ProofsController < ApplicationController
       include RequestMetadataHelper
 
-      # Tell Rails to look for views in the new location
       prepend_view_path 'app/views/constituent_portal/proofs'
       before_action :authenticate_user!
       before_action :require_constituent!
@@ -32,7 +22,6 @@ module ConstituentPortal
       end
 
       def direct_upload
-        # Use keyword arguments for create_before_direct_upload! (Rails 6.1+)
         blob = ActiveStorage::Blob.create_before_direct_upload!(**blob_params.to_h.symbolize_keys)
         render json: direct_upload_json(blob)
       rescue ActionController::ParameterMissing => e
@@ -40,12 +29,11 @@ module ConstituentPortal
       end
 
       def resubmit
-        # The before_action has already run authorize_proof_access!
-        # Return if it fails to prevent a double render error
+        # A before_action that redirects halts the chain, so this guard is only defensive.
         return if performed?
 
-        # ProofAttachmentService manages its own transactions (we don't need an outer transaction)
-        # This prevents nested transaction issues that can cause attachment rollbacks
+        # Do not add an outer transaction. ProofAttachmentService owns its transactions,
+        # and nesting can roll back the attachment.
         attach_and_update_proof
         return if performed?
 
@@ -83,14 +71,11 @@ module ConstituentPortal
       end
 
       def extract_application_id
-        # The application ID could be in different params based on the routing
-        # In routes.rb: get 'proofs/new/:proof_type', to: 'proofs/proofs#new', as: :new_proof
-        # The :id is from the resource-level param; extract the ID from the URL path
+        # The proof routes nest under applications, so they supply :application_id.
         application_id = params[:application_id]
 
-        # Special handling for the route format
         if application_id.nil? && params[:id].present?
-          # When using routes like /constituent_portal/applications/123/proofs/new/income; the ID comes through as :id
+          # No current route supplies :id to this controller.
           application_id = params[:id]
         end
 
@@ -108,11 +93,10 @@ module ConstituentPortal
       # rubocop:enable Naming/PredicateMethod
 
       def find_user_application(application_id)
-        # First try the standard approach
         application = current_user.applications.find_by(id: application_id)
         return application unless application.nil?
 
-        # Also check for applications belonging to dependents
+        # A guardian can also submit proof for a dependent application.
         dependent_ids = current_user.dependents.pluck(:id)
         return nil if dependent_ids.empty?
 
@@ -137,7 +121,7 @@ module ConstituentPortal
 
         redirect_to constituent_portal_application_path(@application),
                     alert: 'Cannot submit proof at this time'
-        nil # Explicit return to prevent code execution after redirect
+        nil
       end
 
       def authorize_proof_access!
@@ -145,33 +129,28 @@ module ConstituentPortal
 
         redirect_to constituent_portal_application_path(@application),
                     alert: 'Invalid proof type or status'
-        false # Explicit return to halt execution
+        false
       end
 
       def check_rate_limit
         RateLimit.check!(:proof_submission, current_user.id)
       rescue RateLimit::ExceededError
-        # Set flash and keep it through redirects
         flash[:alert] = 'Please wait before submitting another proof'
         flash.keep(:alert)
         redirect_to constituent_portal_application_path(@application)
         false
       end
 
-      # Delegates the actual proof attachment to ProofAttachmentService
-      # This ensures a consistent approach to attachment across the application
-      # Both constituent portal and paper applications use the same service
       def attach_and_update_proof
         is_resubmitting = determine_resubmission_status
         log_resubmission_attempt(is_resubmitting)
 
-        # Set Current attribute to communicate resubmission status to validation layer
+        # No code in app/ reads Current.resubmitting_proof now.
         Current.resubmitting_proof = is_resubmitting
 
         begin
           result = ProofAttachmentService.attach_proof(build_attachment_params(is_resubmitting))
         ensure
-          # Always reset Current attribute, even if an exception occurs
           Current.resubmitting_proof = nil
         end
 
@@ -182,7 +161,7 @@ module ConstituentPortal
         raise "Failed to attach proof: #{result[:error]&.message}"
       end
 
-      # A refused upload changed nothing, so the constituent can choose a file and try again
+      # A refused upload changes nothing, so the constituent can choose a file and try again.
       def redirect_refused_upload(refusal)
         redirect_to constituent_portal_application_new_proof_path(@application, proof_type: params[:proof_type]),
                     alert: t("constituent_portal.proofs.upload_refused.#{refusal.reason}",
@@ -209,22 +188,19 @@ module ConstituentPortal
           status: :not_reviewed,
           admin: current_user,
           submission_method: :web,
-          # Using RequestMetadataHelper for consistent metadata creation
           metadata: proof_submission_metadata(params[:proof_type], {
-                                                resubmitting: is_resubmitting # Pass resubmission flag in metadata
+                                                resubmitting: is_resubmitting
                                               })
         }
       end
 
       def handle_successful_submission
-        # Set flash and keep it through redirects
         flash[:notice] = 'Proof submitted successfully'
         flash.keep(:notice)
         redirect_to constituent_portal_application_path(@application)
       end
 
       def handle_rate_limit_error
-        # Set flash and keep it through redirects
         flash[:alert] = 'Please wait before submitting another proof'
         flash.keep(:alert)
         redirect_to constituent_portal_application_path(@application)
@@ -238,12 +214,10 @@ module ConstituentPortal
       end
 
       def track_submission
-        # Create Event for application audit log
         AuditEventService.log(
           action: 'proof_submitted',
           actor: current_user,
           auditable: @application,
-          # Using RequestMetadataHelper for consistent audit metadata
           metadata: audit_metadata({
                                      proof_type: params[:proof_type],
                                      submission_method: 'web'

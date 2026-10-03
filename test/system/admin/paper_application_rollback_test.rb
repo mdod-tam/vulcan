@@ -6,20 +6,8 @@ require_relative '../../support/paper_application_context_helpers'
 require Rails.root.join('test/support/system_test_evidence')
 
 module Admin
-  # What staff can actually do after a paper create fails and the whole transaction rolls back.
-  #
-  # "Usable retry form" is a claim about finishing the job without redoing it, so this test finishes
-  # it that way: it asserts every submitted non-file value came back, reselects only the files the
-  # restored dispositions actually require, changes nothing else, and checks the durable result
-  # matches the decisions staff originally made.
-  #
-  # Two earlier versions proved less than they appeared to. One asserted two names and stopped, while
-  # most of the form was being dropped. The next reattached through the shared accept-everything
-  # helper, which silently overwrote the restored ID rejection -- proving staff could re-enter their
-  # decisions, which is the opposite of the contract.
-  #
-  # The failure is forced at the proof-attachment boundary rather than by mangling the form, because
-  # the subject is the response, not the cause.
+  # Retry scenarios preserve submitted decisions and verify the durable outcome after files are replaced.
+  # Force the failure at the attachment boundary to test the response with valid form input.
   class PaperApplicationRollbackTest < ApplicationSystemTestCase
     include PaperApplicationsTestHelper
     include PaperApplicationContextHelpers
@@ -44,9 +32,8 @@ module Admin
     end
 
     test 'a rolled-back create keeps every typed value and can be retried to success' do
-      # The only scenario that uses the force-reveal helper. The others drive the real controls,
-      # because that helper sets visibility and disabled state directly and would mask the Stimulus
-      # behaviour those captures exist to prove.
+      # This scenario uses the force-reveal helper. Other scenarios use real controls because direct visibility changes
+      # can mask Stimulus failures.
       reveal_adult_application_sections
       ProofAttachmentService.stubs(:attach_proof).returns(
         { success: false, error: StandardError.new('Income proof was rejected by storage') }
@@ -58,11 +45,8 @@ module Admin
         assert_text(/rejected by storage/i, wait: 15)
       end
 
-      # A failure must not navigate to an application the rollback removed. This *is* reachable: the
-      # service classifies by querying the database, and a rolled-back create has nothing to find.
       assert_no_text(/not found/i)
       assert_no_match(%r{/admin/applications}, page.current_path)
-      # The internal step name must not trail the real reason.
       assert_no_text(/Proof upload failed/i)
 
       assert_typed_values_survived
@@ -70,19 +54,14 @@ module Admin
 
       take_evidence_screenshot('paper-application-rollback-retry', full: true, html: true)
 
-      # Finish the job by touching *only* the file inputs. Deliberately not the shared
-      # attach-and-accept helper: that re-chooses "Accept & Upload" for every proof, which would
-      # overwrite the restored ID rejection and make this test prove staff can re-enter their
-      # decisions rather than that they never had to.
+      # Replace files without the shared accept-all helper, which would overwrite the restored ID rejection.
       ProofAttachmentService.unstub(:attach_proof)
       reattach_files_required_by_restored_dispositions
       sync_paper_submit_gate
 
-      # Readiness is the whole promise: files back, nothing else touched, Submit live again.
       assert_button 'Submit Paper Application', disabled: false, wait: 10
       take_evidence_screenshot('paper-application-rollback-submit-ready', full: true, html: true)
 
-      # The dispositions must still be exactly what was restored, immediately before submitting.
       assert_restored_dispositions
 
       assert_difference ['User.count', 'Application.count'], 1 do
@@ -94,9 +73,7 @@ module Admin
       take_evidence_screenshot('paper-application-rollback-retry-succeeded', full: true, html: true)
     end
 
-    # The opposite outcome, and the one the removed branch used to cover by accident. A post-commit
-    # callback failure leaves the application committed, so the admin must be sent to it -- being
-    # handed a retry form here is how a duplicate gets created.
+    # A callback failure after commit must route to the existing application to avoid duplicate submissions.
     test 'a post-commit failure lands on the real application with a warning, not a retry form' do
       ProofReview.any_instance.stubs(:handle_post_review_actions).raises(StandardError, 'after commit exploded')
 
@@ -116,12 +93,8 @@ module Admin
       take_evidence_screenshot('paper-application-post-commit-warning', full: true, html: true)
     end
 
-    # The branch that restored nothing at all. Driven through the real radio, search and picker so
-    # the Stimulus reveal/enable behaviour is part of what the capture proves.
-    #
-    # The contact choices are deliberately non-default -- guardian email and phone unchecked, the
-    # dependent's own values typed in. A browser omits unchecked checkboxes entirely, which is the
-    # case a controller test posting an explicit "0" cannot reproduce.
+    # Use real controls to exercise Stimulus.
+    # Hidden companions submit 0 for unchecked guardian-contact choices.
     test 'a failed dependent submission restores its branch, guardian, and contact choices' do
       guardian = create(:constituent, first_name: 'Dependent', last_name: 'Guardian')
       ProofAttachmentService.stubs(:attach_proof).returns(
@@ -133,7 +106,7 @@ module Admin
       fill_in_application_details(household_size: 3, annual_income: 25_000)
       fill_in_disability_information
       attach_and_accept_proofs
-      # After the proof sections exist: the income flag lives inside one of them.
+      # The income flag exists only after the proof sections render.
       choose_no_information_flags
       complete_paper_application_attestations
 
@@ -144,8 +117,8 @@ module Admin
 
       assert_dependent_branch_restored(guardian)
       assert_file_inputs_empty
-      # Native inputs are empty; valid signed uploads remain available. This scenario replaces
-      # the uploads after restoration and checks that the other choices remain intact.
+      # Native inputs are empty, but valid signed uploads remain available. Replace uploads without changing other
+      # decisions.
       take_evidence_screenshot('paper-application-rollback-dependent', full: true, html: true)
 
       ProofAttachmentService.unstub(:attach_proof)
@@ -167,9 +140,7 @@ module Admin
       take_evidence_screenshot('paper-application-rollback-dependent-succeeded', full: true, html: true)
     end
 
-    # The picker refetches the selected adult on connect and pastes the on-file record over the
-    # fields. On a retry the submitted values are newer -- here, a corrected phone number staff came
-    # to the paper form to make -- so the database original must not win.
+    # Submitted corrections must survive the adult picker refresh on retry.
     test 'a retry keeps corrections to a selected existing adult rather than the on-file values' do
       existing = create(:constituent, first_name: 'OnFile', last_name: 'Applicant',
                                       phone: '202-555-0101')
@@ -192,21 +163,17 @@ module Admin
         assert_text(/rejected by storage/i, wait: 20)
       end
 
-      # The context fetch has to have visibly finished, or this asserts against a form the picker
-      # simply has not reached yet.
+      # Wait for the context fetch before asserting that the submitted correction survived.
       assert_selector '[data-adult-picker-target="onFileSummary"]', visible: true, wait: 15
       assert_equal corrected_phone, enabled_field('constituent[phone]').value,
                    'the correction was overwritten by the on-file value'
       assert_equal existing.id.to_s, first("input[name='existing_constituent_id']", visible: :all).value
 
-      # The card must name who is selected, not merely report that someone is. Only the click path
-      # used to fill it, so a restored retry showed an empty green "selected applicant" box.
       within '[data-adult-picker-target="selectedPane"]' do
         assert_text existing.full_name
       end
 
-      # Files are the one thing a retry cannot put back, and the submit button goes disabled with no
-      # visible reason on a form this long. The sr-only live region is not enough for sighted staff.
+      # The retry guidance must be visible to sighted staff as well as announced by the live region.
       assert_text(/entries were restored/i)
       assert_text(/Income proof/i)
 
@@ -229,9 +196,7 @@ module Admin
       take_evidence_screenshot('paper-application-rollback-existing-adult-succeeded', full: true, html: true)
     end
 
-    # The suppression is scoped to the restored selection. Replacing that selection means the newer
-    # answer is the *new* adult's on-file record, so autopopulation has to come back -- otherwise
-    # staff get a selected applicant whose name, date of birth and contact fields are all blank.
+    # A replacement selection must restore automatic field values from the new adult record.
     test 'changing the selection after a failed retry autopopulates the replacement adult' do
       original = create(:constituent, first_name: 'OnFile', last_name: 'Applicant', phone: '202-555-0101')
       replacement = create(:constituent, first_name: 'Replacement', last_name: 'Adult',
@@ -263,9 +228,8 @@ module Admin
       take_evidence_screenshot('paper-application-rollback-changed-selection', full: true, html: true)
     end
 
-    # When the write cannot be verified, staff must not be sent to the record's own page: if the row
-    # is not there, "application not found" replaces the very guidance telling them to check before
-    # entering it again. The list is somewhere they can act on either way.
+    # The application page could return not found after an unverified write. Route to the list with the duplicate
+    # warning.
     test 'an unconfirmed write lands on the applications list with the warning and no success notice' do
       ProofReview.any_instance.stubs(:handle_post_review_actions).raises(StandardError, 'after commit exploded')
       Application.stubs(:exists?).raises(ActiveRecord::ConnectionNotEstablished, 'database went away')
@@ -286,13 +250,10 @@ module Admin
       take_evidence_screenshot('paper-application-unconfirmed-write', full: true, html: true)
     end
 
-    # The policy applies from the moment a dependent is selected, not only after a failure, so the
-    # ordinary path needs its own browser proof. Without this, the only evidence would be a retry
-    # screen, and a reader could reasonably conclude read-only was a failure-mode behaviour.
+    # Verify on-file identity before submission as well as after failure. The policy applies on both renders.
     test 'selecting an existing dependent shows on-file identity before any submission' do
       guardian = create(:constituent, first_name: 'Initial', last_name: 'Guardian')
-      # Deliberately long but entirely plausible, so the same capture answers both the long-name and
-      # the narrow-width question rather than needing a viewport matrix.
+      # Use a long name to test the card at narrow width.
       dependent = create(:constituent, first_name: 'Aleksandra-Wilhelmina',
                                        last_name: 'Oyelaran-Fitzgerald',
                                        date_of_birth: Date.new(2012, 9, 14))
@@ -302,7 +263,6 @@ module Admin
       select_guardian_through_the_ui(guardian)
       select_existing_dependent_through_the_ui(dependent)
 
-      # No submission has happened: this is the plain selection state.
       assert_text(/Existing dependent selected/i)
       assert_text(/Aleksandra-Wilhelmina Oyelaran-Fitzgerald/)
       assert_text(/will not change them/i)
@@ -310,30 +270,22 @@ module Admin
       assert_no_selector '#dependent_constituent_first_name', visible: :all
       assert_no_selector '#dependent_constituent_date_of_birth', visible: :all
 
-      # Contact stays editable -- the writer does persist that.
       assert_selector "input[name='constituent[dependent_email]']", visible: :all
 
       take_evidence_screenshot('paper-application-existing-dependent-initial-selection',
                                full: true, html: true)
 
-      # 320 CSS pixels: WCAG 1.4.10 Reflow's reference width, equivalent to 400% zoom from a 1280px
-      # viewport. A 375-390px phone capture is useful mobile evidence but is not this claim, and a
-      # 200% text check answers enlargement rather than reflow.
+      # WCAG 1.4.10 uses 320 CSS pixels for reflow, equivalent to a 1280px viewport at 400% zoom.
+      # A phone-width capture or 200% text enlargement does not prove this boundary.
       original_size = page.current_window.size
       begin
         page.current_window.resize_to(320, 900)
         assert_text(/Existing dependent selected/i)
         assert_text(/Aleksandra-Wilhelmina Oyelaran-Fitzgerald/)
-        # Deliberately NOT a page-level WCAG claim. 1.4.10 conformance applies to a complete page,
-        # and this page still fails: measured at 320px, `#guardian-info-section` is 364px wide, so
-        # the document overflows by 60px. That is untouched guardian markup, tracked separately.
-        # What is asserted here is narrower and is this PR's to own -- the summary card introduces
-        # no overflow of its own.
-        #
-        # Scoped to the card itself rather than `#dependent-info-section`, which wraps a great deal
-        # of unchanged form. Both checks matter: the bounding rectangle proves the outer box fits in
-        # the viewport, while scrollWidth proves no descendant spills out of it -- an outer box can
-        # sit inside the viewport while its contents overflow.
+        # This assertion covers the summary card, not full-page WCAG conformance.
+        # Reported guardian-section overflow remains a separate follow-up: 364px section width and 60px document
+        # overflow at 320px.
+        # Measure both the outer box and its contents because a contained box can still have overflowing descendants.
         card = evaluate_script(<<~JS)
           (() => {
             const el = document.getElementById('existing-dependent-summary');
@@ -358,11 +310,8 @@ module Admin
         page.current_window.resize_to(original_size[0], original_size[1])
       end
 
-      # Pressed, not merely present. Asserting the action attribute proves only that a name was
-      # typed into the markup; it cannot show what that name does. The picker's own control calls
-      # `clearSelection`, which would also drop the guardian -- from a button whose copy promises
-      # only to change the dependent.
-      # Scoped to the card, and named distinctly from the guardian card's own "Change Selection".
+      # Exercise Change Dependent because clearSelection would also clear the guardian. Scope the action to the
+      # dependent card.
       within '#dependent-info-section' do
         click_button 'Change Dependent'
       end
@@ -372,16 +321,11 @@ module Admin
                    'changing the dependent must not clear the guardian'
       assert_equal '', first("input[name='dependent_id']", visible: :all).value
 
-      # And the path forward is genuinely usable: the blank new-dependent form is back.
       assert_selector '#dependent_constituent_first_name', wait: 10
       assert_text(/New Dependent Information/i)
 
-      # Turbo destroyed the clicked button, so focus must land somewhere deliberate rather than
-      # falling back to <body> and stranding a keyboard user at the top of a very long form.
-      #
-      # The destination is the on-file dependent list, not the blank name field: "Change Dependent"
-      # usually means "wrong person, pick the right one", and the card just dismissed warns against
-      # creating a duplicate to work around a bad record.
+      # Turbo removes the clicked button. Move focus to the on-file chooser so staff can select another dependent
+      # without creating a duplicate.
       landed = evaluate_script(<<~JS)
         (() => {
           const a = document.activeElement;
@@ -392,15 +336,11 @@ module Admin
           return a.tagName + '#' + (a.id || '');
         })()
       JS
-      # This guardian has an on-file dependent list, so that is where focus belongs. The
-      # new-dependent field is only the fallback when no list exists, and accepting either here
-      # would let the intended destination regress unnoticed.
+      # This guardian has an on-file list, so only that focus destination satisfies the assertion.
       assert_equal 'dependents-list', landed,
                    "focus went to #{landed} instead of the on-file dependent list"
     end
 
-    # The branch where identity is on-file fact rather than paper-intake input. Also the browser
-    # proof of that decision: the fields must not be editable, and no hidden copy may be submitted.
     test 'an existing-dependent retry shows on-file identity and keeps editable contact' do
       guardian = create(:constituent, first_name: 'Existing', last_name: 'Guardian')
       dependent = create(:constituent, first_name: 'Jonathan', last_name: 'Smith',
@@ -425,7 +365,6 @@ module Admin
         assert_text(/rejected by storage/i, wait: 20)
       end
 
-      # Identity is stated, not offered for editing, and nothing hidden carries it back.
       assert_text(/Existing dependent selected/i)
       assert_text(/Jonathan Smith/)
       assert_text(/will not change them/i)
@@ -437,10 +376,8 @@ module Admin
       assert_file_inputs_empty
       take_evidence_screenshot('paper-application-rollback-existing-dependent', full: true, html: true)
 
-      # The same control, exercised on the *other* production render. This frame is nested inside
-      # the guardian-picker element here and outside it on initial selection, so an action bound to
-      # guardian-picker worked on this path and silently did nothing on that one. Both paths are
-      # driven because one passing path proved nothing about the other.
+      # Retry and initial selection nest the dependent frame differently. Exercise the action on both renders to expose
+      # an incorrect controller binding.
       within '#dependent-info-section' do
         click_button 'Change Dependent'
       end
@@ -449,8 +386,7 @@ module Admin
                    'changing the dependent on a retry must not clear the guardian'
       assert_equal '', first("input[name='dependent_id']", visible: :all).value
 
-      # Focus asserted here too. This frame is nested differently on this render, and focus after a
-      # Turbo swap is exactly the kind of behaviour that can hold on one path and not the other.
+      # Verify focus on this render too because the frame has different nesting.
       retry_focus = evaluate_script(<<~JS)
         (() => {
           const a = document.activeElement;
@@ -464,16 +400,12 @@ module Admin
       assert_equal 'dependents-list', retry_focus,
                    "focus went to #{retry_focus} instead of the on-file dependent list on retry"
 
-      # Put the dependent back so the rest of the scenario continues against the same record.
+      # Reselect the same dependent for the rest of the scenario.
       select_existing_dependent_through_the_ui(dependent)
       assert_text(/Existing dependent selected/i, wait: 10)
 
-      # The common sections -- application details, disability, proofs, attestations -- must come
-      # back with the rest of the form, because a retry that cannot reach them cannot be submitted.
-      # This regressed once while the read-only identity block was being added: a misplaced `<% end %>`
-      # closed the form before `commonSections`, so the target rendered outside the element its
-      # controller owns and stayed hidden no matter how long the test waited. Asserted here because
-      # the symptom looks like a controller timing bug and is actually unbalanced markup.
+      # The common sections must stay within the form controller to render on retry.
+      # A misplaced ERB end can hide them and resemble a Stimulus timing failure.
       assert_selector '[data-applicant-type-target="commonSections"]', visible: true, wait: 10
       assert_file_inputs_empty
 
@@ -492,7 +424,6 @@ module Admin
 
       application = Application.order(:id).last
       assert_equal dependent.id, application.user_id, 'the retry must attach to the selected dependent'
-      # The read-only contract, proved durably: paper intake does not touch identity.
       assert_equal 'Jonathan', dependent.reload.first_name
       assert_equal Date.new(2011, 4, 3), dependent.date_of_birth
       take_evidence_screenshot('paper-application-rollback-existing-dependent-succeeded', full: true, html: true)
@@ -500,8 +431,7 @@ module Admin
 
     private
 
-    # Real controls only: the applicant-type radio and the "Create New Applicant" button, letting
-    # Stimulus reveal and enable the sections itself.
+    # Use real controls so Stimulus owns section visibility and enabled state.
     def choose_adult_branch_through_the_ui
       choose 'An Adult (applying for themselves)', allow_label_click: true
       click_button 'Create New Applicant'
@@ -517,8 +447,7 @@ module Admin
       assert_selector '[data-adult-picker-target="onFileSummary"]', visible: true, wait: 15
     end
 
-    # Submit gating requires the admin to confirm they checked the on-file contact details against
-    # the paper form; it is part of the existing-adult contract rather than incidental setup.
+    # The existing-adult submit gate requires staff verification against the paper form.
     def verify_existing_adult_contact
       box = first('[data-adult-picker-target="verificationCheckbox"]', visible: :all)
       return if box.nil? || box.checked?
@@ -532,7 +461,7 @@ module Admin
       end
       assert_selector '#dependent-info-section', wait: 10
       assert_equal dependent.id.to_s, first("input[name='dependent_id']", visible: :all).value
-      # Required, and not prefilled from the existing relationship.
+      # The form requires a relationship choice even for an existing relationship.
       select 'Parent', from: 'relationship_type'
     end
 
@@ -555,12 +484,10 @@ module Admin
         paper_fill_in 'First Name', 'Dependent'
         paper_fill_in 'Last Name', 'Child'
         find('input[name="constituent[date_of_birth]"]:not([disabled])').set('01/15/2010')
-        # Away from the defaults: unchecking these is what makes the dependent's own contact fields
-        # required, and a browser omits the unchecked boxes from the submission entirely.
+        # Uncheck guardian contact to require dependent contact. Hidden companions submit 0 for these unchecked choices.
         uncheck 'use_guardian_email' if has_checked_field?('use_guardian_email', wait: 2)
         uncheck 'use_guardian_phone' if has_checked_field?('use_guardian_phone', wait: 2)
-        # Address too: it has the same absent-when-unchecked problem, and silently flipping
-        # "same address as guardian" back on after a failure changes where documents are sent.
+        # A restored guardian-address choice could change the destination for documents.
         uncheck 'use_guardian_address_checkbox' if has_checked_field?('use_guardian_address_checkbox', wait: 2)
         find('input[name="constituent[dependent_email]"]:not([disabled])').set('dependent.child@example.com')
         find('input[name="constituent[dependent_phone]"]:not([disabled])').set('202-555-0177')
@@ -571,7 +498,7 @@ module Admin
       select 'Parent', from: 'relationship_type'
     end
 
-    # Two flags driven by separate dynamic controllers; one scenario exercises both.
+    # Separate dynamic controllers own these flags.
     def choose_no_information_flags
       check 'no_medical_provider_information', allow_label_click: true
       check 'no_income_information', allow_label_click: true
@@ -579,9 +506,8 @@ module Admin
 
     def assert_dependent_branch_restored(guardian)
       assert_text(/rejected by storage/i)
-      # Checked, not enabled: the applicant-type radios are deliberately disabled once a branch is
-      # locked in, so filtering on :not([disabled]) would find nothing and report a loss that is not
-      # happening.
+      # Locked applicant-type radios remain checked but disabled. An enabled-only selector would miss the restored
+      # choice.
       assert first("input[name='applicant_type'][value='dependent']", visible: :all).checked?,
              'the dependent branch was not restored'
       assert_not first("input[name='applicant_type'][value='self']", visible: :all).checked?,
@@ -589,8 +515,6 @@ module Admin
       assert_equal guardian.id.to_s,
                    first("input[name='guardian_id']", visible: :all).value,
                    'the selected guardian was not restored'
-      # A hidden id is not a restored selection as far as staff are concerned: the panel has to say
-      # which guardian it means.
       assert_selector '[data-guardian-picker-target="selectedGuardianDisplay"]',
                       text: guardian.full_name, wait: 10
 
@@ -624,9 +548,7 @@ module Admin
       complete_paper_application_attestations
     end
 
-    # Deliberately away from the defaults. Medical especially: "approved" is what a fresh form
-    # selects, so leaving it there would let a total failure to restore look like success. The ID
-    # proof is rejected with a reason, which is the state that was silently dropped entirely.
+    # Use non-default medical and ID actions so defaults cannot mask lost state.
     def choose_non_default_proof_dispositions
       choose 'upload_only_medical_certification', allow_label_click: true
       choose 'reject_id_proof', allow_label_click: true
@@ -634,9 +556,7 @@ module Admin
       sync_paper_submit_gate
     end
 
-    # Everything the server is capable of restoring. Selected on the *enabled* input at page scope:
-    # the dependent fieldset carries inputs under the same names and is disabled rather than removed,
-    # so scoping by fieldset reads its empty fields and reports losses that never happened.
+    # Select enabled inputs at page scope. The disabled dependent fieldset retains controls with the same names.
     def assert_typed_values_survived
       {
         'constituent[first_name]' => 'Rollback',
@@ -647,8 +567,7 @@ module Admin
         assert_equal expected, enabled_field(name).value, "#{name} was not restored"
       end
 
-      # Compared as a number: the field is currency-formatted, so its exact string is a display
-      # concern and asserting it would break on formatting rather than on data loss.
+      # Compare currency as a number to detect data loss independently of display formatting.
       assert_equal 20_000,
                    enabled_field('application[annual_income]').value.to_s.gsub(/[^\d.]/, '').to_f.to_i,
                    'annual income was not restored'
@@ -659,8 +578,7 @@ module Admin
         assert enabled_checkbox(name).checked?, "#{name} was not restored"
       end
 
-      # Workflow instructions, not attributes of any record, so nothing carries them back on its
-      # own. All four groups, including the two moved off their defaults.
+      # Workflow decisions are not model attributes, so they require explicit restoration.
       { 'income_proof_action' => 'accept', 'residency_proof_action' => 'accept',
         'id_proof_action' => 'reject', 'medical_certification_action' => 'upload_only' }.each do |group, expected|
         assert_equal expected, checked_value(group), "#{group} was not restored"
@@ -671,8 +589,7 @@ module Admin
                    'the rejection reason was not restored'
     end
 
-    # Files only, and only where the restored disposition needs one. ID is restored as a rejection
-    # for "None Provided", so attaching an ID document would contradict the decision being retried.
+    # The restored ID rejection specifies None Provided. An ID attachment would contradict it.
     def reattach_files_required_by_restored_dispositions
       { 'medical_certification' => 'medical_certification_valid.pdf',
         'income_proof' => 'income_proof.pdf',
@@ -691,8 +608,6 @@ module Admin
                    'the rejection reason changed before the retry was submitted'
     end
 
-    # The point of the whole exercise: the decisions staff made the first time are the decisions the
-    # database ends up with, without their having re-entered any of them.
     def assert_durable_outcome_matches_restored_dispositions
       application = Application.order(:id).last
       assert_equal 'Rollback', application.user.first_name
@@ -705,18 +620,13 @@ module Admin
 
       assert application.medical_certification.attached?, 'the certification should have been attached'
 
-      # The restored rejection has to survive all the way to durable state, document and all.
       assert_not application.id_proof.attached?, 'a rejected ID proof must not carry a document'
       assert_equal 'rejected', application.id_proof_status
 
       review = application.proof_reviews.find_by(proof_type: :id)
       assert_not_nil review, 'the ID rejection should have been recorded as a proof review'
       assert_equal 'rejected', review.status
-      # The exact reason staff picked, not merely that some reason was stored: a restore that
-      # substituted a different reason would still be present, and would still be wrong.
-      # Both halves of the stored reason, exactly. A restore that substituted a different reason
-      # would still be present and still be wrong, so presence alone proves nothing. The code is the
-      # selection staff made; the text is what anyone reading the application later will see.
+      # Assert both the reason code and displayed text. Presence alone cannot detect a substituted rejection reason.
       assert_equal 'none_provided', review.rejection_reason_code,
                    'the durable rejection code must be the one that was restored on the form'
       assert_equal 'No ID proof was provided with the application.', review.rejection_reason,
@@ -727,7 +637,7 @@ module Admin
       page.evaluate_script("document.querySelector('input[name=\"#{group}\"]:checked')?.value || ''")
     end
 
-    # A retry shows saved uploads by filename while native controls remain empty.
+    # Native controls remain empty while signed uploads display their saved filenames.
     def assert_file_inputs_empty
       PROOFS.each_key do |field|
         selected = page.evaluate_script(
@@ -741,9 +651,7 @@ module Admin
       first("[name=\"#{name}\"]:not([disabled])", visible: :all)
     end
 
-    # Rails renders a hidden "0" companion immediately before each check box, under the same name.
-    # Matching on name alone finds that hidden input, which is never checked -- so the assertion
-    # fails while the real control is restored perfectly.
+    # Rails adds a hidden 0 input with the checkbox name. Select the checkbox explicitly to avoid its companion.
     def enabled_checkbox(name)
       first("input[type='checkbox'][name=\"#{name}\"]:not([disabled])", visible: :all)
     end

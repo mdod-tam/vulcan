@@ -1,25 +1,18 @@
 # frozen_string_literal: true
 
-# AuthenticationTestHelper
+# Sign-in helpers for tests that are not system tests:
+# - Controller tests: sign_in_for_controller_test
+# - Integration tests: sign_in_for_integration_test
+# - Other tests: sign_in_for_unit_test
 #
-# Standardised helpers for signing users in/out across non-system tests.
-# – Controller tests → sign_in_for_controller_test
-# – Integration tests → sign_in_for_integration_test
-# – Unit/other        → sign_in_for_unit_test
-#
-# For system tests, see SystemTestAuthentication module.
+# System tests use SystemTestAuthentication.
 module AuthenticationTestHelper
-  # Include shared authentication core functionality
   include AuthenticationCore
 
-  # Explicit methods for different test contexts --------------------------------
-
-  # Controller-level cookie sign-in.
-  # Set bypass_mfa_enrollment: false when testing required-role MFA enforcement
+  # Set bypass_mfa_enrollment: false to test required-role MFA enforcement.
   def sign_in_for_controller_test(user, bypass_mfa_enrollment: true)
     user_session = create_test_session(user)
 
-    # Mirror what Rails would do from the cookie, so authenticate! sees it
     if defined?(request) && request.respond_to?(:session)
       request.session[:session_token] = user_session.session_token
     end
@@ -30,10 +23,7 @@ module AuthenticationTestHelper
       cookies[:session_token] = user_session.session_token
     end
 
-    # Make Current.user available immediately for any before_action
     update_current_user(user)
-
-    # Store test user ID in thread local variable
     store_test_user_id(user.id)
 
     bypass_mfa_enrollment_in_test_session(bypass: bypass_mfa_enrollment)
@@ -42,39 +32,37 @@ module AuthenticationTestHelper
     user
   end
 
-  # Integration-level header sign-in.
-  # Set bypass_mfa_enrollment: false when testing required-role MFA enforcement
+  # Set bypass_mfa_enrollment: false to test required-role MFA enforcement.
   def sign_in_for_integration_test(user, bypass_mfa_enrollment: true)
     user_session = create_test_session(user)
     @session_token = user_session.session_token
-    @test_user_id = user.id # Store in instance variable
-    store_test_user_id(user.id) # Set test-user-context for post-request restore logic
+    @test_user_id = user.id
+    # test_helper.rb restores Current.user from this ID after each request.
+    store_test_user_id(user.id)
 
-    # Set up cookies so find_test_session can find the session
     if respond_to?(:cookies) && cookies.respond_to?(:signed)
       cookies.signed[:session_token] = { value: user_session.session_token, httponly: true }
     elsif respond_to?(:cookies)
       cookies[:session_token] = user_session.session_token
     end
 
-    # Set up headers for subsequent requests - this is what find_test_session checks first
+    # Requests use these headers only if the test passes headers: @headers.
+    # find_test_session checks Current.test_user_id before this header.
     @headers ||= {}
     @headers['X-Test-User-Id'] = user.id.to_s
 
-    # Make Current.user available immediately
     update_current_user(user)
 
     bypass_mfa_enrollment_in_test_session(bypass: bypass_mfa_enrollment)
 
     debug_auth "INTEGRATION AUTH: cookies, headers, and test user ID set for #{user.email}"
 
-    # Store user reference for post-request verification
     @authenticated_user = user
 
     user
   end
 
-  # Pure unit-test fallback: just update Current.user.
+  # Sets only Current.user. It creates no session.
   def sign_in_for_unit_test(user)
     Current.user = user if defined?(Current)
     @current_user ||= user
@@ -82,12 +70,11 @@ module AuthenticationTestHelper
     user
   end
 
-  # Convenience aliases for backward compatibility ---------------------------
   alias sign_in_as sign_in_for_controller_test
   alias sign_in_with_headers sign_in_for_integration_test
-  # Do not alias update_current_user – keep the core meaning from AuthenticationCore
+  # Do not alias update_current_user. AuthenticationCore owns its meaning.
 
-  # Optional convenience helper: simulate a form-based sign-in (slow!).
+  # Signs in through the real form. This is slow.
   def sign_in_user(user, password: 'password123')
     post sign_in_path, params: { email: user.email, password: password }
     assert_response :redirect
@@ -97,28 +84,21 @@ module AuthenticationTestHelper
   end
 
   def sign_out
-    # Clear integration test headers first (before clearing other state)
     if @headers.is_a?(Hash)
       @headers.delete('X-Test-User-Id')
       @headers.delete('HTTP_X_TEST_USER_ID')
     end
 
-    # Clear instance variables set by sign_in_for_integration_test
     @session_token = nil
     @test_user_id = nil
     @authenticated_user = nil
 
     clear_mfa_enrollment_bypass_in_test_session
 
-    # Use the shared cookie deletion logic that handles all driver types
     delete_session_cookie
-
-    # Clear test identity (thread-locals, Current.user, etc.)
     clear_test_identity
   end
-  alias sign_out_with_headers sign_out # preserve original name
-
-  # Assertions ---------------------------------------------------------------
+  alias sign_out_with_headers sign_out
 
   def assert_authenticated(expected_user)
     return unless defined?(@controller) && @controller.respond_to?(:current_user, true)
@@ -139,10 +119,11 @@ module AuthenticationTestHelper
     assert_match(/not authorized/i, flash[:alert])
   end
 
-  # Mirrors ApplicationController#enforce_required_mfa_enrollment test bypass
+  # Sets the session[:skip_2fa] flag that the test-only bypasses in
+  # ApplicationController and TwoFactorAuthenticationsController read.
   def bypass_mfa_enrollment_in_test_session(bypass: true)
     if is_a?(ActionDispatch::IntegrationTest)
-      # SessionTestHelper#session is not available until after the first request
+      # The integration session is not available until after the first request.
       post '/test/set_session', params: { skip_2fa: bypass ? 'true' : 'false' }
     elsif defined?(request) && request.respond_to?(:session)
       if bypass
@@ -164,7 +145,7 @@ module AuthenticationTestHelper
     integration_session&.delete(:skip_2fa)
   end
 
-  # Skip spec if auth system clearly broken, to avoid cascading failures.
+  # Skips the test if GET root_path redirects to sign-in.
   def skip_unless_authentication_working
     begin
       get root_path

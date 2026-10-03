@@ -2,64 +2,62 @@ import { Controller } from "@hotwired/stimulus"
 import { setVisible, hide, show } from "../../utils/visibility"
 
 /**
- * Contact Feedback Controller
+ * Shows contact and document delivery feedback for the selected preferences.
  * 
- * Shows confirmation messages like "We will call you at XXX-XXX-XXXX"
- * based on the selected contact method and entered contact info.
- * 
- * Usage:
+ * Usage (include the address targets for delivery feedback):
  *   <div data-controller="contact-feedback">
  *     <input data-contact-feedback-target="phone" ...>
  *     <input data-contact-feedback-target="email" ...>
- *     <input type="radio" name="contact_method" value="call" 
+ *     <input type="radio" name="contact_method" value="voice"
  *            data-action="change->contact-feedback#updateFeedback">
+ *     <input data-contact-feedback-target="address1" ...>
+ *     <input data-contact-feedback-target="address2" ...>
+ *     <input data-contact-feedback-target="city" ...>
+ *     <input data-contact-feedback-target="state" ...>
+ *     <input data-contact-feedback-target="zipCode" ...>
  *     <div data-contact-feedback-target="feedback"></div>
  *   </div>
  */
 export default class ContactFeedbackController extends Controller {
   static targets = [
-    "phone",           // Phone number input
-    "email",           // Email input
-    "emailWrapper",    // Wrapper around email field (scoped per controller instance)
-    "phoneWrapper",    // Wrapper around phone field
-    "phoneTypeFieldset", // Preferred contact method fieldset
-    "address1",        // Street address line 1
-    "address2",        // Street address line 2 (optional)
-    "city",            // City
-    "state",           // State
-    "zipCode",         // ZIP code
-    "feedback",        // Container for feedback message
-    "contactMethod",   // Radio buttons for how to contact (call, text, videophone, email, mail)
-    "deliveryMethod",  // Radio buttons for where to send official docs (email vs mail)
-    "deliveryFeedback" // Container for delivery preference feedback
+    "phone",
+    "email",
+    "emailWrapper",
+    "phoneWrapper",
+    "phoneTypeFieldset",
+    "address1",
+    "address2",
+    "city",
+    "state",
+    "zipCode",
+    "feedback",
+    "contactMethod",
+    "deliveryMethod",
+    "deliveryFeedback"
   ]
 
   static values = {
-    // Configurable feedback messages for preferred contact method
     callMessage: { type: String, default: "We will call you at" },
     textMessage: { type: String, default: "We will text you at" },
     videophoneMessage: { type: String, default: "We will call you using ASL at" },
     emailMessage: { type: String, default: "We will email you at" },
     mailMessage: { type: String, default: "We will send mail to your address" },
-    // Configurable feedback messages for document delivery preference
     deliveryEmailMessage: { type: String, default: "We will email official program documents to" },
     deliveryMailMessage: { type: String, default: "We will mail official program documents to" }
   }
 
   connect() {
-    // Store bound method references for cleanup
+    // Disconnect must remove the same listener references.
     this._boundUpdateFeedback = this.updateFeedback.bind(this)
     this._boundUpdateDeliveryFeedback = this.updateDeliveryFeedback.bind(this)
     this._boundNoContactCheckboxEvent = this._handleNoContactCheckboxEvent.bind(this)
     
-    // Set up listeners on input fields for real-time updates
     this._setupInputListeners()
     this._setupNoContactCheckboxListeners()
     
-    // Restore no-contact checkbox UI after validation failure re-render
+    // Apply restored no-contact choices after a validation error.
     this._syncNoContactCheckboxState()
 
-    // Initial update - show feedback on page load
     this.updateFeedback()
     this.updateDeliveryFeedback()
   }
@@ -69,9 +67,6 @@ export default class ContactFeedbackController extends Controller {
     this._teardownNoContactCheckboxListeners()
   }
 
-  /**
-   * Toggle email field visibility when "no email" checkbox is checked
-   */
   toggleEmailField(event) {
     const checkbox = event.target
     const emailInput = this._emailInput()
@@ -103,9 +98,6 @@ export default class ContactFeedbackController extends Controller {
     this.updateDeliveryFeedback()
   }
 
-  /**
-   * Toggle phone field visibility when "no phone" checkbox is checked
-   */
   togglePhoneField(event) {
     const checkbox = event.target
     const phoneInput = this._phoneInput()
@@ -140,9 +132,7 @@ export default class ContactFeedbackController extends Controller {
     this.updateDeliveryFeedback()
   }
 
-  /**
-   * Dependent form: no-email checkbox selects guardian email strategy
-   */
+  // A dependent without email uses the guardian email path and letter delivery.
   toggleDependentNoEmail(event) {
     const checkbox = event.target
     const useGuardianEmail = this.element.querySelector('#use_guardian_email_checkbox')
@@ -303,9 +293,7 @@ export default class ContactFeedbackController extends Controller {
     delete field.dataset.contactFeedbackSuppressed
   }
 
-  /**
-   * Called when outer form sections re-enable fields after being hidden.
-   */
+  // Outer form sections call this method after they re-enable fields.
   resyncNoContactState() {
     this._syncNoContactCheckboxState()
     this.updateFeedback()
@@ -367,9 +355,6 @@ export default class ContactFeedbackController extends Controller {
     return this._noPhoneCheckbox()?.checked === true
   }
 
-  /**
-   * Listeners on phone/email/address inputs for real-time feedback updates
-   */
   _setupInputListeners() {
     const phoneInput = this._phoneInput()
     if (phoneInput) {
@@ -385,7 +370,6 @@ export default class ContactFeedbackController extends Controller {
       emailInput.addEventListener("change", this._boundUpdateDeliveryFeedback)
     }
     
-    // Set up listeners for address fields to update delivery feedback
     const addressTargets = ['address1', 'address2', 'city', 'state', 'zipCode']
     addressTargets.forEach(targetName => {
       const target = this[`${targetName}Target`]
@@ -411,7 +395,6 @@ export default class ContactFeedbackController extends Controller {
       emailInput.removeEventListener("change", this._boundUpdateDeliveryFeedback)
     }
     
-    // Remove listeners from address fields
     const addressTargets = ['address1', 'address2', 'city', 'state', 'zipCode']
     addressTargets.forEach(targetName => {
       const target = this[`${targetName}Target`]
@@ -422,10 +405,6 @@ export default class ContactFeedbackController extends Controller {
     })
   }
 
-  /**
-   * Update the contact method feedback based on selection
-   * Called by radio button change events and input changes
-   */
   updateFeedback() {
     if (!this.hasFeedbackTarget) return
 
@@ -446,15 +425,12 @@ export default class ContactFeedbackController extends Controller {
       this.feedbackTarget.innerHTML = feedback.html
       this.feedbackTarget.className = feedback.className
       setVisible(this.feedbackTarget, true)
-      // Note: aria-live="polite" and aria-atomic="true" are set in HTML for reliability
+      // The markup owns the live-region attributes.
     } else {
       setVisible(this.feedbackTarget, false)
     }
   }
 
-  /**
-   * Update delivery method feedback (email vs mail for official docs)
-   */
   updateDeliveryFeedback() {
     const deliveryFeedback = this.element.querySelector('[data-contact-feedback-target="deliveryFeedback"]')
     if (!deliveryFeedback) return
@@ -471,18 +447,16 @@ export default class ContactFeedbackController extends Controller {
       deliveryFeedback.innerHTML = feedback.html
       deliveryFeedback.className = feedback.className
       setVisible(deliveryFeedback, true)
-      // Note: aria-live="polite" and aria-atomic="true" are set in HTML for reliability
+      // The markup owns the live-region attributes.
     } else {
       setVisible(deliveryFeedback, false)
     }
   }
 
   /**
-   * Get the currently selected contact method
    * @returns {string|null} The selected contact method value
    */
   _getSelectedContactMethod() {
-    // Check for radio buttons with specific name patterns
     const radioNames = [
       'constituent[phone_type]',
       'guardian_attributes[phone_type]',
@@ -494,7 +468,6 @@ export default class ContactFeedbackController extends Controller {
       if (checked) return checked.value
     }
     
-    // Fall back to contactMethod targets
     if (this.hasContactMethodTarget) {
       const checked = this.contactMethodTargets.find(r => r.checked)
       return checked?.value || null
@@ -504,7 +477,6 @@ export default class ContactFeedbackController extends Controller {
   }
 
   /**
-   * Get the currently selected delivery method
    * @returns {string|null} The selected delivery method value
    */
   _getSelectedDeliveryMethod() {
@@ -528,7 +500,6 @@ export default class ContactFeedbackController extends Controller {
   }
 
   /**
-   * Build the contact method feedback HTML
    * @param {string} method The preferred contact method (voice, text, videophone, email, letter)
    * @returns {Object|null} Object with html and className, or null if no feedback
    */
@@ -538,12 +509,10 @@ export default class ContactFeedbackController extends Controller {
     const phone = phoneInput ? this._formatPhone(phoneInput.value) : null
     const email = emailInput ? emailInput.value : null
     
-    // Base classes for feedback - accessible, visually distinct
     const baseClassName = "mt-2 p-3 rounded-md text-sm font-medium flex items-center gap-2"
     const successClassName = `${baseClassName} bg-teal-50 text-teal-800 border border-teal-200`
     const warningClassName = `${baseClassName} bg-amber-50 text-amber-800 border border-amber-200`
     
-    // Icon for checkmark
     const checkIcon = `<svg class="w-5 h-5 flex-shrink-0" fill="currentColor" viewBox="0 0 20 20" aria-hidden="true">
       <path fill-rule="evenodd" d="M10 18a8 8 0 100-16 8 8 0 000 16zm3.707-9.293a1 1 0 00-1.414-1.414L9 10.586 7.707 9.293a1 1 0 00-1.414 1.414l2 2a1 1 0 001.414 0l4-4z" clip-rule="evenodd"/>
     </svg>`
@@ -649,7 +618,6 @@ export default class ContactFeedbackController extends Controller {
   }
 
   /**
-   * Build the delivery method feedback HTML
    * @param {string} method The delivery method (email or letter/mail)
    * @returns {Object|null} Object with html and className, or null if no feedback
    */
@@ -707,8 +675,7 @@ export default class ContactFeedbackController extends Controller {
   }
 
   /**
-   * Build full address string from address field targets
-   * @returns {string|null} Full formatted address or null if incomplete
+   * @returns {string|null} Address HTML with <br> separators, or null if required fields are empty
    */
   _buildFullAddress() {
     const address1 = this.hasAddress1Target ? this.address1Target.value.trim() : ''
@@ -717,12 +684,10 @@ export default class ContactFeedbackController extends Controller {
     const state = this.hasStateTarget ? this.stateTarget.value.trim() : ''
     const zipCode = this.hasZipCodeTarget ? this.zipCodeTarget.value.trim() : ''
     
-    // Require at least address1, city, state, and zip
     if (!address1 || !city || !state || !zipCode) {
       return null
     }
     
-    // Build address lines
     const lines = []
     if (address2) {
       lines.push(`${address1}, ${address2}`)
@@ -735,28 +700,24 @@ export default class ContactFeedbackController extends Controller {
   }
 
   /**
-   * Format phone number for display
    * @param {string} phone Raw phone number
-   * @returns {string|null} Formatted phone or null if invalid
+   * @returns {string|null} Formatted US phone, original input for other formats, or null if blank
    */
   _formatPhone(phone) {
     if (!phone) return null
     
-    // Strip non-digits
     const digits = phone.replace(/\D/g, '')
     
-    // Handle 10-digit US phone
     if (digits.length === 10) {
       return `${digits.slice(0, 3)}-${digits.slice(3, 6)}-${digits.slice(6)}`
     }
     
-    // Handle 11-digit with country code
     if (digits.length === 11 && digits.startsWith('1')) {
       const local = digits.slice(1)
       return `${local.slice(0, 3)}-${local.slice(3, 6)}-${local.slice(6)}`
     }
     
-    // Return as-is if can't format
+    // Preserve other formats for display.
     return phone.trim() || null
   }
 }

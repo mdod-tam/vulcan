@@ -1,6 +1,5 @@
 # frozen_string_literal: true
 
-# Application helper methods for common view functionality and formatting.
 module ApplicationHelper
   include ConstituentPortal::ActivityHelper
   include ActiveStorageHelper
@@ -135,32 +134,21 @@ module ApplicationHelper
     end
   end
 
-  # Determines the appropriate proof review button text based on proof status
-  # @param application [Application] The application instance
-  # @param proof_type [String] The type of proof ("income" or "residency")
-  # @return [String] The appropriate button text
   def proof_review_button_text(application, proof_type)
     application.proof_review_button_text(proof_type)
   end
 
-  # Determines the appropriate CSS classes for the proof review button
-  # @param application [Application] The application instance
-  # @param proof_type [String] The type of proof ("income" or "residency")
-  # @return [String] The appropriate CSS class string for the button
   def proof_review_button_class(application, proof_type)
     application.proof_review_button_class(proof_type)
   end
 
-  # Alias for the constituent portal proof route helper
-  # The actual generated helper is constituent_portal_application_new_proof_path
-  # but views and tests expect new_proof_constituent_portal_application_path
+  # Alias of the generated constituent_portal_application_new_proof_path. Views and tests use this name.
   def new_proof_constituent_portal_application_path(application, **)
     constituent_portal_application_new_proof_path(application, **)
   end
 
-  # Checked state for the medical-release authorization box. It is rendered with check_box_tag
-  # rather than through a form builder, so it has no automatic binding: prefer what was just
-  # submitted, then fall back to what is stored on the application being rendered.
+  # check_box_tag has no form binding. A submitted true value wins. Otherwise the stored value decides,
+  # because cast_boolean_params can make the submitted value false and false is not present?.
   def medical_release_authorized_checked?(application)
     submitted = params.dig(:application, :medical_release_authorized)
     return ActiveModel::Type::Boolean.new.cast(submitted) if submitted.present?
@@ -168,16 +156,9 @@ module ApplicationHelper
     application.present? && application.medical_release_authorized.present?
   end
 
-  # Checked state for one disability-type box on a re-render.
-  #
-  # These were compared against the string "1", but cast_boolean_params has already turned the
-  # submitted values into real booleans by the time the view runs -- so the comparison never
-  # matched and the form fell through to the applicant's *stored* selections. A refusal therefore
-  # reversed a deliberate edit: unchecking Hearing and checking Vision came back as Hearing.
-  #
-  # Presence of the key is what decides, not truthiness, because `false` is a real answer. Rails
-  # emits a hidden "0" alongside each checkbox, so an unchecked box is present-and-false rather
-  # than absent, and only a request that never carried the field at all falls back to stored state.
+  # cast_boolean_params already made submitted values booleans, so do not compare with "1".
+  # A submitted false is a real answer. Rails sends a hidden "0" for an unchecked box, so only an
+  # absent key falls back to the stored selection. Otherwise a failed submit reverts the edit.
   def disability_checked?(field, applicant)
     submitted = params.dig(:application, field)
     return ActiveModel::Type::Boolean.new.cast(submitted) unless submitted.nil?

@@ -1,19 +1,16 @@
 # frozen_string_literal: true
 
 module Applications
-  # Service to orchestrate application creation and updates with proper separation of concerns
-  # Handles persistence, audit logging, and event management for validated ApplicationForm objects
+  # Persists ApplicationForm data and records application audit events.
   class ApplicationCreator < BaseService
     class IneligibleApplicantError < StandardError; end
 
-    # A refusal that is not the constituent's fault: staff must still resolve their duplicate
-    # review before final submission. Typed separately so callers can present it as an
-    # informational notice instead of a validation error, without matching on message text.
+    # Staff must resolve the duplicate review before final submission.
+    # A separate type lets callers show an informational notice without a match on message text.
     class PendingIdentityReviewError < IneligibleApplicantError; end
 
     attr_reader :target_application
 
-    # Result object that provides success/failure status and application access
     class Result
       attr_reader :application, :errors
 
@@ -24,9 +21,9 @@ module Applications
         @pending_identity_review = pending_identity_review
       end
 
-      # True when the only reason this failed is that staff must still resolve the applicant's
-      # duplicate review. Callers surface that as an informational notice rather than a validation
-      # error: the constituent did nothing wrong and their draft is intact.
+      # True when a pending duplicate review is the only cause of refusal.
+      # Callers show an informational notice because the constituent is not at fault.
+      # An existing draft remains intact.
       def pending_identity_review?
         @pending_identity_review
       end
@@ -44,7 +41,7 @@ module Applications
       end
     end
 
-    # Create or update an application using a validated ApplicationForm
+    # Creates or updates an application from a valid ApplicationForm.
     # @param form [ApplicationForm] A valid ApplicationForm instance
     # @return [Result] Success/failure result with application
     def self.call(form)
@@ -134,30 +131,23 @@ module Applications
       raise IneligibleApplicantError, error if error
     end
 
-    # A registration soft match creates a durable review case, and its subject may sign in, build a
-    # draft, and autosave -- but may not finally submit until staff either keeps the accounts
-    # separate or merges them. Without this the duplicate-review workflow is advisory: the account
-    # can submit an application that bypasses the canonical record's history while the case is open.
+    # A subject with an open registration soft match case may sign in, create a draft, and autosave.
+    # Final submission waits for staff to keep the accounts separate or merge them.
+    # This prevents an application from bypassing the canonical record's history.
+    # +Application.identity_review_pending_for?+ also serves the advisory GET notice.
+    # This read decides under the applicant's +User+ lock from +lock_for_merge_integrity!+.
     #
-    # The rule itself lives on +Application.identity_review_pending_for?+ so the portal form can ask
-    # the same question on GET; this is the copy that decides, because only this one runs under lock.
-    #
-    # No additional lock is taken for the read. This transaction already holds the applicant's
-    # +User+ row through +lock_for_merge_integrity!+, and both writers that can resolve a case --
-    # +DuplicateReviewCases::ResolutionService+ and +Users::DuplicateMergeService+ -- acquire that
-    # same row first. A resolution therefore cannot be mid-commit while this reads: it either
-    # committed before this lock was granted, so the terminal state is visible, or it waits behind
-    # this transaction.
+    # No additional lock is needed here. +DuplicateReviewCases::ResolutionService+ and
+    # +Users::DuplicateMergeService+ acquire the same row before they resolve a case.
+    # A resolution finishes before this read acquires the lock or waits for this transaction.
     def pending_identity_review?(applicant)
       Application.identity_review_pending_for?(applicant)
     end
 
-    # Resolved through the form's message_locale rather than ambient I18n.locale. The constituent
-    # portal never wraps requests in I18n.with_locale -- that is only applied to the public auth
-    # flows -- so relying on the ambient locale would always render the default and the Spanish
-    # translation would be unreachable. message_locale prefers the submitted locale, then the
-    # applicant's effective locale (which follows the guardian for guardian-contact dependents),
-    # then the current user's.
+    # This refusal uses message_locale because portal requests do not wrap it in I18n.with_locale.
+    # message_locale selects the submitted locale, then the applicant's effective locale,
+    # then the actor's, then the default.
+    # A dependent who uses guardian contact follows the guardian's locale.
     def pending_identity_review_message
       I18n.t('activemodel.errors.models.application_form.attributes.base.pending_identity_review',
              locale: @form.message_locale)
@@ -186,10 +176,9 @@ module Applications
       end
     end
 
-    # A new-application post continues the actor's existing draft for this applicant. The portal's
-    # new-application page posts to create even after autosave has started that draft, so without
-    # this a Save would start a second draft and a Submit would be refused as a sibling of the
-    # constituent's own draft.
+    # The new form posts to create even after autosave starts a draft.
+    # Resume that draft to avoid a second draft or a submission refusal
+    # caused by the actor's own sibling draft.
     def replace_with_exact_target!(locked_inventory)
       if target_application.persisted?
         exact_target = locked_inventory.find { |application| application.id == target_application.id }
@@ -223,7 +212,6 @@ module Applications
     def setup_applicant_user
       return unless applicant_user
 
-      # Ensure proper STI type
       applicant_user.type = 'Users::Constituent' if applicant_user.type.blank?
     end
 
@@ -281,11 +269,10 @@ module Applications
         alternate_contact_email: @form.alternate_contact_email,
         alternate_contact_relationship_type: @form.alternate_contact_relationship_type
       }
-      # Every portal write starts from a newly-built or exactly locked draft.
-      # Submission moves draft -> in_progress via transition_status! after save (canonical audit).
+      # This writer starts with a new draft or the exact locked draft.
+      # Submission uses transition_status! after save to preserve the canonical audit.
       attributes[:status] = target_application.persisted? ? target_application.status : :draft
 
-      # Only set user if this is a new application or explicitly changing the user
       attributes[:user] = applicant_user if target_application.new_record? || @form.user_id.present?
 
       target_application.assign_attributes(attributes)
@@ -299,19 +286,16 @@ module Applications
     end
 
     def attach_file_uploads
-      # Attach residency proof if provided
       if @form.residency_proof.present?
         target_application.residency_proof.attach(@form.residency_proof)
         target_application.residency_proof_status = 'not_reviewed' if @form.is_submission
       end
 
-      # Attach income proof if provided
       if @form.income_proof.present?
         target_application.income_proof.attach(@form.income_proof)
         target_application.income_proof_status = 'not_reviewed' if @form.is_submission
       end
 
-      # Attach ID proof if provided
       return if @form.id_proof.blank?
 
       target_application.id_proof.attach(@form.id_proof)
@@ -320,7 +304,7 @@ module Applications
 
     def save_application_with_audit
       was_new_record = target_application.new_record?
-      # Submission clears the metadata in the same transaction. A refused submission keeps the draft ordering.
+      # Submission clears autosave ordering in this transaction. A refusal preserves the draft's ordering.
       target_application.autosave_revisions = {} if @form.is_submission
       target_application.save!
       actor = determine_audit_actor
@@ -380,7 +364,6 @@ module Applications
     def log_events
       return unless target_application.persisted?
 
-      # Log dependent application event if applicable
       return unless dependent_application? && target_application.managing_guardian && target_application.user
 
       relationship = find_guardian_relationship
@@ -396,7 +379,7 @@ module Applications
     end
 
     def determine_managing_guardian_id
-      # If updating existing application, preserve existing managing_guardian_id
+      # An existing manager remains authoritative on update.
       return target_application.managing_guardian_id if target_application.persisted? && target_application.managing_guardian_id.present?
 
       dependent_application? ? current_user.id : nil

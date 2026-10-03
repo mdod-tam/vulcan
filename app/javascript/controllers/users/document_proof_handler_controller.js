@@ -51,10 +51,7 @@ class DocumentProofHandlerController extends Controller {
     this.uploadForm?.removeEventListener('direct-uploads:end', this._releaseUploads);
   }
 
-  /**
-   * Restore the UI state based on which radio button is checked
-   * This handles cases where the form is re-rendered after validation errors
-   */
+  // Shows the sections for a review action that the server restored.
   restoreStateFromFormData() {
     if (!this.hasAcceptRadioTarget || !this.hasRejectRadioTarget) {
       return;
@@ -71,10 +68,6 @@ class DocumentProofHandlerController extends Controller {
     }
   }
 
-  /**
-   * Toggle between accept/reject states
-   * @param {Event} event The change event from radio buttons
-   */
   toggleProofAction(event) {
     // Update UI based on selection
     this.updateVisibility();
@@ -155,11 +148,7 @@ class DocumentProofHandlerController extends Controller {
     if (this.hasRemoveUploadTarget) this.removeUploadTarget.disabled = false;
   }
 
-  /**
-   * Handle "None Provided" button click
-   * UX shortcut that automatically selects reject + none_provided reason
-   * @param {Event} event The click event from the none button
-   */
+  // Selects rejection with the none_provided reason.
   handleNoneProvided(event) {
     if (!this.hasRejectRadioTarget || !this.hasRejectionReasonSelectTarget) {
       return;
@@ -178,10 +167,7 @@ class DocumentProofHandlerController extends Controller {
     this.rejectRadioTarget.dispatchEvent(new Event('change', { bubbles: true }));
   }
 
-  /**
-   * Update the visibility of upload or rejection sections
-   * based on the selected radio
-   */
+  // Shows file controls for acceptance or later review, and reason controls for rejection.
   updateVisibility() {
     if (!this.hasAcceptRadioTarget || !this.hasUploadSectionTarget || !this.hasRejectionSectionTarget) {
       return;
@@ -196,8 +182,8 @@ class DocumentProofHandlerController extends Controller {
     setVisible(this.uploadSectionTarget, isAccepted || isUploadOnly);
     setVisible(this.rejectionSectionTarget, isRejected);
     
-    // Toggle file input enabled state
-    // Note: We don't set 'required' attribute to allow server-side validation to handle missing files
+    // Do not make the file input required. The server reports a missing file.
+    // Native required validation would block that response.
     if (this.hasFileInputTarget) {
       const target = this.fileInputTarget;
       target.disabled = !(isAccepted || isUploadOnly);
@@ -236,11 +222,7 @@ class DocumentProofHandlerController extends Controller {
     this.updateReasonInputMode();
   }
 
-  /**
-   * Preview the rejection reason text.
-   * Reads the human-readable body from the selected option's data-reason-text attribute,
-   * which is populated server-side from the RejectionReason DB records.
-   */
+  // Shows the data-reason-text of the selected option. For a stored reason, this text is its body.
   previewRejectionReason() {
     if (!this.hasReasonPreviewTarget || !this.hasRejectionReasonSelectTarget) return
 

@@ -1,22 +1,15 @@
-/**
- * Visibility Utility
- * 
- * Provides centralized functions for managing element visibility and required attributes.
- * Replaces repetitive classList.toggle + setAttribute/removeAttribute patterns.
- */
-
 let _legacyWarned = false;
 
 /**
- * Sets element visibility and optionally manages required attribute
+ * Sets visibility and, when requested, the required and aria-hidden attributes.
  * @param {HTMLElement} element - The element to show/hide
  * @param {boolean} visible - Whether the element should be visible
  * @param {Object} options - Additional options
- * @param {boolean} options.required - Whether to set/remove required attribute
+ * @param {boolean} options.required - Sets required only when true and visible. False removes required.
  * @param {string} options.hiddenClass - CSS class for hiding (default: 'hidden')
- * @param {boolean} options.ariaHidden - Whether to set aria-hidden attribute
+ * @param {boolean} options.ariaHidden - The aria-hidden value, independent of visibility
  * @param {boolean} options.inlineStyleFallback - Whether to use inline display fallback (default: true)
- * @returns {HTMLElement|null} The element for chaining, or null if invalid
+ * @returns {HTMLElement|null} The element, or null if it is absent
  */
 export function setVisible(element, visible, options = {}) {
   if (!element) {
@@ -24,7 +17,6 @@ export function setVisible(element, visible, options = {}) {
     return null;
   }
 
-  // Type check for HTMLElement
   if (!(element instanceof HTMLElement)) {
     console.warn('setVisible: expected HTMLElement, got', element);
     return element;
@@ -32,22 +24,20 @@ export function setVisible(element, visible, options = {}) {
 
   const { required, hiddenClass = 'hidden', ariaHidden, inlineStyleFallback = true } = options;
 
-  // Toggle visibility
   if (visible) {
     element.classList.remove(hiddenClass);
-    // Remove inline display:none that might override CSS classes
+    // An inline display:none overrides CSS classes.
     if (inlineStyleFallback && element.style.display === 'none') {
       element.style.display = '';
     }
   } else {
     element.classList.add(hiddenClass);
-    // Optional inline style fallback for sections that must never flash visible.
+    // The inline style hides sections before CSS loads.
     if (inlineStyleFallback) {
       element.style.display = 'none';
     }
   }
 
-  // Handle required attribute if specified
   if (required !== undefined) {
     if (required && visible) {
       element.setAttribute('required', 'required');
@@ -56,7 +46,6 @@ export function setVisible(element, visible, options = {}) {
     }
   }
 
-  // Handle aria-hidden attribute if specified
   if (ariaHidden !== undefined) {
     element.setAttribute('aria-hidden', ariaHidden.toString());
   }
@@ -65,12 +54,12 @@ export function setVisible(element, visible, options = {}) {
 }
 
 /**
- * Legacy wrapper for gradual migration from old toggle patterns
+ * Adapts the legacy shouldHide argument to setVisible.
  * @deprecated Use setVisible() instead
  * @param {HTMLElement} element - The element to toggle
  * @param {boolean} shouldHide - Whether the element should be hidden
  * @param {Object} options - Additional options
- * @returns {HTMLElement|null} The element for chaining, or null if invalid
+ * @returns {HTMLElement|null} The element, or null if it is absent
  */
 export function legacyToggleHidden(element, shouldHide, options = {}) {
   if (!_legacyWarned) {
@@ -86,30 +75,27 @@ export function legacyToggleHidden(element, shouldHide, options = {}) {
 }
 
 /**
- * Show an element and optionally make it required
  * @param {HTMLElement} element - The element to show
  * @param {Object} options - Additional options
- * @returns {HTMLElement|null} The element for chaining, or null if invalid
+ * @returns {HTMLElement|null} The element, or null if it is absent
  */
 export function show(element, options = {}) {
   return setVisible(element, true, options);
 }
 
 /**
- * Hide an element and optionally remove required attribute
  * @param {HTMLElement} element - The element to hide
  * @param {Object} options - Additional options
- * @returns {HTMLElement|null} The element for chaining, or null if invalid
+ * @returns {HTMLElement|null} The element, or null if it is absent
  */
 export function hide(element, options = {}) {
   return setVisible(element, false, options);
 }
 
 /**
- * Toggle element visibility
  * @param {HTMLElement} element - The element to toggle
  * @param {Object} options - Additional options
- * @returns {HTMLElement|null} The element for chaining, or null if invalid
+ * @returns {HTMLElement|null} The element, or null if it is absent
  */
 export function toggle(element, options = {}) {
   if (!element) {
@@ -124,10 +110,10 @@ export function toggle(element, options = {}) {
 }
 
 /**
- * Sets a form field's value if it is currently empty, then fires input + change events.
+ * Sets an empty field and emits input and change events.
  * @param {string} selector - CSS selector for the field
  * @param {*} value - Value to set
- * @returns {boolean} true if the field was actually populated
+ * @returns {boolean} true if the field is empty and the value is not null or undefined
  */
 export function setFieldIfEmpty(selector, value) {
   const el = document.querySelector(selector)
@@ -141,10 +127,10 @@ export function setFieldIfEmpty(selector, value) {
 }
 
 /**
- * Sets a form field's value and fires input + change events.
+ * Sets a field and emits input and change events.
  * @param {string} selector - CSS selector for the field
  * @param {*} value - Value to set
- * @returns {boolean} true if the field exists and was updated
+ * @returns {boolean} true if the field exists and the value is not null or undefined
  */
 export function setFieldValue(selector, value) {
   const el = document.querySelector(selector)
@@ -157,7 +143,6 @@ export function setFieldValue(selector, value) {
 }
 
 /**
- * Test helper to reset deprecation warning state
  * @private Only for testing
  */
 export function _resetLegacyWarnings() {

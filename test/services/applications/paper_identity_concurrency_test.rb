@@ -3,15 +3,11 @@
 require 'test_helper'
 
 module Applications
-  # The identity review reads the rows that exist now; the creation immediately afterwards adds one.
-  # Two submissions of the same person that interleave between those two steps would each see a
-  # clean search and each create -- a duplicate that no amount of client-side care prevents, because
-  # neither request is stale and neither is wrong at the moment it looks.
-  #
-  # PaperApplicationService closes that with a transaction-scoped advisory lock keyed on the
-  # identity. These tests are the evidence that it does, and that it is genuinely Postgres lock
-  # contention doing it rather than the two threads happening not to overlap: the contender is
-  # confirmed blocked *by the holder's backend* before the holder is released.
+  # Two submissions of one person can interleave between the identity search and the create.
+  # Each sees a clean search and creates, and neither request is stale.
+  # PaperApplicationService prevents this with a transaction-scoped advisory lock on the identity.
+  # Each test confirms the holder's backend blocks the contender before the holder releases.
+  # Thus the result comes from real lock contention, not from thread timing.
   class PaperIdentityConcurrencyTest < ActiveSupport::TestCase
     self.use_transactional_tests = false
 
@@ -23,17 +19,15 @@ module Applications
       setup_paper_application_context
       setup_fpl_policies
       @admin = create(:admin)
-      # Unique per run: these tests commit for real, so a timestamp-derived contact can collide with
-      # a record an earlier run left behind and fail as a hard block rather than as a race.
+      # These tests commit. Random contact values prevent a collision with rows from an earlier run.
       @stamp = SecureRandom.hex(5)
       @phone_suffix = format('%<n>07d', n: SecureRandom.random_number(10_000_000))
       @seeded_ids = []
     end
 
-    # Deliberately different contact values on the two submissions. Identical ones are already
-    # refused by the unique index on email and phone, so a test using them would pass with the lock
-    # removed and prove nothing. The same person entered twice from two paper forms -- different
-    # transcriber, different email on file -- is the case nothing else catches.
+    # The contact values are different on purpose. The unique email and phone indexes refuse
+    # identical values, so a test with identical values passes without the lock.
+    # Only the lock catches one person entered from two paper forms with different contact values.
     test 'two concurrent submissions of the same new applicant create exactly one' do
       outcomes = run_racing_creates(params_for: ->(index) { new_applicant_params(index) })
 
@@ -48,14 +42,10 @@ module Applications
       cleanup!
     end
 
-    # An applicant with neither email nor phone is the only way two submissions can carry *identical*
-    # identity facts, and therefore the same signed decision: with no contact values there is no
-    # unique index to collide on. So this is the case where the token is the only thing standing
-    # between one override and two records -- and being stateless, it is not enough on its own.
-    #
-    # What actually stops the second creation is that the loser re-runs detection under the lock and
-    # now sees the record the winner just committed, so the decision it carries was issued for a
-    # candidate set that no longer exists.
+    # With no email and no phone, two submissions can carry identical identity facts and one signed
+    # decision. No unique index applies, and the stateless token alone cannot prevent a second spend.
+    # The loser runs detection again under the lock and sees the winner's committed record.
+    # Its decision then names a candidate set that no longer exists.
     test 'the same decision token cannot be spent twice concurrently' do
       candidate = create(:constituent, first_name: 'Race', last_name: 'Case',
                                        date_of_birth: Date.new(1980, 1, 15))
@@ -75,10 +65,9 @@ module Applications
       cleanup!
     end
 
-    # Different guardians mean the two requests lock different guardian rows; different names and
-    # birth dates mean they also take different identity advisory locks. The shared own-email is
-    # therefore the only point that can serialize these writers. The loser must let PostgreSQL roll
-    # back the aborted transaction, then classify the committed winner as an exact-contact block.
+    # Different guardians and identities give the two requests different row and advisory locks.
+    # Only the unique index on the shared dependent email serializes them. The loser must let
+    # PostgreSQL roll back the aborted transaction. Then it must report an exact-contact block.
     test 'dependent contact collision after a unique-index race returns an actionable refusal' do
       @guardians = [
         create(:constituent, phone: "410555#{format('%04d', SecureRandom.random_number(10_000))}"),
@@ -108,8 +97,7 @@ module Applications
 
     private
 
-    # Only the applicants these submissions created -- never the seeded soft-match candidate, which
-    # shares the name and date of birth by design and would otherwise be counted as a creation.
+    # Excludes the seeded soft-match candidate, which has the same name and date of birth.
     def created_users
       Users::Constituent.where(first_name: 'Race', last_name: 'Case')
                         .where.not(id: @seeded_ids)
@@ -185,8 +173,8 @@ module Applications
       }
     end
 
-    # Staff truthfully recording that this applicant has no email and no phone. The flags sit beside
-    # the constituent hash, not inside it, because PaperContactFlags reads them from the top level.
+    # Staff record no email and no phone. PaperContactFlags reads the flags from the top level,
+    # not from the constituent hash.
     def address_only_params
       params = new_applicant_params
       params[:constituent] = params[:constituent].except(:email, :phone)
@@ -197,10 +185,8 @@ module Applications
       Marshal.load(Marshal.dump(params))
     end
 
-    # The holder opens a transaction, runs the whole create (taking the identity lock inside it),
-    # and then *waits* while still holding it. The contender starts and is confirmed blocked by the
-    # holder's backend before the holder commits, so the interleaving under test is the real one
-    # rather than whatever the scheduler happened to produce.
+    # The holder runs the full create in an open transaction and keeps the identity lock.
+    # The holder commits only after the contender is confirmed blocked by the holder's backend.
     def run_racing_creates(params_for: ->(_index) { new_applicant_params })
       holder_ready = Queue.new
       release_holder = Queue.new

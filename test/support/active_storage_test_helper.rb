@@ -1,24 +1,9 @@
 # frozen_string_literal: true
 
-# This module provides helpers specifically for testing ActiveStorage functionality,
-# particularly when *real* file attachments (using StringIO or fixture files) are needed.
-#
-# USAGE GUIDELINES:
-# - Use real attachments (this helper) for:
-#   * System/integration tests that need to test actual file processing
-#   * Tests of attachment-specific ActiveStorage functionality
-#   * When testing features that interact with file content directly
-#
-# - Use mocked attachments (AttachmentTestHelper#mock_attached_file) for:
-#   * Most unit tests where the actual file content isn't important
-#   * Controller tests where performance is important
-#   * Tests where you only care if an attachment exists, not its content
-#
-# For mocking, use AttachmentTestHelper.mock_attached_file or the application factory
-# traits (:with_mocked_income_proof, :with_mocked_residency_proof, etc.)
+# Attaches real StringIO files for tests that need file content or real
+# ActiveStorage behavior. Use AttachmentTestHelper#mock_attached_file when
+# only the presence of an attachment matters.
 module ActiveStorageTestHelper
-  # Make these class methods so they can be called directly
-
   module_function
 
   # Attaches real StringIO objects as income and residency proofs to an application.
@@ -29,11 +14,10 @@ module ActiveStorageTestHelper
   # @option options [String] :residency_content ("residency proof content") Content for the residency proof
   # @option options [Boolean] :with_medical_certification (false) Whether to also attach a medical certification
   #
-  # @deprecated The use of thread-local state (:skip_proof_validation) is discouraged.
-  #   Consider using factories with proper validation handling instead:
-  #   `create(:application, :with_real_income_proof, :with_real_residency_proof)`
+  # @deprecated Do not use thread-local state (:skip_proof_validation).
+  #   Use factories instead:
+  #   `create(:application, :with_income_proof, :with_residency_proof)`
   def attach_test_proofs_to_application(application, options = {})
-    # Default options
     options = {
       income_content: 'income proof content',
       residency_content: 'residency proof content',
@@ -56,7 +40,6 @@ module ActiveStorageTestHelper
       content_type: 'application/pdf'
     )
 
-    # Optionally attach medical certification
     if options[:with_medical_certification]
       application.medical_certification.attach(
         io: StringIO.new('medical certification content'),
@@ -68,7 +51,7 @@ module ActiveStorageTestHelper
     Thread.current[:skip_proof_validation] = original_value
   end
 
-  # Attaches a real income proof to an application
+  # Attaches a real income proof to an application.
   #
   # @param application [Application] The application to attach the proof to
   # @param content [String] Optional content for the proof file
@@ -80,7 +63,7 @@ module ActiveStorageTestHelper
     )
   end
 
-  # Attaches a real residency proof to an application
+  # Attaches a real residency proof to an application.
   #
   # @param application [Application] The application to attach the proof to
   # @param content [String] Optional content for the proof file
@@ -92,7 +75,7 @@ module ActiveStorageTestHelper
     )
   end
 
-  # Attaches a real medical certification to an application
+  # Attaches a real medical certification to an application.
   #
   # @param application [Application] The application to attach the certification to
   # @param content [String] Optional content for the certification file

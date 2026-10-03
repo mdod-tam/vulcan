@@ -3,22 +3,16 @@
 require 'test_helper'
 
 module ConstituentPortal
-  # Focused transaction and concurrency evidence for the portal dependent write boundary:
-  # ConstituentPortal::DependentsController#create/#update and the merge service must
-  # serialize through User.lock_for_merge_integrity! on their shared participants.
-  #
-  # Exercises the real, private controller method directly (via a minimal
-  # ActionDispatch::TestRequest/TestResponse pair, using set_request!/set_response! -- see
-  # passwords_controller_concurrency_test.rb for why -- and injecting current_user directly)
-  # rather than through routing. Both sides of every race are real production code.
+  # DependentsController#create/#update and the merge service share User.lock_for_merge_integrity! locks.
+  # The tests invoke actions directly with TestRequest/TestResponse and an injected current_user.
+  # Routing and controller callbacks do not run.
+  # See passwords_controller_concurrency_test.rb for the same setup.
   class DependentsControllerConcurrencyTest < ActiveSupport::TestCase
     self.use_transactional_tests = false
 
     include ConcurrencyTestHelper
 
-    # This is the primary sensor for the creation defect. Under the former three-transaction
-    # design the merge could retire the guardian after User creation but before relationship
-    # creation, leaving a real GuardianRelationship attached to that retired guardian.
+    # A merge between user and relationship creation could attach a dependent to a retired guardian.
     test 'merge commits first: dependent creation by the retired guardian fails closed with zero durable effects' do
       admin, canonical, retiring_guardian, review_case = build_guardian_creation_merge_fixtures
       dependent_email = "race-loser-#{SecureRandom.hex(4)}@example.com"
@@ -103,8 +97,7 @@ module ConstituentPortal
               dependent_email:
             )
           end
-          # The real create has returned, but this outer holder transaction supplies the
-          # deterministic commit barrier without adding a pause hook to production code.
+          # The outer transaction delays commit after create returns, without a pause hook in production code.
           holder_ready << true
           release_holder.pop
         end
@@ -211,8 +204,7 @@ module ConstituentPortal
       failing_case_service_class = Class.new(DuplicateReviewCases::CreateService) do
         private
 
-        # Keep the real CreateService#call, including its nested participant lock, and fail
-        # only afterward at the first case write.
+        # Keep CreateService#call and its participant lock. Fail at the first case write.
         def create_open_case!
           ActiveRecord::Base.connection.execute('SELECT * FROM pr4d_intentionally_missing_relation')
         end
@@ -324,12 +316,9 @@ module ConstituentPortal
       cleanup_duplicate_review_test_data!(guardian, admin, canonical, duplicate)
     end
 
-    # Retirement is not the only way the guardian can lose authority while its request waits.
-    # The guardian is the authenticated actor, so a suspension landing inside the lock window
-    # must end the edit too -- before the fix, #update rechecked only merged? and would honor an
-    # edit from an actor that could no longer sign in. (The dependent is deliberately held to a
-    # different standard: see the "guardian can edit an unmerged inactive/suspended dependent"
-    # cases in dependents_controller_test.rb.)
+    # A suspension while the request waits must revoke the guardian's authority to edit.
+    # The dependent has a different rule: an unmerged inactive or suspended dependent remains editable.
+    # See the guardian-edit cases in dependents_controller_test.rb.
     test 'guardian suspension commits first: the dependent edit then fails closed with zero writes' do
       guardian, admin, canonical, duplicate, _review_case = build_fixtures
       original_first_name = duplicate.first_name
@@ -369,10 +358,8 @@ module ConstituentPortal
       cleanup_duplicate_review_test_data!(guardian, admin, canonical, duplicate)
     end
 
-    # set_dependent's User.editable_by_guardian scope proves the relationship existed at lookup
-    # time, unlocked. If it is removed while the request waits for the user lock, the edit is no
-    # longer authorized by anything -- the previous unlocked exists? recheck could still observe
-    # the row a concurrent removal was about to delete.
+    # User.editable_by_guardian proves the relationship exists only at the initial, unlocked lookup.
+    # Removal while the request waits must revoke access. An unlocked recheck can read a row before concurrent deletion commits.
     test 'relationship removal commits first: the dependent edit then fails closed with zero writes' do
       guardian, admin, canonical, duplicate, _review_case = build_fixtures
       original_first_name = duplicate.first_name
@@ -412,10 +399,8 @@ module ConstituentPortal
       cleanup_duplicate_review_test_data!(guardian, admin, canonical, duplicate)
     end
 
-    # Proves the mechanism rather than an outcome: the edit holds the *relationship* row itself
-    # FOR UPDATE, not merely the two user rows. A concurrent removal physically blocks on it, so
-    # the authorizing row cannot be deleted between the recheck and the write. If the recheck
-    # were an unlocked exists? again, this delete would not block and the test would fail.
+    # The edit must lock the relationship row FOR UPDATE until its write completes.
+    # An unlocked exists? recheck would let this concurrent deletion proceed and fail the contention assertion.
     test "a relationship removal physically blocks on the dependent edit's own row lock" do
       guardian, admin, canonical, duplicate, _review_case = build_fixtures
 
@@ -453,12 +438,9 @@ module ConstituentPortal
       cleanup_duplicate_review_test_data!(guardian, admin, canonical, duplicate)
     end
 
-    # The cases above make the *dependent* the merge target. This one makes the *guardian* the
-    # canonical survivor, which is where stale contact derivation shows up: a guardian contact
-    # strategy snapshots the guardian's own phone into the dependent's stored dependent_phone, and
-    # User#effective_phone prefers it. Deriving that snapshot before the lock would make the
-    # discarded pre-merge number the dependent's durable contact truth even though the edit
-    # correctly reauthorized under the lock.
+    # The guardian survives this merge. The guardian strategy copies its phone into dependent_phone,
+    # which User#effective_phone prefers.
+    # A copy before the lock could preserve the discarded phone despite correct authorization under the lock.
     test 'merge commits first: the dependent edit snapshots the post-merge guardian phone' do
       guardian, guardian_duplicate, admin, dependent, review_case = build_guardian_merge_fixtures
       discarded_guardian_phone = guardian.phone
@@ -483,7 +465,7 @@ module ConstituentPortal
       update_response = nil
       contender_thread = on_own_connection do
         contender_pid_queue << backend_pid
-        # Submitting a blank phone selects the guardian phone strategy for this update.
+        # A blank phone selects the guardian strategy on update.
         update_response = run_dependent_edit(guardian:, dependent:, extra_dependent_params: { phone: '' })
       end
 
@@ -545,8 +527,7 @@ module ConstituentPortal
       cleanup_duplicate_review_test_data!(guardian, guardian_duplicate, admin, dependent)
     end
 
-    # Both requests clear pre-lock detection, then contend for the guardian row. Under the former
-    # design both proceeded and created a dependent each; the key must collapse them to one.
+    # Both requests pass detection before the guardian lock. The shared key must prevent a second dependent.
     test 'concurrent identical replays create exactly one dependent and one replay outcome' do
       guardian = create(:constituent)
       key = SecureRandom.hex(16)
@@ -575,8 +556,7 @@ module ConstituentPortal
       cleanup_race_participants(guardian)
     end
 
-    # Different keys means two genuine requests, so this is the admission rule rather than a replay:
-    # one creation succeeds and the other is refused with the support escape hatch.
+    # Different keys exercise identity admission. One request succeeds, and support must resolve the refused request.
     test 'concurrent distinct requests for one identity create exactly one dependent' do
       guardian = create(:constituent)
       identity = unique_race_identity
@@ -593,9 +573,8 @@ module ConstituentPortal
       end
 
       assert_equal 1, User.count - initial_users, 'the identity rule must admit only one'
-      # A refusal re-renders the form, and response_summary reports flash only for redirects, so the
-      # observable split here is one 302 success against one 422. The refusal copy itself is asserted
-      # at the request level in DependentsControllerTest.
+      # response_summary omits flash for renders, so this test compares status codes.
+      # DependentsControllerTest asserts the refusal copy through a request.
       assert_equal 1, results.count { |r| r[:action] == :redirect },
                    "exactly one request may succeed: #{results.inspect}"
       assert_equal 1, results.count { |r| r[:action] == :render && r[:status] == 422 },
@@ -631,8 +610,8 @@ module ConstituentPortal
       [admin, canonical, retiring_guardian, review_case]
     end
 
-    # Guardian-as-canonical-survivor pair, plus a dependent of that guardian. The dependent is
-    # not a merge participant, so the two transactions collide only on the guardian's user row.
+    # The guardian survives the merge. Its dependent is outside the merge pair,
+    # but the merge still locks that dependent as a relationship neighbor.
     def build_guardian_merge_fixtures
       admin = create(:admin)
       guardian = create(:constituent, email: "guardian-#{SecureRandom.hex(3)}@example.com",
@@ -711,11 +690,8 @@ module ConstituentPortal
       controller = ConstituentPortal::DependentsController.new
       controller.set_request!(ActionDispatch::TestRequest.create)
       controller.set_response!(ActionDispatch::TestResponse.new)
-      # action_name (Rails' attr_internal, backed by @_action_name) is normally set by
-      # #process during real dispatch, which this direct-invocation technique never runs.
-      # Without it, #update's own contact_strategy_for reads action_name == 'update' as
-      # false and takes the "field omitted from params" branch instead of the "not submitted
-      # on an update" branch, wrongly triggering a guardian contact-strategy override.
+      # Direct invocation bypasses #process, which sets action_name through @_action_name.
+      # Without 'update', omitted fields select the guardian strategy instead of retaining stored contact.
       controller.instance_variable_set(:@_action_name, 'update')
       controller.instance_variable_set(:@current_user, fresh_guardian)
       controller.instance_variable_set(:@dependent, fresh_dependent)
@@ -750,9 +726,7 @@ module ConstituentPortal
         guardian_relationship: { relationship_type: 'Parent' },
         portal_creation_key: portal_creation_key
       )
-      # The seam between pre-lock duplicate detection and the locked write. Pausing here is what
-      # makes the race real: both requests have already cleared detection and are about to contend
-      # for the same guardian row, which is exactly the window the defect lived in.
+      # Pause after duplicate detection so both requests reach the guardian lock together.
       if before_lock
         controller.define_singleton_method(:create_portal_dependent_atomically) do |*args|
           before_lock.call
@@ -771,10 +745,8 @@ module ConstituentPortal
       response_summary(controller)
     end
 
-    # Two guardians spending the same raw key at the same moment. They lock different rows, so
-    # nothing serializes them against each other -- which is exactly why the unique index must be
-    # scoped to the guardian. A global index would let one of these raise RecordNotUnique purely
-    # because an unrelated account holds the same random value.
+    # These requests lock different guardians. Key uniqueness must include the guardian ID.
+    # A global unique index could raise RecordNotUnique when an unrelated account uses the same key.
     test 'concurrent identical keys from different guardians are independently spendable' do
       guardian_a = create(:constituent)
       guardian_b = create(:constituent)
@@ -783,7 +755,7 @@ module ConstituentPortal
       identity_b = unique_race_identity
       initial_users = User.count
 
-      # A Queue, not an Array: both racers draw from this concurrently.
+      # Queue provides safe assignment to concurrent racers.
       assignments = Queue.new
       assignments << [guardian_a, identity_a] << [guardian_b, identity_b]
       results = run_creation_race(count: 2) do |at_barrier|
@@ -806,10 +778,9 @@ module ConstituentPortal
       cleanup_race_participants(guardian_b)
     end
 
-    # This file runs non-transactionally, so anything a race leaves behind is visible to its
-    # siblings. A dependent sharing the default 'Created Dependent' identity would become a
-    # soft-match candidate for the merge-race tests above, widening the participant set they lock
-    # and breaking their bind-exact assertion. Each race therefore uses an identity of its own.
+    # Nontransactional tests can expose leftover rows to later tests.
+    # The default 'Created Dependent' identity could add a soft-match candidate and break the assertion for exact lock binds.
+    # Each race uses a separate identity.
     def unique_race_identity
       token = SecureRandom.hex(4)
       { first_name: "Racer#{token}", last_name: "Case#{token}", date_of_birth: '03/09/2013' }
@@ -822,8 +793,7 @@ module ConstituentPortal
       cleanup_duplicate_review_test_data!([guardian, *User.where(id: dependent_ids)])
     end
 
-    # Releases every racer only once all of them have cleared pre-lock detection, so the contention
-    # happens at the guardian lock rather than being serialized earlier by chance.
+    # The barrier releases racers after all pass detection, so they contend at the guardian lock.
     def run_creation_race(count:)
       arrived = Queue.new
       release = Queue.new

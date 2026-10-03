@@ -12,19 +12,19 @@ module PasswordFieldHelper
     }
   end
 
-  # Creates a password field with a visibility toggle button using Rails form helpers.
+  # Renders a label, a password field with a visibility toggle, and an optional hint.
   #
-  # @param form [::ActionView::Helpers::FormBuilder] the form builder object
-  # @param field_name [Symbol, String] the name of the password field
-  # @param options [Hash] Options for customizing the password field
+  # @param form [::ActionView::Helpers::FormBuilder]
+  # @param field_name [Symbol, String]
+  # @param options [Hash]
   # @option options [String] :label Custom label text
   # @option options [String] :placeholder Placeholder text
-  # @option options [Boolean] :required Whether the field is required
-  # @option options [String] :autocomplete Autocomplete attribute value
-  # @option options [Integer] :timeout Timeout in milliseconds before hiding password again
-  # @option options [String] :hint Hint text to display below the field
-  # @option options [Hash] :html_options Additional HTML options for the password field
-  # @return [::ActiveSupport::SafeBuffer] HTML for the password field with visibility toggle
+  # @option options [Boolean] :required Defaults to true. Only false makes the field optional.
+  # @option options [String] :autocomplete Defaults to new-password for confirmation fields, else current-password
+  # @option options [Integer] :timeout Milliseconds until the visible password hides again (default 5000)
+  # @option options [String] :hint Text below the field
+  # @option options [Hash] :html_options Extra input attributes. These override the defaults.
+  # @return [::ActiveSupport::SafeBuffer]
   def password_field_with_toggle(form, field_name, options = {})
     config = extract_password_field_config(form, field_name, options)
     field_options = build_field_options(config, field_name)
@@ -41,12 +41,12 @@ module PasswordFieldHelper
 
   private
 
-  # Extract configuration values from the given options.
+  # Removes the helper options from +options+.
   #
   # @param form [::ActionView::Helpers::FormBuilder]
   # @param field_name [Symbol, String]
   # @param options [Hash]
-  # @return [Hash] configuration options for the field
+  # @return [Hash]
   def extract_password_field_config(form, field_name, options)
     field_id = options[:id] || "#{form.object_name}_#{field_name}"
     {
@@ -64,23 +64,18 @@ module PasswordFieldHelper
     }
   end
 
-  # Build the CSS classes for the password field input.
-  #
   # @param base_classes [String]
   # @param html_options [Hash]
-  # @return [String] the complete CSS class string
+  # @return [String]
   def build_password_field_classes(base_classes, html_options)
     html_options[:class] ? "#{base_classes} #{html_options[:class]}" : base_classes
   end
 
-  # Prepare the field options for the password field.
-  #
   # @param config [Hash]
   # @param field_name [Symbol, String]
   # @return [Hash] the options passed to form.password_field
   def build_field_options(config, field_name)
     html_options = config[:html_options]
-    # Add minlength if it's a password field and not already specified
     html_options[:minlength] = 6 if field_name.to_s.include?('password') && !html_options.key?(:minlength)
 
     field_options = {
@@ -98,13 +93,11 @@ module PasswordFieldHelper
     field_options.merge(html_options)
   end
 
-  # Build the container for the password field and toggle button.
-  #
   # @param form [::ActionView::Helpers::FormBuilder]
   # @param field_name [Symbol, String]
   # @param field_options [Hash]
   # @param config [Hash]
-  # @return [::ActiveSupport::SafeBuffer] the HTML for the field container
+  # @return [::ActiveSupport::SafeBuffer]
   def build_field_container(form, field_name, field_options, config)
     content_tag(:div, class: 'relative', data: password_visibility_data(timeout: config[:timeout])) do
       safe_join([
@@ -119,9 +112,7 @@ module PasswordFieldHelper
     end
   end
 
-  # Build the HTML for the toggle button.
-  #
-  # @return [::ActiveSupport::SafeBuffer] the HTML for the toggle button
+  # @return [::ActiveSupport::SafeBuffer]
   def build_toggle_button
     content_tag(:button,
                 type: 'button',

@@ -1,12 +1,6 @@
 # frozen_string_literal: true
 
-# Handles management of two-factor authentication credentials.
-#
-# This controller is responsible for:
-# - Creating new credentials (WebAuthn, TOTP, SMS)
-# - Verifying and confirming credentials during setup
-# - Deleting existing credentials
-# - Managing credential-specific flows (SMS verification, WebAuthn options)
+# Manages WebAuthn, TOTP, and SMS credentials.
 class TwoFactorCredentialsController < ApplicationController
   include TwoFactorVerification
   include TurboStreamResponseHandling
@@ -14,21 +8,19 @@ class TwoFactorCredentialsController < ApplicationController
   before_action :authenticate_user!
   skip_before_action :enforce_required_mfa_enrollment
 
-  # GET /two_factor_authentication/credentials/webauthn/options
+  # POST /two_factor_authentication/credentials/webauthn/options
   def webauthn_creation_options
-    # Get authenticator type from params (platform for biometric, cross-platform for security keys)
     authenticator_type = params[:authenticator_type]
 
     ensure_webauthn_id!
 
-    # Create options based on authenticator type
     create_options = if authenticator_type == 'platform'
                        build_platform_create_options
                      else
                        build_cross_platform_create_options
                      end
 
-    # Store challenge in session using the standardized helper
+    # Enrollment retains this challenge for attestation verification.
     TwoFactorAuth.store_challenge(
       session,
       :webauthn,
@@ -47,18 +39,16 @@ class TwoFactorCredentialsController < ApplicationController
     when 'webauthn'
       render 'webauthn_credentials/new'
     when 'totp'
-      # Generate or retrieve validated secret - never use params directly
+      # Validate a submitted secret before the QR code uses it.
       @secret = get_validated_totp_secret(params[:secret])
 
-      # Store the secret in the session
       TwoFactorAuth.store_challenge(
         session,
         :totp,
-        nil, # TOTP doesn't need a challenge, just metadata
+        nil, # TOTP stores its secret in metadata instead of a challenge.
         { secret: @secret }
       )
 
-      # Generate QR code with validated secret
       generate_totp_qr_code
 
       render 'totp_credentials/new'
@@ -169,15 +159,13 @@ class TwoFactorCredentialsController < ApplicationController
   def ensure_webauthn_id!
     return if current_user.webauthn_id.present?
 
-    # This is a server-generated WebAuthn handle, not user-entered profile data.
-    # Use a narrow column update so unrelated legacy profile validations do not
-    # block MFA enrollment before the user can secure their account.
+    # The server generates this WebAuthn handle.
+    # A column update avoids unrelated profile validation failures during MFA enrollment.
     # rubocop:disable Rails/SkipsModelValidations
     current_user.update_column(:webauthn_id, WebAuthn.generate_user_id)
     # rubocop:enable Rails/SkipsModelValidations
   end
 
-  # Find credential and name for destruction
   def find_credential_for_destruction
     credential_configs = {
       'webauthn' => { relation: :webauthn_credentials, name: 'Security key' },
@@ -200,8 +188,7 @@ class TwoFactorCredentialsController < ApplicationController
     [credential, config[:name]]
   end
 
-  # Destroy credential and log the action
-  # Delegates success/failure handling to smaller helpers to satisfy RuboCop ABC limits.
+  # The response helpers limit the RuboCop ABC size.
   def destroy_and_log_credential(credential, credential_name)
     if credential.destroy
       handle_credential_destruction_success(credential_name, credential)
@@ -210,9 +197,7 @@ class TwoFactorCredentialsController < ApplicationController
     end
   end
 
-  # Single-responsibility private helper methods
-  # Handles the HTML / Turbo Stream response and logging when a credential
-  # is successfully destroyed.
+  # This method logs removal and sends an HTML or Turbo Stream response.
   #
   # @param credential_name [String] Friendly name (e.g., "Authenticator app")
   # @param credential [ApplicationRecord] The destroyed credential instance
@@ -235,7 +220,7 @@ class TwoFactorCredentialsController < ApplicationController
     end
   end
 
-  # Handles logging and error response when credential destruction fails.
+  # This method logs failed removal and sends an error response.
   #
   # @param credential_name [String]
   # @param credential_id [Integer]
@@ -292,28 +277,26 @@ class TwoFactorCredentialsController < ApplicationController
     message = t('two_factor_verification.errors.invalid_code')
     log_totp_setup_failure(message)
 
-    # Regenerate the QR code so the user can try again without losing the setup flow.
+    # Rebuild the QR code so the user can retry setup.
     regenerate_qr_code_for_failed_setup
 
-    # Use the shared error handler to render the form again with an alert.
     handle_error_response(html_render_action: 'totp_credentials/new', error_message: message)
   end
 
   def regenerate_qr_code_for_failed_setup
-    # Ensure @secret is validated from params or session
+    # Validate the secret from params or session before it enters the QR code.
     challenge_data = TwoFactorAuth.retrieve_challenge(session)
     raw_secret = params[:secret] || challenge_data[:metadata]&.dig(:secret)
-    @secret = validate_base32_secret(raw_secret) # Always validate before use
+    @secret = validate_base32_secret(raw_secret)
 
     unless @secret
       Rails.logger.error('[2FA_CREDENTIAL] Invalid or missing secret when regenerating QR code for failed setup.')
-      # Generate a new valid secret if the old one is invalid
       @secret = ROTP::Base32.random
     end
     generate_totp_qr_code
   end
 
-  # SMS credential creation helper methods
+  # SMS enrollment helpers.
   def render_invalid_phone_error
     handle_error_response(
       html_render_action: 'sms_credentials/new',
@@ -324,7 +307,7 @@ class TwoFactorCredentialsController < ApplicationController
   def build_sms_credential(phone)
     current_user.sms_credentials.new(
       phone_number: phone,
-      last_sent_at: Time.current # Set a default value to satisfy NOT NULL constraint
+      last_sent_at: Time.current # The column has a NOT NULL constraint.
     )
   end
 
@@ -397,7 +380,7 @@ class TwoFactorCredentialsController < ApplicationController
     Rails.logger.warn("[2FA_CREDENTIAL] Failed to build SMS credential for user #{current_user.id}: #{credential.errors.full_messages.join(', ')}")
   end
 
-  # TOTP verification failure helper methods
+  # TOTP failure helpers.
   def log_totp_setup_failure(message)
     Rails.logger.warn("[2FA_CREDENTIAL] TOTP credential setup verification failed for user #{current_user.id}: #{message}")
     TwoFactorAuth.log_verification_failure(current_user.id, :totp, 'Invalid code during setup')
@@ -422,7 +405,7 @@ class TwoFactorCredentialsController < ApplicationController
     render :create_credential, status: :unprocessable_content
   end
 
-  # TOTP credential creation helper methods
+  # TOTP enrollment helpers.
   def totp_secret_from_session
     challenge_data = TwoFactorAuth.retrieve_challenge(session)
     challenge_data[:metadata]&.dig(:secret) || params[:secret]
@@ -434,7 +417,7 @@ class TwoFactorCredentialsController < ApplicationController
   end
 
   def handle_totp_credential_success
-    # Create the credential record and clear the session challenge first.
+    # The challenge clears only after the credential saves.
     credential = create_totp_credential_record
     log_totp_credential_created(credential)
     TwoFactorAuth.clear_challenge(session)
@@ -559,7 +542,7 @@ class TwoFactorCredentialsController < ApplicationController
     )
   end
 
-  # WebAuthn credential creation helper methods
+  # WebAuthn enrollment helpers.
   def process_webauthn_params
     params.expect(
       two_factor_credential: [:id, :rawId, :type, :authenticatorAttachment,

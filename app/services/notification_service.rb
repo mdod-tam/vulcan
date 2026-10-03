@@ -3,29 +3,29 @@
 class NotificationService
   VALID_CHANNELS = %i[email letter sms].freeze
 
-  # ---- Public API (backward-compatible) --------------------------------------
+  # ---- Public API -----------------------------------------------------------
 
-  # Preferred call style everywhere:
+  # Legacy proof-rejection example:
   #
   # NotificationService.create_and_deliver!(
   #   type: 'proof_rejected',
   #   recipient: user,
   #   actor: admin,
   #   notifiable: review,
-  #   metadata: { template_variables: ... },
+  #   metadata: { delivery_path: 'legacy', template_variables: ... },
   #   channel: :email,
   #   audit: true,
   #   deliver: true
   # )
   #
-  # NOTE: `channel` is stored as delivery intent for metadata/auditing.
-  # Recipient-facing mailers remain the source of truth for email-vs-letter routing.
+  # `channel` records the requested delivery route for metadata and audits.
+  # Recipient-facing mailers determine the email or letter route.
   #
   def self.create_and_deliver!(type:, recipient:, **options)
     opts = normalize_options(options)
     build_notification_builder(type, recipient, opts).create_and_deliver!
   rescue StandardError => e
-    # Exclude paths within the NotificationService directory to find the actual caller in case of file renames within the service directory.
+    # Exclude service paths to locate the external caller, including after a file rename.
     calling_location = e.backtrace_locations&.find { |loc| !loc.path.match?(%r{app/services/notification_service}) }
     caller_info = calling_location ? "Called from #{calling_location.path}:#{calling_location.lineno} in `#{calling_location.label}`" : 'Caller unknown'
     error_type = e.is_a?(ArgumentError) ? 'invalid argument(s)' : 'unexpected error'
@@ -47,11 +47,10 @@ class NotificationService
   end
   private_class_method :build_notification_builder
 
-  # Optional: expose a builder for explicit fluent usage at call sites.
   # Example:
   # NotificationService.build
   #   .type('proof_rejected').recipient(user).actor(admin)
-  #   .notifiable(review).metadata(...).channel(:email)
+  #   .notifiable(review).metadata(delivery_path: 'legacy').channel(:email)
   #   .audit(true).deliver(true)
   #   .create_and_deliver!
   def self.build
@@ -78,7 +77,7 @@ class NotificationService
     def deliver(value)     = set(:deliver, !!value)
 
     def channel(value)
-      # Use consistent validation - coerce in builder, validate in final creation
+      # The builder normalizes the channel before validation.
       set(:channel, @service.send(:coerce_channel, value))
     end
 
@@ -132,12 +131,11 @@ class NotificationService
   # Compatibility views of EmailDelivery::Catalog, which owns delivery classification.
   MAILER_MAP = EmailDelivery::Catalog.mailer_map.freeze
 
-  # Notification record for audit/in-app purposes only; no email.
+  # These actions create records for audits and in-app display without email.
   NOOP_DELIVERY_ACTIONS = EmailDelivery::Catalog.audit_only_actions.freeze
 
   # Reviewable proof rejections must deliver through Applications::RequestProofResubmission.
-  # These notification actions are legacy/mailer-test only; pass metadata: { delivery_path: 'legacy' }
-  # to create and deliver through NotificationService intentionally.
+  # For legacy or mailer-test delivery, pass metadata: { delivery_path: 'legacy' } to NotificationService.
   ORPHAN_PROOF_REJECTION_DELIVERY_ACTIONS =
     EmailDelivery::Catalog.notification_actions_owned_by(EmailDelivery::Catalog::PROOF_REVIEW_OWNER).freeze
 
@@ -160,7 +158,6 @@ class NotificationService
   def create_and_deliver_with(params)
     type_for_log = params.is_a?(Hash) ? (params[:type] || params['type']) : nil
     normalized_params = normalize_builder_params(params)
-    # Convert defaults to use the same key type as normalized params (string keys)
     string_defaults = defaults.transform_keys(&:to_s)
     opts = string_defaults.merge(normalized_params)
     channel = opts['channel']
@@ -190,11 +187,10 @@ class NotificationService
   private
 
   def create_notification_with_rescue(opts)
-    # Handle both string and symbol keys for type
     type_value = opts[:type] || opts['type']
     attrs = opts.merge(
       actor: opts[:actor] || opts['actor'] || default_actor,
-      action: type_value.to_s, # Alias type to action for the Notification model
+      action: type_value.to_s,
       metadata: finalized_metadata(opts)
     )
 
@@ -217,11 +213,10 @@ class NotificationService
   end
 
   def create_notification_record(attrs)
-    # Handle both symbol and string keys consistently
     Notification.create!(
       recipient: attrs[:recipient] || attrs['recipient'],
       actor: attrs[:actor] || attrs['actor'],
-      action: attrs[:action] || attrs['action'], # Use action directly
+      action: attrs[:action] || attrs['action'],
       notifiable: attrs[:notifiable] || attrs['notifiable'],
       metadata: attrs[:metadata] || attrs['metadata'],
       audited: attrs[:audit] || attrs['audit']
@@ -229,20 +224,18 @@ class NotificationService
   end
 
   def handle_delivery_logic(notification, attrs)
-    # Determine if delivery should be attempted
     should_deliver = (attrs[:deliver] == true) || (attrs['deliver'] == true)
     delivery_channel = attrs[:channel] || attrs['channel']
 
-    # Store delivery intent for later audit logging
+    # The audit uses these transient values after notification creation.
     notification.instance_variable_set(:@should_deliver, should_deliver)
     notification.instance_variable_set(:@delivery_channel, delivery_channel)
 
-    # Attempt delivery if requested
     if should_deliver
       delivery_success = deliver_notification!(notification, channel: delivery_channel)
       notification.instance_variable_set(:@delivery_successful, delivery_success)
     else
-      notification.instance_variable_set(:@delivery_successful, nil) # Not attempted
+      notification.instance_variable_set(:@delivery_successful, nil)
     end
   end
 
@@ -261,18 +254,15 @@ class NotificationService
 
   def perform_post_creation_actions(notification, opts, _channel)
     log_to_audit_trail(notification) if opts[:audit]
-    # Delivery is handled by deliver_notification! which uses ActionMailer#deliver_later,
-    # deferring email sending until after the surrounding DB transaction commits (default Rails behavior).
+    # EmailDelivery::MailDeliveryJob defers email jobs until the surrounding transaction commits.
   end
 
   def handle_record_invalid_error(error, opts)
     record      = error.record
     notifiable  = opts[:notifiable]
-    # Prefer error objects over message matching:
     errors_object = record&.errors
     notifiable_error_attributes = %i[notifiable notifiable_type notifiable_id]
-    # Only retry if the errors are specifically about the notifiable association and the notifiable is present and persisted.
-    # This avoids retrying for other validation errors on the Notification record or if the notifiable itself is not persisted.
+    # Retry only errors for the notifiable association when the notifiable exists in the database.
     if errors_object&.attribute_names&.all? { |attr| notifiable_error_attributes.include?(attr.to_sym) } && notifiable.present?
       Rails.logger.warn "NotificationService: notifiable association invalid for #{opts[:type]}: " \
                         "#{notifiable.class.name}##{safe_id(notifiable)} persisted=#{notifiable.persisted?} valid=#{notifiable.valid?}"
@@ -336,11 +326,9 @@ class NotificationService
   # ---- Delivery --------------------------------------------------------------
 
   def deliver_notification!(notification, channel:)
-    # `channel` represents requested delivery intent (metadata/audit context).
-    # Recipient-facing mailers resolve the final route to honor communication preference.
     return false unless VALID_CHANNELS.include?(channel)
 
-    # SMS tracking is record-only here; secure-request owners call SmsService themselves.
+    # SMS tracking creates a record here. Secure-request owners call SmsService.
     if channel == :sms
       notification.mark_delivery_not_sent!(EmailDelivery::Decision.configuration_error(:sms_requires_delivery_owner), channel: :sms)
       return false
@@ -395,20 +383,19 @@ class NotificationService
   rescue StandardError => e
     ActiveSupport::Notifications.instrument 'notification_service.error', notification: notification, error: e, stage: 'delivery', channel: channel
     handle_delivery_error(notification, e, channel)
-    false # Delivery failed
+    false
   end
 
   def enforce_delivery_contracts!(notification)
     contract_ok = case notification.action
                   when 'proof_rejected', 'id_proof_rejected', 'income_proof_rejected', 'residency_proof_rejected'
-                    # Accept both Application and ProofReview as valid notifiable types
                     ensure_action_contract?(notification, notifiable_class: [Application, ProofReview], actor_presence: true)
                   when 'account_created'
                     ensure_action_contract?(notification, recipient_class: User)
                   when 'medical_certification_not_provided'
                     ensure_action_contract?(notification, notifiable_class: Application, actor_presence: true)
                   else
-                    true # No specific contract for other actions
+                    true
                   end
 
     return if contract_ok
@@ -442,15 +429,15 @@ class NotificationService
     raise StandardError, "Mail job for '#{notification.action}' could not be queued" if outcome == :enqueue_failed
 
     if %i[suppressed configuration_error].include?(outcome)
-      notification.reload # Outcome already persisted the refusal; do not reinterpret it here.
+      notification.reload # The outcome already records the refusal. Preserve its routing metadata.
       return ['none', notification.metadata['delivery_route_reason']]
     end
 
     [actual_delivery_channel, delivery_route_reason]
   end
 
-  # :queued means the job was accepted, not that anything was sent. A refused or failed queue write
-  # returns false rather than raising, so the outcome is checked explicitly.
+  # :queued means the adapter accepted the job. :deferred awaits transaction commit.
+  # Neither outcome confirms delivery. EmailDelivery maps a refused enqueue to an outcome symbol.
   def queue_mail_delivery(mail_delivery)
     return EmailDelivery.deliver_later(mail_delivery) if mail_delivery.is_a?(ActionMailer::MessageDelivery)
 
@@ -458,7 +445,7 @@ class NotificationService
     :queued
   end
 
-  # The catalog names each action's argument shape; the arguments themselves are built here.
+  # The catalog owns each action's argument shape. This method supplies the arguments.
   def build_mail_delivery(notification, mailer_class, method_name)
     case EmailDelivery::Catalog.notification_action(notification.action)&.adapter
     when :recipient
@@ -609,7 +596,7 @@ class NotificationService
   def handle_delivery_error(notification, error, channel)
     error_message = error.message
 
-    # In test environment, be less verbose about expected SMTP failures but still update status
+    # Tests use shorter SMTP logs but retain the delivery status update.
     if Rails.env.test? && error_message.include?('SMTP')
       Rails.logger.warn "NotificationService: SMTP delivery failed in test environment for Notification ##{notification.id}"
     else
@@ -624,7 +611,6 @@ class NotificationService
   # ---- Audit ----------------------------------------------------------------
 
   def log_to_audit_trail(notification)
-    # Determine accurate event name based on actual delivery outcome
     should_deliver = notification.instance_variable_get(:@should_deliver)
     delivery_successful = notification.instance_variable_get(:@delivery_successful)
 
@@ -728,7 +714,7 @@ class NotificationService
 
   def merge_service_metadata(meta, opts)
     meta.merge(
-      # Backward-compatible key: requested delivery intent from caller.
+      # This compatibility key records the requested route, which can differ from the actual route.
       'channel' => (opts['channel'] || opts[:channel]).to_s
     )
   end
@@ -743,10 +729,9 @@ class NotificationService
   end
 
   def normalize_builder_params(params)
-    # Use indifferent access to tolerate symbol/string keys from call sites.
     h = params.respond_to?(:to_h) ? params.to_h : {}
     h = h.with_indifferent_access if h.respond_to?(:with_indifferent_access)
-    # Channel is already normalized by the builder's channel setter (valid_channel!).
+    # NotificationBuilder#channel already normalizes the channel through coerce_channel.
     h
   end
   private :defaults, :finalized_metadata, :extract_raw_metadata, :validate_and_normalize_metadata,
@@ -783,7 +768,6 @@ class NotificationService
   def validate_notifiable_class(notification, notifiable_class, errors)
     return unless notifiable_class
 
-    # Handle array of allowed classes
     allowed_classes = Array(notifiable_class)
 
     return if notification.notifiable.present? && allowed_classes.any? { |klass| notification.notifiable.is_a?(klass) }
@@ -815,7 +799,6 @@ class NotificationService
       options = options[:options]
     end
 
-    # Metadata normalization is handled by finalized_metadata
     out  = options.merge(metadata: options[:metadata])
     out  = out.with_indifferent_access if out.respond_to?(:with_indifferent_access)
     out
@@ -827,7 +810,7 @@ class NotificationService
   end
   private_class_method :default_actor
 
-  # Test helper methods to maintain backward compatibility with existing tests
+  # Existing tests use class-level access to these private instance methods.
   if Rails.env.test?
     def self.deliver_notification!(notification, channel:)
       new.send(:deliver_notification!, notification, channel: channel)
