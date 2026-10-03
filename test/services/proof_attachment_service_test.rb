@@ -129,6 +129,31 @@ class ProofAttachmentServiceTest < ActiveSupport::TestCase
     assert_equal 'paper', event.metadata['submission_method']
   end
 
+  test 'a refused upload is audited against the stored application without saving rolled-back changes' do
+    stored_income = @application.annual_income
+    refused = fixture_file_upload('invalid.exe', 'application/octet-stream')
+
+    assert_difference -> { Event.where(action: 'income_proof_attachment_failed', auditable: @application).count }, 1 do
+      ApplicationRecord.transaction do
+        @application.annual_income = stored_income + 1
+        result = ProofAttachmentService.attach_proof(application: @application, proof_type: :income, blob_or_file: refused,
+                                                     admin: @admin, submission_method: :paper)
+        assert_kind_of UploadedDocument::Refused, result[:error]
+        raise ActiveRecord::Rollback
+      end
+    end
+    assert_equal stored_income, @application.reload.annual_income
+  end
+
+  test 'a refused upload outside a caller transaction is audited immediately' do
+    refused = fixture_file_upload('invalid.exe', 'application/octet-stream')
+
+    assert_difference -> { Event.where(action: 'income_proof_attachment_failed', auditable: @application).count }, 1 do
+      ProofAttachmentService.attach_proof(application: @application, proof_type: :income, blob_or_file: refused,
+                                          admin: @admin, submission_method: :web)
+    end
+  end
+
   test 'reject_proof_without_attachment sets rejected status without attachment' do
     # Clear events before the test
     Event.delete_all

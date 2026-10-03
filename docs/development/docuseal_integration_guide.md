@@ -36,7 +36,7 @@ Unknown event types and unmatched submission IDs change nothing, and the receive
 
 ### Which file wins
 
-A certification can arrive through DocuSeal or a secure upload link. [`MedicalCertificationAttachmentService.accept_submission`](../../app/services/medical_certification_attachment_service.rb) decides placement for both channels, so a correction and a late, obsolete completion are told apart the same way:
+A certification can arrive through DocuSeal or a secure upload link. [`MedicalCertificationAttachmentService.accept_submission`](../../app/services/medical_certification_attachment_service.rb) decides placement for both channels, so a correction and a late, obsolete completion are told apart the same way. It attaches a blob its caller already resolved: the secure form resolves the upload through [`UploadedDocument`](../../app/services/uploaded_document.rb), while DocuSeal's generated PDF keeps its own acceptance contract and is exempt from manual-upload limits (`ProofUploadFormats::GENERATED_SOURCES`):
 
 | Current status | Submission | Result |
 | --- | --- | --- |

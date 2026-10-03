@@ -8,7 +8,7 @@ What follows is the repository-specific part: shared setup that changes behavior
 bin/rails test test/models/user_contact_predicates_test.rb
 bin/rails test test/models/user_contact_predicates_test.rb -n /real_email/
 SYSTEM_TEST_WORKERS=1 bin/rails test test/system/registrations_test.rb
-yarn test test/javascript/controllers/upload_controller_test.js --runInBand
+yarn test test/javascript/controllers/document_upload_controller_test.js --runInBand
 ```
 
 CI runs the full system suite. Locally, browser runs share the test database, so two suites at once will interfere, and browser tests exercise built assets — `yarn build` and `yarn build:css` after frontend changes.

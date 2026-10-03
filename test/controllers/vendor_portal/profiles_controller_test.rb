@@ -90,5 +90,68 @@ module VendorPortal
       assert_equal 'Updated vendor', @vendor_user.reload.business_name
       assert_equal 'https://example.com', @vendor_user.website_url
     end
+
+    test 'refuses a W-9 that is not under the size limit and keeps the profile and W-9 unchanged' do
+      @vendor_user.w9_form.attach(io: file_fixture('sample_w9.pdf').open, filename: 'w9.pdf', content_type: 'application/pdf')
+      previous_w9 = @vendor_user.w9_form.blob
+      previous_name = @vendor_user.business_name
+      oversized = Tempfile.new(['w9', '.pdf'])
+      oversized.binmode
+      oversized.write("%PDF-1.4\n#{'x' * (ProofUploadFormats.max_bytes(:w9) - 9)}")
+      oversized.close
+
+      patch vendor_portal_profile_url, params: {
+        users_vendor: { business_name: 'Unsaved Name', w9_form: fixture_file_upload(oversized.path, 'application/pdf') }
+      }
+
+      assert_response :unprocessable_content
+      assert_includes response.body, I18n.t('documents.refused.too_large_strict', max_size: ProofUploadFormats.max_megabytes(:w9))
+      @vendor_user.reload
+      assert_equal previous_w9, @vendor_user.w9_form.blob
+      assert_equal previous_name, @vendor_user.business_name
+    ensure
+      oversized&.unlink
+    end
+
+    test 'a rolled-back profile update leaves only the tracked retained W-9 in storage' do
+      stored_keys = []
+      record_upload = ->(*, payload) { stored_keys << payload[:key] }
+
+      ActiveSupport::Notifications.subscribed(record_upload, 'service_upload.active_storage') do
+        patch vendor_portal_profile_url, params: {
+          users_vendor: { website_url: 'not a url', w9_form: fixture_file_upload('sample_w9.pdf', 'application/pdf') }
+        }
+      end
+
+      assert_response :unprocessable_content
+      rolled_back, retained = stored_keys
+      assert_equal 2, stored_keys.size, 'the update stores the file once and the re-render keeps it once'
+      assert_not ActiveStorage::Blob.exists?(key: rolled_back)
+      assert_not ActiveStorage::Blob.service.exist?(rolled_back)
+      assert ActiveStorage::Blob.exists?(key: retained), 'the retained upload stays visible to cleanup'
+    end
+
+    test 'a usable new W-9 is kept for the next attempt when another field fails' do
+      @vendor_user.w9_form.attach(io: file_fixture('sample_w9.pdf').open, filename: 'w9.pdf', content_type: 'application/pdf')
+      previous_w9 = @vendor_user.w9_form.blob
+
+      patch vendor_portal_profile_url, params: {
+        users_vendor: { website_url: 'not a url', w9_form: fixture_file_upload('sample_w9.pdf', 'application/pdf') }
+      }
+
+      assert_response :unprocessable_content
+      assert_select 'p', text: 'Current W9 form: w9.pdf'
+      assert_select "[data-document-upload-retained-name-value='users_vendor[w9_form_signed_id]']"
+      retained = css_select("input[name='users_vendor[w9_form_signed_id]']").first
+      assert retained, 'the new W-9 should be kept for the next attempt'
+      assert_equal previous_w9, @vendor_user.reload.w9_form.blob
+
+      patch vendor_portal_profile_url, params: {
+        users_vendor: { website_url: 'https://example.com', w9_form_signed_id: retained['value'] }
+      }
+
+      assert_redirected_to vendor_portal_dashboard_url
+      assert_equal 'sample_w9.pdf', @vendor_user.reload.w9_form.filename.to_s
+    end
   end
 end

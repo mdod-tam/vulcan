@@ -17,16 +17,6 @@ class Application < ApplicationRecord
     end
   end
 
-  ProofResult = Struct.new(:success, :type, :message, :error, keyword_init: true) do # rubocop:disable Style/RedundantStructKeywordInit
-    def success?
-      success == true
-    end
-
-    def error_message
-      error&.message || message
-    end
-  end
-
   # Signing URLs require encryption at rest because they can expose document or audit data.
   encrypts :document_signing_audit_url
   encrypts :document_signing_document_url
@@ -128,6 +118,7 @@ class Application < ApplicationRecord
   # Retain late DocuSeal or secure-upload submissions when certification is received or approved,
   # or when the request predates rejection.
   has_many_attached :additional_medical_certifications
+  validates :medical_certification, :additional_medical_certifications, document: { purpose: :certification }
 
   validates :application_date, presence: true
   validates :status, presence: true

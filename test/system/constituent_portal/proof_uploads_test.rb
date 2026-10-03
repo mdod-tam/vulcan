@@ -37,8 +37,8 @@ class ProofUploadsTest < ApplicationSystemTestCase
     wait_for_turbo
 
     assert_selector 'h1', text: 'Upload New Income Proof'
-    assert_selector "form[data-controller='upload']"
-    assert_field 'income_proof_upload', type: 'file'
+    assert_selector "[data-controller='document-upload']"
+    assert_field 'income_proof', type: 'file'
     assert_button 'Submit Document'
     assert_text 'Maximum file size: 5MB'
   end
@@ -53,7 +53,7 @@ class ProofUploadsTest < ApplicationSystemTestCase
     click_on 'Resubmit Income Proof'
     assert_selector 'h1', text: /Upload New Income Proof/i
 
-    attach_file 'income_proof_upload', @valid_pdf
+    attach_file 'income_proof', @valid_pdf
     click_button 'Submit Document'
 
     assert_success_message('Proof submitted successfully')
@@ -77,13 +77,10 @@ class ProofUploadsTest < ApplicationSystemTestCase
     visit constituent_portal_application_new_proof_path(@application, proof_type: 'income')
     wait_for_turbo
 
-    # Use the upload controller
-    attach_file 'income_proof_upload', @valid_pdf
+    attach_file 'income_proof', @valid_pdf
+    assert_text I18n.t('documents.upload.selected', filename: 'income_proof.pdf')
 
-    # Progress bar should appear during upload
-    assert_selector "[data-upload-target='progress']", visible: true
-
-    # Submit form
+    # The file uploads when the form is submitted
     click_button 'Submit Document'
     wait_for_turbo
 
@@ -94,7 +91,7 @@ class ProofUploadsTest < ApplicationSystemTestCase
     assert @application.reload.income_proof.attached?
   end
 
-  test 'cancelling before the file is stored clears the busy state and a new file still submits' do
+  test 'cancelling an upload before the file is stored keeps the form usable and a new submit succeeds' do
     # Hold the first blob-creation request so Cancel lands before any storage request exists
     browser = page.driver.browser
     held_requests = Queue.new
@@ -112,25 +109,24 @@ class ProofUploadsTest < ApplicationSystemTestCase
     visit constituent_portal_application_new_proof_path(@application, proof_type: 'income')
     wait_for_turbo
 
-    attach_file 'income_proof_upload', @valid_pdf
+    attach_file 'income_proof', @valid_pdf
+    click_button 'Submit Document'
     held_request = held_requests.pop(timeout: 10)
     assert held_request, 'the blob-creation request should be held'
-    assert_button 'Submit Document', disabled: true
+    assert_text I18n.t('documents.upload.uploading', filename: 'income_proof.pdf')
 
-    click_button 'Cancel Upload'
-    assert_button 'Submit Document', disabled: false
-    assert_no_selector "[data-upload-target='progress']", visible: true
+    click_button I18n.t('documents.upload.cancel')
+    assert_text I18n.t('documents.upload.canceled')
+    assert_no_button I18n.t('documents.upload.cancel')
+    assert_no_selector "[data-document-upload-target='progress']", visible: true
 
     begin
       held_request.continue
     rescue Ferrum::Error
       # The browser already dropped the aborted request
     end
-    assert_no_selector 'input[type="hidden"][name="income_proof_upload"]', visible: :all
-
-    attach_file 'income_proof_upload', @valid_pdf
-    assert_selector 'input[type="hidden"][name="income_proof_upload"]', visible: :all, count: 1
-    assert_button 'Submit Document', disabled: false
+    assert_current_path constituent_portal_application_new_proof_path(@application, proof_type: 'income')
+    assert_predicate @application.reload, :income_proof_status_rejected?
 
     click_button 'Submit Document'
     wait_for_turbo
@@ -143,9 +139,9 @@ class ProofUploadsTest < ApplicationSystemTestCase
     visit constituent_portal_application_new_proof_path(@application, proof_type: 'income')
     wait_for_turbo
 
-    attach_file 'income_proof_upload', file_fixture('invalid.exe')
+    attach_file 'income_proof', file_fixture('invalid.exe')
 
-    assert_text 'Invalid file type'
+    assert_text I18n.t('documents.refused.invalid_type')
   end
 
   test 'shows error for oversized file' do
@@ -157,9 +153,9 @@ class ProofUploadsTest < ApplicationSystemTestCase
     visit constituent_portal_application_new_proof_path(@application, proof_type: 'income')
     wait_for_turbo
 
-    attach_file 'income_proof_upload', large_file.path
+    attach_file 'income_proof', large_file.path
 
-    assert_text 'File is too large'
+    assert_text I18n.t('documents.refused.too_large', max_size: 5)
 
     large_file.unlink # Clean up
   end

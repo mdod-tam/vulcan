@@ -1,10 +1,10 @@
 # frozen_string_literal: true
 
+# UploadedDocument runs content inspection after size checks.
+# Routine model saves do not inspect file content.
+# PDF substring checks flag active content but do not provide a malware scan.
 class ProofAttachmentValidator
   ALLOWED_MIME_TYPES = ProofUploadFormats::ALLOWED_CONTENT_TYPES
-
-  MAX_FILE_SIZE = 10.megabytes
-  MIN_FILE_SIZE = 1.kilobyte
 
   class ValidationError < StandardError
     attr_reader :error_type
@@ -15,68 +15,34 @@ class ProofAttachmentValidator
     end
   end
 
-  def self.validate!(attachment, **)
-    new(**).validate!(attachment)
+  def self.check_content!(attachment)
+    new.check_content!(attachment)
   end
 
-  def initialize(allowed_mime_types: ALLOWED_MIME_TYPES, max_file_size: MAX_FILE_SIZE, min_file_size: MIN_FILE_SIZE)
-    @allowed_mime_types = allowed_mime_types
-    @max_file_size = max_file_size
-    @min_file_size = min_file_size
-  end
-
-  def validate!(attachment)
+  # Raises ValidationError with :invalid_type, :suspicious_content, or :unreadable
+  def check_content!(attachment)
     @attachment_content = nil
     @detected_mime_type = nil
 
-    validate(attachment)
-  rescue StandardError => e
-    raise e if e.is_a?(ValidationError)
-
-    Rails.logger.error("Unexpected error in proof validation: #{e.message}")
-    raise ValidationError.new(:unknown_error, 'An unexpected error occurred during validation')
-  end
-
-  def validate(attachment)
-    validation_error(:no_attachment, 'No attachment provided') if attachment.nil?
-
-    attachment_size = attachment_size(attachment)
-
-    if attachment_size < @min_file_size
-      validation_error(:file_too_small,
-                       "File is too small (minimum #{@min_file_size} bytes)")
-    end
-    if attachment_size > @max_file_size
-      validation_error(:file_too_large,
-                       "File is too large (maximum #{@max_file_size} bytes)")
-    end
     validation_error(:invalid_type, 'File type not allowed') unless valid_mime_type?(attachment)
-
-    if potentially_malicious?(attachment)
-      validation_error(:suspicious_content,
-                       'File contains suspicious content')
-    end
+    validation_error(:suspicious_content, 'File contains suspicious content') if potentially_malicious?(attachment)
 
     true
+  rescue ValidationError
+    raise
+  rescue StandardError => e
+    Rails.logger.error("Unexpected error in document content inspection: #{e.message}")
+    raise ValidationError.new(:unreadable, 'The file could not be read')
   end
 
   private
-
-  def attachment_size(attachment)
-    return attachment.byte_size if attachment.respond_to?(:byte_size)
-    return attachment.size if attachment.respond_to?(:size)
-    return attachment.decoded.bytesize if attachment.respond_to?(:decoded)
-    return attachment.body.decoded.bytesize if attachment.respond_to?(:body) && attachment.body.respond_to?(:decoded)
-
-    attachment_content(attachment).bytesize
-  end
 
   def validation_error(type, message)
     raise ValidationError.new(type, message)
   end
 
   def valid_mime_type?(attachment)
-    @allowed_mime_types.include?(detected_mime_type(attachment))
+    ALLOWED_MIME_TYPES.include?(detected_mime_type(attachment))
   end
 
   def potentially_malicious?(attachment)
@@ -105,14 +71,11 @@ class ProofAttachmentValidator
   end
 
   def detected_mime_type(attachment)
-    @detected_mime_type ||= begin
-      content = attachment_content(attachment)
-      Marcel::MimeType.for(
-        StringIO.new(content),
-        name: attachment_filename(attachment),
-        declared_type: declared_content_type(attachment)
-      )
-    end
+    @detected_mime_type ||= Marcel::MimeType.for(
+      StringIO.new(attachment_content(attachment)),
+      name: attachment_filename(attachment),
+      declared_type: declared_content_type(attachment)
+    )
   end
 
   def attachment_content(attachment)
@@ -120,10 +83,6 @@ class ProofAttachmentValidator
                               attachment.download.to_s
                             elsif attachment.respond_to?(:tempfile)
                               read_io(attachment.tempfile)
-                            elsif attachment.respond_to?(:decoded)
-                              attachment.decoded.to_s
-                            elsif attachment.respond_to?(:body) && attachment.body.respond_to?(:decoded)
-                              attachment.body.decoded.to_s
                             elsif attachment.respond_to?(:read)
                               read_io(attachment)
                             else

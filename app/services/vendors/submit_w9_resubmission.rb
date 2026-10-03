@@ -23,7 +23,6 @@ module Vendors
       return invalid_request_failure unless form_belongs_to_vendor?
       return inactive_request_failure unless vendor_secure_request_form.active_for_public_use?
       return invalid_request_failure unless vendor_secure_request_form.kind_w9_upload?
-      return validation_failure unless file_valid?
 
       result = nil
 
@@ -43,6 +42,8 @@ module Vendors
       end
 
       result
+    rescue UploadedDocument::Refused => e
+      refused_upload_failure(e)
     rescue ActiveRecord::RecordInvalid => e
       failure(e.record.errors.full_messages.to_sentence, { errors: e.record.errors })
     end
@@ -55,8 +56,11 @@ module Vendors
 
     def request_form = vendor_secure_request_form
 
+    # A failed attach rolls back the transaction, so the request is never consumed without a file
     def attach_w9!
-      vendor.w9_form.attach(file)
+      blob = UploadedDocument.resolve!(file, record: vendor, name: 'w9_form', signed_ids: false,
+                                             min_bytes: ProofUploadFormats::SECURE_FORM_MIN_BYTES)
+      vendor.w9_form.attach(blob) || raise(ActiveRecord::RecordInvalid, vendor)
     end
 
     def log_submission

@@ -23,7 +23,6 @@ module Applications
       return invalid_request_failure unless form_belongs_to_application?
       return inactive_request_failure unless medical_provider_secure_request_form.active_for_public_use?
       return invalid_request_failure unless certification_kind?
-      return validation_failure unless file_valid?
 
       @system_actor = User.system_user
       return failure(message(:attachment_failed)) unless @system_actor
@@ -48,6 +47,8 @@ module Applications
       end
 
       result
+    rescue UploadedDocument::Refused => e
+      refused_upload_failure(e)
     rescue AttachmentFailure => e
       failure(e.message)
     rescue ActiveRecord::RecordInvalid => e
@@ -69,7 +70,7 @@ module Applications
     def accept_certification
       MedicalCertificationAttachmentService.accept_submission(
         application: application,
-        blob: create_secure_upload_blob,
+        blob: secure_upload_blob,
         submission_method: :secure_form,
         requested_at: medical_provider_secure_request_form.sent_at,
         admin: @system_actor,
@@ -80,34 +81,11 @@ module Applications
       )
     end
 
-    def create_secure_upload_blob
-      io = upload_io
-      io.rewind if io.respond_to?(:rewind)
-
-      ActiveStorage::Blob.create_and_upload!(
-        io: io,
-        filename: upload_filename,
-        content_type: upload_content_type,
-        metadata: secure_upload_metadata
-      )
-    end
-
-    def upload_io
-      file.respond_to?(:tempfile) ? file.tempfile : file
-    end
-
-    def upload_filename
-      if file.respond_to?(:original_filename)
-        file.original_filename
-      elsif file.respond_to?(:filename)
-        file.filename
-      else
-        'medical_certification_upload'
-      end
-    end
-
-    def upload_content_type
-      file.content_type if file.respond_to?(:content_type)
+    def secure_upload_blob
+      blob = UploadedDocument.resolve!(file, record: application, name: 'medical_certification', signed_ids: false,
+                                             min_bytes: ProofUploadFormats::SECURE_FORM_MIN_BYTES)
+      blob.update!(metadata: blob.metadata.merge(secure_upload_metadata))
+      blob
     end
 
     def secure_upload_metadata

@@ -276,6 +276,45 @@ module Admin
       assert_not @application.medical_certification.attached?
     end
 
+    test 'staff cannot upload over a certification that awaits review or is approved' do
+      %w[received approved].each do |status|
+        existing = ActiveStorage::Blob.create_and_upload!(io: file_fixture('medical_certification_valid.pdf').open,
+                                                          filename: 'existing.pdf', content_type: 'application/pdf')
+        @application.medical_certification.attach(existing)
+        @application.update_column(:medical_certification_status, status)
+
+        get admin_application_path(@application)
+        assert_select '[data-testid="medical-certification-upload-form"]', count: 0
+
+        patch upload_medical_certification_admin_application_path(@application),
+              params: { medical_certification: fixture_file_upload('medical_certification_valid.pdf', 'application/pdf'),
+                        medical_certification_status: 'approved' }
+
+        assert_redirected_to admin_application_path(@application)
+        assert_equal I18n.t('admin.applications.upload_medical_certification.m_not_allowed'), flash[:alert]
+        @application.reload
+        assert_equal status, @application.medical_certification_status
+        assert_equal existing, @application.medical_certification.blob
+      end
+    end
+
+    test 'staff can upload again once a certification is rejected' do
+      @application.update_column(:medical_certification_status, 'rejected')
+
+      get admin_application_path(@application)
+
+      assert_select '[data-testid="medical-certification-upload-form"]'
+    end
+
+    test 'rejecting a certification without a reason changes nothing' do
+      patch upload_medical_certification_admin_application_path(@application),
+            params: { medical_certification_status: 'rejected', rejection_reason_code: '' }
+
+      assert_redirected_to admin_application_path(@application)
+      assert_equal 'Please select a rejection reason', flash[:alert]
+      assert_equal 'requested', @application.reload.medical_certification_status
+    end
+
     test 'show page displays the correct application status' do
       approved_app = create(:application,
                             user: create(:constituent, email: generate(:email)),
@@ -704,6 +743,23 @@ module Admin
     def provider_info_summary_expires_text(time)
       I18n.t('admin.applications.secure_request_forms.summary.nearest_expiration',
              time: I18n.l(time.to_date, format: :month_day))
+    end
+
+    test 'refuses a certification with active content without attaching it' do
+      script_pdf = Tempfile.new(['certification', '.pdf'])
+      script_pdf.binmode
+      script_pdf.write("%PDF-1.4\n/OpenAction << /S /JavaScript >>\n#{'x' * 2048}")
+      script_pdf.close
+
+      patch upload_medical_certification_admin_application_path(@application),
+            params: { medical_certification: fixture_file_upload(script_pdf.path, 'application/pdf'),
+                      medical_certification_status: 'approved' }
+
+      assert_redirected_to admin_application_path(@application)
+      assert_includes flash[:alert], I18n.t('documents.refused.suspicious_content')
+      assert_not_predicate @application.reload.medical_certification, :attached?
+    ensure
+      script_pdf&.unlink
     end
   end
 end

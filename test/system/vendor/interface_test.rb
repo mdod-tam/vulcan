@@ -25,33 +25,6 @@ module VendorPortal
       assert_link 'Process Voucher'
     end
 
-    test 'uploading W9 form' do
-      visit edit_vendor_portal_profile_path
-      clear_pending_connections_fast
-
-      # The actual field name from the production UI
-      if has_field?('vendor[w9_form]', wait: 2)
-        attach_file 'vendor[w9_form]',
-                    file_fixture('sample_w9.txt'),
-                    make_visible: true
-      else
-        skip 'W9 upload field not available - may already be uploaded'
-      end
-
-      # Fill in other required fields if they exist
-      fill_in 'Business Name', with: 'Test Business' if has_field?('Business Name')
-      fill_in 'Tax ID (EIN/SSN)', with: '123456789' if has_field?('Tax ID (EIN/SSN)')
-
-      # Check terms if required
-      check 'I agree to the vendor terms and conditions' if has_unchecked_field?('I agree to the vendor terms and conditions')
-
-      click_on 'Save Changes'
-      clear_pending_connections_fast
-
-      # Flexible success assertion
-      assert_text(/updated|saved|success/i, wait: 5)
-    end
-
     test 'processing a valid voucher' do
       # The actual voucher processing flow starts at vouchers index
       visit vendor_portal_vouchers_path

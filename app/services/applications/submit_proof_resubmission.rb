@@ -24,7 +24,6 @@ module Applications
       return invalid_request_failure unless secure_request_form.application_id == application.id
       return inactive_request_failure unless secure_request_form.active_for_public_use?
       return invalid_request_failure unless proof_type
-      return validation_failure unless file_valid?(max_file_size: ProofUploadFormats::PROOF_MAX_BYTES)
 
       result = nil
 
@@ -45,6 +44,8 @@ module Applications
         end
 
         attach_result = attach_proof
+        raise attach_result[:error] if attach_result[:error].is_a?(UploadedDocument::Refused)
+
         raise_attachment_failure(attach_result[:error]) unless attach_result[:success]
 
         secure_request_form.mark_submitted!
@@ -53,6 +54,8 @@ module Applications
       end
 
       result
+    rescue UploadedDocument::Refused => e
+      refused_upload_failure(e)
     rescue AttachmentFailure => e
       failure(e.message)
     rescue ActiveRecord::RecordInvalid => e
@@ -73,6 +76,7 @@ module Applications
         proof_type: proof_type,
         blob_or_file: file,
         signed_ids: false, # the public form accepts only a multipart upload
+        min_bytes: ProofUploadFormats::SECURE_FORM_MIN_BYTES,
         submission_method: :secure_form,
         status: :not_reviewed,
         metadata: {

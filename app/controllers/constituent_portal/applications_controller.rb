@@ -4,7 +4,6 @@ module ConstituentPortal
   class ApplicationsController < ApplicationController
     include ParamCasting
     include ApplicationFormHandling
-    include DocumentUploadHandling
     include ApplicationDataStructures
     include AddressHelper
     include MedicalProviderHelper

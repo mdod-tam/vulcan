@@ -22,11 +22,14 @@ class SecurePublicFormLocaleTest < ApplicationSystemTestCase
 
     assert_selector 'html[lang="es"]'
     assert_selector '#error-summary-title', text: I18n.t('secure_w9_forms.show.error_summary', locale: :es)
-    assert_selector '#file_error', text: I18n.t('vendors.w9_resubmission.messages.file_blank', locale: :es)
+    assert_selector '#file_error', text: I18n.t('documents.refused.missing', locale: :es)
     take_evidence_screenshot('secure-w9-vendor-spanish-validation', full: true, html: true)
   end
 
-  test 'certification form renders show and validation errors in the applicant locale' do
+  # The certification form is completed by the medical provider, not the applicant, so it uses the
+  # default locale whatever the applicant's language (MedicalProviderSecureRequestForm#delivery_locale).
+  test 'certification form renders show and validation errors in the default locale for a Spanish-speaking applicant' do
+    ensure_system_audit_actor! # certification submissions are recorded by the system actor
     constituent = create(:constituent, locale: 'es')
     application = create(
       :application,
@@ -40,17 +43,18 @@ class SecurePublicFormLocaleTest < ApplicationSystemTestCase
 
     visit secure_certification_form_path(token: raw_token)
 
-    assert_selector 'html[lang="es"]'
-    assert_selector 'h1', text: I18n.t('secure_certification_forms.show.heading', locale: :es)
-    assert_no_text I18n.t('secure_certification_forms.show.heading', locale: :en)
-    take_evidence_screenshot('secure-certification-applicant-spanish-locale', full: true, html: true)
+    assert_selector "html[lang='#{I18n.default_locale}']"
+    assert_selector 'h1', text: I18n.t('secure_certification_forms.show.heading', locale: I18n.default_locale)
+    assert_no_text I18n.t('secure_certification_forms.show.heading', locale: :es)
+    take_evidence_screenshot('secure-certification-default-locale', full: true, html: true)
 
     submit_form_without_file
 
-    assert_selector 'html[lang="es"]'
-    assert_selector '#error-summary-title', text: I18n.t('secure_certification_forms.show.error_summary', locale: :es)
-    assert_selector '#file_error', text: I18n.t('applications.certification_upload.messages.file_blank', locale: :es)
-    take_evidence_screenshot('secure-certification-applicant-spanish-validation', full: true, html: true)
+    assert_selector "html[lang='#{I18n.default_locale}']"
+    assert_selector '#error-summary-title',
+                    text: I18n.t('secure_certification_forms.show.error_summary', locale: I18n.default_locale)
+    assert_selector '#file_error', text: I18n.t('documents.refused.missing', locale: I18n.default_locale)
+    take_evidence_screenshot('secure-certification-default-locale-validation', full: true, html: true)
   end
 
   private

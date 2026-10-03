@@ -534,14 +534,6 @@ module Applications
       end
     end
 
-    def no_email_address?(scope = :constituent)
-      paper_contact_flags(scope).no_email?
-    end
-
-    def no_phone_number?(scope = :constituent)
-      paper_contact_flags(scope).no_phone?
-    end
-
     def paper_contact_flags(scope)
       Applications::PaperContactFlags.new(params, scope: scope)
     end
@@ -825,125 +817,49 @@ module Applications
     end
 
     def process_upload_only_proof(type)
-      blob_or_file = proof_upload(type)
-      return false if blob_or_file == false
+      upload = submitted_document(type)
+      return add_error("Please upload a file for #{proof_upload_label(type)} before sending it for review") if upload.blank?
 
-      return add_error("Please upload a file for #{proof_upload_label(type)} before sending it for review") if blob_or_file.blank?
-
-      result = if type == :medical_certification
-                 MedicalCertificationAttachmentService.attach_certification(
-                   application: @application,
-                   blob_or_file: blob_or_file,
-                   status: :received,
-                   admin: @admin,
-                   submission_method: :paper,
-                   metadata: {}
-                 )
-               else
-                 ProofAttachmentService.attach_proof(
-                   application: @application,
-                   proof_type: type,
-                   blob_or_file: blob_or_file,
-                   status: :not_reviewed,
-                   admin: @admin,
-                   submission_method: :paper,
-                   metadata: {}
-                 )
-               end
-
-      unless result[:success]
-        add_error("Error processing #{proof_upload_label(type)}: #{result[:error]&.message}")
-        return false
-      end
-
-      true
+      attach_document(type, upload, status: type == :medical_certification ? :received : :not_reviewed)
     end
 
     def proof_upload_label(type)
       type == :medical_certification ? 'medical certification' : "#{type} proof"
     end
 
+    # Approval requires an attachment in all contexts. Only rejections may proceed without files.
     def process_accept_proof(type)
-      file_key = type == :medical_certification ? type.to_s : "#{type}_proof"
-      signed_id_key = type == :medical_certification ? "#{type}_signed_id" : "#{type}_proof_signed_id"
+      upload = submitted_document(type)
+      return add_error("Please upload a file for #{type} proof before approving") if upload.blank?
 
-      file_param = params[file_key]
-      signed_id_param = params[signed_id_key]
-
-      # The file parameter also accepts a signed blob ID. UploadedDocument resolves and validates that ID before
-      # attachment.
-      file_valid = file_param.present? && (
-        file_param.respond_to?(:read) ||
-        file_param.is_a?(ActionDispatch::Http::UploadedFile) ||
-        (file_param.is_a?(String) && !file_param.empty?)
-      )
-      signed_id_valid = signed_id_param.present? && signed_id_param.is_a?(String) && !signed_id_param.empty?
-
-      file_present = file_valid || signed_id_valid
-
-      # Paper approval requires a file. A rejection can proceed without one.
-      return add_error("Please upload a file for #{type} proof before approving") unless file_present
-
-      attach_and_approve_proof(type)
+      attach_document(type, upload, status: :approved)
     end
 
-    def attach_and_approve_proof(type)
-      blob_or_file = proof_upload(type)
-      return false if blob_or_file == false
+    def submitted_document(type)
+      UploadedDocument.submitted(params, type == :medical_certification ? type.to_s : "#{type}_proof")
+    end
 
+    # The writer resolves the file through UploadedDocument; its refusal is reported against this document
+    def attach_document(type, upload, status:)
       result = if type == :medical_certification
                  MedicalCertificationAttachmentService.attach_certification(
-                   application: @application,
-                   blob_or_file: blob_or_file,
-                   status: :approved,
-                   admin: @admin,
-                   submission_method: :paper,
-                   metadata: {}
+                   application: @application, blob_or_file: upload, status: status,
+                   admin: @admin, submission_method: :paper, metadata: {}
                  )
                else
                  ProofAttachmentService.attach_proof(
-                   application: @application,
-                   proof_type: type,
-                   blob_or_file: blob_or_file,
-                   status: :approved,
-                   admin: @admin,
-                   submission_method: :paper,
-                   metadata: {}
+                   application: @application, proof_type: type, blob_or_file: upload, status: status,
+                   admin: @admin, submission_method: :paper, metadata: {}
                  )
                end
+      return true if result[:success]
+      return add_error(result[:error].user_message_for(proof_upload_label(type).upcase_first)) if result[:error].is_a?(UploadedDocument::Refused)
 
-      unless result[:success]
-        add_error("Error processing #{type} proof: #{result[:error]&.message}")
-        return false
-      end
-
-      true
-    end
-
-    def proof_upload(type)
-      key = type == :medical_certification ? type.to_s : "#{type}_proof"
-      upload = params[key].presence || params["#{key}_signed_id"].presence
-      return upload unless upload.is_a?(String)
-
-      UploadedDocument.resolve!(upload, record: @application, name: key, max_bytes: paper_upload_max_bytes(type))
+      add_error("Error processing #{proof_upload_label(type)}: #{result[:error]&.message}")
     rescue UploadedDocument::Refused => e
-      add_error(paper_upload_refusal(type, e.reason))
-    end
-
-    # Certification limits remain separate from the shared size policy for other proofs.
-    def paper_upload_max_bytes(type)
-      ProofUploadFormats::PROOF_MAX_BYTES unless type == :medical_certification
-    end
-
-    def paper_upload_refusal(type, reason)
-      label = proof_upload_label(type)
-      case reason
-      when :expired then "The uploaded #{label} has expired. Upload it again."
-      when :attached_elsewhere then "The uploaded #{label} is already attached elsewhere. Upload it again."
-      when :too_large then "The uploaded #{label} is larger than #{ProofUploadFormats.proof_max_megabytes}MB. Upload a smaller file."
-      when :invalid_type then "The uploaded #{label} is not a #{ProofUploadFormats::HUMAN_LABEL} file. Upload it again."
-      else "The uploaded #{label} is no longer available. Upload it again."
-      end
+      add_error(e.user_message_for(proof_upload_label(type).upcase_first))
+    rescue MedicalCertificationAttachmentService::StaffUploadNotAllowed => e
+      add_error("#{proof_upload_label(type).upcase_first}: #{e.message}")
     end
 
     def process_reject_proof(type)
@@ -1079,20 +995,6 @@ module Applications
         reason_code: reason_payload[:reason_code],
         submission_method: :paper,
         metadata: {}
-      )
-    end
-
-    def log_proof_submission(type, has_attachment)
-      AuditEventService.log(
-        action: 'proof_submitted',
-        actor: @admin,
-        auditable: @application,
-        metadata: {
-          proof_type: type.to_s,
-          submission_method: 'paper',
-          status: 'approved',
-          has_attachment: has_attachment
-        }
       )
     end
 

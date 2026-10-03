@@ -210,6 +210,35 @@ module ConstituentPortal
       assert_equal 'not_reviewed', application.residency_proof_status
     end
 
+    test 'a refused proof creates nothing and names the document and the reason' do
+      unique_user = create(:constituent, :with_disabilities,
+                           email: "refused_proof_#{Time.now.to_i}_#{rand(1000)}@example.com")
+      sign_in_for_integration_test(unique_user)
+      disguised = Tempfile.new(['income', '.pdf'])
+      disguised.binmode
+      disguised.write("MZ\x90\x00#{'x' * 4096}")
+      disguised.close
+
+      assert_no_difference(['Application.count', 'ActiveStorage::Attachment.count']) do
+        post constituent_portal_applications_path, params: {
+          application: {
+            maryland_resident: true, household_size: 3, annual_income: 50_000,
+            self_certify_disability: checkbox_params(true), hearing_disability: checkbox_params(true),
+            residency_proof: @valid_image, income_proof: fixture_file_upload(disguised.path, 'application/pdf'),
+            terms_accepted: checkbox_params(true), information_verified: checkbox_params(true),
+            medical_release_authorized: checkbox_params(true),
+            medical_provider_attributes: { name: 'Dr. Smith', phone: '2025551234', email: 'drsmith@example.com' }
+          },
+          submit_application: 'Submit Application'
+        }
+      end
+
+      expected = "#{Application.human_attribute_name(:income_proof)}: #{I18n.t('documents.refused.invalid_type')}"
+      assert_includes response.body, ERB::Util.html_escape(expected)
+    ensure
+      disguised&.unlink
+    end
+
     # A pending registration soft-match case produces an informational refusal, with no new application.
     # The response preserves entered values and explains how to restore file selections.
     test 'blocked submission re-renders the form with the pending-review explanation and no application' do

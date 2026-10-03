@@ -1,7 +1,7 @@
 # frozen_string_literal: true
 
-# Provides proof attachments, content type and size validation, required-attachment validation,
-# approval checks, and review timestamps.
+# Provides proof eligibility, required-attachment validation, approval checks, and review timestamps.
+# Application declares attachments. DocumentValidator enforces type and size policy.
 # Attachment and review services own their workflows.
 #
 # @example Basic usage
@@ -15,17 +15,10 @@
 module ProofManageable
   extend ActiveSupport::Concern
 
-  ALLOWED_TYPES = ProofUploadFormats::ALLOWED_CONTENT_TYPES
-
   PROOF_TYPES = %w[income residency].freeze
 
   included do
-    has_one_attached :income_proof
-    has_one_attached :residency_proof
-    has_many_attached :documents
-
-    validate :correct_proof_mime_type
-    validate :proof_size_within_limit
+    validates :income_proof, :residency_proof, :id_proof, document: { purpose: :proof }
     validate :require_proof_attachments, if: :require_proof_validations?
 
     after_save :set_needs_review_timestamp, if: :proof_attachments_changed?
@@ -45,7 +38,7 @@ module ProofManageable
     !status_archived? && !status_approved?
   end
 
-  # Secure proof links serve a rejected proof or a proof that was never uploaded.
+  # Secure proof links serve rejected proofs or missing proofs with not_reviewed status.
   # Issuance, the admin send button, and public submission all use this rule.
   def proof_requestable_via_secure_form?(proof_type)
     return false if proof_type.to_s == 'income' && !income_proof_required?
@@ -68,8 +61,7 @@ module ProofManageable
     update!(status_attr => status)
   end
 
-  # Records rejection status without a file. ProofAttachmentService owns rejection orchestration.
-  # Do not call ProofAttachmentService from here, because that service calls this method.
+  # Records rejection status without a file. The service owns rejection orchestration.
   def reject_proof_without_attachment!(proof_type, admin: nil, reason: 'other', notes: nil)
     status_attr = "#{proof_type}_proof_status"
     update!(status_attr => :rejected)
@@ -113,27 +105,6 @@ module ProofManageable
   end
 
   private
-
-  # These validations check only blob metadata, on every validation of an attached proof.
-  def correct_proof_mime_type
-    ProofUploadFormats::PROOF_ATTACHMENT_TYPES.each do |proof_type|
-      attachment = send("#{proof_type}_proof")
-      next unless attachment.attached?
-
-      errors.add(:"#{proof_type}_proof", "must be a PDF or an image file (#{ProofUploadFormats::HUMAN_LABEL})") unless ALLOWED_TYPES.include?(attachment.content_type)
-    end
-  end
-
-  def proof_size_within_limit
-    ProofUploadFormats::PROOF_ATTACHMENT_TYPES.each do |proof_type|
-      attachment = send("#{proof_type}_proof")
-      next unless attachment.attached?
-      next if ProofUploadFormats.proof_size_allowed?(attachment.byte_size)
-
-      errors.add(:"#{proof_type}_proof",
-                 "is too large. Maximum size allowed is #{ProofUploadFormats.proof_max_megabytes}MB.")
-    end
-  end
 
   # A rejected proof can have no attachment until the constituent resubmits.
   def require_proof_attachments

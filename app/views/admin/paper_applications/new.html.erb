@@ -653,7 +653,11 @@
 
                 <div id="medical_certification_upload" class="mb-4" data-document-proof-handler-target="uploadSection">
                   <label for="medical_certification" class="block text-sm font-medium text-gray-700 mb-1 required-label">Upload Medical Certification</label>
-                  <%= render 'proof_upload', form: form, key: 'medical_certification', blob: @uploaded_proofs&.dig('medical_certification') %>
+                  <%= render 'shared/document_upload',
+                             form: form, field: 'medical_certification', model: Application,
+                             blob: @uploaded_proofs&.dig('medical_certification'),
+                             described_by: 'medical_certification_help',
+                             input_data: { document_proof_handler_target: 'fileInput' } %>
                   <p id="medical_certification_help" class="mt-1 text-xs text-gray-500">
                     Upload documentation verifying the disability certification.
                     Accepted formats: <%= proof_upload_formats_label %>.
@@ -770,7 +774,7 @@
 
           <div class="p-6 space-y-8">
             <% if FeatureFlag.income_proof_required? %>
-            <div data-controller="document-proof-handler" data-document-proof-handler-type-value="income">
+            <div data-controller="document-proof-handler">
               <h3 class="text-base font-semibold text-gray-900 mb-4 flex items-center gap-2">
                 <svg class="w-5 h-5 text-emerald-600" fill="none" stroke="currentColor" viewBox="0 0 24 24" aria-hidden="true">
                   <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 8c-1.657 0-3 .895-3 2s1.343 2 3 2 3 .895 3 2-1.343 2-3 2m0-8c1.11 0 2.08.402 2.599 1M12 8V7m0 1v8m0 0v1m0-1c-1.11 0-2.08-.402-2.599-1M21 12a9 9 0 11-18 0 9 9 0 0118 0z"/>
@@ -830,7 +834,10 @@
 
               <div id="income_proof_upload" class="mb-4" data-document-proof-handler-target="uploadSection">
                 <label for="income_proof" class="block text-sm font-medium text-gray-700 mb-1 required-label">Upload Income Proof Document</label>
-                <%= render 'proof_upload', form: form, key: 'income_proof', blob: @uploaded_proofs&.dig('income_proof') %>
+                <%= render 'shared/document_upload',
+                           form: form, field: 'income_proof', model: Application,
+                           blob: @uploaded_proofs&.dig('income_proof'), described_by: 'income_proof_help',
+                           input_data: { document_proof_handler_target: 'fileInput' } %>
                 <p id="income_proof_help" class="mt-1 text-xs text-gray-500">
                   Upload documents verifying income eligibility: recent tax return (1040), Social Security award letter,
                   SSI/SSDI benefits statement, pension statement, pay stubs, or other income verification.
@@ -930,7 +937,7 @@
 
             <hr class="border-gray-200">
 
-            <div data-controller="document-proof-handler" data-document-proof-handler-type-value="residency">
+            <div data-controller="document-proof-handler">
               <h3 class="text-base font-semibold text-gray-900 mb-4 flex items-center gap-2">
                 <svg class="w-5 h-5 text-emerald-600" fill="none" stroke="currentColor" viewBox="0 0 24 24" aria-hidden="true">
                   <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M3 12l2-2m0 0l7-7 7 7M5 10v10a1 1 0 001 1h3m10-11l2 2m-2-2v10a1 1 0 01-1 1h-3m-6 0a1 1 0 001-1v-4a1 1 0 011-1h2a1 1 0 011 1v4a1 1 0 001 1m-6 0h6"/>
@@ -1005,7 +1012,10 @@
 
               <div id="residency_proof_upload" class="mb-4" data-document-proof-handler-target="uploadSection">
                 <label for="residency_proof" class="block text-sm font-medium text-gray-700 mb-1 required-label">Upload Residency Proof Document</label>
-                <%= render 'proof_upload', form: form, key: 'residency_proof', blob: @uploaded_proofs&.dig('residency_proof') %>
+                <%= render 'shared/document_upload',
+                           form: form, field: 'residency_proof', model: Application,
+                           blob: @uploaded_proofs&.dig('residency_proof'), described_by: 'residency_proof_help',
+                           input_data: { document_proof_handler_target: 'fileInput' } %>
                 <p id="residency_proof_help" class="mt-1 text-xs text-gray-500">
                   Upload documents verifying Maryland residency: utility bill, mortgage statement, lease agreement,
                   bank statement, or government-issued ID showing the same physical address provided in this application.
@@ -1057,7 +1067,7 @@
 
           <hr class="border-gray-200 -mx-6">
 
-          <div data-controller="document-proof-handler" data-document-proof-handler-type-value="id" class="px-6 py-4">
+          <div data-controller="document-proof-handler" class="px-6 py-4">
             <h3 class="text-base font-semibold text-gray-900 mb-4 flex items-center gap-2">
               <svg class="w-5 h-5 text-blue-600" fill="none" stroke="currentColor" viewBox="0 0 24 24" aria-hidden="true">
                 <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M10 6H5a2 2 0 00-2 2v10a2 2 0 002 2h5m0 0h5a2 2 0 002-2V8a2 2 0 00-2-2h-5m0 0V5a2 2 0 012-2h1a2 2 0 012 2v1m0 0h3a2 2 0 012 2v10a2 2 0 01-2 2h-3m-6 0a2 2 0 01-2-2v-1m0 0H7a2 2 0 01-2-2V9m6 0a1 1 0 001-1V5a1 1 0 011-1h1a1 1 0 011 1v1a1 1 0 001 1m0 0h3"/>
@@ -1117,7 +1127,9 @@
 
             <div id="id_proof_upload" class="mb-4" data-document-proof-handler-target="uploadSection">
               <label for="id_proof" class="block text-sm font-medium text-gray-700 mb-1 required-label">Upload ID Proof Document</label>
-              <%= render 'proof_upload', form: form, key: 'id_proof', blob: @uploaded_proofs&.dig('id_proof') %>
+              <%= render 'shared/document_upload',
+                         form: form, field: 'id_proof', model: Application, blob: @uploaded_proofs&.dig('id_proof'),
+                         described_by: 'id_proof_help', input_data: { document_proof_handler_target: 'fileInput' } %>
               <p id="id_proof_help" class="mt-1 text-xs text-gray-500">
                 Upload documents verifying identity: driver's license, state ID, identification card, passport,
                 or other government-issued photo ID. Accepted formats: <%= proof_upload_formats_label %>.

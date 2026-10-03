@@ -81,8 +81,8 @@ class ApplicationProofValidationTest < ActiveSupport::TestCase
         content_type: 'text/plain'
       )
 
-      application.errors.clear
-      application.send(:correct_proof_mime_type)
+      # The document backstop checks the newly attached proof
+      application.valid?
 
       assert_includes application.errors[:income_proof],
                       "must be a PDF or an image file (#{ProofUploadFormats::HUMAN_LABEL})",
@@ -130,8 +130,8 @@ class ApplicationProofValidationTest < ActiveSupport::TestCase
       assert_equal 'text/plain', application.residency_proof.content_type, 'Content type should be text/plain'
       assert application.income_proof.attached?, 'Valid PDF should be attached for income proof'
 
-      application.errors.clear
-      application.send(:correct_proof_mime_type)
+      # The document backstop checks the newly attached proof
+      application.valid?
 
       assert_includes application.errors[:residency_proof],
                       "must be a PDF or an image file (#{ProofUploadFormats::HUMAN_LABEL})",

@@ -1,13 +1,12 @@
 # frozen_string_literal: true
 
-# Shared proof intake with transactions, audit events, and metrics.
-# Portal, paper, scanned, and secure resubmission callers share this service.
+# Attaches proofs for portal resubmission, paper intake, and secure requests.
+# UploadedDocument resolves and validates the file. This service owns proof state, audit, and metrics.
+# Attachment and proof state changes share its transaction.
 #
-# Do not stub ProofAttachmentService.attach_proof in integration tests.
-# A stub can report success without attachments.
-# Use real files so tests exercise attachment persistence.
+# Integration tests must call the real attach_proof method.
+# A stub can report success without storing an attachment.
 class ProofAttachmentService
-  # This context limits the number of parameters for audit methods.
   AttachmentEventContext = Struct.new(
     :application, :proof_type, :status, :submission_method,
     :admin, :metadata, :blob_size, :skip_audit_events,
@@ -25,6 +24,7 @@ class ProofAttachmentService
   #   - :admin [User] (optional) The admin user if this is an admin action.
   #   - :metadata [Hash] (optional) Additional metadata to store with the attachment audit.
   #   - :signed_ids [Boolean] (optional, default: true) Whether a signed blob ID is an accepted input.
+  #   - :min_bytes [Integer, nil] (optional) Smallest accepted file, for channels that require one.
   #
   # @return [Hash] Result hash with :success, :error, and :duration_ms keys. A refused upload
   #   leaves :error as an UploadedDocument::Refused and changes no proof state.
@@ -34,7 +34,8 @@ class ProofAttachmentService
       admin: nil,
       metadata: {},
       skip_audit_events: false,
-      signed_ids: true
+      signed_ids: true,
+      min_bytes: nil
     }.merge(args)
 
     context = {
@@ -58,7 +59,7 @@ class ProofAttachmentService
     end
   end
 
-  # Rejects a proof without an attachment for workflows such as paper intake.
+  # Rejects a proof without a file.
   #
   # @param application [Application] The application to reject the proof for
   # @param proof_type [Symbol] The type of proof (:income, :residency, or :id)
@@ -78,9 +79,8 @@ class ProofAttachmentService
     }
 
     with_service_flow(context) do |result|
-      # ProofReview owns the generic `proof_rejected` audit event and resubmission delivery
-      # through Applications::RequestProofResubmission. Avoid typed `#{proof_type}_proof_rejected`
-      # events or notifications here to prevent duplicate audit rows and delivery.
+      # ProofReview owns `proof_rejected` and delivery through Applications::RequestProofResubmission.
+      # An extra `#{proof_type}_proof_rejected` event or notification here would duplicate audit records or delivery.
       result[:success] = perform_rejection(application: application, proof_type: proof_type, admin: admin,
                                            submission_method: submission_method, rejection_details: rejection_details)
     end
@@ -93,8 +93,8 @@ class ProofAttachmentService
     Rails.logger.error "Failed to record proof failure: #{e.message}"
   end
 
-  # A caller can roll back its open transaction and remove an audit event written there.
-  # Write the failure event after that transaction ends.
+  # A caller's rollback would remove an audit event written inside its transaction.
+  # Write the event after that transaction ends.
   def self.record_failure_audit_after_transaction(error, context)
     transaction = ApplicationRecord.current_transaction
     return log_failure_audit_event(error, context) unless transaction.open?
@@ -183,8 +183,9 @@ class ProofAttachmentService
         result[:blob_size] = flow_data.blob_size
         result[:success] = true
 
-        # If the caller already sets paper_context, it owns final reconciliation.
-        # Other callers, such as ScannedProofsController, attempt reconciliation before this temporary paper context ends.
+        # Keep reconciliation in the attachment transaction so attachment and workflow changes remain atomic.
+        # A caller with paper context already active owns final reconciliation.
+        # Otherwise, reconcile here even when this service temporarily enables paper context.
         if params.fetch(:status).to_sym == :approved && !original_paper_context
           reconcile_if_approved(
             application: flow_data.application,
@@ -245,8 +246,13 @@ class ProofAttachmentService
       Rails.logger.error(backtrace || 'No backtrace available') unless Rails.env.test?
     end
 
+    # Use a fresh record after the caller's transaction ends.
+    # The original object can retain changes from a rollback or refer to a deleted record.
+    # Auditing that object could save it and its associations again.
     def log_failure_audit_event(error, context)
-      application = context.fetch(:application)
+      application = Application.find_by(id: context.fetch(:application).id)
+      return unless application
+
       proof_type = context.fetch(:proof_type)
 
       result_for_context = { success: false, error: error }
@@ -350,7 +356,7 @@ class ProofAttachmentService
     end
 
     def send_notification(context, event_metadata)
-      # PaperApplicationService sends notifications for paper intake. Paper context suppresses delivery here.
+      # PaperApplicationService owns notifications while paper context is active.
       return if Current.paper_context
 
       NotificationService.create_and_deliver!(
@@ -402,7 +408,7 @@ class ProofAttachmentService
       end
     end
 
-    # Resolves the document before proof state changes. A refusal raises here.
+    # Resolves the file before proof state changes. Refusal raises at this boundary.
     def prepare_flow_data(params)
       application = params.fetch(:application)
       proof_type = params.fetch(:proof_type)
@@ -410,8 +416,8 @@ class ProofAttachmentService
         params.fetch(:blob_or_file),
         record: application,
         name: get_attachment_method_name(proof_type),
-        max_bytes: ProofUploadFormats::PROOF_MAX_BYTES,
-        signed_ids: params.fetch(:signed_ids)
+        signed_ids: params.fetch(:signed_ids),
+        min_bytes: params.fetch(:min_bytes)
       )
 
       Struct.new(:application, :proof_type, :attachment_param, :blob_size, :submission_method, keyword_init: true).new( # rubocop:disable Style/RedundantStructKeywordInit

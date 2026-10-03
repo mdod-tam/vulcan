@@ -1,11 +1,12 @@
 import { Controller } from "@hotwired/stimulus"
 import { setVisible } from "../../utils/visibility"
 
+const DECISION_CONTROLS = 'input[type="radio"], [data-document-proof-handler-target="noneButton"]'
+
 /**
- * Controller for handling document proof acceptance/rejection
- * 
- * Manages the UI for accepting or rejecting proof documents,
- * toggling file upload sections, and handling rejection reasons.
+ * Controls acceptance, later review, or rejection of one document.
+ * The document-upload control owns the pending file.
+ * This controller clears that file on rejection and locks decisions during upload.
  */
 class DocumentProofHandlerController extends Controller {
   static targets = [
@@ -20,27 +21,21 @@ class DocumentProofHandlerController extends Controller {
     "reasonPreview",
     "languageNotice",
     "customReasonSection",
-    "customReasonField",
-    "savedUpload",
-    "removeUpload",
-    "cancelUpload"
+    "customReasonField"
   ]
-
-  static values = {
-    type: String // "income" or "residency"
-  }
 
   connect() {
     this.uploadForm = this.element.closest('form');
-    this._releaseUploads = this.releaseUploadControls.bind(this);
-    this.uploadForm?.addEventListener('direct-uploads:end', this._releaseUploads);
-    // Restore state from form data if rejection fields have values
+    this._lockDecisions = this.lockDecisionControls.bind(this);
+    this._unlockDecisions = this.unlockDecisionControls.bind(this);
+    this._blockLockedDecision = this.blockLockedDecision.bind(this);
+    this.element.addEventListener('direct-upload:initialize', this._lockDecisions);
+    this.element.addEventListener('click', this._blockLockedDecision, true);
+    this.uploadForm?.addEventListener('direct-uploads:end', this._unlockDecisions);
     this.restoreStateFromFormData();
     
-    // Set initial state based on selected radio button
     this.updateVisibility();
     
-    // Initialize rejection UI state if rejection is selected
     if (this.hasRejectRadioTarget && this.rejectRadioTarget.checked) {
       this.previewRejectionReason();
       this.updateReasonInputMode();
@@ -48,126 +43,80 @@ class DocumentProofHandlerController extends Controller {
   }
 
   disconnect() {
-    this.uploadForm?.removeEventListener('direct-uploads:end', this._releaseUploads);
+    this.element.removeEventListener('direct-upload:initialize', this._lockDecisions);
+    this.element.removeEventListener('click', this._blockLockedDecision, true);
+    this.uploadForm?.removeEventListener('direct-uploads:end', this._unlockDecisions);
   }
 
-  // Shows the sections for a review action that the server restored.
+  /**
+   * Shows the sections for the review action restored by the server.
+   */
   restoreStateFromFormData() {
     if (!this.hasAcceptRadioTarget || !this.hasRejectRadioTarget) {
       return;
     }
 
-    // Check which radio button is currently selected and show the correct fields
     const isAccepted = this.acceptRadioTarget.checked;
     const isUploadOnly = this.hasUploadOnlyRadioTarget && this.uploadOnlyRadioTarget.checked;
     const isRejected = this.rejectRadioTarget.checked;
 
     if (isAccepted || isUploadOnly || isRejected) {
-      // Radio button state is already set, just update visibility
       this.updateVisibility();
     }
   }
 
+  /**
+   * Updates sections for the selected review action.
+   * @param {Event} event The change event from radio buttons
+   */
   toggleProofAction(event) {
-    // Update UI based on selection
     this.updateVisibility();
   }
 
-  signedInputs() {
-    if (!this.hasFileInputTarget) return [];
-    return Array.from(this.element.querySelectorAll('input[type="hidden"]'))
-      .filter(input => input.name === this.fileInputTarget.name);
+  // Decision controls remain enabled so Rails includes them in the submission.
+  // Rails submits before direct-uploads:end unlocks decisions.
+  lockDecisionControls() {
+    this.decisionsLocked = true;
+    this.element.querySelectorAll(DECISION_CONTROLS)
+      .forEach(control => control.setAttribute('aria-disabled', 'true'));
   }
 
-  removeUpload() {
-    if (this.uploading) return;
-    this.signedInputs().forEach(input => input.remove());
-    this.fileInputTarget.value = '';
-    if (this.hasSavedUploadTarget) this.savedUploadTarget.textContent = '';
-    this.fileInputTarget.dispatchEvent(new Event('change', { bubbles: true }));
+  unlockDecisionControls() {
+    if (!this.decisionsLocked) return;
+    this.decisionsLocked = false;
+    this.element.querySelectorAll(DECISION_CONTROLS)
+      .forEach(control => control.removeAttribute('aria-disabled'));
   }
 
-  uploadStarted() {
-    this.previousUploadText = this.hasSavedUploadTarget ? this.savedUploadTarget.textContent : '';
-    this.uploading = true;
-    this.uploadError = false;
-    this.uploadCanceled = false;
-    this.uploadLockedControls = Array.from(this.element.querySelectorAll('input[type="radio"], button'))
-      .filter(control => !control.disabled);
-    this.uploadLockedControls.forEach(control => { control.disabled = true; });
-    if (this.hasRemoveUploadTarget) this.removeUploadTarget.disabled = true;
-    if (this.hasSavedUploadTarget) this.savedUploadTarget.textContent = 'Uploading document…';
-    if (this.hasCancelUploadTarget) {
-      this.cancelUploadTarget.disabled = false;
-      this.cancelUploadTarget.hidden = false;
-    }
-  }
-
-  rememberUploadRequest(event) {
-    this.uploadXHR = event.detail.xhr;
-    // Active Storage handles network errors, but does not subscribe to XHR aborts.
-    this.uploadXHR.addEventListener('abort', () => event.detail.xhr.dispatchEvent(new Event('error')), { once: true });
-    if (this.uploadCanceled) queueMicrotask(() => event.detail.xhr.abort());
-  }
-
-  cancelUpload() {
-    this.uploadCanceled = true;
-    this.uploadXHR?.abort();
-  }
-
-  uploadFailed(event) {
+  // A canceled click preserves the radio choice for mouse, label, and keyboard activation.
+  blockLockedDecision(event) {
+    if (!this.decisionsLocked || !event.target.closest(DECISION_CONTROLS)) return;
     event.preventDefault();
-    this.uploadError = true;
-    if (this.hasSavedUploadTarget) {
-      this.savedUploadTarget.textContent = this.uploadCanceled
-        ? 'Upload canceled. Any previous upload is retained.'
-        : 'Upload failed. Retry or choose another file. Any previous upload is retained.';
-    }
+    event.stopImmediatePropagation();
   }
 
-  uploadFinished() {
-    this.releaseUploadControls();
-    if (this.uploadError) return;
-
-    // Active Storage inserts the completed reference immediately before its file input.
-    const completed = this.fileInputTarget.previousElementSibling;
-    if (completed?.type !== 'hidden' || !completed.value) return;
-    this.signedInputs().filter(input => input !== completed).forEach(input => input.remove());
-    if (this.hasSavedUploadTarget) {
-      this.savedUploadTarget.textContent = `Uploaded: ${this.fileInputTarget.files[0]?.name || 'document'}`;
-    }
-  }
-
-  releaseUploadControls() {
-    if (!this.uploading) return;
-    if (!this.uploadError && this.hasSavedUploadTarget) this.savedUploadTarget.textContent = this.previousUploadText;
-    this.uploading = false;
-    this.uploadXHR = null;
-    if (this.hasCancelUploadTarget) this.cancelUploadTarget.hidden = true;
-    this.uploadLockedControls?.forEach(control => { control.disabled = false; });
-    if (this.hasRemoveUploadTarget) this.removeUploadTarget.disabled = false;
-  }
-
-  // Selects rejection with the none_provided reason.
+  /**
+   * Selects rejection with the none_provided reason.
+   * @param {Event} event The click event from the none button
+   */
   handleNoneProvided(event) {
     if (!this.hasRejectRadioTarget || !this.hasRejectionReasonSelectTarget) {
       return;
     }
 
-    // Programmatically select the reject radio button
     this.rejectRadioTarget.checked = true;
 
-    // Auto-select "none_provided" from rejection reason dropdown
     this.rejectionReasonSelectTarget.value = 'none_provided';
 
-    // Update visibility and reason mode
     this.updateVisibility();
     this.previewRejectionReason();
     this.updateReasonInputMode();
     this.rejectRadioTarget.dispatchEvent(new Event('change', { bubbles: true }));
   }
 
-  // Shows file controls for acceptance or later review, and reason controls for rejection.
+  /**
+   * Shows file controls for acceptance or later review, and reason controls for rejection.
+   */
   updateVisibility() {
     if (!this.hasAcceptRadioTarget || !this.hasUploadSectionTarget || !this.hasRejectionSectionTarget) {
       return;
@@ -177,28 +126,21 @@ class DocumentProofHandlerController extends Controller {
     const isUploadOnly = this.hasUploadOnlyRadioTarget && this.uploadOnlyRadioTarget.checked;
     const isRejected = this.rejectRadioTarget.checked;
   
-    // Toggle visibility of sections using utility
-    // Note: display:none automatically removes elements from accessibility tree
     setVisible(this.uploadSectionTarget, isAccepted || isUploadOnly);
     setVisible(this.rejectionSectionTarget, isRejected);
     
-    // Do not make the file input required. The server reports a missing file.
-    // Native required validation would block that response.
+    // The server reports missing files. Native required validation would prevent that response.
     if (this.hasFileInputTarget) {
       const target = this.fileInputTarget;
       target.disabled = !(isAccepted || isUploadOnly);
 
+      // Rejection must submit no file, including a pending upload reference.
       if (isRejected) {
-        // Clear file when switching to reject
-        if (target.value) {
-          target.value = '';
-        }
-        this.signedInputs().forEach(input => input.remove());
-        if (this.hasSavedUploadTarget) this.savedUploadTarget.textContent = '';
+        this.uploadSectionTarget.querySelector('[data-controller~="document-upload"]')
+          ?.dispatchEvent(new CustomEvent('document-upload:clear'));
       }
     }
 
-    // Toggle required attributes on fields
     if (this.hasRejectionReasonSelectTarget) {
       const target = this.rejectionReasonSelectTarget;
       if (isRejected) {
@@ -222,7 +164,9 @@ class DocumentProofHandlerController extends Controller {
     this.updateReasonInputMode();
   }
 
-  // Shows the data-reason-text of the selected option. For a stored reason, this text is its body.
+  /**
+   * The selected option's data-reason-text contains the reason body from the database.
+   */
   previewRejectionReason() {
     if (!this.hasReasonPreviewTarget || !this.hasRejectionReasonSelectTarget) return
 
