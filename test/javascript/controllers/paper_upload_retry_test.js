@@ -81,6 +81,9 @@ describe("paper uploads across a server review", () => {
 
   test("remove clears the retained upload and the reference Rails added for a completed upload", () => {
     upload.uploadStarted()
+    completeUpload("interrupted")
+    upload.finished()
+    upload.uploadStarted()
     completeUpload("completed")
     upload.finished()
     upload.remove()
@@ -90,18 +93,18 @@ describe("paper uploads across a server review", () => {
     expect(upload.statusTarget.textContent).toBe("")
   })
 
-  test("a successful new attempt makes the interrupted earlier upload the retained one", () => {
-    upload.uploadStarted()
-    completeUpload("first")
-    upload.finished()
-    // The form submission stopped elsewhere; Rails uploads a newly chosen replacement
-    upload.uploadStarted()
-    completeUpload("second")
-    upload.finished()
-    // The server prefers the replacement and can fall back to the earlier upload if it refuses it
-    const data = new FormData(form)
-    expect(data.getAll("income_proof").filter(value => typeof value === "string")).toEqual(["second"])
-    expect(data.getAll("income_proof_signed_id")).toEqual(["first"])
+  test("repeated interrupted replacements preserve the server-retained upload", () => {
+    for (const signedId of ["first", "second", "third"]) {
+      upload.uploadStarted()
+      completeUpload(signedId)
+      upload.finished()
+      // A sibling upload stops submission before the server validates this replacement.
+      form.dispatchEvent(new Event("direct-uploads:end"))
+
+      const data = new FormData(form)
+      expect(data.getAll("income_proof").filter(value => typeof value === "string")).toEqual([signedId])
+      expect(data.getAll("income_proof_signed_id")).toEqual(["restored"])
+    }
   })
 
   test("an interrupted earlier upload is retained even when nothing was retained before", () => {
@@ -111,6 +114,9 @@ describe("paper uploads across a server review", () => {
     upload.finished()
     upload.uploadStarted()
     completeUpload("second")
+    upload.finished()
+    upload.uploadStarted()
+    completeUpload("third")
     upload.finished()
     expect(new FormData(form).getAll("income_proof_signed_id")).toEqual(["first"])
     upload.remove()
@@ -160,9 +166,16 @@ describe("paper uploads across a server review", () => {
   })
 
   test("choosing rejection clears the retained upload", () => {
+    for (const signedId of ["interrupted", "replacement"]) {
+      upload.uploadStarted()
+      completeUpload(signedId)
+      upload.finished()
+    }
     handler.rejectRadioTarget.checked = true
     handler.updateVisibility()
-    expect(new FormData(form).has("income_proof_signed_id")).toBe(false)
+    const data = new FormData(form)
+    expect(data.has("income_proof_signed_id")).toBe(false)
+    expect(data.getAll("income_proof").filter(value => typeof value === "string")).toEqual([])
     expect(input.disabled).toBe(true)
   })
 

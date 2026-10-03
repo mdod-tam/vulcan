@@ -1,7 +1,7 @@
 import { Controller } from "@hotwired/stimulus"
 
-// Browsers report an empty or generic type for some files, notably HEIC and TIFF, so the
-// extension stands in when the reported type is not allowed.
+// Some browsers report empty or generic types for HEIC and TIFF.
+// Use the extension when the reported type is not allowed.
 const EXTENSION_TO_MIME = {
   pdf: "application/pdf",
   jpg: "image/jpeg",
@@ -14,18 +14,15 @@ const EXTENSION_TO_MIME = {
 }
 
 /**
- * The one document upload control (rendered by shared/_document_upload.html.erb).
+ * Controls one document field from shared/_document_upload.html.erb.
  *
- * Rails direct-uploads the chosen file when its form is submitted, inserting a hidden input named like
- * the file input that carries the new signed ID, and fires direct-upload:* events on the input. This
- * controller gives immediate type and size feedback on selection, shows progress, and lets a person
- * cancel. The retained upload from an earlier attempt stays in the submission even after a new upload
- * finishes: storage accepting a file is not the server accepting it, and the server prefers the new
- * upload while it can fall back to the retained one if it refuses the new one. A reference completed in
- * an earlier, interrupted submission is kept until a new upload succeeds and then becomes the retained
- * upload, so the same fallback covers it. Remove clears every
- * pending reference this control owns; it never deletes a stored document. Form-wide submit gating
- * stays with the form's own controller, which listens for direct-uploads:start/end.
+ * Rails uploads files to storage before it submits the form.
+ * A completed upload does not mean the server accepted the document.
+ *
+ * This control validates selections, shows progress, and lets users cancel or remove pending uploads.
+ * The server uses retained references to rebuild a failed submission.
+ * Remove clears this control's pending references without deleting an attached document.
+ * The form controller owns submit readiness through direct-uploads:start/end.
  */
 export default class extends Controller {
   static targets = ["input", "retained", "status", "progress", "remove", "cancel"]
@@ -46,7 +43,6 @@ export default class extends Controller {
   }
 
   connect() {
-    // The upload this control will submit if no new file is chosen
     this.keptName = this.hasRetainedTarget ? this.retainedFilenameValue : null
     this.form = this.element.closest("form")
     this._release = this.release.bind(this)
@@ -64,7 +60,7 @@ export default class extends Controller {
     const refusal = this.refusalFor(file)
     if (refusal) {
       this.inputTarget.value = ""
-      // A refused choice does not replace an upload this control still submits
+      // An invalid selection leaves the pending upload unchanged.
       const kept = this.hasPendingUpload() ? this.fill(this.uploadedTextValue, this.keptName) : ""
       this.statusTarget.textContent = [refusal, kept].filter(Boolean).join(" ")
     } else {
@@ -86,7 +82,7 @@ export default class extends Controller {
   }
 
   uploadStarted() {
-    // A reference completed in an earlier attempt is kept until this attempt's upload succeeds
+    // Earlier references remain available if this upload fails.
     this.earlierReferences = this.uploadedReferences()
     this.uploading = true
     this.uploadError = false
@@ -101,8 +97,8 @@ export default class extends Controller {
   rememberRequest(event) {
     const xhr = event.detail.xhr
     this.uploadXHR = xhr
-    // Active Storage handles network errors but does not listen for aborts, so an abort is
-    // reported as an error and Rails stops the submission and re-enables the form.
+    // Active Storage handles errors but does not handle aborts.
+    // Treat an abort as an error so Rails stops submission and enables the form.
     xhr.addEventListener("abort", () => xhr.dispatchEvent(new Event("error")), { once: true })
     if (this.uploadCanceled) queueMicrotask(() => xhr.abort())
   }
@@ -128,8 +124,6 @@ export default class extends Controller {
     this.release()
     if (this.uploadError) return
 
-    // An upload completed in an interrupted submission becomes the retained upload, so the server
-    // can still fall back to it if it refuses this one
     const earlier = earlierReferences.filter(input => input.value).pop()
     if (earlier) this.retain(earlier.value)
     earlierReferences.forEach(input => input.remove())
@@ -162,10 +156,8 @@ export default class extends Controller {
   retain(signedId) {
     const [retained, ...extra] = this.retainedTargets
     extra.forEach(input => input.remove())
-    if (retained) {
-      retained.value = signedId
-      return
-    }
+    // Keep the existing retry reference until the server validates a replacement.
+    if (retained) return
     const input = document.createElement("input")
     Object.assign(input, { type: "hidden", name: this.retainedNameValue, value: signedId })
     input.dataset.documentUploadTarget = "retained"
@@ -178,12 +170,11 @@ export default class extends Controller {
       .filter(input => input.name === this.inputTarget.name)
   }
 
-  // A retained upload or one Rails completed for an interrupted submission
+  // An uploaded file reference is available for the next submission.
   hasPendingUpload() {
     return this.hasRetainedTarget || this.uploadedReferences().some(input => input.value)
   }
 
-  // Remove is offered whenever there is a chosen file or a pending upload to clear
   showRemove() {
     this.removeTarget.hidden = !(this.inputTarget.files?.length || this.hasPendingUpload())
   }
