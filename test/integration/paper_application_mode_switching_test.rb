@@ -135,7 +135,7 @@ class PaperApplicationModeSwitchingTest < ActionDispatch::IntegrationTest
     contact = unique_paper_contact
 
     # Attempt to create application with invalid signed_id
-    assert_no_difference ['User.count', 'Application.count'] do
+    assert_no_difference ['User.count', 'Application.count', 'Event.count', 'ActiveStorage::Attachment.count'] do
       post admin_paper_applications_path, params: {
         constituent: paper_self_applicant_params(contact),
         application: paper_application_params,
@@ -148,7 +148,7 @@ class PaperApplicationModeSwitchingTest < ActionDispatch::IntegrationTest
 
     # Should fail gracefully without stranding a user or partially persisted application.
     assert_response :unprocessable_content
-    assert_select '[role=alert]', text: /The uploaded income proof is no longer available. Upload it again./
+    assert_select '[role=alert]', text: "Income proof: #{I18n.t('documents.refused.unavailable')}"
     assert_nil User.find_by(email: contact[:email])
   end
 end

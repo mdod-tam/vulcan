@@ -56,7 +56,7 @@ module Applications
       mock_policy
       service = PaperApplicationService.new(params: confirmed_paper_params(params, admin: @admin), admin: @admin)
 
-      assert_no_difference ['User.count', 'Application.count', 'ActiveStorage::Attachment.count'] do
+      assert_no_difference ['User.count', 'Application.count', 'Event.count', 'ActiveStorage::Attachment.count'] do
         assert_not service.create
       end
       assert_match(/no longer available/, service.errors.join(' '))
@@ -73,11 +73,33 @@ module Applications
       mock_policy
       service = PaperApplicationService.new(params: confirmed_paper_params(params, admin: @admin), admin: @admin)
 
-      assert_no_difference ['User.count', 'Application.count', 'ActiveStorage::Attachment.count'] do
+      assert_no_difference ['User.count', 'Application.count', 'Event.count', 'ActiveStorage::Attachment.count'] do
         assert_not service.create
       end
       assert_includes service.errors.join(' '),
-                      "The uploaded income proof is larger than #{ProofUploadFormats.proof_max_megabytes}MB. Upload a smaller file."
+                      "Income proof: #{I18n.t('documents.refused.too_large', max_size: 5)}"
+    end
+
+    test 'a new certification file with disallowed content is refused before anything is created' do
+      income_blob, residency_blob = create_blobs
+      disguised = Tempfile.new(['certification', '.pdf'])
+      disguised.binmode
+      disguised.write("MZ\x90\x00#{'x' * 4096}")
+      disguised.rewind
+      params = direct_upload_params(income_blob.signed_id, residency_blob.signed_id).merge(
+        medical_certification_action: 'accept',
+        medical_certification: ActionDispatch::Http::UploadedFile.new(tempfile: disguised, filename: 'certification.pdf',
+                                                                      type: 'application/pdf')
+      )
+      mock_policy
+      service = PaperApplicationService.new(params: confirmed_paper_params(params, admin: @admin), admin: @admin)
+
+      assert_no_difference ['User.count', 'Application.count', 'Event.count', 'ActiveStorage::Attachment.count'] do
+        assert_not service.create
+      end
+      assert_includes service.errors.join(' '), I18n.t('documents.refused.invalid_type')
+    ensure
+      disguised&.close!
     end
 
     private

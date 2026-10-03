@@ -224,13 +224,14 @@ module Applications
 
     test 'refuses a proof over the 5 MB limit and keeps the request and proof unchanged' do
       attach_income_proof(@application)
+      @application.update!(income_proof_status: :rejected) # a rejected proof is still requested
       previous_blob = @application.income_proof.blob
 
       result = submit(pdf_upload(7.megabytes))
 
       assert_not result.success?
-      assert_equal I18n.t('applications.proof_resubmission.messages.file_too_large',
-                          max_size: ProofUploadFormats.proof_max_megabytes),
+      assert_equal I18n.t('documents.refused.too_large',
+                          max_size: ProofUploadFormats.max_megabytes(:proof)),
                    result.data[:errors][:file].first
       assert_predicate @secure_request_form.reload, :status_sent?
       assert_equal previous_blob, @application.reload.income_proof.blob

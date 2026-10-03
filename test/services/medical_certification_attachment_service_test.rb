@@ -50,13 +50,15 @@ class MedicalCertificationAttachmentServiceTest < ActiveSupport::TestCase
     end
   end
 
-  test 'normalizing direct uploads does not log upload references or blob contents' do
-    blob = ActiveStorage::Blob.create_and_upload!(io: StringIO.new('proof'), filename: 'private-proof.pdf', content_type: 'application/pdf')
+  test 'attaching a direct upload does not log upload references or file names' do
+    blob = ActiveStorage::Blob.create_and_upload!(io: file_fixture('medical_certification_valid.pdf').open,
+                                                  filename: 'private-proof.pdf', content_type: 'application/pdf')
     messages = []
-    Rails.logger.stub(:info, ->(message) { messages << message }) do
-      [blob, blob.signed_id].each do |input|
-        assert_equal blob.signed_id, MedicalCertificationAttachmentService.process_attachment_param(input)
-      end
+    Rails.logger.stub(:info, ->(message = nil, &block) { messages << (message || block&.call) }) do
+      MedicalCertificationAttachmentService.attach_certification(
+        application: @application, blob_or_file: blob.signed_id, status: :approved,
+        admin: @admin, submission_method: :admin_upload
+      )
     end
     [blob.signed_id, blob.key, blob.filename.to_s].each do |private_value|
       assert_not_includes messages.join, private_value
@@ -109,25 +111,54 @@ class MedicalCertificationAttachmentServiceTest < ActiveSupport::TestCase
     end
   end
 
-  test 'handles failed blob creation gracefully with fallback' do
-    Rails.logger.stubs(:error)
-    Rails.logger.expects(:error).with(regexp_matches(/Failed to create blob from uploaded file: Simulated blob creation failure/)).once
+  test 'a staff upload rechecks eligibility under the lock a provider submission takes' do
+    @application.update!(medical_certification_status: :requested)
+    stale = Application.find(@application.id)
+    # A provider submission commits after the staff request read the application as requested
+    provider_blob = create_dummy_blob
+    MedicalCertificationAttachmentService.accept_submission(
+      application: Application.find(@application.id), blob: provider_blob, submission_method: :secure_form,
+      requested_at: 1.hour.ago, admin: @admin
+    )
+    assert_equal 'requested', stale.medical_certification_status
 
-    # Mock Blob.create_and_upload! to simulate a failure
-    ActiveStorage::Blob.stub :create_and_upload!, ->(*_args) { raise StandardError, 'Simulated blob creation failure' } do
-      assert_difference 'ActiveStorage::Attachment.count' do
-        result = MedicalCertificationAttachmentService.attach_certification(
-          application: @application,
-          blob_or_file: @test_file,
-          status: :approved, # Corrected status enum value
-          admin: @admin,
-          submission_method: :admin_upload
+    assert_no_difference 'ActiveStorage::Attachment.count' do
+      assert_raises(MedicalCertificationAttachmentService::StaffUploadNotAllowed) do
+        MedicalCertificationAttachmentService.attach_certification(
+          application: stale, blob_or_file: @test_file, status: :approved,
+          admin: @admin, submission_method: :admin_upload
         )
-
-        assert result[:success], 'Should succeed with fallback'
-        assert @application.reload.medical_certification.attached?
       end
     end
+    @application.reload
+    assert_equal 'received', @application.medical_certification_status
+    assert_equal provider_blob, @application.medical_certification.blob
+  end
+
+  test 'staff upload returns once a certification is rejected' do
+    @application.update_columns(medical_certification_status: Application.medical_certification_statuses[:rejected])
+
+    result = MedicalCertificationAttachmentService.attach_certification(
+      application: @application, blob_or_file: @test_file, status: :approved,
+      admin: @admin, submission_method: :admin_upload
+    )
+
+    assert result[:success]
+    assert_equal 'approved', @application.reload.medical_certification_status
+  end
+
+  test 'a storage failure attaches nothing instead of falling back to the raw upload' do
+    ActiveStorage::Blob.service.stub :upload, ->(*, **) { raise StandardError, 'Simulated storage failure' } do
+      assert_no_difference 'ActiveStorage::Attachment.count' do
+        assert_raises(StandardError) do
+          MedicalCertificationAttachmentService.attach_certification(
+            application: @application, blob_or_file: @test_file, status: :approved,
+            admin: @admin, submission_method: :admin_upload
+          )
+        end
+      end
+    end
+    assert_not_predicate @application.reload.medical_certification, :attached?
   end
 
   test 'properly handles signed_id strings' do
@@ -223,9 +254,9 @@ class MedicalCertificationAttachmentServiceTest < ActiveSupport::TestCase
 
   def create_dummy_blob
     ActiveStorage::Blob.create_and_upload!(
-      io: StringIO.new('dummy content'),
-      filename: 'dummy.txt',
-      content_type: 'text/plain'
+      io: file_fixture('medical_certification_valid.pdf').open,
+      filename: 'certification.pdf',
+      content_type: 'application/pdf'
     )
   end
 end

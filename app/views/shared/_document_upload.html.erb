@@ -1,0 +1,44 @@
+<%# locals: (form:, field:, model:, blob: nil, described_by: nil, input_id: field.to_s, input_data: {}) %>
+<%# Rails uploads the file to storage before form submission.
+    The retained upload uses "#{field}_signed_id". A new upload in field takes precedence.
+    See UploadedDocument.submitted. %>
+<%= tag.div data: document_upload_data(model, field).merge(
+      document_upload_retained_name_value: form.field_name("#{field}_signed_id"),
+      document_upload_retained_filename_value: blob&.filename.to_s
+    ) do %>
+  <%= form.file_field(
+        field,
+        id: input_id, direct_upload: true, accept: proof_upload_accept_attribute,
+        aria: { describedby: [described_by, "#{input_id}_status"].compact.join(' ') },
+        class: 'block w-full text-sm text-gray-700',
+        data: {
+          document_upload_target: 'input',
+          action: [
+            'change->document-upload#select',
+            'direct-upload:initialize->document-upload#uploadStarted',
+            'direct-upload:before-blob-request->document-upload#rememberRequest',
+            'direct-upload:before-storage-request->document-upload#rememberRequest',
+            'direct-upload:progress->document-upload#progress',
+            'direct-upload:error->document-upload#failed',
+            'direct-upload:end->document-upload#finished'
+          ].join(' ')
+        }.merge(input_data)
+      ) %>
+  <% if blob %>
+    <%= form.hidden_field "#{field}_signed_id", value: blob.signed_id, id: nil, data: { document_upload_target: 'retained' } %>
+  <% end %>
+  <p id="<%= input_id %>_status" role="status" class="mt-2 text-sm" data-document-upload-target="status">
+    <%= t('documents.upload.uploaded', filename: blob.filename) if blob %>
+  </p>
+  <progress hidden max="100" value="0" class="mt-2 w-full" aria-label="<%= t('documents.upload.progress') %>" data-document-upload-target="progress"></progress>
+  <div class="mt-2 flex gap-4">
+    <button type="button" <%= 'hidden' unless blob %> class="text-sm text-indigo-700 underline"
+            data-action="document-upload#remove" data-document-upload-target="remove">
+      <%= t('documents.upload.remove') %>
+    </button>
+    <button type="button" hidden class="text-sm text-indigo-700 underline"
+            data-action="document-upload#cancel" data-document-upload-target="cancel">
+      <%= t('documents.upload.cancel') %>
+    </button>
+  </div>
+<% end %>

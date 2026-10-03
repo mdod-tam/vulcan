@@ -42,7 +42,7 @@
       <%= form.label :file, class: "block text-sm font-medium text-gray-900" do %>
         <%= t('.file_label') %> <abbr title="<%= t('.required') %>" class="text-red-700 no-underline" aria-hidden="true">*</abbr>
       <% end %>
-      <p id="file_help" class="mt-1 text-sm text-gray-600"><%= t('.file_help') %></p>
+      <p id="file_help" class="mt-1 text-sm text-gray-600"><%= t('.file_help', max_size: ProofUploadFormats.max_megabytes(:certification)) %></p>
       <%= form.file_field :file,
                           id: "file",
                           required: true,

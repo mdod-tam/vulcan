@@ -41,6 +41,7 @@ module Admin
       assert_select '#identity-review-heading', text: 'Review possible matches'
       @blobs.each do |key, blob|
         assert_select "input[type=hidden][name='#{key}_signed_id'][value='#{blob.signed_id}']"
+        assert_select "[data-document-upload-retained-name-value='#{key}_signed_id']"
         assert_select 'p', text: "Uploaded: #{blob.filename}"
       end
 

@@ -4,8 +4,7 @@
 #
 # This controller handles the constituent-facing proof submission workflow:
 # 1. Initial proof upload setup
-# 2. Direct upload for client-side uploading to S3
-# 3. Proof resubmission (after rejection)
+# 2. Proof resubmission (after rejection); the form direct-uploads the file to storage on submit
 #
 # Note: This controller handles the UI and workflow for proof submission, and
 # the actual attachment is delegated to ProofAttachmentService to maintain
@@ -24,19 +23,10 @@ module ConstituentPortal
       before_action :ensure_can_submit_proof, only: %i[new resubmit]
       before_action :authorize_proof_access!, only: %i[resubmit]
       before_action :check_rate_limit, only: %i[resubmit]
-      skip_before_action :verify_authenticity_token, only: [:direct_upload]
 
       def new
         @proof_type = params[:proof_type]
         authorize_proof_access!
-      end
-
-      def direct_upload
-        # Use keyword arguments for create_before_direct_upload! (Rails 6.1+)
-        blob = ActiveStorage::Blob.create_before_direct_upload!(**blob_params.to_h.symbolize_keys)
-        render json: direct_upload_json(blob)
-      rescue ActionController::ParameterMissing => e
-        render json: { error: e.message }, status: :unprocessable_content
       end
 
       def resubmit
@@ -59,20 +49,6 @@ module ConstituentPortal
       end
 
       private
-
-      def blob_params
-        params.expect(blob: [:filename, :byte_size, :checksum, :content_type, { metadata: {} }])
-      end
-
-      def direct_upload_json(blob)
-        {
-          signed_id: blob.signed_id,
-          direct_upload: {
-            url: blob.service_url_for_direct_upload,
-            headers: blob.service_headers_for_direct_upload
-          }
-        }
-      end
 
       def set_application
         application_id = extract_application_id
@@ -176,17 +152,22 @@ module ConstituentPortal
         end
 
         return if result[:success]
-        return redirect_refused_upload(result[:error]) if result[:error].is_a?(UploadedDocument::Refused)
+        return render_refused_upload(result[:error]) if result[:error].is_a?(UploadedDocument::Refused)
 
         Rails.logger.error "Failed to attach proof: #{result[:error]&.message}"
         raise "Failed to attach proof: #{result[:error]&.message}"
       end
 
-      # A refused upload changed nothing, so the constituent can choose a file and try again
-      def redirect_refused_upload(refusal)
-        redirect_to constituent_portal_application_new_proof_path(@application, proof_type: params[:proof_type]),
-                    alert: t("constituent_portal.proofs.upload_refused.#{refusal.reason}",
-                             max_size: ProofUploadFormats.proof_max_megabytes)
+      # A refused upload changed nothing; the form returns with the reason and any earlier usable upload
+      def render_refused_upload(refusal)
+        @proof_type = params[:proof_type]
+        @retained_upload = UploadedDocument.retained(params, record: @application, field: proof_field)
+        flash.now[:alert] = refusal.user_message
+        render :new, status: :unprocessable_content
+      end
+
+      def proof_field
+        "#{params[:proof_type]}_proof"
       end
 
       def determine_resubmission_status
@@ -205,7 +186,7 @@ module ConstituentPortal
         {
           application: @application,
           proof_type: params[:proof_type],
-          blob_or_file: params[:"#{params[:proof_type]}_proof_upload"],
+          blob_or_file: UploadedDocument.submitted(params, proof_field),
           status: :not_reviewed,
           admin: current_user,
           submission_method: :web,

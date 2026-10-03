@@ -1,10 +1,6 @@
-<%
-  # Show the upload form unless the certification is already approved
-  # Sometimes certifications arrive unexpectedly (mail, fax, email) without being formally requested
-  show_upload_form = @application.medical_certification_status != "approved"
-%>
-
-<% if show_upload_form %>
+<%# Certifications can arrive unexpectedly (mail, fax, email) without a formal request, so the form
+    stays available until one awaits review or is approved. %>
+<% if @application.staff_certification_upload_allowed? %>
   <div class="mb-4 p-4 bg-blue-50 border-l-4 border-blue-500 rounded-md" 
        id="medical-certification-upload-form"
        data-testid="medical-certification-upload-form">
@@ -18,7 +14,7 @@
                   local: true, 
                   class: "mt-3",
                   multipart: true,
-                  data: { controller: "proof-status" } do |f| %>
+                  data: { controller: 'document-proof-handler' } do |f| %>
     
       <!-- Status Selection -->
       <div class="flex items-center space-x-4 mb-4">
@@ -28,7 +24,7 @@
               class: "focus:ring-indigo-500 h-4 w-4 text-indigo-600 border-gray-300",
               "aria-describedby": "certification_status_help",
               id: "accept_medical_certification",
-              data: { "proof-status-target": "radioButtons", action: "change->proof-status#toggle" } %>
+              data: { document_proof_handler_target: 'acceptRadio', action: 'change->document-proof-handler#toggleProofAction' } %>
           <%= f.label "accept_medical_certification", "Approve Certification and Upload",
               class: "ml-2 text-sm text-gray-700" %>
         </div>
@@ -37,7 +33,7 @@
               class: "focus:ring-indigo-500 h-4 w-4 text-indigo-600 border-gray-300",
               "aria-describedby": "certification_status_help",
               id: "reject_medical_certification",
-              data: { "proof-status-target": "radioButtons", action: "change->proof-status#toggle" } %>
+              data: { document_proof_handler_target: 'rejectRadio', action: 'change->document-proof-handler#toggleProofAction' } %>
           <%= f.label "reject_medical_certification", "Reject Certification",
               class: "ml-2 text-sm text-gray-700" %>
         </div>
@@ -47,7 +43,7 @@
       </p>
       
       <!-- File Upload Section -->
-      <div id="medical_certification_upload" class="mt-4" data-proof-status-target="uploadSection">
+      <div id="medical_certification_upload" class="mt-4" data-document-proof-handler-target="uploadSection">
         <!-- Submission Method Dropdown -->
         <div class="mb-4">
           <%= f.label "submission_method", "Submission Method",
@@ -73,16 +69,13 @@
           <%= f.label "medical_certification", "Certification Document",
               class: "block text-sm font-medium text-gray-700" %>
           <p id="certification_hint" class="text-xs text-gray-700 mb-2">
-            Upload the medical certification document
+            Upload the medical certification document. Accepted formats: <%= proof_upload_formats_label %>, <%= ProofUploadFormats.max_megabytes(:certification) %> MB or smaller.
           </p>
           
-          <!-- Use standard HTML input for direct upload instead of Rails helper -->
-          <input type="file" 
-                 name="medical_certification"
-                 id="medical_certification"
-                 class="block w-full text-sm text-gray-500 file:mr-4 file:py-2 file:px-4 file:rounded-md file:border-0 file:text-sm file:font-semibold file:bg-indigo-50 file:text-indigo-700 hover:file:bg-indigo-100"
-                 accept="<%= proof_upload_accept_attribute %>" />
-                 
+          <%= render 'shared/document_upload',
+                     form: f, field: 'medical_certification', model: Application, described_by: 'certification_hint',
+                     input_data: { document_proof_handler_target: 'fileInput' } %>
+
           <p id="certification_keyboard_hint" class="mt-1 text-xs text-gray-700">
             <span class="sr-only">Keyboard users:</span> Press Space or Enter to open the file browser
           </p>
@@ -104,7 +97,7 @@
           rejection_reason_body(proof_type: 'medical_certification', code: code, locale: 'en', interpolations: cert_interpolations)
         end
       %>
-      <div id="medical_certification_rejection" class="mt-4 hidden" data-proof-status-target="rejectionSection">
+      <div id="medical_certification_rejection" class="mt-4 hidden" data-document-proof-handler-target="rejectionSection">
         <div class="space-y-4">
           <div>
             <%= f.label "rejection_reason_code", "Rejection Reason",
@@ -116,39 +109,8 @@
                     id="rejection_reason_code_select"
                     class="mt-1 block w-full pl-3 pr-10 py-2 text-base border-gray-300 focus:outline-none focus:ring-indigo-500 focus:border-indigo-500 sm:text-sm rounded-md"
                     aria-describedby="certification_rejection_hint"
-                    onchange="(function(el){
-                      var preview = document.getElementById('cert-rejection-reason-preview');
-                      var customArea = document.getElementById('cert-custom-reason-area');
-                      var customReason = document.getElementById('medical_certification_rejection_reason');
-                      var code = el.value;
-                      if (code === 'other') {
-                        preview.textContent = '';
-                        preview.classList.add('hidden');
-                        customArea.classList.remove('hidden');
-                        if (customReason) {
-                          customReason.disabled = false;
-                          customReason.required = true;
-                        }
-                      } else if (code && el.options[el.selectedIndex].dataset.reasonText) {
-                        preview.textContent = el.options[el.selectedIndex].dataset.reasonText;
-                        preview.classList.remove('hidden');
-                        customArea.classList.add('hidden');
-                        if (customReason) {
-                          customReason.value = '';
-                          customReason.disabled = true;
-                          customReason.required = false;
-                        }
-                      } else {
-                        preview.textContent = '';
-                        preview.classList.add('hidden');
-                        customArea.classList.add('hidden');
-                        if (customReason) {
-                          customReason.value = '';
-                          customReason.disabled = true;
-                          customReason.required = false;
-                        }
-                      }
-                    })(this)">
+                    data-action="change->document-proof-handler#handleReasonSelectionChanged"
+                    data-document-proof-handler-target="rejectionReasonSelect">
               <option value="">Select a reason</option>
               <% cert_reason_codes.each do |code| %>
                 <option value="<%= code %>" data-reason-text="<%= cert_reason_texts[code] %>"><%= code.humanize.titleize %></option>
@@ -157,15 +119,17 @@
             </select>
 
             <div id="cert-rejection-reason-preview"
+                 role="status" aria-live="polite" data-document-proof-handler-target="reasonPreview"
                  class="hidden mt-2 p-3 bg-gray-50 border border-gray-200 rounded-md text-sm text-gray-700 whitespace-pre-wrap">
             </div>
 
-            <div id="cert-custom-reason-area" class="hidden mt-2">
+            <div id="cert-custom-reason-area" class="hidden mt-2" data-document-proof-handler-target="customReasonSection">
               <label for="medical_certification_rejection_reason" class="block text-sm font-medium text-gray-700">Custom Rejection Reason</label>
               <textarea name="medical_certification_rejection_reason"
                         id="medical_certification_rejection_reason"
                         rows="3"
                         disabled
+                        data-document-proof-handler-target="customReasonField"
                         class="mt-1 shadow-sm focus:ring-indigo-500 focus:border-indigo-500 block w-full sm:text-sm border-gray-300 rounded-md"
                         placeholder="Enter the rejection reason that will be sent to the certifying professional..."></textarea>
             </div>
@@ -174,13 +138,6 @@
         </div>
       </div>
       
-      <!-- Hidden inputs for controller configuration -->
-      <div>
-        <input type="hidden" data-proof-status-target="radioGroup" name="radioGroup" value="medical_certification_status">
-        <input type="hidden" data-proof-status-target="statusAcceptedValue" value="approved">
-        <input type="hidden" data-proof-status-target="statusRejectedValue" value="rejected">
-      </div>
-
       <div class="mt-4">
         <%= f.submit "Process Certification", 
                     class: "inline-flex justify-center py-2 px-4 border border-transparent

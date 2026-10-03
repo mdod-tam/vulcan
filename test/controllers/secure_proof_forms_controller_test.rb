@@ -17,7 +17,7 @@ class SecureProofFormsControllerTest < ActionDispatch::IntegrationTest
 
     assert_response :success
     assert_select 'form[action*=?]', secure_proof_form_path
-    assert_select '#file_help', I18n.t('secure_proof_forms.show.file_help', max_size: ProofUploadFormats.proof_max_megabytes)
+    assert_select '#file_help', I18n.t('secure_proof_forms.show.file_help', max_size: ProofUploadFormats.max_megabytes(:proof))
     assert_select 'input[type=file][name=file][aria-describedby=file_help]'
     assert_select 'button[type=submit]', I18n.t('secure_proof_forms.show.submit')
   end
@@ -71,7 +71,7 @@ class SecureProofFormsControllerTest < ActionDispatch::IntegrationTest
       proof_type: I18n.t('secure_proof_forms.proof_types.income', locale: :es),
       locale: :es
     )
-    assert_select '#file_error', I18n.t('applications.proof_resubmission.messages.file_blank', locale: :es)
+    assert_select '#file_error', I18n.t('documents.refused.missing', locale: :es)
   end
 
   test 'success response has secure no-store headers' do
@@ -155,7 +155,7 @@ class SecureProofFormsControllerTest < ActionDispatch::IntegrationTest
       proof_type: I18n.t('secure_proof_forms.proof_types.income')
     )
     assert_select '#error-summary-title', I18n.t('secure_proof_forms.show.error_summary')
-    assert_select '#file_error', I18n.t('applications.proof_resubmission.messages.file_blank')
+    assert_select '#file_error', I18n.t('documents.refused.missing')
     assert_select 'input[type=file][name=file][aria-describedby=?]', 'file_help file_error'
     assert_select 'input[type=hidden][name=token][value=?]', @raw_token
   end
@@ -172,7 +172,7 @@ class SecureProofFormsControllerTest < ActionDispatch::IntegrationTest
 
     assert_response :unprocessable_content
     assert_select '#error-summary-title', I18n.t('secure_proof_forms.show.error_summary')
-    assert_select '#file_error', I18n.t('applications.proof_resubmission.messages.file_type_invalid')
+    assert_select '#file_error', I18n.t('documents.refused.invalid_type')
     assert_select 'input[type=hidden][name=token][value=?]', @raw_token
   end
 end

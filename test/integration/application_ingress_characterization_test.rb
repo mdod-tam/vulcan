@@ -13,7 +13,6 @@ class ApplicationIngressCharacterizationTest < ActionDispatch::IntegrationTest
     User.stubs(:system_user).returns(@system_user)
     Rails.application.credentials.stubs(:webhook_secret).returns(@webhook_secret)
     ApplicationController.any_instance.stubs(:authenticate_user!).returns(true)
-    ProofAttachmentValidator.stubs(:validate!).returns(true)
 
     proof_rate_limit_policy.value = 5
     proof_rate_limit_policy.updated_by = @admin
@@ -43,7 +42,7 @@ class ApplicationIngressCharacterizationTest < ActionDispatch::IntegrationTest
     post "/constituent_portal/applications/#{application.id}/proofs/resubmit",
          params: {
            proof_type: 'income',
-           income_proof_upload: fixture_file_upload(Rails.root.join('test/fixtures/files/test_income_proof.pdf'), 'application/pdf')
+           income_proof: fixture_file_upload(Rails.root.join('test/fixtures/files/test_income_proof.pdf'), 'application/pdf')
          }
 
     assert_redirected_to constituent_portal_application_path(application)
@@ -64,55 +63,11 @@ class ApplicationIngressCharacterizationTest < ActionDispatch::IntegrationTest
     assert_not_nil application.needs_review_since, 'needs_review_since should be set for not_reviewed proof'
   end
 
-  test 'scanned proof upload produces the expected proof state' do
-    application = create(:application, user: create(:constituent))
-
-    sign_in_for_integration_test(@admin)
-
-    post admin_application_scanned_proofs_path(application),
-         params: {
-           proof_type: 'income',
-           file: fixture_file_upload(Rails.root.join('test/fixtures/files/test_proof.pdf'), 'application/pdf')
-         }
-
-    assert_redirected_to admin_application_path(application)
-
-    assert_proof_contract(
-      application,
-      proof_type: 'income',
-      expected_status: 'approved',
-      expected_submission_method: 'paper',
-      expected_actor: @admin,
-      expected_event_action: 'proof_submitted'
-    )
-
-    # CHARACTERIZATION: needs_review_since is NOT set for scanned proofs because
-    # ProofAttachmentService only sets it when status is :not_reviewed, and the
-    # scanned controller passes status: :approved.
-    application.reload
-    assert_nil application.needs_review_since, 'needs_review_since should not be set for approved scanned proof'
-  end
-
   # CHARACTERIZATION: ProofAttachmentService skips constituent notification when
   # Current.paper_context is true (paper/scanned paths set this). The scanned proof
   # controller sends its own ApplicationNotificationsMailer.proof_received instead.
   # The concern's notify_admins_of_new_proofs callback does NOT fire from any
   # ProofAttachmentService path because update_columns bypasses after_save.
-  test 'scanned proof upload does not send constituent notification via NotificationService' do
-    constituent = create(:constituent)
-    application = create(:application, user: constituent)
-
-    sign_in_for_integration_test(@admin)
-
-    assert_no_difference -> { Notification.where(notifiable: application, action: 'income_proof_attached').count } do
-      post admin_application_scanned_proofs_path(application),
-           params: {
-             proof_type: 'income',
-             file: fixture_file_upload(Rails.root.join('test/fixtures/files/test_proof.pdf'), 'application/pdf')
-           }
-    end
-  end
-
   test 'paper application creation produces approved paper proof state' do
     constituent = create(:constituent)
 

@@ -731,7 +731,7 @@ module Admin
     def assert_file_inputs_empty
       PROOFS.each_key do |field|
         selected = page.evaluate_script(
-          "(document.querySelector('input[type=file][name=\"#{field}_signed_id\"]')?.files?.[0] || {}).name || ''"
+          "(document.querySelector('input[type=file][name=\"#{field}\"]')?.files?.[0] || {}).name || ''"
         )
         assert_equal '', selected, "#{field} unexpectedly still holds a file"
       end
