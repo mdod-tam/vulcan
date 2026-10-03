@@ -1,7 +1,7 @@
 <%# locals: (form:, field:, model:, blob: nil, described_by: nil, input_id: field.to_s, input_data: {}) %>
-<%# The one document upload control. Rails direct-uploads the file when the form is submitted; the
-    retained upload from an earlier attempt rides in "#{field}_signed_id", and a new upload in
-    field takes precedence (see UploadedDocument.submitted). %>
+<%# Rails uploads the file to storage before form submission.
+    The retained upload uses "#{field}_signed_id". A new upload in field takes precedence.
+    See UploadedDocument.submitted. %>
 <%= tag.div data: document_upload_data(model, field).merge(
       document_upload_retained_name_value: form.field_name("#{field}_signed_id"),
       document_upload_retained_filename_value: blob&.filename.to_s

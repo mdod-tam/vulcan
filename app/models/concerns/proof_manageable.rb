@@ -1,19 +1,8 @@
 # frozen_string_literal: true
 
-# ProofManageable provides proof document management capabilities for applications.
-#
-# This concern handles the core model-level responsibilities for income and residency
-# proof documents, including:
-# - ActiveStorage attachment definitions
-# - Basic validation of file types and sizes
-# - Status checking methods for proof approval states
-# - Model-level callbacks for proof state changes
-#
-# For complex operations like attachment processing, review workflows, and audit
-# trails, this concern delegates to dedicated services:
-# - ProofAttachmentService: Handles file uploads and audit trails
-# - Applications::ProofReviewer: Manages the review process
-# - ProofReviewService: Orchestrates proof reviews
+# Provides proof eligibility, required-attachment validation, approval checks, and review timestamps.
+# Application declares attachments. DocumentValidator enforces type and size policy.
+# Attachment and review services own their workflows.
 #
 # @example Basic usage
 #   application = Application.find(123)
@@ -26,15 +15,12 @@
 module ProofManageable
   extend ActiveSupport::Concern
 
-  # Valid proof types for the application
   PROOF_TYPES = %w[income residency].freeze
 
   included do
-    # Attachments are declared on Application; newly attached proofs follow the proof policy
     validates :income_proof, :residency_proof, :id_proof, document: { purpose: :proof }
     validate :require_proof_attachments, if: :require_proof_validations?
 
-    # Callbacks for proof state management
     after_save :set_needs_review_timestamp, if: :proof_attachments_changed?
   end
 
@@ -56,7 +42,7 @@ module ProofManageable
     !status_archived? && !status_approved?
   end
 
-  # Secure proof links serve a rejected proof or a proof that was never uploaded.
+  # Secure proof links serve rejected proofs or missing proofs with not_reviewed status.
   # Issuance, the admin send button, and public submission all use this rule.
   def proof_requestable_via_secure_form?(proof_type)
     return false if proof_type.to_s == 'income' && !income_proof_required?
@@ -79,14 +65,11 @@ module ProofManageable
     update!(status_attr => status)
   end
 
-  # Rejects a proof without requiring an attachment (used for paper applications)
-  # This is a model-level method that just updates the status - the service handles orchestration
+  # Records rejection status without a file. The service owns rejection orchestration.
   def reject_proof_without_attachment!(proof_type, admin: nil, reason: 'other', notes: nil)
-    # Just update the proof status - avoid circular calls to ProofAttachmentService
     status_attr = "#{proof_type}_proof_status"
     update!(status_attr => :rejected)
 
-    # Log basic info about rejection (params used to avoid unused warnings)
     Rails.logger.info "Rejected #{proof_type} proof for app #{id} by #{admin&.id || 'system'} (#{reason})"
     Rails.logger.debug { "Rejection notes: #{notes}" } if notes.present?
 
@@ -95,15 +78,12 @@ module ProofManageable
   # rubocop:enable Naming/PredicateMethod
 
   # Purges all proof attachments (admin action)
-  # Delegates to ProofAttachmentService for consistency
   # @param admin_user [User] The admin user performing the purge
   # @return [Boolean] true if purge succeeded, false otherwise
   def purge_proofs(admin_user)
-    # This complex operation should be handled by a dedicated service
     # TODO: Create ProofPurgeService to handle this logic
     raise ArgumentError, 'Admin user required' unless admin_user&.admin?
 
-    # For now, simplified inline implementation
     transaction do
       income_proof.purge if income_proof.attached?
       residency_proof.purge if residency_proof.attached?
@@ -172,7 +152,6 @@ module ProofManageable
   def proof_attachments_changed?
     return false if new_record?
 
-    # Check for attachment changes using Rails' built-in detection
     if respond_to?(:attachment_changes) && attachment_changes.present?
       return (FeatureFlag.income_proof_required? && attachment_changes['income_proof'].present?) ||
              attachment_changes['residency_proof'].present? ||

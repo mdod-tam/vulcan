@@ -1,55 +1,50 @@
 # frozen_string_literal: true
 
-# The one gate a manually submitted document passes before any domain state changes.
+# Manual documents pass this gate before attachment.
 #
-# Accepts only proven inputs: a multipart upload, an ActiveStorage::Blob, and, where the
-# caller allows it, a signed blob ID. A signed ID identifies a blob; it does not authorize
-# the submitter, so callers keep their own request and domain checks.
+# Accepts a multipart upload, an ActiveStorage::Blob, or a signed blob ID when the caller permits one.
+# A signed blob ID does not authorize the submitter. Callers enforce request access and domain eligibility.
 #
-# An existing blob is accepted only when it is unattached and inside the cleanup retention
-# window, or already attached to this record's same slot. The blob row is locked so the
-# decision cannot race CleanupUnattachedUploadsJob, which purges under the same lock.
-# The size limit comes from the purpose the model declares for the slot (`validates ..., document:
-# { purpose: }`), so callers never restate it. Content is then read once
-# by ProofAttachmentValidator, which judges the real type and refuses PDF active content.
-# Provider-generated documents do not pass through here.
+# Existing blobs must be unattached within the cleanup retention window, or attached to this record's same slot.
+# Intake and CleanupUnattachedUploadsJob lock the same blob row to prevent a concurrent purge.
+# The slot's DocumentValidator declaration selects its purpose and size limit.
+# ProofAttachmentValidator inspects content at intake. Routine model saves do not inspect file content.
+# Provider-generated documents follow their own acceptance contract.
 class UploadedDocument
   class Refused < StandardError
     attr_reader :reason, :purpose
 
-    # The exception text is the English refusal, for logs and audit metadata
+    # Logs and audit metadata use the English refusal.
     def initialize(reason, purpose: nil)
       @reason = reason
       @purpose = purpose
       super(user_message(locale: :en))
     end
 
-    # The refusal for a person, in the current locale unless one is given
+    # User messages use the current locale unless the caller supplies one.
     def user_message(locale: I18n.locale)
       UploadedDocument.refusal_message(reason, purpose: purpose, locale: locale)
     end
 
-    # The refusal prefixed with the document it applies to, for surfaces that handle several
+    # Identifies the document when a form handles several documents.
     def user_message_for(document)
       I18n.t('documents.refused_document', document: document, reason: user_message)
     end
   end
 
-  # The one wording for a refusal reason, also given to the browser for its selection-time checks.
+  # Shared refusal wording for server responses and browser validation.
   def self.refusal_message(reason, purpose:, locale: I18n.locale)
     key = reason == :too_large && !ProofUploadFormats.max_inclusive?(purpose) ? :too_large_strict : reason
     I18n.t("documents.refused.#{key}", max_size: purpose && ProofUploadFormats.max_megabytes(purpose), locale: locale)
   end
 
-  # What a form submitted for a document field: a new upload in `field` (a multipart file or a
-  # direct-upload signed ID) takes precedence over the upload kept from an earlier attempt in
-  # `field_signed_id`.
+  # A new upload in `field` takes precedence over the retained reference in `field_signed_id`.
   def self.submitted(params, field)
     params[field].presence || params["#{field}_signed_id"].presence
   end
 
-  # The upload to show again after a failed submission, or nil. A new upload is kept only if it passes
-  # the whole gate; otherwise the earlier kept upload stays while it is still restorable.
+  # Rebuilds the file shown after a failed submission. A new upload must pass the intake gate.
+  # An absent or refused upload falls back to the submitted retained reference when it is restorable.
   def self.retained(params, record:, field:)
     fresh = params[field]
     return resolve!(fresh, record: record, name: field) if fresh.present?
@@ -59,9 +54,8 @@ class UploadedDocument
     restorable(params["#{field}_signed_id"], record: record, name: field)
   end
 
-  # record and name identify the slot. record may be the model class when no record exists yet;
-  # an existing blob is then reusable only while unattached. min_bytes is set only by channels
-  # that require a minimum.
+  # record and name identify the attachment slot. Use the model class before a record exists.
+  # Existing blobs then must be unattached. min_bytes applies only to channels with a minimum size.
   def self.resolve!(input, record:, name:, signed_ids: true, min_bytes: nil)
     new(record: record, name: name, purpose: declared_purpose(record, name), signed_ids: signed_ids,
         min_bytes: min_bytes).resolve!(input)
@@ -75,8 +69,8 @@ class UploadedDocument
     validator.options.fetch(:purpose)
   end
 
-  # Read-only check for redisplaying a retained upload after a failed submission. It neither
-  # locks the blob nor reads its content, so the eventual submission still goes through resolve!.
+  # Checks whether a retained reference can be shown after failure. This check does not lock or inspect content.
+  # Submission still calls resolve!.
   def self.restorable(signed_id, record:, name:)
     return unless signed_id.is_a?(String) && signed_id.present?
 
@@ -120,11 +114,10 @@ class UploadedDocument
     input.respond_to?(:original_filename) && input.respond_to?(:tempfile)
   end
 
-  # The request supplies the size, so limits are checked before the file is read or stored.
-  # A stored object is discoverable only through its blob row, which persists unattached outside a
-  # transaction, where CleanupUnattachedUploadsJob finds it. The row is saved before the object is
-  # written, as Active Storage does, and the rollback cleanup is registered before either, so a
-  # caller's rollback after any write deletes the object. A failed write deletes whatever it stored.
+  # Size checks precede content inspection and storage.
+  # The blob row precedes the storage write so cleanup can find unattached uploads.
+  # This method registers rollback cleanup before either write to handle a caller's later rollback.
+  # Rollback and write failures attempt storage deletion. delete_stored logs failed deletion.
   def stored_upload(file)
     check_size(file.size)
     check_content(file)

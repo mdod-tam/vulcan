@@ -4,11 +4,9 @@ import { setVisible } from "../../utils/visibility"
 const DECISION_CONTROLS = 'input[type="radio"], [data-document-proof-handler-target="noneButton"]'
 
 /**
- * Controller for handling document proof acceptance/rejection
- *
- * Manages the decision for one document: accept, upload for later review, or reject with a reason.
- * The file itself is handled by the shared document-upload control inside uploadSection; this
- * controller clears it when rejection is chosen and locks its decision controls while it uploads.
+ * Controls acceptance, later review, or rejection of one document.
+ * The document-upload control owns the pending file.
+ * This controller clears that file on rejection and locks decisions during upload.
  */
 class DocumentProofHandlerController extends Controller {
   static targets = [
@@ -34,13 +32,10 @@ class DocumentProofHandlerController extends Controller {
     this.element.addEventListener('direct-upload:initialize', this._lockDecisions);
     this.element.addEventListener('click', this._blockLockedDecision, true);
     this.uploadForm?.addEventListener('direct-uploads:end', this._unlockDecisions);
-    // Restore state from form data if rejection fields have values
     this.restoreStateFromFormData();
     
-    // Set initial state based on selected radio button
     this.updateVisibility();
     
-    // Initialize rejection UI state if rejection is selected
     if (this.hasRejectRadioTarget && this.rejectRadioTarget.checked) {
       this.previewRejectionReason();
       this.updateReasonInputMode();
@@ -54,37 +49,32 @@ class DocumentProofHandlerController extends Controller {
   }
 
   /**
-   * Restore the UI state based on which radio button is checked
-   * This handles cases where the form is re-rendered after validation errors
+   * Shows the sections for the review action restored by the server.
    */
   restoreStateFromFormData() {
     if (!this.hasAcceptRadioTarget || !this.hasRejectRadioTarget) {
       return;
     }
 
-    // Check which radio button is currently selected and show the correct fields
     const isAccepted = this.acceptRadioTarget.checked;
     const isUploadOnly = this.hasUploadOnlyRadioTarget && this.uploadOnlyRadioTarget.checked;
     const isRejected = this.rejectRadioTarget.checked;
 
     if (isAccepted || isUploadOnly || isRejected) {
-      // Radio button state is already set, just update visibility
       this.updateVisibility();
     }
   }
 
   /**
-   * Toggle between accept/reject states
+   * Updates sections for the selected review action.
    * @param {Event} event The change event from radio buttons
    */
   toggleProofAction(event) {
-    // Update UI based on selection
     this.updateVisibility();
   }
 
-  // A decision cannot change while its document is uploading. The controls are not disabled:
-  // Rails submits the form before it fires direct-uploads:end, and a disabled radio would be
-  // left out of that submission.
+  // Decision controls remain enabled so Rails includes them in the submission.
+  // Rails submits before direct-uploads:end unlocks decisions.
   lockDecisionControls() {
     this.decisionsLocked = true;
     this.element.querySelectorAll(DECISION_CONTROLS)
@@ -98,7 +88,7 @@ class DocumentProofHandlerController extends Controller {
       .forEach(control => control.removeAttribute('aria-disabled'));
   }
 
-  // A canceled click leaves a radio unchanged, whether it came from the mouse, a label, or the keyboard
+  // A canceled click preserves the radio choice for mouse, label, and keyboard activation.
   blockLockedDecision(event) {
     if (!this.decisionsLocked || !event.target.closest(DECISION_CONTROLS)) return;
     event.preventDefault();
@@ -106,8 +96,7 @@ class DocumentProofHandlerController extends Controller {
   }
 
   /**
-   * Handle "None Provided" button click
-   * UX shortcut that automatically selects reject + none_provided reason
+   * Selects rejection with the none_provided reason.
    * @param {Event} event The click event from the none button
    */
   handleNoneProvided(event) {
@@ -115,13 +104,10 @@ class DocumentProofHandlerController extends Controller {
       return;
     }
 
-    // Programmatically select the reject radio button
     this.rejectRadioTarget.checked = true;
 
-    // Auto-select "none_provided" from rejection reason dropdown
     this.rejectionReasonSelectTarget.value = 'none_provided';
 
-    // Update visibility and reason mode
     this.updateVisibility();
     this.previewRejectionReason();
     this.updateReasonInputMode();
@@ -129,8 +115,7 @@ class DocumentProofHandlerController extends Controller {
   }
 
   /**
-   * Update the visibility of upload or rejection sections
-   * based on the selected radio
+   * Shows file controls for acceptance or later review, and reason controls for rejection.
    */
   updateVisibility() {
     if (!this.hasAcceptRadioTarget || !this.hasUploadSectionTarget || !this.hasRejectionSectionTarget) {
@@ -141,25 +126,21 @@ class DocumentProofHandlerController extends Controller {
     const isUploadOnly = this.hasUploadOnlyRadioTarget && this.uploadOnlyRadioTarget.checked;
     const isRejected = this.rejectRadioTarget.checked;
   
-    // Toggle visibility of sections using utility
-    // Note: display:none automatically removes elements from accessibility tree
     setVisible(this.uploadSectionTarget, isAccepted || isUploadOnly);
     setVisible(this.rejectionSectionTarget, isRejected);
     
-    // Toggle file input enabled state
-    // Note: We don't set 'required' attribute to allow server-side validation to handle missing files
+    // The server reports missing files. Native required validation would prevent that response.
     if (this.hasFileInputTarget) {
       const target = this.fileInputTarget;
       target.disabled = !(isAccepted || isUploadOnly);
 
-      // A rejection carries no file, so any pending upload is cleared
+      // Rejection must submit no file, including a pending upload reference.
       if (isRejected) {
         this.uploadSectionTarget.querySelector('[data-controller~="document-upload"]')
           ?.dispatchEvent(new CustomEvent('document-upload:clear'));
       }
     }
 
-    // Toggle required attributes on fields
     if (this.hasRejectionReasonSelectTarget) {
       const target = this.rejectionReasonSelectTarget;
       if (isRejected) {
@@ -184,9 +165,7 @@ class DocumentProofHandlerController extends Controller {
   }
 
   /**
-   * Preview the rejection reason text.
-   * Reads the human-readable body from the selected option's data-reason-text attribute,
-   * which is populated server-side from the RejectionReason DB records.
+   * The selected option's data-reason-text contains the reason body from the database.
    */
   previewRejectionReason() {
     if (!this.hasReasonPreviewTarget || !this.hasRejectionReasonSelectTarget) return

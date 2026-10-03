@@ -1,8 +1,8 @@
 # frozen_string_literal: true
 
-# Content inspection for submitted documents. UploadedDocument calls it on every manual
-# intake path after size checks pass, so a file is read at most once at intake and never
-# on routine saves. The PDF substring checks flag active content; they are not a malware scan.
+# UploadedDocument runs content inspection after size checks.
+# Routine model saves do not inspect file content.
+# PDF substring checks flag active content but do not provide a malware scan.
 class ProofAttachmentValidator
   ALLOWED_MIME_TYPES = ProofUploadFormats::ALLOWED_CONTENT_TYPES
 

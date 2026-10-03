@@ -1,8 +1,8 @@
 # frozen_string_literal: true
 
-# Model backstop for submitted documents, after UploadedDocument at intake. It checks only the
-# blobs attached in this save, from metadata, so routine saves never read files and stored
-# documents stay valid when a rule tightens. Provider-generated documents keep their own contract.
+# UploadedDocument inspects content at intake. This model backstop validates metadata on attachment changes.
+# Saves without attachment changes skip this check. A collection change can include existing blobs.
+# Provider-generated documents keep their own contract.
 #
 #   validates :income_proof, document: { purpose: :proof }
 class DocumentValidator < ActiveModel::EachValidator

@@ -2,9 +2,8 @@
 
 require 'test_helper'
 
-# Every manual document entry point must give the same answer for the same file. The proof writer
-# stands in for portal, paper, and scanned proof intake; the certification writer for admin and
-# paper certification intake. Refused files must leave every attachment as it was.
+# Shared intake checks for proof/certification writers and secure upload services.
+# Each purpose keeps its own limit. A refused file must leave existing attachments unchanged.
 class DocumentIntakeContractTest < ActiveSupport::TestCase
   ENTRY_POINTS = {
     proof_writer: :proof,
