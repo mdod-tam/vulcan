@@ -28,6 +28,12 @@ A link that carries a secure URL must actually be delivered. All four issuing se
 
 Constituent links use the recipient's delivery locale for email, SMS, and pages. Provider certification emails and pages are English, because the applicant's locale says nothing about the provider's language. W9 links follow the vendor's locale.
 
+### Certification request state and counts
+
+[`MedicalCertificationService`](../../app/services/applications/medical_certification_service.rb) records certification request state, status history, and audit for both queued provider requests and secure upload preparation. Each state write attaches the previous status, timestamp, and count to its tracking notification so a delivery refusal can restore that request without replacing newer state.
+
+`medical_certification_request_count` counts the ordinary provider requests queued by `MedicalCertificationService` (including resends) and the separate DocuSeal signing requests. It is recorded at issuance, before confirmed delivery; an intentional or configuration refusal restores the unchanged queued request's previous count. Transport failures retain the request for failure tracking. Issuing or resending a secure upload link leaves this count unchanged, including when the secure issuer delivers the link directly. Rejection review also prepares a link for a separate provider notifier. Preparation changes `not_requested` to `requested` once; later links retain certification status, timestamp, and count, including `rejected`.
+
 ## Submitting
 
 Each public controller shares one flow from [`SecureRequestFormController`](../../app/controllers/secure_request_form_controller.rb):

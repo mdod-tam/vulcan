@@ -5,12 +5,101 @@ require 'test_helper'
 module Applications
   class RequestCertificationUploadTest < ActiveSupport::TestCase
     include ActiveSupport::Testing::TimeHelpers
+    include ActiveJob::TestHelper
 
     setup do
       @actor = create(:admin)
       @application = create(:application, :in_progress,
                             medical_provider_name: 'Dr. Provider',
                             medical_provider_email: 'provider@example.com')
+    end
+
+    test 'preparation records one initial transition and secure resends do not count provider requests' do
+      result = nil
+      assert_no_emails do
+        result = RequestCertificationUpload.new(application: @application, actor: @actor).call
+      end
+      assert_predicate result, :success?
+      original = result.data.fetch(:medical_provider_secure_request_form)
+      initial_state = @application.reload.attributes.slice(*MedicalCertificationService::STATE_FIELDS)
+      notification = Notification.find_by!(notifiable: @application, action: 'cert_upload_requested')
+      history = @application.status_changes.where(change_type: :medical_certification).sole
+      audit = Event.where(auditable: @application, action: 'medical_certification_requested').sole
+      assert_equal 0, initial_state['medical_certification_request_count']
+      assert_equal notification.id, history.metadata['notification_id']
+      assert_equal notification.id, audit.metadata['notification_id']
+      assert_equal 'secure_form', history.metadata['submission_method']
+      assert_equal 'secure_form', audit.metadata['submission_method']
+      state = notification.metadata.fetch('certification_request_state')
+      assert_equal 'not_requested', state.dig('previous', 'medical_certification_status')
+      assert_equal 0, state['issued_count']
+      assert_equal @application.medical_certification_requested_at, Time.iso8601(state['issued_at'])
+      mail = stub(deliver_now: true)
+      MedicalProviderMailer.stubs(:with).returns(stub(request_certification: mail))
+
+      travel_to original.sent_at + 2.hours do
+        assert_no_difference 'ApplicationStatusChange.count' do
+          assert_no_difference "Event.where(action: 'medical_certification_requested').count" do
+            result = RequestCertificationUpload.new(application: @application, actor: @actor, resend_of: original,
+                                                    deliver_email: true).call
+            assert_predicate result, :success?
+          end
+        end
+      end
+
+      assert_equal initial_state, @application.reload.attributes.slice(*MedicalCertificationService::STATE_FIELDS)
+      assert_predicate original.reload, :revoked?
+      replacement_notification = Notification.where(notifiable: @application, action: 'cert_upload_requested').order(:id).last
+      assert_nil replacement_notification.metadata['certification_request_state']
+      assert_equal 'submitted', replacement_notification.delivery_status
+    end
+
+    %i[history audit].each do |failed_write|
+      test "secure preparation rolls back form tracking and state when #{failed_write} fails" do
+        previous = @application.attributes.slice(*MedicalCertificationService::STATE_FIELDS)
+        if failed_write == :history
+          ApplicationStatusChange.any_instance.stubs(:save!).raises(ActiveRecord::RecordInvalid.new(ApplicationStatusChange.new))
+        else
+          AuditEventService.expects(:log).with(has_entries(action: 'medical_certification_requested')).raises(StandardError, 'audit unavailable')
+        end
+
+        result = assert_no_difference ['MedicalProviderSecureRequestForm.count', 'Notification.count', 'ApplicationStatusChange.count', 'Event.count'] do
+          RequestCertificationUpload.new(application: @application, actor: @actor).call
+        end
+
+        assert_predicate result, :failure?
+        assert_equal previous, @application.reload.attributes.slice(*MedicalCertificationService::STATE_FIELDS)
+      end
+    end
+
+    test 'late secure delivery refusal preserves a newer counted provider request' do
+      mail = Object.new
+      application = @application
+      actor = @actor
+      mail.define_singleton_method(:deliver_now) do
+        result = MedicalCertificationService.new(application: application, actor: actor).request_certification
+        raise result.message unless result.success?
+
+        raise ApplicationMailer::DeliverySkipped, 'global_disabled'
+      end
+      MedicalProviderMailer.stubs(:with).returns(stub(request_certification: mail))
+
+      result = assert_no_difference "Event.where(action: 'medical_certification_request_not_sent').count" do
+        RequestCertificationUpload.new(application: @application, actor: @actor, deliver_email: true).call
+      end
+
+      assert_predicate result, :failure?
+      assert result.data[:delivery_suppressed]
+      assert_predicate @application.reload, :medical_certification_status_requested?
+      assert_equal 1, @application.medical_certification_request_count
+      secure_notification = Notification.find_by!(notifiable: @application, action: 'cert_upload_requested')
+      provider_notification = Notification.find_by!(notifiable: @application, action: 'medical_certification_requested')
+      form = MedicalProviderSecureRequestForm.find(secure_notification.metadata['medical_provider_secure_request_form_id'])
+      assert_predicate form, :revoked?
+      assert_equal 'suppressed', secure_notification.delivery_status
+      assert_equal @application.medical_certification_requested_at,
+                   Time.iso8601(provider_notification.metadata.dig('certification_request_state', 'issued_at'))
+      assert_enqueued_jobs 1, only: MedicalCertificationEmailJob
     end
 
     test 'fails explicitly when provider email is missing' do

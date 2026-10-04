@@ -11,6 +11,77 @@ module Applications
       @service = MedicalCertificationService.new(application: @application, actor: @admin)
     end
 
+    test 'first and resent provider requests count once and share tracking history and audit identities' do
+      2.times do |index|
+        travel 6.seconds
+        previous = @application.reload.attributes.slice(*MedicalCertificationService::STATE_FIELDS)
+        result = assert_difference('Notification.count', 1) do
+          assert_difference('ApplicationStatusChange.count', 1) do
+            assert_difference("Event.where(action: 'medical_certification_requested').count", 1) do
+              @service.request_certification
+            end
+          end
+        end
+
+        assert_predicate result, :success?
+        assert_equal index + 1, @application.reload.medical_certification_request_count
+        notification = tracking_notification
+        history = @application.status_changes.order(:id).last
+        audit = Event.where(auditable: @application, action: 'medical_certification_requested').order(:id).last
+        state = notification.metadata.fetch('certification_request_state')
+        assert_equal index + 1, notification.metadata['request_count']
+        assert_equal index, state.dig('previous', 'medical_certification_request_count')
+        assert_equal index + 1, state['issued_count']
+        assert_equal @application.medical_certification_requested_at, Time.iso8601(state['issued_at'])
+        assert_equal previous['medical_certification_status'], history.from_status
+        assert_equal 'requested', history.to_status
+        assert_equal notification.id, history.metadata['notification_id']
+        assert_equal notification.id, audit.metadata['notification_id']
+        assert_equal 'email', history.metadata['submission_method']
+        assert_equal 'email', audit.metadata['submission_method']
+        assert_equal @admin, history.user
+        assert_equal @admin, audit.user
+      end
+    end
+
+    %i[history audit].each do |failed_write|
+      test "provider request rolls back state and tracking when #{failed_write} fails" do
+        previous = @application.attributes.slice(*MedicalCertificationService::STATE_FIELDS)
+        if failed_write == :history
+          ApplicationStatusChange.any_instance.stubs(:save!).raises(ActiveRecord::RecordInvalid.new(ApplicationStatusChange.new))
+        else
+          AuditEventService.expects(:log).with(has_entries(action: 'medical_certification_requested')).raises(StandardError, 'audit unavailable')
+        end
+
+        result = nil
+        assert_no_difference ['Notification.count', 'ApplicationStatusChange.count', 'Event.count'] do
+          assert_no_enqueued_jobs(only: MedicalCertificationEmailJob) { result = @service.request_certification }
+        end
+
+        assert_predicate result, :failure?
+        assert_equal previous, @application.reload.attributes.slice(*MedicalCertificationService::STATE_FIELDS)
+      end
+    end
+
+    test 'refusing an older queued request preserves a newer request issued through the service' do
+      assert_predicate @service.request_certification, :success?
+      older_job = enqueued_jobs.find { |job| job[:job] == MedicalCertificationEmailJob }
+      older_notification = tracking_notification
+      travel 1.second
+      assert_predicate @service.request_certification, :success?
+      newer_notification = tracking_notification
+      newer_state = @application.reload.attributes.slice(*MedicalCertificationService::STATE_FIELDS)
+      toggle(false)
+
+      assert_no_difference "Event.where(action: 'medical_certification_request_not_sent').count" do
+        assert_no_emails { ActiveJob::Base.execute(older_job) }
+      end
+
+      assert_equal newer_state, @application.reload.attributes.slice(*MedicalCertificationService::STATE_FIELDS)
+      assert_equal 'suppressed', older_notification.reload.delivery_status
+      assert_nil newer_notification.reload.metadata['delivery_suppressed']
+    end
+
     test 'early refusal leaves request state and tracking untouched' do
       toggle(false)
       prior = @application.attributes.slice(*MedicalCertificationService::STATE_FIELDS)
