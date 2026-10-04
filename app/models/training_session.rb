@@ -5,15 +5,14 @@ class TrainingSession < ApplicationRecord
   include StatusManagement
   include NotificationDelivery
 
-  # `rescheduled` is legacy/display-only; current reschedules keep sessions scheduled.
+  # `rescheduled` is a legacy display status. Current reschedules keep sessions scheduled.
   OPEN_STATUSES = %i[requested scheduled confirmed].freeze
   HISTORICAL_STATUSES = %i[completed cancelled no_show].freeze
 
-  # Associations
   belongs_to :application
   belongs_to :trainer, class_name: 'User'
   has_one :constituent, through: :application, source: :user
-  belongs_to :product_trained_on, class_name: 'Product', optional: true # Added association
+  belongs_to :product_trained_on, class_name: 'Product', optional: true
 
   attribute :cancellation_initiator, :integer
 
@@ -24,8 +23,7 @@ class TrainingSession < ApplicationRecord
     program: 3
   }, prefix: true
 
-  # Canonical open-session set for training. The shared StatusManagement
-  # `active` scope is narrower legacy language and excludes requested rows.
+  # The canonical open-session set includes requested rows. StatusManagement.active excludes them.
   scope :assigned_or_scheduled, -> { where(status: OPEN_STATUSES) }
   scope :latest_per_application, lambda {
     select('DISTINCT ON (training_sessions.application_id) training_sessions.*')
@@ -46,7 +44,6 @@ class TrainingSession < ApplicationRecord
       .order(updated_at: :desc)
   end
 
-  # Validations
   validates :scheduled_for, presence: true, if: -> { status_scheduled? || status_confirmed? || will_be_scheduled? }
   validates :reschedule_reason, presence: true, if: :rescheduling?
   validate :trainer_must_be_trainer_type
@@ -54,38 +51,28 @@ class TrainingSession < ApplicationRecord
   validate :historical_session_cannot_reopen, if: :reopening_historical_session?
   validate :training_session_capacity_available, if: :entering_open_status?
 
-  # Conditional Validations based on status
   validates :cancellation_reason, presence: true, if: :status_cancelled?
   validates :no_show_notes, presence: true, if: :status_no_show?
   validates :notes, presence: true, if: :status_completed?
   validates :duration_hours, presence: true, numericality: { greater_than: 0 }, if: :status_completed?
 
-  # Callbacks
   before_save :set_completed_at, if: :status_changed_to_completed?
-  # Add a callback to set cancelled_at if status changes to cancelled
   before_save :set_cancelled_at, if: :status_changed_to_cancelled?
   before_save :ensure_status_schedule_consistency
   after_update_commit :deliver_notifications, if: :should_deliver_notifications?
 
-  # Add a helper method for cancellation status change
   def status_changed_to_cancelled?
     status_cancelled? && status_changed?
   end
 
-  # Add a callback method to set cancelled_at
   def set_cancelled_at
     self.cancelled_at = Time.current if status_cancelled? && cancelled_at.nil?
   end
 
   def rescheduling?
-    # A reschedule only occurs if:
-    # 1. The record already exists (is persisted).
-    # 2. The status *was* already 'scheduled'.
-    # 3. The scheduled_for date is changing.
     persisted? && status_was == 'scheduled' && scheduled_for_changed?
   end
 
-  # Detects if this record is being changed to 'scheduled' status
   def will_be_scheduled?
     return false unless status_changed?
 
@@ -161,11 +148,8 @@ class TrainingSession < ApplicationRecord
   end
 
   def scheduled_time_must_be_future
-    # Only apply this validation if the status being set requires a future date
     return unless status_scheduled? || status_confirmed?
-    # Only validate if the scheduled time is being set or changed
     return unless scheduled_for_changed? || new_record?
-    # Now check the date
     return unless scheduled_for.present? && scheduled_for <= Time.current
 
     errors.add(:scheduled_for, 'must be in the future')
@@ -192,10 +176,8 @@ class TrainingSession < ApplicationRecord
   end
 
   def ensure_status_schedule_consistency
-    # If setting a schedule date but still in requested status, update status
     self.status = :scheduled if scheduled_for_changed? && scheduled_for.present? && status_requested?
 
-    # If removing a schedule date but still in scheduled/confirmed status, prevent it
     return unless scheduled_for_changed? && scheduled_for.blank? && (status_scheduled? || status_confirmed?)
 
     errors.add(:scheduled_for, "cannot be removed while status is #{status}")

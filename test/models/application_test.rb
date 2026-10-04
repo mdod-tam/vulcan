@@ -8,10 +8,8 @@ class ApplicationTest < ActiveSupport::TestCase
   def setup
     @admin = create(:admin)
 
-    # Set paper application context for tests
     setup_paper_application_context
 
-    # Use skip_proofs option to avoid callbacks that might cause recursion
     @application = create(:application, :in_progress, skip_proofs: true)
     @proof_review = build(:proof_review,
                           application: @application,
@@ -19,11 +17,10 @@ class ApplicationTest < ActiveSupport::TestCase
   end
 
   def teardown
-    # Clear Current attributes after tests
     Current.reset if defined?(Current) && Current.respond_to?(:reset)
   end
 
-  # Skip notifications tests for now as they're inconsistent with our new safeguards
+  # Restore this notification test after it supports the current guards.
   test 'notifies admins when proofs need review' do
     skip 'Skipping notification test until compatible with new guards'
   end
@@ -55,20 +52,16 @@ class ApplicationTest < ActiveSupport::TestCase
   end
 
   test 'paper applications can be rejected without attachments' do
-    # Set Current attributes for paper application context
     Current.force_notifications = false
     Current.paper_context = true
 
     begin
-      # Create a basic application
       application = create(:application, :in_progress, skip_proofs: true)
 
-      # Reject proofs without attachments
       application.reject_proof_without_attachment!(:income, admin: @admin, reason: 'other', notes: 'Test rejection')
       application.reject_proof_without_attachment!(:id, admin: @admin, reason: 'other', notes: 'Test rejection')
       application.reject_proof_without_attachment!(:residency, admin: @admin, reason: 'other', notes: 'Test rejection')
 
-      # Verify proofs were rejected
       application.reload
       assert application.income_proof_status_rejected?
       assert application.id_proof_status_rejected?
@@ -77,21 +70,17 @@ class ApplicationTest < ActiveSupport::TestCase
       assert_not application.id_proof.attached?
       assert_not application.residency_proof.attached?
     ensure
-      # Reset Current attributes
       Current.reset if defined?(Current) && Current.respond_to?(:reset)
     end
   end
 
   test 'applications correctly track proof status changes' do
-    # Set Current attributes for paper application context
     Current.force_notifications = false
     Current.paper_context = true
 
     begin
-      # Create a test application
       application = create(:application, :in_progress, skip_proofs: true)
 
-      # Create fixture files
       fixture_dir = Rails.root.join('test/fixtures/files')
       FileUtils.mkdir_p(fixture_dir)
 
@@ -100,7 +89,7 @@ class ApplicationTest < ActiveSupport::TestCase
         File.write(file_path, "Test content for #{filename}") unless File.exist?(file_path)
       end
 
-      # Directly update proof status using SQL to avoid callbacks
+      # SQL bypasses model callbacks for enum readback.
       ActiveRecord::Base.connection.execute(<<~SQL.squish)
         UPDATE applications
         SET income_proof_status = #{Application.income_proof_statuses[:approved]},
@@ -109,46 +98,36 @@ class ApplicationTest < ActiveSupport::TestCase
         WHERE id = #{application.id}
       SQL
 
-      # Refresh application record
       application = Application.uncached { Application.find(application.id) }
 
-      # Check proof status
       assert_equal 'approved', application.income_proof_status
       assert_equal 'approved', application.residency_proof_status
       assert_equal 'approved', application.id_proof_status
     ensure
-      # Reset Current attributes
       Current.reset if defined?(Current) && Current.respond_to?(:reset)
     end
   end
 
   test 'transition_status! logs application_status_changed with explicit constituent actor' do
-    # Set Current attributes to disable notifications in tests
     Current.force_notifications = false
 
-    # Create an application with a known user (proofs will be attached by factory default)
     application = create(:application, :draft)
 
-    # Ensure Current.user is nil
     Current.user = nil
 
-    # Verify initial state
     assert_equal 'draft', application.status
 
     assert_difference -> { ApplicationStatusChange.count }, 1 do
       assert_difference -> { Event.where(action: 'application_status_changed').count }, 1 do
-        # Change the application status to trigger transition_status!
         application.transition_status!(:in_progress, actor: application.user, metadata: { trigger: 'test' })
       end
     end
 
-    # Verify the status change was logged correctly
     status_change = application.status_changes.last
     assert_equal 'draft', status_change.from_status
     assert_equal 'in_progress', status_change.to_status
     assert_equal application.user, status_change.user
 
-    # Verify audit event was created correctly
     audit_event = Event.where(action: 'application_status_changed', auditable: application).last
     assert_equal application.user, audit_event.user
     assert_equal 'in_progress', audit_event.metadata['new_status']
@@ -156,34 +135,27 @@ class ApplicationTest < ActiveSupport::TestCase
   end
 
   test 'transition_status! attributes audit to passed actor not Current.user' do
-    # Set Current attributes to disable notifications in tests
     Current.force_notifications = false
 
-    # Create an application and an admin user
     application = create(:application, :draft)
     admin = create(:admin)
 
-    # Set Current.user to admin
     Current.user = admin
 
-    # Verify initial state
     assert_equal 'draft', application.status
 
     assert_difference -> { ApplicationStatusChange.count }, 1 do
       assert_difference -> { Event.where(action: 'application_status_changed').count }, 1 do
-        # Pass a different actor to transition_status!
         other_admin = create(:admin)
         application.transition_status!(:in_progress, actor: other_admin, metadata: { trigger: 'test' })
       end
     end
 
-    # Verify the status change used the passed actor, not Current.user
     status_change = application.status_changes.last
     assert_equal 'draft', status_change.from_status
     assert_equal 'in_progress', status_change.to_status
     assert_not_equal admin, status_change.user
 
-    # Verify audit event used the passed actor
     audit_event = Event.where(action: 'application_status_changed', auditable: application).last
     assert_not_equal admin, audit_event.user
   end
@@ -534,7 +506,6 @@ class ApplicationTest < ActiveSupport::TestCase
     app2 = create(:application, :draft)
     admin = create(:admin)
 
-    # Force an error on the second application
     Application.any_instance.stubs(:transition_status!).returns(true).then.raises(StandardError.new('Test error'))
 
     assert_no_difference -> { ApplicationStatusChange.count } do
@@ -544,7 +515,6 @@ class ApplicationTest < ActiveSupport::TestCase
       assert_includes result[:errors].first, 'Test error'
     end
 
-    # Verify both applications rolled back
     assert app1.reload.status_draft?
     assert app2.reload.status_draft?
   end
@@ -606,7 +576,7 @@ class ApplicationTest < ActiveSupport::TestCase
     assert_not_includes rejected_applications, draft_app
   end
 
-  # Tests for Pain Point Analysis
+  # Pain point analysis
   test 'draft scope returns only draft applications' do
     draft_app = create(:application, status: :draft)
     in_progress_app = create(:application, status: :in_progress)
@@ -618,13 +588,12 @@ class ApplicationTest < ActiveSupport::TestCase
   end
 
   test 'pain_point_analysis returns correct counts grouped by last_visited_step' do
-    # Create draft applications with different last visited steps
     create(:application, status: :draft, last_visited_step: 'step_1')
     create(:application, status: :draft, last_visited_step: 'step_1')
     create(:application, status: :draft, last_visited_step: 'step_2')
-    create(:application, status: :draft, last_visited_step: nil) # Should be ignored
-    create(:application, status: :draft, last_visited_step: '') # Should be ignored
-    create(:application, status: :in_progress, last_visited_step: 'step_1') # Should be ignored (not draft)
+    create(:application, status: :draft, last_visited_step: nil)
+    create(:application, status: :draft, last_visited_step: '')
+    create(:application, status: :in_progress, last_visited_step: 'step_1')
 
     analysis = Application.pain_point_analysis
 
@@ -645,10 +614,9 @@ class ApplicationTest < ActiveSupport::TestCase
     assert_equal({}, analysis)
   end
 
-  # --- Managing Guardian Tests ---
+  # Managing guardian
 
   test 'application can have a managing_guardian' do
-    # Use timestamp to ensure unique phone numbers
     timestamp = Time.current.to_i
     guardian = create(:constituent, email: "guardian.app.#{timestamp}@example.com", phone: "555555#{timestamp.to_s[-4..]}")
     applicant_user = create(:constituent, email: "applicant.app.#{timestamp + 1}@example.com", phone: "555556#{timestamp.to_s[-4..]}")
@@ -669,7 +637,6 @@ class ApplicationTest < ActiveSupport::TestCase
     timestamp = Time.current.to_i
     guardian = create(:constituent, email: "guardian.for.minor.#{timestamp}@example.com", phone: "555558#{timestamp.to_s[-4..]}")
     minor_applicant = create(:constituent, email: "minor.applicant.#{timestamp}@example.com", phone: "555559#{timestamp.to_s[-4..]}")
-    # Create the relationship between guardian and dependent
     GuardianRelationship.create!(guardian_user: guardian, dependent_user: minor_applicant, relationship_type: 'Parent')
 
     application_for_minor = create(:application, user: minor_applicant, managing_guardian: guardian)
@@ -678,7 +645,7 @@ class ApplicationTest < ActiveSupport::TestCase
     assert_equal(guardian, application_for_minor.managing_guardian, "Application's managing_guardian should be the guardian.")
   end
 
-  # --- escalate_to_dcf! tests ---
+  # escalate_to_dcf!
 
   test 'escalate_to_dcf! transitions to awaiting_dcf and leaves the certification request to staff' do
     application = create(:application, :in_progress, skip_proofs: true)

@@ -10,7 +10,6 @@ module Applications
       @params = params
     end
 
-    # Apply filters based on the provided parameters
     def apply_filters
       filtered_scope = build_filtered_scope
       success(nil, filtered_scope)
@@ -37,8 +36,8 @@ module Applications
     def apply_conditional_explicit_status_filter(result)
       return result if params[:status].blank?
 
-      # 'active' is a virtual status (everything except draft/rejected/archived),
-      # not a real enum value, so route it through apply_status_filter.
+      # 'active' names a scope, not an enum value.
+      # It selects in_progress, awaiting_proof, reminder_sent, and awaiting_dcf.
       return apply_status_filter(result, 'active') if params[:status] == 'active'
 
       result.where(status: params[:status])
@@ -55,8 +54,7 @@ module Applications
     def handle_filter_error(error)
       Rails.logger.error "Error applying filters: #{error.message}"
       Rails.logger.error error.backtrace.join("\n")
-      # Return the original scope in the data field on failure, along with an error message.
-      # Use positional parameters to match the BaseService method definition
+      # A failure retains the original scope in Result#data.
       failure("Error applying filters: #{error.message}", scope)
     end
 
@@ -77,24 +75,18 @@ module Applications
       when 'awaiting_medical_response'
         scope.where(status: :awaiting_dcf)
       when 'medical_certs_to_review'
-        # Only include applications that are in progress and have received certs
         scope.where(status: :in_progress, medical_certification_status: :received)
       when 'pending_provider_info'
         scope.pending_provider_info
       when 'training_requests'
-        # Queue is driven by persisted application state (training_requested_at)
-        # rather than notification delivery, so staff don't have to rely on
-        # email notifications being noticed to find pending requests.
+        # training_requested_at drives this queue independently of notification delivery.
         scope.with_pending_training_request
       when 'evaluation_requests'
-        # Explicit admin-initiated evaluation requests only. We do not auto-queue
-        # every approved equipment application as needing evaluation.
+        # Only explicit evaluation requests enter this queue. Equipment approval alone does not create a request.
         scope.with_pending_evaluation_request
       when 'dependent_applications'
-        # Filter applications that are for dependents (have a managing_guardian)
         scope.where.not(managing_guardian_id: nil)
       when 'digitally_signed_needs_review'
-        # Applications that have been digitally signed and need admin review
         scope.digitally_signed_needs_review
       else
         scope
@@ -122,20 +114,17 @@ module Applications
 
     def apply_search_filter(scope)
       search_term = search_pattern(params[:q])
-      # Join with users table to search on user fields in a single query
       result = scope.joins(:user)
       result.where('applications.id::text ILIKE :q OR users.first_name ILIKE :q OR users.last_name ILIKE :q',
                    q: search_term)
             .or(result.where(user_id: email_search_user_ids(params[:q])))
     end
 
-    # Support text queries for guardian and dependent specific searches
     def apply_guardian_dependent_text_searches(scope)
       result = scope
 
       if params[:managing_guardian_q].present?
         q = search_pattern(params[:managing_guardian_q])
-        # Explicit join to users as managing guardians
         result = result.joins('INNER JOIN users mg_users ON mg_users.id = applications.managing_guardian_id')
         result = result.where('mg_users.first_name ILIKE :q OR mg_users.last_name ILIKE :q', q: q)
                        .or(result.where(managing_guardian_id: email_search_user_ids(params[:managing_guardian_q])))
@@ -182,7 +171,7 @@ module Applications
     end
 
     def apply_only_dependents_filter(scope)
-      # Support both legacy only_dependent_apps=true and new for_minors checkbox
+      # Both parameter names select applications managed by a guardian, regardless of applicant age.
       return scope unless params[:only_dependent_apps] == 'true' || params[:for_minors].present?
 
       scope.where.not(managing_guardian_id: nil)

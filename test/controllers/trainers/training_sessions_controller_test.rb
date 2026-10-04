@@ -7,9 +7,8 @@ module Trainers
     # include AuthenticationTestHelper # Already included via test_helper.rb
 
     setup do
-      # Create a constituent for the application
       constituent = create(:constituent)
-      @application = create(:application, :old_enough_for_new_application, user: constituent) # Keep application for association
+      @application = create(:application, :old_enough_for_new_application, user: constituent)
       @trainer = create(:trainer)
       @admin = create(:admin)
 
@@ -23,41 +22,37 @@ module Trainers
       @cancelled_session = create(:training_session, :cancelled, trainer: @trainer, application: @cancelled_application)
       @no_show_session = create(:training_session, :no_show, trainer: @trainer, application: @no_show_application)
       @completed_session = create(:training_session, :completed, trainer: @trainer, application: @completed_application)
-      @product = create(:product) # Keep product as it might be needed
+      @product = create(:product)
 
-      # Setup for other_trainer_session test (Keep for now, might need adjustment later)
       @other_trainer = create(:trainer)
       @other_application = create(:application, :old_enough_for_new_application, user: create(:constituent))
       @other_trainer_session = create(:training_session, :scheduled, trainer: @other_trainer, application: @other_application)
 
-      # Setup for constituent_cancelled_sessions_count test (Keep for now, might need adjustment later)
       @constituent = @application.user
-      @app2 = create(:application, :old_enough_for_new_application, user: @constituent) # Another app for the same constituent
+      @app2 = create(:application, :old_enough_for_new_application, user: @constituent)
       @session1_cancelled = create(:training_session, :cancelled, application: @application, trainer: @trainer)
       @session2_no_show = create(:training_session, :no_show, application: @app2, trainer: @trainer)
     end
 
-    # --- Authorization Tests ---
+    # Authorization
     test 'trainer should only see their own training sessions' do
       sign_in_for_controller_test @trainer
-      # other_trainer_session is created in setup
 
-      get trainers_training_session_url(@training_session) # Trainer's own session
+      get trainers_training_session_url(@training_session)
       assert_response :success
 
-      get trainers_training_session_url(@other_trainer_session) # Other trainer's session
+      get trainers_training_session_url(@other_trainer_session)
       assert_redirected_to trainers_dashboard_path
       assert_equal "You don't have access to this training session.", flash[:alert]
     end
 
     test 'admin should see any training session' do
       sign_in_for_controller_test @admin
-      # other_trainer_session is created in setup
 
-      get trainers_training_session_url(@training_session) # Trainer's session
+      get trainers_training_session_url(@training_session)
       assert_response :success
 
-      get trainers_training_session_url(@other_trainer_session) # Other trainer's session
+      get trainers_training_session_url(@other_trainer_session)
       assert_response :success
     end
 
@@ -186,24 +181,23 @@ module Trainers
       assert_redirected_to sign_in_url
     end
 
-    # --- Show Action Tests ---
+    # Show
     test 'should get show and assign instance variables for trainer' do
       sign_in_for_controller_test @trainer
-      # Create the session *inside* the test
       application = create(:application, :old_enough_for_new_application, user: @constituent)
       training_session = create(:training_session, :scheduled, trainer: @trainer, application: application)
-      get trainers_training_session_url(training_session) # Use the locally created session
+      get trainers_training_session_url(training_session)
       assert_response :success
 
       assert_equal training_session, assigns(:training_session)
       assert_equal training_session.application, assigns(:application)
       assert_equal training_session.constituent, assigns(:constituent)
-      assert_not_nil assigns(:max_training_sessions) # Assuming Policy.get('max_training_sessions') returns something
+      assert_not_nil assigns(:max_training_sessions)
       assert_equal training_session.application.training_sessions.completed_sessions.count,
                    assigns(:completed_training_sessions_count)
       assert_equal training_session.application.completed_training_sessions_count + 1,
                    assigns(:session_number)
-      assert_not_nil assigns(:constituent_cancelled_sessions_count) # Test the complex query
+      assert_not_nil assigns(:constituent_cancelled_sessions_count)
       assert_includes @response.body, 'Activity History'
       assert_includes @response.body, 'Session Capacity'
       assert_includes @response.body, 'sessions reserved'
@@ -259,8 +253,8 @@ module Trainers
       get trainers_training_session_url(@training_session)
       assert_response :success
 
-      # Setup also creates @no_show_session on @application and @session2_no_show on @app2,
-      # both belonging to the same constituent.  The new status-based query counts all of them.
+      # @no_show_session and @session2_no_show belong to this constituent through different applications.
+      # The count also includes @session1_cancelled after its initiator becomes constituent.
       assert_equal 3, assigns(:constituent_cancelled_sessions_count)
       assert_equal 1, assigns(:constituent_session_outcome_counts)[:constituent_cancellations]
       assert_equal 2, assigns(:constituent_session_outcome_counts)[:no_shows]
@@ -319,11 +313,11 @@ module Trainers
       assert_includes @response.body, 'Covered shortcuts, setup, and practice tasks.'
     end
 
-    # --- Status Update Action Tests ---
+    # Status update
 
     test 'update_status should update status and log generic event' do
       sign_in_for_controller_test @trainer
-      original_status = @training_session.status # Define original_status here
+      original_status = @training_session.status
       new_status = :confirmed
 
       assert_difference('Event.count') do
@@ -347,7 +341,6 @@ module Trainers
 
     test 'update_status should handle no_show status and log specific event' do
       sign_in_for_controller_test @trainer
-      # original_status is not used after assignment
       new_status = :no_show
       no_show_notes = 'Constituent did not appear for the session.'
 
@@ -404,11 +397,10 @@ module Trainers
       assert_includes @response.body, I18n.t('activerecord.errors.models.training_session.attributes.base.historical_session_reopen')
     end
 
-    # --- Complete Action Tests ---
+    # Complete
     test 'complete should update status to completed, set completed_at, notes, product, and log specific event' do
       sign_in_for_controller_test @trainer
       notes = 'Training session completed successfully.'
-      # @product is created in setup
 
       assert_difference('Event.count') do
         post complete_trainers_training_session_url(@training_session),
@@ -421,8 +413,8 @@ module Trainers
       assert_equal notes, @training_session.notes
       assert_equal @product, @training_session.product_trained_on
       assert_equal BigDecimal('2.5'), @training_session.duration_hours
-      assert_nil @training_session.cancellation_reason # Ensure cleared
-      assert_nil @training_session.no_show_notes # Ensure cleared
+      assert_nil @training_session.cancellation_reason
+      assert_nil @training_session.no_show_notes
       assert_redirected_to trainers_training_session_url(@training_session)
       assert_equal 'Training session completed successfully.', flash[:notice]
 
@@ -468,7 +460,6 @@ module Trainers
 
     test 'complete should fail without notes' do
       sign_in_for_controller_test @trainer
-      # @product is created in setup
 
       assert_no_difference('Event.count') do
         post complete_trainers_training_session_url(@training_session),
@@ -476,9 +467,9 @@ module Trainers
       end
 
       @training_session.reload
-      assert_equal 'scheduled', @training_session.status # Status should not change
+      assert_equal 'scheduled', @training_session.status
       assert_response :unprocessable_content
-      assert_includes @response.body, 'Failed to complete training session:' # Check for error message in body
+      assert_includes @response.body, 'Failed to complete training session:'
     end
 
     test 'complete should fail without product_trained_on_id' do
@@ -490,9 +481,9 @@ module Trainers
       end
 
       @training_session.reload
-      assert_equal 'scheduled', @training_session.status # Status should not change
+      assert_equal 'scheduled', @training_session.status
       assert_response :unprocessable_content
-      assert_includes @response.body, 'Failed to complete training session:' # Check for error message in body
+      assert_includes @response.body, 'Failed to complete training session:'
     end
 
     test 'complete should fail without duration_hours' do
@@ -529,39 +520,34 @@ module Trainers
       end
     end
 
-    # --- Schedule Action Tests ---
+    # Schedule
     test 'schedule should update status to scheduled, set scheduled_for, notes, and log specific event' do
       sign_in_for_controller_test @trainer
       scheduled_time = 2.days.from_now
       notes = 'Scheduling notes.'
 
-      # Store the starting count before any operations
       starting_event_count = Event.count
 
-      # Perform the action
       post schedule_trainers_training_session_url(@requested_session),
            params: { scheduled_for: scheduled_time, notes: notes }
 
-      # Check the resulting count directly
       assert_equal starting_event_count + 1, Event.count,
                    'Expected Event.count to increase by 1 but it remained the same'
 
-      # Verify the training session updates
       @requested_session.reload
       assert_equal 'scheduled', @requested_session.status
-      assert_in_delta scheduled_time, @requested_session.scheduled_for, 1.second # Use assert_in_delta for time comparisons
+      assert_in_delta scheduled_time, @requested_session.scheduled_for, 1.second
       assert_equal notes, @requested_session.notes
-      assert_nil @requested_session.cancellation_reason # Ensure cleared
-      assert_nil @requested_session.no_show_notes # Ensure cleared
+      assert_nil @requested_session.cancellation_reason
+      assert_nil @requested_session.no_show_notes
       assert_redirected_to trainers_training_session_url(@requested_session)
       assert_equal 'Training session scheduled successfully.', flash[:notice]
 
-      # Verify the event content
       event = Event.last
       assert_equal 'training_scheduled', event.action
       assert_equal @requested_session.id, event.metadata['training_session_id']
       assert_equal @requested_session.application_id, event.metadata['application_id']
-      assert_not_nil event.metadata['scheduled_for'] # Check that scheduled_for is in metadata
+      assert_not_nil event.metadata['scheduled_for']
       assert_equal notes, event.metadata['notes']
       assert_equal @trainer, event.user
     end
@@ -575,9 +561,9 @@ module Trainers
       end
 
       @requested_session.reload
-      assert_equal 'requested', @requested_session.status # Status should not change
+      assert_equal 'requested', @requested_session.status
       assert_response :unprocessable_content
-      assert_includes @response.body, 'Failed to schedule training session:' # Check for error message in body
+      assert_includes @response.body, 'Failed to schedule training session:'
     end
 
     test 'schedule additional creates another scheduled session and logs event' do
@@ -664,26 +650,24 @@ module Trainers
       assert_includes @response.body, 'scheduled_for must be in the future'
     end
 
-    # --- Reschedule Action Tests ---
+    # Reschedule
     test 'reschedule should update scheduled_for, reschedule_reason, status to scheduled, and log specific event' do
       sign_in_for_controller_test @trainer
       new_scheduled_time = 3.days.from_now
       reschedule_reason = 'Trainer unavailable at original time.'
-      # original_scheduled_for is not used after assignment
 
-      # NotificationDeliveryStub overrides the concern's deliver_notifications to no-op in tests,
-      # so we can only assert the audit Event, not the Notification record here.
+      # NotificationDeliveryStub suppresses model delivery, so this test verifies the audit event.
       assert_difference('Event.count') do
         post reschedule_trainers_training_session_url(@training_session),
              params: { scheduled_for: new_scheduled_time, reschedule_reason: reschedule_reason }
       end
 
       @training_session.reload
-      assert_equal 'scheduled', @training_session.status # Status should be scheduled after reschedule
+      assert_equal 'scheduled', @training_session.status
       assert_in_delta new_scheduled_time, @training_session.scheduled_for, 1.second
       assert_equal reschedule_reason, @training_session.reschedule_reason
-      assert_nil @training_session.cancellation_reason # Ensure cleared
-      assert_nil @training_session.no_show_notes # Ensure cleared
+      assert_nil @training_session.cancellation_reason
+      assert_nil @training_session.no_show_notes
       assert_redirected_to trainers_training_session_url(@training_session)
       assert_equal 'Training session rescheduled successfully.', flash[:notice]
 
@@ -691,8 +675,8 @@ module Trainers
       assert_equal 'training_rescheduled', event.action
       assert_equal @training_session.id, event.metadata['training_session_id']
       assert_equal @training_session.application_id, event.metadata['application_id']
-      assert_not_nil event.metadata['old_scheduled_for'] # Check old_scheduled_for is in metadata
-      assert_not_nil event.metadata['new_scheduled_for'] # Check new_scheduled_for is in metadata
+      assert_not_nil event.metadata['old_scheduled_for']
+      assert_not_nil event.metadata['new_scheduled_for']
       assert_equal reschedule_reason, event.metadata['reason']
       assert_equal @trainer, event.user
     end
@@ -707,9 +691,9 @@ module Trainers
       end
 
       @training_session.reload
-      assert_equal 'scheduled', @training_session.status # Status should not change
+      assert_equal 'scheduled', @training_session.status
       assert_response :unprocessable_content
-      assert_includes @response.body, 'Failed to reschedule training session:' # Check for error message in body
+      assert_includes @response.body, 'Failed to reschedule training session:'
     end
 
     test 'reschedule should fail without reschedule_reason' do
@@ -722,9 +706,9 @@ module Trainers
       end
 
       @training_session.reload
-      assert_equal 'scheduled', @training_session.status # Status should not change
+      assert_equal 'scheduled', @training_session.status
       assert_response :unprocessable_content
-      assert_includes @response.body, 'Failed to reschedule training session:' # Check for error message in body
+      assert_includes @response.body, 'Failed to reschedule training session:'
     end
 
     test 'reschedule does not accept cancelled sessions' do
@@ -807,7 +791,7 @@ module Trainers
       assert_equal 'Schedule within remaining quota', follow_up_session.reschedule_reason
     end
 
-    # --- Cancel Action Tests ---
+    # Cancel
     test 'cancel should update status to cancelled, set cancelled_at, cancellation_reason, and log specific event' do
       sign_in_for_controller_test @trainer
       cancellation_reason = 'Constituent cancelled.'
@@ -822,8 +806,8 @@ module Trainers
       assert_not_nil @training_session.cancelled_at
       assert_equal cancellation_reason, @training_session.cancellation_reason
       assert_equal 'trainer', @training_session.cancellation_initiator
-      assert_nil @training_session.notes # Ensure cleared
-      assert_nil @training_session.no_show_notes # Ensure cleared
+      assert_nil @training_session.notes
+      assert_nil @training_session.no_show_notes
       assert_redirected_to trainers_training_session_url(@training_session)
       assert_equal 'Training session cancelled successfully.', flash[:notice]
 
@@ -873,31 +857,27 @@ module Trainers
       end
 
       @training_session.reload
-      assert_equal 'scheduled', @training_session.status # Status should not change
+      assert_equal 'scheduled', @training_session.status
       assert_response :unprocessable_content
-      assert_includes @response.body, 'Failed to cancel training session:' # Check for error message in body
+      assert_includes @response.body, 'Failed to cancel training session:'
     end
 
-    # --- Index and Filter Action Tests ---
+    # Index and filter
 
-    # Basic reachability check
     test 'index should return success when signed in (basic check)' do
-      sign_in_for_controller_test @trainer # Uses ENV['TEST_USER_ID']
-      get trainers_training_sessions_url # Basic index route
-      # This action should redirect if no params, but we want to check if it's reachable (not 404)
-      # A 302 redirect to dashboard is expected success here, proving reachability.
+      sign_in_for_controller_test @trainer
+      get trainers_training_sessions_url
       assert_response :redirect
     end
 
     test 'index should redirect to dashboard if no filter params' do
       sign_in_for_controller_test @trainer
-      get trainers_training_sessions_url # No params
+      get trainers_training_sessions_url
       assert_redirected_to trainers_dashboard_url
     end
 
     test 'index should filter sessions if filter params are present (trainer)' do
       sign_in_for_controller_test @trainer
-      # Sessions are created in setup
       trainer_scheduled = @training_session
       trainer_completed = @completed_session
       other_trainer_scheduled = @other_trainer_session
@@ -913,7 +893,6 @@ module Trainers
 
     test 'index should filter sessions if filter params are present (admin)' do
       sign_in_for_controller_test @admin
-      # Sessions are created in setup
       trainer_scheduled = @training_session
       trainer_completed = @completed_session
       other_trainer_scheduled = @other_trainer_session
@@ -929,14 +908,13 @@ module Trainers
 
     test 'filter should filter sessions and render index (trainer)' do
       sign_in_for_controller_test @trainer
-      # Sessions are created in setup
       trainer_scheduled = @training_session
       trainer_completed = @completed_session
       other_trainer_scheduled = @other_trainer_session
 
       get filtered_trainers_training_sessions_url(status: 'scheduled', scope: 'mine')
       assert_response :success
-      assert_template :index # Should render index template
+      assert_template :index
       assert_equal 'mine', assigns(:current_scope)
       assert_equal 'scheduled', assigns(:current_status)
       assert_includes assigns(:training_sessions), trainer_scheduled
@@ -1003,7 +981,6 @@ module Trainers
 
     test 'filter should filter sessions and render index (admin)' do
       sign_in_for_controller_test @admin
-      # Sessions are created in setup
       trainer_scheduled = @training_session
       trainer_completed = @completed_session
       other_trainer_scheduled = @other_trainer_session
@@ -1042,8 +1019,7 @@ module Trainers
       assert_includes @response.body, 'Duration: 2.5 hours'
     end
 
-    # Add tests for requested, scheduled, completed, needs_followup actions if they are still used directly
-    # (The index/filter actions seem to be the primary way to view lists now, but double-check routes and usage)
+    # Add direct-route tests for requested, scheduled, completed, and needs_followup where coverage is missing.
 
     private
 

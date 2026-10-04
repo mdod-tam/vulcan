@@ -4,15 +4,12 @@ require 'test_helper'
 
 class PaperApplicationModeSwitchingTest < ActionDispatch::IntegrationTest
   setup do
-    @admin = create(:admin) # Use factory instead of fixture
+    @admin = create(:admin)
     sign_in_for_integration_test(@admin)
 
-    # Ensure necessary policies exist for income threshold check
-    # Using find_or_create_by! to prevent errors if policies already exist from previous test runs or setup.
     Policy.find_or_create_by!(key: 'fpl_2_person') { |policy| policy.value = '21150' }
     Policy.find_or_create_by!(key: 'fpl_modifier_percentage') { |policy| policy.value = '400' }
 
-    # Create sample proofs for testing using fixture files directly
     @income_proof_file = fixture_file_upload('test/fixtures/files/income_proof.pdf', 'application/pdf')
     @residency_proof_file = fixture_file_upload('test/fixtures/files/residency_proof.pdf', 'application/pdf')
   end
@@ -60,12 +57,12 @@ class PaperApplicationModeSwitchingTest < ActionDispatch::IntegrationTest
   end
 
   test 'paper application service properly handles mode switching between accept and reject' do
-    # Step 1: First create application with income proof attached but residency proof rejected
+    # Initial proof decisions
     post admin_paper_applications_path, params: {
       constituent: paper_self_applicant_params,
       application: paper_application_params,
       income_proof_action: 'accept',
-      income_proof: @income_proof_file, # Use fixture file directly
+      income_proof: @income_proof_file,
       residency_proof_action: 'reject',
       residency_proof_rejection_reason: 'missing_name'
     }
@@ -74,19 +71,14 @@ class PaperApplicationModeSwitchingTest < ActionDispatch::IntegrationTest
     application = Application.last
     assert_redirected_to admin_application_path(application)
 
-    # Verify income proof is attached
     assert application.income_proof.attached?
     assert_equal 'approved', application.income_proof_status
 
-    # Verify residency proof is rejected but not attached
     assert_not application.residency_proof.attached?
     assert_equal 'rejected', application.residency_proof_status
 
-    # Step 2: Switch the modes - reject income and accept residency
-    # Paper applications are created through admin/paper_applications but then become regular applications
-    # For updating proof status, we need to use the update_proof_status action
+    # Review updates use the regular application endpoint after paper creation.
 
-    # First, reject the income proof
     patch update_proof_status_admin_application_path(application), params: {
       proof_type: 'income',
       status: 'rejected',
@@ -95,13 +87,11 @@ class PaperApplicationModeSwitchingTest < ActionDispatch::IntegrationTest
     }
     assert_response :redirect
 
-    # For the residency proof, we need to first attach the file
-    # We'll use direct attachment instead of the service
+    # Approval requires an attachment. Attach residency proof before the review.
     application.residency_proof.attach(@residency_proof_file)
     application.update_column(:residency_proof_status, Application.residency_proof_statuses[:not_reviewed])
     application.reload
 
-    # Now we can approve the residency proof
     patch update_proof_status_admin_application_path(application), params: {
       proof_type: 'residency',
       status: 'approved'
@@ -110,43 +100,36 @@ class PaperApplicationModeSwitchingTest < ActionDispatch::IntegrationTest
     assert_response :redirect
     application.reload
 
-    # Verify income proof is now rejected and attachment is purged
     assert_not application.income_proof.attached?
     assert_equal 'rejected', application.income_proof_status
 
-    # Verify residency proof is now attached and approved
     assert application.residency_proof.attached?, 'Residency proof should be attached after approval'
     assert_equal 'approved', application.residency_proof_status
 
-    # Verify we have the correct proof reviews
     income_review = application.proof_reviews.find_by(proof_type: :income, status: :rejected, rejection_reason: 'expired')
     assert_not_nil income_review, "Should have an income proof review with rejection_reason 'expired'"
 
-    # We should have a proof review for the approved residency proof after the mode switch
-    # The ProofReviewer service creates a proof review with status 'approved' when approving a proof
+    # ProofReviewer creates the approval record.
     residency_approved_reviews = application.proof_reviews.where(proof_type: :residency, status: :approved)
 
-    # Check if we have any approved residency proof reviews
     assert residency_approved_reviews.exists?, 'Should have at least one approved residency proof review'
   end
 
   test 'paper application service properly handles invalid signed_ids' do
-    # This test verifies the service doesn't crash when given invalid signed_ids
     contact = unique_paper_contact
 
-    # Attempt to create application with invalid signed_id
     assert_no_difference ['User.count', 'Application.count', 'Event.count', 'ActiveStorage::Attachment.count'] do
       post admin_paper_applications_path, params: {
         constituent: paper_self_applicant_params(contact),
         application: paper_application_params,
         income_proof_action: 'accept',
-        income_proof_signed_id: 'invalid-signed-id-that-doesnt-exist', # Invalid signed_id
+        income_proof_signed_id: 'invalid-signed-id-that-doesnt-exist',
         residency_proof_action: 'reject',
         residency_proof_rejection_reason: 'missing_name'
       }
     end
 
-    # Should fail gracefully without stranding a user or partially persisted application.
+    # Refused input must not leave partial records.
     assert_response :unprocessable_content
     assert_select '[role=alert]', text: "Income proof: #{I18n.t('documents.refused.unavailable')}"
     assert_nil User.find_by(email: contact[:email])

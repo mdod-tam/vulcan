@@ -155,7 +155,7 @@ module Admin
       end
     end
 
-    # @return [User] The validated admin user
+    # @return [User] The current user, reloaded for legacy administrator types
     def validate_and_prepare_admin_user
       Rails.logger.info "Current user: #{current_user.inspect}; Current user type: #{current_user.type}, admin? method result: #{current_user.admin?}"
 
@@ -275,7 +275,8 @@ module Admin
       end
     end
 
-    # This flag adds the application to the evaluation queue. Evaluator assignment removes it.
+    # The request timestamp adds an approved application to the evaluation queue.
+    # Any evaluation created at or after the request closes it.
     def request_evaluation
       @application.request_evaluation!(actor: current_user)
       redirect_to admin_application_path(@application),
@@ -293,7 +294,7 @@ module Admin
 
     def update_certification_status
       status = @application.normalize_certification_status(params[:status])
-      # New certification files arrive only through upload_medical_certification
+      # This status action does not accept a new certification file.
       if @application.rejection_requested?(status, params)
         process_certification_rejection
       else
@@ -402,7 +403,7 @@ module Admin
         redirect_to admin_application_path(@application),
                     notice: t('.d_sign_request_pass')
       elsif result.data.is_a?(Hash) && result.data[:delivery_suppressed]
-        # Intentionally not sent, which is not a failure; staff can print the form instead.
+        # Delivery suppression permits staff to print the form.
         redirect_to admin_application_path(@application), alert: result.message
       else
         redirect_to admin_application_path(@application),
@@ -453,7 +454,7 @@ module Admin
       end
     end
 
-    # Lazy-loaded B snapshot charts (FY cohort by current status).
+    # Charts show the fiscal-year cohort by current status.
     def charts
       service_result = Applications::ReportingService.new.generate_index_chart_data
       @metrics = if service_result.is_a?(BaseService::Result) && service_result.success?
@@ -601,7 +602,7 @@ module Admin
 
     # Each action loads its additional associations.
     def set_application
-      # Preload attachment metadata to avoid N+1 queries without loading variants.
+      # The loader queries attachment metadata without variants or updates to association caches.
       @application = load_application_with_attachments(params[:id])
     rescue ActiveRecord::RecordNotFound
       redirect_to admin_applications_path, alert: t('.app_not_found')

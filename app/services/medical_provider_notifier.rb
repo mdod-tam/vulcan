@@ -1,6 +1,5 @@
 # frozen_string_literal: true
 
-# Service for notifying medical providers through different communication channels
 class MedicalProviderNotifier
   include SecureErrorSanitizer
 
@@ -18,13 +17,13 @@ class MedicalProviderNotifier
     @application = application
   end
 
-  # Notify the medical provider about a rejected certification.
-  # Fax is unavailable with the installed provider client. DocuSeal remains an explicit admin action.
+  # Attempts provider notification for a rejected certification.
+  # FaxService refuses fax delivery. DocuSeal remains an explicit admin action.
   # @param rejection_reason [String] The reason for rejection
   # @param admin [User] The admin who rejected the certification
   # @param notification_id [Integer, nil] Existing rejection notification id to enrich with delivery metadata
   # @param secure_upload_url [String, nil] Tokenized upload URL for email delivery only
-  # @return [Boolean] Whether the notification was sent successfully
+  # @return [Boolean] True if email submission or enqueue succeeds and metadata persistence does not fail
   def send_certification_rejection_notice(rejection_reason:, admin:, notification_id: nil, secure_upload_url: nil)
     Rails.logger.info "Notifying medical provider about certification rejection for Application ID: #{application.id}"
 
@@ -55,8 +54,8 @@ class MedicalProviderNotifier
       blob_id = metadata['blob_id'] if FAX_TERMINAL.include?(status)
       notification.update!(fax_status_attributes(metadata, status))
     end
-    # Do not hold the notification row across queue/provider I/O. A crash after the claim leaves
-    # an observable claimed attempt for staff; duplicate callbacks cannot silently replay it.
+    # Release the notification lock before queue or provider I/O.
+    # A crash after the claim leaves a visible attempt. Duplicate callbacks cannot replay that claim.
     queue_callback_fallback(notification, context) if context
     ActiveStorage::Blob.find_by(id: blob_id)&.purge_later if blob_id
   end
@@ -117,7 +116,6 @@ class MedicalProviderNotifier
     application.medical_provider_email.present?
   end
 
-  # Handle the result of delivery attempts
   def handle_delivery_result(delivery_result, notification_id: nil)
     update_notification_metadata(delivery_result, notification_id: notification_id)
     delivery_result[:success]
@@ -126,7 +124,6 @@ class MedicalProviderNotifier
     false
   end
 
-  # Update existing notification with delivery metadata
   def update_notification_metadata(delivery_result, notification_id: nil)
     notification = find_rejection_notification(notification_id)
 
@@ -165,7 +162,6 @@ class MedicalProviderNotifier
     end
   end
 
-  # Return a standard failure result
   def failure_result(error: nil, method: nil)
     sanitized_error = error.present? ? sanitize_secure_error_message(error) : nil
     {
@@ -175,7 +171,7 @@ class MedicalProviderNotifier
     }.compact
   end
 
-  # Notify the medical provider by email
+  # A secure URL requires immediate delivery. Other notices use the queue.
   # @param rejection_reason [String] The reason for rejection
   # @param admin [User] The admin who rejected the certification
   # @param secure_upload_url [String, nil] Tokenized upload URL for corrected certification upload
@@ -209,7 +205,7 @@ class MedicalProviderNotifier
       reason: error.reason, error: error.message }
   end
 
-  # Get the contact methods that were available for the medical provider
+  # Fax is unavailable, so only email can appear here.
   # @return [Array<String>] The available notification methods
   def notification_methods
     methods = []

@@ -45,17 +45,15 @@ module Applications
     end
 
     def find_existing_application
-      # Search in both user's own applications and applications they manage as guardian.
-      # No fallback to a new or resumed draft: the caller supplied an exact application id, so if
-      # it can't be found (or isn't owned/managed by current_user), autosave must fail closed rather
-      # than silently substituting a different draft.
+      # An explicit ID must select an application owned or managed by current_user.
+      # If the lookup fails, autosave must not substitute another draft.
       current_user.applications.find_by(id: params[:id]) ||
         current_user.managed_applications.find_by(id: params[:id])
     end
 
-    # Without an id this is only the applicant a draft is for. Whether that means resuming an
-    # existing draft, creating one, or refusing is decided under lock in
-    # lock_and_requalify_participant!, so concurrent first saves resolve to a single draft.
+    # Without an ID, this method selects the applicant.
+    # lock_and_requalify_participant! decides under lock whether to resume, create, or refuse a draft.
+    # Concurrent first saves therefore use one draft.
     def build_draft_application
       dependent_id = authorized_dependent_id
       return nil if dependent_id == :unauthorized
@@ -67,7 +65,6 @@ module Applications
       current_user.applications.new.tap do |app|
         apply_default_attributes(app)
 
-        # Set up dependent relationship if this is for a dependent
         if dependent_id.present?
           app.user_id = dependent_id
           app.managing_guardian_id = current_user.id
@@ -123,17 +120,11 @@ module Applications
       autosave_error_result('This field could not be saved')
     end
 
-    # Locks the target participant (and, for a dependent application, the guardian) through
-    # the shared merge-integrity primitive before any write, so a concurrent merge and a
-    # concurrent autosave can never interleave. For an application that already exists in the
-    # database, also locks and reloads it and rechecks it is still exactly the draft that was
-    # found -- never substituting a different one -- still belongs to the same participant
-    # (ownership itself could have been transferred by a merge in the window between the
-    # initial unlocked lookup and this lock being granted), and that any guardian relationship
-    # is still authorized. Without an id, resumes the actor's draft for this applicant from the
-    # now-locked inventory when one exists; otherwise checks the shared
-    # Application.sibling_application_eligibility_error policy against that inventory before a new
-    # draft is created.
+    # Shared participant locks serialize autosave with merges before any write.
+    # A merge can transfer ownership after the initial lookup.
+    # This method locks and reloads the exact existing draft, then verifies its owner and guardian authority.
+    # Without an ID, it resumes the actor's draft from the locked applicant inventory.
+    # A new draft must pass Application.sibling_application_eligibility_error against that inventory.
     def lock_and_requalify_participant!
       initial_target_id = @application.user_id
       guardian_ids = GuardianRelationship.where(dependent_id: initial_target_id).pluck(:guardian_id)
@@ -218,13 +209,11 @@ module Applications
     end
 
     def extract_attribute_name
-      # Handle nested medical provider attributes
       if field_name.include?('medical_provider_attributes') &&
          field_name =~ /medical_provider_attributes\]\[([^\]]+)\]/
         return "medical_provider_#{::Regexp.last_match(1)}"
       end
 
-      # Handle standard application fields
       return field_name[12..-2] if field_name.start_with?('application[') && field_name.end_with?(']')
 
       field_name
@@ -246,8 +235,7 @@ module Applications
       :ignored
     end
 
-    # Called only from within save_field's transaction, after lock_and_requalify_participant!
-    # has already locked and revalidated the target user and (if persisted) the application.
+    # save_field calls this inside its transaction after it locks and revalidates the user and any persisted application.
     def save_user_field(attribute)
       value = cast_user_field_value(attribute, field_value)
       was_new_record = @application.new_record?
@@ -262,9 +250,7 @@ module Applications
       { success: true }
     end
 
-    # Called only from within save_field's transaction, after lock_and_requalify_participant!
-    # has already locked and revalidated the target participant and (if persisted) the
-    # application itself.
+    # save_field calls this inside its transaction after it locks and revalidates the participant and any persisted application.
     def save_application_field(attribute)
       validation_result = validate_field_value(attribute)
       return validation_result unless validation_result[:success]
@@ -308,8 +294,7 @@ module Applications
       end
     end
 
-    # A cleared field is saved as cleared, as a full draft save would store it; otherwise the draft
-    # would keep the old number and bring it back on the next load.
+    # A cleared field must stay blank so the previous number does not return on the next load.
     def validate_field_value(attribute)
       return { success: true } if field_value.blank?
 

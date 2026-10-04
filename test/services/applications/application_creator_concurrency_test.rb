@@ -3,11 +3,8 @@
 require 'test_helper'
 
 module Applications
-  # Focused concurrency evidence for the portal-final-submission boundary (plan section 4,
-  # row 1): Applications::ApplicationCreator -- the real production path behind both the
-  # `create` and existing-draft `update` actions (the dead `submit` action deleted earlier
-  # this round never reached this code at all) -- and the merge service must serialize
-  # through User.lock_for_merge_integrity! on the applicant.
+  # ApplicationCreator and DuplicateMergeService share applicant locks for portal submission and merges.
+  # Portal create and draft update both call ApplicationCreator.
   class ApplicationCreatorConcurrencyTest < ActiveSupport::TestCase
     self.use_transactional_tests = false
 
@@ -54,18 +51,12 @@ module Applications
       cleanup_duplicate_review_test_data!(admin, canonical, duplicate)
     end
 
-    # The canonical submits here, not the duplicate. The duplicate is the subject of the open
-    # registration_soft_match case, and the PR5a pending-review gate blocks final submission for
-    # that subject until staff resolve it -- so "the subject submits, then a merge transfers that
-    # submission" is no longer a reachable flow. The canonical is still a merge participant (its
-    # application inventory is locked by the merge) and is never gated merely for being the matched
-    # candidate, so it proves the same ordering: the submission commits first, the merge waits on
-    # the shared rows, and the duplicate's separate application still transfers.
+    # The case gates its duplicate subject. The canonical applicant shares merge locks but remains eligible.
+    # This ordering lets submission commit before the duplicate's application transfers.
     test 'submission commits first: the merge then proceeds normally, transferring the duplicate application' do
       admin, canonical, duplicate, review_case = build_fixtures
       draft = create(:application, :draft, user: canonical)
-      # Archived, so the merge does not refuse for leaving the survivor with two active
-      # applications -- the transfer is what this asserts, not the eligibility policy.
+      # An archived duplicate application avoids a conflict with the canonical applicant's active submission.
       duplicate_application = create(:application, :archived, user: duplicate)
 
       holder_ready = Queue.new
@@ -340,12 +331,9 @@ module Applications
       User.find_by(id: user&.id)&.destroy
     end
 
-    # The pending-review gate reads the case without taking a lock of its own, on the argument that
-    # this transaction already holds the applicant's User row and every writer that can resolve a
-    # case -- DuplicateReviewCases::ResolutionService and Users::DuplicateMergeService -- acquires
-    # that same row first. That argument is load-bearing, so prove it rather than assert it: the
-    # submission must physically block on the resolution, and must then observe the committed
-    # outcome rather than the state it would have read a moment earlier.
+    # ApplicationCreator reads the case under the applicant's User lock.
+    # ResolutionService and DuplicateMergeService acquire that row before they resolve the case.
+    # The waiting submission must observe the committed resolution.
     test 'resolution commits first: the previously gated submission then blocks, sees it, and succeeds' do
       admin, canonical, duplicate, review_case = build_fixtures
       draft = create(:application, :draft, user: duplicate)
@@ -385,10 +373,8 @@ module Applications
       cleanup_duplicate_review_test_data!(admin, canonical, duplicate)
     end
 
-    # The mirror case is deliberately sequential, not a lock race: a gated submission raises and
-    # rolls back, so it holds nothing for a resolution to contend with. What matters is that the
-    # refusal is not retroactive -- it stands, leaves no side effects, and a later resolution then
-    # lets a fresh submission through.
+    # A refusal from the identity-review gate rolls back and releases its locks.
+    # This sequential case verifies that a later resolution permits a fresh submission.
     test 'submission refused first: the refusal stands and a later resolution unblocks it' do
       admin, canonical, duplicate, review_case = build_fixtures
       draft = create(:application, :draft, user: duplicate)

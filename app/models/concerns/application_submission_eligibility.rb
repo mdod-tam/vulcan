@@ -4,12 +4,11 @@ module ApplicationSubmissionEligibility
   extend ActiveSupport::Concern
 
   included do
-    # Allow the test suite to disable the waiting-period check globally.
+    # The test suite can disable the waiting-period rule globally.
     cattr_accessor :skip_wait_period_validation, default: false
   end
 
-  # Instance-level mirror of the +blocking_new_submission+ scope, for checking an
-  # already-loaded/locked record without an extra query.
+  # Mirrors the +blocking_new_submission+ scope for a loaded record without another query.
   def blocking_new_submission?
     !status_archived? && !status_rejected?
   end
@@ -20,26 +19,20 @@ module ApplicationSubmissionEligibility
   end
 
   class_methods do
-    # The draft a portal actor resumes instead of starting a second one, so portal autosave and the
-    # full form continue the same draft. Like the sibling check below, it reads the caller's locked
-    # inventory for the applicant, so a draft committed by a concurrent request is seen rather than
-    # duplicated.
+    # Portal autosave and the full form resume the same draft.
+    # Writers pass a locked applicant inventory so concurrent requests do not create duplicate drafts.
+    # The portal GET passes an unlocked inventory.
     def resumable_portal_draft(applications, actor_id:)
       Array(applications).select { |application| application.resumable_portal_draft_for?(actor_id) }
                          .max_by { |application| [application.created_at, application.id] }
     end
 
-    # The identity-review admission rule, in one place so the locked writer and the portal form
-    # cannot drift. Applications::ApplicationCreator asks under lock and refuses; the portal form
-    # asks on GET so it can warn and disable submission before the constituent selects documents a
-    # refusal would silently discard -- browsers cannot repopulate a file input. The unlocked read
-    # is advisory only; the locked one still decides.
+    # Applications::ApplicationCreator applies this rule under lock. The portal GET uses an advisory read.
+    # The form warns before document selection because browsers cannot repopulate a file input.
     #
-    # Only the +applicant+ is checked, never the acting guardian, and only an open
-    # +registration_soft_match+ case gates. Cases from the other live sources are staff review work
-    # rather than submission blockers, and the candidate account named by someone else's case is
-    # never gated merely for being matched. The durable open case is the authority, not
-    # +users.needs_duplicate_review+, which is a denormalized badge and can be cleared on its own.
+    # Only the +applicant+'s open +registration_soft_match+ case blocks submission.
+    # Cases for the acting guardian or another subject do not block it. Other case sources require staff review only.
+    # The durable case is authoritative. +users.needs_duplicate_review+ is a separate badge that can be cleared independently.
     def identity_review_pending_for?(applicant)
       return false if applicant.blank?
 
@@ -48,10 +41,9 @@ module ApplicationSubmissionEligibility
                          .exists?(source: :registration_soft_match)
     end
 
-    # Shared eligibility policy for "one active application, waiting-period" so portal final
-    # submission and portal autosave apply the same rule against their already-locked inventory.
-    # +applications+ is the caller's locked inventory for the applicant (any enumerable of
-    # Application records); +target_application+ is excluded from its own sibling check.
+    # Portal submission and autosave share the active-application and waiting-period rules.
+    # +applications+ contains the caller's locked Application records for the applicant.
+    # +target_application+ is excluded from the sibling check.
     def sibling_application_eligibility_error(applications, target_application:)
       siblings = Array(applications).select(&:persisted?).reject { |app| app.id == target_application.id }
       has_blocking_sibling = siblings.any?(&:blocking_new_submission?)

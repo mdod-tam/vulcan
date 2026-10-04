@@ -10,16 +10,13 @@ module Evaluators
                   only: %i[edit update schedule reschedule submit_report cancel no_show request_additional_info]
 
     def index
-      # Redirect to dashboard for main entry point
-      # If specific filters are applied, still show the filtered list
+      # Unfiltered visits enter through the dashboard.
       if params[:status].present? || params[:scope].present? || params[:filter].present?
         scope_param = params[:scope] || (current_user.admin? ? 'all' : 'mine')
         status_param = params[:status]
 
-        # Apply filters
         @evaluations = filter_evaluations(scope_param, status_param)
 
-        # Set current selections for UI state
         @current_scope = scope_param
         @current_status = status_param
       else
@@ -27,15 +24,12 @@ module Evaluators
       end
     end
 
-    # New filter action to handle combined scope + status filtering
     def filter
       scope_param = params[:scope] || (current_user.admin? ? 'all' : 'mine')
       status_param = params[:status]
 
-      # Apply filters
       @evaluations = filter_evaluations(scope_param, status_param)
 
-      # Set current selections for UI state
       @current_scope = scope_param
       @current_status = status_param
 
@@ -97,7 +91,6 @@ module Evaluators
 
     def show
       EmailDelivery::Visibility.preload([@evaluation])
-      # @evaluation is set by set_evaluation
       prepare_show_context
     end
 
@@ -106,7 +99,7 @@ module Evaluators
     end
 
     def edit
-      # @evaluation is set by set_evaluation
+      # set_evaluation supplies the scoped record before implicit rendering.
     end
 
     def create
@@ -136,8 +129,7 @@ module Evaluators
       if @evaluation.update(supplemental_notes_params)
         redirect_to evaluators_evaluation_path(@evaluation), notice: 'Evaluation updated successfully.'
       else
-        # If updating from the show page forms, we want to re-render show with errors
-        # rather than the generic edit page
+        # Supplemental notes come from the show page. Return validation errors there.
         prepare_show_context
         flash.now[:alert] = "Failed to update evaluation: #{@evaluation.errors.full_messages.to_sentence}"
         render :show, status: :unprocessable_content
@@ -223,11 +215,9 @@ module Evaluators
     end
 
     def set_evaluation
-      # If the current user is an admin, find the evaluation directly by ID
       @evaluation = if current_user.admin?
                       Evaluation.find(params[:id])
                     else
-                      # For evaluators, find only their own evaluations
                       current_user.evaluations.find(params[:id])
                     end
     rescue ActiveRecord::RecordNotFound
@@ -291,24 +281,19 @@ module Evaluators
     end
 
     def filter_evaluations(_scope, status)
-      # Base query - either all sessions or just mine
       base_query = if current_user.admin?
-                     # For administrators, they don't have an 'evaluations' association
-                     # So regardless of scope, we start with all evaluations
+                     # The scope parameter does not restrict administrator results.
                      Evaluation.all
                    else
-                     # For regular evaluators, use their association
                      current_user.evaluations
                    end
 
-      # Apply status filter if provided
       filtered_query = if status.present?
                          base_query.where(status: status.to_sym)
                        else
                          base_query
                        end
 
-      # Apply appropriate order based on status
       ordered_query =
         case status
         when 'completed'
@@ -318,13 +303,11 @@ module Evaluators
         when 'requested'
           filtered_query.order(created_at: :desc)
         when 'no_show', 'cancelled', nil, ''
-          # Fall through to default
           nil
         end
 
       ordered_query ||= filtered_query.order(updated_at: :desc)
 
-      # Include only constituent since that's all we use in the view
       ordered_query.includes(:constituent)
     end
 

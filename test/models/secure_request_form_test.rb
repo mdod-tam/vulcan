@@ -106,9 +106,7 @@ class SecureRequestFormTest < ActiveSupport::TestCase
     assert_equal [form], found.to_a
   end
 
-  # -----------------------------------------------------------------------
-  # Token digesting and resolution
-  # -----------------------------------------------------------------------
+  # Token digests and resolution
 
   test 'from_public_token resolves the correct record via SHA-256 digest' do
     raw_token = SecureRequestForm.generate_public_token
@@ -137,9 +135,7 @@ class SecureRequestFormTest < ActiveSupport::TestCase
                      SecureRequestForm.digest_public_token(token_b)
   end
 
-  # -----------------------------------------------------------------------
   # Lifecycle predicates: revoked?
-  # -----------------------------------------------------------------------
 
   test 'revoked? is true when status is revoked' do
     form = build(:secure_request_form, :revoked)
@@ -159,9 +155,7 @@ class SecureRequestFormTest < ActiveSupport::TestCase
     assert_not_predicate form, :revoked?
   end
 
-  # -----------------------------------------------------------------------
   # Lifecycle predicates: submitted?
-  # -----------------------------------------------------------------------
 
   test 'submitted? is true when status is submitted' do
     form = build(:secure_request_form, :submitted)
@@ -181,9 +175,7 @@ class SecureRequestFormTest < ActiveSupport::TestCase
     assert_not_predicate form, :submitted?
   end
 
-  # -----------------------------------------------------------------------
   # Lifecycle mutations: mark_submitted! and revoke!
-  # -----------------------------------------------------------------------
 
   test 'mark_submitted! sets status to submitted and records submitted_at' do
     form = create(:secure_request_form)
@@ -207,9 +199,7 @@ class SecureRequestFormTest < ActiveSupport::TestCase
     end
   end
 
-  # -----------------------------------------------------------------------
   # display_status derivation
-  # -----------------------------------------------------------------------
 
   test 'display_status returns :submitted for a submitted form' do
     form = build(:secure_request_form, :submitted)
@@ -235,9 +225,7 @@ class SecureRequestFormTest < ActiveSupport::TestCase
     assert_equal :active, form.display_status
   end
 
-  # -----------------------------------------------------------------------
-  # active_for_public_use? vs active?
-  # -----------------------------------------------------------------------
+  # active_for_public_use? and active?
 
   test 'active_for_public_use? and active? agree for a newly sent form' do
     form = build(:secure_request_form)
@@ -264,9 +252,7 @@ class SecureRequestFormTest < ActiveSupport::TestCase
     assert_not_predicate form, :active_for_public_use?
   end
 
-  # -----------------------------------------------------------------------
-  # Multi-recipient batch: shared request_batch_id, independent revocation
-  # -----------------------------------------------------------------------
+  # Forms in one batch share request_batch_id. Each form has independent revocation.
 
   test 'revoking one form does not revoke a sibling form from the same batch' do
     application = create(:application)

@@ -29,8 +29,7 @@ export default class extends Controller {
   }
 
   update() {
-    // While Turbo submits the form (aria-busy), the autosave controller keeps controls disabled.
-    // Do not change them here.
+    // Autosave keeps controls disabled during Turbo submission. Do not override that state while aria-busy is true.
     if (this.element.getAttribute("aria-busy") === "true") return
     this._syncConditionalRequiredControls()
 
@@ -62,11 +61,8 @@ export default class extends Controller {
     }
   }
 
-  // A server-set reason the form may not be submitted no matter how completely it is filled in --
-  // today, an identity review the constituent cannot resolve themselves. Completeness checks
-  // cannot express this: they only ever ask whether the person supplied everything, and here they
-  // have. Returns null when there is no such block, so an empty attribute cannot silently
-  // become one.
+  // The server can block submission independently of form completeness, such as for pending identity review.
+  // An empty attribute must not create a block.
   _hardBlockMessage() {
     const message = this.element.dataset.finalSubmitGateBlockedMessage
     return message ? message : null
@@ -100,19 +96,15 @@ export default class extends Controller {
 
         field.required = required
         field.setAttribute("aria-required", required ? "true" : "false")
-        // A control whose value is cleared on every update must not stay operable: leaving it
-        // enabled invites a selection that is silently discarded. Disabling also keeps it out of
-        // _enabledVisibleFields, so the gate never waits on a field it just blanked, and out of
-        // the submitted params, which is the intended "no phone type survives" outcome.
+        // Disable cleared controls so users cannot select a value that the next update discards.
+        // Disabled controls do not block readiness or submit parameters, so no phone type survives this branch.
         field.disabled = !required
         this._conditionalRequiredSourceValues.set(key, selectedValue)
       })
   }
 
-  // "Complete every required decision" does not say which decision is missing. When a form opts
-  // in by setting a detail template, name the incomplete groups. Forms that do not set it keep
-  // the previous message verbatim -- this controller is shared with the constituent portal,
-  // where an English string composed in JavaScript would bypass the view's own localization.
+  // Forms can supply a detail template to name incomplete groups.
+  // Without that template, preserve the base message so JavaScript does not bypass the portal view's localization.
   _incompleteMessage() {
     const base = this.element.dataset.finalSubmitGateIncompleteMessage ||
       "Complete all required confirmations before submitting."
@@ -140,9 +132,8 @@ export default class extends Controller {
     return [...new Set(labels.filter(Boolean))]
   }
 
-  // Grouped inputs are named by their enclosing fieldset's legend -- an individual radio's own
-  // label identifies one option ("Subject #5: ..."), not the decision. Single controls are named
-  // by their own label, which is more specific than the surrounding group.
+  // A fieldset legend names the decision for grouped inputs. A radio label names only one option.
+  // Single controls use their own label when available.
   _groupLabelFor(element) {
     if (!element) return null
 

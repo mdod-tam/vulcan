@@ -1,7 +1,6 @@
-// Shared utility for income threshold calculations
 
 /**
- * Calculate the income threshold for a given household size.
+ * Calculates the threshold from base FPL and the policy percentage.
  * @param {Object} params
  * @param {Object.<string|number, number>} params.baseFplBySize - Map of household size (1..8) to base FPL amount
  * @param {number} params.modifierPercent - Policy modifier percentage (e.g., 400 for 400%)
@@ -15,17 +14,16 @@ export function calculateThreshold({ baseFplBySize, modifierPercent, householdSi
     return 0;
   }
 
-  // Support both numeric and string keys ("1".."8")
   const base = baseFplBySize[sizeNum] || baseFplBySize[String(sizeNum)] || 0;
   const modifier = typeof modifierPercent === 'number' && !Number.isNaN(modifierPercent)
     ? modifierPercent
-    : 400; // sensible default
+    : 400; // Default to 400% of base FPL.
 
   return base * (modifier / 100);
 }
 
 /**
- * Determine if the income exceeds the calculated threshold.
+ * Returns true when income exceeds the calculated threshold.
  * @param {Object} params
  * @param {Object.<string|number, number>} params.baseFplBySize
  * @param {number} params.modifierPercent
