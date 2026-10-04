@@ -1,10 +1,9 @@
 # frozen_string_literal: true
 
 Rails.application.routes.draw do
-  # Handle favicon requests silently to prevent routing errors in tests
+  # Browsers request this icon even when tests do not provide one.
   get '/favicon.ico', to: proc { [204, {}, []] }
 
-  # Test routes (only in test environment)
   get 'test/auth_status', to: 'test#auth_status' if Rails.env.test?
   post 'test/set_session', to: 'test#set_session' if Rails.env.test?
 
@@ -32,10 +31,9 @@ Rails.application.routes.draw do
   get 'sign_in', to: 'sessions#new'
   post 'sign_in', to: 'sessions#create'
   delete 'sign_out', to: 'sessions#destroy'
-  get 'sign_out', to: 'sessions#destroy' # Allow GET for browsers without JS or direct URL access
+  get 'sign_out', to: 'sessions#destroy' # Retain direct sign-out links.
   get 'sessions', to: 'sessions#index'
 
-  # Identity namespace for authentication-related actions
   namespace :identity do
     resources :password_resets, only: %i[edit update], param: :token
   end
@@ -46,13 +44,12 @@ Rails.application.routes.draw do
   resource :password, only: %i[new create edit update]
   resource :profile, only: %i[edit update], controller: 'users'
 
-  # Two-Factor Authentication (consolidated approach)
+  # Two-Factor Authentication
   resource :two_factor_authentication, only: [] do
     get :setup
     get :verify
     post :verify_code
 
-    # Primary verification routes
     get 'verify/:type', to: 'two_factor_authentications#verify_method', as: :verify_method
     post 'verify/:type', to: 'two_factor_authentications#process_verification', as: :process_verification
     get 'verification_options/:type', to: 'two_factor_authentications#verification_options', as: :verification_options
@@ -65,12 +62,10 @@ Rails.application.routes.draw do
     delete 'credentials/:type/:id', to: 'two_factor_credentials#destroy_credential', as: :destroy_credential
     get 'credentials/:type/success', to: 'two_factor_credentials#credential_success', as: :credential_success
 
-    # SMS specific routes
     get 'credentials/sms/verify', to: 'two_factor_credentials#verify_pending_sms_credential', as: :verify_pending_sms_credential
     post 'credentials/sms/confirm', to: 'two_factor_credentials#confirm_pending_sms_credential', as: :confirm_pending_sms_credential
     post 'credentials/sms/resend', to: 'two_factor_credentials#resend_pending_sms_code', as: :resend_pending_sms_code
 
-    # WebAuthn specific routes
     post 'credentials/webauthn/options', to: 'two_factor_credentials#webauthn_creation_options', as: :webauthn_creation_options
   end
 
@@ -168,7 +163,7 @@ Rails.application.routes.draw do
         post :reject_for_income
         get :dependent_form
         get :recipient_preference
-        post :identity_review # Compatibility for already-open PR 205 forms.
+        post :identity_review # Legacy forms continue to the canonical create-time review.
       end
     end
 
@@ -187,7 +182,7 @@ Rails.application.routes.draw do
       member do
         post :assign_voucher
         post :request_documents
-        post :review_proof # if you're handling via standard POST or GET
+        post :review_proof
         post :update_proof_status
         patch :approve
         patch :reject
@@ -229,7 +224,6 @@ Rails.application.routes.draw do
       end
     end
 
-    # Application Analytics
     get 'application_analytics/pain_points', to: 'application_analytics#pain_points'
 
     resource :email_delivery_control, only: :update
@@ -261,7 +255,7 @@ Rails.application.routes.draw do
     resources :policies, only: %i[index show edit update create] do
       collection do
         get :changes
-        patch :bulk_update # Add route for bulk updates
+        patch :bulk_update
       end
     end
 
@@ -358,7 +352,6 @@ Rails.application.routes.draw do
       end
 
       collection do
-        # Status filters
         get :requested
         get :scheduled
         get :pending
@@ -371,7 +364,6 @@ Rails.application.routes.draw do
     end
   end
 
-  # Trainers routes
   namespace :trainers do
     resource :dashboard, only: [:show], controller: :dashboards
 
@@ -384,7 +376,7 @@ Rails.application.routes.draw do
         get :scheduled
         get :completed
         get :needs_followup
-        get 'filter(/:scope)(/:status)', to: 'training_sessions#filter', as: :filtered # Add filter route
+        get 'filter(/:scope)(/:status)', to: 'training_sessions#filter', as: :filtered
       end
       member do
         patch :update_status
@@ -420,7 +412,6 @@ Rails.application.routes.draw do
     resources :invoices, only: %i[index show]
   end
 
-  # New constituent_portal namespace (replacing constituent)
   namespace :constituent_portal do
     resource :dashboard, only: [:show]
     resources :dependents
@@ -432,7 +423,7 @@ Rails.application.routes.draw do
       member do
         patch :autosave_field
         post :resubmit_proof
-        post :update # Handle form submissions that POST to update path
+        post :update # Accept POST from application forms.
         post :request_training
       end
 
@@ -445,7 +436,6 @@ Rails.application.routes.draw do
     resources :evaluations, only: %i[index show]
     resources :products, only: %i[index show]
 
-    # Redirect old devices routes to products
     get '/devices', to: redirect('/constituent_portal/products')
     get '/devices/:id', to: redirect('/constituent_portal/products/%<id>s')
   end

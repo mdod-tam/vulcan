@@ -5,25 +5,20 @@ describe('Visibility Utility', () => {
   let consoleWarnSpy
 
   beforeEach(() => {
-    // Create a fresh DOM element for each test
     element = document.createElement('div')
     element.classList.add('test-element')
     document.body.appendChild(element)
     
-    // Mock console.warn to test deprecation warnings
     consoleWarnSpy = jest.spyOn(console, 'warn').mockImplementation(() => {})
     
-    // Reset deprecation warning state for each test
     _resetLegacyWarnings()
   })
 
   afterEach(() => {
-    // Clean up DOM
     if (element.parentNode) {
       element.parentNode.removeChild(element)
     }
     
-    // Restore console.warn
     consoleWarnSpy.mockRestore()
   })
 
@@ -119,7 +114,6 @@ describe('Visibility Utility', () => {
       expect(select).not.toHaveClass('hidden')
       expect(select.hasAttribute('required')).toBe(true)
       
-      // Cleanup
       document.body.removeChild(input)
       document.body.removeChild(div)
       document.body.removeChild(select)
@@ -150,7 +144,7 @@ describe('Visibility Utility', () => {
       )
     })
 
-    test('only shows deprecation warning once per caller', () => {
+    test('shows one deprecation warning across repeated calls', () => {
       legacyToggleHidden(element, false)
       legacyToggleHidden(element, true)
       
@@ -264,17 +258,14 @@ describe('Visibility Utility', () => {
       form.appendChild(input)
       document.body.appendChild(form)
       
-      // Initially hide and make not required
       setVisible(input, false, { required: false })
       expect(input).toHaveClass('hidden')
       expect(input.hasAttribute('required')).toBe(false)
       
-      // Show and make required
       setVisible(input, true, { required: true })
       expect(input).not.toHaveClass('hidden')
       expect(input.hasAttribute('required')).toBe(true)
       
-      // Hide and remove required
       setVisible(input, false, { required: false })
       expect(input).toHaveClass('hidden')
       expect(input.hasAttribute('required')).toBe(false)
@@ -294,11 +285,9 @@ describe('Visibility Utility', () => {
         document.body.appendChild(el)
       })
       
-      // Hide all
       elements.forEach(el => setVisible(el, false))
       elements.forEach(el => expect(el).toHaveClass('hidden'))
       
-      // Show some with different options
       setVisible(elements[0], true)
       setVisible(elements[1], true, { required: true })
       setVisible(elements[2], false, { required: false })
@@ -312,7 +301,6 @@ describe('Visibility Utility', () => {
       expect(elements[2]).toHaveClass('hidden')
       expect(elements[2].hasAttribute('required')).toBe(false)
       
-      // Cleanup
       elements.forEach(el => document.body.removeChild(el))
     })
 
@@ -325,20 +313,17 @@ describe('Visibility Utility', () => {
       document.body.appendChild(checkbox)
       document.body.appendChild(dependentField)
       
-      // Simulate checkbox change handler
       const handleCheckboxChange = () => {
         const isChecked = checkbox.checked
         setVisible(dependentField, !isChecked, { required: !isChecked })
       }
       
-      // Initially unchecked - field should be visible and required
       checkbox.checked = false
       handleCheckboxChange()
       
       expect(dependentField).not.toHaveClass('hidden')
       expect(dependentField.hasAttribute('required')).toBe(true)
       
-      // Check the box - field should be hidden and not required
       checkbox.checked = true
       handleCheckboxChange()
       
@@ -368,7 +353,6 @@ describe('Visibility Utility', () => {
       document.body.appendChild(section1)
       document.body.appendChild(section2)
       
-      // Simulate radio change
       radio1.checked = true
       radio2.checked = false
       
@@ -378,7 +362,6 @@ describe('Visibility Utility', () => {
       expect(section1).not.toHaveClass('hidden')
       expect(section2).toHaveClass('hidden')
       
-      // Switch selection
       radio1.checked = false
       radio2.checked = true
       
@@ -388,7 +371,6 @@ describe('Visibility Utility', () => {
       expect(section1).toHaveClass('hidden')
       expect(section2).not.toHaveClass('hidden')
       
-      // Cleanup
       const toRemove = [radio1, radio2, section1, section2]
       toRemove.forEach(el => {
         if (el && el.parentNode === document.body) {
@@ -420,7 +402,6 @@ describe('Visibility Utility', () => {
     })
 
     test('handles required attribute with different values', () => {
-      // Test various ways required might be set
       element.setAttribute('required', '')
       setVisible(element, true, { required: false })
       expect(element.hasAttribute('required')).toBe(false)
@@ -435,11 +416,9 @@ describe('Visibility Utility', () => {
     })
 
     test('handles elements already in correct state', () => {
-      // Element already visible
       setVisible(element, true)
       expect(element).not.toHaveClass('hidden')
       
-      // Element already hidden
       element.classList.add('hidden')
       setVisible(element, false)
       expect(element).toHaveClass('hidden')

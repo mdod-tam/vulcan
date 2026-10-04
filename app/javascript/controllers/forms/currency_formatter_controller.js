@@ -1,10 +1,7 @@
 import { Controller } from "@hotwired/stimulus"
 
 /**
- * Currency Formatter Controller
- * 
- * Handles currency formatting for input fields while preserving
- * raw numeric values for validation and processing.
+ * Parses currency input, stores numeric values, and announces formatted amounts.
  */
 export default class extends Controller {
   static targets = ["input"]
@@ -16,7 +13,7 @@ export default class extends Controller {
   }
 
   connect() {
-    // Store bound method references for proper cleanup
+    // Listener removal needs the same bound functions.
     this._boundFormatCurrency = this.formatCurrency.bind(this)
     this._boundHandleInput = this.handleInput.bind(this)
     
@@ -42,10 +39,9 @@ export default class extends Controller {
   }
 
   handleInput(event) {
-    // Store raw value immediately for validation purposes
     this.storeRawValue(event.target)
     
-    // Dispatch input event for other controllers (like income validation)
+    // Income validation consumes the rawValueUpdated event.
     this.dispatch("rawValueUpdated", {
       detail: { 
         rawValue: this.extractRawValue(event.target.value),
@@ -58,17 +54,14 @@ export default class extends Controller {
     const input = event.target
     const value = input.value.trim()
     
-    // Skip if empty
     if (!value) return
     
     const numericValue = this.extractRawValue(value)
     
-    // Only proceed if it's a valid number
     if (!isNaN(numericValue) && numericValue >= 0) {
       this.storeRawValue(input, numericValue)
       this.announceFormattedValue(numericValue)
       
-      // Dispatch formatting event
       this.dispatch("formatted", {
         detail: {
           rawValue: numericValue,
@@ -79,7 +72,6 @@ export default class extends Controller {
   }
 
   extractRawValue(value) {
-    // Remove all non-numeric characters except decimal point and minus sign
     const cleaned = value.toString().replace(/[^\d.-]/g, '')
     return parseFloat(cleaned) || 0
   }
@@ -106,18 +98,15 @@ export default class extends Controller {
   }
 
   announceToScreenReader(message) {
-    // ✅ Use centralized accessibility announcer pattern
-    // Dispatch event for the accessibility-announcer controller to handle
     this.dispatch("announce", {
       detail: { message },
       bubbles: true
     })
     
-    // ✅ Fallback: Create announcer if accessibility controller isn't available
+    // The currency live region is independent of accessibility-announcer.
     this.ensureAnnouncerExists()
     const announcer = this.getAnnouncer()
     if (announcer) {
-      // Clear and set new message
       announcer.textContent = ''
       setTimeout(() => {
         announcer.textContent = message
@@ -125,7 +114,6 @@ export default class extends Controller {
     }
   }
 
-  // ✅ Centralized announcer management (fallback when accessibility controller unavailable)
   ensureAnnouncerExists() {
     if (!this.getAnnouncer()) {
       this.createAnnouncer()
@@ -144,7 +132,6 @@ export default class extends Controller {
     return document.getElementById('currency-announcer')
   }
 
-  // Action methods
   formatAction(event) {
     this.formatCurrency(event)
   }
@@ -158,7 +145,6 @@ export default class extends Controller {
     }
   }
 
-  // Public API for other controllers
   getRawValue() {
     if (!this.hasInputTarget) return 0
     

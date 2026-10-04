@@ -23,12 +23,8 @@ module Admin
       'manual_review' => 'Manual review'
     }.freeze
 
-    # `resolved_ignored` records keep-separate decisions. Calling it "Ignored" contradicted
-    # the determination shown beside it on the resolution summary.
-    # "Resolved without merge" is accurate for both the current outcome and any legacy row.
-    #
-    # `resolved_approved` keeps its own label: nothing writes that status any more, but existing
-    # rows must still render truthfully rather than being retitled after the fact.
+    # resolved_ignored includes keep-separate decisions. Use a label that does not imply staff ignored the case.
+    # Preserve the Approved label for legacy resolved_approved rows.
     STATUS_LABELS = {
       'open' => 'Open',
       'resolved_approved' => 'Approved',
@@ -48,9 +44,7 @@ module Admin
     NO_PHONE = 'No phone on file'
     NO_ADDRESS = 'No address on file'
 
-    # Derived from the server-owned allowlist Users::DuplicateMergeService validates against,
-    # so the form can never offer a phone_type the service rejects -- nor silently stop
-    # offering one it accepts.
+    # The form and merge service share the same allowlist of telephone routes.
     def duplicate_review_phone_type_options
       User::REAL_PHONE_TYPES.map { |type| [PHONE_TYPE_LABELS.fetch(type, type.humanize), type] }
     end
@@ -71,10 +65,8 @@ module Admin
       value ? 'Yes' : 'No'
     end
 
-    # A queue row represents one durable case, not one subject record. Keep the subject and every
-    # recorded candidate together so two exact-pair cases sharing a subject cannot look like a
-    # duplicated person row. Retain missing IDs as bounded historical context when a linked user
-    # no longer exists.
+    # Keep case participants together to distinguish cases that share a subject.
+    # Retain stored IDs as historical context when a linked user no longer exists.
     def duplicate_review_case_participants(review_case)
       subject = { user: review_case.subject_user, constituent_id: review_case.subject_user_id }
       candidates = review_case.duplicate_review_case_candidates.map do |candidate|
@@ -84,8 +76,7 @@ module Admin
       [subject, *candidates]
     end
 
-    # Stored record truth (not the delivery/effective fallback). Synthetic placeholders
-    # are hidden so the queue never presents synthetic contact as a real fact.
+    # Display stored contact rather than delivery fallbacks. Hide synthetic placeholders.
     def stored_email_display(user)
       return NO_EMAIL if user.blank? || !user.real_email?
 
@@ -142,8 +133,7 @@ module Admin
       "#{user.full_name} (Constituent ID #{user.id})"
     end
 
-    # The controller preloads applications for every rendered comparison user, so repeated subject
-    # cards reuse the same bounded association data without another query.
+    # The detail controller preloads applications so repeated comparison cards reuse the association data.
     def duplicate_review_record_history(user)
       applications = user.applications.to_a
       {
@@ -154,7 +144,6 @@ module Admin
       }
     end
 
-    # Whether a recorded candidate link still points at an accessible, non-merged user.
     def candidate_link_state(candidate)
       return 'unavailable' if candidate.candidate_user_id.present? && candidate.candidate_user.nil?
       return 'no_link' if candidate.candidate_user_id.blank?
@@ -169,10 +158,7 @@ module Admin
       open_case ? admin_duplicate_review_path(open_case) : admin_duplicate_reviews_path
     end
 
-    # Surfaces the flag on the application page too, not just the user/queue pages.
-    # Staff working from an application (e.g. a soft-matched paper intake) would
-    # otherwise have no on-page signal that a duplicate review is pending for the
-    # applicant or their managing guardian.
+    # Application staff need the pending-review signal for the applicant or managing guardian.
     def duplicate_review_pending_badge(application)
       flagged_user = [application.user, application.managing_guardian].compact.find(&:needs_duplicate_review?)
       return if flagged_user.blank?

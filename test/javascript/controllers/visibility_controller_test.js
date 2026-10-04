@@ -12,7 +12,6 @@ describe("VisibilityController", () => {
   let statusElement
   
   beforeEach(() => {
-    // Set up DOM structure that matches what the controller expects
     document.body.innerHTML = `
       <div data-controller="visibility">
         <div class="relative">
@@ -31,7 +30,6 @@ describe("VisibilityController", () => {
       </div>
     `
     
-    // Set up Stimulus controller
     application = Application.start()
     application.register("visibility", VisibilityController)
     
@@ -47,7 +45,6 @@ describe("VisibilityController", () => {
     confirmationToggleButton = element.querySelectorAll("button[data-action*='togglePassword']")[1]
     statusElement = element.querySelector("#status")
     
-    // Mock setTimeout and clearTimeout
     jest.useFakeTimers()
   })
   
@@ -61,13 +58,10 @@ describe("VisibilityController", () => {
     const passwordField = document.getElementById("password")
     const toggleButton = document.querySelector('button[data-action*="togglePassword"]')
     
-    // Initial state
     expect(passwordField.type).toBe("password")
     
-    // Click the toggle button
     toggleButton.click()
     
-    // Password should be visible
     expect(passwordField.type).toBe("text")
     expect(toggleButton.getAttribute("aria-pressed")).toBe("true")
     expect(toggleButton.getAttribute("aria-label")).toBe("Hide password")
@@ -78,13 +72,10 @@ describe("VisibilityController", () => {
     const confirmationField = document.getElementById("confirmation")
     const confirmationToggleButton = document.querySelectorAll('button[data-action*="togglePassword"]')[1]
     
-    // Initial state
     expect(confirmationField.type).toBe("password")
     
-    // Click the toggle button
     confirmationToggleButton.click()
     
-    // Password should be visible
     expect(confirmationField.type).toBe("text")
     expect(confirmationToggleButton.getAttribute("aria-pressed")).toBe("true")
     expect(confirmationToggleButton.getAttribute("aria-label")).toBe("Hide password")
@@ -92,20 +83,15 @@ describe("VisibilityController", () => {
   })
   
   test("automatically hides password after timeout", () => {
-    // Set timeout value
     element.setAttribute("data-visibility-timeout-value", "5000")
     
-    // Click to show password
     toggleButton.click()
     
-    // Password should be visible
     expect(passwordField.type).toBe("text")
     expect(statusElement.textContent.trim()).toBe("Password is visible")
     
-    // Fast-forward time
     jest.advanceTimersByTime(5000)
     
-    // Password should be hidden again
     expect(passwordField.type).toBe("password")
     expect(toggleButton.getAttribute("aria-pressed")).toBe("false")
     expect(toggleButton.getAttribute("aria-label")).toBe("Show password")
@@ -114,94 +100,70 @@ describe("VisibilityController", () => {
   })
   
   test("clears timeout when toggling back to hidden", () => {
-    // Set timeout value
     element.setAttribute("data-visibility-timeout-value", "5000")
     
-    // Click to show password
     toggleButton.click()
     
-    // Password should be visible
     expect(passwordField.type).toBe("text")
     
-    // Click again to hide before timeout
     toggleButton.click()
     
-    // Password should be hidden
     expect(passwordField.type).toBe("password")
     
-    // Fast-forward time
     jest.advanceTimersByTime(5000)
     
-    // Password should still be hidden (no double-toggle)
     expect(passwordField.type).toBe("password")
   })
   
-  test("handles missing password field gracefully", () => {
-    // Remove the password field
+  test("does not throw when the password input is missing", () => {
     passwordField.remove()
     
-    // Click should not throw error
     expect(() => {
       toggleButton.click()
     }).not.toThrow()
   })
   
   test("cleans up timeout on disconnect", () => {
-    // Mock clearTimeout
     const originalClearTimeout = window.clearTimeout
     window.clearTimeout = jest.fn()
     
-    // Set timeout and show password
     element.setAttribute("data-visibility-timeout-value", "5000")
     toggleButton.click()
     
-    // Disconnect controller
     application.controllers[0].disconnect()
     
-    // Should have called clearTimeout
     expect(window.clearTimeout).toHaveBeenCalled()
     
-    // Restore original
     window.clearTimeout = originalClearTimeout
   })
   
-  test("works with multiple togglePassword buttons", () => {
-    // Initially password is hidden
+  test("toggles two password fields independently", () => {
     expect(passwordField.type).toBe("password")
     
-    // Click the first toggle button to show password
     toggleButton.click()
     expect(passwordField.type).toBe("text")
     
-    // Click the confirmation toggle button - this should work with the confirmation field
     confirmationToggleButton.click()
     expect(confirmationField.type).toBe("text")
     
-    // Click the first toggle button again to hide password
     toggleButton.click()
     expect(passwordField.type).toBe("password")
     
-    // Confirmation should still be visible
     expect(confirmationField.type).toBe("text")
   })
   
-  test("works without targets if they're not available", () => {
+  test("toggles an input without a field target", () => {
     const noTargetsField = document.getElementById("no-targets-field")
     const noTargetsButton = document.querySelectorAll('button[data-action*="togglePassword"]')[2]
     
-    // Initial state
     expect(noTargetsField.type).toBe("password")
     
-    // Click the toggle button
     noTargetsButton.click()
     
-    // Password should be visible
     expect(noTargetsField.type).toBe("text")
     
-    // Click again
     noTargetsButton.click()
     
-    // Password should be hidden again
     expect(noTargetsField.type).toBe("password")
   })
   
@@ -210,12 +172,10 @@ describe("VisibilityController", () => {
     const toggleButton = document.querySelector('button[data-action*="togglePassword"]')
     const statusElement = document.getElementById("status")
     
-    // Click the toggle button
     toggleButton.click()
     
     expect(statusElement.textContent).toBe("Password is visible")
     
-    // Click again to hide
     toggleButton.click()
     
     expect(statusElement.textContent).toBe("Password is hidden")

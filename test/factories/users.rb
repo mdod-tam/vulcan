@@ -7,24 +7,21 @@ FactoryBot.define do
     first_name { 'Test' }
     last_name { 'User' }
     sequence(:phone) { |n| "555-#{format('%03d', (n % 900) + 100)}-#{format('%04d', (n % 9000) + 1000)}" }
-    phone_type { 'voice' } # Default phone type
+    phone_type { 'voice' }
     date_of_birth { 30.years.ago }
     timezone { 'Eastern Time (US & Canada)' }
     locale { 'en' }
     email_verified { true }
     verified { true }
 
-    # Traits for system test compatibility
     trait :confirmed do
       confirmed_at { Time.current }
     end
 
-    # Alias for backward compatibility
     trait :confirmed_at do
       confirmed_at { Time.current }
     end
 
-    # Medical provider trait for backward compatibility
     trait :medical_provider do
       type { 'Users::MedicalProvider' }
       sequence(:email) { |n| "medical#{n}@example.com" }
@@ -38,12 +35,10 @@ FactoryBot.define do
       end
     end
 
-    # Trait to explicitly set active status on users
     trait :active do
       status { :active }
     end
 
-    # Traits to match separate factories for compatibility
     trait :evaluator do
       type { 'Users::Evaluator' }
       sequence(:email) { |n| "evaluator#{n}@example.com" }
@@ -75,7 +70,6 @@ FactoryBot.define do
       date_of_birth { 30.years.ago }
       timezone { 'Eastern Time (US & Canada)' }
       locale { 'en' }
-      # Ensure admin users are verified and active for login
       email_verified { true }
       verified { true }
       status { :active }
@@ -99,7 +93,7 @@ FactoryBot.define do
     end
 
     factory :trainer, class: 'Users::Trainer' do
-      # Add SecureRandom to ensure uniqueness across test runs, avoiding potential sequence reset issues or fixture conflicts
+      # Add randomness to reduce email collisions after a sequence reset.
       sequence(:email) { |n| "trainer_#{n}_#{SecureRandom.hex(4)}@example.com" }
       type { 'Users::Trainer' }
       first_name { 'Test' }
@@ -111,17 +105,17 @@ FactoryBot.define do
       end
     end
 
-    factory :constituent, class: 'Users::Constituent' do # Match class name used in controller/associations
+    factory :constituent, class: 'Users::Constituent' do
       first_name { 'Test' }
       last_name { 'Constituent' }
       sequence(:email) { |n| "constituent#{n}@example.com" }
-      type { 'Users::Constituent' } # Set type explicitly to match controller expectation
+      type { 'Users::Constituent' }
       physical_address_1 { '123 Main St' }
       city { 'Baltimore' }
       state { 'MD' }
       zip_code { '21201' }
 
-      # Set default disability to pass validation
+      # Supply a disability for application validation unless the caller supplies one.
       after(:build) do |constituent|
         unless constituent.hearing_disability ||
                constituent.vision_disability ||
@@ -140,7 +134,6 @@ FactoryBot.define do
         cognition_disability { true }
       end
 
-      # Trait for testing disability validation - no disabilities set
       trait :without_disabilities do
         after(:build) do |constituent|
           constituent.hearing_disability = false
@@ -151,7 +144,6 @@ FactoryBot.define do
         end
       end
 
-      # This trait creates a single dependent for the guardian.
       trait :as_guardian do
         transient do
           dependent_attributes { { first_name: 'Dependent', last_name: 'Child' } }
@@ -162,7 +154,6 @@ FactoryBot.define do
         end
       end
 
-      # This trait creates a single dependent with 'Legal Guardian' relationship.
       trait :as_legal_guardian do
         after(:create) do |guardian|
           dependent = create(:constituent, first_name: 'Dependent', last_name: 'Ward')
@@ -215,7 +206,7 @@ FactoryBot.define do
 
       trait :with_active_application do
         after(:create) do |constituent|
-          create(:application, user: constituent) # Might need adjustment if dependent has guardian
+          create(:application, user: constituent) # Review managing_guardian assignment if this constituent is a dependent.
         end
       end
 
@@ -229,7 +220,6 @@ FactoryBot.define do
         phone_type { 'voice' }
       end
 
-      # Phone type traits
       trait :voice_phone do
         phone_type { 'voice' }
       end
@@ -257,12 +247,8 @@ FactoryBot.define do
         phone_type { 'text' }
       end
 
-      # Trait for a user who is a guardian
-      # In the paper application context, guardians are created as Constituents.
-      # This trait is primarily to satisfy the `create(:user, :guardian)` call.
+      # Paper guardians are constituents. This trait changes names but creates no guardian relationship.
       trait :guardian do
-        # Add any specific guardian attributes here if needed in the future.
-        # For now, being a constituent is sufficient for the search.
         first_name { 'Guardian' }
         sequence(:last_name) { |n| "Test#{n}" }
       end
@@ -277,12 +263,12 @@ FactoryBot.define do
     phone_type { 'voice' }
     business_tax_id { "ABCDEF#{rand(100_000..999_999)}" }
     terms_accepted_at { Time.current }
-    vendor_authorization_status { :approved } # Default to an approved vendor
-    w9_status { :approved } # Default to W9 approved
+    vendor_authorization_status { :approved }
+    w9_status { :approved }
 
     after(:create) do |vendor|
       unless vendor.w9_form.attached?
-        # Temporarily skip the W9 callback during attachment
+        # Preserve this approved fixture while the attachment callback would mark a new upload for review.
         vendor.define_singleton_method(:update_w9_status_on_form_upload) { nil }
 
         vendor.w9_form.attach(
@@ -291,10 +277,9 @@ FactoryBot.define do
           content_type: 'application/pdf'
         )
 
-        # Set w9_status to approved after file attachment, bypassing callbacks
         vendor.update_column(:w9_status, :approved)
 
-        # Re-enable the callback for normal operation
+        # Restore the callback for later vendor updates.
         vendor.singleton_class.send(:remove_method, :update_w9_status_on_form_upload)
       end
     end

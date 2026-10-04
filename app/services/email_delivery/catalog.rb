@@ -1,13 +1,13 @@
 # frozen_string_literal: true
 
 module EmailDelivery
-  # Every email the application can send, and every notification action that may lead to one.
-  # A mailer action missing here is blocked at delivery and fails the catalog coverage test.
+  # Classifies mail, provider delivery, and notification actions.
+  # Delivery policy blocks uncataloged actions. The coverage test reports missing mailer actions.
   #
   # Routing:
-  #   :email_only  never prints; policy can stop it before it is queued
-  #   :preference  the action may print a letter instead, so only the final check stops email
-  #   :email       email, reported without the email_only route reason
+  #   :email_only  allows only email and supports policy refusal before enqueue
+  #   :preference  allows email or a letter, with controls for each channel
+  #   :email       records email without the email_only route reason
   module Catalog
     CATEGORIES = %w[
       proof registration voucher vendor certification training evaluation account_security application
@@ -17,8 +17,8 @@ module EmailDelivery
       def email_only? = routing == :email_only
     end
 
-    # Notification action => how NotificationService delivers it. adapter names the argument
-    # shape NotificationService builds; audit_only actions record a notification and send nothing.
+    # NotificationService uses adapter to select arguments for each mailer action.
+    # An audit_only action records a notification without delivery.
     NotificationAction = Data.define(:action, :mail_action, :adapter, :routing, :owner) do
       def audit_only? = mail_action.nil?
     end
@@ -79,13 +79,13 @@ module EmailDelivery
       'VoucherNotificationsMailer#voucher_expired' => [:voucher, :preference, 'voucher_notifications_voucher_expired'],
       'VoucherNotificationsMailer#voucher_expiring_soon' => [:voucher, :preference, 'voucher_notifications_voucher_expiring_soon'],
       'VoucherNotificationsMailer#voucher_redeemed' => [:voucher, :preference, 'voucher_notifications_voucher_redeemed'],
-      # Sent by DocuSeal, not Action Mailer; DocumentSigning::SubmissionService consults the policy.
+      # DocuSeal sends this request. DocumentSigning::SubmissionService applies the delivery policy.
       'DocuSeal#signing_request' => [:certification, :email_only, nil, 'DocumentSigning::SubmissionService']
     }.to_h do |key, (category, routing, template, owner)|
       [key, MailAction.new(key: key, category: category.to_s, routing: routing, template: template, owner: owner, essential: ESSENTIAL_ACTIONS[key])]
     end.freeze
 
-    # Provider/letter entrypoints share classification with mailers, but are not mailer methods.
+    # Provider and letter entrypoints share the delivery policy with mailers.
     PROVIDER_ACTIONS = {
       'SmsService#account_access' => [:account_security, :sms, nil, 'PasswordsController'],
       'SmsService#proof_resubmission' => [:proof, :sms, nil, PROOF_REVIEW_OWNER],
@@ -129,13 +129,13 @@ module EmailDelivery
       'documents_requested' => AUDIT_ONLY,
       'proof_approved' => AUDIT_ONLY,
       'medical_certification_approved' => AUDIT_ONLY,
-      # The rejection email needs a secure upload link, so only Vendors::RequestW9Resubmission sends it.
+      # Vendors::RequestW9Resubmission owns the secure link and rejection email.
       'w9_rejected' => AUDIT_ONLY
     }.to_h do |action, (mail_action, adapter, routing, owner)|
       [action, NotificationAction.new(action: action, mail_action: mail_action, adapter: adapter, routing: routing, owner: owner)]
     end.freeze
 
-    # Public methods that Action Mailer lists as actions only because a helper module was included.
+    # Exclude helper methods that Action Mailer lists as actions.
     HELPER_MODULES = %w[
       SecureErrorSanitizer
       ActionView::Helpers::NumberHelper
@@ -179,7 +179,6 @@ module EmailDelivery
       template_entry&.category
     end
 
-    # Template name => category, for grouping templates in the admin controls.
     def template_categories
       MAIL_ACTIONS.values.each_with_object({}) do |entry, categories|
         categories[entry.template] ||= entry.category if entry.template.present?

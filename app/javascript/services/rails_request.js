@@ -1,8 +1,7 @@
 import { FetchRequest } from "@rails/request.js"
 
 /**
- * Centralized Rails 8 request service
- * Handles common patterns: abort controllers, error handling, response parsing
+ * Shares request cancellation, error handling, and response parsing.
  */
 export class RailsRequestService {
   constructor() {
@@ -10,25 +9,23 @@ export class RailsRequestService {
   }
 
   /**
-   * Perform a Rails request with standard error handling
+   * Returns a success envelope or an aborted result. HTTP and network failures raise errors.
    * @param {Object} options Request configuration
-   * @returns {Promise<Object>} Parsed response data
+   * @returns {Promise<Object>} Success, data, and response, or success: false and aborted: true
    */
   async perform({ 
     method = 'get',
     url,
     body = null,
-    key = null, // Optional key for tracking/canceling specific requests
+    key = null, // Tracks cancellation when the service owns the AbortController
     signal = null,
     headers = {},
-    keepalive = false // Lets the browser finish the request after the page unloads
+    keepalive = false // Permits the request to continue after the page unloads
   }) {
-    // Cancel existing request with same key if provided
     if (key && this.activeRequests.has(key)) {
       this.cancel(key)
     }
 
-    // Create abort controller if not provided
     const controller = signal ? null : new AbortController()
     const finalSignal = signal || controller.signal
 
@@ -58,7 +55,6 @@ export class RailsRequestService {
 
       const data = await this.parseSuccessResponse(response)
       
-      // Clean up tracking
       if (key && this.activeRequests.get(key) === controller) {
         this.activeRequests.delete(key)
       }
@@ -66,7 +62,6 @@ export class RailsRequestService {
       return { success: true, data, response }
 
     } catch (error) {
-      // Clean up tracking
       if (key && this.activeRequests.get(key) === controller) {
         this.activeRequests.delete(key)
       }
@@ -122,9 +117,6 @@ export class RailsRequestService {
   }
 }
 
-/**
- * Custom error class for request errors
- */
 export class RequestError extends Error {
   constructor(message, status, data = {}) {
     super(message)
@@ -134,16 +126,15 @@ export class RequestError extends Error {
   }
 }
 
-// Export singleton instance
 export const railsRequest = new RailsRequestService()
 
-// Development-time guard to prevent HTML requests via railsRequest
+// Outside production, reject lowercase html in the singleton's explicit Accept header.
 if (process.env.NODE_ENV !== 'production') {
   const originalPerform = railsRequest.perform.bind(railsRequest)
   railsRequest.perform = async (opts = {}) => {
     const accept = (opts.headers && opts.headers.Accept) || ""
     if (/html/.test(accept)) {
-      throw new Error("Use Turbo frames/streams for HTML, not railsRequest. This service is for JSON APIs only.")
+      throw new Error("railsRequest rejects an explicit Accept header containing lowercase html outside production.")
     }
     return originalPerform(opts)
   }

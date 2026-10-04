@@ -6,19 +6,10 @@ require 'securerandom'
 require 'timeout'
 
 module DuplicateReconciliation
-  # Production-safe discovery probe that evaluates the state of duplicate review cases,
-  # review flags (needs_duplicate_review), dynamic matching volume, and guardian relationships.
-  #
-  # Design guarantees:
-  # 1. Zero in-memory quadratic expansion or unbounded array loading.
-  # 2. Database aggregates (COUNT, GROUP BY, HAVING, CTEs) execute in SQL.
-  # 3. Database-enforced read-only transaction (SET TRANSACTION ISOLATION LEVEL REPEATABLE READ READ ONLY).
-  # 4. Total task deadline actively enforced via dynamic per-query statement timeouts.
-  # 5. Default output is strictly aggregate, with zero PII, topology masking, and HMAC-keyed pseudonyms.
-  # 6. Correct flag-drift definition: counts constituents with needs_duplicate_review = true
-  #    who have neither an open case nor an unresolved current Name+DOB pair.
-  # 7. Fails closed if invoked within an open transaction to preserve top-level repeatable-read guarantees.
-  # SQL queries and CTE definitions for DiscoveryProbe
+  # SQL aggregates for cases, review flags, name/DOB matches, and guardian relationships.
+  # PostgreSQL uses a read-only repeatable-read transaction. Queries receive the remaining deadline as their statement timeout.
+  # Samples use configurable limits. Default output masks identifiers and omits raw contact and name values.
+  # Detailed output requires explicit opt-in. An existing transaction cannot supply the required top-level snapshot.
   module DiscoveryQueries
     NO_OPEN_CASE_SQL = <<~SQL.squish
       users.type = 'Users::Constituent'
@@ -142,8 +133,7 @@ module DuplicateReconciliation
       SQL
     end
 
-    # NO_OPEN_CASE_SQL excludes participants with pending work. Remaining recognized
-    # terminal pair evidence is resolved or stale in Population, not unreviewed.
+    # NO_OPEN_CASE_SQL excludes open-case participants. Terminal pair evidence excludes a current match from unreviewed work.
     def unresolved_match_sql
       <<~SQL.squish
         users.merged_into_user_id IS NULL

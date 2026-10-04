@@ -1,10 +1,7 @@
 import { Controller } from "@hotwired/stimulus"
 
 /**
- * Accessibility Announcer Controller
- * 
- * Provides centralized screen reader announcements and accessibility features
- * for dynamic content updates in forms and applications.
+ * Shares a live region for form validation and currency announcements.
  */
 export default class extends Controller {
   static values = {
@@ -15,7 +12,7 @@ export default class extends Controller {
   connect() {
     this.ensureAnnouncerExists()
     
-    // Store bound method references for proper cleanup
+    // Listener removal needs the same bound functions.
     this._boundHandleIncomeValidation = this.handleIncomeValidation.bind(this)
     this._boundHandleCurrencyFormat = this.handleCurrencyFormat.bind(this)
     
@@ -28,7 +25,6 @@ export default class extends Controller {
   }
 
   setupEventListeners() {
-    // Listen for custom events from other controllers
     this.element.addEventListener("income-validation:validated", this._boundHandleIncomeValidation)
     this.element.addEventListener("currency-formatter:formatted", this._boundHandleCurrencyFormat)
   }
@@ -38,7 +34,6 @@ export default class extends Controller {
     this.element.removeEventListener("currency-formatter:formatted", this._boundHandleCurrencyFormat)
   }
 
-  // Create or ensure the main announcer element exists
   ensureAnnouncerExists() {
     if (!this.getAnnouncer()) {
       this.createAnnouncer()
@@ -58,7 +53,6 @@ export default class extends Controller {
     return document.getElementById('accessibility-announcer')
   }
 
-  // Main announcement method
   announce(message, options = {}) {
     if (!message) return
     
@@ -68,19 +62,17 @@ export default class extends Controller {
     const urgency = options.urgency || (this.politeValue ? 'polite' : 'assertive')
     const delay = options.delay !== undefined ? options.delay : this.delayValue
     
-    // Update aria-live if different urgency is requested
     if (announcer.getAttribute('aria-live') !== urgency) {
       announcer.setAttribute('aria-live', urgency)
     }
     
-    // Clear existing content first
     announcer.textContent = ''
     
-    // Set new content after delay to ensure screen readers pick it up
+    // The delay separates the empty and populated live-region states.
     setTimeout(() => {
       announcer.textContent = message
       
-      // Auto-clear after 5 seconds to prevent stale announcements
+      // Remove the text only if it still matches this message.
       setTimeout(() => {
         if (announcer.textContent === message) {
           announcer.textContent = ''
@@ -89,7 +81,6 @@ export default class extends Controller {
     }, delay)
   }
 
-  // Handle income validation announcements
   handleIncomeValidation(event) {
     const { exceedsThreshold, threshold, householdSize } = event.detail
     
@@ -108,7 +99,6 @@ export default class extends Controller {
     }
   }
 
-  // Handle currency formatting announcements  
   handleCurrencyFormat(event) {
     const { formattedValue } = event.detail
     this.announce(`Annual income formatted as: ${formattedValue}`)
@@ -141,7 +131,7 @@ export default class extends Controller {
     this.announce(message, { urgency: 'polite' })
   }
 
-  // Utility methods for form interactions
+  // Announcements for form, page, modal, and loading states
   announceFieldValidation(fieldName, isValid, errorMessage = null) {
     if (isValid) {
       this.announce(`${fieldName} is valid.`)
@@ -183,7 +173,6 @@ export default class extends Controller {
     }
   }
 
-  // Clean up method
   cleanupAnnouncers() {
     const announcer = this.getAnnouncer()
     if (announcer) {
@@ -191,9 +180,7 @@ export default class extends Controller {
     }
   }
 
-  // Public API for other controllers
   static announceMessage(message, options = {}) {
-    // Static method for quick announcements without controller instance
     const announcer = document.getElementById('accessibility-announcer')
     if (announcer) {
       const delay = options.delay || 100

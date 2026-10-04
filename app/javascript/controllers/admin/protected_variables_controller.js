@@ -30,7 +30,6 @@ export default class extends Controller {
     this.editorTarget.addEventListener("dragover", (e) => this.handleDragOver(e))
     this.editorTarget.addEventListener("drop", (e) => this.handleDrop(e))
     this.textareaTarget.addEventListener("change", () => this.renderProtectedVariables())
-    // Handle variable dropdown selection
     this.variableSelectTarget.addEventListener("change", (e) => this.insertVariable(e))
     if (this.hasSubjectVariableSelectTarget) {
       this.subjectVariableSelectTarget.addEventListener("change", (e) => this.insertSubjectVariable(e))
@@ -43,7 +42,6 @@ export default class extends Controller {
   }
   
   handleKeydown(e) {
-    // Allow deleting selected variables with backspace/delete
     if ((e.key === 'Backspace' || e.key === 'Delete') && e.target.classList?.contains('protected-variable')) {
       e.preventDefault()
       e.target.remove()
@@ -51,16 +49,13 @@ export default class extends Controller {
       return
     }
     
-    // Prevent cursor inside variables
     this.preventCursorInVariable(e)
   }
   
   preventCursorInVariable(e) {
-    // Only prevent if directly clicking on a protected variable
     if (e.target.classList?.contains("protected-variable")) {
       e.preventDefault()
       
-      // Move cursor to after the variable
       const selection = window.getSelection()
       const range = document.createRange()
       const nextNode = e.target.nextSibling || e.target.parentNode.nextSibling
@@ -80,7 +75,6 @@ export default class extends Controller {
     e.dataTransfer.effectAllowed = 'move'
     e.dataTransfer.setData('text/html', e.target.outerHTML)
     e.dataTransfer.setData('text/plain', e.target.textContent)
-    // Store reference to the original element so we can remove it later
     this.draggedElement = e.target
     e.target.style.opacity = '0.5'
   }
@@ -91,7 +85,6 @@ export default class extends Controller {
   
   handleDragOver(e) {
     e.preventDefault()
-    // Only allow dropping on text nodes or the editor itself, not on other variables
     if (e.target === this.editorTarget || (e.target.nodeType === Node.TEXT_NODE)) {
       e.dataTransfer.dropEffect = 'move'
     } else if (!e.target.classList?.contains('protected-variable')) {
@@ -104,21 +97,17 @@ export default class extends Controller {
   handleDrop(e) {
     e.preventDefault()
     
-    // Don't allow dropping into other variables
     if (e.target.classList?.contains('protected-variable')) {
       return
     }
     
     e.target.style.opacity = '1'
     
-    // Get the variable text being dragged
     const variableText = e.dataTransfer.getData('text/plain')
     
-    // Get the position where we dropped
     const range = document.caretRangeFromPoint(e.clientX, e.clientY)
     
     if (range && (range.commonAncestorContainer.parentElement === this.editorTarget || this.editorTarget.contains(range.commonAncestorContainer))) {
-      // Create a new span for the variable
       const span = document.createElement('span')
       span.className = 'protected-variable'
       span.draggable = true
@@ -126,19 +115,15 @@ export default class extends Controller {
       span.style.cssText = 'background-color: #e5e7eb; color: #6b7280; padding: 2px 4px; border-radius: 3px; cursor: move; user-select: none;'
       span.textContent = variableText
       
-      // Insert at the drop position
       range.insertNode(span)
       
-      // Add drag listeners to the new variable
       span.addEventListener('dragstart', (e) => this.handleDragStart(e))
       span.addEventListener('dragend', (e) => this.handleDragEnd(e))
       
-      // Remove the original variable if it's different from the new one
       if (this.draggedElement && this.draggedElement !== span) {
         this.draggedElement.remove()
       }
 
-      // Sync to textarea
       this.syncToTextarea()      
     }
     
@@ -160,7 +145,6 @@ export default class extends Controller {
 
     const range = this.rangeForVariableInsertion()
 
-    // Create a span for the variable
     const span = document.createElement('span')
     span.className = 'protected-variable'
     span.draggable = true
@@ -168,20 +152,16 @@ export default class extends Controller {
     span.style.cssText = 'background-color: #e5e7eb; color: #6b7280; padding: 2px 4px; border-radius: 3px; cursor: move; user-select: none;'
     span.textContent = variableText
 
-    // Insert at cursor
     range.deleteContents()
     range.insertNode(span)
 
-    // Add drag listeners
     span.addEventListener('dragstart', (e) => this.handleDragStart(e))
     span.addEventListener('dragend', (e) => this.handleDragEnd(e))
 
     this.moveCursorAfter(span)
 
-    // Reset dropdown
     e.target.value = ''
 
-    // Sync to textarea
     this.syncToTextarea()
   }
 
@@ -372,23 +352,18 @@ export default class extends Controller {
   renderProtectedVariables() {
     const text = this.textareaTarget.value
     
-    // Split text into parts: variables and regular text
     const variablePattern = /(%<[a-zA-Z0-9_.]+>s|\{\{\-?\s*[a-zA-Z_][a-zA-Z0-9_]*(?:\.[a-zA-Z_][a-zA-Z0-9_]*)*\s*\-?\}\})/g
     const parts = text.split(variablePattern)
     
-    // Create HTML with variables as non-editable and text as editable
     const html = parts.map((part) => {
       if (part.match(/^%<[a-zA-Z0-9_.]+>s$/) || part.match(/^\{\{\-?\s*[a-zA-Z_][a-zA-Z0-9_]*(?:\.[a-zA-Z_][a-zA-Z0-9_]*)*\s*\-?\}\}$/)) {
-        // This is a variable - make it non-editable with grey background
         return `<span class="protected-variable" draggable="true" contenteditable="false" style="background-color: #e5e7eb; color: #6b7280; padding: 2px 4px; border-radius: 3px; cursor: not-allowed; user-select: none;">${this.escapeHtml(part)}</span>`
       } else {
-        // This is regular text - keep it editable
         return this.escapeHtml(part)
       }
     }).join("")
     
     this.editorTarget.innerHTML = html
-    // Add drag event listeners to all protected variables
     this.editorTarget.querySelectorAll('.protected-variable').forEach(variable => {
       variable.addEventListener('dragstart', (e) => this.handleDragStart(e))
       variable.addEventListener('dragend', (e) => this.handleDragEnd(e))

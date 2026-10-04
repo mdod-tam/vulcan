@@ -76,8 +76,8 @@ class User < ApplicationRecord
     normalized.match?(URI::MailTo::EMAIL_REGEXP)
   end
 
-  # Public portal login/recovery lookup for email-backed accounts, with real_phone? as an alternate identifier.
-  # Do not use for paper/admin contact matching. Delivery uses find_for_account_access.
+  # Public login and recovery require public_login_active? and real_email?. A real phone can identify that account.
+  # For paper/admin contact matching, use a contact lookup. Delivery uses find_for_account_access.
   def self.find_by_login_identifier(contact)
     normalized = contact.to_s.strip.presence
     return nil if normalized.blank?
@@ -192,17 +192,16 @@ class User < ApplicationRecord
 
   scope :ordered_by_name, -> { order(:first_name) }
 
-  # Paper intake must enforce this boundary, not trust UI filtering or +existing_constituent_id+.
-  # A retired duplicate still passes +constituent?+, but new applications belong to its survivor.
+  # Paper intake must not trust UI filters or +existing_constituent_id+ alone.
+  # A merged duplicate still passes +constituent?+, but new applications belong to its survivor.
   def paper_applicant_candidate?
     return false if merged?
 
     constituent?
   end
 
-  # Guardians own paper-intake context and may receive notifications, so they must remain active constituents.
-  # Duplicate-review visibility does not gate intake. +public_login_active?+ owns authentication policy.
-  # Legacy NULL status remains eligible.
+  # Paper guardians supply intake context and may receive notifications. Exclude merged, suspended, and inactive constituents.
+  # Duplicate-review flags do not gate intake. Legacy NULL status remains eligible.
   def paper_guardian_candidate?
     return false unless constituent?
     return false if merged?
@@ -231,8 +230,8 @@ class User < ApplicationRecord
     true
   end
 
-  # Callers requalify persisted recipients under the issuance lock for new forms and resends.
-  # This delivery policy does not grant login access or change an issued form's submitted/revoked/expired lifecycle.
+  # Issuance callers requalify persisted recipients under a lock for new forms and resends.
+  # This delivery gate does not grant login access or change an issued form's lifecycle.
   def secure_request_delivery_eligible?
     return false unless constituent?
     return false if merged?

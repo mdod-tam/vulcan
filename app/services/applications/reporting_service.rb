@@ -9,7 +9,6 @@ module Applications
       @fiscal_year_override = fiscal_year_override
     end
 
-    # Generate dashboard reporting data
     def generate_dashboard_data
       data = {}
 
@@ -30,7 +29,7 @@ module Applications
       failure("Error generating dashboard data: #{e.message}", {})
     end
 
-    # Generate index data for the applications index page (operational cards only; no chart payloads).
+    # The applications index uses operational cards without chart payloads.
     def generate_index_data
       data = {}
 
@@ -47,7 +46,7 @@ module Applications
       failure("Error generating index data: #{e.message}", {})
     end
 
-    # B — Snapshot: applications created in current FY cohort, grouped by current status.
+    # The snapshot groups the fiscal-year cohort by current status, not historical transitions.
     def generate_index_chart_data
       start_year = current_fiscal_year
       fy_start = FiscalYear.start_date_for(start_year)
@@ -71,7 +70,7 @@ module Applications
       failure("Error generating index chart data: #{e.message}", {})
     end
 
-    # C — MFR throughput: lifecycle status transitions during completed fiscal years.
+    # MFR counts lifecycle transitions during completed fiscal years, not current status.
     def generate_mfr_reports_data(include_voucher_metrics: true)
       current_start_year = current_fiscal_year
       most_recent_start_year = current_start_year - 1
@@ -148,32 +147,27 @@ module Applications
     def add_guardian_dependent_metrics(data, start_date, end_date, period_key)
       period_range = fy_time_range(start_date, end_date)
 
-      # Count of guardian users created in the period
       data[:"#{period_key}_guardian_users_count"] =
         User.with_dependents
             .where(created_at: period_range)
             .count
 
-      # Count of dependent users created in the period
       data[:"#{period_key}_dependent_users_count"] =
         User.with_guardians
             .where(created_at: period_range)
             .count
 
-      # Count of applications for dependents (applications where user is a dependent)
       data[:"#{period_key}_dependent_applications_count"] =
         Application.joins(user: :guardian_relationships_as_dependent)
                    .where(applications: { created_at: period_range })
                    .distinct
                    .count
 
-      # Count of applications managed by guardians
       data[:"#{period_key}_guardian_managed_applications_count"] =
         Application.where.not(managing_guardian_id: nil)
                    .where(created_at: period_range)
                    .count
 
-      # Guardian relationship metrics
       data[:"#{period_key}_avg_dependents_per_guardian"] =
         calculate_avg_dependents_per_guardian(start_date, end_date)
 
@@ -186,8 +180,6 @@ module Applications
     def calculate_avg_dependents_per_guardian(start_date, end_date)
       period_range = fy_time_range(start_date, end_date)
 
-      # Get count of dependents per guardian who registered in the given period
-      # Fix the join reference - use the guardian_user association directly
       guardian_counts = GuardianRelationship
                         .joins(:guardian_user)
                         .where(users: { created_at: period_range })
@@ -196,22 +188,18 @@ module Applications
 
       return 0 if guardian_counts.empty?
 
-      # Calculate average
       guardian_counts.values.sum.to_f / guardian_counts.size
     end
 
     def count_guardians_with_multiple_dependents(start_date, end_date)
       period_range = fy_time_range(start_date, end_date)
 
-      # Count guardians who have more than one dependent
-      # Fix the join reference - use the guardian_user association directly
       guardian_counts = GuardianRelationship
                         .joins(:guardian_user)
                         .where(users: { created_at: period_range })
                         .group(:guardian_id)
                         .count
 
-      # Return count of guardians with more than one dependent
       guardian_counts.count { |_guardian_id, count| count > 1 }
     end
 
@@ -239,13 +227,12 @@ module Applications
       data[:current_fy_applications] = Application.where(created_at: current_range).count
       data[:previous_fy_applications] = Application.where(created_at: previous_range).count
 
-      # Draft applications only (for backwards compatibility with tests)
+      # Reports use draft-only counts. Comparison charts combine drafts with awaiting_proof.
       data[:current_fy_draft_applications] =
         Application.where(status: :draft, created_at: current_range).count
       data[:previous_fy_draft_applications] =
         Application.where(status: :draft, created_at: previous_range).count
 
-      # Combined draft and awaiting_proof applications (for production use)
       data[:current_fy_draft_and_needs_info_applications] =
         Application.where(status: %i[draft awaiting_proof], created_at: current_range).count
       data[:previous_fy_draft_and_needs_info_applications] =
@@ -259,13 +246,11 @@ module Applications
       data[:current_fy_vouchers] = Voucher.where(created_at: current_range).count
       data[:previous_fy_vouchers] = Voucher.where(created_at: previous_range).count
 
-      # Unredeemed vouchers
       data[:current_fy_unredeemed_vouchers] =
         Voucher.where(created_at: current_range, status: :active).count
       data[:previous_fy_unredeemed_vouchers] =
         Voucher.where(created_at: previous_range, status: :active).count
 
-      # Voucher values
       data[:current_fy_voucher_value] =
         Voucher.where(created_at: current_range).sum(:initial_value)
       data[:previous_fy_voucher_value] =
@@ -276,17 +261,14 @@ module Applications
       current_range = fy_time_range(data[:current_fy_start], data[:current_fy_end])
       previous_range = fy_time_range(data[:previous_fy_start], data[:previous_fy_end])
 
-      # Training sessions
       data[:current_fy_trainings] = TrainingSession.where(created_at: current_range).count
       data[:previous_fy_trainings] = TrainingSession.where(created_at: previous_range).count
 
-      # Evaluation sessions
       data[:current_fy_evaluations] = Evaluation.where(created_at: current_range).count
       data[:previous_fy_evaluations] = Evaluation.where(created_at: previous_range).count
     end
 
     def add_vendor_metrics(data)
-      # Vendor activity
       data[:active_vendors] = Vendor.joins(:voucher_transactions).distinct.count
       data[:recent_active_vendors] = Vendor.joins(:voucher_transactions)
                                            .where(voucher_transactions: { created_at: 1.month.ago.. })
@@ -343,7 +325,6 @@ module Applications
     end
 
     def build_guardian_chart_data(data)
-      # Guardian data chart for user dashboard
       data[:guardian_chart_data] = {
         current: {
           'Guardian Users' => data[:current_fy_guardian_users_count],
@@ -355,7 +336,6 @@ module Applications
         }
       }
 
-      # Guardian applications chart for application dashboard
       data[:guardian_applications_chart_data] = {
         current: {
           'Applications for Dependents' => data[:current_fy_dependent_applications_count],
@@ -377,7 +357,6 @@ module Applications
     end
 
     def add_guardian_dependent_index_counts(data)
-      # Check if these associations/scopes exist and handle nil values safely
       data[:guardian_users_count] = User.respond_to?(:with_dependents) ? User.with_dependents.count : 0
       data[:dependent_users_count] = User.respond_to?(:with_guardians) ? User.with_guardians.count : 0
       data[:dependent_applications_count] = Application.where.not(managing_guardian_id: nil).count

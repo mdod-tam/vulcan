@@ -37,16 +37,14 @@ class UserSearchController extends Controller {
   }
 
   navigateToSearch(q) {
-    // Find the turbo frame that should handle the search results
     if (!this.hasSearchResultsTarget) return
     const turboFrame = this.searchResultsTarget
 
-    // Construct the search URL; pass frame_id so the backend Turbo response targets the right frame
+    // frame_id directs the Turbo response to this search frame.
     const frameId = turboFrame.id || ''
     const searchUrl = `${this.searchUrlValue}?q=${encodeURIComponent(q)}&role=${this.roleValue}&frame_id=${encodeURIComponent(frameId)}`
 
-    // Set the turbo frame's src to trigger navigation
-    // Ensure it's visible in case it was previously hidden by clearResults()
+    // clearResults() hides the frame, so show it before navigation.
     setVisible(turboFrame, true)
     turboFrame.src = searchUrl
   }
@@ -55,7 +53,6 @@ class UserSearchController extends Controller {
     this.debouncedSearch.cancel()
     if (this.hasSearchResultsTarget) {
       const target = this.searchResultsTarget
-      // Clear the turbo frame by removing its src
       target.removeAttribute('src')
       target.innerHTML = '<p class="text-sm text-gray-500 p-3">Type a name or email to search for guardians.</p>'
       setVisible(target, false)
@@ -71,12 +68,10 @@ class UserSearchController extends Controller {
 
     this.clearResults()
 
-    // DON'T clear the guardian selection here - that would undo the selection we just made!
-    // The guardian picker outlet should maintain its selected state
+    // Keep the guardian selection after a successful create.
   }
 
   showCreateForm() {
-    // Try multiple approaches to find and show the form
     const form = this.element.querySelector('[data-admin-user-search-target="guardianForm"]') ||
       this.element.querySelector('.guardian-search-form')
 
@@ -88,7 +83,6 @@ class UserSearchController extends Controller {
     }
   }
 
-  // Separate method for when we actually want to clear everything
   clearSearchAndSelection() {
     if (this.hasSearchInputTarget) {
       const input = this.searchInputTarget
@@ -103,14 +97,12 @@ class UserSearchController extends Controller {
     }
   }
 
-  // Handle guardian creation from button click events (matching HTML and documentation)
   async createGuardian(event) {
     event.preventDefault()
 
-    // Collect form data from guardian fields since they're not in an actual form element
+    // Build a separate payload from the nested guardian fields.
     const formData = new FormData()
 
-    // Find all guardian input fields within our controller element
     const guardianFields = this.element.querySelectorAll('input[name^="guardian_attributes"], select[name^="guardian_attributes"]')
 
     if (guardianFields.length === 0) {
@@ -118,22 +110,19 @@ class UserSearchController extends Controller {
       return
     }
 
-    // Collect all field values and convert guardian_attributes[field] to direct field names
     guardianFields.forEach(field => {
       if (field.type === 'radio' || field.type === 'checkbox') {
         if (field.checked) {
-          // Convert guardian_attributes[field_name] to just field_name
           const fieldName = field.name.replace('guardian_attributes[', '').replace(']', '')
           formData.append(fieldName, field.value)
         }
       } else if (field.value.trim() !== '') {
-        // Convert guardian_attributes[field_name] to just field_name
         const fieldName = field.name.replace('guardian_attributes[', '').replace(']', '')
         formData.append(fieldName, field.value)
       }
     })
 
-    // Top-level guardian contact flags (outside guardian_attributes[...])
+    // Contact flags sit outside guardian_attributes and need separate payload entries.
     const noEmailCheckbox = this.element.querySelector('input[type="checkbox"][name="guardian_no_email_address"]')
     const noPhoneCheckbox = this.element.querySelector('input[type="checkbox"][name="guardian_no_phone_number"]')
     if (noEmailCheckbox?.checked) {
@@ -145,10 +134,8 @@ class UserSearchController extends Controller {
       formData.append('no_phone_number', '1')
     }
 
-    // Clear any previous errors
     this.clearFieldErrors()
 
-    // Validate required fields
     const validationResult = await this.validateBeforeSubmit(formData)
     if (!validationResult.valid) {
       this.handleValidationErrors(validationResult.errors)
@@ -196,7 +183,6 @@ class UserSearchController extends Controller {
       return
     }
 
-    // Block selection of ineligible constituents
     if (userIneligible === "true" || row.getAttribute('aria-disabled') === 'true') {
       return
     }
@@ -215,7 +201,7 @@ class UserSearchController extends Controller {
   buildUserDisplayHTML(userName, userData) {
     const { userEmail, userPhone, userAddress1, userAddress2, userCity, userState, userZip, userDependentsCount = '0' } = userData
 
-    // Escape all user data for XSS prevention
+    // Escape contact and address values before HTML interpolation. The caller escapes userName.
     const safeEmail = userEmail ? this.escapeHtml(userEmail) : ''
     const safePhone = userPhone ? this.escapeHtml(userPhone) : ''
     const safeAddress1 = userAddress1 ? this.escapeHtml(userAddress1) : ''
@@ -226,7 +212,6 @@ class UserSearchController extends Controller {
 
     let html = `<span class="font-medium">${userName}</span>`
 
-    // Contact info
     const contactInfo = []
     if (safeEmail) contactInfo.push(`<span class="text-indigo-700">${safeEmail}</span>`)
     if (safePhone) contactInfo.push(`<span class="text-gray-600">Phone: ${safePhone}</span>`)
@@ -235,7 +220,6 @@ class UserSearchController extends Controller {
       html += `<div class="text-sm text-gray-600 mt-1">${contactInfo.join(' • ')}</div>`
     }
 
-    // Address
     const addressParts = [safeAddress1, safeAddress2, safeCity, safeState, safeZip].filter(Boolean)
     if (addressParts.length > 0) {
       html += `<div class="text-sm text-gray-600 mt-1">${addressParts.join(', ')}</div>`
@@ -243,7 +227,6 @@ class UserSearchController extends Controller {
       html += `<div class="text-sm text-gray-600 mt-1 italic">No address information available</div>`
     }
 
-    // Dependents
     const dependentsCount = parseInt(userDependentsCount) || 0
     const dependentsText = dependentsCount === 1 ? "1 dependent" : `${dependentsCount} dependents`
     html += `<div class="text-sm text-gray-600 mt-1">Currently has ${dependentsText}</div>`
@@ -288,7 +271,6 @@ class UserSearchController extends Controller {
     return html
   }
 
-  // XSS prevention helper
   escapeHtml(unsafe) {
     return unsafe
       .replace(/&/g, "&amp;")
@@ -299,7 +281,6 @@ class UserSearchController extends Controller {
   }
 
   async validateBeforeSubmit(data) {
-    // Handle both FormData and plain objects
     const firstName = data instanceof FormData ? data.get('first_name') : data.first_name
     const lastName = data instanceof FormData ? data.get('last_name') : data.last_name
     const email = data instanceof FormData ? data.get('email') : data.email
@@ -334,14 +315,11 @@ class UserSearchController extends Controller {
     return { valid: true }
   }
 
-  // Clear field validation errors
   clearFieldErrors() {
-    // Remove error styling from inputs
     this.element.querySelectorAll('input.border-red-500').forEach(input => {
       input.classList.remove('border-red-500')
     })
 
-    // Remove error messages (field-level and general)
     this.element.querySelectorAll('.field-error-message').forEach(errorEl => {
       errorEl.remove()
     })
@@ -358,26 +336,21 @@ class UserSearchController extends Controller {
     container.appendChild(errorEl)
   }
 
-  // Handle validation errors display
   handleValidationErrors(errors) {
-    // Scroll to first error for visibility
     let firstErrorInput = null
 
     Object.entries(errors).forEach(([field, message]) => {
       if (message) {
-        // Look for input with guardian_attributes format
         const input = this.element.querySelector(`input[name="guardian_attributes[${field}]"], select[name="guardian_attributes[${field}]"], textarea[name="guardian_attributes[${field}]"]`)
         if (input) {
           input.classList.add('border-red-500', 'border-2')
           input.setAttribute('aria-invalid', 'true')
 
-          // Remove any existing error message
           const existingError = input.parentElement.querySelector('.field-error-message')
           if (existingError) {
             existingError.remove()
           }
 
-          // Create and insert error display
           const errorEl = document.createElement('div')
           errorEl.className = 'field-error-message text-red-600 text-sm mt-1 flex items-start gap-1'
           errorEl.setAttribute('role', 'alert')
@@ -389,7 +362,6 @@ class UserSearchController extends Controller {
           `
           input.parentElement.appendChild(errorEl)
 
-          // Track first error for scrolling
           if (!firstErrorInput) {
             firstErrorInput = input
           }
@@ -397,7 +369,6 @@ class UserSearchController extends Controller {
       }
     })
 
-    // Scroll first error into view
     if (firstErrorInput) {
       firstErrorInput.scrollIntoView({ behavior: 'smooth', block: 'center' })
       firstErrorInput.focus()

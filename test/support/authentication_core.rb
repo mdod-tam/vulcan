@@ -1,14 +1,8 @@
 # frozen_string_literal: true
 
-# AuthenticationCore
-#
-# Core module providing shared authentication functionality for all test types.
-# This module is intended to be used by both AuthenticationTestHelper and SystemTestAuthentication.
-#
+# Shared support for AuthenticationTestHelper and SystemTestAuthentication.
 module AuthenticationCore
-  # Session cookie name used across the application
   SESSION_COOKIE_NAME = :session_token
-  # Creates a real Session row that all authentication methods can use
   def create_test_session(user)
     Session.create!(
       user: user,
@@ -17,8 +11,7 @@ module AuthenticationCore
     )
   end
 
-  # Deletes the session cookie from any type of driver (Capybara, Cuprite, Rack)
-  # This centralizes cookie deletion logic that was duplicated across helper modules
+  # Clear the cookie sources exposed by the current test driver.
   def delete_session_cookie
     # Rack mock session (integration tests)
     rack_mock_session.cookie_jar.delete(SESSION_COOKIE_NAME) if respond_to?(:rack_mock_session) && rack_mock_session.respond_to?(:cookie_jar)
@@ -28,14 +21,11 @@ module AuthenticationCore
       request.session.delete(SESSION_COOKIE_NAME)
     end
 
-    # Regular cookies for any test type
     cookies.delete(SESSION_COOKIE_NAME) if respond_to?(:cookies)
 
-    # Browser-specific cookie deletion for system tests
     if defined?(page) && page.respond_to?(:driver)
       driver = page.driver
 
-      # Cuprite driver
       if driver.is_a?(Capybara::Cuprite::Driver)
         begin
           if driver.respond_to?(:remove_cookie)
@@ -49,42 +39,36 @@ module AuthenticationCore
       end
     end
 
-    # Capture the token before deleting the cookie
+    # This lookup runs after cookie deletion and can return no token.
     token = nil
     token = cookies[SESSION_COOKIE_NAME] if defined?(Session) && respond_to?(:cookies) && cookies[SESSION_COOKIE_NAME].present?
 
-    # Clean up sessions from the database to prevent growth if we captured a token
+    # Remove a Session row only if the cookie API still supplies its token.
     return if token.blank?
 
     Session.where(session_token: token).delete_all
   end
 
-  # Updates Current.user for the test environment
   def update_current_user(user)
     return unless defined?(Current)
 
     Current.user = user
   end
 
-  # Clears Current.user and test identity
   def clear_test_identity
-    # Clear specific Current attributes first
     if defined?(Current)
       Current.user = nil
       Current.test_user_id = nil
     end
 
-    # Then reset the entire Current context
     Current.reset if defined?(Current) && Current.respond_to?(:reset)
 
-    # Explicitly set test_user_id to nil again after reset
     Current.test_user_id = nil if defined?(Current) && Current.respond_to?(:test_user_id=)
 
-    # For backward compatibility, also clear ENV variable
+    # Authentication also accepts TEST_USER_ID as a test identity source.
     ENV['TEST_USER_ID'] = nil if ENV['TEST_USER_ID'].present?
   end
 
-  # Validate authentication state
   def verify_authentication_state(user)
     assert_equal user.id, Current.user&.id, 'Current.user wrong' if defined?(Current)
 
@@ -95,7 +79,7 @@ module AuthenticationCore
     assert_not session.expired?, 'Session expired' if session.respond_to?(:expired?)
   end
 
-  # Print debug information when DEBUG_AUTH env var is set to 'true'
+  # DEBUG_AUTH or VERBOSE_TESTS enables these messages.
   def debug_auth(msg)
     return unless ENV['DEBUG_AUTH'] == 'true' || ENV['VERBOSE_TESTS'] == 'true'
 
@@ -106,7 +90,6 @@ module AuthenticationCore
     end
   end
 
-  # Stores the test user ID in a consistent way
   def store_test_user_id(user_id)
     Current.test_user_id = user_id
   end

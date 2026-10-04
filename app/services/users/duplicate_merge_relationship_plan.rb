@@ -1,13 +1,10 @@
 # frozen_string_literal: true
 
 module Users
-  # Projects every guardian/dependent edge touching a retiring duplicate onto the
-  # canonical survivor. The caller owns the transaction and must supply a complete,
-  # row-locked relationship inventory.
+  # Projects a duplicate's guardian/dependent links onto the survivor.
+  # The caller owns the transaction and must supply a complete inventory of locked relationships.
   #
-  # Distinct relationships survive. Two rows may collapse into one only when they
-  # become the exact same guardian/dependent edge and their relationship facts can be
-  # represented without discarding live portal replay evidence.
+  # Distinct links survive unless they become self-links. Identical projected links can coalesce if their facts and replay evidence remain compatible.
   class DuplicateMergeRelationshipPlan
     Projection = Data.define(:relationship, :guardian_id, :dependent_id) do
       def changed?
@@ -103,11 +100,8 @@ module Users
       group.map { |projection| projection.relationship.dependent_id }.uniq.many?
     end
 
-    # Prefer the relationship already attached to the canonical record. Besides minimizing writes,
-    # its row position preserves the guardian chosen by effective-contact fallback. A sole replay
-    # pair from the duplicate-dependent edge is copied onto this keeper after the redundant edge is
-    # removed; its guardian namespace remains live, so the evidence is still true. Replay metadata
-    # from a retiring guardian belongs to the retiring namespace and is not copied.
+    # Prefer the canonical record's existing link to preserve its position in guardian contact fallback.
+    # Copy a sole replay key from a duplicate-dependent link. Do not copy a retiring guardian's replay namespace.
     def keeper_for(group)
       group.find { |projection| !projection.changed? } || group.min_by { |projection| projection.relationship.id }
     end
@@ -128,10 +122,8 @@ module Users
       relationship.portal_creation_key.present?
     end
 
-    # Guardian fallback currently uses the oldest surviving relationship row. Coalescing or
-    # transferring an older row can therefore change the person who receives a dependent's
-    # communications even when every relationship remains valid. There is no durable, explicit
-    # contact-priority field to update, so fail closed instead of silently changing the recipient.
+    # Guardian fallback depends on relationship order. A transfer or coalescence can change the recipient without invalidating a link.
+    # No explicit contact-priority field exists, so reject a projection that changes the expected first guardian.
     def contact_priority_error(active_projections)
       affected_dependent_ids = active_projections.select(&:changed?).map(&:dependent_id).uniq
 
@@ -181,8 +173,7 @@ module Users
 
       attributes.merge!(@replay_metadata_by_keeper_id.fetch(projection.relationship.id, {}))
 
-      # A portal replay key is scoped to its guardian. Retiring that guardian ends the
-      # namespace; moving the key would falsely claim the request happened on the survivor.
+      # A replay key belongs to its guardian. Do not attribute a retired guardian's request to the survivor.
       if projection.relationship.guardian_id == @duplicate_user.id &&
          !@replay_metadata_by_keeper_id.key?(projection.relationship.id)
         attributes[:portal_creation_key] = nil

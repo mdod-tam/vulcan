@@ -1,9 +1,7 @@
 import { Controller } from "@hotwired/stimulus"
 import { setVisible, setFieldValue } from "../../utils/visibility"
 
-// Manages adult applicant search-and-select for paper applications.
-// Mirrors guardian_picker_controller pattern but adds contact mode switching,
-// on-file data tracking, and changed-field highlighting.
+// Paper applicant selection, contact modes, and changes to on-file values.
 export default class extends Controller {
   static targets = [
     "searchPane",
@@ -26,9 +24,7 @@ export default class extends Controller {
     this.selectedValue = !!(this.hasConstituentIdFieldTarget && this.constituentIdFieldTarget.value)
     this._adultApplicationContext = null
     this._onFileData = {}
-    // Set by the server when it re-renders the form after a failed submission. On that render the
-    // fields already hold what staff typed, including corrections to the on-file record, so the
-    // context fetch below must not paste database values back over them.
+    // On a failed submission, preserve staff edits instead of replacing them with database values.
     this._restoredFromSubmission = this.element.dataset.adultPickerRestoredValue === "true"
     this.togglePanes()
 
@@ -80,9 +76,7 @@ export default class extends Controller {
   clearSelection({ dispatch = true } = {}) {
     if (this.hasConstituentIdFieldTarget) this.constituentIdFieldTarget.value = ""
 
-    // The restored submission is being discarded along with the selection it belonged to, so the
-    // guard goes with it. Leaving it set would suppress autopopulation for the *replacement* adult
-    // too, handing staff a selected record whose name, date of birth and contact fields are blank.
+    // Clear the retry guard so a replacement adult can populate the fields.
     this._restoredFromSubmission = false
     this._onFileData = {}
     this._adultApplicationContext = null
@@ -108,7 +102,6 @@ export default class extends Controller {
     const contactFields = this._getContactFieldElements()
 
     if (mode === "on_file") {
-      // Lock contact fields to on-file values
       contactFields.forEach(el => {
         const key = this._fieldKey(el)
         if (key && this._onFileData[key] !== undefined) {
@@ -119,7 +112,6 @@ export default class extends Controller {
       })
       this._lockRadioGroups(true)
     } else {
-      // Unlock fields for editing
       contactFields.forEach(el => {
         el.readOnly = false
         el.classList.remove("bg-gray-100", "text-gray-500")
@@ -152,23 +144,15 @@ export default class extends Controller {
   }
 
   /**
-   * Installs everything a selected adult needs: on-file summary, contact mode, and the verification
-   * control submit gating depends on. Shared by the search-driven path and the identity-review path
-   * so a selection can never be announced with only some of it in place.
+   * Applies fetched applicant context after a search selection or a restored retry.
    * @private
    */
   _applyAdultContext(data) {
     this._adultApplicationContext = data
     this._storeOnFileData(data.user)
-    // The click path fills the selected card with the search result's markup. A restored retry has
-    // no search result, so the card rendered empty: the pane announced that an applicant was
-    // selected without ever naming them. Filled from the context the rest of the restore already
-    // uses, and only when empty, so the click path's richer markup is left alone.
+    // A retry can have no search-result card. Fill that empty card without replacing richer search markup.
     this._fillSelectedCardIfEmpty(data.user)
-    // Everything else here is still needed on a retry -- the on-file summary, contact mode,
-    // verification control and submit gating all depend on it. Only the field overwrite is skipped,
-    // because on a retry the submitted values are the newer ones and silently replacing them with
-    // what is on file loses a correction staff had already made once.
+    // Preserve submitted fields on retry. The summary, contact mode, and verification controls still need the context.
     if (!this._restoredFromSubmission) this._autopopulateFields(data.user)
     this._showOnFileSummary(data)
     this._showContactMode()
@@ -264,7 +248,6 @@ export default class extends Controller {
       el.dispatchEvent(new Event('change', { bubbles: true }))
     })
 
-    // Handle radio buttons for phone_type
     if (user.phone_type) {
       const radio = document.querySelector(`input[name="constituent[phone_type]"][value="${user.phone_type}"]`)
       if (radio) {
@@ -273,7 +256,6 @@ export default class extends Controller {
       }
     }
 
-    // Handle radio buttons for communication_preference
     if (user.communication_preference) {
       const radio = document.querySelector(`input[name="constituent[communication_preference]"][value="${user.communication_preference}"]`)
       if (radio) {
@@ -370,7 +352,6 @@ export default class extends Controller {
     this.contactModeRadioTargets.forEach(radio => {
       radio.checked = radio.value === "update"
     })
-    // Ensure fields are unlocked
     this._getContactFieldElements().forEach(el => {
       el.readOnly = false
       el.classList.remove("bg-gray-100", "text-gray-500")
@@ -425,7 +406,6 @@ export default class extends Controller {
       }
     })
 
-    // Reset radio buttons
     ;['constituent[phone_type]', 'constituent[communication_preference]'].forEach(name => {
       document.querySelectorAll(`input[name="${name}"]`).forEach(radio => {
         radio.checked = false
@@ -433,7 +413,6 @@ export default class extends Controller {
       })
     })
 
-    // Reset state field default
     const stateEl = document.querySelector('[name="constituent[state]"]')
     if (stateEl) stateEl.value = 'MD'
   }

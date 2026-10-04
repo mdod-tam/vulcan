@@ -158,7 +158,7 @@ module DuplicateReconciliation
       assert_includes rendered, "[cluster_ref: #{sample2[:cluster_ref]}]"
     end
 
-    test 'runs safely and returns structured Result without any database mutation' do
+    test 'returns structured metrics and provenance without changing record counts' do
       assert_no_difference ['DuplicateReviewCase.count', 'User.count', 'GuardianRelationship.count'] do
         result = @probe.call(detailed_pii: false)
         assert_instance_of DiscoveryProbe::Result, result
@@ -178,7 +178,6 @@ module DuplicateReconciliation
       create(:guardian_relationship, dependent_user: dependent, guardian_user: g1)
       create(:guardian_relationship, dependent_user: dependent, guardian_user: g2)
 
-      # 1. Default mode: detailed_pii: false
       default_result = @probe.call(detailed_pii: false)
       sample = default_result.samples[:multi_guardian_dependents].first
       assert_not_nil sample
@@ -192,7 +191,6 @@ module DuplicateReconciliation
       assert_not_includes rendered_default, 'SecretGuardianTwo'
       assert_not_includes rendered_default, 'localhost'
 
-      # 2. Detailed mode: detailed_pii: true
       detailed_result = @probe.call(detailed_pii: true)
       detailed_sample = detailed_result.samples[:multi_guardian_dependents].first
       assert_not_nil detailed_sample
@@ -369,9 +367,7 @@ module DuplicateReconciliation
       admin = create(:admin)
       dob = Date.new(1983, 6, 15)
 
-      # 1. Non-post-import case (registration_soft_match) with keep_separate:
-      # Canonical Population does NOT recognize this as a post-import pair resolution.
-      # The dynamic match remains active, flags are required under ReviewFlagProjection, so drift = 0.
+      # A registration resolution does not settle the reconciliation pair, so its review flags are not drift.
       r1 = create(:constituent, first_name: 'Reg', last_name: 'Match', date_of_birth: dob, needs_duplicate_review: true, status: :active)
       r2 = create(:constituent, first_name: 'Reg', last_name: 'Match', date_of_birth: dob, needs_duplicate_review: true, status: :active)
       r_first, r_second = [r1, r2].sort_by(&:id)
@@ -396,8 +392,7 @@ module DuplicateReconciliation
       assert DuplicateReconciliation::ReviewFlagProjection.new.required_for?(r1)
       assert DuplicateReconciliation::ReviewFlagProjection.new.required_for?(r2)
 
-      # 2. Malformed post-import case (inverted orientation: subject > candidate) with keep_separate:
-      # Canonical Population rejects malformed post-import cases; dynamic match remains active, drift = 0.
+      # An inverted post-import pair is malformed and cannot settle the dynamic match.
       m1 = create(:constituent, first_name: 'Mal', last_name: 'Shape', date_of_birth: dob, needs_duplicate_review: true, status: :active)
       m2 = create(:constituent, first_name: 'Mal', last_name: 'Shape', date_of_birth: dob, needs_duplicate_review: true, status: :active)
       m_first, m_second = [m1, m2].sort_by(&:id)
@@ -425,8 +420,7 @@ module DuplicateReconciliation
       res_before = @probe.call
       assert_equal 0, res_before.flag_metrics[:flagged_without_open_case_or_match]
 
-      # 3. Canonical strict post-import case:
-      # Canonical Population classifies as confirmed_different; dynamic match is resolved; flags ARE true drift = 2!
+      # A strict keep-separate resolution settles the pair. Its remaining flags count as drift.
       s1 = create(:constituent, first_name: 'Strict', last_name: 'Match', date_of_birth: dob, needs_duplicate_review: true, status: :active)
       s2 = create(:constituent, first_name: 'Strict', last_name: 'Match', date_of_birth: dob, needs_duplicate_review: true, status: :active)
       s_first, s_second = [s1, s2].sort_by(&:id)
@@ -539,7 +533,7 @@ module DuplicateReconciliation
       assert_equal 0, res.flag_metrics[:flagged_without_open_case_or_match]
     end
 
-    test 'matching metrics maintain bounded behavior with many clusters' do
+    test 'reports a truncated audit and raw cluster count when cluster_limit is exceeded' do
       4.times do |i|
         create(:constituent, first_name: "MultiCluster#{i}", last_name: 'Person', date_of_birth: Date.new(1980 + i, 1, 1), status: :active)
         create(:constituent, first_name: "MultiCluster#{i}", last_name: 'Person', date_of_birth: Date.new(1980 + i, 1, 1), status: :active)
@@ -612,7 +606,7 @@ module DuplicateReconciliation
       assert_no_match(/excluded from dynamic matching/, rendered)
     end
 
-    test 'dob validation and user date_of_birth never write raw DOB values to application logs' do
+    test 'DOB validation and date reader omit invalid raw values from captured logs' do
       log_output = StringIO.new
       test_logger = Logger.new(log_output)
       original_logger = Rails.logger
@@ -752,14 +746,13 @@ module DuplicateReconciliation
       assert_not_equal ref1, ref2
       assert_not_equal Digest::SHA256.hexdigest('user_42')[0..7], ref1
 
-      # Database fingerprint is stable across instances using application-secret HMAC
       fp1 = probe1.send(:collect_provenance)[:database_fingerprint]
       fp2 = probe2.send(:collect_provenance)[:database_fingerprint]
       assert_equal fp1, fp2
       assert_equal 8, fp1.length
     end
 
-    test 'enforces total deadline raising Timeout::Error if budget is exhausted' do
+    test 'remaining-timeout setup raises when the deadline already expired' do
       probe = DiscoveryProbe.new(statement_timeout_ms: 10)
       probe.instance_variable_set(:@deadline, Process.clock_gettime(Process::CLOCK_MONOTONIC) - 1.0)
 
@@ -810,23 +803,23 @@ module DuplicateReconciliation
     end
 
     test 'sanitize_output_text safely handles Cc, Cf, Zl, Zp, and invalid encodings' do
-      # 1. Cc controls (C0 and C1)
+      # Cc control characters.
       assert_equal 'line1\nline2\r\ttab\e[31m', @probe.send(:sanitize_output_text, "line1\nline2\r\ttab\e[31m")
       assert_equal 'null\x00bell\x07', @probe.send(:sanitize_output_text, "null\x00bell\a")
       assert_equal 'nel\x85c1', @probe.send(:sanitize_output_text, "nel\u0085c1")
 
-      # 2. Cf format and bidi controls (e.g. U+202E RLO, U+2066 LTI, U+200B zero-width space)
+      # Cf format and bidi controls.
       assert_equal 'bidi\u202Ereversed\u2066isolate', @probe.send(:sanitize_output_text, "bidi\u202Ereversed\u2066isolate")
       assert_equal 'zero\u200Bwidth', @probe.send(:sanitize_output_text, "zero\u200Bwidth")
 
-      # 3. Zl and Zp separators (U+2028 line separator, U+2029 paragraph separator)
+      # Zl line separators and Zp paragraph separators.
       assert_equal 'line\u2028separator', @probe.send(:sanitize_output_text, "line\u2028separator")
       assert_equal 'para\u2029separator', @probe.send(:sanitize_output_text, "para\u2029separator")
 
-      # 4. Supplementary plane Cf characters (> 0xFFFF)
+      # Cf characters above U+FFFF.
       assert_equal 'tag\u{E0001}char', @probe.send(:sanitize_output_text, "tag\u{E0001}char")
 
-      # 5. Invalid encoding handling (non-UTF8 or malformed byte sequences)
+      # Invalid UTF-8 and binary input.
       bad_binary = "bad\xFF\xFE\x00\nend".b
       sanitized_binary = @probe.send(:sanitize_output_text, bad_binary)
       assert_equal "bad\uFFFD\uFFFD\\x00\\nend", sanitized_binary
@@ -835,9 +828,9 @@ module DuplicateReconciliation
       sanitized_utf8 = @probe.send(:sanitize_output_text, bad_utf8)
       assert_equal "bad\uFFFD\uFFFD\\x00\\nend", sanitized_utf8
 
-      # 6. Preserves valid Unicode (accented letters, emojis, normal punctuation)
+      # Valid Unicode outside the escaped categories.
       assert_equal 'José Niño 😀', @probe.send(:sanitize_output_text, 'José Niño 😀')
-      # Compound emojis with ZWJ (U+200D, category Cf) safely escape the format character
+      # A zero-width joiner belongs to Cf and must be escaped.
       assert_equal '👨\u200D👩\u200D👧', @probe.send(:sanitize_output_text, '👨‍👩‍👧')
     end
 

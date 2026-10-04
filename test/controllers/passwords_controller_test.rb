@@ -6,10 +6,8 @@ class PasswordsControllerTest < ActionDispatch::IntegrationTest
   include ActiveJob::TestHelper
 
   def setup
-    # Track performance for monitoring
     @start_time = Time.current
 
-    # Create basic email templates needed for mailer functionality
     create_basic_email_templates
 
     @user = create(:constituent, password: 'password123', password_confirmation: 'password123')
@@ -17,15 +15,12 @@ class PasswordsControllerTest < ActionDispatch::IntegrationTest
     @system_audit_actor = User.find_by(email: PublicAuditActor::SYSTEM_AUDIT_EMAIL) ||
                           create(:admin, email: PublicAuditActor::SYSTEM_AUDIT_EMAIL)
 
-    # Standard sign-in for integration tests
     sign_in_for_integration_test(@user)
   end
 
   def teardown
-    # Standard sign out for controller tests
     sign_out if respond_to?(:sign_out)
 
-    # Log test execution time for performance monitoring
     @execution_time = Time.current - @start_time
     puts "PasswordsControllerTest #{name} took #{@execution_time.round(2)}s"
   end
@@ -285,10 +280,7 @@ class PasswordsControllerTest < ActionDispatch::IntegrationTest
     assert_nil User.find_by_token_for(:password_reset, token)
   end
 
-  # A reset link is also delivered by SMS, so the phone carries reset authority exactly as the
-  # login email does. Once the phone changes, a link already texted to the old number must stop
-  # working -- otherwise whoever holds that number keeps a live reset for the rest of the token's
-  # 20-minute life.
+  # SMS delivers reset links. A phone change must revoke links sent to the old number.
   def test_generated_password_reset_token_is_invalid_after_phone_changes
     @user.update!(phone: '555-867-5309')
     token = @user.generate_token_for(:password_reset)
@@ -306,9 +298,7 @@ class PasswordsControllerTest < ActionDispatch::IntegrationTest
     assert_equal @user.id, User.find_by_token_for(:password_reset, token)&.id
   end
 
-  # Cosmetic reformatting is not a change of authority: the column and the fingerprint both run
-  # the value through User.normalize_phone, so re-submitting the same number in another format
-  # must not invalidate a reset the user still needs.
+  # Storage and the reset fingerprint both normalize ten-digit US numbers, so format-only changes preserve reset authority.
   def test_generated_password_reset_token_survives_a_cosmetic_phone_reformat
     @user.update!(phone: '555-867-5309')
     token = @user.generate_token_for(:password_reset)
@@ -329,7 +319,6 @@ class PasswordsControllerTest < ActionDispatch::IntegrationTest
     follow_redirect!
     assert_equal 'Password successfully updated.', flash[:notice]
 
-    # Verify password was actually changed
     @user.reload
     assert_not_equal @original_password_digest, @user.password_digest
   end
@@ -384,14 +373,13 @@ class PasswordsControllerTest < ActionDispatch::IntegrationTest
     assert_response :unprocessable_content
     assert_equal 'Current password is incorrect.', flash.now[:alert]
 
-    # Verify password was not changed
     @user.reload
     assert_equal @original_password_digest, @user.password_digest
   end
 
   def test_should_not_update_password_with_mismatched_confirmation
     patch password_path, params: {
-      password_challenge: 'password123', # Use the password set in setup
+      password_challenge: 'password123',
       password: 'NewValid*Password123',
       password_confirmation: 'DifferentPassword123'
     }
@@ -399,23 +387,20 @@ class PasswordsControllerTest < ActionDispatch::IntegrationTest
     assert_response :unprocessable_content
     assert_equal 'New password and confirmation do not match.', flash.now[:alert]
 
-    # Verify password was not changed
     @user.reload
     assert_equal @original_password_digest, @user.password_digest
   end
 
   def test_should_not_update_password_with_invalid_new_password
     patch password_path, params: {
-      password_challenge: 'password123', # Use the password set in setup
+      password_challenge: 'password123',
       password: 'short',
       password_confirmation: 'short'
     }
 
     assert_response :unprocessable_content
-    # Check for model validation error message in the flash
     assert_equal 'Unable to update password. Please check requirements., Password is too short (minimum is 8 characters)', flash.now[:alert]
 
-    # Verify password was not changed
     @user.reload
     assert_equal @original_password_digest, @user.password_digest
   end
@@ -648,7 +633,6 @@ class PasswordsControllerTest < ActionDispatch::IntegrationTest
   private
 
   def create_basic_email_templates
-    # Create header and footer templates if they don't exist
     unless EmailTemplate.exists?(name: 'email_header_text', format: :text)
       EmailTemplate.create!(
         name: 'email_header_text',

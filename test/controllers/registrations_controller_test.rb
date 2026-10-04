@@ -6,7 +6,6 @@ class RegistrationsControllerTest < ActionDispatch::IntegrationTest
   include ActiveJob::TestHelper
 
   setup do
-    # Clear emails before each test
     ActionMailer::Base.deliveries.clear
 
     admin = User.find_by(email: 'david.bahar@maryland.gov') || create(:admin, email: 'david.bahar@maryland.gov')
@@ -35,8 +34,6 @@ class RegistrationsControllerTest < ActionDispatch::IntegrationTest
   end
 
   teardown do
-    # Clear emails after each test
-    # Clean up after tests
     ActionMailer::Base.deliveries.clear
   end
   def test_should_get_new
@@ -59,7 +56,6 @@ class RegistrationsControllerTest < ActionDispatch::IntegrationTest
         phone_type: 'voice',
         timezone: 'Eastern Time (US & Canada)',
         locale: 'en',
-        # Disabilities are required for constituents
         hearing_disability: true,
         vision_disability: false,
         speech_disability: false,
@@ -71,9 +67,8 @@ class RegistrationsControllerTest < ActionDispatch::IntegrationTest
     assert_redirected_to welcome_path
     assert_equal 'Account created successfully. Welcome!', flash[:notice]
 
-    # Verify user was created correctly
     user = User.last
-    assert_equal 'Users::Constituent', user.type # Correct STI class name
+    assert_equal 'Users::Constituent', user.type
     assert user.hearing_disability
     assert_not user.vision_disability
     assert_equal 'newuser@example.com', user.email
@@ -121,12 +116,10 @@ class RegistrationsControllerTest < ActionDispatch::IntegrationTest
     assert_includes assigns(:user).errors[:date_of_birth], 'must be in MM/DD/YYYY format'
   end
 
-  # Renamed test to reflect correct behavior: disability is NOT required at registration
   def test_should_create_constituent_without_disabilities
-    # User should be created successfully even without disability flags
     assert_difference('User.count', 1) do
       post sign_up_path, params: { user: {
-        email: 'nodisability@example.com', # Use a unique email for this test
+        email: 'nodisability@example.com',
         password: 'password123',
         password_confirmation: 'password123',
         first_name: 'New',
@@ -136,7 +129,7 @@ class RegistrationsControllerTest < ActionDispatch::IntegrationTest
         phone_type: 'voice',
         timezone: 'Eastern Time (US & Canada)',
         locale: 'en',
-        hearing_disability: false, # No disability selected
+        hearing_disability: false,
         vision_disability: false,
         speech_disability: false,
         mobility_disability: false,
@@ -144,11 +137,9 @@ class RegistrationsControllerTest < ActionDispatch::IntegrationTest
       } }
     end
 
-    # Should succeed and redirect
     assert_redirected_to welcome_path
     assert_equal 'Account created successfully. Welcome!', flash[:notice]
 
-    # Verify user was created correctly without disability flags set
     user = User.find_by(email: 'nodisability@example.com')
     assert_not_nil user
     assert_not user.disability_selected?, 'User should not have any disability flags set at registration'
@@ -183,7 +174,7 @@ class RegistrationsControllerTest < ActionDispatch::IntegrationTest
         first_name: 'New',
         last_name: 'User',
         date_of_birth: '1990-01-01',
-        phone: 'invalid-phone', # Invalid format
+        phone: 'invalid-phone',
         phone_type: 'voice',
         timezone: 'Eastern Time (US & Canada)',
         locale: 'en',
@@ -192,18 +183,16 @@ class RegistrationsControllerTest < ActionDispatch::IntegrationTest
     end
 
     assert_response :unprocessable_content
-    # Check errors directly on the instance variable assigned by the controller
     assert_includes assigns(:user).errors[:phone], 'must be a valid 10-digit US phone number'
   end
 
   def test_existing_email_redirects_to_sign_in_without_creating_account
-    # Use FactoryBot to create an existing user
     existing_user = create(:constituent)
 
     assert_no_difference(['User.count', 'Session.count', 'DuplicateReviewCase.count',
                           'DuplicateReviewCaseCandidate.count', 'Event.count']) do
       post sign_up_path, params: { user: {
-        email: existing_user.email, # Already exists
+        email: existing_user.email,
         password: 'password123',
         password_confirmation: 'password123',
         first_name: 'New',
@@ -253,8 +242,7 @@ class RegistrationsControllerTest < ActionDispatch::IntegrationTest
   end
 
   def test_should_not_create_user_with_existing_phone
-    # Use FactoryBot to create an existing user with a specific phone
-    test_phone = "555-#{rand(100..999)}-#{rand(1000..9999)}" # Generate a unique phone number
+    test_phone = "555-#{rand(100..999)}-#{rand(1000..9999)}"
     create(:constituent,
            email: "phone-test-#{SecureRandom.hex(4)}@example.com",
            phone: test_phone,
@@ -263,13 +251,13 @@ class RegistrationsControllerTest < ActionDispatch::IntegrationTest
     assert_no_difference(['User.count', 'DuplicateReviewCase.count',
                           'DuplicateReviewCaseCandidate.count', 'Event.count']) do
       post sign_up_path, params: { user: {
-        email: "unique-email-#{SecureRandom.hex(4)}@example.com", # Unique email to avoid conflicts
+        email: "unique-email-#{SecureRandom.hex(4)}@example.com",
         password: 'password123',
         password_confirmation: 'password123',
         first_name: 'New',
         last_name: 'User',
         date_of_birth: '1990-01-01',
-        phone: test_phone, # Already exists
+        phone: test_phone,
         phone_type: 'text',
         timezone: 'Eastern Time (US & Canada)',
         locale: 'en',
@@ -803,7 +791,7 @@ class RegistrationsControllerTest < ActionDispatch::IntegrationTest
       post sign_up_path, params: { user: {
         email: 'newuser@example.com',
         password: 'password123',
-        password_confirmation: 'different123', # Mismatched
+        password_confirmation: 'different123',
         first_name: 'New',
         last_name: 'User',
         date_of_birth: '1990-01-01',
@@ -816,16 +804,12 @@ class RegistrationsControllerTest < ActionDispatch::IntegrationTest
     end
 
     assert_response :unprocessable_content
-    # Check errors directly on the instance variable assigned by the controller
     assert_includes assigns(:user).errors[:password_confirmation], "doesn't match Password"
   end
 
   def test_should_send_registration_confirmation_email
-    # Template should be created by the setup block, no need to create it here again.
-    # Clear deliveries to ensure clean state
     ActionMailer::Base.deliveries.clear
 
-    # Create user parameters for registration
     user_params = {
       email: 'testuser@example.com',
       password: 'password123',
@@ -837,7 +821,7 @@ class RegistrationsControllerTest < ActionDispatch::IntegrationTest
       phone_type: 'voice',
       timezone: 'Eastern Time (US & Canada)',
       locale: 'en',
-      communication_preference: 'email', # Ensure email is sent
+      communication_preference: 'email',
       hearing_disability: true,
       vision_disability: false,
       speech_disability: false,
@@ -845,46 +829,36 @@ class RegistrationsControllerTest < ActionDispatch::IntegrationTest
       cognition_disability: false
     }
 
-    # Verify a user will be created and one job (the mailer) will be enqueued
     assert_difference('User.count') do
       assert_enqueued_jobs 1 do
-        # Create a new user with post request
         post sign_up_path, params: { user: user_params }
       end
     end
 
-    # Now perform the enqueued jobs and check deliveries
     perform_enqueued_jobs
     assert_equal 1, ActionMailer::Base.deliveries.size, 'Email should have been delivered'
 
-    # Verify the registration was successful
     assert_redirected_to welcome_path
     assert_equal 'Account created successfully. Welcome!', flash[:notice]
 
-    # Verify user was created with expected attributes
     user = User.find_by(email: 'testuser@example.com')
     assert_not_nil user, 'User should have been created'
     assert_equal 'Test', user.first_name
     assert_equal 'User', user.last_name
     assert user.hearing_disability
 
-    # Verify the email was sent and has correct attributes
     assert_equal 1, ActionMailer::Base.deliveries.size, 'One email should have been sent'
     email = ActionMailer::Base.deliveries.last
 
-    # Verify email headers
     assert_not_nil email, 'Email should not be nil'
     assert_equal ['no_reply@mdmat.org'], email.from, 'Email should be from no_reply@mdmat.org'
     assert_equal ['testuser@example.com'], email.to, 'Email should be sent to the registered user'
     assert_equal 'Welcome to the Maryland Accessible Telecommunications Program', email.subject
 
-    # Get the email content
     content = email.body.decoded
 
-    # Test that variables were substituted with values
     assert_match(/Test/, content, 'First name should be substituted')
     assert_match(/Test User/, content, 'Full name should be substituted')
-    # Dashboard and new application links were removed from the template body
   end
 
   def test_registration_confirmation_uses_spanish_template_for_spanish_locale
@@ -959,7 +933,7 @@ class RegistrationsControllerTest < ActionDispatch::IntegrationTest
 
   def assert_no_sign_in_cta
     assert_select 'footer.text-center', count: 0
-    # Only the shared navigation logo links to sign-in; support offers no account handoff.
+    # The shared navigation logo accounts for the one sign-in link.
     assert_select 'a[href=?]', sign_in_path, count: 1
     assert_select 'body > header a[href=?]', sign_in_path, count: 1 do
       assert_select 'img[alt=?]', 'TAM Logo', count: 1
