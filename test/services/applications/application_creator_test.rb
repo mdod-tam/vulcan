@@ -212,7 +212,6 @@ module Applications
         current_user: @user,
         submission_method: 'online',
         is_submission: true
-        # Form is invalid - missing required fields like annual_income for submission
       )
 
       result = ApplicationCreator.call(form)
@@ -223,7 +222,6 @@ module Applications
 
     test 'handles database errors gracefully' do
       form = create_valid_form(@user)
-      # Force a validation error by making annual_income invalid
       form.annual_income = nil
       form.is_submission = true
 
@@ -271,7 +269,6 @@ module Applications
       create_guardian_relationship(@user, @dependent)
       form = create_valid_dependent_form(@user, @dependent)
 
-      # Mock the EventService to verify it's called
       mock_service = Minitest::Mock.new
       mock_service.expect :log_dependent_application_update, nil do |args|
         args[:dependent] == @dependent && args[:relationship_type] == 'parent'
@@ -282,7 +279,6 @@ module Applications
         result = ApplicationCreator.call(form)
       end
 
-      # Verify the application was created successfully
       assert result.success?
       assert_not_nil result.application
       assert_equal @dependent, result.application.user
@@ -291,11 +287,8 @@ module Applications
       mock_service.verify
     end
 
-    # --- Pending-review submission gate (PR5a) ---------------------------------
-    #
-    # A registration soft match creates a durable review case. Its subject may sign in, draft, and
-    # autosave, but must not finally submit until staff resolves the case -- otherwise the account
-    # submits an application that bypasses the canonical record's history.
+    # Pending identity review
+    # Final submission waits for staff to resolve the applicant's open registration soft match case.
 
     test 'blocks final submission while the applicant has an open registration soft match case' do
       open_registration_soft_match_case_for(@user)
@@ -312,10 +305,7 @@ module Applications
                       I18n.t('activemodel.errors.models.application_form.attributes.base.pending_identity_review')
     end
 
-    # The constituent portal never wraps requests in I18n.with_locale -- that is applied only to
-    # the public auth flows -- so resolving this message from the ambient locale would always
-    # render English and make the Spanish translation unreachable. It resolves through
-    # ApplicationForm#message_locale instead.
+    # ApplicationForm#message_locale selects the applicant's locale when the ambient locale differs.
     test 'the refusal is rendered in the applicant locale, not the ambient one' do
       spanish_user = create(:constituent, locale: 'es')
       open_registration_soft_match_case_for(spanish_user)
@@ -361,11 +351,8 @@ module Applications
       assert_not ActiveStorage::Blob.service.exist?(stored_keys.first)
     end
 
-    # The submitted locale reaches the form straight from params with no allowlisting on the way
-    # in, and this gate is the first thing to hand it to I18n. A locale this app does not carry
-    # must therefore fall back rather than raise: an I18n::InvalidLocale here would be swallowed by
-    # the generic rescue and the typed pending-review refusal would degrade into an ordinary
-    # validation error, which the portal renders as a red "you did something wrong" summary.
+    # Submitted locale values reach the form without an allowlist.
+    # An unsupported locale must fall back before I18n receives it, so the gate can return its typed refusal.
     test 'an unsupported submitted locale falls back instead of degrading the refusal' do
       open_registration_soft_match_case_for(@user)
       form = create_valid_form(@user)
@@ -392,10 +379,7 @@ module Applications
       assert_equal 'draft', result.application.status
     end
 
-    # The refusal notice tells the constituent to reselect their documents and use "Save
-    # Application" to keep them. That instruction is only worth giving if it is true: the gate runs
-    # only for a submission, so a draft save still reaches attach_file_uploads and the documents
-    # really do land on the draft.
+    # The refusal notice offers Save Application to retain documents. Draft saves must still reach attachment intake.
     test 'a draft save while gated still attaches the selected documents' do
       open_registration_soft_match_case_for(@user)
       form = create_valid_form_with_proofs(@user)
@@ -425,7 +409,7 @@ module Applications
     end
 
     test 'does not gate the candidate account named by someone else open case' do
-      candidate = create(:constituent) # the matched account, not the case subject
+      candidate = create(:constituent)
       open_registration_soft_match_case_for(@user, candidate: candidate)
       form = create_valid_form(candidate)
       form.is_submission = true
@@ -462,10 +446,7 @@ module Applications
       assert result.success?, result.error_messages.to_sentence
     end
 
-    # The gate reads the applicant, not the actor. For a guardian-managed application those differ,
-    # and getting it backwards fails in both directions: it would let a gated dependent's
-    # application through whenever a guardian submits it, and would block a dependent whose own
-    # identity was never in question. The two tests below pin each direction.
+    # The dependent is the applicant. An open case for the acting guardian alone does not block submission.
     test 'gates a guardian-managed application when the dependent applicant is the case subject' do
       create_guardian_relationship(@user, @dependent)
       open_registration_soft_match_case_for(@dependent)
@@ -484,7 +465,7 @@ module Applications
 
     test 'does not gate a dependent application merely because the acting guardian has an open case' do
       create_guardian_relationship(@user, @dependent)
-      open_registration_soft_match_case_for(@user) # the guardian, who is the actor and not the applicant
+      open_registration_soft_match_case_for(@user)
       form = create_valid_dependent_form(@user, @dependent)
       form.is_submission = true
 
@@ -495,16 +476,10 @@ module Applications
       assert_equal @dependent, result.application.user
     end
 
-    # The central safety claim of this gate is that a refusal costs nothing: the refusal is raised
-    # before any write, so the applicant's account, the draft, and every durable trail around them
-    # are exactly as they were. The two tests below assert that directly rather than inferring it
-    # from statement order, once for each entrypoint.
-    #
-    # Measured against a successful submission of the same form, the discriminating counters are
-    # Application (+1), ApplicationStatusChange (+1), Event (+2), ActiveStorage::Attachment (+2),
-    # and the applicant's own attributes, which the success path really does rewrite. Notification,
-    # enqueued jobs, and deliveries all stay at zero even on success at this level -- they are
-    # asserted anyway as forward-looking guards, not as currently discriminating evidence.
+    # The review gate runs before participant updates and application writes.
+    # Both entrypoints must preserve the stored applicant and draft.
+    # The notification, job, and delivery assertions guard future changes.
+    # These tests do not compare those counts with a successful submission.
     test 'a refused create leaves no application, lifecycle, audit, notification, attachment, or delivery trace' do
       open_registration_soft_match_case_for(@user)
       form = create_valid_form_with_proofs(@user)
@@ -638,7 +613,7 @@ module Applications
       )
     end
 
-    # Carries proofs so "no attachment was created" is a real assertion rather than a vacuous one.
+    # Proof uploads let these assertions detect unintended attachments.
     def create_valid_form_with_proofs(user)
       form = create_valid_form(user)
       form.residency_proof = fixture_file_upload('test/fixtures/files/residency_proof.pdf', 'application/pdf')

@@ -107,8 +107,7 @@ export default class extends Controller {
   }
 
   /**
-   * Toggle medical provider fields visibility and required attribute
-   * When "No medical provider information provided" is checked, hide fields and remove required
+   * Hides provider fields and removes their required state when the no-provider option is selected.
    */
   toggleMedicalProvider(event) {
     this.syncFormState(event);
@@ -226,19 +225,18 @@ export default class extends Controller {
   }
 
   /**
-   * Temporary method to prevent errors - this functionality should be handled by income-validation controller
-   * TODO: Replace with proper income-validation controller setup
+   * Temporary no-op for income-validation calls.
+   * TODO: Replace with proper income-validation controller setup.
    */
   validateIncomeThreshold() {
     if (process.env.NODE_ENV !== 'production') {
       console.warn('validateIncomeThreshold called on paper-application controller - this should be handled by income-validation controller');
     }
-    // For now, prevent the error - the income validation should be handled elsewhere
   }
 
   /**
-   * Open the rejection modal and populate hidden fields with data from the main form.
-   * Uses native <dialog> showModal() API for proper accessibility.
+   * Copies form values into the rejection modal and opens it.
+   * Native <dialog> uses showModal() for modal focus behavior.
    */
   openRejectionModal() {
     const dialog = document.getElementById('rejection-modal');
@@ -247,10 +245,8 @@ export default class extends Controller {
       return;
     }
 
-    // Populate hidden fields from main form values
     this._populateRejectionModalFields();
 
-    // Open the dialog using native API
     if (dialog.tagName === 'DIALOG') {
       dialog.showModal();
     } else {
@@ -286,11 +282,9 @@ export default class extends Controller {
   }
 
   /**
-   * Populate the rejection modal hidden fields with values from the main form
    * @private
    */
   _populateRejectionModalFields() {
-    // Get values from main form fields
     const firstName = this.element.querySelector('[name="constituent[first_name]"]')?.value ||
                       this.element.querySelector('[name="guardian_attributes[first_name]"]')?.value || '';
     const lastName = this.element.querySelector('[name="constituent[last_name]"]')?.value ||
@@ -358,7 +352,7 @@ export default class extends Controller {
         preference === 'letter' ? 'Printed Letter' : 'Email';
       this.rejectionExistingPreferenceNoticeTarget.classList.remove('hidden');
     } catch (_error) {
-      // Non-blocking enhancement: keep modal functional even if lookup fails.
+      // Preference lookup failure must not prevent modal use.
     }
   }
 

@@ -69,7 +69,7 @@ class UploadedDocument
     validator.options.fetch(:purpose)
   end
 
-  # Checks whether a retained reference can be shown after failure. This check does not lock or inspect content.
+  # A restorable reference can appear after failure. This read does not lock or inspect content.
   # Submission still calls resolve!.
   def self.restorable(signed_id, record:, name:)
     return unless signed_id.is_a?(String) && signed_id.present?

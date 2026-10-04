@@ -3,25 +3,21 @@ import { setVisible } from "../../utils/visibility"
 import { calculateThreshold as calculateThresholdUtil } from "../../services/income_threshold"
 
 /**
- * Income Validation Controller
- * 
- * Validates that annual income is within FPL (Federal Poverty Level) thresholds
- * for the given household size. Shows warnings and dispatches validation state.
- * Final submit button state is owned by the form-specific submit gate controllers.
+ * Compares annual income with FPL (Federal Poverty Level) thresholds for the household size.
+ * Shows warnings and dispatches validation state. The form controllers own final submit readiness.
  */
 class IncomeValidationController extends Controller {
   static targets = [
     "householdSize", "annualIncome", "warningContainer", "incomeFieldsContainer", "noIncomeProvided"
   ]
 
-  static outlets = ["flash"] // Declare flash outlet
+  static outlets = ["flash"]
   static values = {
-    fplThresholds: String,  // JSON string of FPL thresholds
-    modifier: Number // FPL modifier percentage from policy
+    fplThresholds: String,  // Server-rendered JSON of base FPL amounts.
+    modifier: Number // Policy percentage of base FPL.
   }
 
   connect() {
-    // Parse FPL thresholds from server-rendered data
     try {
       this.fplThresholds = JSON.parse(this.fplThresholdsValue)
     } catch (error) {
@@ -29,22 +25,21 @@ class IncomeValidationController extends Controller {
       this.fplThresholds = {}
     }
     
-    // Bind method for event listener cleanup
+    // Reuse this bound listener during disconnect.
     this._validate = this.validateIncomeThreshold.bind(this)
 
     this.setupEventListeners()
 
-    // Listen for currency formatter updates to re-validate immediately after formatting/blur
+    // Currency formatting can change the raw value after the input event.
     this._onCurrencyRawUpdate = () => this.validateIncomeThreshold()
     this._onCurrencyFormatted = () => this.validateIncomeThreshold()
     try {
       this.element.addEventListener('currency-formatter:rawValueUpdated', this._onCurrencyRawUpdate)
       this.element.addEventListener('currency-formatter:formatted', this._onCurrencyFormatted)
     } catch (_) {
-      // no-op: event wiring is best-effort
+      // Listener setup failure does not prevent controller initialization.
     }
 
-    // Mark as loaded and validate initial state
     this.element.dataset.fplLoaded = "true"
     this.element.classList.add("fpl-data-loaded")
     this.dispatch("fpl-data-loaded")
@@ -57,7 +52,6 @@ class IncomeValidationController extends Controller {
       if (this._onCurrencyRawUpdate) this.element.removeEventListener('currency-formatter:rawValueUpdated', this._onCurrencyRawUpdate)
       if (this._onCurrencyFormatted) this.element.removeEventListener('currency-formatter:formatted', this._onCurrencyFormatted)
     } catch (_) {
-      // no-op
     }
   }
 
@@ -103,7 +97,6 @@ class IncomeValidationController extends Controller {
     const size = this.getHouseholdSize()
     const income = this.getAnnualIncome()
 
-    // Skip validation if inputs are invalid
     if (size < 1 || income < 1) {
       this.clearValidationState()
       return
@@ -115,7 +108,6 @@ class IncomeValidationController extends Controller {
 
     this.updateValidationUI(exceedsThreshold, threshold)
 
-    // Dispatch custom event for other controllers to listen to
     this.dispatch("validated", {
       detail: {
         exceedsThreshold,
@@ -137,18 +129,17 @@ class IncomeValidationController extends Controller {
   getAnnualIncome() {
     if (this.hasAnnualIncomeTarget) {
       const target = this.annualIncomeTarget
-      // Handle both formatted and raw input values
       const value = target.value
       const rawValue = target.dataset.rawValue
       const inputType = (target.getAttribute('type') || '').toLowerCase()
       const hasNonNumericChars = /[^0-9.\-]/.test(value)
 
-      // Prefer rawValue only for text inputs or when formatted characters are present
+      // Text inputs can contain currency formatting, so prefer their raw value.
       if (rawValue && (inputType === 'text' || hasNonNumericChars)) {
         return parseFloat(rawValue) || 0
       }
 
-      // For number inputs or plain numeric values, trust the visible value
+      // A number input can change before its cached raw value updates.
       const parsed = parseFloat(value)
       if (!Number.isNaN(parsed)) return parsed
       return parseFloat((value || '').replace(/[^\d.-]/g, '')) || 0
@@ -157,7 +148,6 @@ class IncomeValidationController extends Controller {
   }
 
   calculateThresholdForSize(householdSize) {
-    // Use server-rendered data with fallback to prevent failures
     const fallbackFpl = {
       1: 15650, 2: 21150, 3: 26650, 4: 32150,
       5: 37650, 6: 43150, 7: 48650, 8: 54150
@@ -193,14 +183,14 @@ class IncomeValidationController extends Controller {
   showWarning(target, threshold) {
     target.innerHTML = this.buildWarningHTML(threshold)
     setVisible(target, true)
-    // Ensure HTML hidden attribute is removed in environments without CSS
+    // The hidden attribute controls visibility without CSS.
     try { target.removeAttribute('hidden') } catch (_) {}
     target.setAttribute("role", "alert")
   }
 
   hideWarning(target) {
     setVisible(target, false)
-    // Ensure HTML hidden attribute is set in environments without CSS
+    // The hidden attribute controls visibility without CSS.
     try { if (!target.hasAttribute('hidden')) target.setAttribute('hidden', '') } catch (_) {}
     target.removeAttribute("role")
   }
@@ -227,8 +217,7 @@ class IncomeValidationController extends Controller {
       this.hideWarning(this.warningContainerTarget)
     }
     this.resetIncomeFieldsContainerStyle()
-    // Dispatch so paper-application re-applies combined gating (income + existing-adult verification).
-    // paper-application#handleIncomeValidation will call updateSubmitButton as needed.
+    // Form controllers must recompute submit readiness when the income block clears.
     this.dispatch("validated", {
       detail: {
         exceedsThreshold: false,
@@ -239,15 +228,10 @@ class IncomeValidationController extends Controller {
     })
   }
 
-  /**
-   * Updates the income fields container background to provide visual feedback
-   * Green = income within threshold, Red = income exceeds threshold
-   */
   updateIncomeFieldsContainerStyle(exceedsThreshold) {
     if (!this.hasIncomeFieldsContainerTarget) return
 
     const container = this.incomeFieldsContainerTarget
-    // Remove all validation-related classes first
     container.classList.remove(
       'bg-gray-50', 'border-gray-200',
       'bg-green-50', 'border-green-300',
@@ -255,17 +239,12 @@ class IncomeValidationController extends Controller {
     )
 
     if (exceedsThreshold) {
-      // Red background for exceeds threshold
       container.classList.add('bg-red-50', 'border-red-300')
     } else {
-      // Green background for within threshold
       container.classList.add('bg-green-50', 'border-green-300')
     }
   }
 
-  /**
-   * Resets the income fields container to neutral state (gray)
-   */
   resetIncomeFieldsContainerStyle() {
     if (!this.hasIncomeFieldsContainerTarget) return
 
@@ -278,7 +257,6 @@ class IncomeValidationController extends Controller {
   }
 
 
-  // Action methods for manual triggering
   validateAction() {
     this.validateIncomeThreshold()
   }

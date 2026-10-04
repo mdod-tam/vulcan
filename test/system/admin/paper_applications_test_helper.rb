@@ -1,23 +1,15 @@
 # frozen_string_literal: true
 
-# Paper Application Test Helper
-#
-# Simplified helper module for paper application system tests.
-# This module provides basic form interaction helpers that work with
-# the centralized ApplicationSystemTestCase infrastructure.
+# Form helpers for paper application system tests.
 module PaperApplicationsTestHelper
-  # Helper methods for filling out paper application forms
-
   def fill_in_applicant_information(first_name: 'John', last_name: 'Doe', email: nil, phone: '555-123-4567', date_of_birth: '01/15/1980')
     email ||= "#{first_name.downcase}.#{last_name.downcase}.#{Time.now.to_i}@example.com"
 
     within_applicant_fieldset do
-      # Use explicit field clearing for critical fields that might be reused
       find('input[name="constituent[first_name]"]').set('').set(first_name)
       find('input[name="constituent[last_name]"]').set('').set(last_name)
       find('input[name="constituent[email]"]').set('').set(email)
       find('input[name="constituent[phone]"]').set('').set(phone)
-      # Date of birth is required
       find('input[name="constituent[date_of_birth]"]').set(date_of_birth)
       find('input[name="constituent[physical_address_1]"]').set('').set('123 Main St')
       find('input[name="constituent[city]"]').set('').set('Baltimore')
@@ -28,13 +20,12 @@ module PaperApplicationsTestHelper
 
   def fill_in_application_details(household_size: 2, annual_income: 30_000)
     within_application_details_fieldset do
-      # Clear and set field values explicitly to avoid concatenation issues
       household_size_field = find('input[name="application[household_size]"]')
-      household_size_field.set('') # Clear first
+      household_size_field.set('')
       household_size_field.set(household_size.to_s)
 
       income_field = find('input[name="application[annual_income]"]')
-      income_field.set('') # Clear first
+      income_field.set('')
       income_field.set(annual_income.to_s)
 
       check 'application[maryland_resident]'
@@ -50,7 +41,6 @@ module PaperApplicationsTestHelper
 
   def fill_in_medical_provider_information(name: 'Dr. Smith', phone: '555-987-6543', email: 'dr.smith@example.com')
     within_medical_provider_fieldset do
-      # Clear and set field values explicitly to avoid concatenation issues
       find('input[name="application[medical_provider_name]"]').set('').set(name)
       find('input[name="application[medical_provider_phone]"]').set('').set(phone)
       find('input[name="application[medical_provider_email]"]').set('').set(email)
@@ -61,15 +51,12 @@ module PaperApplicationsTestHelper
     attach_file 'medical_certification', Rails.root.join('test/fixtures/files/medical_certification_valid.pdf')
 
     within_proof_documents_fieldset do
-      # Income proof
       choose 'accept_income_proof', allow_label_click: true
       attach_file 'income_proof', Rails.root.join('test/fixtures/files/income_proof.pdf')
 
-      # Residency proof
       choose 'accept_residency_proof', allow_label_click: true
       attach_file 'residency_proof', Rails.root.join('test/fixtures/files/residency_proof.pdf')
 
-      # ID proof
       choose 'accept_id_proof', allow_label_click: true
       attach_file 'id_proof', Rails.root.join('test/fixtures/files/residency_proof.pdf')
     end
@@ -96,7 +83,7 @@ module PaperApplicationsTestHelper
     JS
   end
 
-  # Fieldset helper methods
+  # Form sections
   def within_applicant_fieldset(&)
     reveal_adult_application_sections
     within find_by_id('self-info-section'), &
@@ -119,7 +106,7 @@ module PaperApplicationsTestHelper
     within find('section', text: 'Proof Documents'), &
   end
 
-  # Utility methods for common test actions
+  # Browser interactions
   def safe_visit(path)
     visit(path)
     wait_for_network_idle
@@ -197,20 +184,18 @@ module PaperApplicationsTestHelper
     assert_match(/Complete all required confirmations before submitting/i, status)
   end
 
-  # Simple field filling that tries multiple approaches with proper clearing
   def paper_fill_in(field_label, value)
-    # Try standard approach with explicit clearing first
     field = find_field(field_label)
     field.set('').set(value)
   rescue Capybara::ElementNotFound
-    # Try by name attribute as fallback
+    # Named-field fallback
     case field_label
     when 'Household Size'
       find('input[name="application[household_size]"]').set('').set(value)
     when 'Annual Income'
       find('input[name="application[annual_income]"]').set('').set(value)
     else
-      # Try find by partial text match and clear first
+      # First-match fallback
       field = find_field(field_label, match: :first)
       field.set('').set(value)
     end

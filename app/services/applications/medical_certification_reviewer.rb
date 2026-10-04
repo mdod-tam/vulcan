@@ -1,19 +1,17 @@
 # frozen_string_literal: true
 
 module Applications
-  # Service for reviewing and managing medical certification documents
-  # Handles rejection workflow including notifications to provider and application status updates
+  # Rejects certifications and requests a corrected document from the provider.
   class MedicalCertificationReviewer < BaseService
     attr_reader :application, :admin
 
     def initialize(application, admin)
-      super() # Initialize BaseService
+      super()
       @application = application
       @admin = admin
     end
 
-    # Reject a medical certification with a specific reason
-    # Updates application status and notifies provider
+    # Records the rejection and attempts provider notification.
     # @param rejection_reason [String] The reason for rejection
     # @param notes [String, nil] Optional additional notes for internal use
     # @param rejection_reason_code [String, nil] Stable code for locale-aware resolution (e.g. missing_signature)
@@ -21,15 +19,12 @@ module Applications
     def reject(rejection_reason:, notes: nil, rejection_reason_code: nil)
       Rails.logger.info "Rejecting medical certification for Application ##{application.id}"
 
-      # Validate all inputs and prerequisites
       validation_result = validate_rejection_inputs(rejection_reason)
       return validation_result if validation_result.failure?
 
-      # Process the rejection through the dedicated service
       service_result = process_rejection(rejection_reason, notes, rejection_reason_code)
       return service_result if service_result.failure?
 
-      # Create additional note if provided
       note_result = create_rejection_note(notes)
       return note_result if note_result.failure?
 
@@ -58,7 +53,7 @@ module Applications
 
       secure_upload_request = request_secure_certification_upload
 
-      # Notify provider via fax/email channel and attach delivery metadata to the same notification record
+      # Add provider delivery metadata to the rejection notification.
       notify_medical_provider(
         rejection_reason,
         service_result[:notification_id],
@@ -96,15 +91,12 @@ module Applications
         secure_upload_url: secure_upload_url
       )
     rescue StandardError => e
-      # Log but don't fail the reviewer - the rejection already succeeded (DB updated, notification created)
       Rails.logger.error("Provider notification failed for application #{application.id}: #{sanitize_secure_error_message(e.message)}")
       Rails.logger.error(sanitize_secure_error_message(e.backtrace.join("\n")))
 
-      # Optional: Report to error tracking service if available
       # Sentry.capture_exception(e) if defined?(Sentry)
 
-      # Provider notification failure doesn't prevent rejection from succeeding
-      # Admin can manually contact provider if needed
+      # Notification failure does not undo the rejection. Staff can contact the provider manually.
     end
 
     def create_rejection_note(notes)

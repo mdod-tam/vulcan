@@ -1,6 +1,6 @@
 import { Controller } from "@hotwired/stimulus"
 
-// Some browsers report empty or generic types for HEIC and TIFF.
+// The reported MIME type can be empty or outside the allowlist.
 // Use the extension when the reported type is not allowed.
 const EXTENSION_TO_MIME = {
   pdf: "application/pdf",
@@ -19,9 +19,9 @@ const EXTENSION_TO_MIME = {
  * Rails uploads files to storage before it submits the form.
  * A completed upload does not mean the server accepted the document.
  *
- * This control validates selections, shows progress, and lets users cancel or remove pending uploads.
+ * Users can cancel or remove pending uploads. The control validates selections and shows progress.
  * The server uses retained references to rebuild a failed submission.
- * Remove clears this control's pending references without deleting an attached document.
+ * Remove clears pending references and leaves attached documents intact.
  * The form controller owns submit readiness through direct-uploads:start/end.
  */
 export default class extends Controller {
@@ -164,7 +164,7 @@ export default class extends Controller {
     this.element.append(input)
   }
 
-  // The hidden signed-ID inputs Rails added for this control's completed uploads
+  // Rails adds hidden signed-ID inputs for this control's completed uploads.
   uploadedReferences() {
     return Array.from(this.element.querySelectorAll('input[type="hidden"]'))
       .filter(input => input.name === this.inputTarget.name)

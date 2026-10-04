@@ -22,7 +22,6 @@ class PrintQueueItem < ApplicationRecord
 
   has_one_attached :pdf_letter
 
-  # Define enums with explicit name parameter
   enum :letter_type, {
     account_created: 0,
     income_proof_rejected: 1,
@@ -95,7 +94,7 @@ class PrintQueueItem < ApplicationRecord
     EmailDelivery::Decision.allowed
   end
 
-  # Called with the item locked by Letters::Delivery. Release is authorization, not proof of printing.
+  # Letters::Delivery locks the item before this call. Release authorizes printing but does not confirm it.
   def release_for_printing!(actor:)
     return if released_at
 

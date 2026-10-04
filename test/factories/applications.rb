@@ -2,19 +2,15 @@
 
 FactoryBot.define do
   factory :application do
-    # Required associations
     user factory: %i[constituent with_disabilities], strategy: :create
 
-    # Make managing_guardian truly optional by not specifying it by default
-    # It will be nil unless explicitly set in the test
+    # The model can infer managing_guardian from a GuardianRelationship.
 
-    # Base status fields with default values
     status { :in_progress }
     income_proof_status { :not_reviewed }
     residency_proof_status { :not_reviewed }
     medical_certification_status { :not_requested }
 
-    # Other required fields
     application_date { 4.years.ago }
     maryland_resident { true }
     self_certify_disability { true }
@@ -27,10 +23,10 @@ FactoryBot.define do
 
     transient do
       skip_proofs { false }
-      use_mock_attachments { false } # Whether to use mock_attached_file instead of real attachments
+      use_mock_attachments { false }
     end
 
-    # Simple traits for different application states
+    # Application states
     trait :draft do
       status { :draft }
     end
@@ -84,10 +80,10 @@ FactoryBot.define do
       last_activity_at { 8.years.ago }
     end
 
-    # Trait for applications that are old enough to allow new applications
-    # Use this when tests need to create multiple applications for the same user
+    # Use this trait for tests with multiple applications per applicant.
+    # The dates exceed the default three-year waiting period.
     trait :old_enough_for_new_application do
-      application_date { 4.years.ago } # Older than the 3-year waiting period
+      application_date { 4.years.ago }
       last_activity_at { 4.years.ago }
     end
 
@@ -98,10 +94,8 @@ FactoryBot.define do
       needs_review_since { Time.current }
       last_activity_at { Time.current }
 
-      # This trait represents the constituent portal scenario where
-      # proofs were uploaded and then rejected by admin review
+      # This trait represents rejected uploads from the constituent portal.
       after(:create) do |application|
-        # Attach sample proofs to represent the uploaded-then-rejected scenario
         application.income_proof.attach(
           io: Rails.root.join('test/fixtures/files/medical_certification_valid.pdf').open,
           filename: 'income_proof.pdf',
@@ -118,10 +112,8 @@ FactoryBot.define do
     trait :paper_rejected_proofs do
       status { :awaiting_proof }
 
-      # This trait represents the paper application scenario where
-      # admin rejected proofs without uploading them (paper workflow)
+      # This trait represents paper proofs rejected without uploads.
       after(:create) do |application|
-        # Use update_columns to bypass validations for this specific paper scenario
         application.update_columns(
           income_proof_status: Application.income_proof_statuses[:rejected],
           residency_proof_status: Application.residency_proof_statuses[:rejected],
@@ -135,7 +127,7 @@ FactoryBot.define do
       residency_proof_status { :approved }
     end
 
-    # Clean attachment traits using real files
+    # Attachment traits
     trait :with_income_proof do
       after(:create) do |application|
         application.income_proof.attach(
@@ -183,7 +175,6 @@ FactoryBot.define do
       with_medical_certification
     end
 
-    # Trait for testing medical certification upload workflow
     trait :with_medical_certification_requested do
       medical_certification_status { :requested }
     end
@@ -195,8 +186,6 @@ FactoryBot.define do
       needs_review_since { Time.current }
 
       after(:create) do |application|
-        # Attach proofs that need review
-
         application.income_proof.attach(
           io: Rails.root.join('test/fixtures/files/medical_certification_valid.pdf').open,
           filename: 'income_proof.pdf',
@@ -209,7 +198,7 @@ FactoryBot.define do
           content_type: 'application/pdf'
         )
 
-        # Create audit events for proof submissions so needs_proof_type_review? returns true
+        # Submission events make needs_proof_type_review? true before any review exists.
         Event.create!(
           user: application.user,
           action: 'income_proof_submitted',
@@ -244,7 +233,6 @@ FactoryBot.define do
       last_activity_at { Time.current }
 
       after(:create) do |application|
-        # Attach proofs that were rejected
         application.income_proof.attach(
           io: Rails.root.join('test/fixtures/files/medical_certification_valid.pdf').open,
           filename: 'income_proof.pdf',
@@ -258,24 +246,20 @@ FactoryBot.define do
       end
     end
 
-    # This trait creates an application for a dependent, managed by a guardian.
     trait :for_dependent do
       transient do
         guardian { create(:constituent, first_name: 'Guardian', last_name: 'User') }
-        dependent_attrs { { first_name: 'Dependent', last_name: 'User' } } # Pass attributes for the dependent
+        dependent_attrs { { first_name: 'Dependent', last_name: 'User' } }
         relationship_type { 'Parent' }
       end
 
-      # The main `user` of the application is the dependent.
-      user factory: %i[constituent] # This will be overridden by the dependent created below
+      user factory: %i[constituent] # The after(:build) callback replaces this association with the dependent.
 
       after(:build) do |application, evaluator|
-        # Ensure dependent is created using transient attributes
         dependent_user = create(:constituent, evaluator.dependent_attrs)
-        application.user = dependent_user # Explicitly set the application's user to the dependent
+        application.user = dependent_user
         application.managing_guardian = evaluator.guardian
 
-        # Create the relationship if it doesn't exist
         unless GuardianRelationship.exists?(guardian_user: evaluator.guardian, dependent_user: dependent_user)
           create(:guardian_relationship, guardian_user: evaluator.guardian, dependent_user: dependent_user,
                                          relationship_type: evaluator.relationship_type)
@@ -295,14 +279,14 @@ FactoryBot.define do
       end
     end
 
-    # DEPRECATED: Use :for_dependent trait for more clarity.
+    # DEPRECATED: Use :for_dependent.
     trait :submitted_by_guardian do
-      for_dependent # Delegates to the new :for_dependent trait
+      for_dependent
     end
 
-    # DEPRECATED: Use :for_dependent trait with relationship_type: 'Legal Guardian'.
+    # DEPRECATED: Use :for_dependent with relationship_type: 'Legal Guardian'.
     trait :submitted_by_legal_guardian do
-      for_dependent { { relationship_type: 'Legal Guardian' } } # Delegates with specific relationship
+      for_dependent { { relationship_type: 'Legal Guardian' } }
     end
   end
 end

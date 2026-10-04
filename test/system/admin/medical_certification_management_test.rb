@@ -3,24 +3,19 @@
 require 'application_system_test_case'
 
 module Admin
-  # This is a consolidated test file for managing medical certifications in the admin panel.
-  # It covers UI states, approval/rejection workflows, and validation, combining the
-  # responsibilities of several older, redundant test files.
   class MedicalCertificationManagementTest < ApplicationSystemTestCase
     setup do
       @admin = create(:admin)
-      # Create a base application that can be modified by each test
       @application = create(:application,
                             status: 'in_progress',
-                            medical_certification_status: 'not_requested', # Start from a neutral state
+                            medical_certification_status: 'not_requested',
                             medical_provider_name: 'Dr. Test Provider',
                             medical_provider_email: 'provider@example.com')
 
-      # Sign in as admin using system test helper
       system_test_sign_in(@admin)
     end
 
-    # --- UI State Tests ---
+    # Certification UI states
 
     test 'upload form is shown when certification is requested' do
       @application.update!(medical_certification_status: 'requested')
@@ -32,7 +27,6 @@ module Admin
     end
 
     test 'review actions are shown when certification is received' do
-      # Simulate a received certification
       @application.medical_certification.attach(io: StringIO.new('test content'), filename: 'cert.pdf', content_type: 'application/pdf')
       @application.update!(medical_certification_status: 'received')
       visit admin_application_path(@application)
@@ -42,7 +36,6 @@ module Admin
     end
 
     test 'view link is shown when certification is approved' do
-      # Simulate an approved certification
       @application.medical_certification.attach(io: StringIO.new('test content'), filename: 'cert.pdf', content_type: 'application/pdf')
       @application.update!(medical_certification_status: 'approved')
       visit admin_application_path(@application)
@@ -51,16 +44,14 @@ module Admin
       assert_link 'View Medical Certification Document'
     end
 
-    # --- Functional Tests ---
+    # Certification actions
 
     test 'admin can approve a medical certification during upload' do
       @application.update!(medical_certification_status: 'requested')
       visit admin_application_path(@application)
 
-      # Wait for page to be fully loaded
       wait_for_turbo
 
-      # Ensure the form is present before interacting
       assert_selector '[data-testid="medical-certification-upload-form"]', wait: 10
 
       within '[data-testid="medical-certification-upload-form"]' do
@@ -69,7 +60,6 @@ module Admin
         click_button 'Process Certification'
       end
 
-      # Wait for form submission to complete
       wait_for_turbo
 
       assert_success_message('Disability certification successfully uploaded and approved.')
@@ -78,7 +68,6 @@ module Admin
       assert_equal 'approved', @application.medical_certification_status
       assert_audit_event('medical_certification_status_changed', actor: @admin, auditable: @application)
 
-      # Clear any pending network connections to prevent timeout during teardown
       clear_pending_network_connections if respond_to?(:clear_pending_network_connections)
     end
 
@@ -94,10 +83,8 @@ module Admin
       @application.update!(medical_certification_status: 'requested')
       visit admin_application_path(@application)
 
-      # Wait for page to be fully loaded
       wait_for_turbo
 
-      # Ensure the form is present before interacting
       assert_selector '[data-testid="medical-certification-upload-form"]', wait: 10
 
       within '[data-testid="medical-certification-upload-form"]' do
@@ -107,7 +94,6 @@ module Admin
         click_button 'Process Certification'
       end
 
-      # Wait for form submission to complete
       wait_for_turbo
 
       assert_success_message('Disability certification rejected and provider notified.')
@@ -117,7 +103,6 @@ module Admin
       assert_equal expected_reason, @application.medical_certification_rejection_reason
       assert_audit_event('medical_certification_status_changed', actor: @admin, auditable: @application)
 
-      # Clear any pending network connections to prevent timeout during teardown
       clear_pending_network_connections if respond_to?(:clear_pending_network_connections)
     end
 
@@ -139,36 +124,29 @@ module Admin
       end
     end
 
-    # --- Validation Tests ---
+    # Required-input validation
 
     test 'approving without a file explains why and changes nothing' do
       @application.update!(medical_certification_status: 'requested')
       visit admin_application_path(@application)
 
-      # Wait for page to be fully loaded
       wait_for_turbo
 
-      # Ensure the form is present before interacting
       assert_selector '[data-testid="medical-certification-upload-form"]', wait: 10
 
       within '[data-testid="medical-certification-upload-form"]' do
-        # Select the "Approve" option
         choose 'Approve Certification and Upload'
 
-        # Try to submit without attaching a file
         click_button 'Process Certification'
       end
 
-      # Wait for any request processing to complete
       wait_for_turbo
 
       assert_error_message('Please select a file to upload')
 
-      # Verify status remained 'requested'
       @application.reload
       assert_equal 'requested', @application.medical_certification_status
 
-      # Clear any pending network connections to prevent timeout during teardown
       clear_pending_network_connections if respond_to?(:clear_pending_network_connections)
     end
 
@@ -190,7 +168,6 @@ module Admin
     end
 
     test 'upload form is not shown when medical certification is already attached' do
-      # Prepare an application that already has a certification attached
       @application.medical_certification.attach(
         io: StringIO.new('test content'),
         filename: 'already_attached.pdf',
@@ -200,10 +177,8 @@ module Admin
 
       visit admin_application_path(@application)
 
-      # Verify upload form is not shown
       assert_no_selector '[data-testid="medical-certification-upload-form"]'
 
-      # But the link to view the certification is shown
       assert_text 'View Medical Certification Document'
     end
   end
