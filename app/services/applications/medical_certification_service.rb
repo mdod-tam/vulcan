@@ -36,23 +36,11 @@ module Applications
       application.with_lock do
         return failure('Auto-send is no longer applicable.') if automatic && !auto_requestable?
 
-        previous = application.attributes.slice(*STATE_FIELDS)
-        timestamp = Time.current
-        Current.instance.set(skip_proof_validation: true) do
-          application.update!(medical_certification_status: :requested, medical_certification_requested_at: timestamp,
-                              medical_certification_request_count: application.medical_certification_request_count.to_i + 1)
-        end
-        application.reload
-        notification = create_notification(previous)
-        AuditEventService.log(action: 'medical_certification_requested', actor: actor, auditable: application,
-                              metadata: { old_status: previous['medical_certification_status'], new_status: 'requested',
-                                          change_type: 'medical_certification', notification_id: notification.id,
-                                          submission_method: 'email', delivery_outcome: 'pending_enqueue' })
+        notification = create_notification
+        record_request!(notification: notification, submission_method: 'email',
+                        request_count: application.medical_certification_request_count.to_i + 1,
+                        delivery_outcome: 'pending_enqueue')
         context = context.merge('notification_id' => notification.id)
-        ApplicationStatusChange.create!(application: application, user: actor,
-                                        from_status: previous['medical_certification_status'], to_status: 'requested',
-                                        change_type: 'medical_certification',
-                                        metadata: { notification_id: notification.id, change_type: 'medical_certification' })
       end
       deferred = ActiveRecord::Base.current_transaction.open?
       job = EmailDelivery::Current.set(context: context, queued: true) do
@@ -74,6 +62,17 @@ module Applications
       self.class.restore_unsent_request(notification) if notification
       log_error(e, "Application ID: #{application.id}")
       failure('Certification email could not be queued.', { delivery_outcome: :enqueue_failed })
+    end
+
+    # Preparing an upload link is not a counted provider request. Replacements and
+    # rejection follow-ups retain the existing certification state and request count.
+    def prepare_upload_request!(notification:)
+      application.with_lock do
+        if application.medical_certification_status_not_requested?
+          record_request!(notification: notification, submission_method: 'secure_form',
+                          request_count: application.medical_certification_request_count)
+        end
+      end
     end
 
     # JSON's default timestamp format drops microseconds needed for exact restoration.
@@ -125,14 +124,32 @@ module Applications
               { delivery_outcome: decision.outcome.to_sym, reason: decision.reason })
     end
 
-    def create_notification(previous)
+    # Caller holds the application lock; state, tracking, history and audit commit together.
+    def record_request!(notification:, submission_method:, request_count:, delivery_outcome: nil)
+      previous = application.attributes.slice(*STATE_FIELDS)
+      Current.instance.set(skip_proof_validation: true) do
+        application.update!(medical_certification_status: :requested, medical_certification_requested_at: Time.current,
+                            medical_certification_request_count: request_count)
+      end
+      application.reload
+      notification.update_metadata!('certification_request_state', self.class.request_state(application, previous: previous))
+      notification.update_metadata!('request_count', request_count)
+      metadata = { notification_id: notification.id, change_type: 'medical_certification',
+                   requested_by_id: actor&.id, submission_method: submission_method }
+      ApplicationStatusChange.create!(application: application, user: actor,
+                                      from_status: previous['medical_certification_status'], to_status: 'requested',
+                                      change_type: 'medical_certification', metadata: metadata)
+      AuditEventService.log(action: 'medical_certification_requested', actor: actor, auditable: application,
+                            metadata: metadata.merge(old_status: previous['medical_certification_status'], new_status: 'requested',
+                                                     delivery_outcome: delivery_outcome).compact)
+    end
+
+    def create_notification
       resolver = Applications::SecureRequestRecipientResolver.new(application: application)
       recipient = resolver.known_recipients.find { |user| user.id == resolver.default_recipient_ids.first } || application.user
       NotificationService.create_and_deliver!(
         type: 'medical_certification_requested', recipient: recipient, actor: actor, notifiable: application,
-        metadata: { request_count: application.medical_certification_request_count,
-                    provider: application.medical_provider_name, provider_email: application.medical_provider_email,
-                    certification_request_state: self.class.request_state(application, previous: previous) },
+        metadata: { provider: application.medical_provider_name, provider_email: application.medical_provider_email },
         channel: :email, deliver: false
       ) || raise('Could not create certification tracking notification')
     end

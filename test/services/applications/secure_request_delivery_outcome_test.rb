@@ -10,6 +10,86 @@ class SecureRequestDeliveryOutcomeTest < ActiveSupport::TestCase
   end
 
   [Applications::RequestProofResubmission, Applications::RequestProviderInfo].each do |service_class|
+    [1, 2].each do |collisions|
+      test "#{service_class} #{collisions == 1 ? 'retries a digest collision' : 'rolls back exhausted digest retries'}" do
+        application = create(:application, :in_progress)
+        guardian = create(:constituent)
+        create(:guardian_relationship, guardian_user: guardian, dependent_user: application.user)
+        kind = service_class == Applications::RequestProofResubmission ? :id_proof_resubmission : :provider_info_request
+        original = create(:secure_request_form, application: application, requested_by: @actor,
+                                                kind: kind, sent_at: 2.hours.ago)
+        delivery = stub(deliver_now: true)
+        ApplicationNotificationsMailer.stubs(:proof_requested).returns(delivery)
+        ApplicationNotificationsMailer.stubs(:provider_info_requested).returns(delivery)
+        args = { application: application, actor: @actor, recipient_ids: [application.user_id] }
+        args[:proof_type] = :id if service_class == Applications::RequestProofResubmission
+        # Simulate the index race after uniqueness validation, using the real PostgreSQL constraint.
+        remaining = collisions
+        collide = lambda do |form|
+          if remaining.positive?
+            remaining -= 1
+            form.public_token_digest = original.public_token_digest
+          end
+        end
+        SecureRequestForm.set_callback(:create, :before, collide)
+
+        if collisions == 1
+          result = assert_difference('SecureRequestForm.count', 1) do
+            assert_difference('Notification.count', 1) { service_class.new(**args).call }
+          end
+          assert_predicate result, :success?
+          replacement = result.data.fetch(:secure_request_forms).sole.reload
+          assert_predicate replacement, :active?
+          assert_not_equal original.public_token_digest, replacement.public_token_digest
+          assert_predicate original.reload, :revoked?
+          assert_equal guardian.id, application.reload.managing_guardian_id
+          notification = Notification.find_by!(notifiable: application)
+          assert_equal replacement.id, notification.metadata['secure_request_form_id']
+          assert_equal replacement.request_batch_id, notification.metadata['request_batch_id']
+          assert_not notification.metadata.key?('raw_token')
+        else
+          result = assert_no_difference ['SecureRequestForm.count', 'Notification.count', 'Event.count'] do
+            service_class.new(**args).call
+          end
+          assert_predicate result, :failure?
+          assert_predicate original.reload, :active?
+          assert_nil application.reload.managing_guardian_id
+        end
+      ensure
+        SecureRequestForm.skip_callback(:create, :before, collide) if collide
+      end
+    end
+
+    test "#{service_class} rolls back earlier recipients and replacements when later tracking fails" do
+      application = create(:application, :in_progress)
+      guardian = create(:constituent)
+      create(:guardian_relationship, guardian_user: guardian, dependent_user: application.user)
+      kind = service_class == Applications::RequestProofResubmission ? :id_proof_resubmission : :provider_info_request
+      original = create(:secure_request_form, application: application, requested_by: @actor,
+                                              kind: kind, sent_at: 2.hours.ago)
+      args = { application: application, actor: @actor, recipient_ids: [application.user_id, guardian.id] }
+      args[:proof_type] = :id if service_class == Applications::RequestProofResubmission
+      ApplicationNotificationsMailer.expects(:proof_requested).never
+      ApplicationNotificationsMailer.expects(:provider_info_requested).never
+      refuse_tracking = lambda do |notification|
+        if notification.recipient_id == guardian.id
+          notification.errors.add(:base, 'Tracking unavailable')
+          raise ActiveRecord::RecordInvalid, notification
+        end
+      end
+      Notification.set_callback(:create, :before, refuse_tracking)
+
+      result = assert_no_difference ['SecureRequestForm.count', 'Notification.count', 'Event.count', 'ApplicationStatusChange.count'] do
+        service_class.new(**args).call
+      end
+
+      assert_predicate result, :failure?
+      assert_predicate original.reload, :active?
+      assert_nil application.reload.managing_guardian_id
+    ensure
+      Notification.skip_callback(:create, :before, refuse_tracking) if refuse_tracking
+    end
+
     test "#{service_class} revocation survives a subsequent notification write failure" do
       application = create(:application, :in_progress)
       delivery = mock('delivery')

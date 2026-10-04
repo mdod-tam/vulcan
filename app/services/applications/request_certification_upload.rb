@@ -35,7 +35,8 @@ module Applications
           ensure_cooldown_allows!
           revoke_open_requests
           delivery = create_request
-          transition_initial_status_if_needed(delivery)
+          MedicalCertificationService.new(application: application, actor: actor)
+                                     .prepare_upload_request!(notification: Notification.find(delivery.notification_id))
         end
       end
 
@@ -169,61 +170,6 @@ module Applications
 
     def after_delivery_not_sent(delivery)
       MedicalCertificationService.restore_unsent_request(Notification.find_by(id: delivery.notification_id))
-    end
-
-    def transition_initial_status_if_needed(delivery)
-      return unless application.medical_certification_status_not_requested?
-
-      previous = application.attributes.slice(*MedicalCertificationService::STATE_FIELDS)
-      with_proof_validation_skipped do
-        application.update!(
-          medical_certification_status: :requested,
-          medical_certification_requested_at: Time.current
-        )
-      end
-      application.reload
-      Notification.find(delivery.notification_id).update_metadata!(
-        'certification_request_state',
-        MedicalCertificationService.request_state(application, previous: previous)
-      )
-      record_status_transition(previous['medical_certification_status'])
-    end
-
-    def with_proof_validation_skipped
-      # This status-only cert transition preserves Application update! callbacks
-      # but must not require unrelated income/residency attachments.
-      previous_value = Current.skip_proof_validation
-      Current.skip_proof_validation = true
-      yield
-    ensure
-      Current.skip_proof_validation = previous_value
-    end
-
-    def record_status_transition(previous_status)
-      ApplicationStatusChange.create!(
-        application: application,
-        user: actor,
-        from_status: previous_status || 'not_requested',
-        to_status: 'requested',
-        change_type: 'medical_certification',
-        metadata: {
-          change_type: 'medical_certification',
-          requested_by_id: actor&.id,
-          submission_method: 'secure_form'
-        }
-      )
-
-      AuditEventService.log(
-        action: 'medical_certification_requested',
-        actor: actor,
-        auditable: application,
-        metadata: {
-          old_status: previous_status || 'not_requested',
-          new_status: 'requested',
-          change_type: 'medical_certification',
-          submission_method: 'secure_form'
-        }
-      )
     end
 
     def result_data(request_form, raw_token)
