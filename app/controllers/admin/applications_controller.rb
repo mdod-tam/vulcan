@@ -543,7 +543,7 @@ module Admin
     private
 
     def load_attachment_data
-      @proof_histories = load_proof_histories(@application)
+      @application.proof_reviews.load
       load_secure_request_recipient_data(@application)
     end
 

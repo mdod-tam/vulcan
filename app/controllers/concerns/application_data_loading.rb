@@ -79,33 +79,6 @@ module ApplicationDataLoading
     fetch_and_process_attachments(ids, attachment_names)
   end
 
-  # @param application [Application] The application to load proof history for
-  # @return [Hash] Hash with :income and :residency keys containing history data
-  def load_proof_histories(application)
-    {
-      income: load_proof_history_for_type(application, :income),
-      residency: load_proof_history_for_type(application, :residency)
-    }
-  end
-
-  # @param application [Application] The application
-  # @param type [Symbol] The proof type (:income or :residency)
-  # @return [Hash] Hash containing reviews and audits
-  def load_proof_history_for_type(application, type)
-    {
-      reviews: filter_and_sort_by_type(application.proof_reviews, type, :reviewed_at),
-      audits: filter_and_sort_by_type(
-        application.events.where(action: 'proof_submitted', metadata: { proof_type: type }),
-        type,
-        :created_at
-      )
-    }
-  rescue StandardError => e
-    Rails.logger.error "Failed to load #{type} proof history: #{e.message}"
-    Rails.logger.error e.backtrace.join("\n")
-    { reviews: [], audits: [], error: true }
-  end
-
   # Turbo stream updates use a fresh application instance.
   # @param application [Application] Application whose ID selects the fresh instance
   # @return [Application] A fresh application instance
@@ -255,15 +228,5 @@ module ApplicationDataLoading
     Rails.logger.error "Error preloading attachments for applications #{ids}: #{error.message}"
     Rails.logger.error error.backtrace.join("\n") if ENV['VERBOSE_TESTS']
     {}
-  end
-
-  # @param collection [ActiveRecord::Relation] The collection to filter
-  # @param type [Symbol] The proof type to filter by
-  # @param sort_method [Symbol] The method to sort by
-  # @return [Array] Filtered and sorted collection
-  def filter_and_sort_by_type(collection, type, sort_method)
-    collection.select { |item| item.proof_type.to_sym == type.to_sym }
-              .sort_by(&sort_method)
-              .reverse
   end
 end

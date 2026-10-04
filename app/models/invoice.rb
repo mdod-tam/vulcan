@@ -32,53 +32,6 @@ class Invoice < ApplicationRecord
   }
   scope :needs_processing, -> { where(status: :invoice_pending) }
 
-  def self.generate_biweekly
-    # Find vendors with uninvoiced transactions
-    vendor_ids = VoucherTransaction.pending_invoice
-                                   .select(:vendor_id)
-                                   .distinct
-                                   .pluck(:vendor_id)
-
-    vendor_ids.each do |vendor_id|
-      # Calculate date range for this invoice
-      latest_invoice = for_vendor(vendor_id).order(end_date: :desc).first
-      start_date = latest_invoice ? latest_invoice.end_date : 14.days.ago.beginning_of_day
-      end_date = Time.current.end_of_day
-
-      # Create invoice
-      create_for_vendor(vendor_id, start_date, end_date)
-    end
-  end
-
-  def self.create_for_vendor(vendor_id, start_date, end_date)
-    # Get all completed, uninvoiced transactions for this vendor in date range
-    transactions = VoucherTransaction
-                   .completed
-                   .pending_invoice
-                   .for_vendor(vendor_id)
-                   .in_date_range(start_date, end_date)
-
-    return if transactions.empty?
-
-    transaction do
-      # Create invoice
-      invoice = create!(
-        vendor_id: vendor_id,
-        start_date: start_date,
-        end_date: end_date,
-        status: :invoice_pending
-      )
-
-      # Associate transactions and vouchers with this invoice
-      transactions.each do |txn|
-        txn.update!(invoice: invoice)
-        txn.voucher.update!(invoice: invoice) if txn.voucher.invoice_id.nil?
-      end
-
-      invoice
-    end
-  end
-
   validates :gad_invoice_reference, presence: true, if: :status_invoice_paid?
 
   before_save :set_timestamps

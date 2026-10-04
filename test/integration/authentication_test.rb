@@ -177,17 +177,4 @@ class AuthenticationTest < ActionDispatch::IntegrationTest
     assert user_session.expires_at > 23.hours.from_now && user_session.expires_at < 25.hours.from_now,
            'Session should last for 24 hours'
   end
-
-  test 'should skip tests when authentication is not working' do
-    def skip_unless_authentication_working_test
-      raise Minitest::Skip, 'Authentication not working properly'
-    end
-
-    begin
-      skip_unless_authentication_working_test
-      flunk 'Expected test to be skipped'
-    rescue Minitest::Skip => e
-      assert_match(/Authentication not working properly/, e.message)
-    end
-  end
 end

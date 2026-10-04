@@ -53,14 +53,6 @@ module ProofManageable
     public_send("#{proof_type}_proof_status_rejected?")
   end
 
-  # Writes the status with no review record or audit. Only tests call it now.
-  # @param proof_type [String] The type of proof ('income' or 'residency')
-  # @param status [String] The new status ('approved', 'rejected', 'not_reviewed')
-  def update_proof_status!(proof_type, status)
-    status_attr = "#{proof_type}_proof_status"
-    update!(status_attr => status)
-  end
-
   # Records rejection status without a file. The service owns rejection orchestration.
   def reject_proof_without_attachment!(proof_type, admin: nil, reason: 'other', notes: nil)
     status_attr = "#{proof_type}_proof_status"
@@ -71,7 +63,6 @@ module ProofManageable
 
     true
   end
-  # rubocop:enable Naming/PredicateMethod
 
   # Purges all proof attachments. Resets only the income and residency statuses.
   # @param admin_user [User] must be an admin

@@ -19,17 +19,6 @@ module ApplicationHelper
     end
   end
 
-  def dashboard_path_for(user)
-    return root_path unless user
-
-    case user.type
-    when 'Admin' then admin_applications_path
-    when 'Evaluator' then evaluator_root_path
-    when 'Users::Vendor' then vendor_root_path
-    else root_path
-    end
-  end
-
   def application_status_badge(application)
     content_tag(:span,
                 badge_label_for(:application, application.status),

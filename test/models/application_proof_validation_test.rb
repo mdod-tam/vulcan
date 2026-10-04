@@ -197,12 +197,4 @@ class ApplicationProofValidationTest < ActiveSupport::TestCase
 
     assert_not_nil @application.reload.needs_review_since
   end
-
-  test 'validates SSA award letter is current year' do
-    skip 'Implement custom validation for SSA award letter date'
-  end
-
-  test 'validates SSA award letter is less than 2 months old' do
-    skip 'Implement custom validation for SSA award letter age'
-  end
 end

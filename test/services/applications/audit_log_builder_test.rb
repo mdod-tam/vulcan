@@ -5,9 +5,8 @@ require 'test_helper'
 module Applications
   class AuditLogBuilderTest < ActiveSupport::TestCase
     setup do
-      # Set thread-local variable to bypass proof validations
+      # Set paper context for test setup.
       Thread.current[:paper_application_context] = true
-      Thread.current[:skip_proof_validation] = true
 
       # Bypass validations directly
       Application.any_instance.stubs(:require_proof_validations?).returns(false)
@@ -21,9 +20,6 @@ module Applications
 
       # Prepare the application for testing
       prepare_application_for_test(@application, stub_attachments: true)
-
-      # Set up mocks for ActiveStorage attachments to prevent byte_size() errors
-      setup_attachment_mocks_for_audit_logs
 
       @admin = create(:admin)
       @user = create(:constituent)
@@ -63,7 +59,6 @@ module Applications
     teardown do
       # Clear thread-local variables after test
       Thread.current[:paper_application_context] = nil
-      Thread.current[:skip_proof_validation] = nil
 
       # Remove stubs
       Application.any_instance.unstub(:require_proof_validations?)

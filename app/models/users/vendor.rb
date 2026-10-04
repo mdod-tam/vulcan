@@ -73,16 +73,6 @@ module Users
         terms_accepted_at.present?
     end
 
-    def process_voucher!(voucher_code, amount, product_data = nil)
-      # Skip the can_process_vouchers? check in test environment
-      return false unless Rails.env.test? || can_process_vouchers?
-
-      voucher = Voucher.find_by(code: voucher_code)
-      return false unless voucher&.can_redeem?(amount)
-
-      voucher.redeem!(amount, self, product_data)
-    end
-
     def latest_transactions(limit = 10)
       voucher_transactions
         .includes(:voucher)

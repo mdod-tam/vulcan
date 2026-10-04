@@ -6,7 +6,6 @@ module ProofTestHelper
     Current.user = nil
     Current.proof_attachment_service_context = nil
     Current.paper_context = nil
-    Current.resubmitting_proof = nil
     Current.skip_proof_validation = nil
     Current.reviewing_single_proof = nil
   end
@@ -80,11 +79,6 @@ module ProofTestHelper
 
     assert_empty duplicate_groups,
                  "Found duplicate events: #{duplicate_groups.inspect}"
-  end
-
-  # Legacy method for compatibility - sets up basic attachment mocks
-  def setup_attachment_mocks_for_audit_logs
-    # This is a no-op method for compatibility with existing tests. Tests should use factory traits instead
   end
 
   # Legacy method for compatibility - prepares application for testing

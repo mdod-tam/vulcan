@@ -36,25 +36,6 @@ module VendorPortal
       assert_match(/vendor/i, response.body)
     end
 
-    # Factory smoke test only. It does not call the controller.
-    def test_voucher_operations
-      assert_not_nil @voucher
-      assert_not_nil @vendor
-      assert_equal @voucher.vendor_id, @vendor.id
-      assert_equal :active, @voucher.status.to_sym
-    end
-
-    # Model smoke test only. It does not call the controller.
-    def test_with_correct_field_names
-      assert @voucher.respond_to?(:initial_value)
-      assert @voucher.respond_to?(:remaining_value)
-
-      @voucher.update(initial_value: 500.0, remaining_value: 500.0)
-
-      assert_equal 500.0, @voucher.initial_value.to_f
-      assert_equal 500.0, @voucher.remaining_value.to_f
-    end
-
     # The system tests cover the full redemption flow, including session and verification.
     def test_voucher_redemption_delegates_to_service
       @voucher.update(initial_value: 500.0, remaining_value: 500.0, issued_at: Time.current)

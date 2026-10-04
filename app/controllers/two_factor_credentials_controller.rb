@@ -386,25 +386,6 @@ class TwoFactorCredentialsController < ApplicationController
     TwoFactorAuth.log_verification_failure(current_user.id, :totp, 'Invalid code during setup')
   end
 
-  def respond_to_totp_failure_formats
-    respond_to do |format|
-      format.html { handle_totp_html_failure }
-      format.turbo_stream { handle_totp_turbo_failure }
-    end
-  end
-
-  def handle_totp_html_failure
-    handle_error_response(
-      html_redirect_path: new_credential_two_factor_authentication_path(type: 'totp', secret: @secret),
-      error_message: t('two_factor_verification.errors.invalid_code')
-    )
-  end
-
-  def handle_totp_turbo_failure
-    regenerate_qr_code_for_failed_setup
-    render :create_credential, status: :unprocessable_content
-  end
-
   # TOTP enrollment helpers.
   def totp_secret_from_session
     challenge_data = TwoFactorAuth.retrieve_challenge(session)

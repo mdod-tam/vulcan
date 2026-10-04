@@ -5,7 +5,6 @@ module UserAuthentication
   extend ActiveSupport::Concern
 
   MAX_LOGIN_ATTEMPTS = 5
-  PASSWORD_RESET_EXPIRY = 20.minutes
   LOCK_DURATION = 1.hour
 
   included do
@@ -93,13 +92,6 @@ module UserAuthentication
       updated_at: Time.current
     )
     # rubocop:enable Rails/SkipsModelValidations
-  end
-
-  def generate_password_reset_token!
-    update(
-      reset_password_token: SecureRandom.urlsafe_base64,
-      reset_password_sent_at: Time.current
-    )
   end
 
   def second_factor_enabled?

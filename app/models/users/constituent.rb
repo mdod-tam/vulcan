@@ -26,10 +26,6 @@ module Users
       end
     end
 
-    def self.inherited_columns
-      column_names
-    end
-
     def active_application?
       active_application.present?
     end
@@ -95,14 +91,6 @@ module Users
         Arel::Nodes::NamedFunction.new('LOWER', [arel_table[column]])
                                   .eq(Arel::Nodes::BindParam.new(bind))
       end
-    end
-
-    private
-
-    def must_have_at_least_one_disability
-      return if hearing_disability || vision_disability || speech_disability || mobility_disability || cognition_disability
-
-      errors.add(:base, 'At least one disability must be selected.')
     end
   end
 end

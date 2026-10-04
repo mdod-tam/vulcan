@@ -1,12 +1,9 @@
 # frozen_string_literal: true
 
 require 'test_helper'
-require 'webauthn/fake_client'
-require 'support/webauthn_test_helper'
 
 class TwoFactorAuthenticationCredentialTest < ActionDispatch::IntegrationTest
   include ActiveSupport::Testing::TimeHelpers
-  include WebauthnTestHelper
   include AuthenticationTestHelper
 
   setup do
@@ -17,8 +14,6 @@ class TwoFactorAuthenticationCredentialTest < ActionDispatch::IntegrationTest
 
     # The factory omits the WebAuthn handle required by creation options.
     @user.update_column(:webauthn_id, WebAuthn.generate_user_id)
-
-    @fake_client = setup_webauthn_test_environment
 
     sign_in_for_integration_test(@user)
   end
@@ -38,14 +33,6 @@ class TwoFactorAuthenticationCredentialTest < ActionDispatch::IntegrationTest
     assert_includes response.body, I18n.t('outbound_delivery.sms_suppressed')
     assert_select 'input[name="phone_number"][value="555-123-4567"]'
     assert_nil Rails.cache.read(TwoFactor::PendingSmsSetupChallenge.cache_key(@user.id, '555-123-4567'))
-  end
-
-  test 'should get new credential form' do
-    get new_credential_two_factor_authentication_path(type: 'webauthn')
-    assert_response :success
-
-    # This case asserts page load success only. The registration form uses browser JavaScript.
-    assert_select 'div', { minimum: 0 }
   end
 
   test 'setup remains in the default language outside public verification locale scope' do
@@ -103,22 +90,6 @@ class TwoFactorAuthenticationCredentialTest < ActionDispatch::IntegrationTest
     ensure
       WebAuthn.configuration.rp_id = original_rp_id
     end
-  end
-
-  test 'should create credential with valid attestation' do
-    # This case creates a record directly. It does not submit or verify an attestation.
-
-    assert_difference('WebauthnCredential.count', 1) do
-      create(:webauthn_credential,
-             user: @user,
-             nickname: 'Test Credential')
-    end
-
-    post webauthn_creation_options_two_factor_authentication_path, xhr: true
-    assert_response :success
-
-    assert session[TwoFactorAuth::SESSION_KEYS[:challenge]].present?,
-           'Creation challenge should be stored in session'
   end
 
   test 'sending SMS setup code does not create credential' do

@@ -41,13 +41,6 @@ class ProofManageableTest < ActiveSupport::TestCase
     skip('Skipping mime type validation test')
   end
 
-  test 'tracks proof status changes' do
-    @application.income_proof.attach(@valid_pdf)
-    assert_changes -> { @application.income_proof_status }, from: 'not_reviewed', to: 'approved' do
-      @application.update_proof_status!('income', 'approved')
-    end
-  end
-
   test 'creates audit trail on proof submission' do
     # SKIP: This test is too sensitive to callback timing in test environment
     skip('Audit trail creation is tested in integration tests')

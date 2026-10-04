@@ -253,12 +253,10 @@ class ApplicationSystemTestCase < ActionDispatch::SystemTestCase
     @skip_flag_original = Application.skip_wait_period_validation
     Application.skip_wait_period_validation = true
 
-    debug_browser_state('SETUP START')
     track_chrome_processes('BEFORE_SESSION_RESET')
     begin
       Capybara.reset_sessions!
       track_chrome_processes('AFTER_SESSION_RESET')
-      debug_browser_state('SETUP AFTER RESET')
     rescue StandardError
       track_chrome_processes('SESSION_RESET_FAILED')
     end
@@ -728,48 +726,6 @@ class ApplicationSystemTestCase < ActionDispatch::SystemTestCase
 
     Capybara.reset_sessions! if defined?(Capybara) && Capybara.respond_to?(:reset_sessions!)
     GC.start
-  end
-
-  # Browser diagnostics
-
-  def debug_browser_state(_context)
-    return unless ENV['VERBOSE_TESTS'] || ENV['DEBUG_BROWSER']
-
-    begin
-      return unless defined?(page) && page
-
-      browser = (page.driver.browser if page.driver.respond_to?(:browser))
-
-      if browser
-        if browser.respond_to?(:contexts)
-          begin
-            browser.contexts.count
-          rescue StandardError
-            nil
-          end
-        end
-
-        if browser.respond_to?(:process)
-          begin
-            browser.process&.pid
-          rescue StandardError
-            nil
-          end
-        end
-      end
-
-      begin
-        page.current_url
-      rescue StandardError
-        # A failed URL read does not stop the remaining diagnostics.
-      end
-
-      if defined?(Capybara.session_pool)
-        Capybara.session_pool.size
-      end
-    rescue StandardError
-      # Diagnostic errors do not interrupt the test lifecycle.
-    end
   end
 
   def force_browser_restart(reason)

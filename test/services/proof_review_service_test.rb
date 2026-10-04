@@ -28,21 +28,18 @@ class ProofReviewServiceTest < ActiveSupport::TestCase
   test 'uses the reviewable proof type boundary from ProofReview' do
     assert_equal %w[income id residency], ProofReview.reviewable_proof_types
 
-    reviewer = Object.new
-    reviewer.define_singleton_method(:review) do |**_kwargs|
-      true
-    end
+    ProofReview.reviewable_proof_types.each do |proof_type|
+      result = ProofReviewService.new(
+        @application,
+        @admin,
+        { proof_type: proof_type, status: 'approved' }
+      ).call
 
-    Applications::ProofReviewer.stub(:new, reviewer) do
-      ProofReview.reviewable_proof_types.each do |proof_type|
-        result = ProofReviewService.new(
-          @application,
-          @admin,
-          { proof_type: proof_type, status: 'approved' }
-        ).call
-
-        assert result.success?, "#{proof_type} should be accepted by ProofReviewService"
-      end
+      assert result.success?, "#{proof_type} should be accepted by ProofReviewService: #{result.message}"
+      review = @application.proof_reviews.find_by!(proof_type: proof_type, status: :approved)
+      assert_equal review, result.data[:proof_review]
+      assert_equal @admin, review.admin
+      assert_equal 'approved', @application.reload.public_send("#{proof_type}_proof_status")
     end
 
     invalid_result = ProofReviewService.new(
@@ -71,18 +68,15 @@ class ProofReviewServiceTest < ActiveSupport::TestCase
   test 'allows residency proof review when income_proof_required is false' do
     @application.update_columns(income_proof_required: false)
 
-    reviewer = Object.new
-    reviewer.define_singleton_method(:review) { |**_kwargs| true }
+    result = ProofReviewService.new(
+      @application,
+      @admin,
+      { proof_type: 'residency', status: 'approved' }
+    ).call
 
-    Applications::ProofReviewer.stub(:new, reviewer) do
-      result = ProofReviewService.new(
-        @application,
-        @admin,
-        { proof_type: 'residency', status: 'approved' }
-      ).call
-
-      assert result.success?, "Residency review should still work when income is off: #{result.message}"
-    end
+    assert result.success?, "Residency review should still work when income is off: #{result.message}"
+    assert_equal 'approved', @application.reload.residency_proof_status
+    assert_equal @application.proof_reviews.find_by!(proof_type: :residency, status: :approved), result.data[:proof_review]
   end
 
   test 'returns rejected proof review and resubmission delivery status' do

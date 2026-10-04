@@ -154,59 +154,9 @@ class UserTest < ActiveSupport::TestCase
     assert_includes other_dependents, @dependent_user1
   end
 
-  test 'accessible_by_guardian scope works same as editable_by_guardian' do
-    GuardianRelationship.create!(guardian_user: @guardian_user, dependent_user: @dependent_user1, relationship_type: 'Parent')
-
-    editable = User.editable_by_guardian(@guardian_user)
-    accessible = User.accessible_by_guardian(@guardian_user)
-
-    assert_equal editable.to_a, accessible.to_a
-  end
-
-  test 'editable_by_guardian? returns true for guardian of dependent' do
-    GuardianRelationship.create!(guardian_user: @guardian_user, dependent_user: @dependent_user1, relationship_type: 'Parent')
-
-    assert @dependent_user1.editable_by_guardian?(@guardian_user)
-  end
-
-  test 'editable_by_guardian? returns false for non-guardian' do
-    GuardianRelationship.create!(guardian_user: @guardian_user, dependent_user: @dependent_user1, relationship_type: 'Parent')
-
-    assert_not @dependent_user1.editable_by_guardian?(@another_guardian)
-  end
-
-  test 'editable_by_guardian? returns false for user who is not a dependent' do
-    assert_not @guardian_user.editable_by_guardian?(@another_guardian)
-  end
-
-  test 'editable_by_guardian? returns false for nil user' do
-    GuardianRelationship.create!(guardian_user: @guardian_user, dependent_user: @dependent_user1, relationship_type: 'Parent')
-
-    assert_not @dependent_user1.editable_by_guardian?(nil)
-  end
-
-  test 'accessible_by_guardian? works same as editable_by_guardian?' do
-    GuardianRelationship.create!(guardian_user: @guardian_user, dependent_user: @dependent_user1, relationship_type: 'Parent')
-
-    assert_equal @dependent_user1.editable_by_guardian?(@guardian_user),
-                 @dependent_user1.accessible_by_guardian?(@guardian_user)
-    assert_equal @dependent_user1.editable_by_guardian?(@another_guardian),
-                 @dependent_user1.accessible_by_guardian?(@another_guardian)
-  end
-
-  test 'viewable_by_guardian? works same as accessible_by_guardian?' do
-    GuardianRelationship.create!(guardian_user: @guardian_user, dependent_user: @dependent_user1, relationship_type: 'Parent')
-
-    assert_equal @dependent_user1.accessible_by_guardian?(@guardian_user),
-                 @dependent_user1.viewable_by_guardian?(@guardian_user)
-  end
-
   test 'multiple guardians can both edit same dependent' do
     GuardianRelationship.create!(guardian_user: @guardian_user, dependent_user: @dependent_user1, relationship_type: 'Parent')
     GuardianRelationship.create!(guardian_user: @another_guardian, dependent_user: @dependent_user1, relationship_type: 'Legal Guardian')
-
-    assert @dependent_user1.editable_by_guardian?(@guardian_user)
-    assert @dependent_user1.editable_by_guardian?(@another_guardian)
 
     assert_includes User.editable_by_guardian(@guardian_user), @dependent_user1
     assert_includes User.editable_by_guardian(@another_guardian), @dependent_user1

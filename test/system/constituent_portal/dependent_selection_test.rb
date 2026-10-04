@@ -72,78 +72,11 @@ module ConstituentPortal
       assert_selector 'h1#form-title', text: "New Application for #{@dependent1.full_name}", wait: 5, visible: :all
     end
 
-    test 'toggling between Myself and A dependent I manage radio buttons updates title correctly' do
-      skip 'Applicant type is determined by URL params, not radio buttons'
-
-      visit new_constituent_portal_application_path
-      wait_for_turbo
-
-      assert_checked_field 'Myself'
-      assert_selector 'h1#form-title', text: 'New Application', wait: 5
-
-      choose 'A dependent I manage'
-
-      assert_selector '#dependent-selection-fields', visible: true, wait: 5
-
-      select @dependent1.full_name, from: 'Select Dependent'
-
-      assert_selector 'h1#form-title', text: "New Application for #{@dependent1.full_name}", wait: 5
-
-      choose 'Myself'
-
-      wait_for_turbo
-
-      assert_selector 'h1#form-title', text: 'New Application', wait: 5
-
-      element = find_by_id('dependent-selection-fields', visible: :all)
-      assert element[:class].to_s.include?('hidden')
-    end
-
-    test 'selecting different dependents from dropdown updates title correctly' do
-      skip 'Dependent selection is done via dashboard, not form dropdown'
-
-      visit new_constituent_portal_application_path(user_id: @dependent1.id, for_self: false)
-      wait_for_turbo
-
-      assert_selector 'h1#form-title', text: "New Application for #{@dependent1.full_name}", wait: 5
-
-      assert_checked_field 'A dependent I manage'
-
-      assert_selector '#dependent_select_frame', visible: true
-
-      select @dependent2.full_name, from: 'Select Dependent'
-
-      assert_selector 'h1#form-title', text: "New Application for #{@dependent2.full_name}", wait: 5
-    end
-
     test 'handles application form with url parameter for dependent' do
       visit new_constituent_portal_application_path(user_id: @dependent1.id, for_self: false)
       wait_for_turbo
 
       assert_selector 'h1#form-title', text: "New Application for #{@dependent1.full_name}", wait: 5
-    end
-
-    test 'handles application form with for_self=false parameter' do
-      skip 'for_self=false requires user_id param to specify which dependent'
-
-      visit new_constituent_portal_application_path(for_self: false)
-      wait_for_turbo
-
-      assert_checked_field 'A dependent I manage'
-
-      assert_selector '#dependent_select_frame', visible: true, wait: 5
-
-      within('#dependent_select_frame') do
-        assert_selector 'select[data-dependent-selector-target="dependentSelect"]'
-        assert_no_selector "option[selected][value='#{@dependent1.id}']"
-        assert_no_selector "option[selected][value='#{@dependent2.id}']"
-      end
-
-      assert_selector 'h1#form-title', text: 'New Application', wait: 5
-
-      select @dependent2.full_name, from: 'Select Dependent'
-
-      assert_selector 'h1#form-title', text: "New Application for #{@dependent2.full_name}", wait: 5
     end
   end
 end
