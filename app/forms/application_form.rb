@@ -126,7 +126,6 @@ class ApplicationForm
       next unless app_params.key?(field_sym)
 
       value = app_params[field_sym]
-      # Rails check boxes post a hidden blank value before the checked value.
       value = value.last if value.is_a?(Array) && value.size == 2 && value.first.blank?
       app_params[field_sym] = to_boolean(value)
     end

@@ -371,7 +371,6 @@ module ConstituentPortal
       assert_equal original_address, @user.physical_address_1
     end
 
-
     def assert_json_response(expected)
       response_data = response.parsed_body
       expected.each do |key, value|

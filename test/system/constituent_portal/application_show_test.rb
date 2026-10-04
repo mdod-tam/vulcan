@@ -13,9 +13,6 @@ module ConstituentPortal
       assert_text 'Dashboard', wait: 10
     end
 
-    teardown do
-    end
-
     test 'application show page displays all information entered during application creation' do
       visit new_constituent_portal_application_path
       wait_for_turbo
@@ -58,7 +55,6 @@ module ConstituentPortal
       application = Application.find(application_id)
       puts 'DEBUG: Application attributes after save:'
       puts application.attributes.inspect
-
 
       # Application details.
       assert_text 'Status', wait: 5

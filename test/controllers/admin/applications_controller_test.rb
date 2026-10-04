@@ -12,9 +12,6 @@ module Admin
       cookies.delete(:session_token) if respond_to?(:cookies)
       Current.reset if defined?(Current)
 
-      if ENV['DEBUG_AUTH'] == 'true'
-      end
-
       sign_in_for_integration_test(@admin)
       @application = create(:application, user: create(:constituent, email: generate(:email)))
       @application.update!(medical_certification_status: 'requested')
@@ -199,7 +196,6 @@ module Admin
     end
 
     test 'should upload medical certification document' do
-
       assert_equal 'requested', @application.medical_certification_status
       assert_not @application.medical_certification.attached?
 
@@ -394,12 +390,10 @@ module Admin
       get admin_application_path(app_needs_review)
       assert_response :success
 
-
       assert_select 'button[data-proof-type="income"]', text: 'Review Proof'
 
       get admin_application_path(app_rejected_review)
       assert_response :success
-
 
       assert_select 'button[data-proof-type="income"]', text: 'Review Rejected Proof'
     end
@@ -544,7 +538,6 @@ module Admin
       assert_response :success
 
       assert_equal 'text/vnd.turbo-stream.html', response.media_type
-
 
       assert_match 'Income proof rejected successfully', response.body
 

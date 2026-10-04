@@ -252,7 +252,6 @@ class TwoFactorAuthenticationCredentialTest < ActionDispatch::IntegrationTest
   test 'should require authentication' do
     sign_out
 
-
     get new_credential_two_factor_authentication_path(type: 'webauthn')
     assert_redirected_to sign_in_path,
                          "Expected redirect to sign_in_path, but got status #{response.status}. Location: #{response.location}. Body starts with: #{response.body[0..100]}"

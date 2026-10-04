@@ -15,7 +15,6 @@ module Admin
     end
 
     test 'UI initial state before guardian selection' do
-
       assert_selector 'fieldset legend', text: 'Who is this application for?', visible: true
       assert_selector 'fieldset[data-applicant-type-target="radioSection"]', visible: true
 
@@ -34,7 +33,6 @@ module Admin
       assert_selector '[data-applicant-type-target="sectionsForDependentWithGuardian"]', visible: :all
       dependent_section = find('[data-applicant-type-target="sectionsForDependentWithGuardian"]', visible: :all)
       assert dependent_section[:class].include?('hidden'), "Dependent section should have 'hidden' class"
-
     end
 
     test 'UI state after guardian selection (guardian with no address)' do
@@ -106,7 +104,6 @@ module Admin
     end
 
     test 'UI state for adult-only flow (no guardian selected)' do
-
       assert_selector '[data-guardian-picker-target="searchPane"]', visible: :all
       search_pane = find('[data-guardian-picker-target="searchPane"]', visible: :all)
       guardian_section = search_pane.ancestor('[data-applicant-type-target="guardianSection"]')
