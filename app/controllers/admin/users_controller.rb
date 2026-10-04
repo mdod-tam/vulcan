@@ -1,8 +1,6 @@
 # frozen_string_literal: true
 
 module Admin
-  # Controller for managing users in the admin interface
-  # Inherits from BaseController for Pagy pagination support
   class UsersController < BaseController # rubocop:disable Metrics/ClassLength
     include ParamCasting
     include UserServiceIntegration
@@ -23,8 +21,6 @@ module Admin
       :relationship_types
     )
 
-    # Define the mapping from expected demodulized names to full namespaced names.
-    # These should match the actual class names under the Users module.
     VALID_USER_TYPES = {
       'Admin' => 'Users::Administrator',
       'Administrator' => 'Users::Administrator',
@@ -34,24 +30,18 @@ module Admin
       'Trainer' => 'Users::Trainer'
     }.freeze
 
-    # Main index action with filtering, pagination, and dashboard metrics
-    # Supports both full page loads and Turbo Frame updates
     def index
-      # Handle special case: paper application form user search
       if turbo_frame_request_for_search_results?
         handle_search_frame_request
         return
       end
 
-      # Load dashboard metrics for stats cards
       load_user_metrics
 
-      # Build filtered and paginated user list
       base_scope = User.all
       filtered_scope = apply_user_filters(base_scope)
       @pagy, @users = paginate_users(filtered_scope)
 
-      # Optimize for N+1 prevention
       optimize_users_for_index_view(@users.to_a)
 
       respond_to do |format|
@@ -62,7 +52,6 @@ module Admin
 
     private
 
-    # Load metrics for dashboard stats cards
     def load_user_metrics
       @user_counts_by_role = User.group(:type).count
       @needs_review_count = User.where(needs_duplicate_review: true).count
@@ -71,7 +60,6 @@ module Admin
       @total_users_count = User.count
     end
 
-    # Apply filters using Users::FilterService
     def apply_user_filters(scope)
       result = Users::FilterService.new(scope, params).apply_filters
       if result.success?
@@ -82,7 +70,6 @@ module Admin
       end
     end
 
-    # Paginate users with error handling
     def paginate_users(scope)
       pagy(scope, items: 25)
     rescue StandardError => e
@@ -90,7 +77,6 @@ module Admin
       [Pagy.new(count: scope.count, page: 1, items: 25), scope.limit(25)]
     end
 
-    # Handle Turbo Frame requests for paper application user search
     def handle_search_frame_request
       @q = params[:q]
       @role_filter = params[:role]
@@ -107,7 +93,6 @@ module Admin
       render partial: 'admin/users/user_search_results_list', locals: { users: @users, role: @role_filter }
     end
 
-    # Check if this is a turbo frame request for search results (paper app form)
     def turbo_frame_request_for_search_results?
       turbo_frame_request_id&.end_with?('_search_results') ||
         params[:turbo_frame_id]&.end_with?('_search_results')
@@ -123,7 +108,6 @@ module Admin
       load_and_enhance_user_relationships
     end
 
-    # Load and enhance user relationships for the show view
     def load_and_enhance_user_relationships
       relationship_data = load_user_relationships
       enhance_relationships_with_users(relationship_data)
@@ -131,7 +115,6 @@ module Admin
       add_helper_methods_to_user(relationship_data)
     end
 
-    # Load guardian relationships for a specific user
     def load_user_relationships
       dependent_rels = GuardianRelationship.where(guardian_id: @user.id)
                                            .select(:id, :guardian_id, :dependent_id, :relationship_type)
@@ -144,7 +127,6 @@ module Admin
       { dependent_rels: dependent_rels, guardian_rels: guardian_rels }
     end
 
-    # Enhance relationships with user objects
     def enhance_relationships_with_users(relationship_data)
       dependent_rels = relationship_data[:dependent_rels]
       guardian_rels = relationship_data[:guardian_rels]
@@ -156,7 +138,6 @@ module Admin
       attach_users_to_relationships(dependent_rels, guardian_rels, related_users)
     end
 
-    # Attach user objects to relationship records
     def attach_users_to_relationships(dependent_rels, guardian_rels, related_users)
       dependent_rels.each do |rel|
         rel.define_singleton_method(:dependent_user) do
@@ -171,7 +152,6 @@ module Admin
       end
     end
 
-    # Set instance variables for the view
     def view_instance_variables(relationship_data)
       dependent_rels = relationship_data[:dependent_rels]
       guardian_rels = relationship_data[:guardian_rels]
@@ -182,7 +162,6 @@ module Admin
       @dependent_relationships = dependent_rels
     end
 
-    # Add helper methods to the user instance (DRY version of enhance_user_with_relationship_data)
     def add_helper_methods_to_user(_relationship_data)
       @user.instance_variable_set(:@dependents_count, @dependents_count)
       @user.instance_variable_set(:@has_guardian, @has_guardian)
@@ -190,7 +169,6 @@ module Admin
       add_relationship_helper_methods_to_user(@user)
     end
 
-    # Add relationship helper methods to a user instance (shared with other methods)
     def add_relationship_helper_methods_to_user(user)
       class << user
         def dependents_count
@@ -211,7 +189,6 @@ module Admin
       @user = User.find(params[:id])
     end
 
-    # Create action for creating a new guardian from the paper application form
     def create
       Current.paper_context = true
       response.headers['Cache-Control'] = 'no-store'
@@ -237,7 +214,6 @@ module Admin
       Current.reset
     end
 
-    # Dedicated search endpoint for user search (used by paper application form)
     def search
       @q = params[:q]
       @role_filter = params[:role]
@@ -259,7 +235,7 @@ module Admin
       Rails.logger.info "Admin::UsersController#update_role - Received raw params[:role]: #{params[:role].inspect} for user_id: #{user.id}"
 
       namespaced_role = validate_and_normalize_role(params[:role], user.id)
-      return if performed? # Early return if validation failed and response was rendered
+      return if performed?
 
       unless user.prevent_self_role_update?(current_user, namespaced_role)
         Rails.logger.warn "Admin::UsersController#update_role - Denied self role change attempt by user_id: #{current_user.id}"
@@ -288,7 +264,6 @@ module Admin
       handle_capability_error(e)
     end
 
-    # Handle adding a capability to a user
     def handle_add_capability(capability)
       result = @user.add_capability(capability)
       log_capability_action('Adding', capability, result)
@@ -302,7 +277,6 @@ module Admin
       end
     end
 
-    # Handle removing a capability from a user
     def handle_remove_capability(capability)
       result = @user.remove_capability(capability)
       log_capability_action('Removing', capability, result)
@@ -314,27 +288,22 @@ module Admin
       end
     end
 
-    # Log capability action
     def log_capability_action(action, capability, result)
       Rails.logger.info "#{action} capability #{capability} to user #{@user.id}: #{result}"
     end
 
-    # Extract error message from result object
     def extract_error_message(result)
       result.errors.full_messages.join(', ') if result.respond_to?(:errors)
     end
 
-    # Render successful capability response
     def render_capability_success(message)
       render json: { message: message, success: true }
     end
 
-    # Render capability error response
     def render_capability_error(message)
       render json: { message: message, success: false }, status: :unprocessable_content
     end
 
-    # Handle capability operation errors
     def handle_capability_error(error)
       Rails.logger.error "Error in update_capabilities: #{error.message}\n#{error.backtrace.join("\n")}"
       render json: {
@@ -343,10 +312,8 @@ module Admin
       }, status: :unprocessable_content
     end
 
-    # Locks the target user before requalifying and updating primary contact fields, so a
-    # concurrent merge and a concurrent admin profile edit can never interleave: either the
-    # merge commits first and this reload sees the retired record and refuses, or the edit
-    # commits first and the merge -- which takes the same lock -- waits.
+    # Share User locks with merge. If merge commits first, reject the retired profile.
+    # If this edit locks first, merge waits for the updated contact values.
     def update
       @user = User.find(params[:id])
 
@@ -520,7 +487,6 @@ module Admin
       @applications = @user.applications.order(application_date: :desc)
     end
 
-    # Returns a server-rendered list of a guardian's dependents with eligibility metadata
     def dependents
       @guardian = User.find(params[:id])
       waiting_period_years = Policy.get('waiting_period_years') || 3
@@ -539,11 +505,10 @@ module Admin
       end
     end
 
-    # Returns last known application values for a guardian or related dependents
+    # The latest application can belong to this user or a dependent.
     def last_application_values
       user = User.find(params[:id])
 
-      # Gather candidate applications: user's own and their dependents'
       candidate_apps = Application.where(user_id: [user.id] + user.dependents.pluck(:id))
                                   .order(application_date: :desc)
       last_app = candidate_apps.first
@@ -567,7 +532,7 @@ module Admin
       end
     end
 
-    # Returns user profile + self-only application context for adult applicant prefill
+    # Adult prefill uses only the applicant's own applications.
     def adult_application_context
       user = User.find_by(id: params[:id])
       return render json: { success: false, error: 'Not found' }, status: :not_found unless user&.paper_applicant_candidate?
@@ -677,7 +642,6 @@ module Admin
       }
     end
 
-    # Build DependentSummary objects for a guardian's dependents
     def build_dependent_summaries(guardian, waiting_period_years)
       guardian.dependents.map do |dep|
         last_app = dep.applications.order(application_date: :desc).first
@@ -696,7 +660,6 @@ module Admin
       end
     end
 
-    # Build JSON response hash for dependents endpoint
     def dependents_json_response(guardian, waiting_period_years)
       {
         guardian_id: guardian.id,
@@ -705,8 +668,7 @@ module Admin
       }
     end
 
-    # Text search for paper application widgets; +role_filter+ +constituent+ means
-    # constituent-compatible applicant records, including legacy "Constituent" STI rows.
+    # The constituent filter includes legacy "Constituent" STI records that satisfy +paper_applicant_candidate?+.
     def users_for_paper_search(query, role_filter, limit: 10)
       if role_filter == 'constituent'
         result = Users::FilterService.new(User.all, q: query, role: nil).apply_filters
@@ -724,8 +686,6 @@ module Admin
       end
     end
 
-    # Add eligibility metadata for adult search results (any +paper_applicant_candidate?+).
-    # Attaches virtual attributes: eligible_now, ineligible_reason, last_app_date, last_received_products
     def enhance_constituent_eligibility(users)
       waiting_period = Policy.get('waiting_period_years') || 3
       users.each { |user| decorate_user_eligibility(user, waiting_period) if user.paper_applicant_candidate? }
@@ -749,7 +709,7 @@ module Admin
       user.define_singleton_method(:last_received_products) { last_app&.products&.pluck(:name).presence || [] }
     end
 
-    # Enhance constituent users with relationship data to avoid N+1 queries
+    # Batch relationship counts before the search view renders.
     def enhance_constituent_users(users)
       constituent_ids = users.grep(Users::Constituent).map(&:id)
       return unless constituent_ids.any?
@@ -758,7 +718,6 @@ module Admin
       replace_users_with_enhanced_versions(users, constituent_records)
     end
 
-    # Load constituent users with relationship data
     def load_enhanced_constituents(constituent_ids)
       constituent_records = {}
       relationship_data = load_relationship_data(constituent_ids)
@@ -771,7 +730,6 @@ module Admin
       constituent_records
     end
 
-    # Load relationship data for constituents
     def load_relationship_data(constituent_ids)
       {
         dependents_counts: GuardianRelationship.where(guardian_id: constituent_ids)
@@ -783,21 +741,19 @@ module Admin
       }
     end
 
-    # Enhance a single user with relationship data
     def enhance_user_with_relationship_data(user, relationship_data)
       user.instance_variable_set(:@dependents_count, relationship_data[:dependents_counts][user.id] || 0)
       user.instance_variable_set(:@has_guardian, relationship_data[:has_guardian].include?(user.id))
       add_relationship_helper_methods_to_user(user)
     end
 
-    # Replace users in array with enhanced versions
     def replace_users_with_enhanced_versions(users, constituent_records)
       users.each_with_index do |user, index|
         users[index] = constituent_records[user.id] if user.is_a?(Users::Constituent) && constituent_records[user.id]
       end
     end
 
-    # Role update helper methods
+    # Role conversion
     def validate_and_normalize_role(raw_role_param, user_id)
       return nil if raw_role_param.blank?
 
@@ -831,15 +787,11 @@ module Admin
 
     def handle_role_change(user, namespaced_role)
       new_klass = validate_target_class(namespaced_role)
-      return if performed? # Early return if validation failed
+      return if performed?
 
-      # Locks the base User row before requalifying so a concurrent merge and a concurrent
-      # role conversion can never interleave: either the merge commits first and this reload
-      # sees the retired record and refuses, or the conversion commits first and the merge --
-      # which takes the same lock -- waits. converted_user.save below runs with
-      # validate: false (STI type conversion can legitimately fail unrelated validations for
-      # the new type), so this explicit merged? check is the only thing standing between a
-      # retired duplicate and having its `type` column silently rewritten.
+      # Share the merge lock before role conversion. Reject a record that merge retired first.
+      # save(validate: false) bypasses the merged-record validation, so the explicit merged? guard is required.
+      # Role conversion can fail unrelated validations for the target STI type.
       ActiveRecord::Base.transaction do
         locked_user = User.lock_for_merge_integrity!(user).fetch(user.id)
 
@@ -866,7 +818,7 @@ module Admin
 
     def convert_user_to_new_type(user, new_klass)
       converted_user = user.becomes(new_klass)
-      converted_user.type = new_klass.name # Explicitly set the type column for STI
+      converted_user.type = new_klass.name
       clear_type_specific_fields(user, converted_user)
       converted_user
     end
@@ -880,7 +832,7 @@ module Admin
       converted_user.terms_accepted_at = nil
       converted_user.w9_status = nil
 
-      # Add similar blocks for other types if they have type-specific fields
+      # For other roles with type-specific fields, clear those fields here.
     end
 
     def save_converted_user(converted_user, original_user)
@@ -913,7 +865,6 @@ module Admin
       params.expect(user: [:type, { capabilities: [] }])
     end
 
-    # Parameters for admin user edit form
     def admin_user_params
       params.expect(
         user: %i[first_name last_name email phone phone_type
@@ -922,25 +873,18 @@ module Admin
       )
     end
 
-    # Handles updating capabilities for a user
-    # Used by update_role to ensure capabilities are maintained when changing user types
     def update_user_capabilities(user, capabilities)
       return if capabilities.blank?
 
-      # Clear existing capabilities first
       user.role_capabilities.destroy_all
 
-      # Add each new capability
       capabilities.each do |capability|
         user.add_capability(capability)
       end
     end
 
-    # Permits parameters for creating a constituent user
-    # Called in the create action
     def user_create_params
-      # When called from the admin UI (normal user create form), parameters come wrapped in :user
-      # When called from the paper application form, parameters come directly (unwrapped)
+      # Accept :user-wrapped fields and direct fields for paper guardian creation.
       if params.key?(:user)
         params.expect(
           user: %i[first_name last_name email phone phone_type
@@ -949,7 +893,6 @@ module Admin
                    communication_preference locale]
         )
       else
-        # Handle direct params from paper application form's guardian_attributes
         params.permit(
           :first_name, :last_name, :email, :phone, :phone_type,
           :physical_address_1, :physical_address_2,
@@ -959,18 +902,15 @@ module Admin
       end
     end
 
-    # Format validation errors into a field-keyed object for JavaScript error handling
-    # Converts error messages like "Phone is invalid" into { phone: "Phone is invalid" }
+    # JavaScript expects errors by field, such as { phone: "Phone is invalid" }.
     def format_validation_errors(errors)
       error_hash = {}
 
       Array(errors).each do |error_msg|
         next if error_msg.blank?
 
-        # Try to extract field name from error message (e.g., "Phone is invalid" -> "phone")
         field_name = extract_field_from_error(error_msg)
 
-        # If we already have an error for this field, append to it; otherwise set it
         if error_hash[field_name].present?
           error_hash[field_name] += "; #{error_msg}"
         else
@@ -981,10 +921,8 @@ module Admin
       error_hash
     end
 
-    # Extract field name from error message
-    # Handles messages like "Phone is invalid", "Email can't be blank", "Failed to create user: Phone must be...", etc.
+    # Accepts messages such as "Phone is invalid", "Email can't be blank", and "Failed to create user: Phone must be...".
     def extract_field_from_error(error_msg)
-      # Remove "Failed to create user: " prefix if present
       clean_msg = error_msg.sub(/^Failed to create (user|guardian|dependent):\s*/i, '')
 
       case clean_msg
@@ -998,12 +936,11 @@ module Admin
       when /^State/i then 'state'
       when /^Zip code/i then 'zip_code'
       else
-        # Default: use first word lowercased with underscores
         clean_msg.split.first.downcase.gsub(/[^a-z0-9_]/, '')
       end
     end
 
-    # Avoid N+1 queries on users index
+    # The index renders relationship and capability data from these batches.
     def optimize_users_for_index_view(users)
       user_ids = users.map(&:id)
       return if user_ids.empty?
@@ -1012,7 +949,6 @@ module Admin
       enhance_users_with_preloaded_data(users, preloaded_data)
     end
 
-    # Preload all data needed for the users index view
     def preload_user_index_data(user_ids)
       guardian_rels = load_guardian_relationships(user_ids)
       dependent_rels = load_dependent_relationships(user_ids)
@@ -1028,27 +964,22 @@ module Admin
       }
     end
 
-    # Load guardian counts for users
     def load_guardian_counts(user_ids)
       GuardianRelationship.where(guardian_id: user_ids).group(:guardian_id).count
     end
 
-    # Load IDs of users who have guardians
     def load_has_guardian_ids(user_ids)
       GuardianRelationship.where(dependent_id: user_ids).pluck(:dependent_id)
     end
 
-    # Load guardian relationships grouped by dependent
     def load_guardian_relationships(user_ids)
       GuardianRelationship.where(dependent_id: user_ids).group_by(&:dependent_id)
     end
 
-    # Load dependent relationships grouped by guardian
     def load_dependent_relationships(user_ids)
       GuardianRelationship.where(guardian_id: user_ids).group_by(&:guardian_id)
     end
 
-    # Load users referenced in relationships (works for both guardians and dependents)
     def load_related_users_from_relationships(relationships, user_id_field)
       user_ids = relationships.values.flatten.map(&user_id_field).uniq
       return {} unless user_ids.any?
@@ -1056,7 +987,6 @@ module Admin
       User.where(id: user_ids).index_by(&:id)
     end
 
-    # Load capabilities grouped by user
     def load_capabilities_by_user(user_ids)
       RoleCapability.where(user_id: user_ids)
                     .pluck(:user_id, :capability)
@@ -1064,7 +994,6 @@ module Admin
                     .transform_values { |caps| caps.map(&:second) }
     end
 
-    # Enhance users with preloaded data to avoid N+1 queries
     def enhance_users_with_preloaded_data(users, preloaded_data)
       users.each do |user|
         add_guardian_methods(user, preloaded_data)
@@ -1073,7 +1002,6 @@ module Admin
       end
     end
 
-    # Add guardian-related methods to user
     def add_guardian_methods(user, preloaded_data)
       guardian_counts = preloaded_data[:guardian_counts]
       has_guardian_ids = preloaded_data[:has_guardian_ids]
@@ -1089,11 +1017,9 @@ module Admin
       add_guardian_relationship_methods(user, guardian_rels, guardian_users, dependent_rels, dependent_users)
     end
 
-    # Add guardian relationship methods to user
     def add_guardian_relationship_methods(user, guardian_rels, guardian_users, dependent_rels, dependent_users)
       user.define_singleton_method(:guardian_relationships_as_dependent) do
         rels = guardian_rels[id] || []
-        # Set guardian_user for each relationship
         rels.each do |rel|
           rel.define_singleton_method(:guardian_user) do
             guardian_users&.fetch(guardian_id, nil)
@@ -1112,10 +1038,8 @@ module Admin
         @guardian_for_contact ||= guardian_relationships_as_dependent.first&.guardian_user
       end
 
-      # Add guardian_relationships_as_guardian method for guardians
       user.define_singleton_method(:guardian_relationships_as_guardian) do
         rels = dependent_rels[id] || []
-        # Set dependent_user for each relationship
         rels.each do |rel|
           rel.define_singleton_method(:dependent_user) do
             dependent_users&.fetch(dependent_id, nil)
@@ -1124,13 +1048,11 @@ module Admin
         rels
       end
 
-      # Add dependents method for guardians
       user.define_singleton_method(:dependents) do
         guardian_relationships_as_guardian.map(&:dependent_user).compact
       end
     end
 
-    # Add capability methods to user
     def add_capability_methods(user, capabilities_by_user)
       user.define_singleton_method(:has_capability?) do |capability|
         (capabilities_by_user[id] || []).include?(capability)
@@ -1145,7 +1067,6 @@ module Admin
       end
     end
 
-    # Add role methods to user
     def add_role_methods(user)
       user.define_singleton_method(:role_type) { type&.demodulize || 'Unknown' }
     end

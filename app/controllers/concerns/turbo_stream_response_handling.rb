@@ -3,10 +3,8 @@
 module TurboStreamResponseHandling
   extend ActiveSupport::Concern
 
-  # Handles successful turbo stream responses with standardized patterns
-  # @param message [String] The success message to display
-  # @param updates [Hash] Hash of element_id => partial_name for updates
-  # @param modals_to_remove [Array<String>] Array of modal IDs to remove
+  # @param updates [Hash] element_id => partial_name
+  # @param modals_to_remove [Array<String>] modal element IDs
   def handle_turbo_stream_success(message:, updates: {}, modals_to_remove: [])
     prepare_turbo_stream_data if respond_to?(:prepare_turbo_stream_data, true)
     flash.now[:success] = message
@@ -14,31 +12,22 @@ module TurboStreamResponseHandling
     render turbo_stream: streams
   end
 
-  # Handles failed turbo stream responses with error messaging
-  # @param message [String] The error message to display
   def handle_turbo_stream_error(message:)
     flash.now[:error] = message
     render turbo_stream: turbo_stream.update('flash', partial: 'shared/flash')
   end
 
-  # Builds turbo stream responses for successful operations
-  # @param updates [Hash] Hash of element_id => partial_name for updates
-  # @param modals_to_remove [Array<String>] Array of modal IDs to remove
-  # @return [Array] Array of turbo stream objects
-  #
-  # NOTE: modals_to_remove is ignored if updates includes 'modals' (container replacement)
+  # The flash always updates. A 'modals' key in updates replaces the modal container,
+  # so modals_to_remove is then ignored.
   def build_success_turbo_streams(updates = {}, modals_to_remove = [])
     streams = []
 
-    # Always update flash messages
     streams << turbo_stream.update('flash', partial: 'shared/flash')
 
-    # Add custom updates
     updates.each do |element_id, partial_name|
       streams << turbo_stream.update(element_id, partial: partial_name)
     end
 
-    # Remove specified modals unless they were recently updated
     unless updates.key?('modals')
       modals_to_remove.each do |modal_id|
         streams << turbo_stream.remove(modal_id)
@@ -48,14 +37,10 @@ module TurboStreamResponseHandling
     streams
   end
 
-  # Handles both HTML and Turbo Stream responses for successful operations
-  # @param html_redirect_path [String] Path to redirect for HTML requests
-  # @param html_message [String] Message for HTML redirect
-  # @param turbo_message [String] Message for Turbo Stream response
-  # @param turbo_updates [Hash] Updates for Turbo Stream response
-  # @param turbo_modals_to_remove [Array<String>] DEPRECATED: Modals to remove for Turbo Stream.
-  #   Use 'modals' => 'modals' in turbo_updates to replace entire modal container.
-  # @param turbo_redirect_path [String] Path to redirect for Turbo Stream (optional)
+  # @param turbo_message [String] defaults to html_message
+  # @param turbo_modals_to_remove [Array<String>] DEPRECATED. To replace the full modal container,
+  #   put 'modals' => 'modals' in turbo_updates.
+  # @param turbo_redirect_path [String] when present, Turbo gets a 303 redirect, not streams
   def handle_success_response(
     html_redirect_path:,
     html_message:,
@@ -67,12 +52,12 @@ module TurboStreamResponseHandling
     turbo_message ||= html_message
 
     respond_to do |format|
-      # Keep traditional flash types for HTML redirects to avoid breaking existing tests.
+      # HTML keeps the :notice flash key because existing tests expect it.
       format.html { redirect_to html_redirect_path, notice: html_message }
 
       format.turbo_stream do
         if turbo_redirect_path.present?
-          # Standard HTTP redirect – Turbo will convert this into a visit
+          # Turbo converts a 303 redirect into a visit.
           redirect_to turbo_redirect_path, status: :see_other, notice: turbo_message
         else
           handle_turbo_stream_success(
@@ -85,11 +70,8 @@ module TurboStreamResponseHandling
     end
   end
 
-  # Handles both HTML and Turbo Stream responses for failed operations
-  # @param html_redirect_path [String] Path to redirect for HTML requests (optional)
-  # @param html_render_action [Symbol] Action to render for HTML requests (optional)
-  # @param error_message [String] Error message to display
-  # @param status [Symbol] HTTP status for render (optional, defaults to :unprocessable_content)
+  # HTML precedence: html_redirect_path, then html_render_action, then redirect back.
+  # status applies only to html_render_action.
   def handle_error_response(error_message:, html_redirect_path: nil, html_render_action: nil, status: :unprocessable_content)
     respond_to do |format|
       if html_redirect_path

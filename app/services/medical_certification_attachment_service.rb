@@ -11,15 +11,15 @@ class MedicalCertificationAttachmentService
     end
   end
 
-  # Updates only the status of a medical certification without touching the attachment
+  # Changes the certification status. The attachment does not change.
+  # Errors are recorded and returned, not raised.
   #
-  # @param application [Application] The application whose certification status to update
-  # @param status [Symbol] The status to set (:approved, :rejected, :received)
-  # @param admin [User] The admin user performing this action
-  # @param submission_method [Symbol] The method of submission (:fax, :email, :portal, etc.)
-  # @param metadata [Hash] Additional metadata to store with the operation
-  #
-  # @return [Hash] Result hash with :success, :error, and :duration_ms keys
+  # @param application [Application] the application to update
+  # @param status [Symbol] :approved, :rejected, or :received
+  # @param admin [User] the admin who makes the change
+  # @param submission_method [Symbol] the submission channel
+  # @param metadata [Hash] additional operation metadata
+  # @return [Hash] :success, :error, :duration_ms, and :status on success
   def self.update_certification_status(application:, status:, admin:, submission_method: :admin_review, metadata: {})
     start_time = Time.current
     result = { success: false, error: nil, duration_ms: 0 }
@@ -112,7 +112,7 @@ class MedicalCertificationAttachmentService
                            .maximum(:changed_at) || application.medical_certification_verified_at
   end
 
-  # Reject a medical certification without requiring a file attachment
+  # Rejects the certification. An attached file is not necessary.
   def self.reject_certification(application:, admin:, reason:, notes: nil, # rubocop:disable Metrics/ParameterLists
                                 reason_code: nil, submission_method: :admin_review, metadata: {})
     rejection_params = {
@@ -150,7 +150,7 @@ class MedicalCertificationAttachmentService
     true
   end
 
-  # Updates only the status fields and creates audit records without touching the attachment
+  # Writes the status, status history, audit event, and notification. The attachment does not change.
   def self.update_certification_status_only(application, status, admin, submission_method, metadata)
     ActiveRecord::Base.transaction do
       old_status = application.medical_certification_status || 'requested'
@@ -278,7 +278,6 @@ class MedicalCertificationAttachmentService
     result
   end
 
-  # Main attachment processing logic
   def self.process_attachment(params)
     blob_size = params[:blob].byte_size
 
@@ -290,7 +289,6 @@ class MedicalCertificationAttachmentService
     { blob_size: blob_size, status: params[:status].to_s }
   end
 
-  # Handles rejection processing with transaction
   def self.process_rejection(params)
     ActiveRecord::Base.transaction do
       params[:resolved_reason] = resolve_rejection_reason_text(params)

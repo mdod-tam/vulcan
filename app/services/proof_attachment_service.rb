@@ -12,7 +12,7 @@ class ProofAttachmentService
     :admin, :metadata, :blob_size, :skip_audit_events,
     keyword_init: true # rubocop:disable Style/RedundantStructKeywordInit
   )
-  # Attaches a proof document to an application
+  # Attaches a proof document to an application.
   #
   # @param args [Hash] A hash containing the arguments for attachment:
   #   - :application [Application] (required) The application to attach the proof to.
@@ -234,8 +234,7 @@ class ProofAttachmentService
       context = Rails.env.test? ? '[TEST_ATTACHMENT] ' : '[ATTACHMENT_ERROR] '
       message = "#{context}Proof attachment error: #{error.message}"
 
-      # Fabricated test files intentionally trigger digest errors.
-      # Log those errors at DEBUG to keep test output readable.
+      # Digest failures use DEBUG in tests to reduce error log noise.
       if Rails.env.test? && error.message.to_s.match?(/mismatched digest/i)
         Rails.logger.debug(message)
       else

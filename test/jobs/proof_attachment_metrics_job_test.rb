@@ -4,12 +4,10 @@ require 'test_helper'
 
 class ProofAttachmentMetricsJobTest < ActiveJob::TestCase
   setup do
-    # Clear all notifications and events for a clean slate
     Notification.delete_all
     Event.delete_all
 
-    # Clear dependent records first to avoid foreign key violations
-    # ApplicationStatusChange must be deleted before Applications due to FK constraint
+    # Delete child rows before their parents because of foreign keys.
     ApplicationStatusChange.delete_all
     ProofReview.delete_all
     MedicalProviderSecureRequestForm.delete_all
@@ -26,33 +24,27 @@ class ProofAttachmentMetricsJobTest < ActiveJob::TestCase
     DuplicateReviewCaseCandidate.delete_all
     DuplicateReviewCase.delete_all
 
-    # Clear all users to ensure a completely clean slate for system_user and admins
+    # After this, the only system user and admins are the ones that setup creates.
     User.delete_all
 
-    # Clear the cached system user to prevent stale references
+    # User.system_user has no @system_user cache now, so this line has no effect.
     User.instance_variable_set(:@system_user, nil)
 
-    # Create the system user and some test administrators
     @system_user = ensure_system_audit_actor!
     @admin1 = create(:admin)
     @admin2 = create(:admin)
     @admin3 = create(:admin)
 
-    # Create test application for use in tests
     @application = create(:application, skip_proofs: true)
   end
 
   test 'creates notifications when both failure threshold and success rate conditions are met' do
-    # Clear all events and notifications for a clean slate
     Event.delete_all
     Notification.delete_all
 
-    # Create a scenario that meets both conditions:
-    # 1. At least 5 failures (threshold condition)
-    # 2. Success rate below 95% (success rate condition)
     base_time = Time.current
 
-    # Create 6 failure events (above threshold of 5)
+    # 6 failures: more than the minimum of 5.
     6.times do |i|
       action_name = i < 3 ? 'income_proof_attachment_failed' : 'residency_proof_attachment_failed'
       Event.create!(
@@ -70,7 +62,7 @@ class ProofAttachmentMetricsJobTest < ActiveJob::TestCase
       )
     end
 
-    # Create 8 successful events to get 57.1% success rate (8 successes / 14 total)
+    # 8 successes of 14 events: a 57.1% success rate, below 95%.
     8.times do |i|
       action_name = i < 4 ? 'income_proof_attached' : 'residency_proof_attached'
       Event.create!(
@@ -87,15 +79,12 @@ class ProofAttachmentMetricsJobTest < ActiveJob::TestCase
       )
     end
 
-    # Run the job
     ProofAttachmentMetricsJob.perform_now
 
-    # Should create notifications for all administrators
     expected_notifications = User.where(type: 'Users::Administrator').count
     assert expected_notifications.positive?, 'Should have administrators to notify'
     assert_equal expected_notifications, Notification.count, 'Should create one notification per administrator'
 
-    # Check that each notification has the correct content
     Notification.find_each do |notification|
       assert_equal 'attachment_failure_warning', notification.action
       assert_equal 57.1, notification.metadata['success_rate']
@@ -106,25 +95,21 @@ class ProofAttachmentMetricsJobTest < ActiveJob::TestCase
   end
 
   test "doesn't create notifications when success rate is good" do
-    # Ensure clean state before test
     Notification.delete_all
 
-    # Delete the failure events
     Event.where("action LIKE '%_failed'").delete_all
 
-    # Run the job
     ProofAttachmentMetricsJob.perform_now
 
-    # Should not create notifications since success rate is 100%
+    # Setup leaves no events, so the job uses its 100% default rate.
     assert_equal 0, Notification.count, 'Should not have created notifications'
   end
 
   test "doesn't create notifications when failure count is below threshold" do
-    # Clear all events and notifications for a clean slate
     Event.delete_all
     Notification.delete_all
 
-    # Create exactly 4 recent failure events (below threshold of 5)
+    # 4 failures: fewer than the minimum of 5.
     base_time = Time.current
     4.times do |i|
       Event.create!(
@@ -142,7 +127,7 @@ class ProofAttachmentMetricsJobTest < ActiveJob::TestCase
       )
     end
 
-    # Create some successful events to establish a baseline
+    # 6 successes of 10 events: a 60% success rate, below 95%. Only the failure minimum stops the alert.
     6.times do |i|
       Event.create!(
         action: 'income_proof_attached',
@@ -158,19 +143,16 @@ class ProofAttachmentMetricsJobTest < ActiveJob::TestCase
       )
     end
 
-    # Run the job - should not create notifications since failures (4) < threshold (5)
     ProofAttachmentMetricsJob.perform_now
 
-    # Should not create notifications since we have fewer than 5 failures
     assert_equal 0, Notification.count, 'Should not create notifications when failures below threshold'
   end
 
   test 'creates notifications when failure count meets threshold with poor success rate' do
-    # Clear all events and notifications for a clean slate
     Event.delete_all
     Notification.delete_all
 
-    # Create exactly 5 recent failure events (at threshold)
+    # Exactly 5 failures: the minimum.
     base_time = Time.current
     5.times do |i|
       Event.create!(
@@ -188,8 +170,7 @@ class ProofAttachmentMetricsJobTest < ActiveJob::TestCase
       )
     end
 
-    # Create fewer successful events to ensure success rate < 95%
-    # 5 failures + 1 success = 16.7% success rate (well below 95%)
+    # 1 success of 6 events: a 16.7% success rate.
     Event.create!(
       action: 'income_proof_attached',
       user: @application.user,
@@ -203,14 +184,11 @@ class ProofAttachmentMetricsJobTest < ActiveJob::TestCase
       created_at: base_time - ((0 + 10) * 2).minutes
     )
 
-    # Run the job - should create notifications since failures (5) >= threshold (5) AND success rate < 95%
     ProofAttachmentMetricsJob.perform_now
 
-    # Should create notifications for all administrators
     expected_notifications = User.where(type: 'Users::Administrator').count
     assert_equal expected_notifications, Notification.count, 'Should create notifications when both conditions met'
 
-    # Verify notification content
     Notification.find_each do |notification|
       assert_equal 'attachment_failure_warning', notification.action
       assert notification.metadata['success_rate'] < 95.0
@@ -220,15 +198,12 @@ class ProofAttachmentMetricsJobTest < ActiveJob::TestCase
   end
 
   test 'handles empty audit data' do
-    # Delete all events
     Event.delete_all
 
-    # Run the job - should not raise any errors
     assert_nothing_raised do
       ProofAttachmentMetricsJob.perform_now
     end
 
-    # Should not create notifications
     assert_equal 0, Notification.count
   end
 end

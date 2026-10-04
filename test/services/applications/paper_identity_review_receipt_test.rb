@@ -3,20 +3,19 @@
 require 'test_helper'
 
 module Applications
-  # A decision that survives a change to the identity it was made about is worse than no decision at
-  # all: it launders "I checked" from one applicant onto another. These pin what invalidates it.
+  # A decision that survives an identity change moves a review from one applicant to another.
+  # These tests pin what invalidates a decision.
   class PaperIdentityReviewReceiptTest < ActiveSupport::TestCase
     setup do
       @admin = create(:admin)
       @other_admin = create(:admin)
-      # The full fact set duplicate detection receives, already canonicalized by the caller's
-      # duplicate_detection_attrs -- this object fingerprints what it is given rather than
-      # re-deriving normalization, so there is one definition of "the same facts".
+      # The caller's duplicate_detection_attrs canonicalizes these facts. The receipt does not
+      # normalize them again, so only one definition of "the same facts" exists.
       @identity = { first_name: 'John', last_name: 'Smith', date_of_birth: Date.new(1990, 4, 2),
                     email: 'john.smith@example.com', phone: '5555550100',
                     physical_address_1: '1 Main St', physical_address_2: nil,
                     city: 'Baltimore', state: 'MD', zip_code: '21201' }
-      # The presented snapshot -- the exact rows the browser rendered -- not a list of ids.
+      # The rows the browser showed, not only their ids.
       @candidates = [
         { id: 11, name: 'John Smith', date_of_birth: 'April 2, 1990',
           city: 'Baltimore', state: 'MD', zip_code: '21201', selectable: true },
@@ -32,11 +31,8 @@ module Applications
       assert verify(issue).valid?
     end
 
-    # The whole point: the decision was about this applicant, so changing who is being created must
-    # invalidate it. This is the "searched for John, submitted Jane" case.
-    # Materially different values per field, not a suffix: appending to a date still casts to the
-    # same day and appending to a phone still normalizes to the same digits, and canonicalization is
-    # meant to absorb exactly that.
+    # A search for John followed by a submission for Jane must not verify.
+    # Each value differs materially. Caller canonicalization can absorb a suffix on a date or phone.
     {
       first_name: 'Jane',
       last_name: 'Smythe',
@@ -58,22 +54,18 @@ module Applications
       end
     end
 
-    # Address is part of what detection scores, so it is part of what a decision is about. Binding
-    # only name/DOB/contact left a gap: swapping one non-matching address for another preserves the
-    # candidate ids and reasons, so the old decision would have stayed valid.
-    # An absent second address line and a cleared one are different submissions. Stringifying every
-    # value would collapse them and let one be substituted under a decision issued for the other.
+    # Detection scores the address, so the decision binds it. A change between two non-matching
+    # addresses keeps the candidate ids and reasons the same.
+    # An absent second address line and a cleared one are different submissions.
+    # If the fingerprint made every value a string, one could replace the other.
     test 'a blank value is not the same fact as a missing one' do
-      # Issued at one fixed instant, because the token embeds its timestamp: two calls straddling a
-      # second boundary would differ even if the fingerprints underneath were identical, and the
-      # assertion would pass without proving anything.
+      # The token embeds its expiry. Two tokens issued in different seconds always differ,
+      # so both use one instant.
       at = Time.current
       assert_not_equal issue(identity: @identity.merge(physical_address_2: nil), issued_at: at),
                        issue(identity: @identity.merge(physical_address_2: ''), issued_at: at)
     end
 
-    # The same guarantee from the verification side, which is where it actually matters: a decision
-    # issued for a missing value must not verify once that value is present but blank.
     test 'a decision issued for a missing value does not verify against a blank one' do
       token = issue(identity: @identity.merge(physical_address_2: nil))
 
@@ -85,8 +77,7 @@ module Applications
       assert verify(issue(identity: shuffled)).valid?
     end
 
-    # A different candidate set means staff reviewed a different set of possibilities, whether
-    # because someone created a record in between or because the request supplied its own list.
+    # The set can change because a record was created between steps or the request supplied a list.
     test 'a changed candidate set invalidates the decision' do
       token = issue
       newcomer = { id: 99, name: 'Jane Smith', date_of_birth: 'April 2, 1990',
@@ -97,9 +88,7 @@ module Applications
       assert_equal :mismatched, result.reason
     end
 
-    # The reason ids alone were not enough: staff decide on what the row *says*. Each of these
-    # changes a fact that was on screen while leaving the candidate ids and the reason codes
-    # untouched, which is exactly the case an id-only binding accepted.
+    # Staff decide on the text of each row. Each change keeps the candidate ids and reason codes.
     {
       name: 'Jonathan Smith',
       date_of_birth: 'April 3, 1990',
@@ -118,8 +107,7 @@ module Applications
       end
     end
 
-    # Whether a row could be picked at all is part of what staff were looking at: "these are
-    # different people" means something different when the alternative was not offered.
+    # "These are different people" has a different meaning when staff could not select the row.
     test 'a changed selectable state invalidates the decision' do
       token = issue
       shown = @candidates.map(&:dup)
@@ -142,7 +130,7 @@ module Applications
       assert_not verify(issue, reasons: %w[name_dob]).valid?
     end
 
-    # A decision is one admin's attestation, so it cannot be carried across accounts.
+    # A decision is the attestation of one admin.
     test 'another admin cannot use this decision' do
       assert_not verify(issue, admin: @other_admin).valid?
     end
@@ -151,8 +139,7 @@ module Applications
       assert_not verify(issue(context: :self_applicant), context: :dependent).valid?
     end
 
-    # An old form left open overnight must not authorize a creation the next day even when nothing
-    # about the identity changed.
+    # An old form must not authorize a creation, even when the identity did not change.
     test 'a decision expires' do
       token = issue(issued_at: 2.hours.ago)
       result = verify(token)
@@ -184,7 +171,7 @@ module Applications
       end
     end
 
-    # The token carries only a version, a timestamp, and a digest -- never the applicant's facts.
+    # The token carries only the fingerprint digest and verifier metadata, not applicant facts.
     test 'no identity facts travel in the token' do
       token = issue
 

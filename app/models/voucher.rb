@@ -20,10 +20,10 @@ class Voucher < ApplicationRecord
   after_update :log_status_change, if: -> { saved_change_to_status? && respond_to?(:events) }
 
   enum :status, {
-    active: 0,      # Initial state when voucher is created and ready to be used
-    redeemed: 2,    # When voucher has been fully used
-    expired: 3,     # When voucher has passed its expiration date
-    cancelled: 4    # When voucher has been cancelled by admin
+    active: 0,
+    redeemed: 2,    # Fully used
+    expired: 3,
+    cancelled: 4    # Cancelled by an admin
   }, default: :active, prefix: :voucher
 
   scope :available, -> { where(status: :active) }
@@ -60,16 +60,14 @@ class Voucher < ApplicationRecord
   end
 
   def activate_if_valid!
-    # Don't modify if voucher is already in a final state
+    # Redeemed and cancelled are final states.
     return if %w[redeemed cancelled].include?(status)
 
-    # If voucher is already active, only check if it needs to be marked as expired
     if status == 'active'
       update!(status: :expired) if expired?
       return
     end
 
-    # For any other status, check if it should be expired or active
     if expired?
       update!(status: :expired)
     else
@@ -77,10 +75,8 @@ class Voucher < ApplicationRecord
     end
   end
 
-  # Determines if a voucher can be redeemed based on its internal state and amount.
-  # NOTE: This method does NOT perform identity verification (e.g., Date of Birth).
-  # Identity verification is handled externally by the VoucherVerificationService
-  # as a prerequisite to calling the redemption process.
+  # Checks only voucher state and amount. Identity verification (date of birth)
+  # occurs before redemption, in VoucherVerificationService.
   def can_redeem?(amount)
     return false unless voucher_active?
     return false if expired?
@@ -90,9 +86,8 @@ class Voucher < ApplicationRecord
     true
   end
 
-  # This method handles the financial transaction (redemption) and updates the voucher's state.
-  # It assumes that any necessary identity verification (e.g., DOB) has already
-  # been performed by an external service (e.g., VoucherVerificationService) prior to this method being called.
+  # Records the redemption and updates the voucher. The caller must verify
+  # identity first (see VoucherVerificationService).
   #
   # @param amount [Float] The amount to redeem
   # @param vendor [User] The vendor processing the redemption
@@ -100,20 +95,15 @@ class Voucher < ApplicationRecord
   # @param notes [String] Optional notes about the redemption
   # @return [VoucherTransaction, false] The created transaction or false if redemption fails
   def redeem!(amount, vendor, product_data = nil, notes: nil)
-    # Ensure the voucher meets basic redemption criteria (active, not expired, sufficient funds)
     return false unless can_redeem?(amount)
 
     transaction(requires_new: true) do
-      # Create the transaction record
       txn = create_redemption_transaction(amount, vendor, generate_reference_number, notes)
 
-      # Process any products that were purchased
       process_product_data(product_data, txn) if product_data.present?
 
-      # Update voucher state
       update_voucher_after_redemption(amount, vendor)
 
-      # Send notifications and create audit event
       notify_voucher_redemption(txn)
       log_redemption_event(vendor, amount, txn, product_data)
 
@@ -142,14 +132,13 @@ class Voucher < ApplicationRecord
     super(value.try(:round, 2))
   end
 
-  # Override to_param to return the voucher code
   def to_param
     code
   end
 
   def self.calculate_value_for_constituent(constituent)
     Constituent::DISABILITY_TYPES.sum do |disability_type|
-      # Explicitly check for true to handle any truthy/falsey values
+      # Compare with true so that only a true flag adds value.
       if constituent.send("#{disability_type}_disability") == true
         Policy.voucher_value_for_disability(disability_type)
       else
@@ -160,7 +149,6 @@ class Voucher < ApplicationRecord
 
   private
 
-  # Create the transaction record
   def create_redemption_transaction(amount, vendor, reference_number, notes)
     transactions.create!(
       vendor: vendor,
@@ -173,46 +161,39 @@ class Voucher < ApplicationRecord
     )
   end
 
-  # Handle product data
   def process_product_data(product_data, transaction)
     product_data.each do |product_id, quantity|
       product = Product.find(product_id)
 
-      # Create transaction product record
       transaction.voucher_transaction_products.create!(
         product: product,
         quantity: quantity.to_i
       )
 
-      # Associate product with the application if not already associated
       associate_product_with_application(product)
     end
   end
 
-  # Associate product with the application
   def associate_product_with_application(product)
     application.products << product unless application.products.include?(product)
   end
 
-  # Update the voucher's state after redemption
   def update_voucher_after_redemption(amount, vendor)
     self.remaining_value -= amount
     self.last_used_at = Time.current
     self.vendor = vendor
 
-    # Update status if fully redeemed (use epsilon check for floating point precision)
+    # The epsilon allows for floating point amounts.
     self.status = :redeemed if remaining_value.zero? || remaining_value.abs < 0.01
 
     save!
   end
 
-  # Send the redemption notification
   def notify_voucher_redemption(transaction)
     VoucherNotificationsMailer.with(transaction: transaction).voucher_redeemed.deliver_later
   end
 
-  # Create an event record for voucher redemption
-  # This method is fault-tolerant - if it fails, it logs the error but doesn't raise an exception
+  # Logs and does not raise on failure, so that the redemption completes.
   def log_redemption_event(vendor, amount, transaction, product_data)
     AuditEventService.log(
       action: 'voucher_redeemed',
@@ -229,14 +210,11 @@ class Voucher < ApplicationRecord
       }
     )
   rescue StandardError => e
-    # Log the error but don't raise - this ensures the transaction still completes
     Rails.logger.error("Failed to log voucher redemption event: #{e.message}")
     Rails.logger.error(e.backtrace.join("\n")) if e.backtrace
-    # Return nil but don't raise exception
     nil
   end
 
-  # Format product data for event metadata
   def format_product_data_for_event(product_data)
     return nil if product_data.blank?
 
@@ -269,10 +247,9 @@ class Voucher < ApplicationRecord
       }
     )
   rescue StandardError => e
-    # Log the error but don't raise - this ensures the voucher operation still completes
+    # Do not raise, so that the voucher update completes.
     Rails.logger.error("Failed to log voucher status change: #{e.message}")
     Rails.logger.error(e.backtrace.join("\n")) if e.backtrace
-    # Return nil but don't raise exception
     nil
   end
 

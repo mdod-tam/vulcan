@@ -9,7 +9,7 @@ module Applications
   # Explicit overrides require a real email, a real text-capable phone, or a complete address.
   # An SMS override with a voice, videophone, synthetic, malformed, or stale phone fails with :invalid_channel_override.
   # SMS requires an override. Invalid overrides never fall back to another channel.
-  # Letters require a complete address and permission from the action.
+  # Letters require a complete address and permission from the calling service.
   # Default selection honors letter preference, then tries email, then letter, within eligible routes.
   # No permissible route returns :no_contact_path before any token, form, notification, or audit event.
   #
@@ -233,8 +233,8 @@ module Applications
       [owner.public_send(kind), owner, source]
     end
 
-    # Legacy rows do not persist address strategy; use the dependent only when the
-    # managing guardian has no usable mailing address.
+    # Address strategy is not persisted. A dependent owns the address only when
+    # the dependent address is complete and the managing guardian address is not.
     def address_owner_for(recipient, role)
       return recipient if role == :guardian
       return recipient unless dependent_recipient?(recipient)

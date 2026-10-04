@@ -5,30 +5,27 @@ module ConstituentPortal
     include UserServiceIntegration
 
     before_action :authenticate_user!
-    before_action :require_constituent! # Ensure only constituents can manage dependents
+    before_action :require_constituent!
     before_action :set_current_user
     before_action :set_dependent, only: %i[show edit update destroy]
 
-    # Format guard only. A key is an opaque per-form value, so anything that is not one is treated
-    # as absent rather than queried; a malformed key must never widen a lookup.
+    # The form key identifies a creation request within one guardian's account.
+    # Invalid keys act as absent keys.
     PORTAL_CREATION_KEY_FORMAT = /\A[a-f0-9]{32}\z/
 
     # GET /constituent_portal/dependents/:id
     def show
-      # @dependent is set by before_action
       @guardian_relationship = @dependent.guardian_relationships_as_dependent.find_by(guardian_user: current_user)
 
-      # Get recent profile changes for this dependent
       @recent_changes = get_recent_profile_changes(@dependent)
 
-      # Get dependent's applications if any
       @dependent_applications = @dependent.applications.order(created_at: :desc).limit(5)
     end
 
     # GET /constituent_portal/dependents/new
     def new
-      @dependent_user = User.new # For the dependent's user record
-      @guardian_relationship = GuardianRelationship.new # For the relationship_type
+      @dependent_user = User.new
+      @guardian_relationship = GuardianRelationship.new
     end
 
     # GET /constituent_portal/dependents/:id/edit
@@ -59,12 +56,8 @@ module ConstituentPortal
 
     # PATCH/PUT /constituent_portal/dependents/:id
     #
-    # Locks the dependent and the guardian before requalifying and updating, so a concurrent
-    # merge and a concurrent dependent profile edit can never interleave: either the merge
-    # commits first and this reload sees the retired participant and refuses, or the edit
-    # commits first and the merge -- which takes the same lock -- waits. Also re-derives every
-    # authority fact under that lock (see dependent_edit_still_authorized?): set_dependent and
-    # require_constituent! both ran before the lock was granted.
+    # The merge writer uses the same user locks.
+    # Revalidate access under these locks because the request's initial authorization precedes them.
     def update
       ActiveRecord::Base.transaction do
         locked_users = User.lock_for_merge_integrity!(@dependent, current_user)
@@ -78,12 +71,8 @@ module ConstituentPortal
 
         @dependent = locked_dependent
 
-        # Derived from the *locked* guardian, inside the lock. A guardian contact strategy
-        # snapshots the guardian's own email, phone, and delivery preference into the dependent's
-        # stored contact, and User#effective_phone prefers that stored dependent_phone -- so
-        # deriving these before the lock would let a merge that changed the guardian's contact in
-        # the meantime be overwritten by pre-lock values and become durable contact truth,
-        # routing the dependent's notifications to a number the merge just discarded.
+        # Use the locked guardian when the strategy copies contact values into the dependent's record.
+        # Pre-lock values could restore contact that a concurrent merge replaced.
         params_to_update = dependent_attributes_with_contact_strategies(locked_guardian)
         unless params_to_update
           contact_strategy_errors.each { |error| @dependent.errors.add(:base, error) }
@@ -104,16 +93,10 @@ module ConstituentPortal
 
     # DELETE /constituent_portal/dependents/:id
     def destroy
-      # @dependent is set by before_action
-      # This should destroy the GuardianRelationship.
-      # Destroying the dependent User record itself is more complex:
-      # - Only if no other guardians?
-      # - Only if no applications?
-      # Focus on destroying the relationship from current_user's perspective.
+      # Keep the dependent's user record because other guardians or applications can still refer to it.
       relationship = @dependent.guardian_relationships_as_dependent.find_by(guardian_user: current_user)
 
       if relationship&.destroy
-        # Optionally, check if the dependent user should be destroyed
         # if !@dependent.guardians.exists? && !@dependent.applications.exists?
         #   @dependent.destroy
         # end
@@ -125,24 +108,11 @@ module ConstituentPortal
 
     private
 
-    # Every authority fact behind this edit, re-derived against the locked rows instead of the
-    # pre-lock instances the request was authorized with.
-    #
-    # The two participants are deliberately held to different standards. The guardian is the
-    # authenticated actor, so it must still satisfy the same gates the request was admitted
-    # under: public_login_active? (an admin suspension or deactivation landing mid-request must
-    # end the actor's authority, exactly as it would have blocked sign-in) and constituent?
-    # (require_constituent! ran before the lock was granted, so a role conversion in that window
-    # would otherwise still be honored). The dependent is a managed record that never
-    # authenticates, so only merged? disqualifies it: an admin deactivating or suspending a
-    # dependent must not lock their guardian out of maintaining the profile, and the dependent's
-    # own STI type is not part of this authorization -- User.editable_by_guardian scopes on the
-    # relationship alone. See the "guardian can edit an unmerged inactive/suspended dependent"
-    # cases in test/controllers/constituent_portal/dependents_controller_test.rb.
-    #
-    # The guardian relationship is read FOR UPDATE rather than through an unlocked exists?: an
-    # unlocked check can be satisfied by a row that a concurrent removal deletes before the
-    # update below lands, whereas locking the row makes that removal wait for this transaction.
+    # Guardian access can change after the request passes its initial authorization.
+    # Dependent login status and STI type do not affect this authorization.
+    # A guardian can still edit an unmerged inactive or suspended dependent.
+    # The relationship lock makes concurrent removal wait until this transaction ends.
+    # See the inactive/suspended cases in test/controllers/constituent_portal/dependents_controller_test.rb.
     def dependent_edit_still_authorized?(locked_dependent, locked_guardian)
       return false if locked_dependent.merged?
       return false unless locked_guardian.public_login_active? && locked_guardian.constituent?
@@ -156,7 +126,6 @@ module ConstituentPortal
     end
 
     def set_dependent
-      # Use Rails-centric scope for authorization
       @dependent = User.editable_by_guardian(current_user).find_by(id: params[:id])
 
       return if @dependent
@@ -165,9 +134,6 @@ module ConstituentPortal
     end
 
     def dependent_user_params
-      # Define strong parameters for the dependent User
-      # Ensure to permit all necessary fields for creating a User (e.g., email, name, dob)
-      # Handle password creation strategy for dependents (e.g., generate random, or no login)
       params.expect(dependent: %i[first_name last_name email phone phone_type date_of_birth
                                   hearing_disability vision_disability
                                   speech_disability mobility_disability cognition_disability
@@ -188,13 +154,10 @@ module ConstituentPortal
       Current.user = current_user
     end
 
-    # +guardian+ is the record whose own contact facts get snapshotted into the dependent's
-    # stored contact, so it must be the locked guardian on any path that writes under a lock --
-    # never the request's pre-lock current_user.
+    # The guardian strategy copies contact from +guardian+ into the dependent's fields.
+    # If the caller holds a user lock, +guardian+ must be the locked record.
     def dependent_attributes_with_contact_strategies(guardian = current_user, preallocated_synthetic_phone: nil)
       attrs = dependent_user_params.to_h
-      # Portal contact strategies snapshot the submitted choice into User fields.
-      # Omitted contact keys preserve existing contact on partial updates.
       strategies = dependent_contact_strategy_params(attrs, guardian)
       return attrs if strategies.values_at(:email_strategy, :phone_strategy).all?(&:nil?)
 
@@ -227,8 +190,7 @@ module ConstituentPortal
       key.match?(PORTAL_CREATION_KEY_FORMAT) ? key : nil
     end
 
-    # The refusal has to leave the guardian somewhere to go: they cannot self-serve past a
-    # same-name/same-birthdate block when the two really are different people.
+    # Support must resolve distinct people who share a name and birthdate under this guardian.
     def duplicate_identity_message(existing_dependent)
       t('constituent_portal.dependents.create.duplicate_identity',
         name: existing_dependent.full_name,
@@ -236,8 +198,7 @@ module ConstituentPortal
         support_phone: Policy.get('support_phone') || '410-767-6960')
     end
 
-    # A replay already succeeded once, so it redirects to the outcome the guardian was waiting on;
-    # anything else is a refusal and returns messages for the caller to render after rollback.
+    # A replay redirects without writes. Refusals render after rollback.
     def apply_portal_dependent_admission(admission)
       return admission[:errors] if admission[:notice].blank?
 
@@ -245,8 +206,9 @@ module ConstituentPortal
       nil
     end
 
-    # Answers both admission questions in one place and returns what the caller should do:
-    # a notice to redirect with on a replay, errors to fail with, or nil to proceed.
+    # Recognize a repeated request before applying the identity rule for a new request.
+    # A new form key does not override that rule.
+    # Returns a notice for replay, errors for refusal, or nil to continue.
     def portal_dependent_admission(locked_guardian, dependent_attrs)
       replay = replayed_dependent_creation(locked_guardian, dependent_attrs)
       return { errors: [t('constituent_portal.dependents.create.stale_request')] } if replay == :conflict
@@ -262,17 +224,12 @@ module ConstituentPortal
       nil
     end
 
-    # Resolves the submitted key within this guardian's own request namespace, which is what replay
-    # identity means: (authenticated guardian, request key). The index is scoped the same way, so
-    # the same raw key held by another guardian is simply a different request and resolves to
-    # nothing here -- no coupling between accounts, and nothing that could surface their record.
+    # Replay lookup uses the guardian ID and form key, as the unique index does.
+    # The same key in another guardian's account identifies a separate request.
     #
-    # Returns the original relationship on a true replay, :conflict when this guardian already spent
-    # the key on materially different input, and nil when the key is absent or unspent by them.
-    #
-    # A form rendered before this shipped carries no key. That returns nil, so it falls through to
-    # the identity guard with degraded replay semantics -- admitted or refused on policy, never
-    # silently past both checks.
+    # Returns the original relationship for unchanged input, :conflict for changed input,
+    # or nil for an absent or unused key.
+    # A legacy form without a key still passes through the identity guard.
     def replayed_dependent_creation(guardian, _dependent_attrs)
       key = submitted_portal_creation_key
       return nil if key.blank?
@@ -284,16 +241,9 @@ module ConstituentPortal
       existing.portal_creation_fingerprint == submitted_request_fingerprint ? existing : :conflict
     end
 
-    # Fingerprint of everything semantically submitted, built from the request rather than from the
-    # persisted dependent. Comparing against the stored record cannot work: under a guardian contact
-    # choice the dependent's stored contact is *derived from the guardian*, so the submitted value
-    # was never persisted verbatim and is unrecoverable afterwards.
-    #
-    # Note this passes the raw `use_guardian_*` choices rather than the resolved strategies.
-    # `contact_strategy_for` decides the strategy partly by comparing submitted contact against the
-    # guardian's *current* email and phone, so feeding it here would make the fingerprint a function
-    # of mutable guardian state: the guardian edits their own email and a byte-identical replay
-    # hashes differently, then gets refused as stale. Submitted intent is the only stable input.
+    # Use submitted fields and raw use_guardian_* choices for replay identity.
+    # Stored contact can contain generated values or copies of guardian contact.
+    # A guardian contact edit must not change whether the server recognizes a repeated request.
     def submitted_request_fingerprint
       DependentRequestFingerprint.new(
         dependent_params: dependent_user_params.to_h,
@@ -303,18 +253,11 @@ module ConstituentPortal
       ).to_s
     end
 
-    # Guardian-scoped admission rule: one dependent per canonical name and date of birth.
-    #
-    # Equivalence is delegated to Users::Constituent.find_duplicates -- the single definition of
-    # "same person" this application has -- rather than restated here. That matters beyond tidiness:
-    # find_duplicates lower-cases both names in SQL and parses string dates with Date.iso8601, so a
-    # hand-rolled comparison against the portal's MM/DD/YYYY input would silently match nothing.
-    # duplicate_detection_attrs casts the submitted value through a Users::Constituent instance, so
-    # what is passed here is an already-parsed Date.
-    #
-    # Portal-side admission, not a system-wide invariant: it reads relationships written by paper
-    # and admin intake, but it does not constrain those writers, and a concurrent sibling write is
-    # not serialized by this lock.
+    # This portal guard compares constituents this guardian already manages.
+    # A matching name and birthdate blocks a new request.
+    # Users::Constituent.find_duplicates owns the comparison after duplicate_detection_attrs casts the birthdate.
+    # The query includes relationships from paper and admin intake.
+    # This portal lock does not serialize concurrent writes by those entrypoints.
     def guardian_scoped_identity_match(locked_guardian, dependent_attrs)
       attrs = duplicate_detection_attrs(dependent_attrs)
       first_name = attrs[:first_name].to_s.strip
@@ -328,15 +271,9 @@ module ConstituentPortal
                         .first
     end
 
-    # A replay resends the contact details of the record it already created, so exact-contact
-    # detection sees a hard block -- against that record. Refusing there would answer a request the
-    # server already completed with a support-contact dead end, and the key would never be consulted
-    # because this runs before the lock.
-    #
-    # So a submission that looks like a replay is allowed through to the locked path, which resolves
-    # the key and returns the original outcome. This read is unlocked and therefore advisory only,
-    # exactly like the portal's pre-lock identity-review read: the in-transaction check still
-    # decides, and a concurrent first request that has not committed yet simply falls through to it.
+    # Exact-contact detection can block a replay against the dependent it created.
+    # Let a possible replay reach the locked admission check before deciding its outcome.
+    # This unlocked lookup is advisory. A concurrent first request can commit before the locked check.
     def portal_dependent_duplicate_blocked?(duplicate_detection, dependent_attrs)
       return false unless duplicate_detection.hard_block
       return false if replayed_dependent_creation(current_user, dependent_attrs).present?
@@ -345,6 +282,7 @@ module ConstituentPortal
       true
     end
 
+    # New portal dependents require disability validation and must not reuse a user lookup result.
     def create_portal_dependent_user(dependent_attrs)
       create_user_with_service(dependent_attrs,
                                is_managing_adult: false,
@@ -352,10 +290,9 @@ module ConstituentPortal
                                require_disability_validation: true)
     end
 
-    # Duplicate detection must run before this boundary so the complete persisted participant
-    # inventory is known. The guardian and every candidate that will be written into a review
-    # case are then locked in one ascending-id call before any durable write. The new dependent
-    # cannot be included because it does not exist yet and is invisible outside this transaction.
+    # Duplicate detection supplies the persisted candidates before this transaction.
+    # Lock the guardian and review candidates in ascending ID order before any write.
+    # The new dependent has no row to lock yet.
     def create_portal_dependent_atomically(duplicate_detection, participant_ids, preallocated_synthetic_phone)
       failure_messages = nil
 
@@ -382,16 +319,6 @@ module ConstituentPortal
           raise ActiveRecord::Rollback
         end
 
-        # Two independent admission questions, both asked under the lock and before any write, in
-        # this order because they answer different things:
-        #
-        #   1. replay -- is this the same *request* the server already completed? Only the per-form
-        #      key can distinguish a retransmission from a guardian deliberately adding someone
-        #      else; two identical-looking submissions and one submission sent twice are the same
-        #      thing to an identity comparison.
-        #   2. admission -- may this guardian hold this dependent at all? Answered by canonical
-        #      name+DOB equivalence, which is policy about people rather than about requests. A
-        #      fresh form legitimately carries a new key, so the key cannot answer this.
         admission = portal_dependent_admission(locked_guardian, dependent_attrs)
         if admission
           failure_messages = apply_portal_dependent_admission(admission)
@@ -400,8 +327,6 @@ module ConstituentPortal
 
         record_applied_contact_choices
 
-        # Using UserServiceIntegration for the existing portal contract: always create a new
-        # dependent, never reuse a lookup hit, and require the disability validation.
         result = create_portal_dependent_user(dependent_attrs)
         unless result.success?
           failure_messages = result.data[:errors] || [result.message]
@@ -432,17 +357,12 @@ module ConstituentPortal
         redirect_to constituent_portal_dashboard_path, notice: 'Dependent was successfully created.'
       end
 
-      # Render only after rollback. In particular, CreateService may rescue a database error
-      # into a failure result; PostgreSQL rejects every query until that transaction ends.
+      # Render after rollback because a rescued database error can leave PostgreSQL's transaction unusable.
       handle_creation_failure(failure_messages) if failure_messages
     end
 
-    # lock_for_merge_integrity! refuses to lock a partial participant set: if a candidate resolved
-    # during duplicate detection was deleted before this lock was granted, it raises rather than
-    # locking fewer rows than asked for. Failing closed is correct, but on this path that is an
-    # ordinary concurrent condition, not a server error -- before the lock moved here it was
-    # absorbed by open_portal_dependent_duplicate_review_case's rescue and surfaced as the normal
-    # retry message. Returning nil keeps that response instead of escaping as a 500.
+    # The shared lock refuses an incomplete participant set.
+    # Treat a missing participant as a normal retry condition.
     def lock_creation_participants(participant_ids)
       User.lock_for_merge_integrity!(participant_ids)
     rescue ActiveRecord::RecordNotFound
@@ -493,10 +413,9 @@ module ConstituentPortal
       [current_user.id, *candidate_ids]
     end
 
-    # The initial, pre-lock contact pass is needed for duplicate detection and already pays the
-    # bounded synthetic-phone allocation cost. Reuse only that opaque primary value if the locked
-    # pass still chooses the guardian strategy; the strategy itself and every guardian-derived
-    # contact fact are recalculated from the locked guardian.
+    # The initial contact pass already allocated a synthetic phone for duplicate detection.
+    # Reuse that phone only if the locked pass still selects guardian contact.
+    # Derive the strategy and guardian contact again from the locked guardian.
     def preallocated_synthetic_phone_from(dependent_attrs)
       return unless @contact_strategy_service&.params&.[](:phone_strategy) == 'guardian'
       return unless User.synthetic_dependent_phone?(dependent_attrs[:phone])
@@ -535,7 +454,7 @@ module ConstituentPortal
       submitted = attrs.key?(field) || attrs.key?(field.to_s)
       value = attrs[field] || attrs[field.to_s]
 
-      # Update only rewrites contact when the field was submitted; omitted keys preserve stored values.
+      # On update, omitted fields preserve stored contact.
       if action_name == 'update'
         return nil unless submitted
       elsif !submitted
@@ -547,16 +466,14 @@ module ConstituentPortal
 
     def guardian_contact_strategy(param_name, dependent_value, guardian)
       return 'guardian' if ActiveModel::Type::Boolean.new.cast(params[param_name])
-      # Submitted blank contact on create/update applies guardian strategy and regenerates primary contact.
+      # A submitted blank replaces dependent contact through the guardian strategy.
       return 'guardian' if dependent_value.blank?
       return 'guardian' if matches_guardian_contact?(param_name, dependent_value, guardian)
 
       'dependent'
     end
 
-    # Compares against the passed guardian, not current_user: deciding "the submitted value is
-    # the guardian's own contact, so use the guardian strategy" is only correct against the same
-    # guardian record whose values will then be snapshotted.
+    # Compare with the same guardian record that supplies the stored contact values.
     def matches_guardian_contact?(param_name, dependent_value, guardian)
       case param_name
       when :use_guardian_email
@@ -572,7 +489,6 @@ module ConstituentPortal
       phone.to_s.gsub(/\D/, '')
     end
 
-    # Get recent profile changes for a user
     def get_recent_profile_changes(user)
       Event.where(
         "(action = 'profile_updated' AND user_id = ?) OR (action = 'profile_updated_by_guardian' AND metadata->>'user_id' = ?)",
@@ -580,19 +496,10 @@ module ConstituentPortal
       ).order(created_at: :desc).limit(10)
     end
 
-    # The re-rendered form must show the contact choice the server actually applied, not re-derive
-    # it from whether the contact field is blank. A guardian may type dependent contact and *then*
-    # check "use my email/phone": the portal form declares no guardian-contact JS targets, so
-    # copyGuardianEmail/copyGuardianPhone return early and the typed value survives in params.
-    # Blankness-inference would then render both boxes unchecked, and an unchanged retry would
-    # silently store dependent-owned contact -- routing that dependent's program communications to
-    # the dependent instead of the guardian. Derived through contact_strategy_for so the form can
-    # never disagree with the strategy the write path would choose for the same parameters.
+    # A failed form must retain the applied contact choice, even when hidden fields contain typed contact.
+    # Inferring the choice from blank fields could change delivery on retry.
+    # When no applied choice was captured, derive it from submitted parameters and current_user.
     def capture_guardian_contact_choices
-      # Prefer the choice the locked pass actually applied. It is only absent when the attempt
-      # failed before any strategy was derived under lock -- a participant that vanished before the
-      # lock, or a guardian that no longer qualifies -- in which case no locked decision exists and
-      # the submitted parameters are the best available answer.
       return unless @use_guardian_email.nil? && @use_guardian_phone.nil?
 
       attrs = dependent_user_params.to_h
@@ -600,16 +507,8 @@ module ConstituentPortal
       @use_guardian_phone = contact_strategy_for(:phone, :use_guardian_phone, attrs, current_user) != 'dependent'
     end
 
-    # Retain the strategy the *locked* pass applied, captured before any rollback, so failure
-    # rendering never re-derives it. The service records the final strategy per channel including
-    # its own fallbacks (a 'dependent' choice with blank contact becomes 'guardian'), so this is
-    # the decision the write used rather than a reconstruction of it.
-    #
-    # Re-deriving would read the pre-lock `current_user`, and `matches_guardian_contact?` is the one
-    # strategy branch that depends on the guardian's own contact. A concurrent merge or admin
-    # contact edit landing inside the lock window makes the same submitted value match under one
-    # instance and not the other, so the rendered choice -- and with it an unchanged retry -- could
-    # disagree with what the locked transaction actually decided.
+    # The retry form uses the service's final choices, including fallbacks, from before rollback.
+    # Deriving those choices again from current_user could use stale guardian contact.
     def record_applied_contact_choices
       applied = @contact_strategy_service&.params
       return if applied.blank?
@@ -619,7 +518,6 @@ module ConstituentPortal
     end
 
     def handle_creation_failure(errors)
-      # Handle both array of strings and ActiveModel::Errors objects
       error_messages = if errors.respond_to?(:full_messages)
                          errors.full_messages
                        elsif errors.is_a?(Array)
@@ -631,13 +529,8 @@ module ConstituentPortal
       error_prefix = Rails.env.test? ? '[TEST_VALIDATION] ' : ''
       Rails.logger.error "#{error_prefix}Failed to create dependent: #{error_messages.join(', ')}"
 
-      # Always rebuild the form object from the submitted parameters, never from the object the
-      # failed attempt produced. Rollback restores that object to a new record but keeps the
-      # attributes the contact strategies wrote into it, so a persisted?/new_record? test cannot
-      # tell the two apart -- and rendering it would put internal placeholders (a synthetic
-      # dependent-...@system.matvulcan.local address, a 000-... phone) into the form as if the
-      # guardian had typed them. Resubmitting that form would then store those placeholders as
-      # dependent-owned contact and silently change delivery routing.
+      # Rebuild from submitted fields because rollback leaves generated contact values on the failed user object.
+      # Showing those values could expose internal placeholders and change contact ownership on retry.
       @dependent_user = User.new(dependent_user_params)
       @guardian_relationship ||= GuardianRelationship.new(guardian_relationship_params)
       capture_guardian_contact_choices

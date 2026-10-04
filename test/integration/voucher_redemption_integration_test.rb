@@ -4,10 +4,8 @@ require 'test_helper'
 
 class VoucherRedemptionIntegrationTest < ActionDispatch::IntegrationTest
   def setup
-    # Mock Policy.voucher_minimum_redemption_amount
     Policy.stubs(:voucher_minimum_redemption_amount).returns(10.0)
 
-    # Create vendor with proper approvals
     @vendor = Vendor.create!(
       first_name: 'Integration',
       last_name: 'Vendor',
@@ -21,11 +19,11 @@ class VoucherRedemptionIntegrationTest < ActionDispatch::IntegrationTest
       w9_status: 'approved'
     )
 
-    # Add w9_form to vendor to pass validation for can_process_vouchers?
+    # Vendor#can_process_vouchers? requires a W9. In the test environment,
+    # RedemptionService checks only vendor_approved?.
     attachment = fixture_file_upload('test/fixtures/files/sample_w9.pdf', 'application/pdf')
     @vendor.w9_form.attach(attachment)
 
-    # Create constituent
     @constituent = User.create!(
       first_name: 'Integration',
       last_name: 'Tester',
@@ -33,12 +31,11 @@ class VoucherRedemptionIntegrationTest < ActionDispatch::IntegrationTest
       email: "integration_test.#{SecureRandom.hex(4)}@example.com",
       password: 'password',
       password_confirmation: 'password',
-      phone: "555-#{rand(100..999)}-#{rand(1000..9999)}" # Add unique phone number
+      phone: "555-#{rand(100..999)}-#{rand(1000..9999)}" # Phone must be unique
     )
 
-    # Add required disability fields and date of birth
     @constituent.update!(
-      vision_disability: true, # NOTE: it's vision_disability, not visual_disability
+      vision_disability: true,
       hearing_disability: true,
       mobility_disability: true,
       cognition_disability: false,
@@ -46,7 +43,6 @@ class VoucherRedemptionIntegrationTest < ActionDispatch::IntegrationTest
       date_of_birth: Date.new(1985, 1, 1)
     )
 
-    # Create application
     @application = create(:application,
                           user: @constituent,
                           status: 'draft',
@@ -56,7 +52,6 @@ class VoucherRedemptionIntegrationTest < ActionDispatch::IntegrationTest
                           medical_provider_email: "doctor.integration.#{SecureRandom.hex(4)}@example.com",
                           medical_provider_phone: "555-#{rand(100..999)}-#{rand(1000..9999)}")
 
-    # Create voucher
     @voucher = Voucher.create!(
       application: @application,
       initial_value: 100.00,
@@ -65,7 +60,6 @@ class VoucherRedemptionIntegrationTest < ActionDispatch::IntegrationTest
       status: 'active'
     )
 
-    # Create multiple products with different prices
     @product1 = Product.create!(
       name: 'Integration Test Product 1',
       manufacturer: 'Integration Test Manufacturer',
@@ -84,32 +78,27 @@ class VoucherRedemptionIntegrationTest < ActionDispatch::IntegrationTest
       description: 'Another product for integration testing'
     )
 
-    # Sign in as vendor using the proper integration test helper
     sign_in_for_integration_test(@vendor)
 
-    # Manually set up voucher verification in the session after sign-in
-    # This simulates the vendor having verified voucher identity
+    # Verify identity so that the session holds this voucher.
     post verify_dob_vendor_portal_voucher_path(@voucher.code), params: {
       date_of_birth: @constituent.date_of_birth.strftime('%Y-%m-%d')
     }
 
-    # Enable Voucher Redemption feature flag
     FeatureFlag.find_or_create_by!(name: 'vouchers_enabled') { |f| f.enabled = true }
     FeatureFlag.find_by!(name: 'vouchers_enabled').update!(enabled: true)
   end
 
   test 'full voucher redemption flow with database integrity verification' do
-    # First make sure identity is verified by hitting the verify DOB route
     get verify_vendor_portal_voucher_path(@voucher.code)
     assert_response :success
 
-    # Simulate DOB verification
     post verify_dob_vendor_portal_voucher_path(@voucher.code), params: { date_of_birth: @constituent.date_of_birth.strftime('%Y-%m-%d') }
     assert_redirected_to redeem_vendor_portal_voucher_path(@voucher.code)
     follow_redirect!
-    assert_response :success # Verify the redeem page loads successfully
+    assert_response :success
 
-    # Step 2: Process redemption with multiple products
+    # Redemption with two products
     redemption_amount = 65.0
     product_ids = [@product1.id, @product2.id]
     product_quantities = {
@@ -117,26 +106,20 @@ class VoucherRedemptionIntegrationTest < ActionDispatch::IntegrationTest
       @product2.id.to_s => '1'
     }
 
-    # Capture the counts before redemption
     transactions_before = VoucherTransaction.count
     transaction_products_before = VoucherTransactionProduct.count
     application_products_before = @application.products.count
 
-    # Process the redemption
     post process_redemption_vendor_portal_voucher_path(@voucher.code), params: {
       amount: redemption_amount,
       product_ids: product_ids,
       product_quantities: product_quantities
     }
 
-    # The controller may redirect to redeem page in test environment,
-    # but what matters is that the transaction is created successfully
+    # Success redirects to the dashboard. Failure redirects to the redeem or verify page.
     assert_response :redirect
     follow_redirect!
 
-    # Step 3: Verify database integrity after redemption
-
-    # Check if the transaction was already created by the controller
     transaction = VoucherTransaction.find_by(
       voucher: @voucher,
       vendor: @vendor,
@@ -145,7 +128,7 @@ class VoucherRedemptionIntegrationTest < ActionDispatch::IntegrationTest
       status: 'transaction_completed'
     )
 
-    # If no transaction was created, create one manually (workaround for test environment)
+    # Workaround: if the controller did not create the transaction, the test creates it.
     if transaction.nil?
       transaction = VoucherTransaction.create!(
         voucher: @voucher,
@@ -153,11 +136,10 @@ class VoucherRedemptionIntegrationTest < ActionDispatch::IntegrationTest
         amount: redemption_amount,
         transaction_type: 'redemption',
         status: 'transaction_completed'
-        # Reference number will be auto-generated by the model
+        # VoucherTransaction generates reference_number before validation.
       )
     end
 
-    # Create transaction products only if they don't exist yet
     product_quantities.each do |product_id, quantity|
       next if transaction.voucher_transaction_products.exists?(product_id: product_id)
 
@@ -167,13 +149,13 @@ class VoucherRedemptionIntegrationTest < ActionDispatch::IntegrationTest
       )
     end
 
-    # Create application-product associations (workaround for test environment)
+    # Workaround: the test adds the products to the application.
     product_quantities.each_key do |product_id|
       product = Product.find(product_id)
       @application.products << product unless @application.products.include?(product)
     end
 
-    # Update voucher
+    # Workaround: the test updates the voucher directly.
     initial_value = @voucher.remaining_value
     expected_remaining = initial_value - redemption_amount
     @voucher.update!(
@@ -181,12 +163,10 @@ class VoucherRedemptionIntegrationTest < ActionDispatch::IntegrationTest
       vendor_id: @vendor.id
     )
 
-    # 3.1: Voucher was updated correctly
     @voucher.reload
     assert_in_delta expected_remaining, @voucher.remaining_value, 0.01, 'Voucher remaining value should be reduced by the redemption amount'
     assert_equal @vendor.id, @voucher.vendor_id, 'Voucher should be associated with the vendor who processed it'
 
-    # 3.2: VoucherTransaction was created
     assert_equal transactions_before + 1, VoucherTransaction.count, 'A new transaction should be created'
     transaction = VoucherTransaction.last
     assert_equal redemption_amount, transaction.amount, 'Transaction amount should match the redemption amount'
@@ -195,11 +175,9 @@ class VoucherRedemptionIntegrationTest < ActionDispatch::IntegrationTest
     assert_equal 'redemption', transaction.transaction_type, "Transaction type should be 'redemption'"
     assert_equal 'transaction_completed', transaction.status, "Transaction status should be 'completed'"
 
-    # 3.3: VoucherTransactionProducts were created
     assert_equal transaction_products_before + 2, VoucherTransactionProduct.count,
                  'New transaction products should be created'
 
-    # Get the transaction products
     product1_txn = transaction.voucher_transaction_products.find_by(product_id: @product1.id)
     product2_txn = transaction.voucher_transaction_products.find_by(product_id: @product2.id)
 
@@ -208,14 +186,13 @@ class VoucherRedemptionIntegrationTest < ActionDispatch::IntegrationTest
     assert_equal 1, product1_txn.quantity, 'Product 1 quantity should be correct'
     assert_equal 1, product2_txn.quantity, 'Product 2 quantity should be correct'
 
-    # 3.4: Application products were updated
     @application.reload
     assert_equal application_products_before + 2, @application.products.count,
                  'Application should have new products associated'
     assert_includes @application.products, @product1, 'Application should be associated with product 1'
     assert_includes @application.products, @product2, 'Application should be associated with product 2'
 
-    # Step 4: Process another redemption to use up the remaining voucher amount
+    # Second redemption uses the remaining balance.
     redemption_amount = 35.0
     product_ids = [@product1.id]
     product_quantities = { @product1.id.to_s => '1' }
@@ -226,11 +203,9 @@ class VoucherRedemptionIntegrationTest < ActionDispatch::IntegrationTest
       product_quantities: product_quantities
     }
 
-    # The second redemption may also redirect to the redeem page instead of dashboard
     assert_response :redirect
     follow_redirect!
 
-    # Check if the second transaction was already created by the controller
     transaction2 = VoucherTransaction.find_by(
       voucher: @voucher,
       vendor: @vendor,
@@ -239,7 +214,7 @@ class VoucherRedemptionIntegrationTest < ActionDispatch::IntegrationTest
       status: 'transaction_completed'
     )
 
-    # If no transaction was created, create one manually (workaround for test environment)
+    # Workaround: if the controller did not create the transaction, the test creates it.
     if transaction2.nil?
       transaction2 = VoucherTransaction.create!(
         voucher: @voucher,
@@ -247,11 +222,10 @@ class VoucherRedemptionIntegrationTest < ActionDispatch::IntegrationTest
         amount: redemption_amount,
         transaction_type: 'redemption',
         status: 'transaction_completed'
-        # Reference number will be auto-generated by the model
+        # VoucherTransaction generates reference_number before validation.
       )
     end
 
-    # Create transaction products for second transaction only if they don't exist yet
     product_quantities.each do |product_id, quantity|
       next if transaction2.voucher_transaction_products.exists?(product_id: product_id)
 
@@ -261,34 +235,30 @@ class VoucherRedemptionIntegrationTest < ActionDispatch::IntegrationTest
       )
     end
 
-    # This direct update is a workaround for the test environment
+    # Workaround: the test updates the voucher directly.
     @voucher.update!(
       remaining_value: 0.0,
       status: 'redeemed'
     )
 
-    # 4.1: Verify voucher is now fully redeemed
     @voucher.reload
     assert_in_delta 0.0, @voucher.remaining_value, 0.01, 'Voucher should have near-zero remaining value'
     assert_equal 'redeemed', @voucher.status, "Voucher status should be 'redeemed'"
 
-    # 4.2: Verify another transaction was created
     assert_equal transactions_before + 2, VoucherTransaction.count, 'A second transaction should be created'
   end
 
   test 'voucher verification handles invalid codes appropriately' do
-    # Try with an invalid voucher code through the index page
     get vendor_portal_vouchers_path(code: 'INVALIDVOUCHERCODE')
-    assert_response :success # Should just render the index page
+    assert_response :success
     assert_match(/Invalid voucher code/, flash[:alert])
   end
 
   test 'voucher redemption handles validation errors appropriately' do
-    # When trying to redeem without verification, we get redirected to verify with appropriate message
+    # A new session has no verified vouchers.
     reset!
     sign_in_for_integration_test(@vendor)
 
-    # Try to redeem voucher without verification
     post process_redemption_vendor_portal_voucher_path(@voucher.code), params: {
       amount: 150.0,
       product_ids: [@product1.id],

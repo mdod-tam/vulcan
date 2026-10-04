@@ -2,14 +2,11 @@
 
 require 'test_helper'
 
-# Focused concurrency evidence for the password-reset consumption boundary (plan section 4):
-# PasswordsController#update_password_from_token and the merge service must serialize
-# through User.lock_for_merge_integrity! on the target user.
+# PasswordsController#update_password_from_token, Users::PasswordUpdateService, and the merge
+# service must serialize through User.lock_for_merge_integrity! on the target user.
 #
-# Exercises the real, private controller method directly (via a minimal
-# ActionDispatch::TestRequest/TestResponse pair and ActionController::Parameters, not a full
-# HTTP dispatch) rather than through routing, matching the same technique used for the
-# session-creation boundary. Both sides of every race are real production code.
+# The reset tests call the private controller method directly with a minimal TestRequest and
+# TestResponse, not through routing. Both sides of every race are production code.
 class PasswordsControllerConcurrencyTest < ActiveSupport::TestCase
   self.use_transactional_tests = false
 
@@ -94,12 +91,9 @@ class PasswordsControllerConcurrencyTest < ActiveSupport::TestCase
     cleanup_duplicate_review_test_data!(admin, canonical, duplicate)
   end
 
-  # Not a merge scenario: proves the specific mechanism added alongside the merge-integrity
-  # lock in update_password_from_token -- re-resolving the token itself under lock, not just
-  # rechecking merge eligibility. A token issued before this test starts is used *after* a
-  # concurrent password change (any concurrent change, not only a merge) commits, while the
-  # reset request waited on the same user's lock. Without the fix, the stale token's payload
-  # was only checked once, unlocked, before that change -- and would still have landed.
+  # Not a merge scenario. update_password_from_token must resolve the token again under the lock.
+  # The token is valid at the unlocked lookup. A concurrent password change then commits while
+  # the reset waits on the lock. Without the second lookup, the stale token would still apply.
   test 'a concurrent password change commits first: the now-stale reset token then fails closed with zero writes' do
     user = create(:constituent, password: 'OriginalPass123!', password_confirmation: 'OriginalPass123!')
     stale_token = User.find(user.id).generate_token_for(:password_reset)
@@ -133,10 +127,7 @@ class PasswordsControllerConcurrencyTest < ActiveSupport::TestCase
 
     assert_equal :redirect, reset_response[:action]
     assert_match(/invalid or expired/i, reset_response[:alert])
-    # #reload (not a fresh User.find): this connection already queried this same user once
-    # above (via generate_token_for), so a repeated User.find(user.id) here would be exactly
-    # the query-cache trap ConcurrencyTestHelper's setup now defends against -- reload always
-    # bypasses the cache regardless.
+    # #reload always bypasses the query cache. This connection already read this user above.
     user.reload
     assert user.authenticate('ChangedConcurrently123!'), 'the concurrent password change must survive untouched'
     assert_not user.authenticate('NewPassword123!'),
@@ -145,13 +136,10 @@ class PasswordsControllerConcurrencyTest < ActiveSupport::TestCase
     user&.destroy
   end
 
-  # The signed-in and forced password-change path (PasswordsController#update ->
-  # Users::PasswordUpdateService) reaches the same password_digest as the reset-token path above
-  # and must serialize with merge the same way. Before the service locked the user, it
-  # authenticated and wrote through the caller's pre-lock instance: the unlocked
-  # merged_record_immutable read could observe "not merged" while the merge was still
-  # uncommitted, and the UPDATE would then wait on the merge's row lock and land immediately
-  # after it committed -- writing a password onto a retired duplicate.
+  # The signed-in and forced change path (PasswordsController#update to
+  # Users::PasswordUpdateService) writes the same password_digest and must serialize with merge.
+  # Without the lock, an unlocked read could see "not merged" during an uncommitted merge.
+  # The UPDATE then waited on the row lock and wrote a password onto the retired duplicate.
   test 'merge commits first: the signed-in password change for the newly-merged duplicate fails closed with zero writes' do
     admin, canonical, duplicate, review_case = build_fixtures
     original_digest = duplicate.password_digest
@@ -272,9 +260,8 @@ class PasswordsControllerConcurrencyTest < ActiveSupport::TestCase
     ).call
   end
 
-  # The signed-in/forced-change path. Takes the user the way the controller does -- as an
-  # already-loaded instance (current_user), not re-resolved inside the service -- so the stale
-  # pre-lock instance the hardening has to defend against is exactly what gets passed in.
+  # Passes a loaded instance, as the controller passes current_user. The service must not
+  # trust this pre-lock instance.
   def run_password_update(user)
     Users::PasswordUpdateService.new(
       User.find(user.id),
@@ -284,19 +271,15 @@ class PasswordsControllerConcurrencyTest < ActiveSupport::TestCase
     ).call
   end
 
-  # Drives PasswordsController#update_password_from_token directly with a real generated
-  # token, and reports back what the action *did* (redirect target + flash) rather than
-  # relying on view rendering, since this bypasses the normal render pipeline.
+  # Returns the redirect and flash, not rendered views. This path skips the render pipeline.
   def run_password_reset(user)
     run_password_reset_with_token(token: User.find(user.id).generate_token_for(:password_reset))
   end
 
   def run_password_reset_with_token(token:)
     controller = PasswordsController.new
-    # set_request!/set_response! (not the public request=/response= setters): Metal#response=
-    # deliberately forces performed? to true as a side effect ("no further processing will
-    # occur"), which is correct for attaching an already-completed response but would make
-    # the very first real redirect_to/render call below raise DoubleRenderError immediately.
+    # Do not use response=. Metal#response= sets performed? to true, so the first
+    # redirect_to or render would raise DoubleRenderError.
     controller.set_request!(ActionDispatch::TestRequest.create)
     controller.set_response!(ActionDispatch::TestResponse.new)
     controller.params = ActionController::Parameters.new(

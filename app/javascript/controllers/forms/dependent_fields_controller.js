@@ -3,10 +3,7 @@ import { setVisible } from "../../utils/visibility"
 import { debounce } from "../../utils/debounce"
 
 /**
- * Controller for managing dependent-related fields
- *
- * Responsible for toggling dependent contact information visibility and handling
- * the "Same as Guardian's" functionality for address, email, and phone.
+ * Selects dependent contact fields or copies the guardian's address, email, and phone.
  */
 class DependentFieldsController extends Controller {
   static targets = [
@@ -40,12 +37,11 @@ class DependentFieldsController extends Controller {
   }
 
   connect() {
-    // Store bound method reference for proper cleanup
+    // Keep the same handler reference for disconnect().
     this._boundHandleApplicantTypeChange = this.handleApplicantTypeChange.bind(this)
 
     this.debouncedApplicantTypeChange = debounce(() => this.executeApplicantTypeChange(), 20)
 
-    // Set initial state based on checkboxes if available - use target safety
     if (this.hasSameAddressCheckboxTarget) {
       const checkbox = this.sameAddressCheckboxTarget
       if (this.hasAddressFieldsTarget) {
@@ -67,7 +63,6 @@ class DependentFieldsController extends Controller {
       }
     }
 
-    // Listen for applicant-type change events from ApplicantTypeController
     this.formElement = this.element.closest("form")
     if (this.formElement) {
       this.formElement.addEventListener(
@@ -78,7 +73,6 @@ class DependentFieldsController extends Controller {
   }
 
   disconnect() {
-    // Clean up event listeners
     if (this.formElement && this._boundHandleApplicantTypeChange) {
       this.formElement.removeEventListener(
         "applicant-type:applicantTypeChanged",
@@ -86,12 +80,11 @@ class DependentFieldsController extends Controller {
       )
     }
 
-    // Clean up debounced function
     this.debouncedApplicantTypeChange?.cancel()
   }
 
   /**
-   * Toggle address fields based on "Same as Guardian's Address" checkbox
+   * Shows address fields when the checkbox is clear.
    * @param {Event} event The change event from the checkbox
    */
   toggleContactFields(event) {
@@ -115,7 +108,7 @@ class DependentFieldsController extends Controller {
   }
 
   /**
-   * Toggle dependent email field based on "Use Guardian's Email" checkbox
+   * Shows the dependent email field when the checkbox is clear.
    * @param {Event} event The change event from the checkbox
    */
   toggleEmailField(event) {
@@ -135,7 +128,7 @@ class DependentFieldsController extends Controller {
   }
 
   /**
-   * Toggle dependent phone field based on "Use Guardian's Phone" checkbox
+   * Shows the dependent phone field when the checkbox is clear.
    * @param {Event} event The change event from the checkbox
    */
   togglePhoneField(event) {
@@ -154,11 +147,7 @@ class DependentFieldsController extends Controller {
     }
   }
 
-  /**
-   * Copy guardian's address fields to dependent fields
-   */
   copyGuardianAddressInfo() {
-    // Check for minimum required address fields
     const hasMinAddressTargets = this.hasGuardianAddress1Target &&
       this.hasDependentAddress1Target &&
       this.hasGuardianCityTarget &&
@@ -170,7 +159,7 @@ class DependentFieldsController extends Controller {
 
     if (!hasMinAddressTargets) {
 
-      // Copy individual fields if available
+      // Some forms omit address targets.
       if (this.hasGuardianAddress1Target && this.hasDependentAddress1Target) {
         this.dependentAddress1Target.value = this.guardianAddress1Target.value || '';
       }
@@ -189,7 +178,6 @@ class DependentFieldsController extends Controller {
       return;
     }
 
-    // Copy address fields
     this.dependentAddress1Target.value = this.guardianAddress1Target.value || '';
     this.dependentAddress2Target.value = this.guardianAddress2Target.value || '';
     this.dependentCityTarget.value = this.guardianCityTarget.value || '';
@@ -197,9 +185,6 @@ class DependentFieldsController extends Controller {
     this.dependentZipTarget.value = this.guardianZipTarget.value || '';
   }
 
-  /**
-   * Copy guardian's email to dependent email field
-   */
   copyGuardianEmail() {
     if (!this.hasGuardianEmailTarget || !this.hasDependentEmailTarget) {
       if (process.env.NODE_ENV !== 'production' && this.element.offsetParent !== null) {
@@ -208,14 +193,10 @@ class DependentFieldsController extends Controller {
       return;
     }
 
-    // Prefer guardian's email if available
     const guardianEmail = this.guardianEmailTarget.value || '';
     this.dependentEmailTarget.value = guardianEmail;
   }
 
-  /**
-   * Copy guardian's phone to dependent phone field
-   */
   copyGuardianPhone() {
     if (!this.hasGuardianPhoneTarget || !this.hasDependentPhoneTarget) {
       if (process.env.NODE_ENV !== 'production' && this.element.offsetParent !== null) {
@@ -224,52 +205,41 @@ class DependentFieldsController extends Controller {
       return;
     }
 
-    // Prefer guardian's phone if available
     const guardianPhone = this.guardianPhoneTarget.value || '';
     this.dependentPhoneTarget.value = guardianPhone;
   }
 
   /**
-   * Handle applicant type change event from parent controller
-   * @param {CustomEvent} event The change:applicant-type custom event
+   * Defers applicant type changes through debounce.
+   * @param {CustomEvent} event The applicant-type:applicantTypeChanged event
    */
   handleApplicantTypeChange(event) {
-    // Store event data for debounced execution
     this._pendingEvent = event;
     this.debouncedApplicantTypeChange();
   }
 
-  /**
-   * Execute the applicant type change logic (debounced)
-   */
   executeApplicantTypeChange() {
     try {
       if (!this._pendingEvent) return;
 
       const isForDependent = this._pendingEvent.detail.isDependentSelected;
 
-      // Use utility to handle visibility of this controller's element
       setVisible(this.element, isForDependent);
 
-      // Use utility to handle relationship type required state
       if (this.hasRelationshipTypeTarget) {
         setVisible(this.relationshipTypeTarget, true, { required: isForDependent });
       }
 
-      // Re-apply checkbox states when applicant type changes
-      // Only if we're showing the dependent fields AND the required targets exist
+      // Restore contact choices after the dependent section becomes visible.
       if (isForDependent) {
-        // Check for email checkbox and targets before trying to toggle
         if (this.hasSameEmailCheckboxTarget && this.hasDependentEmailTarget) {
           this.toggleEmailField({ target: this.sameEmailCheckboxTarget });
         }
 
-        // Check for phone checkbox and targets before trying to toggle
         if (this.hasSamePhoneCheckboxTarget && this.hasDependentPhoneTarget) {
           this.togglePhoneField({ target: this.samePhoneCheckboxTarget });
         }
 
-        // Check for address checkbox and targets before trying to toggle
         if (this.hasSameAddressCheckboxTarget && this.hasAddressFieldsTarget) {
           this.toggleContactFields({ target: this.sameAddressCheckboxTarget });
         }

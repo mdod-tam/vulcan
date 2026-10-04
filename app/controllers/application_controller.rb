@@ -1,17 +1,13 @@
 # frozen_string_literal: true
 
-# Base controller that all other controllers inherit from
-# Includes authentication, CSRF protection, and password change enforcement
 class ApplicationController < ActionController::Base
   include Authentication
   include Pagy::Frontend
 
   protect_from_forgery with: :exception
 
-  # Extended flash types for accessible, semantic notifications
   add_flash_types :info, :error, :success, :warning
 
-  # Include our helpers
   helper PasswordFieldHelper
   helper EmailStatusHelper
   helper_method :dashboard_path_for_current_user, :mfa_required_for_current_user?,
@@ -22,7 +18,7 @@ class ApplicationController < ActionController::Base
 
   def default_url_options
     if Rails.env.production?
-      # Fail fast if APPLICATION_HOST is not configured in production
+      # Production requires APPLICATION_HOST.
       { host: ENV.fetch('APPLICATION_HOST'), protocol: 'https' }
     else
       {}
@@ -34,13 +30,11 @@ class ApplicationController < ActionController::Base
   def check_password_change_required
     return unless current_user&.force_password_change?
 
-    # Skip the check on the password edit page and during password update
     return if controller_name == 'passwords' && %w[edit update].include?(action_name)
 
-    # Store the current path to return after password change
+    # Return to this path after the password change.
     store_location if request.get? && !request.xhr?
 
-    # Redirect to password change form with notice
     redirect_to edit_password_path,
                 notice: t('controllers.application.check_password_change_required.password_security_change')
   end
@@ -68,8 +62,7 @@ class ApplicationController < ActionController::Base
     user.admin? || user.evaluator? || user.trainer? || user.vendor?
   end
 
-  # Public neutral auth flows should use only request-selected locale, not a
-  # matched account's locale, so translations do not become an existence signal.
+  # These public auth flows use only the request locale. An account locale could reveal that the account exists.
   def with_public_request_locale(&)
     I18n.with_locale(public_request_locale, &)
   end
@@ -104,7 +97,6 @@ class ApplicationController < ActionController::Base
     _dashboard_for(user)
   end
 
-  # Standard flash helper methods
   # rubocop:disable Rails/ActionControllerFlashBeforeRender
   def flash_success(message)
     flash[:success] = message
@@ -123,7 +115,7 @@ class ApplicationController < ActionController::Base
   end
   # rubocop:enable Rails/ActionControllerFlashBeforeRender
 
-  # Immediate (render-safe) flash helpers
+  # These flash messages apply to the current render.
   def flash_success_now(message)
     flash.now[:success] = message
   end
@@ -140,12 +132,12 @@ class ApplicationController < ActionController::Base
     flash.now[:info] = message
   end
 
-  # Creates a session, sets the cookie, tracks sign-in, and redirects.
-  # To be called after successful authentication (password or 2FA).
+  # Creates a session, sets the cookie, records sign-in, and redirects.
+  # Call this method after password or 2FA authentication.
   #
-  # +submitted_login_identifier+ and +submitted_password+ are the exact credentials the
-  # requester submitted (password sign-in only; 2FA completion omits both). They are passed
-  # through only for this immediate locked recheck and are never stored in session/cookies.
+  # +submitted_login_identifier+ and +submitted_password+ are the exact credentials from password sign-in.
+  # 2FA completion omits both. Only the immediate recheck under the user lock uses them.
+  # This method does not store these credentials in the session or cookies.
   def sign_in(user, submitted_login_identifier: nil, submitted_password: nil)
     session_record = _create_and_set_session_cookie(
       user,
@@ -159,22 +151,17 @@ class ApplicationController < ActionController::Base
     end
   end
 
-  # Creates the Session record and sets the secure cookie.
-  # Returns the session record on success, nil on failure.
+  # Creates a Session and sets its signed cookie after the transaction completes.
+  # Returns the session, or nil if the user is ineligible or the session cannot save.
   #
-  # Fails closed for records that are not login-active (merged into another account,
-  # inactive, or suspended). This is the single chokepoint for both password sign-in
-  # and 2FA completion, so a duplicate retired mid-flow cannot finish authenticating.
+  # Password sign-in and 2FA completion both reject merged, inactive, or suspended users here.
+  # The shared user lock serializes these writes with a merge of the same user.
+  # If the merge commits first, this path reloads the retired user and rejects sign-in.
+  # If sign-in acquires the lock first, the merge waits for the session transaction to complete.
   #
-  # Locks the user row before requalifying so a concurrent merge and a concurrent sign-in
-  # can never interleave: either the merge commits first and this reload sees the retired
-  # record and fails closed, or this session is created and committed first and the merge
-  # -- which takes the same lock -- must wait behind it.
-  #
-  # For password sign-in, also re-resolves the exact submitted identifier and reauthenticates
-  # the exact submitted password under the same lock. A merge may reassign the identifier, or
-  # a concurrent password change may invalidate the password, while this request waits. The
-  # stale pre-lock authentication must not create a session after either authority changes.
+  # Password sign-in resolves the exact submitted identifier and authenticates the submitted password under the same lock.
+  # A merge can reassign the identifier. A password change can invalidate the password while this request waits.
+  # Authentication before the lock must not authorize a session after either change.
   def _create_and_set_session_cookie(user, submitted_login_identifier: nil, submitted_password: nil)
     return unless user
 
@@ -198,7 +185,7 @@ class ApplicationController < ActionController::Base
         next
       end
 
-      locked_user.track_sign_in!(request.remote_ip) # Assuming this method exists on User model
+      locked_user.track_sign_in!(request.remote_ip)
     end
     return unless session_record
 
@@ -206,18 +193,16 @@ class ApplicationController < ActionController::Base
     session_record
   end
 
-  # Generates options for the session cookie.
   def _session_cookie_options(token)
     {
       value: token,
       httponly: true,
       secure: Rails.env.production?
-      # Consider adding SameSite attribute for enhanced security:
+      # Consider an explicit SameSite attribute for the session cookie:
       # same_site: :lax # or :strict depending on your needs
     }
   end
 
-  # Determines the appropriate dashboard path based on user type.
   def _dashboard_for(user)
     case user.type
     when 'Users::Administrator' then admin_dashboard_path
@@ -229,37 +214,31 @@ class ApplicationController < ActionController::Base
     end
   end
 
-  # Completes the 2FA authentication and redirects appropriately
   def complete_two_factor_authentication(user)
-    # Get the return path BEFORE clearing the 2FA session data
+    # Read the return path before 2FA completion removes it.
     stored_location = TwoFactorAuth.get_return_path(session) || session.delete(:return_to)
 
-    # Complete the 2FA authentication process (but preserve challenge until after sign-in)
+    # Preserve the challenge until session creation succeeds.
     TwoFactorAuth.complete_authentication(session)
 
-    # Create the session and redirect
     session_record = _create_and_set_session_cookie(user)
 
     if session_record
-      # Clear the challenge only after successful sign-in
+      # Clear the challenge only after session creation succeeds.
       TwoFactorAuth.clear_challenge(session)
-      # Redirect to stored location or appropriate dashboard
       redirect_to stored_location || _dashboard_for(user), notice: t('controllers.application.complete_two_factor_authentication.signin_pass_2fa')
     else
-      # Session creation failed closed (e.g. the record was retired mid-login). Clear all
-      # temporary 2FA state, including the challenge, so nothing can be replayed.
+      # A rejected session must clear temporary 2FA state, including the challenge, to prevent replay.
       TwoFactorAuth.abort_authentication(session)
       redirect_to sign_in_path, alert: t('alerts.session_fail')
     end
   end
 
-  # Checks if a 2FA authentication process has been initiated
   def two_factor_authentication_initiated?
     TwoFactorAuth.get_temp_user_id(session).present?
   end
 
-  # Finds the user for whom 2FA is in progress. Fails closed for records that are not
-  # login-active (merged into another account, inactive, or suspended).
+  # A pending 2FA user must remain login-active: not merged, inactive, or suspended.
   def find_user_for_two_factor
     user_id = TwoFactorAuth.get_temp_user_id(session)
     return nil unless user_id
@@ -270,16 +249,13 @@ class ApplicationController < ActionController::Base
     nil
   end
 
-  # Ensures a 2FA flow has been initiated
   def ensure_two_factor_initiated
     redirect_to sign_in_path unless two_factor_authentication_initiated?
   end
 
-  # Ensures a user is not fully authenticated (used for 2FA step)
   def ensure_user_not_authenticated
-    redirect_to root_path if current_user # current_user checks the final session_token cookie
+    redirect_to root_path if current_user
   end
 
-  # Legacy method name for backward compatibility
   alias ensure_login_initiated ensure_two_factor_initiated
 end

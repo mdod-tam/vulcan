@@ -2,19 +2,14 @@
 
 module Users
   class Constituent < User
-    # Associations
     has_many :applications, foreign_key: :user_id, dependent: :destroy
     has_many :evaluations
     has_many :assigned_evaluators, through: :evaluations, source: :evaluator
-    # Removed unconditional validation: validate :must_have_at_least_one_disability
 
-    # Enums
     enum :communication_preference, { email: 0, letter: 1 }
 
-    # Encryption
     encrypts :date_of_birth, deterministic: true
 
-    # Scopes
     scope :needs_evaluation, -> { joins(:applications).where(applications: { status: :approved }) }
     scope :active, -> { where.not(status: %i[withdrawn rejected expired]) }
     scope :ytd, lambda {
@@ -23,7 +18,6 @@ module Users
 
     DISABILITY_TYPES = %w[hearing vision speech mobility cognition].freeze
 
-    # Define disability attributes with defaults
     DISABILITY_TYPES.each do |type|
       attribute :"#{type}_disability", :boolean, default: false
 
@@ -32,7 +26,6 @@ module Users
       end
     end
 
-    # Optional: Method to check inherited columns
     def self.inherited_columns
       column_names
     end
@@ -45,23 +38,14 @@ module Users
       applications.active.order(application_date: :desc).first
     end
 
-    # Public method to check if any disability is selected
     def disability_selected?
       hearing_disability || vision_disability || speech_disability || mobility_disability || cognition_disability
     end
 
-    # Class methods for encrypted lookups
-    # Diagnostics here are deliberately PII-free. This is the identity-matching path -- its
-    # arguments are a name and a date of birth, and its results are the people who matched -- and
-    # paper intake now calls it on every new-applicant submission. `config.filter_parameters`
-    # redacts params, not strings a developer interpolated into a log message, so anything named
-    # here would land in the log in the clear. Counts and shapes are what debugging actually needs.
-    # Identifying *which* records matched is deliberately not obtainable from the log at all -- run
-    # the same query in a console against the request's own parameters instead.
-    #
-    # The explicit messages are only half of it: the query itself sends these names to the database,
-    # and a positional bind is logged without an attribute name for the filter to match. See
-    # case_insensitive_match below.
+    # Identity-matching path. Paper intake calls it for each new applicant. Keep log messages PII-free.
+    # `config.filter_parameters` does not redact values interpolated into a message, so log only
+    # counts and types. To find which records matched, run the query in a console.
+    # The SQL log is also a risk. See case_insensitive_match.
     def self.find_duplicates(first_name, last_name, date_of_birth)
       return none if invalid_duplicate_params?(first_name, last_name, date_of_birth)
 
@@ -95,21 +79,15 @@ module Users
                 .where(case_insensitive_match(:last_name, last_name))
                 .where(date_of_birth: formatted_date)
 
-        # Counting is a second query, so it stays inside the level check rather than running
-        # unconditionally to build a message that is usually discarded.
+        # The count is a second query, so it runs only at debug level.
         Rails.logger.debug { "find_duplicates: #{query.count} match(es)" } if Rails.logger.debug?
 
         query
       end
 
-      # Built through Arel with a *named* bind rather than `where('LOWER(col) = ?', value)`.
-      #
-      # A positional bind is anonymous: Active Record logs it as `[nil, "smith"]`, and
-      # `config.filter_parameters` matches on the attribute name, so it has nothing to match and the
-      # value is written to the query log in the clear. The date of birth beside it was filtered the
-      # whole time precisely because a hash condition carries its column name. Naming the bind is
-      # what lets the existing filter do its job -- the same query, logged as
-      # `["first_name", "[FILTERED]"]`.
+      # Uses a named Arel bind, not `where('LOWER(col) = ?', value)`. Active Record logs a
+      # positional bind as `[nil, "smith"]`, and `config.filter_parameters` cannot filter a bind
+      # with no name. A named bind logs as `["first_name", "[FILTERED]"]`.
       def case_insensitive_match(column, value)
         bind = ActiveRecord::Relation::QueryAttribute.new(
           column.to_s, value.to_s.downcase, ActiveRecord::Type::String.new

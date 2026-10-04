@@ -1,14 +1,12 @@
 # frozen_string_literal: true
 
-# Form object to handle application validation and state management
-# Pure validation layer - persistence is handled by Applications::ApplicationCreator service
+# Validates constituent application input. Applications::ApplicationCreator owns persistence.
 class ApplicationForm
   include ActiveModel::Model
   include ActiveModel::Attributes
   include ActiveModel::Validations
   include ParamCasting
 
-  # Application attributes
   attribute :annual_income, :string
   attribute :status, :string, default: 'draft'
   attribute :submission_method, :string, default: 'online'
@@ -16,12 +14,11 @@ class ApplicationForm
   attribute :maryland_resident, :boolean, default: true
   attribute :self_certify_disability, :boolean, default: true
 
-  # File attachments
   attribute :residency_proof
   attribute :income_proof
   attribute :id_proof
 
-  # User attributes (disability flags and address)
+  # User attributes
   attribute :hearing_disability, :boolean, default: false
   attribute :vision_disability, :boolean, default: false
   attribute :speech_disability, :boolean, default: false
@@ -29,7 +26,6 @@ class ApplicationForm
   attribute :cognition_disability, :boolean, default: false
   attribute :locale, :string
 
-  # Address attributes
   attribute :physical_address_1, :string
   attribute :physical_address_2, :string
   attribute :city, :string
@@ -37,36 +33,29 @@ class ApplicationForm
   attribute :zip_code, :string
   attribute :use_guardian_address, :boolean, default: false
 
-  # Terms and verification attributes
   attribute :terms_accepted, :boolean, default: false
   attribute :information_verified, :boolean, default: false
   attribute :medical_release_authorized, :boolean, default: false
 
-  # Medical provider attributes
   attribute :medical_provider_name, :string
   attribute :medical_provider_phone, :string
   attribute :medical_provider_fax, :string
   attribute :medical_provider_email, :string
 
-  # Guardian/dependent management
-  attribute :user_id, :integer # For dependent applications
+  attribute :user_id, :integer # Dependent applicant for a new application
   attribute :managing_guardian_id, :integer
 
-  # Alternate contact attributes
   attribute :alternate_contact_name, :string
   attribute :alternate_contact_phone, :string
   attribute :alternate_contact_email, :string
   attribute :alternate_contact_relationship_type, :string
 
-  # Form state
   attribute :is_submission, :boolean, default: false
   attribute :autosave_context, :string
   attribute :autosave_revision, :string
 
-  # Runtime dependencies (injected)
   attr_accessor :current_user, :application
 
-  # Validations
   validates :current_user, presence: true
   validates :annual_income, presence: true, if: -> { is_submission && income_collection_required? }
   validate :validate_disability_selection, if: :is_submission
@@ -77,7 +66,6 @@ class ApplicationForm
     @current_user = attributes.delete(:current_user)
     @application = attributes.delete(:application)
 
-    # Handle params-based initialization
     if attributes[:params].present?
       params = attributes.delete(:params)
       super
@@ -87,36 +75,27 @@ class ApplicationForm
     end
   end
 
-  # Check if this is for a dependent user.
-  #
-  # For a persisted application the applicant is already settled: it is whoever owns the row the
-  # actor was authorized to open, and it cannot be changed by this form. Re-deriving it from a
-  # submitted user_id made the answer depend on a field the edit form does not post at all, so
-  # every update resolved to the acting adult -- which is how a refusal on a Spanish dependent's
-  # draft rendered in the English guardian's locale while the GET notice on that same page rendered
-  # in Spanish. The submitted id only decides for a new application, where there is no owner yet.
+  # A persisted application keeps the owner that the actor was authorized to open.
+  # The edit form does not post user_id. If this used user_id, every update would resolve to the actor.
+  # The submitted user_id decides only for a new application, which has no owner yet.
   def for_dependent?
     return application.user_id.present? && application.user_id != current_user&.id if application&.persisted?
 
     user_id.present? && user_id != current_user&.id
   end
 
-  # Get the applicant user (either current_user or dependent)
   def applicant_user
     @applicant_user ||= determine_applicant_user
   end
 
-  # Get or create the application
   def target_application
     @target_application ||= application || Application.new
   end
 
-  # The locale to render form-owned messages in, in preference order: what was submitted, then the
-  # applicant's effective locale (which follows the guardian for guardian-contact dependents), then
-  # the actor's. Every candidate is allowlisted -- the submitted one arrives as raw params and is
-  # never validated on the way in, and a locale this app does not carry would otherwise reach
-  # I18n as an I18n::InvalidLocale rather than as a message. Callers pass this straight to
-  # +I18n.t+ and +I18n.with_locale+, so it must always be a locale those accept.
+  # Locale for form-owned messages, in this order: the submitted locale, the applicant locale, the actor locale.
+  # The applicant locale follows the guardian for guardian-contact dependents.
+  # Callers pass the result to +I18n.t+ and +I18n.with_locale+, so it must be an available locale.
+  # An unsupported locale would raise I18n::InvalidLocale instead of showing a message.
   def message_locale
     supported_locale(locale) ||
       applicant_user&.effective_message_locale ||
@@ -126,8 +105,7 @@ class ApplicationForm
 
   private
 
-  # Only the submitted value needs this; the user-owned candidates allowlist themselves through
-  # User#effective_message_locale.
+  # Only the submitted locale needs this. User#effective_message_locale allowlists the user locales.
   def supported_locale(value)
     candidate = value.to_s
     return if candidate.blank?
@@ -135,7 +113,6 @@ class ApplicationForm
     candidate.to_sym if I18n.available_locales.include?(candidate.to_sym)
   end
 
-  # Cast boolean parameters for the given params hash
   def cast_boolean_params_for(params)
     return if params[:application].blank?
 
@@ -149,7 +126,6 @@ class ApplicationForm
       next unless app_params.key?(field_sym)
 
       value = app_params[field_sym]
-      # Handle array workaround for hidden checkbox fields (Rails pattern)
       value = value.last if value.is_a?(Array) && value.size == 2 && value.first.blank?
       app_params[field_sym] = to_boolean(value)
     end
@@ -168,7 +144,6 @@ class ApplicationForm
     assign_file_attachments(app_params)
     assign_disability_attributes(app_params)
 
-    # Assign terms and verification attributes
     self.terms_accepted = app_params[:terms_accepted] if app_params.key?(:terms_accepted)
     self.information_verified = app_params[:information_verified] if app_params.key?(:information_verified)
     self.medical_release_authorized = app_params[:medical_release_authorized] if app_params.key?(:medical_release_authorized)
@@ -238,11 +213,10 @@ class ApplicationForm
   end
 
   def extract_medical_provider_attributes(params)
-    # Check nested attributes first
     if params.dig(:application, :medical_provider_attributes).present?
       mp_attrs = params[:application][:medical_provider_attributes]
       assign_medical_provider_attributes(mp_attrs)
-    # Check top-level params (used in tests)
+    # Only tests post top-level medical_provider params.
     elsif params[:medical_provider].present?
       assign_medical_provider_attributes(params[:medical_provider])
     end
@@ -263,9 +237,8 @@ class ApplicationForm
   end
 
   def determine_applicant_user
-    # The authorized owner of a persisted row, never a submitted id. ensure_editable has already
-    # decided this actor may open this application; nothing in the request can move it to someone
-    # else, and no hidden field has to be trusted (or added) to keep it right.
+    # A persisted application uses its authorized owner, never a submitted id.
+    # ensure_editable has already authorized the actor for this application.
     return application.user if application&.persisted?
 
     return current_user unless for_dependent?
@@ -279,7 +252,6 @@ class ApplicationForm
     dependent
   end
 
-  # Validations
   def validate_disability_selection
     return unless applicant_user
 

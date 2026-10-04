@@ -3,21 +3,16 @@
 module DashboardMetricsLoading # rubocop:disable Metrics/ModuleLength
   extend ActiveSupport::Concern
 
-  # Main method to load all dashboard metrics with error handling
-  # Uses Rails caching to reduce database load on frequent page visits
-  # Returns a hash of metrics
+  # Returns metrics as a hash. Errors return default metric values.
   def load_dashboard_metrics
-    # Cache all metrics together for 5 minutes to reduce DB queries.
-    # print_queue_pending_count is intentionally excluded from the cache — it is
-    # a fast indexed COUNT on a small table and must always be current.
+    # Cache metrics for five minutes to reduce queries.
+    # Keep print_queue_pending_count outside the cache so each request reads the current count.
     cached = Rails.cache.fetch('admin_dashboard_metrics', expires_in: 5.minutes) do
       metrics = {}
 
-      # Load all metrics into the hash
       metrics[:open_applications_count] = Application.active.count
       metrics[:pending_services_count] = Application.where(status: :approved).count
 
-      # Load reporting service data
       service_result = Applications::ReportingService.new.generate_index_data
       if service_result.is_a?(BaseService::Result) && service_result.success?
         service_result.data.to_h.each do |key, value|
@@ -29,7 +24,6 @@ module DashboardMetricsLoading # rubocop:disable Metrics/ModuleLength
       end
       metrics[:proofs_needing_review_count] = Application.with_proofs_needing_review.distinct.count
 
-      # Load certification review counts
       metrics[:medical_certs_to_review_count] = Application.where.not(status: %i[rejected archived])
                                                            .where(medical_certification_status: :received)
                                                            .count
@@ -38,10 +32,8 @@ module DashboardMetricsLoading # rubocop:disable Metrics/ModuleLength
                                                                  .where.not(medical_certification_status: :approved)
                                                                  .count
 
-      # Load training requests count
       metrics[:training_requests_count] = calculate_training_requests_count
 
-      # Load evaluation requests count (admin-initiated)
       metrics[:evaluation_requests_count] = calculate_evaluation_requests_count
 
       metrics
@@ -50,22 +42,19 @@ module DashboardMetricsLoading # rubocop:disable Metrics/ModuleLength
     cached.merge(print_queue_pending_count: PrintQueueItem.unreleased.count)
   rescue StandardError => e
     Rails.logger.error "Dashboard metric error: #{e.message}"
-    # Return default values hash on error
     default_metric_values_hash
   end
 
-  # Loads basic application counts that are commonly needed
   def load_simple_counts
     safe_assign(:open_applications_count, cached_count('open_apps') { Application.active.count })
     safe_assign(:pending_services_count, cached_count('pending_services') { Application.where(status: :approved).count })
   end
 
-  # Integrates with the Applications::ReportingService for comprehensive data
   def load_reporting_service_data
     service_result = Applications::ReportingService.new.generate_index_data
     return unless service_result.is_a?(BaseService::Result) && service_result.success?
 
-    # Extract data and set instance variables, excluding simple counts to avoid duplication
+    # Keep the reporting service from replacing locally owned metrics.
     service_result.data.to_h.each do |key, value|
       next if excluded_reporting_keys.include?(key.to_s)
       next if key.to_s.blank? || value.nil?
@@ -74,19 +63,16 @@ module DashboardMetricsLoading # rubocop:disable Metrics/ModuleLength
     end
   end
 
-  # Loads additional metrics specific to admin operations
   def load_remaining_metrics
     load_proof_review_counts
     load_certification_review_counts
     load_training_request_counts
   end
 
-  # Loads count for print queue
   def load_print_queue_count
     safe_assign(:print_queue_pending_count, cached_count('print_queue_pending') { PrintQueueItem.unreleased.count })
   end
 
-  # Loads counts for proofs needing review
   def load_proof_review_counts
     proofs_count = cached_count('proofs_needing_review') do
       Application.with_proofs_needing_review.distinct.count
@@ -95,7 +81,6 @@ module DashboardMetricsLoading # rubocop:disable Metrics/ModuleLength
     safe_assign(:proofs_needing_review_count, proofs_count)
   end
 
-  # Loads counts for medical certifications needing review
   def load_certification_review_counts
     medical_count = cached_count('medical_certs_to_review') do
       Application.where.not(status: %i[rejected archived])
@@ -103,7 +88,6 @@ module DashboardMetricsLoading # rubocop:disable Metrics/ModuleLength
                  .count
     end
 
-    # Count applications with digitally signed certifications needing admin review
     digitally_signed_count = cached_count('digitally_signed_needs_review') do
       Application.where(document_signing_status: :signed)
                  .where.not(medical_certification_status: :approved)
@@ -114,7 +98,6 @@ module DashboardMetricsLoading # rubocop:disable Metrics/ModuleLength
     safe_assign(:digitally_signed_needs_review_count, digitally_signed_count)
   end
 
-  # Loads training request counts from the application-owned request queue
   def load_training_request_counts
     training_count = cached_count('training_requests') { calculate_training_requests_count }
     safe_assign(:training_requests_count, training_count)
@@ -122,7 +105,6 @@ module DashboardMetricsLoading # rubocop:disable Metrics/ModuleLength
 
   # === Fiscal Year Utilities ===
 
-  # Loads fiscal year data and date ranges
   def load_fiscal_year_data
     current_fy = current_fiscal_year
     previous_fy = current_fy - 1
@@ -135,12 +117,11 @@ module DashboardMetricsLoading # rubocop:disable Metrics/ModuleLength
     safe_assign(:previous_fy_start, Date.new(previous_fy, 7, 1))
     safe_assign(:previous_fy_end, Date.new(current_fy, 6, 30))
 
-    # Display labels using ending year short form (FY26, FY25)
+    # Fiscal year labels use the final year (FY26, FY25).
     safe_assign(:current_fy_label, "FY#{(current_fy + 1).to_s[-2..]}")
     safe_assign(:previous_fy_label, "FY#{current_fy.to_s[-2..]}")
   end
 
-  # Loads application counts by fiscal year
   def load_fiscal_year_application_counts
     load_fiscal_year_data unless @current_fy_start && @current_fy_end
 
@@ -153,7 +134,6 @@ module DashboardMetricsLoading # rubocop:disable Metrics/ModuleLength
     safe_assign(:previous_fy_draft_applications, Application.where(status: :draft, created_at: previous_range).count)
   end
 
-  # Loads voucher counts by fiscal year
   def load_fiscal_year_voucher_counts
     load_fiscal_year_data unless @current_fy_start && @current_fy_end
 
@@ -170,7 +150,6 @@ module DashboardMetricsLoading # rubocop:disable Metrics/ModuleLength
     safe_assign(:previous_fy_voucher_value, Voucher.where(issued_at: previous_range).sum(:initial_value))
   end
 
-  # Loads service counts (training sessions, evaluations) by fiscal year
   def load_fiscal_year_service_counts
     load_fiscal_year_data unless @current_fy_start && @current_fy_end
 
@@ -191,7 +170,6 @@ module DashboardMetricsLoading # rubocop:disable Metrics/ModuleLength
 
   # === Chart Data Utilities ===
 
-  # Loads chart data for applications
   def load_applications_chart_data
     load_fiscal_year_application_counts unless @current_fy_applications
 
@@ -207,7 +185,6 @@ module DashboardMetricsLoading # rubocop:disable Metrics/ModuleLength
                 })
   end
 
-  # Loads chart data for vouchers
   def load_vouchers_chart_data
     load_fiscal_year_voucher_counts unless @current_fy_vouchers
 
@@ -225,7 +202,6 @@ module DashboardMetricsLoading # rubocop:disable Metrics/ModuleLength
                 })
   end
 
-  # Loads chart data for services
   def load_services_chart_data
     load_fiscal_year_service_counts unless @current_fy_trainings
 
@@ -243,7 +219,6 @@ module DashboardMetricsLoading # rubocop:disable Metrics/ModuleLength
 
   # === Vendor and MFR Data ===
 
-  # Loads vendor activity data
   def load_vendor_data
     safe_assign(:active_vendors, Vendor.joins(:voucher_transactions).distinct.count)
     safe_assign(:recent_active_vendors, Vendor.joins(:voucher_transactions)
@@ -251,47 +226,39 @@ module DashboardMetricsLoading # rubocop:disable Metrics/ModuleLength
                                            .distinct.count)
   end
 
-  # Disability type breakdown from submitted applications by fiscal year
-  # Users can have multiple disabilities
+  # Each user contributes once per fiscal year. A user can have multiple disabilities.
   def load_disability_type_data
     load_fiscal_year_data unless @current_fy_start && @current_fy_end
 
     disability_types = %i[hearing vision speech mobility cognition]
 
-    # Current FY disability counts
     load_disability_counts_for_period(:current_fy, fy_created_at_range(@current_fy_start, @current_fy_end), disability_types)
 
-    # Previous FY disability counts
     load_disability_counts_for_period(:previous_fy, fy_created_at_range(@previous_fy_start, @previous_fy_end), disability_types)
   end
 
-  # Helper to load disability counts for a specific time period
   def load_disability_counts_for_period(period_key, date_range, disability_types)
     user_ids = Application.where.not(status: :draft)
                           .where(created_at: date_range)
                           .pluck(:user_id).uniq
     users = User.where(id: user_ids)
 
-    # Count each disability type
     disability_types.each do |type|
       safe_assign(:"#{period_key}_#{type}_disability_count", users.where("#{type}_disability": true).count)
     end
 
-    # Total applications with at least one disability
+    # The total counts users with at least one disability.
     safe_assign(:"#{period_key}_total_disability_applications", users.where(
       disability_types.map { |t| "#{t}_disability = ?" }.join(' OR '),
       *([true] * disability_types.size)
     ).count)
   end
 
-  # Referral source breakdown by different time periods
-  # Follows existing pattern used in load_fiscal_year_application_counts
   def load_referral_source_data
     load_fiscal_year_data unless @current_fy_start && @current_fy_end
 
     current_date = Date.current
 
-    # Define time period ranges - reusing existing @current_fy_start/@previous_fy_start
     time_periods = {
       month: { start: current_date.beginning_of_month, end: current_date.end_of_month },
       quarter: { start: FiscalYear.quarter_start_date(current_date), end: FiscalYear.quarter_end_date(current_date) },
@@ -299,7 +266,6 @@ module DashboardMetricsLoading # rubocop:disable Metrics/ModuleLength
       prior_year: { start: @previous_fy_start, end: @previous_fy_end }
     }
 
-    # Calculate referral sources for each period
     time_periods.each do |period, range|
       created_range = if %i[ytd prior_year].include?(period)
                         fy_created_at_range(range[:start], range[:end])
@@ -310,7 +276,6 @@ module DashboardMetricsLoading # rubocop:disable Metrics/ModuleLength
       safe_assign(:"referral_#{period}_data", calculate_referral_sources(apps))
     end
 
-    # Store labels for display (use ending year short form: FY26, FY25)
     safe_assign(:referral_month_label, current_date.strftime('%B %Y'))
     safe_assign(:referral_quarter_label, "Q#{FiscalYear.quarter_for(current_date)} #{@current_fy_label}")
     safe_assign(:referral_ytd_label, "#{@current_fy_label} YTD")
@@ -324,14 +289,11 @@ module DashboardMetricsLoading # rubocop:disable Metrics/ModuleLength
     FiscalYear.time_range(start_date, end_date)
   end
 
-  # Count applications with an outstanding training request. Driven by
-  # persisted application state so admin queue visibility doesn't depend on
-  # notification delivery.
+  # Pending training counts use application state, so notification delivery does not control queue visibility.
   def calculate_training_requests_count
     Application.with_pending_training_request.count
   end
 
-  # Count applications with an outstanding admin-initiated evaluation request.
   def calculate_evaluation_requests_count
     Application.with_pending_evaluation_request.count
   end
@@ -344,32 +306,29 @@ module DashboardMetricsLoading # rubocop:disable Metrics/ModuleLength
     end
   end
 
-  # Get the current fiscal year (July 1 - June 30)
+  # Fiscal years run from July 1 through June 30. The return value is the first year.
   def current_fiscal_year
     current_date = Date.current
     current_date.month >= 7 ? current_date.year : current_date.year - 1
   end
 
-  # Get the start of the current fiscal year
   def fiscal_year_start
     year = current_fiscal_year
     Date.new(year, 7, 1)
   end
 
-  # Safely assign instance variables with error handling
   def safe_assign(var_name, value)
     instance_variable_set("@#{var_name}", value)
   rescue StandardError => e
     Rails.logger.error "Failed to assign @#{var_name}: #{e.message}"
-    instance_variable_set("@#{var_name}", 0) # Default to 0 for numeric values
+    instance_variable_set("@#{var_name}", 0)
   end
 
-  # Cache count queries to reduce database load
   def cached_count(key, expires_in: 5.minutes, &)
     Rails.cache.fetch("dashboard_metrics_#{key}", expires_in: expires_in, &)
   end
 
-  # Keys to exclude when loading reporting service data to avoid duplication
+  # These metrics have local owners outside the reporting service.
   def excluded_reporting_keys
     %w[
       open_applications_count pending_services_count
@@ -379,7 +338,6 @@ module DashboardMetricsLoading # rubocop:disable Metrics/ModuleLength
     ]
   end
 
-  # Return default metric values as a hash for load_dashboard_metrics
   def default_metric_values_hash
     {
       open_applications_count: 0,
@@ -394,8 +352,8 @@ module DashboardMetricsLoading # rubocop:disable Metrics/ModuleLength
     }
   end
 
-  # Calculates referral source breakdown for a given set of applications
-  # Returns a hash of referral_source => count
+  # Counts each user once, even if the user has several applications.
+  # Returns a hash of referral_source => count.
   def calculate_referral_sources(applications)
     user_ids = applications.pluck(:user_id).uniq
     return {} if user_ids.empty?
@@ -406,7 +364,7 @@ module DashboardMetricsLoading # rubocop:disable Metrics/ModuleLength
     referral_data.transform_keys { |k| k || 'Not Specified' }
   end
 
-  # Checks if we have at least one full prior fiscal year of data
+  # Returns whether a non-draft application predates @previous_fy_start.
   def full_prior_year_data?
     @previous_fy_start &&
       Application.where.not(status: :draft)

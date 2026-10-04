@@ -1,19 +1,17 @@
 # frozen_string_literal: true
 
 module Applications
-  # Consolidates event deduplication logic from multiple sources into a single, reliable service through
-  # a flexible fingerprinting approach to identify and merge duplicate events based on their type, content, and timing.
+  # Merges duplicate events from mixed sources by fingerprint and time bucket.
   class EventDeduplicationService < BaseService
-    # Time window for grouping events. Events within this window with the same fingerprint are considered duplicates.
+    # Groups use fixed buckets, not a sliding window.
+    # Duplicates on two sides of a bucket boundary both stay.
     DEDUPLICATION_WINDOW = 1.minute
 
-    # Deduplicates a collection of events from various sources.
-    # @param events [Array<Notification, ApplicationStatusChange, Event>] The events to deduplicate.
-    # @return [Array] A sorted, unique list of events.
+    # @param events [Array<Notification, ApplicationStatusChange, Event, ProofReview>]
+    # @return [Array] one event per duplicate group, newest first
     def deduplicate(events)
       return [] if events.blank?
 
-      # Group events by a generated fingerprint and a time bucket.
       grouped_events = events.group_by do |event|
         [
           event_fingerprint(event),
@@ -21,7 +19,6 @@ module Applications
         ]
       end
 
-      # From each group of duplicates, select the most representative event.
       grouped_events.values.map do |group|
         select_best_event(group)
       end.sort_by(&:created_at).reverse
@@ -29,13 +26,9 @@ module Applications
 
     private
 
-    # Generates a consistent, descriptive fingerprint for an event to identify duplicates.
-    # The fingerprint includes the event's primary action and relevant metadata.
-    #
-    # @param event [Object] The event to fingerprint.
-    # @return [String] A unique fingerprint string.
+    # Events with equal fingerprints in one bucket are duplicates.
     def event_fingerprint(event)
-      # Never deduplicate application_created events
+      # The record id makes each application_created event unique.
       return "application_created_#{event.id}" if event.respond_to?(:action) && event.action == 'application_created'
 
       action = generic_action(event)
@@ -99,15 +92,11 @@ module Applications
       when 'proof_resubmission_request_failed'
         metadata['proof_review_id'].to_s
       when 'alternate_contact_updated', 'medical_provider_info_updated'
-        # Each stored change is distinct; AuditEventService already drops identical repeats.
+        # Each stored change is distinct. AuditEventService already drops identical repeats.
         event.id.to_s
       end
     end
 
-    # Normalizes the action name across different event types.
-    #
-    # @param event [Object] The event record.
-    # @return [String] The normalized action name.
     def generic_action(event)
       case event
       when Notification, Event
@@ -126,21 +115,14 @@ module Applications
       end
     end
 
-    # Selects the best event from a group of duplicates based on a priority system. The priority is:
-    # ApplicationStatusChange > Event > Notification. If types are the same, the most recent event is chosen.
-    #
-    # @param group [Array] A group of duplicate events. @return [Object] The highest-priority event from the group.
+    # Highest priority_score wins. The newest event breaks a tie.
     def select_best_event(group)
       group.max_by do |event|
         [priority_score(event), event.created_at]
       end
     end
 
-    # Assigns a priority score to an event type to help select the best representation of a duplicate event. Higher scores are preferred.
-    #
-    # @param event [Object] The event to score. @return [Integer] The priority score.
     def priority_score(event)
-      # Give highest priority to application_created events
       return 4 if event.respond_to?(:action) && event.action == 'application_created'
 
       case event

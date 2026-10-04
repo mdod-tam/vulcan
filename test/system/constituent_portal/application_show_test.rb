@@ -9,36 +9,28 @@ module ConstituentPortal
       @valid_pdf = file_fixture('income_proof.pdf').to_s
       @valid_image = file_fixture('residency_proof.pdf').to_s
 
-      # Use enhanced sign in for better stability
       system_test_sign_in(@constituent)
-      assert_text 'Dashboard', wait: 10 # Verify we're signed in with increased wait time
-    end
-
-    teardown do
-      # Extra cleanup to ensure browser stability
+      assert_text 'Dashboard', wait: 10
     end
 
     test 'application show page displays all information entered during application creation' do
-      # Visit the new application page with safe visit
       visit new_constituent_portal_application_path
       wait_for_turbo
 
-      # Fill in all required fields with safe interactions
       check 'I certify that I am a resident of Maryland'
 
-      # Household information
+      # Household information.
       fill_in 'Household Size', with: 3
       fill_in 'Annual Income', with: 45_999
 
-      # This test is for a constituent applying for themselves, not a guardian for a dependent.
-      # The guardian information section should not be filled or asserted here.
+      # This test covers the constituent's own application and excludes guardian fields.
 
-      # Disability information
+      # Disability information.
       check 'I certify that I have a disability that affects my ability to access telecommunications services'
       check 'Hearing'
       check 'Vision'
 
-      # Medical provider information with safe interaction
+      # Medical provider information.
       within '#medical-provider-fields' do
         fill_in 'Name', with: 'Benjamin Rush'
         fill_in 'Phone', with: '2022222323'
@@ -46,32 +38,25 @@ module ConstituentPortal
         check 'I authorize the release and sharing of my disability-related information as described above'
       end
 
-      # Upload documents with safe interaction (using updated label names)
       attach_file 'Upload Residency Proof Document', @valid_image
       attach_file 'Upload Income Proof Document', @valid_pdf
 
-      # Save the application with safe interaction
       click_button 'Save Application'
       wait_for_turbo
 
-      # Verify we're redirected to the show page with safe interaction
       assert_application_saved_as_draft(wait: 10)
       assert_current_path %r{/constituent_portal/applications/\d+}
 
-      # Debug: Print the current user's attributes
       puts 'DEBUG: Current user attributes after save:'
       puts @constituent.reload.attributes.inspect
 
-      # Debug: Print the application attributes
       current_url =~ %r{/applications/(\d+)}
       application_id = ::Regexp.last_match(1)
       application = Application.find(application_id)
       puts 'DEBUG: Application attributes after save:'
       puts application.attributes.inspect
 
-      # Verify all entered information is displayed correctly on the show page
-
-      # Application details
+      # Application details.
       assert_text 'Status', wait: 5
       assert_text 'Draft', wait: 5
       assert_text 'Household Size', wait: 5
@@ -79,22 +64,19 @@ module ConstituentPortal
       assert_text 'Annual Income', wait: 5
       assert_text '$45,999.00', wait: 5
 
-      # Application type should be displayed (even if it's a default value)
       assert_text 'Application Type', wait: 5
       assert_text application.application_type&.titleize || 'Not specified', wait: 5
 
-      # This test is for a constituent applying for themselves, not a guardian for a dependent.
-      # Guardian information should not be displayed.
       assert_no_text 'Guardian Application:'
       assert_no_text 'Guardian Relationship:'
 
-      # Disability information
+      # Disability information.
       assert_text 'Self-Certified Disability', wait: 5
       assert_text 'Yes', wait: 5
       assert_text 'Disability Types', wait: 5
       assert_text 'Hearing, Vision', wait: 5
 
-      # Medical provider information
+      # Medical provider information.
       assert_text 'Name', wait: 5
       assert_text 'Benjamin Rush', wait: 5
       assert_text 'Phone', wait: 5
@@ -102,25 +84,22 @@ module ConstituentPortal
       assert_text 'Email', wait: 5
       assert_text 'thunderbolts@rush.med', wait: 5
 
-      # Uploaded documents
+      # Uploaded documents.
       assert_text 'Filename:', wait: 5
       assert_text 'residency_proof.pdf', wait: 5
       assert_text 'income_proof.pdf', wait: 5
     end
 
     test 'application show page displays updated information after editing' do
-      # Create a draft application first with safe visit
       visit new_constituent_portal_application_path
       wait_for_turbo
 
-      # Fill in required fields with safe interaction
       check 'I certify that I am a resident of Maryland'
       fill_in 'application_household_size', with: 2
       fill_in 'application_annual_income', with: 30_000
       check 'I certify that I have a disability that affects my ability to access telecommunications services'
       check 'Hearing'
 
-      # Fill in medical provider info with safe interaction
       within '#medical-provider-fields' do
         fill_in 'Name', with: 'Dr. Jane Smith'
         fill_in 'Phone', with: '2025551234'
@@ -128,48 +107,36 @@ module ConstituentPortal
         check 'I authorize the release and sharing of my disability-related information as described above'
       end
 
-      # Upload required documents with safe interaction (using updated label names)
       attach_file 'Upload Residency Proof Document', @valid_image
       attach_file 'Upload Income Proof Document', @valid_pdf
 
-      # Save as draft with safe interaction
       click_button 'Save Application'
       wait_for_turbo(timeout: 15)
 
-      # Verify success with safe interaction - check both flash message possibilities
       begin
         assert_application_saved_as_draft(wait: 15)
       rescue Minitest::Assertion
-        # If flash message isn't visible, check for successful navigation to show page
-        # This is a backup check since the save might be successful even if flash isn't visible
+        # A successful save can lack a visible flash. Navigation is the fallback.
         assert_current_path(%r{/constituent_portal/applications/\d+}, wait: 10)
       end
 
-      # Get the ID of the created application from the URL
       current_url =~ %r{/applications/(\d+)}
       application_id = ::Regexp.last_match(1)
 
-      # Visit the edit page with safe visit
       visit edit_constituent_portal_application_path(application_id)
       wait_for_turbo
 
-      # Update fields with safe interaction - bypass JavaScript by setting values directly
-      # Debug: Check current values before updating
       household_field = find_by_id('application_household_size')
       income_field = find_by_id('application_annual_income')
 
-      # Set values directly to bypass autosave interference
       household_field.set('4')
       income_field.set('55000')
 
-      # Explicitly ensure Vision and Mobility are checked
-      # First uncheck them in case they're already checked, then check them
       uncheck 'Vision' if page.has_checked_field?('Vision')
       uncheck 'Mobility' if page.has_checked_field?('Mobility')
       check 'Vision'
       check 'Mobility'
 
-      # Update medical provider info with safe interaction
       within '#medical-provider-fields' do
         fill_in 'Name', with: 'Dr. Benjamin Franklin'
         fill_in 'Phone', with: '2025559876'
@@ -177,19 +144,14 @@ module ConstituentPortal
         check 'I authorize the release and sharing of my disability-related information as described above'
       end
 
-      # Save the updated application with safe interaction
       click_button 'Save Application'
       wait_for_turbo(timeout: 15)
 
-      # Verify we're redirected to the show page with safe interaction
-      # Check both flash message possibilities and navigation
       begin
         assert_application_saved_as_draft(wait: 15)
       rescue Minitest::Assertion
-        # If flash message isn't visible, check for successful navigation to show page
-        # This is a backup check since the save might be successful even if flash isn't visible
+        # A successful save can lack a visible flash. Navigation is the fallback.
         assert_current_path(%r{/constituent_portal/applications/\d+}, wait: 10)
-        # Also check for any flash message container to help debug
         if page.has_selector?('.flash-messages', wait: 2)
           flash_content = find('.flash-messages').text
           puts "DEBUG: Flash content found: '#{flash_content}'"
@@ -198,13 +160,11 @@ module ConstituentPortal
         end
       end
 
-      # Ensure we're on the show page, not still on the edit page
       unless current_path.match?(%r{/constituent_portal/applications/\d+$})
         visit constituent_portal_application_path(application_id)
         wait_for_turbo
       end
 
-      # Verify updated information is displayed correctly
       assert_text 'Household Size', wait: 5
       assert_text '4', wait: 5
       assert_text 'Annual Income', wait: 5
@@ -212,7 +172,6 @@ module ConstituentPortal
       assert_text 'Disability Types', wait: 5
       assert_text 'Hearing, Vision, Mobility', wait: 5
 
-      # Verify the medical provider information was updated correctly
       assert_text 'Name', wait: 5
       assert_text 'Dr. Benjamin Franklin', wait: 5
       assert_text 'Phone', wait: 5
@@ -222,22 +181,18 @@ module ConstituentPortal
     end
 
     test 'application show page displays disability information correctly' do
-      # Create a draft application with specific disability selections using safe visit
       visit new_constituent_portal_application_path
       wait_for_turbo
 
-      # Fill in required fields with safe interaction
       check 'I certify that I am a resident of Maryland'
       fill_in 'Household Size', with: 2
       fill_in 'Annual Income', with: 30_000
 
-      # Select specific disabilities
       check 'I certify that I have a disability that affects my ability to access telecommunications services'
       check 'Hearing'
       check 'Speech'
       check 'Cognition'
 
-      # Fill in medical provider info with safe interaction
       within '#medical-provider-fields' do
         fill_in 'Name', with: 'Dr. Medical Provider'
         fill_in 'Phone', with: '2025551234'
@@ -245,23 +200,18 @@ module ConstituentPortal
         check 'I authorize the release and sharing of my disability-related information as described above'
       end
 
-      # Upload required documents with safe interaction (using updated label names)
       attach_file 'Upload Residency Proof Document', @valid_image
       attach_file 'Upload Income Proof Document', @valid_pdf
 
-      # Save as draft with safe interaction
       click_button 'Save Application'
       wait_for_turbo
 
-      # Verify success with safe interaction
       assert_application_saved_as_draft(wait: 10)
 
-      # Get the application ID from the URL
       current_url =~ %r{/applications/(\d+)}
       application_id = ::Regexp.last_match(1)
       application = Application.find(application_id)
 
-      # Debug the application attributes
       puts 'DEBUG: Application disability attributes:'
       puts "self_certify_disability: #{application.self_certify_disability}"
       puts 'User disability attributes:'
@@ -269,17 +219,13 @@ module ConstituentPortal
       puts "speech_disability: #{application.user.speech_disability}"
       puts "cognition_disability: #{application.user.cognition_disability}"
 
-      # Verify disability information is displayed correctly
-      # The application shows the actual value from the database
       assert_text 'Self-Certified Disability', wait: 5
       assert_text application.self_certify_disability ? 'Yes' : 'No', wait: 5
 
-      # Verify the disability types are displayed correctly
       assert_text 'Disability Types', wait: 5
       assert_text 'Hearing, Speech, Cognition', wait: 5
 
-      # Verify other disabilities are not displayed
-      assert_no_text 'Vision, Mobility' # This checks that neither Vision nor Mobility appear
+      assert_no_text 'Vision, Mobility'
     end
   end
 end

@@ -3,24 +3,22 @@
 module ApplicationDataLoading
   extend ActiveSupport::Concern
 
-  # Preload attachment names
   DEFAULT_ATTACHMENT_NAMES = %w[income_proof residency_proof id_proof medical_certification].freeze
 
-  # Load an application with optimized attachment preloading
-  # @param application_id [Integer] The ID of the application to load
+  # This loader finds an application and queries its attachment metadata.
+  # @param application_id [Integer, String] The ID of the application to load
   # @return [Application] The loaded application
   def load_application_with_attachments(application_id)
-    # Load application first, without eager loading anything
     application = Application.find(application_id)
 
-    # Preload the attachment metadata without loading associated models or variant records
+    # These queries omit variant records.
     preload_application_attachments(application)
 
     application
   end
 
-  # Preload attachment metadata for a single application
-  # @param application [Application] The application to preload attachments for
+  # These queries read attachment IDs and blob metadata without populating association caches.
+  # @param application [Application] Application whose attachment metadata the queries read
   def preload_application_attachments(application)
     attachment_ids = ActiveStorage::Attachment
                      .where(record_type: 'Application', record_id: application.id)
@@ -29,7 +27,6 @@ module ApplicationDataLoading
 
     return unless attachment_ids.any?
 
-    # Make sure blobs are accessible with all required attributes
     ActiveStorage::Blob
       .joins('INNER JOIN active_storage_attachments ON active_storage_blobs.id = active_storage_attachments.blob_id')
       .where(active_storage_attachments: { id: attachment_ids })
@@ -40,35 +37,30 @@ module ApplicationDataLoading
       .to_a
   end
 
-  # Load associations specifically needed for application show views
-  # @param application [Application] The application to load associations for
+  # This helper queries records for application show views.
+  # @param application [Application] Application whose related records the queries read
   def load_application_show_associations(application)
-    # Load status changes directly – they're always needed
     ApplicationStatusChange.where(application_id: application.id)
                            .includes(:user)
                            .load
 
-    # Load proof reviews that are needed
     ProofReview.where(application_id: application.id)
                .includes(:admin)
                .order(created_at: :desc)
                .load
 
-    # Load application notes with admin and assigned_to to avoid N+1
     ApplicationNote.where(application_id: application.id)
                    .includes(:admin, :assigned_to)
                    .recent_first
                    .load
 
-    # Access user if needed (for caching, if necessary)
     User.find_by(id: application.user_id) if application.user_id.present?
 
-    # Load training-related data for approved applications
     load_training_associations(application) if application.status_approved?
   end
 
-  # Load training-related associations for approved applications
-  # @param application [Application] The application to load training data for
+  # This helper builds relations for evaluation and training data.
+  # @param application [Application] Application for the evaluation and training relations
   def load_training_associations(application)
     application.evaluations.preload(:evaluator) if application.respond_to?(:evaluations)
     return unless application.respond_to?(:training_sessions)
@@ -76,9 +68,8 @@ module ApplicationDataLoading
     application.training_sessions.preload(:trainer).order(created_at: :desc)
   end
 
-  # Preload attachments for multiple applications efficiently
-  # @param applications [Array<Application>] Applications to preload attachments for
-  # @param attachment_names [Array<String>] Names of attachments to preload
+  # @param applications [Array<Application>] Applications whose attachment names the query reads
+  # @param attachment_names [Array<String>, nil] Attachment names, or nil for controller defaults
   # @return [Hash] Hash mapping application_id to Set of attachment names
   def preload_attachments_for_applications(applications, attachment_names: nil)
     attachment_names = resolve_attachment_names(attachment_names)
@@ -88,7 +79,6 @@ module ApplicationDataLoading
     fetch_and_process_attachments(ids, attachment_names)
   end
 
-  # Load proof history data for income and residency proofs
   # @param application [Application] The application to load proof history for
   # @return [Hash] Hash with :income and :residency keys containing history data
   def load_proof_histories(application)
@@ -98,7 +88,6 @@ module ApplicationDataLoading
     }
   end
 
-  # Load proof history for a specific proof type
   # @param application [Application] The application
   # @param type [Symbol] The proof type (:income or :residency)
   # @return [Hash] Hash containing reviews and audits
@@ -117,16 +106,15 @@ module ApplicationDataLoading
     { reviews: [], audits: [], error: true }
   end
 
-  # Reload application and its associations (used for turbo stream updates)
-  # @param application [Application] The application to reload
-  # @return [Application] The reloaded application
+  # Turbo stream updates use a fresh application instance.
+  # @param application [Application] Application whose ID selects the fresh instance
+  # @return [Application] A fresh application instance
   def reload_application_and_associations(application)
     reloaded_application = load_application_with_attachments(application.id)
     load_training_associations(reloaded_application) if reloaded_application.status_approved?
     reloaded_application
   end
 
-  # Decorates applications with storage information
   # @param applications [Array<Application>] Applications to decorate
   # @param attachment_index [Hash] Hash mapping application_id to attachment names
   # @return [Array<ApplicationStorageDecorator>] Decorated applications
@@ -136,7 +124,6 @@ module ApplicationDataLoading
     end
   end
 
-  # Build a base scope for application queries with common includes
   # @param exclude_statuses [Array<Symbol>] Statuses to exclude (default: [:draft, :rejected, :archived])
   # @return [ActiveRecord::Relation] The base scope
   #
@@ -151,19 +138,17 @@ module ApplicationDataLoading
   #   build_application_base_scope(exclude_statuses: [:rejected])
   def build_application_base_scope(exclude_statuses: %i[draft rejected archived])
     scope = Application.includes(
-      # Preload guardian_relationships to avoid N+1 when checking relationships in views
+      # Views read guardian relationships for each application.
       user: :guardian_relationships_as_dependent
     )
 
     scope = scope.where.not(status: exclude_statuses) if exclude_statuses.any?
 
-    # Default ordering: most recent applications first
     scope.order(application_date: :desc, id: :desc)
   end
 
-  # Load notifications for an application with specific actions
   # @param application [Application] The application
-  # @param actions [Array<String>] Notification actions to load
+  # @param actions [Array<String>, nil] Notification actions, or nil for defaults
   # @return [ActiveRecord::Relation] Notifications
   def load_application_notifications(application, actions: nil)
     actions ||= %w[
@@ -180,9 +165,8 @@ module ApplicationDataLoading
       .order(created_at: :desc)
   end
 
-  # Load application events with specific actions
   # @param application [Application] The application
-  # @param actions [Array<String>] Event actions to load
+  # @param actions [Array<String>, nil] Event actions, or nil for defaults
   # @return [ActiveRecord::Relation] The events
   def load_application_events(application, actions: nil)
     actions ||= %w[
@@ -202,7 +186,6 @@ module ApplicationDataLoading
 
   private
 
-  # Resolve attachment names from parameter or constant
   # @param attachment_names [Array<String>, nil] Names to use or nil for default
   # @return [Array<String>] Resolved attachment names
   def resolve_attachment_names(attachment_names)
@@ -215,7 +198,6 @@ module ApplicationDataLoading
     end
   end
 
-  # Fetch and process attachment data with error handling
   # @param ids [Array<Integer>] Application IDs
   # @param attachment_names [Array<String>] Attachment names to fetch
   # @return [Hash] Hash mapping application_id to Set of attachment names
@@ -231,7 +213,6 @@ module ApplicationDataLoading
     handle_attachments_error(e, ids)
   end
 
-  # Fetch raw attachment data from database
   # @param ids [Array<Integer>] Application IDs
   # @param attachment_names [Array<String>] Attachment names to fetch
   # @return [Array<Array>] Raw attachment data
@@ -241,7 +222,6 @@ module ApplicationDataLoading
       .pluck(:record_id, :name)
   end
 
-  # Log attachment preloading information
   # @param attachments_data [Array] The fetched attachment data
   # @param ids [Array<Integer>] Application IDs
   def log_attachments_preload(attachments_data, ids)
@@ -250,7 +230,6 @@ module ApplicationDataLoading
     Rails.logger.debug { "Preloaded #{attachments_data.length} attachments for #{ids.length} applications" }
   end
 
-  # Transform raw attachment data into structured result
   # @param attachments_data [Array<Array>] Raw attachment data
   # @return [Hash] Hash mapping application_id to Set of attachment names
   def transform_attachments_data(attachments_data)
@@ -258,7 +237,6 @@ module ApplicationDataLoading
                     .transform_values { |rows| rows.to_set(&:second) }
   end
 
-  # Log applications with missing attachments
   # @param ids [Array<Integer>] All application IDs
   # @param result [Hash] Result hash with application IDs as keys
   def log_missing_attachments(ids, result)
@@ -270,7 +248,6 @@ module ApplicationDataLoading
     Rails.logger.debug { "Applications with no attachments: #{missing_attachments}" }
   end
 
-  # Handle errors during attachment processing
   # @param error [StandardError] The error that occurred
   # @param ids [Array<Integer>] Application IDs being processed
   # @return [Hash] Empty hash as fallback
@@ -280,7 +257,6 @@ module ApplicationDataLoading
     {}
   end
 
-  # Filter and sorts a collection by proof type
   # @param collection [ActiveRecord::Relation] The collection to filter
   # @param type [Symbol] The proof type to filter by
   # @param sort_method [Symbol] The method to sort by

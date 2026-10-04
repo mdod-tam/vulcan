@@ -1,11 +1,8 @@
 # frozen_string_literal: true
 
-# Manages the application lifecycle including proof submission, review,
-# medical certification, training sessions, evaluations, and voucher issuance
+# Owns application lifecycle rules for proofs, certification, training, evaluations, and fulfillment.
 class Application < ApplicationRecord
   has_many :email_delivery_attempts, dependent: :nullify
-  # Constants
-  # Definition for Medical Provider Info struct
   MedicalProviderInfo = Struct.new(:name, :phone, :fax, :email, keyword_init: true) do # rubocop:disable Style/RedundantStructKeywordInit
     def present?
       name.present? || phone.present? || fax.present? || email.present?
@@ -20,11 +17,10 @@ class Application < ApplicationRecord
     end
   end
 
-  # Field encryption - URLs contain PII-adjacent data and should be encrypted at rest
+  # Signing URLs require encryption at rest because they can expose document or audit data.
   encrypts :document_signing_audit_url
   encrypts :document_signing_document_url
 
-  # Concerns
   include ApplicationStatusManagement
   include ApplicationSubmissionEligibility
   include NotificationDelivery
@@ -37,20 +33,18 @@ class Application < ApplicationRecord
   include EvaluationManagement
   include ContactChangeAudit
 
-  # Attribute accessors
-  # Virtual attribute to hold nested medical provider params for the form
+  # The nested provider form uses this virtual attribute.
   attr_accessor :medical_provider_attributes
 
-  # Enums
   enum :status, {
-    draft: 0,               # Constituent still working on application
-    in_progress: 1,         # Submitted by constituent, being processed
-    approved: 2,            # Application approved
-    rejected: 3,            # Application rejected
-    awaiting_proof: 4,      # Waiting for income/residency proofs
-    reminder_sent: 5,       # Reminder sent to constituent
-    awaiting_dcf: 6,        # Waiting for disability certification form (DCF)
-    archived: 7             # Historical record
+    draft: 0,               # Incomplete application
+    in_progress: 1,         # Submitted for processing
+    approved: 2,
+    rejected: 3,
+    awaiting_proof: 4,
+    reminder_sent: 5,
+    awaiting_dcf: 6,        # Disability certification form (DCF) pending
+    archived: 7
   }, prefix: true, validate: true
 
   enum :fulfillment_type, { equipment: 0, voucher: 1 }, prefix: true
@@ -59,19 +53,19 @@ class Application < ApplicationRecord
     not_reviewed: 0,
     approved: 1,
     rejected: 2
-  }, prefix: true # Use standard boolean prefix
+  }, prefix: true
 
   enum :residency_proof_status, {
     not_reviewed: 0,
     approved: 1,
     rejected: 2
-  }, prefix: true # Use standard boolean prefix
+  }, prefix: true
 
   enum :id_proof_status, {
     not_reviewed: 0,
     approved: 1,
     rejected: 2
-  }, prefix: true # Use standard boolean prefix
+  }, prefix: true
 
   enum :medical_certification_status, {
     not_requested: 0,
@@ -82,14 +76,14 @@ class Application < ApplicationRecord
   }, prefix: :medical_certification_status
 
   enum :document_signing_status, {
-    not_sent: 0,        # No signing request sent yet
-    sent: 1,            # Signing request sent to provider
-    opened: 2,          # Provider opened the signing link
-    signed: 3,          # Provider completed signing
-    declined: 4         # Provider declined to sign
+    not_sent: 0,
+    sent: 1,
+    opened: 2,
+    signed: 3,
+    declined: 4
   }, prefix: :document_signing_status
 
-  # Associations - made more flexible to work with both Constituent and Users::Constituent
+  # Accept both constituent STI names.
   belongs_to :user, -> { where("type = 'Users::Constituent' OR type = 'Constituent'") },
              class_name: 'User',
              foreign_key: :user_id,
@@ -112,7 +106,7 @@ class Application < ApplicationRecord
   has_many :notifications, as: :notifiable, dependent: :destroy
   has_many :proof_reviews, dependent: :destroy
   has_many :status_changes, class_name: 'ApplicationStatusChange', dependent: :destroy
-  has_many :events, as: :auditable, dependent: :destroy # Added for audit trail
+  has_many :events, as: :auditable, dependent: :destroy
   has_many :vouchers, dependent: :restrict_with_error
   has_many :application_notes, dependent: :destroy
   has_many :medical_provider_secure_request_forms, dependent: :destroy
@@ -121,12 +115,11 @@ class Application < ApplicationRecord
   has_one_attached :residency_proof
   has_one_attached :id_proof
   has_one_attached :medical_certification
-  # Stores duplicate medical certification submissions from the second completed channel:
-  # late DocuSeal PDFs after secure upload, or late secure uploads after DocuSeal.
+  # Retain late DocuSeal or secure-upload submissions when certification is received or approved,
+  # or when the request predates rejection.
   has_many_attached :additional_medical_certifications
   validates :medical_certification, :additional_medical_certifications, document: { purpose: :certification }
 
-  # Validations
   validates :application_date, presence: true
   validates :status, presence: true
   validates :maryland_resident, inclusion: { in: [true], message: 'You must be a Maryland resident to apply' }, unless: :status_draft?
@@ -149,7 +142,6 @@ class Application < ApplicationRecord
 
   before_validation :scrub_income_fields, if: :should_scrub_income?
   before_save :ensure_managing_guardian_set, if: :user_id_changed?
-  # Callbacks
   before_create :stamp_workflow_defaults!
   before_create :ensure_managing_guardian_set
   after_update :reconcile_pending_letters_after_owner_change
@@ -162,23 +154,18 @@ class Application < ApplicationRecord
       .references(:users)
   }
 
-  # Single constituent application scopes
-  # Find draft application for a specific constituent
   scope :draft_for_constituent, lambda { |user_id|
     draft.where(user_id: user_id)
   }
 
-  # Find active (non-draft, non-archived, non-rejected) application for a specific constituent
-  # Excludes: draft (still being worked on), archived (historical), rejected (can start fresh)
   scope :active_for_constituent, lambda { |user_id|
     where(user_id: user_id)
       .where.not(status: %i[draft archived rejected])
   }
 
-  # Only archived and rejected allow a new application.
+  # Archived and rejected records do not block submission through this scope.
   scope :blocking_new_submission, -> { where.not(status: %i[archived rejected]) }
 
-  # Guardian/Dependent relationship scopes
   scope :managed_by, lambda { |guardian_user|
     where(managing_guardian_id: guardian_user.id)
   }
@@ -192,40 +179,35 @@ class Application < ApplicationRecord
     end
   }
 
-  # Returns all applications related to a guardian, either managed by them
-  # or for one of their dependents (even if not managed by this guardian)
-  # NOTE: This scope is intentionally broad and should only be used for viewing, not editing
+  # Includes dependent applications managed by other guardians. Use for viewing, not edit authorization.
   scope :related_to_guardian, lambda { |guardian_user|
     managed_by(guardian_user)
       .or(for_dependents_of(guardian_user))
   }
 
-  # Strict ownership scope: only returns applications the user can edit
-  # User can edit if they are:
-  # - The applicant (user_id) AND no managing guardian exists, OR
-  # - The managing guardian
+  # Ownership permits edits for an unmanaged applicant or the managing guardian.
+  # Callers must also require draft status before allowing an edit.
   scope :editable_by, lambda { |user|
     where('(applications.user_id = :user_id AND applications.managing_guardian_id IS NULL)
            OR applications.managing_guardian_id = :user_id', user_id: user.id)
   }
 
-  # Returns applications the user can view (broader than editable)
-  # Currently same as editable_by (strict ownership model)
+  # Viewing uses the same ownership boundary as editing.
   scope :accessible_by, lambda { |user|
     editable_by(user)
   }
 
-  # Alias scopes for approved applications
+  # Completion requires a submitted application, approved income/residency proofs, and at least one voucher, all redeemed.
   scope :complete, lambda {
-    where.not(status: :draft) # Application submitted
-         .where(residency_proof_status: :approved)      # Residency approved
-         .where(income_proof_status: :approved)         # Income approved
-         .joins(:vouchers)                              # Must have at least one voucher issued
+    where.not(status: :draft)
+         .where(residency_proof_status: :approved)
+         .where(income_proof_status: :approved)
+         .joins(:vouchers)
          .where(
            'NOT EXISTS (SELECT 1 FROM vouchers v WHERE v.application_id = applications.id AND v.status != ?)',
            Voucher.statuses[:redeemed]
          )
-         .distinct # Avoid duplicates due to the join
+         .distinct # Multiple vouchers must not duplicate an application.
   }
 
   scope :with_proofs_needing_review, lambda {
@@ -249,10 +231,8 @@ class Application < ApplicationRecord
       SQL
   }
 
-  # Pending evaluation-request queue: applications with an explicit
-  # `evaluation_requested_at` timestamp and no evaluation created after the
-  # request. We intentionally do NOT infer "needs evaluation" from
-  # fulfillment_type or approval status.
+  # An explicit request timestamp drives this queue. Fulfillment type alone does not create a request.
+  # An evaluation created at or after the request closes it, regardless of evaluation status.
   scope :with_pending_evaluation_request, lambda {
     where(status: :approved)
       .where.not(evaluation_requested_at: nil)
@@ -279,28 +259,22 @@ class Application < ApplicationRecord
     ).distinct
   }
 
-  # -------------------------------------------------------------------------
-  # Eager-loading helpers
-  # -------------------------------------------------------------------------
-  # Loads all blobs for the three primary attachments in a single query so that
-  # subsequent calls to `income_proof.attached?`/`blob` don't hit the DB.  Chain
-  # this onto any Application relation:
+  # Attachment preloads
+  # Preload income, residency, and medical certification attachments with their blobs.
+  # Active Storage uses separate preload queries. Use with a relation or a single-record finder:
   #   Application.with_proof_blobs.includes(:user).page(params[:page])
-  # It works for single-record fetches as well (find/id).
   scope :with_proof_blobs, lambda {
     with_attached_income_proof
       .with_attached_residency_proof
       .with_attached_medical_certification
   }
 
-  # Scope for applications that have been digitally signed and need admin review
   scope :digitally_signed_needs_review, lambda {
     where(document_signing_status: :signed)
       .where.not(status: %i[rejected archived])
       .where.not(medical_certification_status: %i[approved rejected])
   }
 
-  # Class Methods for Analysis
   def self.pain_point_analysis
     draft
       .where.not(last_visited_step: [nil, ''])
@@ -357,7 +331,7 @@ class Application < ApplicationRecord
     end
   end
 
-  # Instance Methods
+  # Instance methods
   def skip_medical_provider_validation?
     status_draft? ||
       status_awaiting_proof? ||
@@ -380,22 +354,18 @@ class Application < ApplicationRecord
     medical_provider_name.present? && medical_provider_email.present?
   end
 
-  # Status methods- Delegate approval logic to the Applications::Approver service object
   def approve!(user:)
     Applications::Approver.new(self, by: user).call
   end
 
-  # Delegate rejection logic to the Applications::Rejecter service object
   def reject!(user:)
     Applications::Rejecter.new(self, by: user).call
   end
 
-  # Delegate document request logic to the Applications::DocumentRequester service object
   def request_documents!(user:)
     Applications::DocumentRequester.new(self, by: user).call
   end
 
-  # Submits the application, moving it from draft to in_progress
   def submit!(actor:)
     transition_status!(
       :in_progress,
@@ -404,9 +374,8 @@ class Application < ApplicationRecord
     )
   end
 
-  # Explicit status transition API for new lifecycle paths.
-  # This writes the status change, status-change record, and audit event atomically.
-  # Audit failures propagate and roll back the status change.
+  # Change status and its history in one transaction with audit logging.
+  # An audit exception propagates and rolls back the status change.
   def transition_status!(new_status, actor:, notes: nil, metadata: {})
     raise ArgumentError, 'actor is required' if actor.blank?
 
@@ -455,7 +424,6 @@ class Application < ApplicationRecord
   end
 
   def constituent_full_name
-    # Checking if user exists and has both names to avoid nil errors
     if user && (user.first_name || user.last_name)
       "#{user.first_name} #{user.last_name}".strip
     else
@@ -463,16 +431,14 @@ class Application < ApplicationRecord
     end
   end
 
-  # Determines if the proof needs review based on submission history
-  # @param proof_type [String] The type of proof ("income" or "residency")
-  # @return [Boolean] True if there's a new submission requiring review
+  # A submission event newer than the latest review requires another review.
+  # @param proof_type [String] The proof type ("income", "residency", or "id")
+  # @return [Boolean] True for a submission with no review or one newer than the latest review
   def needs_proof_type_review?(proof_type)
     latest_review, latest_audit = latest_review_and_audit(proof_type)
 
-    # Case 1: No reviews yet, but has submission
     return true if latest_review.nil? && latest_audit.present?
 
-    # Case 2: Has a new submission after the last review
     latest_audit.present? && latest_review.present? && latest_audit.created_at > latest_review.created_at
   end
 
@@ -517,9 +483,8 @@ class Application < ApplicationRecord
     proof_review_state(proof_type) == :rejected ? 'bg-red-600 hover:bg-red-700' : 'bg-blue-600 hover:bg-blue-700'
   end
 
-  # Retrieves the latest review and audit for a given proof type
-  # @param proof_type [String] The type of proof ("income" or "residency")
-  # @return [Array] A two-element array containing the latest review and audit
+  # @param proof_type [String] The proof type ("income", "residency", or "id")
+  # @return [Array] The latest review and submission audit event, in that order
   def latest_review_and_audit(proof_type)
     latest_review = proof_reviews.where(proof_type: proof_type).order(created_at: :desc).first
     latest_audit = latest_proof_submission_event(proof_type)
@@ -544,17 +509,15 @@ class Application < ApplicationRecord
     self[:medical_provider_name]
   end
 
-  # New method to check if the application is for a dependent (managed by a guardian)
   def for_dependent?
     managing_guardian_id.present?
   end
 
-  # --- Admin Fulfillment Responsibility Tracking ---
+  # Admin fulfillment responsibility
 
   def admin_fulfillment_responsibility_state
     return :voucher_no_equipment if voucher_fulfillment?
 
-    # Only track fulfillment responsibility AFTER an evaluation is completed
     return :pending_evaluation unless evaluations.completed_sessions.any?
 
     if equipment_po_sent_at.present?
@@ -586,7 +549,7 @@ class Application < ApplicationRecord
     )
   end
 
-  # --- Workflow predicates ---
+  # Workflow predicates
 
   def income_collection_enabled?
     if persisted?
@@ -623,10 +586,7 @@ class Application < ApplicationRecord
       training_sessions.where(created_at: training_requested_at..).none?
   end
 
-  # True only when an admin-initiated evaluation request is outstanding.
-  # Pending means `evaluation_requested_at` is present and there is no
-  # evaluation created after that request (any status — active assignment,
-  # requested, scheduled, or even completed closes the request).
+  # Any evaluation created at or after the request closes it, regardless of evaluation status.
   def evaluation_request_pending?
     evaluation_requested_at.present? &&
       evaluations.where(created_at: evaluation_requested_at..).none?
@@ -653,10 +613,8 @@ class Application < ApplicationRecord
     end_date.present? && end_date > Date.current
   end
 
-  # Last eligible date for this application's service window, based on the
-  # current `waiting_period_years` Policy (no new policy key). Returns nil
-  # when `application_date` is blank. Shared between eligibility checks and
-  # constituent-facing copy so the calculation isn't duplicated in views.
+  # The current waiting_period_years policy sets the service window end. It returns nil when application_date is absent.
+  # Eligibility and constituent copy share this calculation.
   def service_window_end_date
     return nil if application_date.blank?
 
@@ -664,22 +622,19 @@ class Application < ApplicationRecord
     application_date.to_date + waiting_period.years
   end
 
-  # Returns the guardian relationship type for this application
   def guardian_relationship_type
     return nil unless for_dependent?
 
-    # Look up the relationship type from the GuardianRelationship table
     GuardianRelationship.find_by(
       guardian_id: managing_guardian_id,
       dependent_id: user_id
     )&.relationship_type
   end
 
-  # Authorization methods
+  # Authorization
   def editable_by?(user)
     return false unless user
 
-    # Can edit if user is the owner (no guardian) or the managing guardian
     is_owner = user_id == user.id && managing_guardian_id.nil?
     is_managing_guardian = managing_guardian_id == user.id
 
@@ -687,13 +642,11 @@ class Application < ApplicationRecord
   end
 
   def accessible_by?(user)
-    # For now, accessible means editable (strict ownership)
-    # Could be expanded in the future to allow read-only access for other guardians
+    # Viewing uses the same ownership boundary as editing.
     editable_by?(user)
   end
 
   def viewable_by?(user)
-    # Alias for consistency with Rails authorization patterns
     accessible_by?(user)
   end
 
@@ -750,8 +703,6 @@ class Application < ApplicationRecord
     types
   end
 
-  # Method replaced by for_dependent?
-
   def constituent_must_have_disability
     return if user&.disability_selected?
 
@@ -774,21 +725,16 @@ class Application < ApplicationRecord
     errors.add(:base, 'An application cannot be managed by the applicant themselves')
   end
 
-  # Ensures the managing_guardian_id is set when the application is for a dependent.
-  # This is called before create and when user_id changes to automatically
-  # associate the application with a guardian if a relationship exists.
+  # Assign a guardian before create or after an applicant change when no manager is set.
+  # An existing manager takes precedence over relationships.
   def ensure_managing_guardian_set
-    # Skip if the application already has a managing guardian or if user_id is not set.
     return if managing_guardian_id.present? || user_id.blank?
 
-    # Find if there's any guardian relationship for this user (dependent).
-    # Using find_by to get a single record or nil.
     guardian_relationship = GuardianRelationship.find_by(dependent_id: user_id)
 
-    # If there is a guardian relationship, set the managing_guardian_id.
     return unless guardian_relationship
 
-    # Additional safety check: ensure we're not creating a circular relationship
+    # Do not assign the applicant as their own guardian.
     return if guardian_relationship.guardian_id == user_id
 
     Rails.logger.info "Setting managing_guardian_id to #{guardian_relationship.guardian_id} for application #{id}"

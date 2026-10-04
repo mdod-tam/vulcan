@@ -4,17 +4,14 @@ require 'test_helper'
 
 class UserTest < ActiveSupport::TestCase
   setup do
-    # Use a unique test run identifier to avoid collisions with existing data
-    # This avoids the need to delete existing users and prevents foreign key violations
+    # A per-run id keeps emails and phones unique without deleting existing users.
     @test_run_id = SecureRandom.hex(4)
 
-    # Create constituent users for all tests with unique phone numbers in valid 10-digit format
-    # Using a "777-" prefix to avoid collision with "555-" prefixed phones in fixtures.
+    # The 777- prefix avoids the 555- phones in fixtures and the user factory.
     @existing_constituent = create(:constituent,
                                    email: "unique.constituent.#{@test_run_id}@example.com",
                                    phone: "777-111-#{1000 + (@test_run_id.to_i(16) % 9000)}")
 
-    # Create users for guardian relationship tests with unique phone numbers
     @guardian_user = create(:constituent,
                             email: "guardian.user.#{@test_run_id}@example.com",
                             phone: "777-222-#{2000 + (@test_run_id.to_i(16) % 8000)}")
@@ -30,13 +27,12 @@ class UserTest < ActiveSupport::TestCase
   end
 
   test 'admins scope works as expected' do
-    # Just verify the scope SQL structure is what we expect
     scope_sql = User.admins.to_sql
     assert_match(/WHERE.+"users"\."type" = 'Users::Administrator'/, scope_sql)
   end
 
   test 'should not save constituent with duplicate email' do
-    constituent = build(:constituent, email: @existing_constituent.email) # Same email as @existing_constituent
+    constituent = build(:constituent, email: @existing_constituent.email)
     assert_not constituent.save, 'Saved constituent with duplicate email'
     assert_includes constituent.errors[:email], 'has already been taken'
   end
@@ -47,13 +43,12 @@ class UserTest < ActiveSupport::TestCase
   end
 
   test 'should not save constituent with duplicate phone number' do
-    constituent = build(:constituent, phone: @existing_constituent.phone) # Same phone as @existing_constituent
+    constituent = build(:constituent, phone: @existing_constituent.phone)
     assert_not constituent.save, 'Saved constituent with duplicate phone number'
     assert_includes constituent.errors[:phone], 'has already been taken'
   end
 
   test 'should save constituent with unique phone number' do
-    # Generate a valid 10-digit phone number format
     valid_phone = "555-333-#{rand(1000..9999)}"
     constituent = build(:constituent, phone: valid_phone)
     assert constituent.save, "Did not save constituent with unique phone number: #{constituent.errors.full_messages.join(', ')}"
@@ -65,13 +60,12 @@ class UserTest < ActiveSupport::TestCase
   end
 
   test 'should save multiple constituents with blank phone numbers' do
-    create(:constituent, phone: nil) # First constituent with nil phone
-    constituent2 = build(:constituent, phone: '') # Second constituent with blank phone
+    create(:constituent, phone: nil)
+    constituent2 = build(:constituent, phone: '')
     assert constituent2.save, "Did not save second constituent with blank phone number: #{constituent2.errors.full_messages.join(', ')}"
   end
 
   test 'phone number formatting runs before validation' do
-    # Create unformatted phone matching existing_constituent's phone but in a different format
     unformatted_phone = @existing_constituent.phone.gsub('-', '.')
     constituent = build(:constituent, phone: unformatted_phone)
 
@@ -114,8 +108,8 @@ class UserTest < ActiveSupport::TestCase
   end
 
   test 'guardian? returns false if user has no dependents' do
-    assert_not(@dependent_user1.guardian?) # A dependent is not a guardian in this context
-    assert_not(create(:constituent).guardian?) # A new user is not a guardian
+    assert_not(@dependent_user1.guardian?)
+    assert_not(create(:constituent).guardian?)
   end
 
   test 'dependent? returns true if user has guardians' do
@@ -124,8 +118,8 @@ class UserTest < ActiveSupport::TestCase
   end
 
   test 'dependent? returns false if user has no guardians' do
-    assert_not(@guardian_user.dependent?) # A guardian is not a dependent in this context
-    assert_not(create(:constituent).dependent?) # A new user is not a dependent
+    assert_not(@guardian_user.dependent?)
+    assert_not(create(:constituent).dependent?)
   end
 
   test 'destroying a guardian user destroys their guardian_relationships_as_guardian' do
@@ -142,22 +136,19 @@ class UserTest < ActiveSupport::TestCase
     end
   end
 
-  # --- Authorization Method Tests (Rails-centric pattern) ---
+  # --- Authorization Method Tests ---
 
   test 'editable_by_guardian scope returns only dependents of the specified guardian' do
-    # Set up relationships
     GuardianRelationship.create!(guardian_user: @guardian_user, dependent_user: @dependent_user1, relationship_type: 'Parent')
     GuardianRelationship.create!(guardian_user: @guardian_user, dependent_user: @dependent_user2, relationship_type: 'Parent')
     GuardianRelationship.create!(guardian_user: @another_guardian, dependent_user: @dependent_user1, relationship_type: 'Legal Guardian')
 
-    # Guardian should see their dependents
-    # Use .to_a to materialize the grouped results
+    # The scope groups by users.id. Use .to_a, because count on a grouped relation returns a hash.
     dependents = User.editable_by_guardian(@guardian_user).to_a
     assert_equal 2, dependents.length
     assert_includes dependents, @dependent_user1
     assert_includes dependents, @dependent_user2
 
-    # Another guardian should only see their dependent
     other_dependents = User.editable_by_guardian(@another_guardian).to_a
     assert_equal 1, other_dependents.length
     assert_includes other_dependents, @dependent_user1
@@ -181,12 +172,10 @@ class UserTest < ActiveSupport::TestCase
   test 'editable_by_guardian? returns false for non-guardian' do
     GuardianRelationship.create!(guardian_user: @guardian_user, dependent_user: @dependent_user1, relationship_type: 'Parent')
 
-    # Another guardian who is not related to this dependent
     assert_not @dependent_user1.editable_by_guardian?(@another_guardian)
   end
 
   test 'editable_by_guardian? returns false for user who is not a dependent' do
-    # Guardian user is not a dependent, so editable_by_guardian? should return false
     assert_not @guardian_user.editable_by_guardian?(@another_guardian)
   end
 
@@ -213,15 +202,12 @@ class UserTest < ActiveSupport::TestCase
   end
 
   test 'multiple guardians can both edit same dependent' do
-    # Set up shared dependent
     GuardianRelationship.create!(guardian_user: @guardian_user, dependent_user: @dependent_user1, relationship_type: 'Parent')
     GuardianRelationship.create!(guardian_user: @another_guardian, dependent_user: @dependent_user1, relationship_type: 'Legal Guardian')
 
-    # Both guardians should be able to edit
     assert @dependent_user1.editable_by_guardian?(@guardian_user)
     assert @dependent_user1.editable_by_guardian?(@another_guardian)
 
-    # Both should see the dependent in their scope
     assert_includes User.editable_by_guardian(@guardian_user), @dependent_user1
     assert_includes User.editable_by_guardian(@another_guardian), @dependent_user1
   end
@@ -229,10 +215,9 @@ class UserTest < ActiveSupport::TestCase
   # --- Profile Change Audit Logging Tests ---
 
   test 'logs profile update when user updates their own profile' do
-    # Clear Current.user to simulate self-update
+    # No Current.user means a self-update.
     Current.user = nil
 
-    # Store the original values before update
     original_first_name = @existing_constituent.first_name
     original_email = @existing_constituent.email
 
@@ -246,7 +231,6 @@ class UserTest < ActiveSupport::TestCase
     assert_equal @existing_constituent.id, event.metadata['user_id']
     assert_equal @existing_constituent.id, event.metadata['updated_by']
 
-    # Check that changes are recorded
     changes = event.metadata['changes']
     assert_equal 'Updated Name', changes['first_name']['new']
     assert_equal original_first_name, changes['first_name']['old']
@@ -255,7 +239,6 @@ class UserTest < ActiveSupport::TestCase
   end
 
   test 'logs profile update when guardian updates dependent profile' do
-    # Set Current.user to guardian to simulate guardian update
     Current.user = @guardian_user
     unique_phone = "555-#{rand(100..999)}-#{rand(1000..9999)}"
 
@@ -269,21 +252,18 @@ class UserTest < ActiveSupport::TestCase
     assert_equal @dependent_user1.id, event.metadata['user_id'] # Target is the dependent
     assert_equal @guardian_user.id, event.metadata['updated_by']
 
-    # Check that changes are recorded
     changes = event.metadata['changes']
     assert_equal 'Updated Dependent', changes['first_name']['new']
     assert_equal unique_phone, changes['phone']['new']
   end
 
   test 'does not log event when no profile fields change' do
-    # Update a non-profile field
     assert_no_difference('Event.count') do
       @existing_constituent.update!(status: :suspended)
     end
   end
 
   test 'does not log event when profile fields change but no actual changes occur' do
-    # Update with same values
     assert_no_difference('Event.count') do
       @existing_constituent.update!(
         first_name: @existing_constituent.first_name,
@@ -295,7 +275,6 @@ class UserTest < ActiveSupport::TestCase
   test 'logs multiple field changes in single event' do
     Current.user = nil
 
-    # Generate unique values to avoid conflicts
     unique_phone = "555-#{rand(100..999)}-#{rand(1000..9999)}"
     unique_email = "newemail.#{SecureRandom.hex(4)}@example.com"
 
@@ -315,7 +294,6 @@ class UserTest < ActiveSupport::TestCase
     event = Event.last
     changes = event.metadata['changes']
 
-    # Verify all changed fields are recorded
     assert_equal 'New First', changes['first_name']['new']
     assert_equal 'New Last', changes['last_name']['new']
     assert_equal unique_email, changes['email']['new']
@@ -352,9 +330,8 @@ class UserTest < ActiveSupport::TestCase
   end
 
   test 'handles nil values in profile changes' do
-    # Set a field to nil - use a unique phone number to avoid conflicts
     unique_phone = "555-#{rand(100..999)}-#{rand(1000..9999)}"
-    @existing_constituent.update!(phone: unique_phone) # Set initial value
+    @existing_constituent.update!(phone: unique_phone)
 
     Current.user = nil
     assert_difference('Event.count', 1) do
@@ -368,7 +345,6 @@ class UserTest < ActiveSupport::TestCase
   end
 
   test 'handles blank to value changes' do
-    # Start with blank value
     user = create(:constituent, physical_address_1: nil)
 
     Current.user = nil
@@ -472,7 +448,6 @@ class UserTest < ActiveSupport::TestCase
   end
 
   teardown do
-    # Clean up Current.user to avoid affecting other tests
     Current.user = nil
   end
 

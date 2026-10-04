@@ -9,32 +9,26 @@ module ConstituentPortal
     include AuthenticationTestHelper
 
     setup do
-      # Generate a unique email for each test to avoid uniqueness validation errors
       unique_email = "constituent_#{Time.now.to_i}_#{rand(1000)}@example.com"
 
-      # Set up test data using factories with the unique email
       @user = create(:constituent, :with_disabilities, email: unique_email)
-      # Use archived application so it doesn't block creation of new applications
+      # Archived status does not block a new submission.
       @application = create(:application, :archived, user: @user)
       @valid_pdf = fixture_file_upload(Rails.root.join('test/fixtures/files/income_proof.pdf'), 'application/pdf')
       @valid_image = fixture_file_upload(Rails.root.join('test/fixtures/files/residency_proof.pdf'), 'application/pdf')
 
-      # Sign in the user for all tests
       sign_in_for_integration_test(@user)
 
-      # Enable debug logging for authentication issues
       ENV['DEBUG_AUTH'] = 'true'
 
-      # Set thread local context to skip proof validations in tests
+      # The helper bypasses proof and waiting-period validation for these requests.
       setup_paper_application_context
     end
 
     teardown do
-      # Clean up thread local context after each test
       teardown_paper_application_context
     end
 
-    # Test that the checkbox handling works correctly
     test 'request review route is not available' do
       assert_raises(ActionController::RoutingError) do
         Rails.application.routes.recognize_path(
@@ -45,18 +39,16 @@ module ConstituentPortal
     end
 
     test 'should handle array values for self_certify_disability' do
-      # Create a unique user for this test to avoid 3-year validation
       unique_user = create(:constituent, :with_disabilities,
                            email: "checkbox_test_#{Time.now.to_i}_#{rand(1000)}@example.com")
       sign_in_for_integration_test(unique_user)
 
-      # Simulate a form submission with an array value for self_certify_disability
       post constituent_portal_applications_path, params: {
         application: {
           maryland_resident: true,
           household_size: 3,
           annual_income: 50_000,
-          self_certify_disability: checkbox_params(true), # Use our helper to simulate a checked checkbox
+          self_certify_disability: checkbox_params(true),
           hearing_disability: true
         },
         medical_provider: {
@@ -67,38 +59,28 @@ module ConstituentPortal
         save_draft: 'Save Application'
       }
 
-      # Check that the application was created
       assert_response :redirect
 
-      # Get the newly created application
       application = Application.last
 
-      # Verify that self_certify_disability was correctly cast to true
       assert_equal true, application.self_certify_disability
     end
 
-    # Test that the new application page loads correctly
     test 'should get new' do
-      # Access the new application page
       get new_constituent_portal_application_path
 
-      # Verify the page loaded successfully
       assert_response :success
-      # The new UI shows the user's name in the title
       assert_select 'h1', /New Application for/
       assert_select 'select[name="constituent[locale]"]'
       assert_select 'select[name="constituent[locale]"] option[value="en"]', text: 'English'
       assert_select 'select[name="constituent[locale]"] option[value="es"]', text: 'Spanish'
     end
 
-    # Test creating a draft application
     test 'should create application as draft' do
-      # Create a unique user for this test to avoid 3-year validation
       unique_user = create(:constituent, :with_disabilities,
                            email: "draft_test_#{Time.now.to_i}_#{rand(1000)}@example.com")
       sign_in_for_integration_test(unique_user)
 
-      # Submit a draft application
       assert_difference('Application.count') do
         post constituent_portal_applications_path, params: {
           application: {
@@ -117,10 +99,8 @@ module ConstituentPortal
         }
       end
 
-      # Get the newly created application
       application = Application.last
 
-      # Verify the application was created correctly
       assert_redirected_to constituent_portal_application_path(application)
       assert_equal 'draft', application.status
       assert_equal 'Dr. Smith', application.medical_provider_name
@@ -187,14 +167,11 @@ module ConstituentPortal
       assert_equal 'es', unique_user.locale
     end
 
-    # Test creating an application as submitted with required proofs
     test 'should create application as submitted' do
-      # Create a unique user for this test to avoid 3-year validation
       unique_user = create(:constituent, :with_disabilities,
                            email: "submitted_test_#{Time.now.to_i}_#{rand(1000)}@example.com")
       sign_in_for_integration_test(unique_user)
 
-      # Submit an application with required proofs
       assert_difference('Application.count') do
         post constituent_portal_applications_path, params: {
           application: {
@@ -202,7 +179,7 @@ module ConstituentPortal
             household_size: 3,
             annual_income: 50_000,
             self_certify_disability: checkbox_params(true),
-            hearing_disability: checkbox_params(true), # Use proper checkbox format
+            hearing_disability: checkbox_params(true),
             vision_disability: checkbox_params(false),
             speech_disability: checkbox_params(false),
             mobility_disability: checkbox_params(false),
@@ -222,14 +199,11 @@ module ConstituentPortal
         }
       end
 
-      # Get the newly created application
       application = Application.last
 
-      # Verify the application was created correctly
       assert_redirected_to constituent_portal_application_path(application)
       assert_equal 'in_progress', application.status
 
-      # Verify proofs were attached
       assert application.income_proof.attached?
       assert application.residency_proof.attached?
       assert_equal 'not_reviewed', application.income_proof_status
@@ -265,11 +239,8 @@ module ConstituentPortal
       disguised&.unlink
     end
 
-    # PR5a blocked-response contract, situation 1: "Submit Application" on the new form while the
-    # applicant is the subject of an open registration_soft_match case. Nothing persists, the
-    # constituent lands back on the form with the localized explanation in #pending-review-notice
-    # -- deliberately not #error-summary, which is the red validation block -- and the values they
-    # typed survive the refusal.
+    # A pending registration soft-match case produces an informational refusal, with no new application.
+    # The response preserves entered values and explains how to restore file selections.
     test 'blocked submission re-renders the form with the pending-review explanation and no application' do
       unique_user = create(:constituent, :with_disabilities,
                            email: "pending_review_#{Time.now.to_i}_#{rand(1000)}@example.com")
@@ -281,24 +252,18 @@ module ConstituentPortal
       end
 
       assert_response :unprocessable_content
-      # An informational notice, not the red error summary: the constituent made no error, and
-      # nothing failed to save.
       assert_select '#pending-review-notice[role=?]', 'status'
       assert_select '#pending-review-notice',
                     text: /#{Regexp.escape(pending_review_message)}/
       assert_select '#error-summary', false,
                     'a pending review is not a validation error and must not render the error summary'
-      # The refusal must not cost the constituent the values they typed.
       assert_select "input[name='application[household_size]'][value='3']"
-      # The one thing the re-render genuinely cannot give back is the file selections, so the
-      # notice has to say so and name the action that recovers them.
+      # A server response cannot restore selected files.
       assert_select '#pending-review-documents-notice',
                     text: /#{Regexp.escape(refused_documents_message)}/
     end
 
-    # The new-application form posts to create until the page is reloaded, even after autosave has
-    # started the draft. Create must continue that draft: a Save used to start a second draft, and a
-    # Submit was refused because the constituent's own draft counted as a sibling application.
+    # Autosave leaves the new form on the create route. The full save must resume its draft.
     test 'Save Application posted to create continues the draft autosave already started' do
       applicant = create(:constituent, :with_disabilities)
       sign_in_for_integration_test(applicant)
@@ -335,8 +300,7 @@ module ConstituentPortal
       assert_equal 0, Application.where(user: guardian).count, 'nothing may be filed as the guardian'
     end
 
-    # A refused create that resumed a draft re-renders what was typed, not what was stored, and the
-    # re-rendered form now targets that draft, so an unchanged retry submits it.
+    # The refusal shows submitted values and changes the form action to update the resumed draft.
     test 'a refused create that resumed a draft keeps typed values and an unchanged retry submits that draft' do
       applicant = create(:constituent, :with_disabilities)
       sign_in_for_integration_test(applicant)
@@ -362,7 +326,7 @@ module ConstituentPortal
       assert_equal ['in_progress', 3], draft.reload.values_at(:status, :household_size)
     end
 
-    # The same notice on arrival must not claim documents were lost: nothing has been selected yet.
+    # The GET notice precedes file selection, so it must not claim files were lost.
     test 'the arrival notice does not mention lost documents' do
       unique_user = create(:constituent, :with_disabilities,
                            email: "arrival_docs_#{Time.now.to_i}_#{rand(1000)}@example.com")
@@ -377,8 +341,6 @@ module ConstituentPortal
                     'nothing has been selected on arrival, so nothing can have been lost'
     end
 
-    # The recovery the reviewer asked about, end to end: once staff resolve the case the form stops
-    # warning, stops blocking, and the same submission that was refused now goes through.
     test 'resolving the review unblocks the form and lets the submission through' do
       unique_user = create(:constituent, :with_disabilities,
                            email: "resolved_#{Time.now.to_i}_#{rand(1000)}@example.com")
@@ -411,11 +373,8 @@ module ConstituentPortal
                    'the previously refused submission must now be accepted'
     end
 
-    # The locale that decides this message comes from params and is never allowlisted on the way
-    # in, so it is reachable by hand. An unsupported value must fall back to a locale the app
-    # carries and still produce the typed refusal: if it instead reached I18n and raised, the
-    # generic rescue would render this as an ordinary validation error and tell a constituent who
-    # did nothing wrong that they did.
+    # Raw locale parameters can contain unsupported values. ApplicationForm must select a supported locale
+    # so I18n does not replace the informational refusal with a generic error response.
     test 'a tampered locale still renders the pending-review notice rather than a validation error' do
       unique_user = create(:constituent, :with_disabilities,
                            email: "pending_locale_#{Time.now.to_i}_#{rand(1000)}@example.com")
@@ -433,12 +392,7 @@ module ConstituentPortal
                     'a forged locale must not degrade the refusal into the red error summary'
     end
 
-    # The refusal alone is too late to be the only signal. It arrives after the constituent has
-    # selected their income and residency documents, and no browser lets a re-render restore a file
-    # input -- so they would have to find and choose those files again, for a submission that will
-    # be refused identically until staff resolve the case. The form therefore asks on GET and says
-    # so before any of that work happens, and hands the submit gate a hard block so the control
-    # never becomes pressable. Draft saving is untouched.
+    # The GET warning avoids file selection for a blocked submission. File selections cannot survive a refusal.
     test 'the new form warns and blocks submission before any upload while identity review is pending' do
       unique_user = create(:constituent, :with_disabilities,
                            email: "pending_new_#{Time.now.to_i}_#{rand(1000)}@example.com")
@@ -481,8 +435,7 @@ module ConstituentPortal
       assert_select 'form[data-final-submit-gate-blocked-message=?]', submission_gate_blocked_message
     end
 
-    # The gate follows the applicant, so a guardian gets the warning for a dependent's open case --
-    # and does not get it for their own, since their identity is not what the application turns on.
+    # The review block follows the applicant, not the acting guardian.
     test 'a guardian editing a gated dependent application sees the block' do
       guardian = create(:constituent, :with_disabilities,
                         email: "guardian_gate_#{Time.now.to_i}_#{rand(1000)}@example.com")
@@ -518,11 +471,7 @@ module ConstituentPortal
       assert_select 'form[data-final-submit-gate-blocked-message]', false
     end
 
-    # A refused dependent submission must stay the dependent's. The refusal re-render had no
-    # applicant context -- setup_applicant_context runs only on :new, and reads a top-level
-    # params[:user_id] the form does not post -- so the page told the guardian the application was
-    # theirs and dropped the hidden application[user_id]. Acting on that page attributed the
-    # dependent's answers and uploads to the guardian.
+    # A refusal must preserve the dependent applicant and hidden id so a retry cannot change the owner.
     test 'a refused dependent submission keeps the application scoped to the dependent' do
       guardian, dependent = guardian_and_dependent
       sign_in_for_integration_test(guardian)
@@ -545,8 +494,7 @@ module ConstituentPortal
       assert_no_match(/unknown attribute/i, response.body)
     end
 
-    # The id is never trusted as posted: it is resolved through current_user.dependents, so someone
-    # else's dependent cannot be named on the page or attached to the retry.
+    # Resolve the posted id through the guardian association before the form displays a dependent.
     test 'a forged dependent id in a refused submission falls back to a self application' do
       guardian, = guardian_and_dependent
       stranger = create(:constituent, :with_disabilities,
@@ -565,8 +513,7 @@ module ConstituentPortal
       assert_no_match(/#{Regexp.escape(stranger.full_name)}/, response.body)
     end
 
-    # cast_boolean_params turns these into real booleans before the view runs, so the old `== "1"`
-    # comparison never matched and the refusal restored stored selections over submitted ones.
+    # ParamCasting converts checkbox arrays to booleans. The view must not compare them with "1".
     test 'a refused submission keeps the submitted disability selections in both directions' do
       unique_user = create(:constituent, email: "disability_#{Time.now.to_i}_#{rand(1000)}@example.com",
                                          hearing_disability: true, vision_disability: false)
@@ -580,16 +527,13 @@ module ConstituentPortal
            )
 
       assert_response :unprocessable_content
-      # false -> the stored `true` must not come back
       assert_select "input[name='application[hearing_disability]'][checked]", false,
                     'unchecking a stored disability must survive the refusal'
-      # true -> the submitted selection must be kept even though stored is false
       assert_select "input[name='application[vision_disability]'][checked]", 1,
                     'a newly checked disability must survive the refusal'
     end
 
-    # Derived from persisted address blankness, the checkbox came back opposite to what was chosen,
-    # so a retry could hide or replace the dependent address just entered.
+    # Submitted guardian-address choice must override stored address blankness after a refusal.
     test 'a refused dependent submission keeps the submitted guardian-address choice' do
       guardian, dependent = guardian_and_dependent
       sign_in_for_integration_test(guardian)
@@ -608,12 +552,8 @@ module ConstituentPortal
       assert_select "input[name='application[physical_address_1]'][value='9 Dependent Ln']", 1
     end
 
-    # A refused update must speak the applicant's language, not the actor's. The edit form posts no
-    # application[user_id], so resolving the form's applicant from the submitted id made every
-    # update resolve to the acting guardian -- and this page then said one thing on GET (the
-    # dependent's Spanish, via the persisted application) and another on the POST refusal (the
-    # guardian's English). The dependent here carries their own contact, so their locale is their
-    # own; a guardian-contact dependent deliberately follows the guardian instead.
+    # An update derives the applicant from the persisted draft because the edit form omits application[user_id].
+    # A dependent with their own contact uses their own locale. Guardian-contact dependents use the guardian locale.
     test 'a refused update on a Spanish dependent draft renders in the dependent locale' do
       guardian, dependent = guardian_and_dependent
       guardian.update!(locale: 'en')
@@ -633,10 +573,7 @@ module ConstituentPortal
       assert_equal 'draft', draft.reload.status
     end
 
-    # PR5a blocked-response contract, situation 2: the same refusal on an existing draft. Situation
-    # 1 proves nothing is created; this proves nothing is destroyed -- the stored draft survives
-    # untouched, and the form still shows the constituent's latest edits rather than reverting to
-    # the stored values.
+    # The refusal preserves the stored draft but renders the latest submitted values.
     test 'blocked submission on an existing draft leaves the draft intact and keeps the edits shown' do
       unique_user = create(:constituent, :with_disabilities,
                            email: "pending_edit_#{Time.now.to_i}_#{rand(1000)}@example.com")
@@ -657,12 +594,10 @@ module ConstituentPortal
       draft.reload
       assert_equal 'draft', draft.status, 'the refused submission must not advance the draft'
       assert_equal 2, draft.household_size, 'the stored draft must be untouched by the refusal'
-      # ...while the form still shows what they just typed, not the reverted stored value.
       assert_select "input[name='application[household_size]'][value='7']"
     end
 
-    # Situation 3: the same request without the submit_application param is a draft save, which
-    # pending review never blocks.
+    # Without submit_application, this request saves a draft despite the pending review.
     test 'a draft save is not blocked while a registration soft match case is open' do
       unique_user = create(:constituent, :with_disabilities,
                            email: "pending_draft_#{Time.now.to_i}_#{rand(1000)}@example.com")
@@ -758,32 +693,26 @@ module ConstituentPortal
     end
 
     test 'guardian should create application for a dependent' do
-      # Setup: Create a guardian and a dependent user linked by GuardianRelationship
       guardian = create(:constituent, email: 'guardian.app.creator@example.com', phone: '5555550020')
       dependent = create(:constituent, email: 'dependent.app.subject@example.com', phone: '5555550021')
       GuardianRelationship.create!(guardian_id: guardian.id, dependent_id: dependent.id, relationship_type: 'parent')
 
-      # Sign in as the guardian
       sign_in_for_integration_test guardian
 
-      # Simulate submitting an application where the guardian selects the dependent
-      # The controller logic will need to handle identifying the dependent based on params,
-      # e.g., params[:application][:user_id] = dependent.id
-      # The managing_guardian_id should be set to current_user.id (guardian.id)
       assert_difference('Application.count') do
         post constituent_portal_applications_path, params: {
           application: {
-            user_id: dependent.id, # Explicitly setting the applicant user ID
+            user_id: dependent.id,
             maryland_resident: true,
             household_size: 2,
             annual_income: 30_000,
             self_certify_disability: checkbox_params(true),
-            hearing_disability: checkbox_params(true), # Use proper checkbox format and ensure at least one disability
+            hearing_disability: checkbox_params(true),
             vision_disability: checkbox_params(false),
             speech_disability: checkbox_params(false),
             mobility_disability: checkbox_params(false),
             cognition_disability: checkbox_params(false),
-            residency_proof: @valid_image, # Assuming proofs are needed for submission
+            residency_proof: @valid_image,
             income_proof: @valid_pdf,
             terms_accepted: checkbox_params(true),
             information_verified: checkbox_params(true),
@@ -794,19 +723,17 @@ module ConstituentPortal
               email: 'drchild@example.com'
             }
           },
-          submit_application: 'Submit Application' # Trigger submission logic
+          submit_application: 'Submit Application'
         }
       end
 
       application = Application.last
       assert_redirected_to constituent_portal_application_path(application)
 
-      # Verify the application is linked correctly
       assert_equal(dependent.id, application.user_id, 'Application user_id should be the dependent')
       assert_equal(guardian.id, application.managing_guardian_id, 'Application managing_guardian_id should be the guardian')
-      assert_equal('in_progress', application.status) # Assuming submission leads to in_progress
+      assert_equal('in_progress', application.status)
 
-      # Verify proofs were attached (if submitted)
       assert application.income_proof.attached?
       assert application.residency_proof.attached?
     end
@@ -864,57 +791,40 @@ module ConstituentPortal
       assert_equal 'es', dependent.locale
     end
 
-    # Test that the application show page loads correctly
     test 'should show application' do
-      # Access the application show page
       get constituent_portal_application_path(@application)
 
-      # Verify the page loaded successfully
       assert_response :success
       assert_select 'h1', /Application ##{@application.id}/
     end
 
-    # Test that the edit page loads correctly for draft applications
     test 'should get edit for draft application' do
-      # Set the application to draft status
       @application.update!(status: :draft)
 
-      # Access the edit page
       get edit_constituent_portal_application_path(@application)
 
-      # Verify the page loaded successfully
       assert_response :success
     end
 
-    # Test that users can't edit submitted applications
     test 'should not get edit for submitted application' do
-      # First attach required proofs
       @application.income_proof.attach(@valid_pdf)
       @application.residency_proof.attach(@valid_image)
 
-      # Then set the application to in_progress status (submitted)
       @application.update!(status: :in_progress)
 
-      # Try to edit a submitted application
       get edit_constituent_portal_application_path(@application)
 
-      # Should be redirected to application page with an alert
       assert_redirected_to constituent_portal_application_path(@application)
       assert_flash_message(:alert, 'This application has already been submitted and cannot be edited.')
     end
 
-    # Test updating a draft application
     test 'should update draft application' do
-      # Set the application to draft status
       @application.update!(status: :draft)
 
-      # Update the application with at least one disability selected
-      # The controller requires at least one disability to be selected
       patch constituent_portal_application_path(@application), params: {
         application: {
           household_size: 4,
           annual_income: 60_000,
-          # Include disability information to pass validation
           hearing_disability: checkbox_params(true),
           vision_disability: checkbox_params(false),
           speech_disability: checkbox_params(false),
@@ -923,23 +833,18 @@ module ConstituentPortal
         }
       }
 
-      # Verify the update was successful
       assert_redirected_to constituent_portal_application_path(@application)
 
-      # Reload the application and verify changes
       @application.reload
       assert_equal 4, @application.household_size
       assert_equal 60_000, @application.annual_income
 
-      # Verify user disability attributes were updated
-      # These get applied to the user, not the application
+      # Disability attributes belong to the applicant user, not the application.
       @user.reload
       assert_equal true, @user.hearing_disability
     end
 
-    # Test submitting a draft application
     test 'should submit draft application' do
-      # Use the existing application and set it to draft status instead of creating a new one
       @application.update!(
         status: :draft,
         household_size: 3,
@@ -949,23 +854,22 @@ module ConstituentPortal
         medical_provider_email: 'drsmith@example.com'
       )
 
-      # Submit the draft application
       patch constituent_portal_application_path(@application), params: {
         application: {
           household_size: 4,
           annual_income: 60_000,
           maryland_resident: true,
-          self_certify_disability: true, # This is an application model field
+          self_certify_disability: true,
           terms_accepted: true,
           information_verified: true,
           medical_release_authorized: true,
-          hearing_disability: checkbox_params(true), # Must have at least one disability for submission
+          hearing_disability: checkbox_params(true), # Submission requires at least one disability.
           vision_disability: checkbox_params(false),
           speech_disability: checkbox_params(false),
           mobility_disability: checkbox_params(false),
           cognition_disability: checkbox_params(false),
-          residency_proof: @valid_image, # Added residency proof
-          income_proof: @valid_pdf, # Added income proof
+          residency_proof: @valid_image,
+          income_proof: @valid_pdf,
           medical_provider_attributes: {
             name: 'Dr. Smith',
             phone: '2025551234',
@@ -975,24 +879,18 @@ module ConstituentPortal
         submit_application: 'Submit Application'
       }
 
-      # Verify the submission was successful
       assert_redirected_to constituent_portal_application_path(@application)
 
-      # Reload the application and verify status change
       @application.reload
       assert_equal 'in_progress', @application.status
     end
 
-    # Test that submitted applications cannot be updated
     test 'should not update submitted application' do
-      # First attach required proofs
       @application.income_proof.attach(@valid_pdf)
       @application.residency_proof.attach(@valid_image)
 
-      # Set the application to in_progress status (submitted) and ensure starting values
       @application.update!(status: :in_progress, household_size: 3, annual_income: 50_000)
 
-      # Attempt to update a submitted application
       patch constituent_portal_application_path(@application), params: {
         application: {
           household_size: 4,
@@ -1000,19 +898,15 @@ module ConstituentPortal
         }
       }
 
-      # Verify the update was rejected by ensure_editable
       assert_redirected_to constituent_portal_application_path(@application)
       assert_flash_message(:alert, 'This application has already been submitted and cannot be edited.')
 
-      # Reload the application and verify no changes were made
       @application.reload
-      assert_equal 3, @application.household_size # Assuming original fixture value was 3
-      assert_equal 50_000, @application.annual_income.to_i # Assuming original fixture value was 50000
+      assert_equal 3, @application.household_size
+      assert_equal 50_000, @application.annual_income.to_i
     end
 
-    # Test validation errors for invalid submission
     test 'should show validation errors for invalid submission' do
-      # Submit an invalid application
       post constituent_portal_applications_path, params: {
         application: {
           maryland_resident: false,
@@ -1022,45 +916,33 @@ module ConstituentPortal
         submit_application: 'Submit Application'
       }
 
-      # Verify validation errors are shown
       assert_response :unprocessable_content
 
-      # Check that errors are present in the response body - be flexible with specific wording
       assert_match(/maryland resident|residency/i, response.body)
       assert_match(/household size|size.*blank/i, response.body)
       assert_match(/annual income|income.*blank/i, response.body)
     end
 
-    # Test showing uploaded document filenames
     test 'should show uploaded document filenames on show page' do
-      # First attach files to the application
       @application.income_proof.attach(@valid_pdf)
       @application.residency_proof.attach(@valid_image)
       @application.save!
 
-      # Access the application show page
       get constituent_portal_application_path(@application)
 
-      # Verify the page shows the filenames
       assert_response :success
-      # The view uses <span> elements for filename labels, not <p>
       assert_select 'span', /Filename:/
     end
 
-    # Test FPL helper methods provide correct server-rendered data
     test 'helper methods should return correct FPL thresholds' do
-      # Set up FPL policies with standard values for testing
       setup_fpl_policies
 
-      # Access a page that uses the helpers to ensure they work in context
       get new_constituent_portal_application_path
       assert_response :success
 
-      # Test the helper methods directly
       thresholds_json = @controller.fpl_thresholds_json
       modifier = @controller.fpl_modifier_value
 
-      # Parse and verify the thresholds JSON
       thresholds = JSON.parse(thresholds_json)
       assert_equal 15_650, thresholds['1']
       assert_equal 21_150, thresholds['2']
@@ -1071,24 +953,19 @@ module ConstituentPortal
       assert_equal 48_650, thresholds['7']
       assert_equal 54_150, thresholds['8']
 
-      # Verify the modifier value
       assert_equal 400, modifier
     end
 
-    # Test that user association is maintained during update
     test 'should maintain user association during update' do
-      # Set up the application and make it a draft
       @application.update!(status: :draft,
                            household_size: 3,
                            annual_income: 50_000,
                            medical_provider_name: 'Good Health Clinic')
 
-      # Update the application with new values and disability information (draft update - no submission)
       patch constituent_portal_application_path(@application), params: {
         application: {
           household_size: 5,
           annual_income: 75_000,
-          # No more is_guardian field - instead managing_guardian would be set via managing_guardian_id
           hearing_disability: checkbox_params(true),
           vision_disability: checkbox_params(true),
           speech_disability: checkbox_params(false),
@@ -1100,29 +977,23 @@ module ConstituentPortal
             email: 'drjane@example.com'
           }
         }
-        # NOTE: No submit_application param, so this is a draft update
+        # Without submit_application, this request updates the draft.
       }
 
-      # Verify the update was successful
       assert_redirected_to constituent_portal_application_path(@application)
 
-      # Reload the application and verify changes
       @application.reload
 
-      # Check application attributes were updated
       assert_equal 5, @application.household_size
       assert_equal 75_000, @application.annual_income
 
-      # The medical provider name should be updated
       assert_equal 'Dr. Jane Smith', @application.medical_provider_name
       assert_equal '2025559876', @application.medical_provider_phone
       assert_equal 'drjane@example.com', @application.medical_provider_email
 
-      # Most importantly, verify the user association was maintained
       assert_not_nil @application.user_id
       assert_equal @user.id, @application.user_id
 
-      # Verify user disability attributes were updated
       @user.reload
       assert_equal true, @user.hearing_disability
       assert_equal true, @user.vision_disability
@@ -1131,52 +1002,42 @@ module ConstituentPortal
       assert_equal false, @user.cognition_disability
     end
 
-    # Test for updating an application to be managed by a guardian
     test 'should update application with managing guardian' do
-      # Create a dependent user
       dependent = create(:constituent, :with_disabilities,
                          email: 'dependent_for_update_test@example.com')
 
-      # Set up guardian relationship between current user and dependent
       GuardianRelationship.create!(
         guardian_id: @user.id,
         dependent_id: dependent.id,
         relationship_type: 'parent'
       )
 
-      # Create an application for the dependent WITH managing_guardian set from the start
-      # This reflects correct behavior - guardian creates application with themselves as manager
+      # The managing guardian can edit this dependent draft.
       dependent_app = create(:application,
                              user: dependent,
                              status: :draft,
                              managing_guardian_id: @user.id)
 
-      # Verify the managing_guardian_id was properly set
       assert_equal @user.id, dependent_app.managing_guardian_id,
                    'managing_guardian_id should be set during creation'
 
-      # Update the dependent's application (guardian can edit because they're the managing_guardian)
       patch constituent_portal_application_path(dependent_app), params: {
         application: {
           household_size: 2,
           annual_income: 30_000,
-          # Add disability information since this might be treated as a submission
           hearing_disability: checkbox_params(true),
           vision_disability: checkbox_params(false),
           speech_disability: checkbox_params(false),
           mobility_disability: checkbox_params(false),
           cognition_disability: checkbox_params(false)
         }
-        # NOTE: No submit_application param - this is a draft update
+        # Without submit_application, this request updates the draft.
       }
 
-      # Verify the update was successful
       assert_redirected_to constituent_portal_application_path(dependent_app)
 
-      # Reload the application and verify changes
       dependent_app.reload
 
-      # Verify managing guardian is still set correctly
       assert_equal @user.id, dependent_app.managing_guardian_id
       assert dependent_app.for_dependent?, 'Application should be marked as for a dependent'
       assert_equal 'parent', dependent_app.guardian_relationship_type
@@ -1185,12 +1046,10 @@ module ConstituentPortal
     end
 
     test 'should save address information to user during application creation' do
-      # Create a unique user for this test to avoid 3-year validation
       unique_user = create(:constituent, :with_disabilities,
                            email: "address_creation_test_#{Time.now.to_i}_#{rand(1000)}@example.com")
       sign_in_for_integration_test(unique_user)
 
-      # Ensure the user starts with no address information
       unique_user.update!(
         physical_address_1: nil,
         physical_address_2: nil,
@@ -1199,7 +1058,6 @@ module ConstituentPortal
         zip_code: nil
       )
 
-      # Create an application with address information
       assert_difference('Application.count') do
         post constituent_portal_applications_path, params: {
           application: {
@@ -1212,7 +1070,6 @@ module ConstituentPortal
             speech_disability: checkbox_params(false),
             mobility_disability: checkbox_params(false),
             cognition_disability: checkbox_params(false),
-            # Address fields that should be saved to the user model
             physical_address_1: '134 main st',
             physical_address_2: 'Apt 2B',
             city: 'baltimore',
@@ -1231,12 +1088,11 @@ module ConstituentPortal
         }
       end
 
-      # Verify the application was created
       application = Application.last
       assert_redirected_to constituent_portal_application_path(application)
       assert_equal 'draft', application.status
 
-      # CRITICAL: Verify that the address information was saved to the user model
+      # Address fields belong to the applicant user, not the application.
       unique_user.reload
       assert_equal '134 main st', unique_user.physical_address_1, 'Address line 1 should be saved to user'
       assert_equal 'Apt 2B', unique_user.physical_address_2, 'Address line 2 should be saved to user'
@@ -1246,12 +1102,10 @@ module ConstituentPortal
     end
 
     test 'should save address information to user during application submission' do
-      # Create a unique user for this test to avoid 3-year validation
       unique_user = create(:constituent, :with_disabilities,
                            email: "address_submission_test_#{Time.now.to_i}_#{rand(1000)}@example.com")
       sign_in_for_integration_test(unique_user)
 
-      # Ensure the user starts with no address information
       unique_user.update!(
         physical_address_1: nil,
         physical_address_2: nil,
@@ -1260,7 +1114,6 @@ module ConstituentPortal
         zip_code: nil
       )
 
-      # Submit an application with address information and required proofs
       assert_difference('Application.count') do
         post constituent_portal_applications_path, params: {
           application: {
@@ -1273,7 +1126,6 @@ module ConstituentPortal
             speech_disability: checkbox_params(false),
             mobility_disability: checkbox_params(false),
             cognition_disability: checkbox_params(false),
-            # Address fields that should be saved to the user model
             physical_address_1: '456 Oak Street',
             physical_address_2: '',
             city: 'Silver Spring',
@@ -1294,12 +1146,11 @@ module ConstituentPortal
         }
       end
 
-      # Verify the application was submitted
       application = Application.last
       assert_redirected_to constituent_portal_application_path(application)
       assert_equal 'in_progress', application.status
 
-      # CRITICAL: Verify that the address information was saved to the user model
+      # Address fields belong to the applicant user, not the application.
       unique_user.reload
       assert_equal '456 Oak Street', unique_user.physical_address_1, 'Address line 1 should be saved to user'
       assert_equal '', unique_user.physical_address_2, 'Address line 2 should be saved to user (empty string)'
@@ -1309,11 +1160,9 @@ module ConstituentPortal
     end
 
     test 'should save address information to dependent user when guardian creates application' do
-      # Setup: Create a guardian and a dependent user linked by GuardianRelationship
       guardian = create(:constituent,
                         email: 'guardian.address.test@example.com',
                         phone: '5555550030',
-                        # Guardian starts with existing address
                         physical_address_1: '999 Guardian Lane',
                         city: 'Bethesda',
                         state: 'MD',
@@ -1321,7 +1170,6 @@ module ConstituentPortal
       dependent = create(:constituent,
                          email: 'dependent.address.test@example.com',
                          phone: '5555550031',
-                         # Start with no address information
                          physical_address_1: nil,
                          physical_address_2: nil,
                          city: nil,
@@ -1329,14 +1177,12 @@ module ConstituentPortal
                          zip_code: nil)
       GuardianRelationship.create!(guardian_id: guardian.id, dependent_id: dependent.id, relationship_type: 'parent')
 
-      # Sign in as the guardian
       sign_in_for_integration_test guardian
 
-      # Create application for dependent with address information
       assert_difference('Application.count') do
         post constituent_portal_applications_path, params: {
           application: {
-            user_id: dependent.id, # Explicitly setting the applicant user ID
+            user_id: dependent.id,
             maryland_resident: true,
             household_size: 2,
             annual_income: 30_000,
@@ -1346,7 +1192,6 @@ module ConstituentPortal
             speech_disability: checkbox_params(false),
             mobility_disability: checkbox_params(false),
             cognition_disability: checkbox_params(false),
-            # Address fields that should be saved to the DEPENDENT user model
             physical_address_1: '789 Elm Avenue',
             physical_address_2: 'Unit 5',
             city: 'Rockville',
@@ -1370,22 +1215,19 @@ module ConstituentPortal
       application = Application.last
       assert_redirected_to constituent_portal_application_path(application)
 
-      # Verify the application is linked correctly
       assert_equal(dependent.id, application.user_id, 'Application user_id should be the dependent')
       assert_equal(guardian.id, application.managing_guardian_id, 'Application managing_guardian_id should be the guardian')
 
-      # CRITICAL: Verify that the address information was saved to the DEPENDENT user model, not the guardian
+      # The dependent owns the submitted address. The guardian address must remain unchanged.
       dependent.reload
       guardian.reload
 
-      # Address should be saved to the dependent (the applicant)
       assert_equal '789 Elm Avenue', dependent.physical_address_1, 'Address line 1 should be saved to dependent user'
       assert_equal 'Unit 5', dependent.physical_address_2, 'Address line 2 should be saved to dependent user'
       assert_equal 'Rockville', dependent.city, 'City should be saved to dependent user'
       assert_equal 'MD', dependent.state, 'State should be saved to dependent user'
       assert_equal '20850', dependent.zip_code, 'ZIP code should be saved to dependent user'
 
-      # Guardian's address should remain unchanged
       assert_equal '999 Guardian Lane', guardian.physical_address_1, 'Guardian address should not be affected'
       assert_equal 'Bethesda', guardian.city, 'Guardian city should not be affected'
     end

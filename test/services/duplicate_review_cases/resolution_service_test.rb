@@ -10,9 +10,7 @@ module DuplicateReviewCases
       @review_case = open_case_for(@subject)
     end
 
-    # The determination is server-owned. A non-merge resolution means exactly one thing, so there is
-    # no input that could record anything else -- the five-value control is gone, and the service
-    # takes no determination parameter at all.
+    # The service owns the determination and takes no determination parameter.
     test 'a non-merge resolution always records keep_separate' do
       result = resolve
 
@@ -20,8 +18,7 @@ module DuplicateReviewCases
       assert_equal 'keep_separate', @review_case.reload.resolution_determination
     end
 
-    # The audit record must agree with the stored case; a divergence would make the evidence trail
-    # claim a decision that was never taken.
+    # The audit event must agree with the stored case.
     test 'the resolution audit event records the same server-owned determination' do
       resolve
 
@@ -29,9 +26,7 @@ module DuplicateReviewCases
       assert_equal 'keep_separate', event.metadata['resolution_determination']
     end
 
-    # `resolution_action` is no longer written. The consumer inventory found no reader anywhere, so
-    # 5c-2 stops emitting it rather than deriving a replacement value nobody consumes. Historical
-    # events keep whatever they recorded.
+    # `resolution_action` had no reader, so new events omit it. Old events keep their value.
     test 'the resolution audit event no longer carries resolution_action' do
       resolve
 
@@ -39,9 +34,8 @@ module DuplicateReviewCases
       assert_not event.metadata.key?('resolution_action')
     end
 
-    # There is no path from this service to same_person_confirmed. Recording "these are one
-    # identity" without consolidating the records would release submission while knowingly keeping
-    # the duplicate, so it belongs to Users::DuplicateMergeService, atomically with the merge.
+    # same_person_confirmed without a merge would release submission and keep the duplicate.
+    # Only Users::DuplicateMergeService records it, in the same transaction as the merge.
     test 'this service cannot record same_person_confirmed' do
       assert_equal 'keep_separate', DuplicateReviewCases::ResolutionService::NON_MERGE_DETERMINATION
       assert_raises(ArgumentError) do
@@ -52,8 +46,7 @@ module DuplicateReviewCases
       end
     end
 
-    # The status is server-owned alongside the determination: every non-merge resolution records
-    # `resolved_ignored`, so there is no input that could steer it elsewhere.
+    # The service also owns the status. Every non-merge resolution records `resolved_ignored`.
     test 'a resolution records the server-owned status and clears the review flag' do
       original_phone = @subject.phone
       result = nil
@@ -71,16 +64,14 @@ module DuplicateReviewCases
                    'a non-merge resolution moves no contact facts'
     end
 
-    # `resolved_approved` stays mapped on the model so historical rows keep rendering, but nothing
-    # writes it any more.
+    # The model keeps `resolved_approved` for old rows, but nothing writes it.
     test 'nothing records resolved_approved' do
       assert_equal :resolved_ignored, ResolutionService::NON_MERGE_STATUS
       resolve
       assert_equal 'resolved_ignored', @review_case.reload.status
     end
 
-    # The action is not an accepted input, so a stale caller cannot select a retired outcome and
-    # have it quietly honoured.
+    # A stale caller cannot select a retired outcome.
     test 'this service takes no action parameter' do
       assert_raises(ArgumentError) do
         ResolutionService.new(
@@ -106,10 +97,8 @@ module DuplicateReviewCases
       assert_equal 'open', @review_case.reload.status
     end
 
-    # Reason codes land in immutable resolution metadata and audit evidence, so they are checked
-    # against a server-owned vocabulary. Validating in preflight (not only at the model) matters
-    # here: resolve_case! writes with update!, and #call rescues StaleCaseError only, so a
-    # model-level rejection would surface as an unhandled RecordInvalid rather than a failure.
+    # Preflight must reject bad codes. #call rescues only StaleCaseError, so a model rejection
+    # from update! would raise RecordInvalid instead of a failure result.
     test 'rejects a reason code outside the server-owned vocabulary' do
       result = resolve(reason_codes: ['name_dob', 'free text'])
       assert result.failure?
@@ -136,12 +125,8 @@ module DuplicateReviewCases
       assert @subject.reload.needs_duplicate_review
     end
 
-    # The review flag and the submission gate are recomputed from different sets and are not
-    # synonyms: the flag counts open cases of *any* source, while the gate counts only open
-    # `registration_soft_match` cases. Each half is covered elsewhere -- the flag above, the gate's
-    # source filter in ApplicationCreatorTest -- but only together do they pin the divergence, which
-    # is the state the resolving admin actually leaves behind. Documentation asserted the opposite
-    # (that a remaining case holds both) through PR198, so this asserts both in one sequence.
+    # The review flag counts open cases of any source. The submission gate counts only open
+    # `registration_soft_match` cases. This test asserts both after one resolution.
     test 'resolving the last registration case releases the submission gate while another source keeps the flag' do
       open_case_for(@subject, source: :paper_intake)
 
@@ -159,11 +144,8 @@ module DuplicateReviewCases
       end
     end
 
-    # A subject can hold several open cases at once, so an admin can resolve two of them inside
-    # AuditEventService::DEDUP_WINDOW. The fingerprint must carry the case id: without it both
-    # events collapse to the bare action name for the same auditable and the second resolution
-    # loses its audit event. Deliberately not time-travelled -- the point is that the real window
-    # is in force.
+    # Two resolutions for one subject can occur in AuditEventService::DEDUP_WINDOW. Without the
+    # case id in the fingerprint, the second event is dropped. No time travel, so the real window applies.
     test 'resolving two cases for the same subject records an audit event for each' do
       second_case = open_case_for(@subject)
 

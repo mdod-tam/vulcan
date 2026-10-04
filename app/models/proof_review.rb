@@ -1,13 +1,11 @@
 # frozen_string_literal: true
 
-# Manages the review process for income and residency proof documents.
-# Medical certification uses a separate workflow even though it shares this model.
+# Admin review of an income, residency, or ID proof.
+# Medical certification reviews also use this model, but skip its rejection and notification side effects.
 class ProofReview < ApplicationRecord
-  # Associations
   belongs_to :application
   belongs_to :admin, -> { where(type: 'Users::Administrator') }, class_name: 'User'
 
-  # Enums (using the original syntax to avoid argument errors)
   enum :proof_type, { income: 0, residency: 1, medical_certification: 2, id: 3 }, prefix: true
   enum :status, { approved: 0, rejected: 1 }, prefix: true
   enum :submission_method, { web: 0, email: 1, scanned: 2, paper: 3, secure_form: 4 }, prefix: true
@@ -22,7 +20,6 @@ class ProofReview < ApplicationRecord
     REVIEWABLE_PROOF_TYPES.include?(proof_type.to_s)
   end
 
-  # Validations
   validates :proof_type, presence: true
   validates :status, presence: true
   validates :reviewed_at, presence: true
@@ -31,11 +28,9 @@ class ProofReview < ApplicationRecord
   validate :proof_must_be_attached, if: :should_validate_proof_attachment?
   validate :admin_must_be_admin_type
 
-  # Callbacks
   before_validation :set_reviewed_at, on: :create
   after_commit :handle_post_review_actions, on: :create
 
-  # Scopes
   scope :recent, -> { order(created_at: :desc) }
   scope :by_admin, ->(admin_id) { where(admin_id: admin_id) }
   scope :rejections, -> { where(status: :rejected) }
@@ -65,26 +60,18 @@ class ProofReview < ApplicationRecord
   end
 
   def should_validate_proof_attachment?
-    # Medical certification rejections are allowed without an uploaded attachment.
+    # A rejected medical certification or paper proof can have no attachment, in all environments.
     return false if status_rejected? && proof_type_medical_certification?
-
-    # Don't validate proof attachment for paper submissions with rejected proofs
-    # This check is the highest priority and applies in all environments
     return false if status_rejected? && submission_method_paper?
 
-    # Skip validation in test environment unless explicitly enabled
+    # Tests skip this validation unless VALIDATE_PROOF_ATTACHMENTS=true.
     return false if Rails.env.test? && ENV['VALIDATE_PROOF_ATTACHMENTS'] != 'true'
-
-    # For all other cases in production, validate the attachment
     return true if Rails.env.production?
-
-    # In development/test, only validate for approved proofs
     return true if status_approved?
 
-    # For rejected proofs in non-production, be more lenient
+    # Development and test accept a rejection with no attachment. Other non-production environments do not.
     return false if status_rejected? && Rails.env.local?
 
-    # Default to validating
     true
   end
 
@@ -140,7 +127,7 @@ class ProofReview < ApplicationRecord
     # Medical certification reviews have their own provider notification flow.
     return if proof_type_medical_certification?
 
-    # Skip if associations aren't loaded properly
+    # Skip when the applicant or the admin record is missing.
     return unless application&.user.present? && admin.present?
 
     status_rejected? ? request_proof_resubmission : send_approval_notification
@@ -166,9 +153,9 @@ class ProofReview < ApplicationRecord
     log_resubmission_request_failure(e.class.name)
   end
 
-  # The rejection stands even when its secure link cannot be sent. Record that
-  # durably so staff can follow up; no fallback recipient is guessed.
-  # delivery_suppressed marks an email the email controls stopped on purpose, not a failure to deliver.
+  # The rejection stands when its secure link cannot be sent. This audit event lets staff follow up.
+  # This method does not try a different recipient.
+  # delivery_suppressed means that the email controls stopped the email on purpose. It is not a delivery failure.
   def log_resubmission_request_failure(reason, delivery_suppressed: false)
     AuditEventService.log(
       action: 'proof_resubmission_request_failed',
@@ -195,9 +182,8 @@ class ProofReview < ApplicationRecord
     )
   end
 
-  # Creates a record-only notification for Recent Notifications.
-  # Approval mail/letters are intentionally suppressed; constituents can see
-  # proof status in the portal and staff can see the audit event.
+  # Records a notification for Recent Notifications, but sends no email or letter.
+  # Constituents see the proof status in the portal. Staff see the audit event.
   def send_approval_notification
     AuditEventService.log(
       action: 'proof_approved',
@@ -206,8 +192,7 @@ class ProofReview < ApplicationRecord
       metadata: { proof_type: proof_type }
     )
 
-    # Send the notification with Application as notifiable to maintain consistency
-    # with existing queries that filter by notifiable_type: 'Application'
+    # Queries filter on notifiable_type: 'Application', so the notifiable must be the application.
     NotificationService.create_and_deliver!(
       type: 'proof_approved',
       recipient: proof_approval_recipient,
@@ -219,7 +204,7 @@ class ProofReview < ApplicationRecord
     )
   rescue StandardError => e
     Rails.logger.error "Failed to send proof_approved notification via NotificationService: #{e.message}"
-    # Don't re-raise - notification errors shouldn't fail the whole operation
+    # A notification error must not fail the review.
   end
 
   def proof_approval_recipient
@@ -252,7 +237,8 @@ class ProofReview < ApplicationRecord
   end
 
   def send_max_rejections_warning
-    # Log the audit event - EventDeduplicationService will handle preventing duplicates in audit log display
+    # Each rejection at a total of 8 or more logs and sends a new warning.
+    # Audit displays merge duplicates only within one 1-minute bucket (EventDeduplicationService).
     AuditEventService.log(
       action: 'max_rejections_warning',
       actor: admin,
@@ -260,7 +246,6 @@ class ProofReview < ApplicationRecord
       metadata: { recipient_id: User.admins.first.id }
     )
 
-    # Send the notification
     NotificationService.create_and_deliver!(
       type: 'max_rejections_warning',
       recipient: User.admins.first,

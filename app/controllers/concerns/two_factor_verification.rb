@@ -1,12 +1,7 @@
 # frozen_string_literal: true
 
-# This module handles verification of multiple 2FA credential types:
-# - WebAuthn (security keys and biometric authenticators)
-# - TOTP (time-based one-time passwords from authenticator apps)
-# - SMS (text message verification codes)
-#
-# The module integrates with the TwoFactorAuth service module for logging
-# and session management, ensuring consistent behavior across the application.
+# Verifies WebAuthn, TOTP, and SMS second factors. TwoFactorAuth
+# (config/initializers/two_factor_auth.rb) owns the session keys and logs.
 module TwoFactorVerification
   extend ActiveSupport::Concern
 
@@ -79,7 +74,6 @@ module TwoFactorVerification
 
   private
 
-  # Base verification method with common user validation
   def with_verified_user(_credential_type)
     user_for_2fa = find_user_for_two_factor
     return [false, :user_session] unless user_for_2fa
@@ -87,7 +81,6 @@ module TwoFactorVerification
     yield(user_for_2fa)
   end
 
-  # WebAuthn specific verification
   def verify_webauthn_challenge(params, user)
     webauthn_credential = WebAuthn::Credential.from_get(params)
     stored_credential = user.webauthn_credentials.find_by(external_id: webauthn_credential.id)
@@ -115,7 +108,6 @@ module TwoFactorVerification
     [true, 'Verification successful']
   end
 
-  # TOTP specific verification
   def verify_totp_code(code, user)
     user.totp_credentials.each do |credential|
       totp = ROTP::TOTP.new(credential.secret)
@@ -123,7 +115,7 @@ module TwoFactorVerification
 
       credential.update(last_used_at: Time.current)
       log_verification_success(user.id, :totp, credential_id: credential.id)
-      return [true, 'Verification successful'] # Let the controller handle completion
+      return [true, 'Verification successful'] # The controller completes sign-in.
     end
 
     log_verification_failure(user.id, :totp, 'Invalid code', credential_ids: user.totp_credentials.pluck(:id))
@@ -153,7 +145,7 @@ module TwoFactorVerification
     if result[:success] && result[:status] == 'approved'
       challenge.clear!
       log_verification_success(user_for_2fa.id, :sms, credential_id: credential.id)
-      [true, 'Verification successful'] # Let the controller handle completion
+      [true, 'Verification successful'] # The controller completes sign-in.
     elsif result[:success]
       challenge.clear! if challenge.terminal_status?(result[:status])
       error_msg = result[:error] || 'Invalid code'
@@ -179,44 +171,38 @@ module TwoFactorVerification
 
   protected
 
-  # Shared helper methods for credential management
-
-  # Helper method to validate phone numbers
   def valid_phone_number?(phone)
-    # Basic validation (could use a gem like phonelib for better validation)
+    # Only counts digits. It does not validate the number format.
     phone.present? && phone.gsub(/\D/, '').length >= 10
   end
 
-  # Validates TOTP secret to prevent XSS - uses ROTP's own validation
+  # Returns nil unless the secret is Base32. The secret goes into HTML and URLs, so
+  # the character limit prevents XSS.
   def validate_base32_secret(secret)
     return nil if secret.blank?
 
-    # Ensure secret is a string and contains only valid Base32 characters
     secret = secret.to_s.strip
     return nil unless secret.match?(/\A[A-Z2-7]+\z/)
 
-    # Use ROTP to validate the secret format
     ROTP::Base32.decode(secret)
     secret
   rescue ArgumentError, ROTP::Base32::Base32Error
     nil
   end
 
-  # Get a validated TOTP secret, never using params directly
+  # Returns the params secret if it is valid Base32. The failed setup redirect sends one.
+  # Otherwise returns a new random secret.
   def get_validated_totp_secret(param_secret)
-    # Use the secret from params if provided (for redirects after failed verification),
-    # otherwise generate a new one. Always validate secret to prevent XSS.
     if param_secret.present?
       validated_secret = validate_base32_secret(param_secret)
-      validated_secret || ROTP::Base32.random # Fallback if validation fails
+      validated_secret || ROTP::Base32.random
     else
       ROTP::Base32.random
     end
   end
 
-  # Generate QR code with validated secret only
+  # Callers must set @secret to a validated secret first.
   def generate_totp_qr_code
-    # Only use the validated @secret instance variable
     @totp_uri = ROTP::TOTP.new(@secret, issuer: 'MatVulcan').provisioning_uri(current_user.mfa_account_name)
     @qr_code = RQRCode::QRCode.new(@totp_uri).as_svg(
       color: '000',
@@ -251,7 +237,7 @@ module TwoFactorVerification
     TwoFactor::SmsLoginChallenge.new(session: session, credential: credential)
   end
 
-  # WebAuthn credential creation options for platform authenticators (biometrics)
+  # Platform authenticators (biometrics).
   def build_platform_create_options
     WebAuthn::Credential.options_for_create(
       user: {
@@ -267,7 +253,7 @@ module TwoFactorVerification
     )
   end
 
-  # WebAuthn credential creation options for cross-platform authenticators (security keys)
+  # Cross-platform authenticators (security keys).
   def build_cross_platform_create_options
     WebAuthn::Credential.options_for_create(
       user: {
@@ -278,7 +264,6 @@ module TwoFactorVerification
     )
   end
 
-  # Shared response handling patterns
   def respond_with_authentication_required
     respond_to do |format|
       format.html { redirect_to sign_in_path }
@@ -309,7 +294,7 @@ module TwoFactorVerification
     end
   end
 
-  # WebAuthn options generation with common response handling
+  # Returns false and renders nothing if the user has no WebAuthn credentials.
   def generate_webauthn_verification_options(user)
     return false unless user&.webauthn_credentials&.any?
 
@@ -334,7 +319,6 @@ module TwoFactorVerification
     end
   end
 
-  # Shared authentication flow validation
   def ensure_two_factor_auth_in_progress # rubocop:disable Naming/PredicateMethod
     return true if two_factor_auth_in_progress?
 
@@ -342,7 +326,6 @@ module TwoFactorVerification
     false
   end
 
-  # Shared user finding with validation
   def find_and_validate_2fa_user
     user = find_user_for_two_factor
     return user if user

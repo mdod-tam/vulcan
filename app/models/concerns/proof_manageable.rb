@@ -24,20 +24,16 @@ module ProofManageable
     after_save :set_needs_review_timestamp, if: :proof_attachments_changed?
   end
 
-  # Checks if all required proofs have been approved (delegates to Application predicate)
-  # @return [Boolean] true if all required proofs are approved
+  # Alias of Application#required_proofs_approved?.
   def all_proofs_approved?
     required_proofs_approved?
   end
 
-  # Checks if all currently required proofs for DCF request have been approved
-  # @return [Boolean] true if required proofs are approved
+  # Alias of Application#required_proofs_approved? for the DCF escalation trigger.
   def required_proofs_for_dcf_approved?
     required_proofs_approved?
   end
 
-  # Checks if the application can submit proof documents
-  # @return [Boolean] true if application is in a valid state for proof submission
   def can_submit_proof?
     !status_archived? && !status_approved?
   end
@@ -57,7 +53,7 @@ module ProofManageable
     public_send("#{proof_type}_proof_status_rejected?")
   end
 
-  # Updates proof status directly (for testing and admin operations)
+  # Writes the status with no review record or audit. Only tests call it now.
   # @param proof_type [String] The type of proof ('income' or 'residency')
   # @param status [String] The new status ('approved', 'rejected', 'not_reviewed')
   def update_proof_status!(proof_type, status)
@@ -77,9 +73,9 @@ module ProofManageable
   end
   # rubocop:enable Naming/PredicateMethod
 
-  # Purges all proof attachments (admin action)
-  # @param admin_user [User] The admin user performing the purge
-  # @return [Boolean] true if purge succeeded, false otherwise
+  # Purges all proof attachments. Resets only the income and residency statuses.
+  # @param admin_user [User] must be an admin
+  # @return [Boolean] false if the purge fails
   def purge_proofs(admin_user)
     # TODO: Create ProofPurgeService to handle this logic
     raise ArgumentError, 'Admin user required' unless admin_user&.admin?
@@ -97,9 +93,7 @@ module ProofManageable
     false
   end
 
-  # Purges a specific rejected proof attachment
-  # Called by ProofReviewer after setting status to rejected
-  # @param proof_type_key [String] The type of proof to purge
+  # Applications::ProofReviewer calls this after it sets the rejected status.
   def purge_rejected_proof(proof_type_key)
     attachment_name = :"#{proof_type_key}_proof"
     attachment = public_send(attachment_name)
@@ -112,7 +106,7 @@ module ProofManageable
 
   private
 
-  # Validates that required proofs are attached when needed
+  # A rejected proof can have no attachment until the constituent resubmits.
   def require_proof_attachments
     return if new_record? || status_draft?
 
@@ -125,8 +119,6 @@ module ProofManageable
     errors.add(:residency_proof, 'must be attached. Please upload your proof of Maryland residency.')
   end
 
-  # Determines if proof attachment validations should be required
-  # @return [Boolean] true if validations should run
   def require_proof_validations?
     return false if skip_validation_contexts?
     return false if new_record? || status_draft?
@@ -147,8 +139,6 @@ module ProofManageable
     saved_change_to_status? && status_before_last_save == 'draft'
   end
 
-  # Detects if proof attachments have changed
-  # @return [Boolean] true if attachments were recently changed
   def proof_attachments_changed?
     return false if new_record?
 
@@ -161,7 +151,7 @@ module ProofManageable
     false
   end
 
-  # Sets the needs_review_since timestamp when proofs are attached
+  # update! runs after_save again. The flag stops that recursion.
   def set_needs_review_timestamp
     return if @setting_review_timestamp
     return if Current.proof_attachment_service_context?

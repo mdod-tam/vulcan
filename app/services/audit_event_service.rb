@@ -1,27 +1,24 @@
 # frozen_string_literal: true
 
-# app/services/audit_event_service.rb
 class AuditEventService < BaseService
-  # Time window for preventing duplicate event creation.
-  # EventDeduplicationService handles sophisticated deduplication for display purposes.
+  # This window suppresses matching stored events. EventDeduplicationService deduplicates events for display.
   DEDUP_WINDOW = 5.seconds
 
-  # Logs a distinct system event and prevents duplicates within the DEDUP_WINDOW.
+  # Logs an event, or returns nil when deduplication suppresses a matching event within DEDUP_WINDOW.
   #
-  # @param action [String] The specific action being performed (e.g., 'proof_approved').
-  # @param actor [User] The user performing the action.
-  # @param auditable [ApplicationRecord, nil] The primary record being acted upon (optional).
+  # @param action [String] The action (e.g., 'proof_approved').
+  # @param actor [User] The user who performs the action.
+  # @param auditable [ApplicationRecord, nil] The primary record for the action (optional).
   # @param metadata [Hash] Additional context for the event.
-  # @param created_at [Time] (Optional) The timestamp for the event, for testing purposes.
-  # @return [Event, nil] The created Event record or nil if deduplicated.
+  # @param created_at [Time] The optional timestamp for tests.
+  # @return [Event, nil] The new event, or nil if deduplication suppresses it.
   def self.log(action:, actor:, auditable: nil, metadata: {}, created_at: nil)
-    # TODO: for more robustness add a partial unique index in the database on
-    # (action, auditable_type, auditable_id) for recent events.
+    # TODO: Add a partial unique index on (action, auditable_type, auditable_id) for recent events.
 
-    # Skip deduplication for application_created - these should always be logged
+    # application_created must retain a separate audit event for each creation.
     skip_deduplication_actions = %w[application_created]
 
-    # Skip deduplication if auditable is nil (can't dedupe without record reference)
+    # Deduplication requires an auditable record.
     should_check_duplicates = auditable.present? && skip_deduplication_actions.exclude?(action.to_s)
 
     if should_check_duplicates && recent_duplicate_exists?(action: action, auditable: auditable, metadata: metadata)
@@ -29,7 +26,7 @@ class AuditEventService < BaseService
       return nil
     end
 
-    # Use reverse_merge to ensure caller-provided metadata is not overwritten; namespace internal keys to avoid conflicts.
+    # Caller metadata takes precedence over service metadata. Internal keys use a separate namespace.
     final_metadata = metadata.reverse_merge(
       __service_generated: true
     )
@@ -41,10 +38,8 @@ class AuditEventService < BaseService
       metadata: final_metadata
     }
 
-    # Only set created_at if it's provided, primarily for testing
     event_attributes[:created_at] = created_at if created_at.present?
 
-    # Debug log for application_created events
     if action.to_s == 'application_created' && auditable.present?
       Rails.logger.debug { "AuditEventService: Creating application_created event for application #{auditable.id}" }
       Rails.logger.debug { "Metadata: #{final_metadata.inspect}" }
@@ -52,7 +47,6 @@ class AuditEventService < BaseService
 
     event = Event.create!(event_attributes)
 
-    # Debug for application_created event
     if action.to_s == 'application_created' && auditable.present? && event.persisted?
       Rails.logger.debug { "AuditEventService: Successfully created event #{event.id} for application #{auditable.id}" }
     end
@@ -61,16 +55,14 @@ class AuditEventService < BaseService
   rescue ActiveRecord::RecordInvalid => e
     Rails.logger.error "AuditEventService: Failed to log event: #{e.message}"
     Rails.logger.error "Event attributes: #{event_attributes.inspect}"
-    raise # Re-raise the exception to make it visible in tests
+    raise # Expose invalid events to callers and tests.
   end
 
-  # Checks if a similar event for the same record was created within the DEDUP_WINDOW.
-  # Enhanced to consider metadata differences to allow legitimate different events.
+  # Matches action, auditable, and fingerprint within DEDUP_WINDOW.
+  # Metadata differences can identify separate events.
   def self.recent_duplicate_exists?(action:, auditable:, metadata: {})
-    # Skip deduplication if auditable is nil
     return false if auditable.nil?
 
-    # Create a fingerprint that includes meaningful metadata differences
     fingerprint = create_event_fingerprint(action, metadata)
 
     Event.where(action: action.to_s, auditable: auditable)
@@ -78,22 +70,21 @@ class AuditEventService < BaseService
          .any? { |event| create_event_fingerprint(event.action, event.metadata) == fingerprint }
   end
 
-  # Create a fingerprint that distinguishes between meaningfully different events
+  # These fingerprints select the metadata that affects deduplication.
   def self.create_event_fingerprint(action, metadata) # rubocop:disable Metrics/CyclomaticComplexity, Metrics/PerceivedComplexity
     base = action.to_s
 
-    # A caller that names its mutation gets one event per mutation, however close together;
-    # a retry of that same mutation reuses the id and is suppressed.
+    # Different operation IDs retain separate audit events within DEDUP_WINDOW.
+    # A retry with the same ID uses the same fingerprint.
     operation_id = metadata['operation_id'] || metadata[:operation_id]
     return "#{base}_operation_#{operation_id}" if operation_id.present?
 
-    # For proof submission events, include proof_type and submission_method
     if action.to_s.include?('proof_submitted') || action.to_s.include?('proof_attached')
       proof_type = metadata['proof_type'] || metadata[:proof_type]
       submission_method = metadata['submission_method'] || metadata[:submission_method]
       blob_id = metadata['blob_id'] || metadata[:blob_id]
 
-      # Include blob_id for proof attachment events to ensure we only create one event per actual attachment
+      # The blob ID distinguishes separate attachments of the same proof type.
       if action.to_s.include?('proof_attached') && blob_id
         return "#{base}_#{proof_type}_blob_#{blob_id}"
       elsif proof_type && submission_method
@@ -101,35 +92,26 @@ class AuditEventService < BaseService
       end
     end
 
-    # For profile and contact field update events, include which fields changed AND their new values
-    # This allows different changes to the same fields while deduplicating identical saves
     if action.to_s.include?('profile_updated') ||
        %w[profile_created_by_admin_via_paper alternate_contact_updated medical_provider_info_updated].include?(action.to_s)
       changes = metadata['changes'] || metadata[:changes]
       if changes.present?
-        # Create fingerprint based on fields + new values to distinguish different actual changes
-        # Hash the values to keep fingerprint size reasonable
+        # Field names and the first 51 characters of string-keyed 'new' values distinguish these changes.
+        # A hash limits the fingerprint size.
         changes_hash = changes.map { |k, v| "#{k}:#{v['new'].to_s[0..50]}" }.sort.join('|')
         fingerprint_hash = Digest::MD5.hexdigest(changes_hash)
         return "#{base}_#{fingerprint_hash}"
       end
     end
 
-    # For duplicate merges, include the merged (retired) user id. Without this, the
-    # fingerprint collapses to just the action name, so a second merge into the same
-    # canonical user within the dedup window would silently suppress its required
-    # audit event even though the merge itself succeeded.
+    # The retired user ID keeps separate merges into one canonical user distinct within DEDUP_WINDOW.
     if action.to_s == 'duplicate_user_merged'
       merged_user_id = metadata['merged_user_id'] || metadata[:merged_user_id]
       return "#{base}_#{merged_user_id}" if merged_user_id.present?
     end
 
-    # For duplicate review case events, include the case id. One subject can hold several open
-    # cases at once -- DuplicateReviewCases::CreateService keys deduplication on
-    # (source, subject, reason_codes, candidate_ids), so cases from different sources or with
-    # different candidate sets coexist by design. Without the id the fingerprint collapses to just
-    # the action name, and a second case event for the same subject within the dedup window would
-    # silently suppress its audit event even though the open or resolution itself succeeded.
+    # DuplicateReviewCases::CreateService keys cases by source, subject, reason codes, and candidate IDs.
+    # One subject can therefore hold several open cases. Their IDs keep audit events distinct within DEDUP_WINDOW.
     if %w[
       duplicate_review_case_opened
       duplicate_review_case_resolved
@@ -140,8 +122,8 @@ class AuditEventService < BaseService
       return "#{base}_#{review_case_id}" if review_case_id.present?
     end
 
-    # For feature flag toggles, include flag name, old/new values, and actor.
-    # Use key?-based lookup because || collapses `false` to nil after JSON round-trip.
+    # Flag toggles distinguish the flag, old and new values, and actor.
+    # key? retains false after a JSON round trip. A || lookup would replace false with nil.
     if action.to_s == 'feature_flag_toggled'
       flag_name = metadata.key?('flag_name') ? metadata['flag_name'] : metadata[:flag_name]
       old_val   = metadata.key?('old_value') ? metadata['old_value'] : metadata[:old_value]
@@ -166,10 +148,6 @@ class AuditEventService < BaseService
       return "#{base}_#{form_id || request_batch_id}" if form_id.present? || request_batch_id.present?
     end
 
-    # Distinct follow-up failures on one application are distinct events. Fingerprinting them by
-    # action alone made the second one within the dedup window look like a repeat of the first, so a
-    # notification failure and a proof-delivery failure collapsed into one record and staff were
-    # told about only half of what went wrong.
     if action.to_s == 'w9_details_changed'
       changed_fields = metadata['changed_fields'] || metadata[:changed_fields]
       return "#{base}_#{Array(changed_fields).sort.join('_')}" if changed_fields.present?
@@ -180,12 +158,12 @@ class AuditEventService < BaseService
       return "#{base}_#{proof_review_id}" if proof_review_id.present?
     end
 
+    # A notification failure and a proof delivery failure must retain separate audit events within DEDUP_WINDOW.
     if action.to_s == 'application_post_creation_step_failed'
       step = metadata['step'] || metadata[:step]
       return "#{base}_#{step}" if step.present?
     end
 
-    # For other events, use just the base action
     base
   end
 

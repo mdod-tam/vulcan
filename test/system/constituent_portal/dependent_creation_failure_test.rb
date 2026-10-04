@@ -4,10 +4,10 @@ require 'application_system_test_case'
 require Rails.root.join('test/support/system_test_evidence')
 
 module ConstituentPortal
-  # Visible evidence for the failed-creation re-render. Rollback restores the attempted dependent
-  # to a new record while keeping the synthetic contact the guardian strategy wrote into it, so
-  # re-rendering that object would put internal placeholders in front of the guardian and let an
-  # unchanged retry store them as dependent-owned contact.
+  # Visible evidence for the failed-creation re-render. Rollback returns the attempted dependent to
+  # a new record but keeps the synthetic contact that the guardian strategy wrote. A re-render of
+  # that object would show internal placeholders, and an unchanged retry would store them as
+  # dependent-owned contact.
   class DependentCreationFailureTest < ApplicationSystemTestCase
     include SystemTestEvidence
 
@@ -51,10 +51,9 @@ module ConstituentPortal
       click_button 'Add Dependent'
       assert_text 'Dependent was successfully created.'
 
-      # A genuine second POST of the same request: identical body, and the key the first submission
-      # carried. A guardian reaches this when the first response never lands and the browser or the
-      # user resends. The browser driver will not replay a request on its own, so the rendered form is set
-      # back to that key rather than the fresh one this page was issued.
+      # A real second POST of the same request: identical body and the first submission's key. A
+      # guardian gets here when the first response is lost and the browser or user resends. The
+      # driver cannot replay a request, so the test puts the old key back into the new form.
       visit new_constituent_portal_dependent_path
       fill_replay_form
       execute_script(
@@ -68,9 +67,9 @@ module ConstituentPortal
       take_evidence_screenshot('dependent-create-replay-already-added', full: true, html: true)
     end
 
-    # A reused key carrying changed input is a different operation, so it must refuse rather than
-    # report success while discarding the change. Contact details are the sharp case: a guardian who
-    # corrected an email and saw "already added" would reasonably believe it applied.
+    # A reused key with changed input is a different operation. It must be refused, not reported as
+    # success with the change discarded. A guardian who corrected an email and saw "already added"
+    # would believe the correction applied.
     test 'a reused key with changed input is refused as a stale form' do
       visit new_constituent_portal_dependent_path
       fill_replay_form
@@ -92,9 +91,9 @@ module ConstituentPortal
       take_evidence_screenshot('dependent-create-fingerprint-conflict', full: true, html: true)
     end
 
-    # Asserting the data attribute proves only that the label was rendered. The state that matters is
-    # the one the guardian actually sees, so this holds the response open, clicks without waiting,
-    # and captures the control while it is genuinely disabled and reading its in-flight label.
+    # The data attribute proves only that the label was rendered. To capture what the guardian sees,
+    # this holds the response open, clicks without waiting, and captures the control while it is
+    # disabled and shows its in-flight label.
     test 'the submit control shows its localized in-flight state while the request is open' do
       hold = held_creation_response
 
@@ -125,12 +124,11 @@ module ConstituentPortal
       settle_click(clicker, hold)
     end
 
-    # No Spanish in-flight capture: the portal has no locale switching for signed-in users. I18n
-    # locale is resolved only in public auth flows (ApplicationController#with_public_request_locale),
-    # so a constituent with locale 'es' still renders in the default locale. The es translations
-    # below are correct and consistent with the other constituent-facing keys, but nothing routes a
-    # signed-in guardian to them today. Tracked in docs/future_work/mat_vulcan_todos.md under
-    # "Signed-in portal locale routing" rather than asserted here.
+    # No Spanish in-flight capture: the portal has no locale switching for signed-in users. Only
+    # public flows resolve the I18n locale (ApplicationController#with_public_request_locale), so a
+    # constituent with locale 'es' sees the default locale. The es translations exist, but nothing
+    # routes a signed-in guardian to them. Tracked in docs/future_work/mat_vulcan_todos.md under
+    # "Signed-in portal locale routing".
 
     test 'adding a dependent the guardian already holds is refused with a route forward' do
       existing = create(:constituent, first_name: 'Repeat', last_name: 'Child',
@@ -188,10 +186,10 @@ module ConstituentPortal
     end
 
     # The harder case: the guardian types dependent contact and *then* chooses "use mine". The
-    # portal form has no guardian-contact JS targets, so the typed values stay in the fields and
-    # are submitted. Inferring the checkbox from contact blankness on the failed re-render would
-    # flip both choices, and an unchanged retry would route this dependent's communications to the
-    # dependent instead of the guardian.
+    # portal form has no guardianEmail or guardianPhone targets, so the typed values stay and are
+    # submitted. If the re-render inferred the checkboxes from blank contact, it would flip both
+    # choices. An unchanged retry would then send this dependent's communications to the dependent,
+    # not to the guardian.
     test 'a failed creation preserves the guardian choice even when dependent contact was typed first' do
       DuplicateReviewCases::CreateService.any_instance.stubs(:call).returns(
         BaseService::Result.new(success: false, message: 'case creation failed', data: {})
@@ -226,12 +224,9 @@ module ConstituentPortal
 
     private
 
-    # Holds the server inside the action so the browser stays in its submitting state long enough to
-    # observe and photograph. Released in an ensure block so a failure cannot wedge the suite.
-    # Releases the held action and waits for the click thread to finish before returning, so
-    # teardown cannot restore the aliased controller method while a request is still inside it --
-    # which would either raise in that thread or leak the alias into the next test. #value re-raises
-    # anything the thread hit, so a broken click surfaces instead of vanishing.
+    # Releases the held action and waits for the click thread. Teardown must not restore the aliased
+    # method while a request is inside it: that would raise in the thread or leak the alias into the
+    # next test. #value re-raises any thread error, so a broken click is not lost.
     def settle_click(clicker, hold)
       hold&.push(:go)
       clicker&.value
@@ -245,6 +240,8 @@ module ConstituentPortal
       hold_controller_action(ConstituentPortal::DependentsController, :update)
     end
 
+    # Holds the server inside the action, so the browser stays in its submitting state long enough to
+    # observe and capture. Callers release it from an ensure block, so a failure cannot hang the suite.
     def hold_controller_action(controller_class, action)
       gate = Queue.new
       controller_class.class_eval do

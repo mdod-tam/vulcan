@@ -1,48 +1,38 @@
 # frozen_string_literal: true
 
-# Concern for handling user authentication, password management, and session tracking.
+# Password, lockout, sign-in tracking, password reset, and second-factor state for User.
 module UserAuthentication
   extend ActiveSupport::Concern
 
-  # Constants
   MAX_LOGIN_ATTEMPTS = 5
   PASSWORD_RESET_EXPIRY = 20.minutes
   LOCK_DURATION = 1.hour
 
   included do
-    # Define the password accessors first. Rails' has_secure_password installs its own
-    # password-salt token definition, so our stronger password-plus-email definition
-    # must be registered afterward.
+    # has_secure_password defines its own :password_reset token from the password salt.
+    # Register the stronger definition below after it, so that ours replaces it.
     has_secure_password
 
-    # Token generation for password reset. Bound to a fingerprint of the password digest plus
-    # *every* contact route a reset link can be delivered to -- normalized login email and
-    # normalized phone -- not the digest alone. A password change, a login-email change, or a
-    # phone change therefore invalidates outstanding tokens. The phone half matters because a
-    # reset link is also delivered by SMS: without it, a merge that replaced a survivor's phone
-    # left the token already texted to the discarded number valid for its full lifetime, even
-    # though that merge is precisely the admin action declaring the number is not this person's.
-    # Revocation, not issuance ordering, is what makes an already-sent link safe. This is a
-    # distinct mechanism from clearing the legacy reset_password_token/reset_password_sent_at
-    # columns on retirement; the two must not be conflated.
+    # The token binds to the password digest and to each route that can receive a reset link:
+    # the login email and the phone. A change to any of them revokes links already sent.
+    # The phone is necessary because SMS also delivers reset links. For example, a duplicate merge
+    # that replaces a phone must revoke the link sent to the discarded number.
+    # This is separate from clearing the legacy reset_password_token and reset_password_sent_at
+    # columns on retirement. Do not combine the two mechanisms.
     generates_token_for :password_reset, expires_in: 20.minutes do
       password_reset_token_fingerprint
     end
 
-    # Associations
     has_many :sessions, dependent: :destroy
 
-    # Two-Factor Authentication Associations
     has_many :webauthn_credentials, dependent: :destroy
     has_many :totp_credentials, dependent: :destroy
     has_many :sms_credentials, dependent: :destroy
 
-    # Validations
     validates :password, length: { minimum: 8 }, if: -> { password.present? }
     validates :reset_password_token, uniqueness: true, allow_nil: true
   end
 
-  # Class methods
   class_methods do
     def digest(string)
       cost = ActiveModel::SecurePassword.min_cost ? BCrypt::Engine::MIN_COST : BCrypt::Engine.cost
@@ -50,7 +40,6 @@ module UserAuthentication
     end
   end
 
-  # Authentication methods
   def account_locked?
     return false if locked_at.blank?
     return true if locked_at > LOCK_DURATION.ago
@@ -62,8 +51,7 @@ module UserAuthentication
   def record_failed_login!
     next_attempt_count = failed_attempts.to_i + 1
 
-    # Failed login counters are auth bookkeeping and should not be blocked by
-    # unrelated legacy profile validations.
+    # Skip validations so that invalid legacy profile data cannot block the failed-login count.
     # rubocop:disable Rails/SkipsModelValidations
     update_columns(
       failed_attempts: next_attempt_count,
@@ -80,9 +68,8 @@ module UserAuthentication
       return false
     end
 
-    # Sign-in tracking should not be blocked by unrelated legacy profile validations.
-    # No auth state transition callbacks depend on these audit columns, and updated_at
-    # is maintained explicitly here.
+    # Skip validations so that invalid legacy profile data cannot block sign-in tracking.
+    # No callbacks depend on these columns. This code sets updated_at itself.
     # rubocop:disable Rails/SkipsModelValidations
     update_columns(
       last_sign_in_at: Time.current,
@@ -108,7 +95,6 @@ module UserAuthentication
     # rubocop:enable Rails/SkipsModelValidations
   end
 
-  # Password reset methods
   def generate_password_reset_token!
     update(
       reset_password_token: SecureRandom.urlsafe_base64,
@@ -116,7 +102,6 @@ module UserAuthentication
     )
   end
 
-  # Check if any second factor is enabled
   def second_factor_enabled?
     webauthn_credentials.exists? ||
       totp_credentials.exists? ||
@@ -125,12 +110,10 @@ module UserAuthentication
 
   private
 
-  # HMAC-SHA256 of the password digest (standing in for a dedicated password salt column,
-  # which this schema does not have) plus the normalized login email and normalized phone --
-  # every delivery route a reset link can reach. Used only as the generates_token_for
-  # :password_reset payload above -- see that block's comment. Both contact values go through
-  # the same normalizers the lookup paths use, so a cosmetic reformat is not a change of
-  # authority; the separator keeps two different email/phone splits from colliding.
+  # Payload for the :password_reset token above. The password digest is the HMAC key
+  # because the schema has no separate password salt column.
+  # The lookup normalizers make sure that a format-only change does not revoke the token.
+  # The separator prevents collisions between different email and phone splits.
   def password_reset_token_fingerprint
     contact_authority = [
       User.normalize_email(email).to_s,
