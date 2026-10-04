@@ -45,8 +45,6 @@ module ConstituentPortal
       application_id = ::Regexp.last_match(1)
       application = Application.find(application_id)
 
-      puts "DEBUG: Application type: #{application.application_type.inspect}"
-
       # The show page puts the label and the value in separate dt and dd elements.
       assert_selector 'dt', text: 'Application Type'
       assert_selector 'dd', text: application.application_type&.titleize || 'Not specified'
@@ -102,9 +100,6 @@ module ConstituentPortal
       assert application_id.present?, "Failed to extract application ID from URL: #{current_url}"
 
       application = Application.find(application_id)
-
-      puts "DEBUG: self_certify_disability: #{application.self_certify_disability.inspect}"
-      puts "DEBUG: hearing_disability: #{application.user.hearing_disability.inspect}"
 
       assert application.self_certify_disability, 'self_certify_disability should be true'
 

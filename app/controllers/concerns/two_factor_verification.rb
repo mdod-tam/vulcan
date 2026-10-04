@@ -19,10 +19,6 @@ module TwoFactorVerification
     TwoFactorAuth.clear_challenge(session)
   end
 
-  def complete_verification(_user_id, _type)
-    TwoFactorAuth.complete_authentication(session)
-  end
-
   def log_verification_success(user_id, type, context = {})
     TwoFactorAuth.log_verification_success(user_id, type, context)
   end
@@ -309,7 +305,6 @@ module TwoFactorVerification
     end
     true
   end
-  # rubocop:enable Naming/PredicateMethod
 
   def handle_html_webauthn_options_request(get_options)
     if request.xhr?
@@ -319,7 +314,7 @@ module TwoFactorVerification
     end
   end
 
-  def ensure_two_factor_auth_in_progress # rubocop:disable Naming/PredicateMethod
+  def ensure_two_factor_auth_in_progress
     return true if two_factor_auth_in_progress?
 
     respond_with_authentication_required

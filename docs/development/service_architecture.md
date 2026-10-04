@@ -99,7 +99,6 @@ Deployment requires the additive migration before the new server code. All write
 | `skip_proof_validation` | Skips proof presence/consistency checks; used by certification-upload requests and test setup. |
 | `reviewing_single_proof` | Scoped by the proof reviewer while saving one decision, avoiding whole-application proof validation. |
 | `proof_attachment_service_context` | Tells model callbacks that the attachment service owns validation, events, and review timestamps. |
-| `resubmitting_proof` | Set and cleared by the portal proof controller; **no application code reads it**. |
 | `force_notifications` | Declared but unread — the delivery checks still consult `Thread.current[:force_notifications]`. |
 | `test_user_id` | Lets test authentication restore a session, which can bypass the sign-in flow a test means to exercise. |
 

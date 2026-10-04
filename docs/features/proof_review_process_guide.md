@@ -50,6 +50,10 @@ Attaching a file does not always mean it still needs review — the entry point 
 
 Every proof entry point uses the formats and the inclusive 5 MB proof limit in [`ProofUploadFormats`](../../app/models/proof_upload_formats.rb). [`UploadedDocument`](../../app/services/uploaded_document.rb) resolves each submitted file before any proof state changes: it accepts an upload, a blob, or a signed blob ID where the entry point allows one, and refuses a missing, unreadable, unavailable, expired, oversized, wrongly typed, or elsewhere-attached file. It then reads the file once with [`ProofAttachmentValidator`](../../app/services/proof_attachment_validator.rb), which judges the real type from content and refuses PDF active content such as scripts or form actions. Audit size and filename come from the resolved blob. On save, [`DocumentValidator`](../../app/validators/document_validator.rb) checks only newly attached files from metadata, so a stored document is never re-judged by a later rule.
 
+## Unresolved SSA document requirements
+
+Two former skipped test placeholders proposed requiring an SSA award letter from the current year and less than two months old. Neither rule is implemented by the attachment validators. Program owners must decide whether either restriction applies, what document date to measure, how to handle year boundaries, and whether the two-month limit is inclusive before validation or review guidance changes.
+
 ## Requesting a replacement
 
 [`RequestProofResubmission`](../../app/services/applications/request_proof_resubmission.rb) creates `SecureRequestForm` records and attempts delivery. For a dependent application the applicant, the person receiving the request, and the owner of the contact it is delivered to can all be different people, so [`SecureRequestRecipientResolver`](../../app/services/applications/secure_request_recipient_resolver.rb) picks them and the form stores each role separately. Email and letter are the default channels; SMS requires an explicit choice and an eligible number.

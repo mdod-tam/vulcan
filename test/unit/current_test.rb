@@ -26,19 +26,6 @@ class CurrentTest < ActiveSupport::TestCase
     assert_not Current.paper_context?
   end
 
-  test 'resubmitting_proof can be set and retrieved' do
-    assert_nil Current.resubmitting_proof
-    assert_not Current.resubmitting_proof?
-
-    Current.resubmitting_proof = true
-    assert Current.resubmitting_proof
-    assert Current.resubmitting_proof?
-
-    Current.resubmitting_proof = false
-    assert_not Current.resubmitting_proof
-    assert_not Current.resubmitting_proof?
-  end
-
   test 'skip_proof_validation can be set and retrieved' do
     assert_nil Current.skip_proof_validation
     assert_not Current.skip_proof_validation?
@@ -96,23 +83,19 @@ class CurrentTest < ActiveSupport::TestCase
     assert Current.paper_context?
     assert Current.skip_proof_validation?
     assert_equal 456, Current.test_user_id
-    assert_not Current.resubmitting_proof?
   end
 
   test 'reset clears all attributes' do
     Current.paper_context = true
-    Current.resubmitting_proof = true
     Current.skip_proof_validation = true
     Current.test_user_id = 789
 
     Current.reset
 
     assert_nil Current.paper_context
-    assert_nil Current.resubmitting_proof
     assert_nil Current.skip_proof_validation
     assert_nil Current.test_user_id
     assert_not Current.paper_context?
-    assert_not Current.resubmitting_proof?
     assert_not Current.skip_proof_validation?
   end
 
@@ -120,7 +103,6 @@ class CurrentTest < ActiveSupport::TestCase
     # This test verifies that Current attributes don't leak between tests
     # The setup/teardown should ensure this, but let's verify
     assert_nil Current.paper_context
-    assert_nil Current.resubmitting_proof
     assert_nil Current.skip_proof_validation
     assert_nil Current.test_user_id
   end

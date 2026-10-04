@@ -187,7 +187,6 @@ module ActiveSupport
     include FlashTestHelper
     include FormTestHelper
     include ActiveStorageHelper
-    include ActiveStorageTestHelper
     include AttachmentTestHelper
     include ProofTestHelper
     include FplPolicyHelpers
@@ -236,7 +235,6 @@ module ActiveSupport
       Current.test_user_id = nil if defined?(Current)
 
       Thread.current[:paper_application_context] = nil
-      Thread.current[:skip_proof_validation] = nil
 
       @authenticated_user = nil
       @test_user_id = nil

@@ -5,8 +5,6 @@ require 'test_helper'
 module Applications
   class EventDeduplicationServiceTest < ActiveSupport::TestCase
     setup do
-      # Set up mocks for ActiveStorage attachments to prevent byte_size() errors
-      setup_attachment_mocks_for_audit_logs
       @application = create(:application)
       @admin = create(:admin)
     end

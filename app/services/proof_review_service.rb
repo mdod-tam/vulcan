@@ -55,9 +55,8 @@ class ProofReviewService < BaseService
 
   def perform_review
     reviewer = Applications::ProofReviewer.new(application, admin_user)
-    review_result = reviewer.review(**review_params)
-    @proof_review = reviewer.proof_review if reviewer.respond_to?(:proof_review)
-    @proof_review ||= review_result if review_result.is_a?(ProofReview)
+    reviewer.review(**review_params)
+    @proof_review = reviewer.proof_review
   end
 
   def review_params

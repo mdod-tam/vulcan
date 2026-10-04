@@ -4,11 +4,10 @@ module TurboStreamResponseHandling
   extend ActiveSupport::Concern
 
   # @param updates [Hash] element_id => partial_name
-  # @param modals_to_remove [Array<String>] modal element IDs
-  def handle_turbo_stream_success(message:, updates: {}, modals_to_remove: [])
+  def handle_turbo_stream_success(message:, updates: {})
     prepare_turbo_stream_data if respond_to?(:prepare_turbo_stream_data, true)
     flash.now[:success] = message
-    streams = build_success_turbo_streams(updates, modals_to_remove)
+    streams = build_success_turbo_streams(updates)
     render turbo_stream: streams
   end
 
@@ -17,9 +16,8 @@ module TurboStreamResponseHandling
     render turbo_stream: turbo_stream.update('flash', partial: 'shared/flash')
   end
 
-  # The flash always updates. A 'modals' key in updates replaces the modal container,
-  # so modals_to_remove is then ignored.
-  def build_success_turbo_streams(updates = {}, modals_to_remove = [])
+  # Updates the flash and each requested partial, including the modal container.
+  def build_success_turbo_streams(updates = {})
     streams = []
 
     streams << turbo_stream.update('flash', partial: 'shared/flash')
@@ -28,25 +26,16 @@ module TurboStreamResponseHandling
       streams << turbo_stream.update(element_id, partial: partial_name)
     end
 
-    unless updates.key?('modals')
-      modals_to_remove.each do |modal_id|
-        streams << turbo_stream.remove(modal_id)
-      end
-    end
-
     streams
   end
 
   # @param turbo_message [String] defaults to html_message
-  # @param turbo_modals_to_remove [Array<String>] DEPRECATED. To replace the full modal container,
-  #   put 'modals' => 'modals' in turbo_updates.
   # @param turbo_redirect_path [String] when present, Turbo gets a 303 redirect, not streams
   def handle_success_response(
     html_redirect_path:,
     html_message:,
     turbo_message: nil,
     turbo_updates: {},
-    turbo_modals_to_remove: [],
     turbo_redirect_path: nil
   )
     turbo_message ||= html_message
@@ -62,8 +51,7 @@ module TurboStreamResponseHandling
         else
           handle_turbo_stream_success(
             message: turbo_message,
-            updates: turbo_updates,
-            modals_to_remove: turbo_modals_to_remove
+            updates: turbo_updates
           )
         end
       end

@@ -58,9 +58,6 @@ module Applications
       @dependent_app = create(:application, status: :in_progress, user: @dependent, managing_guardian: @guardian)
 
       @scope = Application.all # Scope includes factory-created records
-
-      # This setup might still be needed depending on what it does beyond basic attachment mocking
-      setup_attachment_mocks_for_audit_logs
     end
 
     teardown do

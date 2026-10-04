@@ -79,26 +79,18 @@ class ConstituentProofsSubmissionTest < ActionDispatch::IntegrationTest
     end
   end
 
-  # test 'cannot submit proof if not rejected' do
-  #   # Set up a non-rejected application
-  #   @application.income_proof.attach(io: StringIO.new('dummy content'), filename: 'dummy.pdf', content_type: 'application/pdf')
-  #   @application.update!(income_proof_status: :not_reviewed)
+  test 'cannot replace a proof that has not been rejected' do
+    @application.update!(income_proof_status: :not_reviewed)
 
-  #   # Remove all stubs - rely on controller filters and application state
-  #   # ensure_can_submit_proof should pass (can_submit_proof? is true by default)
-  #   # authorize_proof_access! should fail can_modify_proof? and redirect/halt
+    assert_no_difference ['Event.count', 'ActiveStorage::Attachment.count'] do
+      post "/constituent_portal/applications/#{@application.id}/proofs/resubmit",
+           params: { proof_type: 'income', income_proof: @valid_pdf }
+    end
 
-  #   # Make the request
-  #   post "/constituent_portal/applications/#{@application.id}/proofs/resubmit",
-  #        params: { proof_type: 'income', income_proof: @valid_pdf }
-
-  #   # Verify the redirect from authorize_proof_access!
-  #   assert_redirected_to constituent_portal_application_path(@application)
-  #   # Check the flash directly after the redirect is asserted
-  #   assert_equal 'Invalid proof type or status', flash[:alert]
-  # end
-  # The application already includes before_action :authenticate_user! in all controllers
-  # through the Application controller, which we've tested elsewhere
+    assert_redirected_to constituent_portal_application_path(@application)
+    assert_equal 'Invalid proof type or status', flash[:alert]
+    assert_equal 'not_reviewed', @application.reload.income_proof_status
+  end
 
   test 'resubmit handles rate limit exceeded' do
     RateLimit.stubs(:check!).raises(RateLimit::ExceededError.new('Rate limit exceeded'))

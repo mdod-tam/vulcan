@@ -74,15 +74,6 @@ module AuthenticationTestHelper
   alias sign_in_with_headers sign_in_for_integration_test
   # Do not alias update_current_user. AuthenticationCore owns its meaning.
 
-  # Signs in through the real form. This is slow.
-  def sign_in_user(user, password: 'password123')
-    post sign_in_path, params: { email: user.email, password: password }
-    assert_response :redirect
-    assert_redirected_to root_path, 'Sign in failed to redirect properly'
-    sign_in_for_unit_test(user)
-    user
-  end
-
   def sign_out
     if @headers.is_a?(Hash)
       @headers.delete('X-Test-User-Id')
@@ -143,17 +134,5 @@ module AuthenticationTestHelper
       nil
     end
     integration_session&.delete(:skip_2fa)
-  end
-
-  # Skips the test if GET root_path redirects to sign-in.
-  def skip_unless_authentication_working
-    begin
-      get root_path
-    rescue StandardError
-      nil
-    end
-    return unless response&.redirect? && response.location.to_s.include?('sign_in')
-
-    skip 'Authentication not working properly'
   end
 end

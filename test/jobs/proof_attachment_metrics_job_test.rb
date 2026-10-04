@@ -12,7 +12,6 @@ class ProofAttachmentMetricsJobTest < ActiveJob::TestCase
     ProofReview.delete_all
     MedicalProviderSecureRequestForm.delete_all
     SecureRequestForm.delete_all
-    ApplicationStatusChange.delete_all
     Application.delete_all
     GuardianRelationship.delete_all
     WebauthnCredential.delete_all
@@ -27,10 +26,7 @@ class ProofAttachmentMetricsJobTest < ActiveJob::TestCase
     # After this, the only system user and admins are the ones that setup creates.
     User.delete_all
 
-    # User.system_user has no @system_user cache now, so this line has no effect.
-    User.instance_variable_set(:@system_user, nil)
-
-    @system_user = ensure_system_audit_actor!
+    ensure_system_audit_actor!
     @admin1 = create(:admin)
     @admin2 = create(:admin)
     @admin3 = create(:admin)

@@ -1,12 +1,9 @@
 # frozen_string_literal: true
 
 require 'test_helper'
-require 'webauthn/fake_client'
-require 'support/webauthn_test_helper'
 
 # Integration tests for the WebAuthn second step after password sign-in.
 class TwoFactorAuthenticationWebauthnTest < ActionDispatch::IntegrationTest
-  include WebauthnTestHelper
   include AuthenticationTestHelper
 
   setup do
@@ -20,13 +17,6 @@ class TwoFactorAuthenticationWebauthnTest < ActionDispatch::IntegrationTest
     @user.update_column(:webauthn_id, WebAuthn.generate_user_id)
 
     @credential = create(:webauthn_credential, user: @user)
-
-    # Enables debug_auth output from test/support/authentication_core.rb.
-    ENV['DEBUG_AUTH'] = 'true'
-  end
-
-  teardown do
-    ENV['DEBUG_AUTH'] = nil
   end
 
   test 'should get new form for WebAuthn authentication after password step' do

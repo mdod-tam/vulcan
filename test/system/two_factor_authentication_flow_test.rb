@@ -1,13 +1,9 @@
 # frozen_string_literal: true
 
 require 'application_system_test_case'
-require 'webauthn/fake_client'
-require_relative '../support/webauthn_test_helper'
-require 'base64'
 
 class TwoFactorAuthenticationFlowTest < ApplicationSystemTestCase
   include SystemTestHelpers
-  include WebauthnTestHelper
 
   def teardown
     super
@@ -17,10 +13,6 @@ class TwoFactorAuthenticationFlowTest < ApplicationSystemTestCase
 
   setup do
     SmsService.stubs(:send_message).returns(true)
-
-    WebAuthn.configure do |config|
-      config.allowed_origins = ['https://example.com']
-    end
 
     @user = User.create!(
       email: "2fa_flow_test_#{SecureRandom.hex(4)}@example.com",
@@ -219,28 +211,8 @@ class TwoFactorAuthenticationFlowTest < ApplicationSystemTestCase
   end
 
   test 'user removes WebAuthn credential successfully' do
-    fake_client = setup_webauthn_test_environment
-    credential = create_webauthn_credential_programmatically(@user, fake_client, 'KeyToDelete')
-
-    if credential.nil?
-      # A direct credential record is sufficient for the deletion flow.
-      credential = @user.webauthn_credentials.create!(
-        external_id: Base64.strict_encode64(SecureRandom.random_bytes(16)),
-        public_key: 'dummy_public_key_for_testing',
-        nickname: 'KeyToDelete',
-        sign_count: 0
-      )
-    end
-
+    credential = create(:webauthn_credential, user: @user, nickname: 'KeyToDelete')
     assert @user.reload.webauthn_credentials.exists?(nickname: 'KeyToDelete')
-
-    puts "=== DEBUG: User email: #{@user.email}"
-    puts "=== DEBUG: User status: #{@user.status}"
-    puts "=== DEBUG: User verified: #{@user.verified}"
-    puts "=== DEBUG: User valid?: #{@user.valid?}"
-    puts "=== DEBUG: User errors: #{@user.errors.full_messages}" unless @user.valid?
-
-    @user.reload
 
     system_test_sign_in(@user)
 
@@ -333,57 +305,6 @@ class TwoFactorAuthenticationFlowTest < ApplicationSystemTestCase
     assert_not @user.sms_credentials.exists?(phone_number: test_phone)
   end
 
-  test 'session challenge is stored correctly during WebAuthn setup' do
-    setup_webauthn_test_environment
-    system_test_sign_in(@user)
-
-    visit new_credential_two_factor_authentication_path(type: 'webauthn')
-    assert_text 'Set up Device or Security Key'
-
-    # These DOM markers exercise the helper rather than the stored session challenge.
-    page.execute_script(<<~JS)
-      // Set up a way to view WebAuthn data in the DOM so we can check it
-      window.addEventListener('message', (event) => {
-        if (event.data && event.data.webauthnChallenge) {
-          // Create a visual indicator that challenge is ready
-          const element = document.createElement('div');
-          element.id = 'challenge-ready';
-          element.setAttribute('data-challenge', 'available');
-          element.textContent = 'Challenge is ready';
-          document.body.appendChild(element);
-        }
-      });
-
-      // Find and click any element that might trigger WebAuthn registration
-      const registrationButton = document.querySelector('[data-controller="add-credential"], #start-registration, button.webauthn-register');
-      if (registrationButton) {
-        registrationButton.click();
-        // Announce that we've clicked the button
-        const buttonClicked = document.createElement('div');
-        buttonClicked.id = 'button-clicked';
-        buttonClicked.textContent = 'Registration button clicked';
-        document.body.appendChild(buttonClicked);
-      } else {
-        // If we couldn't find a button, add a message for debugging
-        const noButton = document.createElement('div');
-        noButton.id = 'no-button-found';
-        noButton.textContent = 'No registration button found';
-        document.body.appendChild(noButton);
-      }
-
-      // Simulate challenge data to verify our test infrastructure works
-      setTimeout(() => {
-        window.postMessage({ webauthnChallenge: true }, '*');
-      }, 500);
-    JS
-
-    assert_selector '#button-clicked', wait: 2, text: 'Registration button clicked'
-    assert_selector '#challenge-ready', wait: 2, text: 'Challenge is ready'
-
-    assert true, 'Challenge verification test passed'
-    take_screenshot('2fa-session-challenge-storage')
-  end
-
   test 'multi-method user sees all available verification options during sign in' do
     skip('Skipping multi-method test until the actual UI is finalized')
 
@@ -447,11 +368,5 @@ class TwoFactorAuthenticationFlowTest < ApplicationSystemTestCase
     )
 
     take_screenshot('2fa-10-redirect-protection')
-  end
-
-  private
-
-  def get_latest_sms_credential(user)
-    user.reload.sms_credentials.verified.order(created_at: :desc).first
   end
 end

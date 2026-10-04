@@ -7,7 +7,6 @@ module ConstituentPortal
     class ProofsController < ApplicationController
       include RequestMetadataHelper
 
-      prepend_view_path 'app/views/constituent_portal/proofs'
       before_action :authenticate_user!
       before_action :require_constituent!
       before_action :set_application
@@ -21,9 +20,6 @@ module ConstituentPortal
       end
 
       def resubmit
-        # A before_action that redirects halts the chain, so this guard is only defensive.
-        return if performed?
-
         # Do not add an outer transaction. ProofAttachmentService owns its transactions,
         # and nesting can roll back the attachment.
         attach_and_update_proof
@@ -41,23 +37,11 @@ module ConstituentPortal
       private
 
       def set_application
-        application_id = extract_application_id
+        application_id = params[:application_id]
         return if redirect_if_missing_application_id(application_id)
 
         @application = find_user_application(application_id)
         handle_application_not_found(application_id) if @application.nil?
-      end
-
-      def extract_application_id
-        # The proof routes nest under applications, so they supply :application_id.
-        application_id = params[:application_id]
-
-        if application_id.nil? && params[:id].present?
-          # No current route supplies :id to this controller.
-          application_id = params[:id]
-        end
-
-        application_id
       end
 
       # rubocop:disable Naming/PredicateMethod
@@ -123,14 +107,7 @@ module ConstituentPortal
         is_resubmitting = determine_resubmission_status
         log_resubmission_attempt(is_resubmitting)
 
-        # No code in app/ reads Current.resubmitting_proof now.
-        Current.resubmitting_proof = is_resubmitting
-
-        begin
-          result = ProofAttachmentService.attach_proof(build_attachment_params(is_resubmitting))
-        ensure
-          Current.resubmitting_proof = nil
-        end
+        result = ProofAttachmentService.attach_proof(build_attachment_params(is_resubmitting))
 
         return if result[:success]
         return render_refused_upload(result[:error]) if result[:error].is_a?(UploadedDocument::Refused)

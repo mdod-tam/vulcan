@@ -45,10 +45,6 @@ module UserGuardianship
         .where(guardian_relationships: { guardian_id: guardian_user.id })
         .group('users.id')
     }
-
-    scope :accessible_by_guardian, lambda { |guardian_user|
-      editable_by_guardian(guardian_user)
-    }
   end
 
   def guardian?
@@ -125,23 +121,6 @@ module UserGuardianship
                                   .joins(:guardian_user)
                                   .first&.guardian_user
                               end
-  end
-
-  # True when +guardian_user+ has a guardian relationship with this dependent.
-  def editable_by_guardian?(guardian_user)
-    return false unless guardian_user
-    return false unless dependent?
-
-    guardians.include?(guardian_user)
-  end
-
-  def accessible_by_guardian?(guardian_user)
-    # Strict ownership: access currently equals edit rights. There is no read-only access yet.
-    editable_by_guardian?(guardian_user)
-  end
-
-  def viewable_by_guardian?(guardian_user)
-    accessible_by_guardian?(guardian_user)
   end
 
   # Paper intake displays dependent-owned contact separately from synthetic primary fields.

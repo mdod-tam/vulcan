@@ -7,9 +7,6 @@ class Current < ActiveSupport::CurrentAttributes
   # Paper application context - used to bypass certain validations during admin paper application processing
   attribute :paper_context
 
-  # Proof resubmission context - used to bypass validations during proof resubmission flows
-  attribute :resubmitting_proof
-
   # Skip proof validation flag - used in tests and specific service contexts
   attribute :skip_proof_validation
 
@@ -35,10 +32,6 @@ class Current < ActiveSupport::CurrentAttributes
 
   def paper_context?
     paper_context.present?
-  end
-
-  def resubmitting_proof?
-    resubmitting_proof.present?
   end
 
   def skip_proof_validation?

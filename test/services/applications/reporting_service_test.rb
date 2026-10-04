@@ -42,8 +42,6 @@ module Applications
                               created_at: previous_fy_start + 1.month,
                               status: :approved)
 
-      setup_attachment_mocks_for_audit_logs
-
       with_mocked_attachments do
         service = ReportingService.new
         service_result = service.generate_dashboard_data
@@ -99,8 +97,6 @@ module Applications
                               created_at: previous_fy_start + 1.month,
                               status: :approved)
 
-      setup_attachment_mocks_for_audit_logs
-
       with_mocked_attachments do
         service = ReportingService.new
         service_result = service.generate_dashboard_data
@@ -146,8 +142,6 @@ module Applications
                               user: create(:constituent, email: "unique_voucher_approved3_#{Time.now.to_i}@example.com"),
                               created_at: previous_fy_start + 1.month,
                               status: :approved)
-
-      setup_attachment_mocks_for_audit_logs
 
       current_approved_app = create(:application,
                                     user: create(:constituent, email: "unique_voucher_app1_#{Time.now.to_i}@example.com"),
@@ -220,8 +214,6 @@ module Applications
                              created_at: previous_fy_start + 1.month,
                              status: :approved)
 
-      setup_attachment_mocks_for_audit_logs
-
       with_mocked_attachments do
         test_applications = Application.where(id: [
                                                 draft_app.id, submitted_app1.id, submitted_app2.id,
@@ -280,8 +272,6 @@ module Applications
                               created_at: previous_fy_start + 1.month,
                               status: :approved)
 
-      setup_attachment_mocks_for_audit_logs
-
       with_mocked_attachments do
         service = ReportingService.new(2023)
         service_result = service.generate_dashboard_data
@@ -337,8 +327,6 @@ module Applications
                              user: create(:constituent, email: "unique_index_approved3_#{Time.now.to_i}@example.com"),
                              created_at: previous_fy_start + 1.month,
                              status: :approved)
-
-      setup_attachment_mocks_for_audit_logs
 
       with_mocked_attachments do
         new_status_counts = Application.group(:status).count
@@ -429,8 +417,6 @@ module Applications
                               user: create(:constituent, email: "unique_error_approved3_#{Time.now.to_i}@example.com"),
                               created_at: previous_fy_start + 1.month,
                               status: :approved)
-
-      setup_attachment_mocks_for_audit_logs
 
       with_mocked_attachments do
         Application.stub :where, ->(*_args) { raise StandardError, 'Test error' } do
