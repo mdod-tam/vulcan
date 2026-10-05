@@ -60,7 +60,7 @@ module Admin
     end
 
     test 'a rolled-back reconciliation renders the review form without saving a review' do
-      error = 'reconciliation failed <script>capture_payload()</script>'
+      error = 'reconciliation failed for proof-review-private@example.test token=proof-review-secret-225 <script>capture_payload()</script>'
       Application.any_instance.stubs(:reconcile_workflow_state!).raises(StandardError, error)
 
       assert_no_difference -> { @application.proof_reviews.count } do
@@ -72,9 +72,10 @@ module Admin
 
       assert_response :unprocessable_content
       assert_equal 'not_reviewed', @application.reload.income_proof_status
-      assert_select '[data-testid="flash-alert"]', text: "Proof review failed: #{error}"
-      assert_includes response.body, '&lt;script&gt;capture_payload()&lt;/script&gt;'
-      assert_select 'script', text: 'capture_payload()', count: 0
+      assert_select '[data-testid="flash-alert"]', text: 'The proof review could not be completed. Check this application before reviewing it again.'
+      assert_not_includes response.body, 'proof-review-private@example.test'
+      assert_not_includes response.body, 'proof-review-secret-225'
+      assert_not_includes response.body, 'capture_payload()'
       assert_select "form[action='#{admin_proof_reviews_path(application_id: @application.id)}'][method='post']"
       assert_select 'input[name="proof_review[proof_type]"][value="income"]'
       assert_select 'input[name="proof_review[status]"][value="approved"][checked]'
@@ -94,7 +95,7 @@ module Admin
 
       assert_response :unprocessable_content
       assert_equal 'not_reviewed', @application.reload.income_proof_status
-      assert_select '[data-testid="flash-alert"]', text: /Rejection reason can't be blank/
+      assert_select '[data-testid="flash-alert"]', text: 'The proof review could not be completed. Check this application before reviewing it again.'
       assert_select 'input[name="proof_review[status]"][value="rejected"][checked]'
       assert_select 'label[for="proof_review_rejection_reason"]', text: 'Reason for Rejection (required when rejecting)'
       assert_select '#proof_review_rejection_reason_help', text: /Required when rejecting\. Leave blank when approving\./
@@ -114,7 +115,7 @@ module Admin
 
       assert_response :unprocessable_content
       assert_equal 'not_reviewed', @application.reload.income_proof_status
-      assert_select '[data-testid="flash-alert"]', text: 'Proof review failed: proof status update failed'
+      assert_select '[data-testid="flash-alert"]', text: 'The proof review could not be completed. Check this application before reviewing it again.'
       assert_select "form[action='#{admin_proof_reviews_path(application_id: @application.id)}'][method='post']"
       assert_select 'input[name="proof_review[status]"][value="rejected"][checked]'
       assert_select '#proof_review_rejection_reason', text: reason

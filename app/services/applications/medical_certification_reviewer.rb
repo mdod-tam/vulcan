@@ -27,6 +27,7 @@ module Applications
 
       note_result = create_rejection_note(notes)
       warnings = note_result.failure? ? [note_result.message] : []
+      warnings << 'Rejection notification tracking is unavailable; verify provider email before retrying.' if service_result[:notification_id].nil?
       result = success(nil, { notification_id: service_result[:notification_id],
                               provider_delivery: { success: false, outcome: :deferred }, warnings: warnings })
       result.message = rejection_message(result.data)

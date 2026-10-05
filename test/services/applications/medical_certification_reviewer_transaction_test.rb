@@ -72,6 +72,49 @@ module Applications
       assert_empty @application.medical_provider_secure_request_forms
     end
 
+    test 'missing rejection notification preserves committed rejection and warns without repeating provider delivery' do
+      invalid_notification = Notification.new
+      invalid_notification.errors.add(:base, 'Private notification validation failure')
+      Notification.expects(:create!).with(has_entries(action: 'medical_certification_rejected', notifiable: @application))
+                  .raises(ActiveRecord::RecordInvalid.new(invalid_notification))
+      secure_upload_url = 'https://example.test/secure_certification_form?token=test'
+      RequestCertificationUpload.any_instance.expects(:call).returns(
+        BaseService::Result.new(success: true, data: { secure_upload_url: secure_upload_url })
+      )
+      mail = stub('certification_rejection_mail')
+      mail.stubs(:[]).with('X-PM-Message-Id').returns(stub(value: 'MSG-TRACKING'))
+      MedicalProviderMailer.expects(:with).with(
+        application: @application, rejection_reason: 'Missing signature', admin: @admin, secure_upload_url: secure_upload_url
+      ).returns(stub(certification_rejected: mail))
+      EmailDelivery.expects(:deliver_now!).with(mail, context: anything).once.returns(true)
+      paper = PaperApplicationService.new(params: {}, admin: @admin)
+      paper.instance_variable_set(:@application, @application)
+      result = nil
+
+      assert_no_difference -> { Notification.where(notifiable: @application, action: 'medical_certification_rejected').count } do
+        ActiveRecord::Base.transaction do
+          result = paper.send(:reject_medical_certification_via_reviewer,
+                              selected_reason: 'other', custom_reason: 'Missing signature', notes: nil)
+          assert result[:success]
+          assert_equal :deferred, result[:provider_delivery][:outcome]
+          assert_nil paper.warning_message
+        end
+      end
+
+      assert @application.reload.medical_certification_status_rejected?
+      assert_equal 1, ApplicationStatusChange.where(application: @application, to_status: 'rejected').count
+      assert_equal 1, Event.where(auditable: @application, action: 'medical_certification_status_changed').count
+      review = @application.proof_reviews.find_by!(proof_type: :medical_certification, status: :rejected)
+      assert_equal 'Missing signature', review.rejection_reason
+      assert result[:provider_delivery][:success]
+      assert_equal :submitted, result[:provider_delivery][:outcome]
+      assert_equal :not_requested, result[:provider_delivery][:tracking_status]
+      assert_includes paper.warning_message, 'Provider email submitted.'
+      assert_includes paper.warning_message, 'Rejection notification tracking is unavailable; verify provider email before retrying.'
+      assert_not_includes paper.warning_message, 'Provider email was not sent.'
+      assert_not_includes paper.warning_message, 'Private notification validation failure'
+    end
+
     test 'a database note failure preserves the paper rejection and attempts provider delivery only after a successful commit' do
       attempts = []
       note_save_attempts = 0

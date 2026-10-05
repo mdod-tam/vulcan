@@ -52,7 +52,7 @@ class ProofReviewService < BaseService
       failure(e.message, { commit_state: :unknown })
     rescue StandardError => e
       log_review_error(e)
-      failure("Proof review failed: #{e.message}")
+      failure('The proof review could not be completed. Check this application before reviewing it again.')
     end
   end
 
@@ -116,7 +116,7 @@ class ProofReviewService < BaseService
   end
 
   def log_review_error(error)
-    Rails.logger.error "ProofReviewService: Error during review for Application ##{application.id}: #{error.message}"
+    Rails.logger.error "ProofReviewService: Error during review for Application ##{application.id}: #{error.class.name}"
     Rails.logger.error error.backtrace.join("\n")
     # Possible improvement: report the error to an error tracker such as Honeybadger.
   end

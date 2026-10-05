@@ -25,18 +25,27 @@ class ProofReviewServiceTest < ActiveSupport::TestCase
     )
   end
 
-  test 'a failure before saving the review leaves no review or side effects' do
-    ProofReview.any_instance.stubs(:save!).raises(StandardError, 'review save failed')
+  test 'a failure before saving the review rolls back without exposing exception details' do
+    private_email = 'proof-review-private@example.test'
+    private_token = 'proof-review-secret-225'
+    ProofReview.any_instance.stubs(:save!).raises(StandardError, "review save failed for #{private_email} token=#{private_token}")
+    log_output = StringIO.new
 
     result = nil
-    assert_no_difference ['ProofReview.count', 'ApplicationStatusChange.count', 'Event.count', 'Notification.count'] do
-      assert_no_enqueued_jobs do
-        result = review_income
+    Rails.stub :logger, ActiveSupport::Logger.new(log_output) do
+      assert_no_difference ['ProofReview.count', 'ApplicationStatusChange.count', 'Event.count', 'Notification.count'] do
+        assert_no_enqueued_jobs do
+          result = review_income
+        end
       end
     end
 
     assert result.failure?
-    assert_includes result.message, 'review save failed'
+    assert_equal 'The proof review could not be completed. Check this application before reviewing it again.', result.message
+    assert_includes log_output.string, 'Proof review failed: StandardError'
+    assert_includes log_output.string, "ProofReviewService: Error during review for Application ##{@application.id}: StandardError"
+    assert_not_includes log_output.string, private_email
+    assert_not_includes log_output.string, private_token
     assert_equal 'not_reviewed', @application.reload.income_proof_status
     assert_equal 'in_progress', @application.status
     assert_not Current.reviewing_single_proof?
@@ -53,7 +62,7 @@ class ProofReviewServiceTest < ActiveSupport::TestCase
     end
 
     assert result.failure?
-    assert_includes result.message, 'reconciliation failed'
+    assert_equal 'The proof review could not be completed. Check this application before reviewing it again.', result.message
     assert_equal 'not_reviewed', @application.reload.income_proof_status
     assert_equal 'in_progress', @application.status
     assert_not Current.reviewing_single_proof?
@@ -95,7 +104,7 @@ class ProofReviewServiceTest < ActiveSupport::TestCase
     end
 
     assert result.failure?
-    assert_includes result.message, 'lifecycle audit failed'
+    assert_equal 'The proof review could not be completed. Check this application before reviewing it again.', result.message
     assert_equal 'not_reviewed', @application.reload.income_proof_status
     assert_equal 'in_progress', @application.status
     assert_not Current.reviewing_single_proof?
@@ -343,6 +352,27 @@ class ProofReviewCommitOutcomeTest < ActiveSupport::TestCase
     cleanup_duplicate_review_test_data!(@user, @admin)
     Current.reset
     clear_enqueued_jobs
+  end
+
+  test 'post review logging failure retains committed review without claiming save failure' do
+    private_token = 'post-review-log-secret-225'
+    service = ProofReviewService.new(@application, @admin, { proof_type: 'residency', status: 'approved' })
+    service.stubs(:log_review_success).raises(StandardError, "logging failed token=#{private_token}")
+
+    result = service.call
+
+    review = @application.proof_reviews.where(proof_type: :residency, status: :approved).sole
+    assert_equal @application.id, review.application_id
+    assert_equal @admin, review.admin
+    assert_equal 'approved', @application.reload.residency_proof_status
+    assert_equal 'approved', @application.status
+    history = @application.status_changes.where(from_status: 'in_progress', to_status: 'approved').sole
+    assert_equal @admin, history.user
+    audit = @application.events.where(action: 'application_status_changed').sole
+    assert_equal @admin, audit.user
+    assert result.failure?
+    assert_not_includes result.message, private_token
+    assert_equal 'The proof review could not be completed. Check this application before reviewing it again.', result.message
   end
 
   test 'a committed callback failure preserves review lifecycle history and audit with a warning' do
