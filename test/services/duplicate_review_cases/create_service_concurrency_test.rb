@@ -3,26 +3,9 @@
 require 'test_helper'
 
 module DuplicateReviewCases
-  # Focused concurrency evidence for plan section 1's scenarios: "online registration case
-  # creation versus selected-case merge/retirement" and "case creation versus the non-merge
-  # resolution path that clears the subject flag." Each test forces one specific commit
-  # order deterministically.
-  #
-  # Both sides of every race are the real production services -- including the "holder"
-  # side, which is the *winning* transaction, not a copy of its effects. This works because
-  # `ActiveRecord::Base.transaction` joins an already-open transaction on the same connection
-  # rather than starting a real nested one: wrapping a real service call in an outer
-  # `transaction do ... end` lets that service run to completion (locking, requalifying,
-  # mutating) while the actual COMMIT is deferred until the outer block returns. Signaling
-  # "ready" after the service call returns, then waiting on a release queue before letting
-  # the outer block end, holds the winner's locks open under our control without faking any
-  # of its logic.
-  #
-  # The contender is confirmed genuinely blocked at the Postgres level via
-  # `wait_until_blocked_on_lock`/`backend_pid` (which polls `pg_blocking_pids` from a
-  # dedicated observer connection, not thread-start-order assumptions) before the holder is
-  # unconditionally released via `confirm_blocked_then_release`, so a failing or timing-out
-  # wait can never leave the holder's lock open and hang cleanup behind it.
+  # Run production services on separate connections and force each tested commit order.
+  # An outer transaction retains the holder's locks after its service returns.
+  # confirm_blocked_then_release verifies the PostgreSQL blocker and releases the holder in ensure.
   class CreateServiceConcurrencyTest < ActiveSupport::TestCase
     self.use_transactional_tests = false
 

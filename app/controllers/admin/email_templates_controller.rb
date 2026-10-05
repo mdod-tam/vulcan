@@ -17,10 +17,6 @@ module Admin
 
     # GET /admin/email_templates/:id
     def show
-      # @email_template is set by before_action
-      # @template_definition is set by before_action
-
-      # Expensive computation in controller
       @en_sample_data = view_context.sample_data_for_template(
         @email_template.name,
         locale: 'en',
@@ -59,10 +55,6 @@ module Admin
 
     # GET /admin/email_templates/:id/new_test_email
     def new_test_email
-      # @email_template is set by before_action
-      # @template_definition is set by before_action
-
-      # Get sample data and render the template with it for preview
       sample_data = view_context.sample_data_for_template(
         @email_template.name,
         locale: @email_template.locale,
@@ -88,17 +80,12 @@ module Admin
 
     # GET /admin/email_templates/:id/edit
     def edit
-      # @email_template is set by before_action
-      # @template_definition is set by before_action
-
       @counterpart_template = counterpart_template
       prepare_draft_preview_locals
     end
 
     # PATCH/PUT /admin/email_templates/:id
     def update
-      # @email_template is set by before_action
-      # @template_definition is set by before_action
       target_template = template_for_locale(params[:locale].presence || @email_template.locale)
       target_locale = target_template&.locale&.upcase || params[:locale].to_s.upcase
 
@@ -170,7 +157,7 @@ module Admin
 
       return handle_invalid_form unless @test_email_form.valid?
 
-      # A test email follows the same controls as the real email for this template.
+      # The test uses this template's category and pair controls, plus the email channel control.
       denial = EmailDelivery.issuance_denial(TEST_MAIL_ACTION, params: test_mail_params)
       return redirect_to admin_email_template_path(@email_template), alert: test_send_suppressed_message(denial.reason) if denial
 
@@ -182,7 +169,7 @@ module Admin
       when :configuration_error
         EmailDelivery::Current.denial_decision.raise_if_configuration_error!
       when :suppressed
-        # A setting changed between the check above and queueing.
+        # Delivery controls can change after the issuance check.
         redirect_to admin_email_template_path(@email_template),
                     alert: test_send_suppressed_message(EmailDelivery::Current.denial_reason)
       else
@@ -403,7 +390,6 @@ module Admin
       params.expect(admin_test_email_form: %i[email template_id])
     end
 
-    # Shared audit logging method
     def log_audit_event(action, additional_metadata = {})
       base_metadata = {
         email_template_id: @email_template.id,
@@ -421,7 +407,7 @@ module Admin
       )
     end
 
-    # Each saved edit or toggle moves updated_at, so it names that mutation.
+    # The saved timestamp identifies this edit in the audit event.
     def template_operation_id
       "email_template:#{@email_template.id}:#{@email_template.updated_at.utc.iso8601(6)}"
     end

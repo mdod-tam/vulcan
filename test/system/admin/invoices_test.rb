@@ -8,10 +8,10 @@ module Admin
 
     setup do
       @admin = create(:admin)
-      @vendor = users(:vendor_ray) # Use seeded vendor
-      @vendor2 = users(:vendor_teltex) # Use second seeded vendor
+      @vendor = users(:vendor_ray)
+      @vendor2 = users(:vendor_teltex)
 
-      # Create invoices with dates far in the past to avoid overlap with existing data
+      # Use past periods to avoid overlap with existing invoices.
       @invoice = create(:invoice, :pending, :with_transactions,
                         vendor: @vendor,
                         start_date: 1.year.ago.beginning_of_day,
@@ -30,7 +30,6 @@ module Admin
       sign_in(@admin)
     end
 
-    # Helper method to access invoice instances
     def invoices(fixture_name)
       case fixture_name
       when :test_pending_99
@@ -42,40 +41,34 @@ module Admin
       when :paid
         @paid_invoice
       else
-        raise "Unknown invoice fixture: #{fixture_name}"
+        raise "Unknown test invoice: #{fixture_name}"
       end
     end
 
     test 'viewing and approving invoice' do
-      # Ensure the invoice exists and has a valid ID
       assert_not_nil @invoice, 'Test invoice should exist'
       assert_not_nil @invoice.id, 'Test invoice should have a valid ID'
       assert_equal 'invoice_pending', @invoice.status, 'Test invoice should be pending'
 
       visit admin_invoices_path
 
-      # Check if invoice rows exist, use more flexible selector
       if has_selector?('.invoice-row')
         assert_selector '.invoice-row'
       elsif has_selector?('tr', text: @invoice.invoice_number)
-        # Alternative: look for table rows containing the invoice number
         assert_selector 'tr', text: @invoice.invoice_number
       else
-        skip 'Invoice list UI structure has changed'
+        skip 'No invoice-row or row matching the invoice number is present'
       end
 
-      # Navigate to invoice details using the invoice ID to avoid nil issues
       begin
         visit admin_invoice_path(@invoice)
         assert_selector 'h1', text: 'Invoice Details'
 
-        # Try to approve if button exists
         if has_button?('Approve Invoice')
           click_on 'Approve Invoice'
-          # Check for success message (flexible text matching)
           assert_text(/approved|success/i)
         else
-          skip 'Approve Invoice functionality not available'
+          skip 'Approve Invoice button is absent on the invoice page'
         end
       rescue ActionController::RoutingError => e
         skip "Invoice detail route not available: #{e.message}"
@@ -83,11 +76,9 @@ module Admin
     end
 
     test 'recording GAD payment details' do
-      # Use the approved invoice from fixtures
       approved_invoice = invoices(:ray_approved)
       visit admin_invoice_path(approved_invoice)
 
-      # Check if payment form fields exist
       if has_field?('GAD Invoice Reference')
         fill_in 'GAD Invoice Reference', with: 'GAD-123456'
         fill_in 'Check Number', with: 'CHK-789' if has_field?('Check Number')
@@ -95,54 +86,45 @@ module Admin
 
         if has_button?('Record Payment')
           click_on 'Record Payment'
-          # Check for success message (flexible)
           assert_success_message(/payment.*recorded|success/i)
         else
-          skip 'Record Payment functionality not available'
+          skip 'Record Payment button is absent on the invoice page'
         end
       else
-        skip 'Payment form not available for this invoice'
+        skip 'GAD Invoice Reference field is absent on the invoice page'
       end
     end
 
     test 'exporting paid invoices' do
-      # Use existing paid invoices from fixtures
       visit admin_invoices_path
       select 'Paid', from: 'Status'
       click_on 'Apply Filters'
 
-      # Check if Export Batch button exists, skip if not
       if has_button?('Export Batch')
         click_on 'Export Batch'
         assert_valid_csv_response
       else
-        skip 'Export Batch functionality not available in current UI'
+        skip 'Export Batch button is absent after the Paid filter'
       end
     end
 
     test 'requires GAD reference for payment' do
-      # Use the approved invoice from fixtures
       approved_invoice = invoices(:ray_approved)
       visit admin_invoice_path(approved_invoice)
 
-      # Check if payment form exists
       if has_field?('GAD Invoice Reference') && has_button?('Record Payment')
-        # Try to record payment without GAD reference (leave field empty)
         fill_in 'Check Number', with: 'CHK-789' if has_field?('Check Number')
         fill_in 'Payment Notes', with: 'Payment processed by GAD' if has_field?('Payment Notes')
         click_on 'Record Payment'
 
-        # Check for validation error (flexible text matching)
         assert_error_message(/GAD.*reference.*blank|required/i)
 
-        # Add GAD reference and try again
         fill_in 'GAD Invoice Reference', with: 'GAD-123456'
         click_on 'Record Payment'
 
-        # Check for success
         assert_success_message(/payment.*recorded|success/i)
       else
-        skip 'Payment validation form not available'
+        skip 'GAD Invoice Reference field or Record Payment button is absent'
       end
     end
   end

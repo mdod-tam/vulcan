@@ -65,7 +65,7 @@ Constraints that are easy to break:
 
 ## Paper identity review and uploads
 
-The paper form uses Rails automatic direct uploads for its four documents. Normal `POST /admin/paper_applications` returns a server-rendered identity review or validation form with retained signed IDs and filenames. Current pages make no identity preflight or second eligibility fetch. The legacy preview route only resumes submission from older open forms; see [deployment and recovery](paper_application_architecture.md#deployment-and-recovery).
+The paper form uses Rails automatic direct uploads for its four documents and submits directly to `POST /admin/paper_applications`. Identity review or validation failures return a server-rendered form with retained signed IDs and filenames.
 
 Review choices use normal submit buttons, a rationale, and a short-lived `identity_review_receipt`. Rails locks and recomputes the facts at the write; changed or expired facts require a fresh review. Guardian quick-create posts through `admin-user-search`, receiving an HTML review fragment on refusal or the saved/selected guardian as JSON on success.
 

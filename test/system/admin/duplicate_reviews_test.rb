@@ -43,19 +43,12 @@ module Admin
       system_test_sign_in(@admin)
     end
 
-    # A non-merge resolution means exactly one thing -- staff decided these are different people --
-    # so the five-value determination control was offering a choice that did not exist. Resolving
-    # recomputes two independent effects from remaining open cases: the submission gate releases
-    # when no open registration soft-match case remains, and the review flag clears when no open
-    # case of any source remains -- taking the subject off the queue badges staff rely on. Only a
-    # completed identity decision may trigger either, so the outcome is server-owned and stated
-    # plainly.
+    # The non-merge action records a server-owned keep-separate decision.
     test 'the resolve form states the fixed identity outcome instead of offering a choice' do
       visit admin_duplicate_review_path(@review_case)
       assert_selector '[data-testid="duplicate-review-detail"]'
 
       assert_no_selector 'select[name=determination]'
-      # The action is server-owned, so the form offers no action control at all.
       within 'form[action$="/resolve"]' do
         assert_no_selector 'input[type=radio][name=resolution_action]'
         assert_no_selector 'legend', text: 'Action'
@@ -75,9 +68,6 @@ module Admin
                                full: true, html: true)
     end
 
-    # The resolution summary shows the outcome and the determination side by side, so the two must
-    # agree. This is the state an admin is left looking at after deciding, and it is the only place
-    # the status label is read back to them.
     test 'the resolved summary reports an outcome that agrees with the determination' do
       visit admin_duplicate_review_path(@review_case)
 
@@ -97,15 +87,12 @@ module Admin
       take_evidence_screenshot('duplicate-review-resolved-summary', full: true, html: true)
     end
 
-    # The rollover guard has its own visible state. A page rendered before this shipped still has the
-    # old determination select, so submitting it must not resolve the case under an intent the admin
-    # no longer expressed. The request test proves the server refuses; this proves the admin can see
-    # why and is left on a usable form.
+    # Old forms can submit a different determination. Refuse that intent and show the current form.
     test 'a stale determination is refused with a visible alert and the case stays open' do
       visit admin_duplicate_review_path(@review_case)
       assert_selector '[data-testid="duplicate-review-detail"]'
 
-      # Reconstruct the pre-5c-1 form: inject the determination control the old page carried.
+      # Restore the determination control from the old form.
       page.execute_script(<<~JS)
         const form = document.querySelector('form[action$="/resolve"]');
         const select = document.createElement('select');
@@ -114,7 +101,7 @@ module Admin
         form.appendChild(select);
       JS
 
-      # Scoped: the merge form carries its own rationale field.
+      # Scope this field because the merge form also has a rationale.
       within 'form[action$="/resolve"]' do
         fill_in 'rationale', with: 'still gathering documents'
         click_button 'Resolve case'
@@ -124,7 +111,6 @@ module Admin
       assert_selector '[data-testid="duplicate-review-detail"]', text: 'Duplicate Review Case'
       assert @review_case.reload.open?, 'a stale submission must not resolve the case'
       assert_nil @review_case.resolved_at
-      # The admin is left able to act, on the current form rather than the stale one.
       assert_selector '#identity-outcome', text: 'Keep records separate'
       assert_no_selector 'select[name=determination]'
 
@@ -207,8 +193,6 @@ module Admin
         assert_selector "##{prefix}-phone-type[required][aria-required='true']"
         assert_selector "input[type='submit'][disabled]"
 
-        # Each decision group carries its own accessible name, and the gate says which one is
-        # still outstanding rather than only that something is.
         assert_selector 'fieldset > legend', text: 'Phone'
         assert_selector 'fieldset > legend', text: 'Address'
         assert_selector '[data-final-submit-gate-target="status"]', text: 'Still needed: Phone type.'
@@ -223,9 +207,7 @@ module Admin
 
       within(form_selector) do
         choose "#{prefix}-phone-source-#{@subject.id}"
-        # A control whose value is cleared on every update must not stay operable, so no real
-        # phone surviving disables it outright rather than leaving a selection the gate would
-        # silently discard. (A CSS `find` still locates it; only find_field filters on disabled.)
+        # Use CSS find because find_field excludes disabled controls by default.
         phone_type = find("##{prefix}-phone-type")
         assert_equal 'false', phone_type['aria-required']
         assert_not phone_type[:required]

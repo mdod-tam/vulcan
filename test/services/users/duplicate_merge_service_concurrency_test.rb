@@ -3,16 +3,9 @@
 require 'test_helper'
 
 module Users
-  # Focused concurrency evidence for the merge boundary itself (plan section 2): two admins
-  # racing to merge the same open case must serialize through
-  # User.lock_for_merge_integrity!, and exactly one of them must win -- the other fails
-  # closed with zero partial side effects rather than double-merging or corrupting the
-  # winner's result. Both threads run the identical, unordered attempt so the test proves
-  # the invariant regardless of which admin's request happens to reach Postgres first.
+  # Competing merges use separate connections and the same open case. One succeeds and one fails without a second merge event.
   class DuplicateMergeServiceConcurrencyTest < ActiveSupport::TestCase
-    # Rails' fixture-connection-sharing patch (on by default) hands every thread the same
-    # underlying connection for the life of a transactional test, which would make a single
-    # Postgres session appear to "lock against itself" instead of producing real contention.
+    # Commit setup data so separate PostgreSQL connections can observe it and contend for locks.
     self.use_transactional_tests = false
 
     include ConcurrencyTestHelper
@@ -28,8 +21,6 @@ module Users
         Current.reset
       end
 
-      # Only a registration_soft_match case is eligible for the merge path (plan acceptance
-      # criteria); a support_claim/paper_intake/admin_create case must fail static preflight.
       review_case = DuplicateReviewCase.create!(
         source: :registration_soft_match,
         subject_user: duplicate,
@@ -57,10 +48,7 @@ module Users
       result_a = nil
       result_b = nil
 
-      # Each thread writes only to its own outer variable, so there is no shared mutable
-      # state between them beyond the real Postgres row locks under test. Thread#join
-      # re-raises automatically if the service raised instead of returning a Result, so
-      # neither thread can wedge the test in an unjoinable state.
+      # Keep each result separate. Thread#join propagates service exceptions.
       thread_a = on_own_connection { result_a = attempt.call }
       thread_b = on_own_connection { result_b = attempt.call }
 
@@ -113,12 +101,7 @@ module Users
       release_holder = Queue.new
       holder_pid_queue = Queue.new
 
-      # Thread A locks ONLY the base User rows via the shared primitive -- it never touches
-      # duplicate_review_cases at all. If User.lock_for_merge_integrity! were removed (or
-      # replaced with a no-op), the contender below would sail through immediately instead
-      # of genuinely blocking, and wait_until_blocked_on_lock would time out and fail this
-      # test -- proving the User-row lock itself, not incidental case-row serialization, is
-      # what provides the exclusion.
+      # The holder locks User rows only. PostgreSQL blocker evidence must show contention before release.
       holder_thread = on_own_connection do
         holder_pid_queue << backend_pid
         ActiveRecord::Base.transaction do

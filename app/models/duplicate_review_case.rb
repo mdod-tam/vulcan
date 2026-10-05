@@ -11,8 +11,7 @@ class DuplicateReviewCase < ApplicationRecord
     application_id
   ].freeze
 
-  # Structured record of an admin resolution. Stores decision context and codes only;
-  # never raw contact values (those come from live records at merge time).
+  # Resolution writers store decision context and codes. Read live contact values at merge time.
   ALLOWED_RESOLUTION_METADATA_KEYS = %w[
     reason_codes
     canonical_user_id
@@ -28,14 +27,11 @@ class DuplicateReviewCase < ApplicationRecord
 
   RESOLVED_STATUSES = %w[resolved_approved resolved_ignored resolved_merged resolved_superseded resolved_selected].freeze
 
-  # Reason codes an admin may record on a resolution, as opposed to the detection-derived
-  # evidence codes in DuplicateReviewCaseCandidate::MATCH_REASONS. A case opened without any
-  # detection reasons still has to be resolvable, so the merge form falls back to
-  # 'admin_reviewed' -- it must stay in this vocabulary or every such merge would be rejected.
+  # Operator codes differ from detection codes in DuplicateReviewCaseCandidate::MATCH_REASONS.
+  # Keep admin_reviewed for the merge form's fallback when a case has no detection reasons.
   OPERATOR_REASON_CODES = %w[admin_reviewed manual_review].freeze
 
-  # Resolution metadata and audit evidence are immutable once written, so the codes that land
-  # there are validated against a server-owned vocabulary rather than accepted from the request.
+  # Validate resolution codes against a server-owned vocabulary before they become terminal evidence.
   RESOLUTION_REASON_CODES = (DuplicateReviewCaseCandidate::MATCH_REASONS + OPERATOR_REASON_CODES).freeze
 
   MAX_REASON_CODES = 20
@@ -62,8 +58,7 @@ class DuplicateReviewCase < ApplicationRecord
     post_import_reconciliation: 5
   }
 
-  # Identity/linking determination the admin recorded. Distinct from the coarse
-  # status enum: it captures what the admin actually decided about the two records.
+  # The determination records the identity decision separately from the case status.
   enum :resolution_determination, {
     same_person_confirmed: 'same_person_confirmed',
     authorized_relationship_confirmed: 'authorized_relationship_confirmed',
@@ -83,9 +78,7 @@ class DuplicateReviewCase < ApplicationRecord
   validate :metadata_shape
   validate :resolution_fields_present_when_resolved
   validate :resolution_metadata_shape
-  # Review evidence invariant: a resolved case is terminal and its resolution/snapshot facts
-  # are never rewritten. Reads the live database row (not this instance's own dirty
-  # tracking) so a caller holding a pre-resolution instance cannot bypass the guard.
+  # Validated updates must preserve resolved evidence. Read the database state to reject stale pre-resolution instances.
   validate :terminal_case_immutable, on: :update
   before_destroy :reject_resolved_case_destroy
 
@@ -102,8 +95,7 @@ class DuplicateReviewCase < ApplicationRecord
     )
   }
 
-  # Candidate cardinality includes missing/deleted candidates, so malformed history
-  # cannot become an exact-pair decision merely because one candidate still exists.
+  # Count candidate rows even when their users are missing. Incomplete history must not become an exact pair.
   scope :single_candidate_pairs, lambda {
     joins(:duplicate_review_case_candidates)
       .where('duplicate_review_cases.subject_user_id <> duplicate_review_case_candidates.candidate_user_id')
@@ -230,8 +222,7 @@ class DuplicateReviewCase < ApplicationRecord
       return
     end
 
-    # Detection metadata carries only machine-derived match evidence; the operator codes are
-    # valid on a resolution, not on the reason a case was opened.
+    # Operator codes belong to a resolution. Detection metadata accepts match evidence codes only.
     validate_reason_code_list(:metadata, metadata['reason_codes'], DuplicateReviewCaseCandidate::MATCH_REASONS)
     validate_submitted_contact_digest(metadata['submitted_contact_digest'])
     validate_intake_context(metadata['intake_context'])

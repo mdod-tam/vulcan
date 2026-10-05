@@ -416,7 +416,6 @@ module Users
     test 'blocks merge when the pair does not include the case subject' do
       other_candidate = create(:constituent, email: "other-#{SecureRandom.hex(3)}@example.com")
       @review_case.duplicate_review_case_candidates.create!(candidate_user: other_candidate, match_reason: 'name_dob', snapshot: {})
-      # @canonical and other_candidate are both candidates, but the subject (@duplicate) is absent.
       result = merge(canonical_user: @canonical, duplicate_user: other_candidate)
       assert result.failure?
       assert_match(/subject must be one of the two records/i, result.message)
@@ -424,7 +423,7 @@ module Users
     end
 
     test 'blocks stranding an email-backed portal account without a real email' do
-      duplicate_without_email = @duplicate # phone-only, no real email
+      duplicate_without_email = @duplicate
       result = merge(
         duplicate_user: duplicate_without_email,
         contact_choices: { email: 'duplicate', phone: 'duplicate', phone_type: 'voice', address: 'canonical' }
@@ -439,11 +438,7 @@ module Users
       assert_not @duplicate.reload.merged?
     end
 
-    # phone_type doubles as "preferred contact method", so its enum also carries the legacy
-    # non-phone modes contact_email => 'email' and contact_letter => 'letter'. The merge form
-    # offers only real telephone routes; a forged request must not be able to store "reach this
-    # person by email" as the canonical's phone preference, which then renders as their contact
-    # method in evaluator and trainer notifications.
+    # The enum includes legacy email/letter preferences. A surviving phone needs a telephone route.
     %w[contact_email contact_letter email letter].each do |forged_phone_type|
       test "blocks merge when phone type #{forged_phone_type} is not a real telephone route" do
         result = merge(contact_choices: { phone: 'duplicate', phone_type: forged_phone_type,
@@ -454,8 +449,6 @@ module Users
       end
     end
 
-    # Reason codes become immutable resolution metadata and audit evidence, so they are validated
-    # against a server-owned vocabulary rather than accepted from the request.
     test 'blocks merge when a reason code is outside the server-owned vocabulary' do
       result = merge(reason_codes: ['exact_phone', 'attacker supplied note'])
       assert result.failure?
@@ -470,8 +463,7 @@ module Users
       assert_not @duplicate.reload.merged?
     end
 
-    # The merge form falls back to 'admin_reviewed' for a case opened without detection reasons,
-    # so that operator code must stay in the vocabulary or every such merge would be rejected.
+    # The merge form uses admin_reviewed when the case has no detection reasons.
     test 'accepts the admin_reviewed operator reason code the merge form falls back to' do
       result = merge(reason_codes: %w[admin_reviewed])
       assert result.success?, result.message
@@ -932,12 +924,8 @@ module Users
       assert_nil User.find_by_token_for(:password_reset, password_reset_token)
     end
 
-    # The retirement case above covers the duplicate. This covers the survivor, which is the
-    # dangerous half: a merge that replaces the canonical's phone is the admin declaring the old
-    # number is not this person's, and an account-access reset link already texted to that number
-    # must stop working. Reset authority is revoked through the token fingerprint, not through
-    # lock ordering at issuance -- issuing the link before the merge was legitimate at the time,
-    # so no amount of locking the lookup would invalidate it afterwards.
+    # The token fingerprint must revoke an earlier reset link when the survivor loses its delivery phone.
+    # Issuance locks alone cannot invalidate a link after a merge.
     test 'discarding the canonical phone invalidates a reset link already sent to that number' do
       @canonical.update!(phone: '555-867-5309', phone_type: 'voice')
       discarded_phone = @canonical.phone
@@ -977,11 +965,8 @@ module Users
       assert_nil @canonical.phone_type
     end
 
-    # portal_creation_key identifies one portal request inside one guardian's namespace, and the
-    # partial unique index is scoped (guardian_id, portal_creation_key) to match. The two repoints
-    # in transfer_guardian_relationships! are therefore asymmetric, and both directions are pinned
-    # here: a wrong choice either strands a key under an account that never made the request, or
-    # discards replay history that is still true.
+    # The replay key belongs to a guardian namespace, enforced by the scoped unique index.
+    # Guardian retirement clears that namespace. Dependent retirement preserves a surviving guardian's replay evidence.
 
     test 'retiring a guardian clears the replay keys on the relationships it transfers' do
       dependent = create(:constituent)
@@ -1001,9 +986,7 @@ module Users
                  'the pair clears together; a stranded fingerprint would violate the pair constraint'
     end
 
-    # The same key may legitimately exist under the canonical guardian already. Carrying the retired
-    # guardian's copy across unchanged would collide on the scoped index; clearing it must let the
-    # merge complete.
+    # An identical key in the retiring guardian's namespace must not collide with the survivor's key.
     test 'a key already held by the canonical guardian does not block the merge' do
       key = SecureRandom.hex(16)
       GuardianRelationship.create!(guardian_user: @canonical, dependent_user: create(:constituent),
@@ -1222,9 +1205,7 @@ module Users
 
     private
 
-    # The replay pair is meaningless split, and a check constraint enforces that, so fixtures that
-    # set a key directly must supply a fingerprint too. The value is opaque here: these tests are
-    # about the key's scope and the merge repoints, not about fingerprint comparison.
+    # The database constraint requires a replay key and fingerprint together. These fixtures test key scope, not fingerprint comparison.
     def fake_fingerprint
       "v1:#{SecureRandom.hex(32)}"
     end
@@ -1372,8 +1353,6 @@ module Users
       result.data.fetch(:duplicate_review_case)
     end
 
-    # Defaults to registration_soft_match; pass an explicit source for cases that exist only
-    # to exercise the competing-open-case blocker rather than being merged themselves.
     def open_case(subject:, candidate:, reason:, source: :registration_soft_match)
       review_case = DuplicateReviewCase.create!(
         source: source,

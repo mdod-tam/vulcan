@@ -2,14 +2,12 @@
 
 module ConstituentPortal
   class DashboardsController < ApplicationController
-    # ApplicationDataLoading concern: Provides optimized methods for loading applications efficiently
-    # Key benefits: Reduces N+1 queries, provides consistent application scoping, optimizes for dashboard views
+    # The shared scope preloads users and their guardian relationships for managed applications.
     include ApplicationDataLoading
 
     before_action :authenticate_user!
     before_action :require_constituent!
     before_action :load_applications, only: [:show]
-    # Make these methods available as helper methods in views
     helper_method :get_latest_rejection_reason, :get_latest_rejection_date, :can_resubmit_proof?
 
     def show
@@ -22,7 +20,6 @@ module ConstituentPortal
 
     protected
 
-    # Helper methods available to views
     def get_latest_rejection_reason(application, proof_type)
       latest_review = application.proof_reviews.where(proof_type: proof_type, status: :rejected)
                                  .order(created_at: :desc).first
@@ -36,11 +33,9 @@ module ConstituentPortal
     end
 
     def can_resubmit_proof?(application, proof_type, max_submissions)
-      # Only allow resubmission for rejected proofs
       status_method = "#{proof_type}_proof_status_rejected?"
       return false unless application.send(status_method)
 
-      # Check if under the maximum number of allowed resubmissions
       submission_count = count_proof_submissions(application, proof_type)
       submission_count < max_submissions
     end
@@ -54,48 +49,36 @@ module ConstituentPortal
     end
 
     def load_applications
-      # Load user's own applications (exclude drafts from main list - show via continue application button)
-      # We still need to detect them for the "Continue Application" button
+      # Drafts have separate continuation links.
       @applications = current_user.applications.where.not(status: :draft).order(created_at: :desc)
 
-      # If no applications found, try a more direct approach to handle potential type mismatches
       if @applications.empty?
         Rails.logger.info "No applications found via association for user #{current_user.id}, trying direct query"
         @applications = Application.where(user_id: current_user.id).where.not(status: :draft).order(created_at: :desc)
       end
 
-      # ApplicationDataLoading concern: Uses optimized application scope for guardian applications
-      # Exclude drafts from managed applications list (default behavior excludes draft, rejected, archived)
+      # The shared scope excludes draft, rejected, and archived applications.
       @managed_applications = build_application_base_scope
                               .where(managing_guardian_id: current_user.id)
                               .order(created_at: :desc)
 
-      # Query for managed drafts separately (for "Continue [Dependent]'s Draft" buttons)
       @managed_drafts = Application.where(managing_guardian_id: current_user.id, status: :draft)
                                    .order(created_at: :desc)
 
-      # Log for debugging
       Rails.logger.info "Dashboard loaded guardian applications for user #{current_user.id}: " \
                         "#{@managed_applications.count} managed applications, " \
                         "#{@managed_drafts.count} managed drafts"
     end
 
     def set_active_and_draft_applications
-      # @applications already excludes drafts, so just get the first one
       @active_application = @applications.first
 
-      # Query for draft separately (not included in @applications)
       @draft_application = current_user.applications.where(status: :draft).first
 
-      # Also get most recent managed active application (for dependents)
-      # @managed_applications already excludes drafts via build_application_base_scope
       @active_managed_application = @managed_applications.first
 
-      # Determine primary application to show in main status section
-      # Show user's own active application first, then most recent managed application
       @primary_active_application = @active_application || @active_managed_application
 
-      # Log for debugging
       Rails.logger.info "Dashboard loaded for user #{current_user.id}: " \
                         "#{@applications.count} submitted applications, " \
                         "active_application_id=#{@active_application&.id}, " \
@@ -104,10 +87,8 @@ module ConstituentPortal
     end
 
     def load_voucher_information
-      # Get voucher information
       @voucher = (@active_application.vouchers.available.first if @active_application)
 
-      # Calculate remaining waiting period
       @waiting_period_months = calculate_waiting_period_months
     end
 
@@ -123,7 +104,7 @@ module ConstituentPortal
       @completed_training_sessions_count = @completed_training_sessions.count
       @active_training_session           = @active_application.active_training_session
 
-      # Completed sessions are the durable count against the training benefit.
+      # Display numbers follow completion order. Open sessions reserve quota without numbers in this map.
       @training_session_numbers = all_sessions.completed_sessions.order(completed_at: :asc, created_at: :asc)
                                               .pluck(:id)
                                               .each_with_index
@@ -166,7 +147,6 @@ module ConstituentPortal
     end
 
     def load_recent_activities
-      # Get recent activities
       @recent_activities = get_recent_activities(@active_application) if @active_application
     end
 
@@ -175,7 +155,6 @@ module ConstituentPortal
     end
 
     def get_recent_activities(application)
-      # Get both proof submissions and reviews in a unified format
       ConstituentPortal::Activity.from_events(application).first(10)
     end
 
@@ -185,11 +164,9 @@ module ConstituentPortal
       waiting_period_years = Policy.get('waiting_period_years') || 3
       waiting_period_end_date = @active_application.application_date + waiting_period_years.years
 
-      # Calculate months between now and waiting period end date
       months_remaining = ((waiting_period_end_date.year - Time.current.year) * 12) +
                          (waiting_period_end_date.month - Time.current.month)
 
-      # Return 0 if waiting period has passed
       [months_remaining, 0].max
     end
   end

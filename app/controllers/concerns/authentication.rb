@@ -16,34 +16,28 @@ module Authentication
 
   private
 
-  # Retrieves the currently logged-in user based on the session_token stored in cookies
   def current_user
     return @current_user if defined?(@current_user)
 
-    # Load current session first to avoid redundant DB queries
     current_session
 
-    # Return the already loaded user from the session if possible
     @current_user = @current_session&.user
 
-    # Set Current.user for the request context - needed for verify_authentication_state
+    # Current.user supplies the actor for request-scoped audit events.
     Current.user = @current_user if @current_user.present?
 
     @current_user
   end
 
-  # Load and cache the current session
   def current_session
     return @current_session if defined?(@current_session)
 
     @current_session = if Rails.env.test?
                          find_test_session
                        else
-                         # Production environment - use signed cookies only
                          find_production_session
                        end
 
-    # Check for expired session
     if @current_session.respond_to?(:expired?) && @current_session.expired?
       @current_session = nil
       cookies.delete(:session_token)
@@ -55,12 +49,12 @@ module Authentication
   def find_production_session
     return if cookies.signed[:session_token].blank?
 
-    # Load session without eager loading user; association is loaded on demand when needed.
+    # Load the user association only when a caller needs it.
     Session.find_by(session_token: cookies.signed[:session_token])
   end
 
   def find_test_session
-    # Try test user sources in priority order
+    # Explicit test identities take priority over cookies.
     find_current_test_user ||
       find_header_test_user ||
       find_env_test_user ||
@@ -107,16 +101,8 @@ module Authentication
     Session.find_by(session_token: cookies[:session_token])
   end
 
-  # Redirects unauthenticated users to the sign-in page with an alert message.
-  #
-  # A JSON caller is answered with 401 instead. Redirecting it sends the fetch to SessionsController#new,
-  # which has no JSON responder and raises ActionController::UnknownFormat -- so an ordinary expired
-  # session produced a server exception on every such request, and the client had to infer what
-  # happened from the fact that it had been redirected. 401 is the answer the question deserves, and
-  # it is what the caller can act on.
-  #
-  # Deliberately scoped to JSON rather than to `xhr?`: Turbo requests are also XHR, and they *do*
-  # want the redirect, because SessionsController#new renders a turbo_stream.
+  # JSON callers need a 401 response. The sign-in action has no JSON responder.
+  # Use the format, not xhr?, because Turbo callers need the sign-in redirect.
   def authenticate_user!
     return if current_user.present?
 
@@ -126,8 +112,7 @@ module Authentication
     redirect_to sign_in_path, alert: 'Please sign in to continue' and return
   end
 
-  # no-store because the body describes the state of one session at one moment; a cached "your
-  # session ended" is wrong the instant the user signs back in.
+  # A cached failure would remain stale after the user signs in.
   def render_json_authentication_required
     response.headers['Cache-Control'] = 'no-store'
     render json: { error: 'authentication_required', sign_in_path: sign_in_path },
@@ -138,7 +123,6 @@ module Authentication
     session[:return_to] = request.fullpath if request.get? || request.head?
   end
 
-  # Restricts access to admin users only
   def require_admin!
     return if current_user.admin?
 

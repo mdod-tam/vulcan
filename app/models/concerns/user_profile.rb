@@ -1,33 +1,26 @@
 # frozen_string_literal: true
 
-# Concern for handling user profile data, validations, and formatting.
 module UserProfile
   extend ActiveSupport::Concern
 
-  # phone_type doubles as "preferred contact method", so its enum also carries two legacy
-  # non-phone modes (contact_email => 'email', contact_letter => 'letter'). These are the
-  # values that describe an actual telephone route, and therefore the only ones that may be
-  # stored alongside a real phone number. Server-owned: any surface that accepts a submitted
-  # phone_type for a real phone must validate against this list rather than the full enum.
+  # The phone_type enum includes email and letter preferences as legacy values.
+  # For a real phone, validate submitted phone_type against these telephone routes, not the full enum.
   REAL_PHONE_TYPES = %w[voice videophone text].freeze
 
   included do
     attr_accessor :phone_type_submitted
 
-    # merge_in_progress: set by the same-person merge service while it moves contact facts, so the
-    #   admin-edit reachability guard does not apply to a supervised release of a duplicate's contact.
-    # retiring_for_merge: set on the duplicate being retired by a merge; a retired record never
-    #   receives deliveries, so email-delivery and letter-address guards do not apply.
+    # The merge service sets merge_in_progress to bypass the admin contact guard during contact transfer.
+    # It sets retiring_for_merge on the duplicate to bypass delivery validation during retirement.
     attr_accessor :merge_in_progress, :retiring_for_merge
 
-    # Callbacks
     before_validation :normalize_email_fields
     before_validation :normalize_communication_preference_for_undeliverable_email
     before_validation :format_phone_number
     before_save :format_phone_number, if: :phone_changed?
     after_save :log_profile_changes, if: :saved_changes_to_profile_fields?
 
-    # PII Encryption
+    # Deterministic encryption permits equality queries on the marked fields.
     encrypts :email, deterministic: true
     encrypts :phone, deterministic: true
     encrypts :dependent_email, deterministic: true
@@ -41,7 +34,6 @@ module UserProfile
     encrypts :state
     encrypts :zip_code
 
-    # Validations
     validates :first_name, presence: true, length: { maximum: 50 }
     validates :last_name, presence: true, length: { maximum: 50 }
     validates :middle_initial, length: { maximum: 1 }, allow_blank: true
@@ -62,17 +54,15 @@ module UserProfile
     validate :portal_self_registration_phone_type_matches_phone, if: :portal_self_registration?
     validate :portal_self_registration_requires_email_backed_account, if: :portal_self_registration?
 
-    # Enums
     enum :status, { inactive: 0, active: 1, suspended: 2 }, default: :active
-    # communication_preference: where to send official documents (email vs physical mail)
+    # Official documents use communication_preference. Questions use phone_type.
     enum :communication_preference, { email: 0, letter: 1 }, default: :email, prefix: :deliver_via
-    # phone_type serves as "preferred contact method" - how the user prefers to be reached for questions
     enum :phone_type, {
-      voice: 'voice',           # Voice call to phone number
+      voice: 'voice',
       videophone: 'videophone', # ASL videophone call
       text: 'text',             # Text/SMS message
-      contact_email: 'email',   # Contact via email (stored as 'email' in DB)
-      contact_letter: 'letter'  # Contact via physical mail (stored as 'letter' in DB)
+      contact_email: 'email',
+      contact_letter: 'letter'
     }, default: :voice
   end
 
@@ -205,8 +195,7 @@ module UserProfile
       end
     end
 
-    # A merge emits a single duplicate_user_merged audit event; suppress the per-field
-    # profile audit noise for the contact moves it performs on the canonical and duplicate.
+    # The merge owns duplicate_user_merged. Do not add profile events for its contact transfers.
     return if changed_attributes.blank? || merge_in_progress || retiring_for_merge
 
     actor = Current.user || self
@@ -264,9 +253,8 @@ module UserProfile
     Current.paper_context && phone.blank?
   end
 
-  # Phone-only paper records store NULL email; password/profile saves must not require email.
-  # They are not email-backed portal accounts and cannot use public portal sign-in.
-  # Address-only users store NULL email/phone and remain editable outside paper context.
+  # Persisted phone-only and address-only constituents can remain editable without an email.
+  # This validation exception does not grant public portal access.
   def email_optional?
     retiring_for_merge || paper_context_no_email? ||
       (persisted? && constituent_user_type? && portal_phone_only_without_email?) ||

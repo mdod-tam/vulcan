@@ -1,14 +1,5 @@
 import UserSearchController from "../../../app/javascript/controllers/admin/user_search_controller"
 
-// Mock the rails request service
-jest.mock('../../../app/javascript/services/rails_request', () => ({
-  railsRequest: {
-    perform: jest.fn(),
-    cancel: jest.fn()
-  }
-}))
-
-// Mock the visibility utility
 jest.mock('../../../app/javascript/utils/visibility', () => ({
   setVisible: jest.fn((element, visible) => {
     if (visible) {
@@ -19,16 +10,12 @@ jest.mock('../../../app/javascript/utils/visibility', () => ({
   })
 }))
 
-import { railsRequest } from "../../../app/javascript/services/rails_request"
-
-// Mock fetch
 global.fetch = jest.fn()
 
 describe("UserSearchController", () => {
   let controller, fixture
   
   beforeEach(() => {
-    // Set up DOM fixture for guardian creation
     document.body.innerHTML = `
       <div id="test-container">
         <input type="text" id="searchInput" placeholder="Search guardians..." />
@@ -72,17 +59,14 @@ describe("UserSearchController", () => {
     
     fixture = document.querySelector('#test-container')
     
-    // Create controller instance directly
     controller = new UserSearchController()
     
-    // Mock controller properties using Object.defineProperty
     Object.defineProperty(controller, 'element', {
       value: fixture,
       writable: false,
       configurable: true
     })
     
-    // Mock target properties
     Object.defineProperty(controller, 'searchInputTarget', {
       value: fixture.querySelector('#searchInput'),
       writable: false,
@@ -123,7 +107,6 @@ describe("UserSearchController", () => {
       configurable: true
     })
     
-    // Mock the has target methods
     Object.defineProperty(controller, 'hasSearchInputTarget', {
       value: true,
       writable: false,
@@ -160,7 +143,6 @@ describe("UserSearchController", () => {
       configurable: true
     })
     
-    // Mock data values
     Object.defineProperty(controller, 'searchUrlValue', {
       value: '/admin/users/search',
       writable: false,
@@ -179,14 +161,12 @@ describe("UserSearchController", () => {
       configurable: true
     })
     
-    // Mock the registered controller identifier
     Object.defineProperty(controller, 'identifier', {
       value: 'admin--user-search',
       writable: false,
       configurable: true
     })
     
-    // Mock outlet properties (initially no outlets)
     Object.defineProperty(controller, 'hasGuardianPickerOutlet', {
       get: () => false,
       configurable: true
@@ -197,13 +177,11 @@ describe("UserSearchController", () => {
       configurable: true
     })
     
-    // Mock the dispatch method
     controller.dispatch = jest.fn()
     
     controller.showErrorNotification = jest.fn()
     controller.showSuccessNotification = jest.fn()
     
-    // Call connect manually
     controller.connect()
   })
   
@@ -215,20 +193,17 @@ describe("UserSearchController", () => {
     jest.clearAllMocks()
   })
   
-  // Helper function to mock the guardian picker outlet
   function createMockGuardianPickerOutlet() {
     const mockOutlet = {
       selectGuardian: jest.fn(),
       clearSelection: jest.fn()
     }
     
-    // Mock the hasGuardianPickerOutlet getter
     Object.defineProperty(controller, 'hasGuardianPickerOutlet', {
       get: () => true,
       configurable: true
     })
     
-    // Mock the guardianPickerOutlet getter
     Object.defineProperty(controller, 'guardianPickerOutlet', {
       get: () => mockOutlet,
       configurable: true
@@ -243,7 +218,6 @@ describe("UserSearchController", () => {
     beforeEach(() => {
       mockedOutlet = createMockGuardianPickerOutlet()
       
-      // Fill form with test data
       fixture.querySelector('[name="guardian_attributes[first_name]"]').value = "John"
       fixture.querySelector('[name="guardian_attributes[last_name]"]').value = "Doe"
       fixture.querySelector('[name="guardian_attributes[email]"]').value = "john@example.com"
@@ -368,13 +342,11 @@ describe("UserSearchController", () => {
         userPhone: "555-1234"
       }
       
-      // Test that escapeHtml method works correctly
       const maliciousName = "<script>alert('xss')</script> Doe"
       const escapedName = controller.escapeHtml(maliciousName)
       expect(escapedName).not.toContain("<script>")
       expect(escapedName).toContain("&lt;script&gt;")
       
-      // Test that buildUserDisplayHTML uses the escaped name correctly
       const html = controller.buildUserDisplayHTML(escapedName, userData)
       expect(html).not.toContain("<script>")
       expect(html).toContain("&lt;script&gt;")
@@ -392,8 +364,6 @@ describe("UserSearchController", () => {
       jest.advanceTimersByTime(300)
       jest.useRealTimers()
       
-      // Verify that the turbo frame's src was set to trigger navigation
-      // The controller uses the searchResultsTarget directly
       expect(controller.searchResultsTarget.src).toBe(
         '/admin/users/search?q=John&role=guardian&frame_id=searchResults'
       )
@@ -409,7 +379,6 @@ describe("UserSearchController", () => {
       await controller.performSearch(event)
       
       expect(controller.clearResults).toHaveBeenCalled()
-      expect(railsRequest.perform).not.toHaveBeenCalled()
     })
   })
   
@@ -426,7 +395,6 @@ describe("UserSearchController", () => {
       
       expect(searchInput.value).toBe("")
       expect(controller.clearResults).toHaveBeenCalled()
-      // Guardian picker outlet should NOT be cleared
       expect(mockedOutlet.clearSelection).not.toHaveBeenCalled()
     })
   })

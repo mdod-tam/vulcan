@@ -1,14 +1,14 @@
 # frozen_string_literal: true
 
-# Service for interacting with Twilio Verify API for 2FA
+# Twilio Verify adapter for SMS 2FA.
 # Twilio Verify documentation: https://www.twilio.com/docs/verify/quickstarts/ruby-rails
 class TwilioVerifyService
   extend SecureErrorSanitizer
 
   class << self
-    # Send a verification code via SMS
-    # @param phone_number [String] Phone number in E.164 format (e.g., +12025551234)
-    # @return [Hash] Result with :success, :verification_sid, :status, and :error keys
+    # Sends a verification code through the SMS delivery policy.
+    # @param phone_number [String] Phone number. Unprefixed ten-digit US numbers receive +1 (e.g., +12025551234)
+    # @return [Hash] :success plus :verification_sid/:status on success or :error on failure
     def send_verification(phone_number, purpose:, sms_credential_id: nil)
       action = { login: 'TwoFactor#sms_login', setup: 'TwoFactor#sms_setup' }.fetch(purpose)
       context = EmailDelivery::Policy.capture(mail_action: action, params: { sms_credential_id: sms_credential_id, phone_number: phone_number })
@@ -63,10 +63,10 @@ class TwilioVerifyService
       { success: false, error: error_message }
     end
 
-    # Check a verification code
+    # Verifies a code against the supplied verification SID.
     # @param phone_number [String] Phone number that received the code
     # @param code [String] The verification code to check
-    # @return [Hash] Result with :success, :status, :valid, and :error keys
+    # @return [Hash] :success, with :status/:valid for handled checks. :error can accompany :success true or false.
     def check_verification(phone_number, code, verification_sid:)
       return test_mode_check(code) if test_mode?
 
@@ -103,8 +103,7 @@ class TwilioVerifyService
       Rails.logger.error("[TwilioVerify] Verification check error: #{error_message}")
       Rails.logger.error("[TwilioVerify] Error code: #{e.code}") if e.respond_to?(:code)
 
-      # Error 60200 is returned for invalid Verify check inputs.
-      # Error 60202 means "Max check attempts reached"
+      # Twilio uses 60200 for invalid parameters and 60202 for exhausted code-check attempts.
       return { success: true, status: 'invalid_input', valid: false, error: error_message } if e.code == 60_200
       return { success: true, status: 'max_attempts_reached', valid: false, error: error_message } if e.code == 60_202
       return { success: true, status: 'not_found', valid: false, error: error_message } if read_twilio_attribute(e, :status_code) == 404
@@ -142,16 +141,14 @@ class TwilioVerifyService
       Rails.env.development? && !verify_configured?
     end
 
-    # Convert phone number from XXX-XXX-XXXX format to E.164 format (+1XXXXXXXXXX)
-    # @param phone [String] Phone number in any format
-    # @return [String] Phone number in E.164 format
+    # Adds +1 to a ten-digit US number. Leaves input with a leading + unchanged.
+    # @param phone [String] Phone number with separators, a country code, or a leading +
+    # @return [String] Number with a leading +, without format validation
     def format_phone_to_e164(phone)
       return phone if phone.start_with?('+')
 
-      # Strip all non-digit characters
       digits = phone.gsub(/\D/, '')
 
-      # Add country code if not present
       digits = "1#{digits}" if digits.length == 10
 
       "+#{digits}"
@@ -173,7 +170,7 @@ class TwilioVerifyService
       nil
     end
 
-    # Test mode methods - used when Verify is not configured or in test environment
+    # Test mode applies in tests and in development without Verify configuration.
     def test_mode_success(phone_number)
       Rails.logger.info("[TwilioVerify] TEST MODE: Simulating verification send to #{sanitize_secure_error_message(phone_number)}")
       {
@@ -186,7 +183,6 @@ class TwilioVerifyService
     end
 
     def test_mode_check(code)
-      # In test mode, accept '123456' as valid code
       is_valid = code == '123456'
       Rails.logger.info("[TwilioVerify] TEST MODE: Verification check valid: #{is_valid}")
       {

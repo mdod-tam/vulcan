@@ -5,26 +5,19 @@ require 'test_helper'
 module Applications
   class AuditLogBuilderTest < ActiveSupport::TestCase
     setup do
-      # Set paper context for test setup.
-      Thread.current[:paper_application_context] = true
-
-      # Bypass validations directly
       Application.any_instance.stubs(:require_proof_validations?).returns(false)
       Application.any_instance.stubs(:verify_proof_attachments).returns(true)
 
-      # Create application using factory with appropriate traits
       @application = create(:application,
                             :approved,
                             income_proof_status: :approved,
                             residency_proof_status: :approved)
 
-      # Prepare the application for testing
       prepare_application_for_test(@application, stub_attachments: true)
 
       @admin = create(:admin)
       @user = create(:constituent)
 
-      # Create some test data that we can verify in our audit logs
       @status_change = ApplicationStatusChange.create!(
         application: @application,
         user: @admin,
@@ -51,33 +44,25 @@ module Applications
       @event = Event.create!(
         user: @admin,
         action: 'application_created',
-        auditable: @application, # Add auditable for consistency
-        metadata: { application_id: @application.id, initial_status: 'approved' } # Add more realistic metadata
+        auditable: @application,
+        metadata: { application_id: @application.id, initial_status: 'approved' }
       )
     end
 
     teardown do
-      # Clear thread-local variables after test
-      Thread.current[:paper_application_context] = nil
-
-      # Remove stubs
       Application.any_instance.unstub(:require_proof_validations?)
       Application.any_instance.unstub(:verify_proof_attachments)
     end
 
-    test 'builds audit logs from all sources' do
-      # Only test the basic functionality without complicated assertions
+    test 'includes status changes in reverse chronological audit logs' do
       with_mocked_attachments do
         builder = AuditLogBuilder.new(@application)
         logs = builder.build_audit_logs
 
-        # Check that we have some logs returned
         assert_not_empty logs
 
-        # Very basic test for a known object
         assert_includes logs, @status_change
 
-        # Verify they're sorted by created_at in descending order
         assert_equal logs.map(&:created_at), logs.map(&:created_at).sort.reverse
       end
     end
@@ -89,20 +74,15 @@ module Applications
       end
     end
 
-    test 'handles exceptions gracefully' do
-      # Skip this test as it requires deeper mocking of the AuditLogBuilder class
-      # which is causing issues across test runs
-      skip 'This test requires deeper mocking'
+    test 'returns empty audit logs after a build failure' do
+      skip 'Add failure injection and result assertions before enabling this test'
     end
 
     test 'builds deduplicated audit logs' do
-      # Skip this test as the AuditLogBuilder deduplication seems to be more complex
-      # than we can easily test without deeper knowledge of the implementation
-      skip 'Deduplication testing requires deeper knowledge of implementation'
+      skip 'Add duplicate-event inputs and deduplication assertions before enabling this test'
     end
 
     test 'includes user profile changes in audit logs' do
-      # Create profile change events for the application user
       profile_update_event = Event.create!(
         user: @application.user,
         action: 'profile_updated',
@@ -121,18 +101,15 @@ module Applications
         builder = AuditLogBuilder.new(@application)
         logs = builder.build_audit_logs
 
-        # Verify the profile update event is included
         assert_includes logs, profile_update_event
       end
     end
 
     test 'includes guardian profile changes for dependent applications' do
-      # Create a dependent application with managing guardian
       guardian = create(:constituent)
       dependent = create(:constituent)
       dependent_application = create(:application, user: dependent, managing_guardian: guardian)
 
-      # Create profile change event where guardian updates dependent's profile
       guardian_update_event = Event.create!(
         user: guardian,
         action: 'profile_updated_by_guardian',
@@ -150,18 +127,15 @@ module Applications
         builder = AuditLogBuilder.new(dependent_application)
         logs = builder.build_audit_logs
 
-        # Verify the guardian update event is included
         assert_includes logs, guardian_update_event
       end
     end
 
     test 'includes managing guardian profile changes' do
-      # Create a dependent application with managing guardian
       guardian = create(:constituent)
       dependent = create(:constituent)
       dependent_application = create(:application, user: dependent, managing_guardian: guardian)
 
-      # Create profile change event where guardian updates their own profile
       guardian_self_update_event = Event.create!(
         user: guardian,
         action: 'profile_updated',
@@ -179,13 +153,11 @@ module Applications
         builder = AuditLogBuilder.new(dependent_application)
         logs = builder.build_audit_logs
 
-        # Verify the guardian's self-update event is included
         assert_includes logs, guardian_self_update_event
       end
     end
 
     test 'does not include unrelated user profile changes' do
-      # Create an unrelated user and their profile change
       unrelated_user = create(:constituent)
       unrelated_event = Event.create!(
         user: unrelated_user,
@@ -204,13 +176,11 @@ module Applications
         builder = AuditLogBuilder.new(@application)
         logs = builder.build_audit_logs
 
-        # Verify the unrelated user's event is NOT included
         assert_not_includes logs, unrelated_event
       end
     end
 
     test 'profile changes are sorted with other audit logs by created_at' do
-      # Create profile change event with specific timestamp
       profile_event = Event.create!(
         user: @application.user,
         action: 'profile_updated',
@@ -227,10 +197,8 @@ module Applications
         builder = AuditLogBuilder.new(@application)
         logs = builder.build_audit_logs
 
-        # Verify all logs are sorted by created_at in descending order
         assert_equal logs.map(&:created_at), logs.map(&:created_at).sort.reverse
 
-        # Verify profile event is included and properly positioned
         assert_includes logs, profile_event
       end
     end

@@ -2,33 +2,29 @@
 
 require_relative '../../lib/webhooks/email_events_parameter_filter'
 
-# Be sure to restart your server when you modify this file.
+# After you modify this file, restart the server.
 
-# Configure parameters to be partially matched (e.g. passw matches password) and filtered from the log file.
-# Use this to limit dissemination of sensitive information.
-# See the ActiveSupport::ParameterFilter documentation for supported notations and behaviors.
+# Parameter filters limit sensitive data in logs. String and symbol filters match partial parameter names.
+# See ActiveSupport::ParameterFilter for supported notations and behavior.
 Rails.application.config.filter_parameters += [
   # Password-related fields
   :password, :password_confirmation, :current_password, :password_digest,
 
-  # PII fields (plaintext) - User model
+  # Contact, identity, and address data
   :email, :phone, :contact, :details, :email_hint, :ssn_last4, :date_of_birth,
   :physical_address_1, :physical_address_2, :city, :state, :zip_code,
 
-  # Names. A name alone is weak, but these travel alongside a date of birth and an address in
-  # identity review and paper intake, and the combination is exactly what identifies a person.
+  # Identity review and paper intake submit names with birth dates and addresses.
   :first_name, :middle_initial, :last_name,
 
-  # Short-lived authorization artifact for a paper identity decision. It is not a credential for any
-  # account, but it authorizes a specific creation, so it should not sit in logs after the request
-  # that spent it. Listed explicitly because none of the legacy patterns below match this name --
-  # /\btoken\z/ is anchored and this parameter is not called "token".
+  # The paper identity receipt binds a creation decision to reviewed facts. Keep it and the rationale out of logs.
+  # Legacy token filters do not match these parameter names.
   :identity_decision, :identity_review_receipt, :identity_rationale, /_signed_id\z/,
 
   # Autosave wraps income, disability, and provider details in a generic value parameter.
   :autosave_context, :field_value,
 
-  # SMS credential specific field
+  # SMS contact
   :phone_number,
 
   # Medical provider PII fields
@@ -39,11 +35,11 @@ Rails.application.config.filter_parameters += [
 
   # Authentication credential secrets
   :secret, /\A(?:HTTP_)?Authorization\z/i,
-  # NOTE: public_key omitted as it's not secret data in cryptographic terms
+  # The legacy /_key\z/ filter also matches public_key.
 
-  # Legacy broad filters (be careful with these)
+  # Legacy filters also match names outside the explicit lists.
   /passw/, /\btoken\z/, /_key\z/, /crypt/, /salt/, /certificate/, /\botp\z/, /\bssn\z/, /cvv/, /cvc/
 ]
 
-# Install before request logging so rejected Postmark callbacks are also redacted.
+# Redact Postmark parameters before request logging, including rejected callbacks.
 Rails.application.config.middleware.insert_before Rails::Rack::Logger, Webhooks::EmailEventsParameterFilter

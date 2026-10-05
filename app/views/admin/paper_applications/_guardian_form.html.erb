@@ -1,13 +1,4 @@
-<%# 
-  Guardian Creation Form Partial
-  Used when creating a new guardian for a dependent applicant
-  
-  This partial provides a complete guardian information form with:
-  - Personal identification
-  - Contact information with live feedback
-  - Communication preferences
-  - Accessibility options
-%>
+<%# Guardian creation during dependent paper intake. %>
 
 <div class="mt-6 p-5 border-2 border-indigo-200 rounded-lg bg-indigo-50/50" data-controller="contact-feedback">
   <% submitted = (@paper_application[:submitted_params] || {}).with_indifferent_access %>
@@ -21,7 +12,6 @@
   </h3>
   
   <%= fields_for :guardian_attributes, guardian_attributes do |g| %>
-    <%# Personal Information %>
     <div class="mb-5">
       <h4 class="text-sm font-medium text-gray-700 mb-3">Personal Information</h4>
       <div class="grid grid-cols-1 md:grid-cols-6 gap-4">
@@ -60,7 +50,6 @@
         </div>
       </div>
 
-      <%# Terms Acceptance %>
       <div class="mt-6 flex items-start">
         <%= fields_for :application, @paper_application[:application] do |a| %>
           <%= a.check_box :terms_accepted, 
@@ -73,11 +62,9 @@
       </div>
     </div>
 
-    <%# Contact Information %>
     <div class="mb-5">
       <h4 class="text-sm font-medium text-gray-700 mb-3">Contact Information</h4>
 
-      <%# No Email Checkbox %>
       <div class="mb-4">
         <label class="flex items-center gap-2 cursor-pointer">
           <%= hidden_field_tag :guardian_no_email_address, "0", id: nil %>
@@ -92,7 +79,6 @@
         </label>
       </div>
 
-      <%# No Phone Checkbox %>
       <div class="mb-4">
         <label class="flex items-center gap-2 cursor-pointer">
           <%= hidden_field_tag :guardian_no_phone_number, "0", id: nil %>
@@ -133,7 +119,6 @@
         </div>
       </div>
 
-      <%# Preferred Contact Method %>
       <fieldset data-contact-feedback-target="phoneTypeFieldset" class="mb-4 p-3 bg-white rounded border border-gray-200" aria-describedby="guardian_contact_method_help guardian_contact_method_feedback">
         <legend class="text-sm font-medium text-gray-700 mb-2">Contact method</legend>
         <p id="guardian_contact_method_help" class="text-xs text-gray-500 mb-2">How would you like us to contact you if we have any questions?</p>
@@ -177,7 +162,6 @@
         <div id="guardian_contact_method_feedback" data-contact-feedback-target="feedback" class="hidden" aria-live="polite"></div>
       </fieldset>
 
-      <%# Address %>
       <div class="space-y-3">
         <div>
           <%= g.label :physical_address_1, "Street Address", class: "block text-sm font-medium text-gray-700" %>
@@ -203,8 +187,7 @@
           </div>
           <div>
             <%= g.label :state, "State", class: "block text-sm font-medium text-gray-700" %>
-            <%# Defaults to MD, but a submitted value wins -- a hardcoded value silently discards a
-                correction on a retry. %>
+            <%# Preserve a submitted state on retry. Use MD only when the value is blank. %>
             <%= g.text_field :state,
                 value: (g.object&.state.presence || "MD"),
                 autocomplete: "address-level1",
@@ -219,7 +202,6 @@
                 data: { dependent_fields_target: "guardianZip", contact_feedback_target: "zipCode" } %>
           </div>
         </div>
-        <%# Residency proof notice - placed after all address fields for clarity %>
         <div role="note" aria-label="Address matching requirement" class="mt-3 flex items-start gap-2 p-2 bg-blue-50 border border-blue-200 rounded-md">
           <svg class="w-5 h-5 text-blue-600 flex-shrink-0 mt-0.5" fill="currentColor" viewBox="0 0 20 20" aria-hidden="true">
             <path fill-rule="evenodd" d="M18 10a8 8 0 11-16 0 8 8 0 0116 0zm-7-4a1 1 0 11-2 0 1 1 0 012 0zM9 9a1 1 0 000 2v3a1 1 0 001 1h1a1 1 0 100-2v-3a1 1 0 00-1-1H9z" clip-rule="evenodd"/>
@@ -231,7 +213,6 @@
       </div>
     </div>
 
-    <%# Communication Preferences %>
     <div class="mb-5 p-4 bg-white rounded border border-gray-200">
       <h4 class="text-sm font-medium text-gray-700 mb-3">Communication Preferences</h4>
       <div class="grid grid-cols-1 md:grid-cols-2 gap-4 mb-4">
@@ -294,7 +275,6 @@
         <div id="guardian_document_delivery_feedback" data-contact-feedback-target="deliveryFeedback" class="hidden" aria-live="polite" aria-atomic="true"></div>
       </fieldset>
 
-      <%# Newsletter Signup %>
       <div class="mt-6 flex items-start">
         <%= g.check_box :newsletter_signup, 
             class: "mt-1 h-4 w-4 text-indigo-600 focus:ring-indigo-500 border-gray-300 rounded" %>

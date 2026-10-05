@@ -297,10 +297,7 @@ module Admin
       assert @subject.reload.merged?
     end
 
-    # A non-merge resolution means exactly one thing, so the five-value control offered a fake
-    # choice. The outcome is now server-owned and shown as static text; a one-option select would
-    # have been no better. The enum keeps every value, because resolved cases already recorded with
-    # them must still render.
+    # Resolution uses a fixed outcome. Legacy enum values remain available for historical records.
     test 'the resolve form states the fixed outcome instead of offering a choice' do
       get admin_duplicate_review_path(@review_case)
 
@@ -317,8 +314,6 @@ module Admin
       end
     end
 
-    # A submitted determination cannot influence what is stored. The value is server-owned, so a
-    # hand-built request naming another determination must not reach the record.
     test 'a forged determination cannot alter the stored determination' do
       post resolve_admin_duplicate_review_path(@review_case),
            params: { determination: 'fraud_or_security_review',
@@ -329,9 +324,7 @@ module Admin
       assert @review_case.open?, 'a request carrying a stale determination must not resolve the case'
     end
 
-    # Ignoring it outright would be worse than rejecting: an admin on a page rendered before this
-    # shipped could choose "Needs more information", submit, and silently get a keep-separate
-    # resolution -- the opposite of their intent.
+    # Reject a conflicting old-form choice instead of silently recording a different intent.
     test 'a stale form carrying needs_more_information does not resolve the case' do
       post resolve_admin_duplicate_review_path(@review_case),
            params: { determination: 'needs_more_information',
@@ -411,9 +404,6 @@ module Admin
       assert_not @subject.reload.needs_duplicate_review
     end
 
-    # The action is server-owned, so a hand-built or cached request naming a retired one must be
-    # refused rather than quietly resolved as keep-separate: the admin asked for an outcome the
-    # server no longer offers, on a decision that releases a submission gate.
     test 'a stale form carrying a retired resolution_action does not resolve the case' do
       %w[approve ignore].each do |retired_action|
         post resolve_admin_duplicate_review_path(@review_case),
@@ -425,10 +415,7 @@ module Admin
       end
     end
 
-    # The other half of the rollover contract. The guard must reject only *conflicting* values, so a
-    # page rendered between the two changes -- carrying the values the server would choose anyway --
-    # still resolves normally. A guard that refused these would strand every admin holding an
-    # intermediate form until they reloaded.
+    # Compatible old-form values preserve staff intent and must still resolve.
     test 'a compatible stale form still resolves the case' do
       post resolve_admin_duplicate_review_path(@review_case),
            params: { resolution_action: 'keep_separate', determination: 'keep_separate',
@@ -441,8 +428,6 @@ module Admin
       assert_equal 'keep_separate', @review_case.resolution_determination
     end
 
-    # The status label and the determination are shown side by side on the resolution summary, so a
-    # label that contradicts the determination misreports the decision staff recorded.
     test 'a resolved case reports the outcome without contradicting the determination' do
       post resolve_admin_duplicate_review_path(@review_case), params: { rationale: 'different people' }
       get admin_duplicate_review_path(@review_case)
@@ -455,8 +440,6 @@ module Admin
       end
     end
 
-    # Nothing writes resolved_approved any more, but rows that already carry it must keep rendering
-    # their own label rather than being retitled after the fact.
     test 'a historical resolved_approved case still displays Approved' do
       @review_case.update!(
         status: :resolved_approved,
@@ -507,8 +490,7 @@ module Admin
         reason_codes: ['name_dob'],
         contact: { phone_user_id: @candidate.id, address_user_id: @candidate.id, phone_type: 'voice' },
         delivery_user_id: @candidate.id,
-        # Forged/irrelevant application_ids: an unrelated app id plus a nonexistent id.
-        # The service no longer accepts a transfer subset, so this must have no effect.
+        # The controller must not let this unrelated/nonexistent subset restrict the service-owned transfer.
         application_ids: [unrelated_app.id, 0]
       }
 

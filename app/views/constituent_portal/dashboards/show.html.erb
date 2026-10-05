@@ -12,7 +12,6 @@
 
     <main id="main-content">
       <div class="max-w-7xl mx-auto sm:px-6 lg:px-8">
-        <!-- Status Overview -->
           <div class="bg-white shadow overflow-hidden sm:rounded-lg p-6 mb-6">
             <div class="px-4 py-5 sm:px-6 space-y-6">
               <section aria-labelledby="my-application-status-title">
@@ -85,9 +84,7 @@
             </div>
           </div>
 
-        <!-- Quick Actions Grid -->
         <div class="grid grid-cols-1 gap-4 sm:grid-cols-2 lg:grid-cols-3">
-          <!-- Medical Certification Status -->
           <div class="bg-white overflow-hidden shadow rounded-lg">
             <div class="p-5">
               <div class="flex items-center">
@@ -122,7 +119,6 @@
             </div>
           </div>
 
-          <!-- My Voucher -->
           <div class="bg-white overflow-hidden shadow rounded-lg">
             <div class="p-5">
               <div class="flex items-center">
@@ -170,7 +166,6 @@
               <h3 class="text-lg leading-6 font-medium text-gray-900">My Dependents</h3>
             </div>
             <div class="px-4 py-5 sm:p-6">
-              <!-- Show managed applications -->
               <% if @managed_applications&.any? %>
                 <h4 class="text-md font-medium text-gray-900 mb-4">Applications I'm Managing</h4>
                 <div class="overflow-hidden border-b border-gray-200 sm:rounded-lg mb-6">
@@ -205,7 +200,6 @@
                 </div>
               <% end %>
               
-              <!-- My dependents section -->
               <% if current_user.dependents.any? %>
                 <h4 class="text-md font-medium text-gray-900 mb-4">My Dependents</h4>
                 <ul role="list" class="divide-y divide-gray-200">
@@ -279,7 +273,6 @@
           </div>
         <% end %>
 
-        <!-- Proof Status and Upload Section -->
         <% if @active_application %>
           <div class="mt-6 bg-white shadow overflow-hidden sm:rounded-lg">
             <div class="px-4 py-5 border-b border-gray-200 sm:px-6">
@@ -303,7 +296,6 @@
             </div>
             <div class="px-4 py-5 sm:p-6 space-y-6">
               <% if @active_application&.income_proof_required? %>
-              <!-- Income Proof Status -->
               <div>
                 <div class="flex items-center justify-between">
                   <div>
@@ -348,7 +340,6 @@
               </div>
               <% end %>
 
-              <!-- Residency Proof Status -->
               <div>
                 <div class="flex items-center justify-between">
                   <div>
@@ -392,7 +383,6 @@
                 </div>
               </div>
 
-              <!-- ID Proof Status -->
               <div>
                 <div class="flex items-center justify-between">
                   <div>
@@ -439,7 +429,6 @@
           </div>
         <% end %>
 
-        <!-- Document Status for Managed Applications -->
         <% if @managed_applications&.any? %>
           <% @managed_applications.where.not(status: :draft).each do |managed_app| %>
             <div class="mt-6 bg-white shadow overflow-hidden sm:rounded-lg">
@@ -453,7 +442,6 @@
               </div>
               <div class="px-4 py-5 sm:p-6 space-y-6">
                 <% if managed_app.income_proof_required? %>
-                <!-- Income Proof Status -->
                 <div>
                   <div class="flex items-center justify-between">
                     <div>
@@ -501,7 +489,6 @@
                 </div>
                 <% end %>
 
-                <!-- Residency Proof Status -->
                 <div>
                   <div class="flex items-center justify-between">
                     <div>
@@ -547,7 +534,6 @@
                   </div>
                 </div>
 
-                <!-- ID Proof Status -->
                 <div>
                   <div class="flex items-center justify-between">
                     <div>
@@ -597,10 +583,8 @@
           <% end %>
         <% end %>
 
-        <!-- Application Information -->
         <% if @active_application && @active_application.status_approved? %>
           <div class="mt-6 grid grid-cols-1 gap-4 sm:grid-cols-2">
-            <!-- Waiting Period -->
             <div class="bg-white shadow overflow-hidden sm:rounded-lg">
               <div class="px-4 py-5 border-b border-gray-200 sm:px-6">
                 <h3 class="text-lg leading-6 font-medium text-gray-900">Waiting Period</h3>
@@ -628,7 +612,6 @@
               </div>
             </div>
 
-            <!-- Training Sessions -->
             <div class="bg-white shadow overflow-hidden sm:rounded-lg" data-testid="training-card">
               <div class="px-4 py-5 border-b border-gray-200 sm:px-6">
                 <h3 class="text-lg leading-6 font-medium text-gray-900">Training Sessions</h3>
@@ -636,7 +619,6 @@
               <div class="px-4 py-5 sm:p-6">
                 <% service_window_end = @active_application.service_window_end_date %>
 
-                <%# Previous completed sessions %>
                 <% if @completed_training_sessions&.any? %>
                   <div class="mb-5">
                     <h4 class="text-sm font-medium text-gray-700 mb-2">Previous Sessions</h4>
@@ -674,7 +656,6 @@
                     </p>
                   <% end %>
 
-                  <%# Remaining count — always visible when in service window %>
                   <p class="text-sm text-gray-700 mb-4">
                     <span class="font-medium"><%= @remaining_training_sessions %></span>
                     of
@@ -683,7 +664,6 @@
                   </p>
 
                   <% if @active_application.training_request_pending? %>
-                    <%# Admin set training_requested_at but no session assigned yet %>
                     <div class="mb-4 rounded-md bg-blue-50 p-4">
                       <p class="text-sm text-blue-700">
                         <%= t('applications.training_requests.messages.duplicate_pending', locale: current_user.effective_locale) %>
@@ -695,7 +675,6 @@
                   <% elsif @active_training_session.present? %>
                       <% active_session_num = @completed_training_sessions_count + 1 %>
                     <% if @active_training_session.status_requested? %>
-                      <%# Trainer assigned but no date set yet %>
                       <div class="mb-4 rounded-md bg-blue-50 p-4">
                         <p class="text-sm font-medium text-blue-800 mb-1">
                           Session <%= active_session_num %> of <%= @max_training_sessions %> &mdash; Awaiting Scheduling
@@ -707,7 +686,6 @@
                         </p>
                       </div>
                     <% elsif @active_training_session.scheduled_for.present? %>
-                      <%# scheduled or confirmed with a concrete date %>
                       <div class="mb-4 rounded-md bg-blue-50 p-4">
                         <p class="text-sm font-medium text-blue-800 mb-1">
                           Session <%= active_session_num %> of <%= @max_training_sessions %> &mdash; Scheduled
@@ -760,7 +738,6 @@
           </div>
         <% end %>
 
-        <!-- Recent Activity -->
         <div class="mt-6 bg-white shadow overflow-hidden sm:rounded-lg">
           <div class="px-4 py-5 border-b border-gray-200 sm:px-6">
             <h3 class="text-lg leading-6 font-medium text-gray-900">Recent Activity</h3>

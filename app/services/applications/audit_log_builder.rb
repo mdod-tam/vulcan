@@ -10,11 +10,9 @@ module Applications
       @delivery_owners_by_id = {}
     end
 
-    # Build combined audit logs from multiple sources, including creation event
     def build_audit_logs
       return [] unless application
 
-      # Combine creation event with other events
       events = [build_creation_event] + combined_events
       preload_delivery_owners(events)
       events.sort_by(&:created_at).reverse
@@ -25,18 +23,14 @@ module Applications
       []
     end
 
-    # Build deduplicated audit logs using the EventDeduplicationService
     def build_deduplicated_audit_logs
       return [] unless application
 
-      # Collect all events from various sources
       events = build_audit_logs
 
-      # Use the deduplication service to remove duplicates
       deduped = EventDeduplicationService.new.deduplicate(events)
 
-      # Conditionally preload associations used by the view to avoid N+1
-      # without over-eager loading when those records are not displayed.
+      # Preload only notification associations that the audit view reads.
       notifications = deduped.grep(Notification)
       if notifications.any?
         ActiveRecord::Associations::Preloader.new(
@@ -72,9 +66,8 @@ module Applications
       @delivery_owners_by_id = User.where(id: owner_ids.map(&:to_i).uniq).index_by(&:id)
     end
 
-    # Construct the application creation event
     def build_creation_event
-      # Prefer the persisted creation event (logged with correct actor: admin for paper, user for portal)
+      # Prefer the persisted event to preserve its recorded actor.
       persisted = Event
                   .select('id, user_id, action, created_at, metadata, auditable_type, auditable_id')
                   .includes(:user)
@@ -84,7 +77,6 @@ module Applications
 
       return persisted if persisted.present?
 
-      # Fallback: locate persisted events that reference the application via metadata.application_id
       persisted_by_metadata = Event
                               .select('id, user_id, action, created_at, metadata, auditable_type, auditable_id')
                               .includes(:user)
@@ -95,7 +87,7 @@ module Applications
 
       return persisted_by_metadata if persisted_by_metadata.present?
 
-      # Fallback for legacy records where no persisted creation event exists
+      # Without a persisted creation event, the fallback uses current application attributes.
       Event.new(
         user: application.user,
         auditable: application,
@@ -108,7 +100,6 @@ module Applications
       )
     end
 
-    # Aggregate events from all sources
     def combined_events
       [
         load_proof_reviews,
@@ -119,28 +110,25 @@ module Applications
       ].flatten
     end
 
-    # Load proof reviews with minimal eager loading
     def load_proof_reviews
       ProofReview
         .select('id, application_id, admin_id, proof_type, status, created_at, reviewed_at, rejection_reason, notes')
-        .includes(admin: []) # Include the admin but not role_capabilities
+        .includes(admin: [])
         .where(application_id: application.id)
         .order(created_at: :desc)
         .to_a
     end
 
-    # Load status changes with minimal eager loading
     def load_status_changes
       ApplicationStatusChange
         .select('id, application_id, user_id, from_status, to_status, created_at, metadata, notes')
-        .includes(user: []) # Include the user but not role_capabilities
+        .includes(user: [])
         .where(application_id: application.id)
         .order(created_at: :desc)
         .to_a
     end
 
-    # Load notifications without eager loading; we conditionally preload
-    # actor after deduplication to avoid unnecessary eager loading.
+    # After deduplication, preload notification actors and selected recipients.
     def load_notifications
       Notification
         .select('id, recipient_id, actor_id, notifiable_id, notifiable_type, action, read_at, created_at, message_id, delivery_status, metadata')
@@ -160,11 +148,10 @@ module Applications
         .to_a
     end
 
-    # Load application events with minimal eager loading
     def load_application_events
       Event
         .select('id, user_id, action, created_at, metadata, auditable_type, auditable_id')
-        .includes(:user) # Include just the user without role_capabilities
+        .includes(:user)
         .where(
           "action IN (?) AND (metadata->>'application_id' = ? OR metadata @> ? OR (auditable_type = 'Application' AND auditable_id = ?))",
           %w[
@@ -188,7 +175,6 @@ module Applications
         .to_a
     end
 
-    # Load user profile changes with minimal eager loading
     def load_user_profile_changes
       user_ids = [application.user_id]
       user_ids << application.managing_guardian_id if application.managing_guardian_id.present?

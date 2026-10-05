@@ -2,8 +2,8 @@
 
 class VoucherNotificationsMailer < ApplicationMailer
   include Rails.application.routes.url_helpers
-  include ActionView::Helpers::NumberHelper # For number_to_currency
-  include Mailers::SharedPartialHelpers # Include the shared helpers for header_text and footer_text
+  include ActionView::Helpers::NumberHelper
+  include Mailers::SharedPartialHelpers
 
   def self.default_url_options
     Rails.application.config.action_mailer.default_url_options
@@ -16,14 +16,12 @@ class VoucherNotificationsMailer < ApplicationMailer
     template_name = 'voucher_notifications_voucher_assigned'
 
     begin
-      # Only find the text template as per project strategy
       text_template = find_text_template(template_name, locale: locale)
     rescue ActiveRecord::RecordNotFound => e
       Rails.logger.error "Missing EmailTemplate for #{template_name}: #{e.message}"
       raise "Email template (text format) not found for #{template_name}"
     end
 
-    # Common elements for shared partials
     header_title = header_title_from_template_subject(
       template: text_template,
       subject_variables: { voucher_code: voucher.code, user_first_name: user.first_name },
@@ -39,12 +37,10 @@ class VoucherNotificationsMailer < ApplicationMailer
       nil
     end
 
-    # Prepare variables
     variables = {
       user_first_name: user.first_name,
       voucher_code: voucher.code,
       initial_value_formatted: number_to_currency(voucher.initial_value, locale: locale),
-      # Use Policy.get for configuration values
       expiration_date_formatted: I18n.l(voucher.expiration_date.to_date, format: :long, locale: locale),
       validity_period_months: Policy.get('voucher_validity_period_months') || 6,
       minimum_redemption_amount_formatted: number_to_currency(Policy.get('minimum_voucher_redemption_amount') || 0, locale: locale),
@@ -70,14 +66,12 @@ class VoucherNotificationsMailer < ApplicationMailer
     template_name = 'voucher_notifications_voucher_expiring_soon'
 
     begin
-      # Find the text template
       text_template = find_text_template(template_name, locale: locale)
     rescue ActiveRecord::RecordNotFound => e
       Rails.logger.error "Missing EmailTemplate for #{template_name}: #{e.message}"
       raise "Email template (text format) not found for #{template_name}"
     end
 
-    # Prepare variables
     header_title = header_title_from_template_subject(
       template: text_template,
       subject_variables: { voucher_code: voucher.code, user_first_name: user.first_name },
@@ -92,7 +86,6 @@ class VoucherNotificationsMailer < ApplicationMailer
     rescue StandardError
       nil
     end
-    # Use Policy.get for configuration values
     expiration_date = voucher.issued_at + (Policy.get('voucher_validity_period_months') || 6).months
     days_remaining = (expiration_date - Time.current).to_i / 1.day
     expiration_date_formatted = I18n.l(expiration_date.to_date, format: :long, locale: locale)
@@ -150,14 +143,12 @@ class VoucherNotificationsMailer < ApplicationMailer
     template_name = 'voucher_notifications_voucher_expired'
 
     begin
-      # Find the text template
       text_template = find_text_template(template_name, locale: locale)
     rescue ActiveRecord::RecordNotFound => e
       Rails.logger.error "Missing EmailTemplate for #{template_name}: #{e.message}"
       raise "Email template (text format) not found for #{template_name}"
     end
 
-    # Common elements for shared partials
     header_title = header_title_from_template_subject(
       template: text_template,
       subject_variables: { voucher_code: voucher.code, user_first_name: user.first_name },
@@ -173,7 +164,6 @@ class VoucherNotificationsMailer < ApplicationMailer
       nil
     end
 
-    # Optional: Render transaction history if needed for the template (text only)
     transaction_history_text = ''
     if voucher.transactions.any?
       transaction_history_text = voucher.transactions.order(created_at: :desc).map do |t|
@@ -188,17 +178,14 @@ class VoucherNotificationsMailer < ApplicationMailer
       voucher_code: voucher.code,
       initial_value_formatted: number_to_currency(voucher.initial_value, locale: locale),
       unused_value_formatted: number_to_currency(voucher.remaining_value, locale: locale),
-      # Use Policy.get for configuration values
       expiration_date_formatted: I18n.l(voucher.expiration_date.to_date, format: :long, locale: locale),
-      # Required header and footer text
       header_text: header_text(title: header_title, logo_url: header_logo_url, locale: locale),
       footer_text: footer_text(contact_email: footer_contact_email, website_url: footer_website_url,
                                organization_name: organization_name, show_automated_message: footer_show_automated_message,
                                locale: locale),
       support_email: footer_contact_email,
-      # Optional variables
       transaction_history_text: transaction_history_text,
-      show_automated_message: footer_show_automated_message # Optional
+      show_automated_message: footer_show_automated_message
     }.compact
 
     return noop_letter_delivery if queue_letter_if_preferred(user, template_name, variables, locale: locale, application: voucher.application)
@@ -218,20 +205,18 @@ class VoucherNotificationsMailer < ApplicationMailer
     template_name = 'voucher_notifications_voucher_redeemed'
 
     begin
-      # Find the text template
       text_template = find_text_template(template_name, locale: locale)
     rescue ActiveRecord::RecordNotFound => e
       Rails.logger.error "Missing EmailTemplate for #{template_name}: #{e.message}"
       raise "Email template (text format) not found for #{template_name}"
     end
 
-    # Prepare variables
     header_title = header_title_from_template_subject(
       template: text_template,
       subject_variables: { voucher_code: voucher.code, user_first_name: user.first_name },
       fallback: I18n.t('mailers.voucher_notifications.redeemed_header', locale: locale)
     )
-    remaining_balance_formatted = number_to_currency(voucher.remaining_value, locale: locale) # After transaction
+    remaining_balance_formatted = number_to_currency(voucher.remaining_value, locale: locale)
     footer_contact_email = Policy.get('support_email') || 'mat.program1@maryland.gov'
     footer_website_url = ProgramContact.website_url
     footer_show_automated_message = true
@@ -241,17 +226,14 @@ class VoucherNotificationsMailer < ApplicationMailer
     rescue StandardError
       nil
     end
-    # Use Policy.get for configuration values
     expiration_date_formatted = I18n.l(voucher.expiration_date.to_date, format: :long, locale: locale)
     minimum_redemption_amount_formatted = number_to_currency(Policy.get('minimum_voucher_redemption_amount') || 0, locale: locale)
     redeemed_value_formatted = number_to_currency(transaction.amount, locale: locale)
 
-    # Optional message blocks (text only)
     remaining_value_message_text = ''
     fully_redeemed_message_text = ''
 
     if voucher.remaining_value.positive?
-      # Simplified example - actual content depends on template placeholders
       remaining_value_message_text = I18n.t(
         'mailers.voucher_notifications.remaining_balance',
         locale: locale, balance: remaining_balance_formatted, minimum: minimum_redemption_amount_formatted
@@ -269,11 +251,10 @@ class VoucherNotificationsMailer < ApplicationMailer
       voucher_code: voucher.code,
       remaining_balance_formatted: remaining_balance_formatted,
       expiration_date_formatted: expiration_date_formatted,
-      # Optional variables
       remaining_value_message_text: remaining_value_message_text,
       redeemed_value_formatted: redeemed_value_formatted,
       fully_redeemed_message_text: fully_redeemed_message_text,
-      minimum_redemption_amount_formatted: minimum_redemption_amount_formatted, # Often used within optional blocks
+      minimum_redemption_amount_formatted: minimum_redemption_amount_formatted,
       header_text: header_text(title: header_title, logo_url: header_logo_url, locale: locale),
       footer_text: footer_text(contact_email: footer_contact_email, website_url: footer_website_url,
                                organization_name: organization_name, show_automated_message: footer_show_automated_message,

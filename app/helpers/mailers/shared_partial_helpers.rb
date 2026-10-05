@@ -1,12 +1,10 @@
 # frozen_string_literal: true
 
 module Mailers
-  # Shared helper methods for rendering common mailer partials and templates.
   module SharedPartialHelpers
     extend ActiveSupport::Concern
 
     included do
-      # Ensure path and url helpers are available
       include Rails.application.routes.url_helpers
 
       helper :application
@@ -14,12 +12,11 @@ module Mailers
 
     private
 
-    # Caches rendered content for one mailer instance, so a later message sees template edits.
+    # The cache belongs to one mailer instance. A new instance sees template edits.
     def mailer_cache
       @mailer_cache ||= {}
     end
 
-    # Generic helper for caching and rendering blocks
     def fetch_from_cache(key, &block)
       mailer_cache[key] ||= begin
         result = block.call.freeze
@@ -27,11 +24,9 @@ module Mailers
       end
     rescue StandardError => e
       Rails.logger.error "Error during cached render (#{key.first}): #{e.message}\n#{e.backtrace.first(5).join("\n")}"
-      # Return a generic error message for safety
       "Error rendering #{key.first} '#{key[1]}'"
     end
 
-    # Renders a shared mailer partial (ERB) to string, with caching.
     def render_shared_partial_to_string(partial_name, format, locals = {})
       key = [:partial, partial_name, format, locals.hash]
       fetch_from_cache(key) do
@@ -46,8 +41,7 @@ module Mailers
       "Error: Missing partial 'shared/mailers/#{partial_name}' for format #{format}"
     end
 
-    # Renders an email template stored in DB, using ActionView to avoid ERB injection,
-    # with caching.
+    # EmailTemplate#render handles stored placeholders. Stored content does not run as ERB.
     def render_email_template(template_name, format, locals = {})
       locals = locals.dup
       locale = locals.delete(:locale) || locals.delete('locale')
@@ -65,25 +59,21 @@ module Mailers
         end
 
         unless template
-          # Enhanced error logging with more context
           total_templates = EmailTemplate.count
           Rails.logger.error "Missing email template: #{template_name} for format #{format}. " \
                              "Locale: #{resolved_locale}. Total templates in DB: #{total_templates}. Rails env: #{Rails.env}"
 
-          # In test environment, try to create a fallback template
           return "Error: Missing email template '#{template_name}' for format #{format}" unless Rails.env.test?
 
           template = create_fallback_template(template_name, format, resolved_locale)
           return "Error: Missing email template '#{template_name}' for format #{format}" unless template
         end
 
-        # Rails 8 requires proper ActionView::Base initialization with empty template cache
         _rendered_subject, rendered_body = template.render(**locals.symbolize_keys)
         rendered_body
       end
     end
 
-    # Creates a fallback template for test environment
     def create_fallback_template(template_name, format, locale)
       return nil unless Rails.env.test?
 
@@ -104,7 +94,6 @@ module Mailers
         subject: "#{template_name.humanize} Template",
         description: 'Auto-created fallback template for testing',
         body: body,
-        # Tests need generic variable arrays so validations don't block creation
         variables: { 'required' => [], 'optional' => [] },
         version: 1
       )
@@ -113,10 +102,6 @@ module Mailers
       nil
     end
 
-    # --- Specific helpers for common templates ---
-
-    # Renders the text header template.
-    # Expects locals like: :title, :subtitle (optional)
     def header_text(title:, subtitle: '', logo_url: '', locale: nil)
       render_email_template('email_header_text', :text, {
                               title: title.to_s,
@@ -126,8 +111,6 @@ module Mailers
                             })
     end
 
-    # Renders the text footer template.
-    # Expects locals like: :contact_email, :website_url, :organization_name, :show_automated_message (boolean)
     def footer_text(organization_name: nil, contact_email: nil, website_url: nil, locale: nil, **_kwargs)
       org_name  = organization_name || Policy.get('organization_name') || 'MAT Program'
       email     = contact_email || Policy.get('support_email') || ProgramContact.support_email
@@ -137,13 +120,11 @@ module Mailers
                               organization_name: org_name.to_s,
                               contact_email: email.to_s,
                               website_url: web_url.to_s,
-                              show_automated_message: '', # Blank string so "true" doesn't print
+                              show_automated_message: '', # A boolean here would print as text.
                               locale: locale
                             })
     end
 
-    # Generates a simple text representation for a status box.
-    # Expects locals like: :status, :title, :message
     def status_box_text(status:, title:, message:)
       "[#{status.to_s.upcase}] #{title}: #{message}"
     end

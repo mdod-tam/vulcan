@@ -4,9 +4,7 @@ Staff use paper intake to enter an application, identify its applicant, and atta
 
 The resulting application then follows the shared approval and fulfillment rules.
 
-[PaperApplicationsController](../../app/controllers/admin/paper_applications_controller.rb) handles the form, parameter normalization, identity-review response, and retry restoration.
-
-[PaperApplicationService](../../app/services/applications/paper_application_service.rb) owns the final application write and its outcome.
+The multipart form posts directly to [PaperApplicationsController#create](../../app/controllers/admin/paper_applications_controller.rb), which normalizes parameters and restores the form on failure. [PaperApplicationService](../../app/services/applications/paper_application_service.rb) owns applicant selection or creation, identity handling, and the final application write and its outcome.
 
 ## From form to saved application
 
@@ -28,7 +26,7 @@ Guardian quick-create is a separate JSON write through [PaperGuardianQuickCreate
 
 An existing dependent's name and DOB render as on-file text on both initial selection and retry. The form submits `dependent_id`, without hidden copies of those identity fields. Contact details, address, and preferences remain editable. Paper intake owns those updates; changing an existing person's identity needs a separate authorized workflow with duplicate checks and audit history.
 
-[PaperIdentityReview](../../app/services/applications/paper_identity_review.rb) owns matching, candidate presentation, selectable roles, and signed decisions. Exact contact collisions block new-record creation; possible name/DOB/address matches require staff to choose an eligible existing person or confirm that they are different people.
+[PaperIdentityReview](../../app/services/applications/paper_identity_review.rb) owns matching, candidate presentation, selectable roles, and review receipts. Exact contact collisions block new-record creation; possible name/DOB/address matches require staff to choose an eligible existing person or confirm that they are different people.
 
 Writers recompute under [PaperIdentityCreationLock](../../app/services/applications/paper_identity_creation_lock.rb) and participant row locks. [PaperIdentityReviewReceipt](../../app/services/applications/paper_identity_review_receipt.rb) binds the actor, role/context, identity, and displayed candidates through keyed digests and expires after 30 minutes. Changed facts or an expired receipt require another review. Dependent decisions also depend on the guardian, relationship, and contact choices. Server-side eligibility checks still apply after a picker selection.
 
@@ -76,7 +74,7 @@ Three distinctions survive the round trip or the retry lies about what staff ent
 | Proof instructions and section flags | Restore all four document actions, rejection reasons/custom text, `no_medical_provider_information`, and `no_income_information`. |
 | Uploads | Restore completed uploads through `<document>_signed_id` and the filename, for each document in `DOCUMENT_KEYS`. Native file inputs cannot be refilled; replace missing or invalid blobs when the restored action requires a file. |
 
-Retained blobs must exist in storage and be either unattached and less than seven days old or already attached to the same application slot; [`UploadedDocument`](../../app/services/uploaded_document.rb) applies this rule to every manual writer. A re-render shows a retained upload only if `UploadedDocument.restorable` still finds it usable; that check neither locks the blob nor reads its content. A new multipart file is preserved for the re-render only after it passes the same checks. A completed replacement is submitted beside the retained signed ID, and the server prefers it; if the server refuses the replacement, the retained upload is shown again. An upload that completed in a submission the browser interrupted becomes the retained signed ID once its replacement uploads, so the same fallback applies. Removal or rejection clears both references, and a failed or canceled replacement keeps the prior upload. A multipart file stored inside a transaction that rolls back is deleted from storage with it, so nothing is left that cleanup cannot find. [CleanupUnattachedUploadsJob](../../app/jobs/cleanup_unattached_uploads_job.rb) purges older unattached blobs daily, rechecking under the same blob lock used by intake. Attached application documents are outside that cleanup.
+Retained blobs must exist in storage and be either unattached and less than seven days old or already attached to the same application slot; [`UploadedDocument`](../../app/services/uploaded_document.rb) applies this rule to paper intake uploads. A re-render shows a retained upload only if `UploadedDocument.restorable` still finds it usable; that check neither locks the blob nor reads its content. A new multipart file is preserved for the re-render only after it passes the same checks. A completed replacement is submitted beside the retained signed ID, and the server prefers it; if the server refuses the replacement, the retained upload is shown again. An upload that completed in a submission the browser interrupted becomes the retained signed ID once its replacement uploads, so the same fallback applies. Removal or rejection clears both references, and a failed or canceled replacement keeps the prior upload. A rollback attempts to delete a multipart file from storage. Failed deletion is logged and can leave an object without its rolled-back blob row. [CleanupUnattachedUploadsJob](../../app/jobs/cleanup_unattached_uploads_job.rb) purges older unattached blobs daily, rechecking under the same blob lock used by intake. Attached application documents are outside that cleanup.
 
 Identity-review retries render the current candidates, receipt, rationale, and selected candidate. Stale facts require renewed review, and an existing self-applicant selection requires contact verification.
 
@@ -89,8 +87,6 @@ Unbalanced markup in one branch of a conditional is worth watching for specifica
 ## Deployment and recovery
 
 [Migration 20260917004500](../../db/migrate/20260917004500_add_inline_paper_review_outcomes.rb) is irreversible, even before any selection is recorded. Apply it before starting the new workers. Recovery must roll forward with a release that understands `resolved_selected` (status `5`); do not roll back the migration, deploy an older status model, or rewrite completed decisions. During recovery, pause paper intake, preserve the database and audit history, and verify an existing selection and a new intake before reopening.
-
-Older open forms may still call `POST /admin/paper_applications/identity_review`. Its authenticated, uncached response only resumes native submission: it does no lookup and issues no receipt. The create action ignores legacy decisions, recomputes identity, and preserves multipart uploads as unattached blobs on refusal, under the same seven-day retention policy. Keep the adapter until those tabs are closed and access logs show no calls for seven consecutive days; then remove its route and action together. Multipart retry preservation remains useful independently.
 
 ## Follow-up and fulfillment
 

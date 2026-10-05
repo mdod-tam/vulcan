@@ -58,41 +58,26 @@ module Admin
       capture('guardian-no-contact-selected')
     end
 
-    test 'an old page submits native files through the compatibility route and retries with saved uploads' do
-      create(:constituent, first_name: 'Legacy', last_name: 'Applicant', date_of_birth: Date.new(1980, 1, 15))
-      start_self('Legacy', 'Applicant')
-      complete_application
-      # Reproduce PR 205's file inputs and clear -> requestSubmit contract.
-      page.execute_script(<<~JS, identity_review_admin_paper_applications_path, PROOFS)
-        const [url, proofs] = arguments;
-        const form = document.getElementById(proofs[0]).form;
+    test 'native multipart submission retains all four uploads through identity review and retry' do
+      create(:constituent, first_name: 'Multipart', last_name: 'Applicant', date_of_birth: Date.new(1980, 1, 15))
+      start_self('Multipart', 'Applicant')
+      # Native multipart inputs exercise server retention without direct uploads.
+      page.execute_script(<<~JS, PROOFS)
+        const [proofs] = arguments;
         proofs.forEach(key => {
           const input = document.getElementById(key);
           input.removeAttribute("data-direct-upload-url");
           input.name = key;
         });
-        let bypass = false;
-        form.addEventListener("submit", async event => {
-          if (bypass) return;
-          event.preventDefault();
-          event.stopImmediatePropagation();
-          const response = await fetch(url, {
-            method: "POST",
-            headers: { Accept: "application/json", "X-CSRF-Token": document.querySelector('meta[name="csrf-token"]')?.content || "" }
-          });
-          const payload = await response.json();
-          if (payload.state !== "clear") throw new Error("Legacy submission could not resume");
-          bypass = true;
-          try { form.requestSubmit(event.submitter); } finally { bypass = false; }
-        }, true);
       JS
-      assert_no_difference ['User.count', 'Application.count', 'DuplicateReviewCase.count'] do
+      complete_application
+      assert_no_difference ['User.count', 'Application.count', 'DuplicateReviewCase.count', 'Event.count'] do
         click_button 'Submit Paper Application'
         assert_selector '#identity-review-heading'
       end
       original = uploaded_ids
       assert_equal 4, original.size
-      capture('legacy-review-retains-native-files')
+      capture('multipart-review-retains-uploads')
       fill_in 'identity_rationale', with: 'Paper documents identify a different person.'
       assert_difference ['User.count', 'Application.count', 'DuplicateReviewCase.count'], 1 do
         click_button 'These are different people — create a new person'
@@ -100,7 +85,7 @@ module Admin
       end
       application = Application.order(:id).last
       PROOFS.each { |key| assert_equal original[key], application.public_send(key).blob.signed_id }
-      capture('legacy-retry-application')
+      capture('multipart-retry-application')
     end
 
     private
@@ -299,7 +284,7 @@ module Admin
       complete_paper_application_attestations
     end
 
-    # Exercise the rendered sections without the legacy helper's DOM visibility overrides.
+    # These overrides require the rendered sections to be visible without DOM changes.
     def reveal_adult_application_sections
       assert_selector '#self-info-section', visible: true
     end

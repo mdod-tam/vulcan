@@ -7,11 +7,9 @@ class MedicalProviderMailer < ApplicationMailer
     Rails.application.config.action_mailer.default_url_options
   end
 
-  # Proxy methods for NotificationService compatibility
-  # These delegate to the existing methods with proper parameter mapping
+  # requested adapts NotificationService arguments to mailer parameters.
 
   def requested(notifiable, notification)
-    # Map to request_certification method
     self.class.with(
       application: notifiable,
       timestamp: notification.metadata['timestamp'],
@@ -20,15 +18,12 @@ class MedicalProviderMailer < ApplicationMailer
   end
 
   def approved(notifiable, notification)
-    # For now, delegate to a simple approval method
-    # This can be expanded later if needed
     self.class.with(
       application: notifiable,
       notification: notification
     ).certification_approved
   end
 
-  # New method for approved certifications
   def certification_approved
     locale = provider_email_locale
     template = find_text_template('medical_provider_certification_approved', locale: locale)
@@ -41,11 +36,9 @@ class MedicalProviderMailer < ApplicationMailer
     raise e
   end
 
-  # Notify a medical provider that a certification has been rejected.
-  # Uses RejectionReason.resolve when a medical-certification ProofReview stores
-  # rejection_reason_code, so body text is DB-stored and locale-aware.
+  # A code on the latest rejected medical review selects the localized stored reason.
   # @param application [Application] The application with the rejected certification
-  # @param rejection_reason [String] Fallback reason text when no code is stored
+  # @param rejection_reason [String] Fallback text when no stored reason body resolves
   # @param admin [User] The admin who rejected the certification
   def certification_rejected
     locale = provider_email_locale
@@ -60,7 +53,6 @@ class MedicalProviderMailer < ApplicationMailer
     raise e
   end
 
-  # Request certification from a medical provider
   # @param application [Application] The application requiring certification
   # @param timestamp [String] ISO8601 timestamp of when the request was made
   # @param notification_id [Integer] ID of the notification record for tracking
@@ -106,8 +98,8 @@ class MedicalProviderMailer < ApplicationMailer
     }.compact
   end
 
-  # Resolves rejection body from RejectionReason when code is stored on the latest
-  # medical-certification ProofReview; otherwise uses passed-in text.
+  # A stored code selects the localized reason.
+  # Without a resolved body, fallback order is supplied text, review text, then 'Not specified'.
   def resolve_medical_cert_rejection_reason(application, locale)
     latest_review = application.latest_medical_rejection_review
     code = latest_review&.rejection_reason_code.presence
@@ -214,8 +206,8 @@ class MedicalProviderMailer < ApplicationMailer
     '#'
   end
 
-  # Provider emails come from no_reply on the outbound stream. A message carrying a secure link
-  # must be sent or reported, so a disabled template raises DeliverySkipped.
+  # Provider emails use no_reply and the outbound stream.
+  # A disabled template raises DeliverySkipped when the message carries a secure link.
   def provider_mail_options(required_delivery: false)
     { from: 'no_reply@mdmat.org', reply_to: support_email, message_stream: 'outbound', required_delivery: required_delivery }
   end

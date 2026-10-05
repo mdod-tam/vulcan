@@ -71,17 +71,11 @@ module Admin
       @selected_dependent = nil
     end
 
-    # Already-open PR 205 forms treat clear as permission to submit.
-    # Only create adjudicates identity. This response grants no decision.
-    def identity_review
-      response.headers['Cache-Control'] = 'no-store'
-      render json: { state: 'clear' }
-    end
-
     def create
       log_file_and_form_params
       service_params = paper_application_processing_params
 
+      # The service owns identity review and applicant creation.
       service = Applications::PaperApplicationService.new(
         params: service_params,
         admin: current_user,

@@ -6,8 +6,7 @@ module DuplicateReviewCases
 
     CandidateInput = Struct.new(:user, :match_reason, :snapshot)
 
-    # The intake writer supplies a freshly verified review inside its business transaction.
-    # Cases, candidate evidence and resolution commit with the person/application they describe.
+    # The intake writer supplies a verified review inside its transaction. Case evidence commits with the person/application.
     # rubocop:disable Metrics/PerceivedComplexity -- keep the atomic composition of the existing writers together
     def self.record_paper_decision!(review:, user:, actor:, rationale:, receipt:, application: nil)
       return [] unless review.confirmed? || review.selected?
@@ -74,17 +73,11 @@ module DuplicateReviewCases
       idempotent = false
 
       ActiveRecord::Base.transaction do
-        # Lock the persisted subject (and any persisted candidates) before querying for an
-        # open case, so a concurrent create/resolve/merge touching the same subject can't
-        # interleave with this transaction's read-then-write. Uses the same
-        # User.lock_for_merge_integrity! ordering as the merge boundary, so this can never
-        # deadlock against it.
+        # Lock users before the case lookup to serialize competing create, resolve, and merge operations.
+        # Use the merge boundary's User lock order to avoid conflicting lock sequences.
         lock_subject_and_candidates!
 
-        # A lock does not validate a stale decision: if a merge retired the subject or a
-        # candidate while this transaction waited for the lock, the pre-lock instances this
-        # service was constructed with are stale. Fail with zero case/flag/audit effects
-        # rather than opening a case that names an already-merged identity.
+        # A merge can retire a participant while this transaction waits. Requalify locked rows before case, flag, or audit writes.
         ineligibility_error = participant_ineligibility_error
         raise IneligibleParticipantError, ineligibility_error if ineligibility_error
 
@@ -128,9 +121,7 @@ module DuplicateReviewCases
       inline_intake? && @metadata[:intake_context] == 'paper_inline_selection' && @subject_fingerprint.present?
     end
 
-    # Locks the persisted subject and candidates, then swaps in the freshly locked/reloaded
-    # rows (not the pre-lock instances this service was constructed with) for every
-    # subsequent read in this transaction.
+    # Replace persisted subject, actor, and candidate instances with fresh locked rows before subsequent reads.
     def lock_subject_and_candidates!
       persisted_users = ([@subject_user, @actor] + @candidates.filter_map(&:user)).compact.select(&:persisted?)
       locked = User.lock_for_merge_integrity!(*persisted_users)

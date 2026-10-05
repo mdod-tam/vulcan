@@ -2,20 +2,18 @@
 
 class EvaluatorMailer < ApplicationMailer
   include Rails.application.routes.url_helpers
-  # Include helpers for rendering shared partials
-  include Mailers::SharedPartialHelpers # Use the extracted shared helper module
+  include Mailers::SharedPartialHelpers
   include ConstituentCommunicationLabelsHelper
 
   def self.default_url_options
     Rails.application.config.action_mailer.default_url_options
   end
 
-  # Notify an evaluator that a new evaluation has been assigned
   # Expects evaluation passed via .with(evaluation: ...)
   def new_evaluation_assigned
     evaluation = params[:evaluation]
     template_name = 'evaluator_mailer_new_evaluation_assigned'
-    # Staff-only template; only English seed content is maintained.
+    # The assignment template has only an English seed.
     locale = 'en'
 
     text_template = load_email_template(template_name, locale: locale)
@@ -26,7 +24,6 @@ class EvaluatorMailer < ApplicationMailer
     raise
   end
 
-  # Notify a constituent that their evaluation has been submitted
   # Expects evaluation passed via .with(evaluation: ...)
   def evaluation_submission_confirmation
     evaluation = params[:evaluation]
@@ -46,7 +43,6 @@ class EvaluatorMailer < ApplicationMailer
 
   private
 
-  # Load email template with error handling
   def load_email_template(template_name, locale: nil)
     find_text_template(template_name, locale: locale)
   rescue ActiveRecord::RecordNotFound => e
@@ -54,7 +50,6 @@ class EvaluatorMailer < ApplicationMailer
     raise "Email templates not found for #{template_name}"
   end
 
-  # Build variables hash for new evaluation assignment email
   def build_new_evaluation_variables(evaluation, template:, locale: nil)
     evaluator = evaluation.evaluator
     constituent = evaluation.constituent
@@ -90,7 +85,6 @@ class EvaluatorMailer < ApplicationMailer
     }.compact
   end
 
-  # Build variables hash for evaluation submission confirmation email
   def build_submission_confirmation_variables(evaluation, template:, locale: nil)
     constituent = evaluation.constituent
     application = evaluation.application
@@ -119,14 +113,12 @@ class EvaluatorMailer < ApplicationMailer
     }.compact
   end
 
-  # Safely get evaluation URL with fallback
   def safe_evaluation_url(evaluation)
     evaluators_evaluation_url(evaluation, host: default_url_options[:host])
   rescue StandardError
     '#'
   end
 
-  # Build header and footer data for email template
   def build_header_footer_data(title, locale: nil)
     footer_contact_email = Policy.get('support_email') || 'mat.program1@maryland.gov'
     footer_website_url = ProgramContact.website_url
@@ -149,14 +141,12 @@ class EvaluatorMailer < ApplicationMailer
     }
   end
 
-  # Safely get logo URL with fallback
   def safe_logo_url
     ActionController::Base.helpers.asset_path('logo.png', host: default_url_options[:host])
   rescue StandardError
     nil
   end
 
-  # Format constituent address for display
   def format_constituent_address(constituent)
     [
       constituent.physical_address_1,
@@ -165,14 +155,12 @@ class EvaluatorMailer < ApplicationMailer
     ].compact_blank.join("\n")
   end
 
-  # Format disabilities as HTML list
   def format_disabilities_html(constituent)
     return '' if constituent.disabilities.blank?
 
     "<ul>#{constituent.disabilities.map { |d| "<li>#{d}</li>" }.join}</ul>"
   end
 
-  # Format disabilities as text list
   def format_disabilities_text(constituent)
     return '' if constituent.disabilities.blank?
 
@@ -183,8 +171,7 @@ class EvaluatorMailer < ApplicationMailer
     evaluation.recommended_products.order(:name).map(&:name).join("\n")
   end
 
-  # Queue letter if constituent prefers print communication. True means the letter route
-  # handled this message, including a letter queued earlier, so no email follows.
+  # True means the letter route handles this message, including an existing queued letter, so no email follows.
   def queue_letter_if_needed(evaluation, template_name, variables, locale:)
     constituent = evaluation.constituent
     return false unless prefers_letter_delivery?(constituent)

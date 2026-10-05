@@ -1,6 +1,5 @@
 <main class="container mx-auto px-4 py-8" role="main" id="main-content">
   <div class="max-w-7xl mx-auto">
-    <%# Skip to content link for keyboard users %>
     <a href="#main-content" class="sr-only focus:not-sr-only focus:absolute focus:p-4 focus:bg-white focus:z-50">
       Skip to main content
     </a>
@@ -19,7 +18,6 @@
       <p class="text-sm text-gray-600 mt-2">Note: Fiscal Year runs from July 1 to June 30.</p>
     </div>
 
-    <%# Table of Contents for Screen Readers %>
     <nav aria-label="Report sections" class="sr-only">
       <h2>Quick Navigation</h2>
       <ul>
@@ -37,14 +35,12 @@
       </ul>
     </nav>
 
-    <%# Applications Overview Section %>
     <section aria-labelledby="applications-overview-heading" class="bg-white rounded-lg shadow p-6 mb-8">
       <h2 id="applications-overview-heading" class="text-xl font-bold mb-4">Applications Overview</h2>
       <p class="text-sm text-gray-500 mb-4">
         Operational counts: applications <strong>created</strong> in each fiscal year. This is not MFR.
       </p>
       <div class="grid grid-cols-1 md:grid-cols-2 gap-4 mb-4">
-        <!-- Current FY Applications -->
         <div class="bg-gray-50 rounded p-4">
           <h3 id="current-fy-heading" class="font-medium text-gray-700">Current Fiscal Year (<%= @current_fy_label %>)</h3>
           <dl class="mt-2 grid grid-cols-1 gap-x-4 gap-y-2">
@@ -58,7 +54,6 @@
             </div>
           </dl>
 
-          <%# Current FY Applications Chart %>
           <div class="mt-4">
             <div style="position: relative; height: 200px; width: 100%;"
                  data-controller="chart"
@@ -75,7 +70,6 @@
 
         </div>
 
-        <!-- Previous FY Applications -->
         <div class="bg-gray-50 rounded p-4">
           <h3 id="previous-fy-heading" class="font-medium text-gray-700">Previous Fiscal Year (<%= @previous_fy_label %>)</h3>
           <dl class="mt-2 grid grid-cols-1 gap-x-4 gap-y-2">
@@ -89,7 +83,6 @@
             </div>
           </dl>
 
-          <%# Previous FY Applications Chart %>
           <div class="mt-4">
             <div style="position: relative; height: 200px; width: 100%;"
                  data-controller="chart"
@@ -107,7 +100,6 @@
         </div>
       </div>
 
-      <%# Applications Comparison Chart %>
       <div class="mt-4">
         <div style="position: relative; height: 300px; width: 100%;"
              data-controller="chart"
@@ -121,7 +113,6 @@
         </div>
       </div>
 
-      <%# Disability Type Breakdown %>
       <div class="mt-6">
         <h3 id="disability-breakdown-heading" class="font-medium text-gray-700 mb-3">Disability Type Breakdown</h3>
         <p class="text-sm text-gray-500 mb-3">
@@ -129,7 +120,6 @@
         </p>
 
         <div class="grid grid-cols-1 md:grid-cols-2 gap-4">
-          <!-- Current FY Disabilities -->
           <div class="bg-gray-50 rounded p-4">
             <h4 id="current-fy-disabilities-heading" class="font-medium text-gray-700 mb-2">Current Fiscal Year (<%= @current_fy_label %>)</h4>
             <dl class="space-y-1">
@@ -160,7 +150,6 @@
             </dl>
           </div>
 
-          <!-- Previous FY Disabilities -->
           <div class="bg-gray-50 rounded p-4">
             <h4 id="previous-fy-disabilities-heading" class="font-medium text-gray-700 mb-2">Previous Fiscal Year (<%= @previous_fy_label %>)</h4>
             <dl class="space-y-1">
@@ -192,7 +181,6 @@
           </div>
         </div>
 
-        <%# Disability Type Comparison Chart %>
         <div class="mt-4">
           <h4 class="sr-only" id="disability-comparison-chart-heading">Disability Type Comparison Chart</h4>
           <div style="position: relative; height: 300px; width: 100%;"
@@ -231,7 +219,6 @@
                chart_data: @equipment_by_type_chart_data,
                error_message: @equipment_by_type_error %>
 
-    <%# Voucher Statistics Section %>
     <% if @vouchers_enabled %>
       <section aria-labelledby="voucher-statistics-heading" class="bg-white rounded-lg shadow p-6 mb-8">
       <h2 id="voucher-statistics-heading" class="text-xl font-bold mb-4">Voucher Statistics</h2>
@@ -257,7 +244,6 @@
             </div>
           </dl>
 
-          <%# Current FY Vouchers Chart %>
           <div class="mt-4">
             <div style="position: relative; height: 200px; width: 100%;"
                  data-controller="chart"
@@ -301,7 +287,6 @@
             </div>
           </dl>
 
-          <%# Previous FY Vouchers Chart %>
           <div class="mt-4">
             <div style="position: relative; height: 200px; width: 100%;"
                  data-controller="chart"
@@ -325,7 +310,6 @@
         </div>
       </div>
 
-      <%# Vouchers Comparison Chart %>
       <div class="mt-4">
         <div style="position: relative; height: 300px; width: 100%;"
              data-controller="chart"
@@ -339,7 +323,6 @@
         </div>
       </div>
 
-      <%# Voucher Value Chart %>
       <div class="mt-4 bg-gray-50 rounded p-4">
         <h4 class="font-medium text-gray-700 mb-2">Voucher Value Comparison</h4>
         <div class="flex justify-between mb-2">
@@ -367,7 +350,6 @@
       </section>
     <% end %>
 
-    <%# Services Overview Section %>
     <section aria-labelledby="services-overview-heading" class="bg-white rounded-lg shadow p-6 mb-8">
       <h2 id="services-overview-heading" class="text-xl font-bold mb-4">Services Overview</h2>
       <div class="grid grid-cols-1 md:grid-cols-2 gap-4 mb-4">
@@ -384,7 +366,6 @@
             </div>
           </dl>
 
-          <%# Current FY Services Chart %>
           <div class="mt-4">
             <div style="position: relative; height: 200px; width: 100%;"
                  data-controller="chart"
@@ -414,7 +395,6 @@
             </div>
           </dl>
 
-          <%# Previous FY Services Chart %>
           <div class="mt-4">
             <div style="position: relative; height: 200px; width: 100%;"
                  data-controller="chart"
@@ -434,7 +414,6 @@
 
       <% training_statuses = TrainingSession.statuses.keys %>
       <% evaluation_statuses = Evaluation.statuses.keys %>
-      <%# Text-only service status details %>
       <div class="mt-4 bg-gray-50 rounded p-4">
         <div class="flex flex-col gap-3 sm:flex-row sm:items-start sm:justify-between mb-4">
           <div>
@@ -500,7 +479,6 @@
         </div>
       </div>
 
-      <%# Services Comparison Chart %>
       <div class="mt-4 bg-gray-50 rounded p-4">
         <h4 class="font-medium text-gray-700 mb-2">Services Comparison</h4>
         <div class="flex flex-wrap justify-between mb-4">
@@ -527,7 +505,6 @@
       </div>
     </section>
 
-    <%# Vendor Activity Section %>
     <% if @vouchers_enabled %>
       <section aria-labelledby="vendor-activity-heading" class="bg-white rounded-lg shadow p-6 mb-8">
       <h2 id="vendor-activity-heading" class="text-xl font-bold mb-4">Vendor Activity</h2>
@@ -545,7 +522,6 @@
             </div>
           </dl>
 
-          <%# Vendor Activity Bar Chart (instead of pie) %>
           <div class="mt-4">
             <div style="position: relative; height: 200px; width: 100%;"
                  data-controller="chart"
@@ -588,7 +564,6 @@
 
     <%= render 'mfr_section' %>
 
-    <%# Referral Origin Section %>
     <section aria-labelledby="referral-origin-heading" class="bg-white rounded-lg shadow p-6 mb-4">
       <h2 id="referral-origin-heading" class="text-xl font-bold mb-4">Referral Origin</h2>
       <p class="text-sm text-gray-500 mb-4">
@@ -596,7 +571,6 @@
       </p>
 
       <div class="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-4">
-        <%# Current Month %>
         <div class="bg-gray-50 rounded p-4">
           <h3 id="referral-month-heading" class="font-medium text-gray-700 mb-2"><%= @referral_month_label %></h3>
           <% if @referral_month_data&.any? %>
@@ -613,7 +587,6 @@
           <% end %>
         </div>
 
-        <%# Current Quarter %>
         <div class="bg-gray-50 rounded p-4">
           <h3 id="referral-quarter-heading" class="font-medium text-gray-700 mb-2"><%= @referral_quarter_label %></h3>
           <% if @referral_quarter_data&.any? %>
@@ -630,7 +603,6 @@
           <% end %>
         </div>
 
-        <%# Year to Date %>
         <div class="bg-gray-50 rounded p-4">
           <h3 id="referral-ytd-heading" class="font-medium text-gray-700 mb-2"><%= @referral_ytd_label %></h3>
           <% if @referral_ytd_data&.any? %>
@@ -647,7 +619,6 @@
           <% end %>
         </div>
 
-        <%# Prior Year Total - Always show %>
         <div class="bg-gray-50 rounded p-4">
           <h3 id="referral-prior-year-heading" class="font-medium text-gray-700 mb-2"><%= @referral_prior_year_label %></h3>
           <% if @referral_prior_year_data&.any? %>
@@ -665,7 +636,6 @@
         </div>
       </div>
 
-      <%# Referral Source Chart - Year to Date %>
       <div class="mt-6 bg-gray-50 rounded p-4">
         <h4 id="referral-ytd-chart-heading" class="font-medium text-gray-700 mb-2">Referral Sources - Year to Date</h4>
         <% if @referral_ytd_data&.any? %>

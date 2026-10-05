@@ -88,7 +88,7 @@ class DocumentProofHandlerController extends Controller {
       .forEach(control => control.removeAttribute('aria-disabled'));
   }
 
-  // A canceled click preserves the radio choice for mouse, label, and keyboard activation.
+  // A canceled activation click preserves the current radio choice.
   blockLockedDecision(event) {
     if (!this.decisionsLocked || !event.target.closest(DECISION_CONTROLS)) return;
     event.preventDefault();
@@ -165,7 +165,7 @@ class DocumentProofHandlerController extends Controller {
   }
 
   /**
-   * The selected option's data-reason-text contains the reason body from the database.
+   * data-reason-text supplies a database reason body or a literal fallback.
    */
   previewRejectionReason() {
     if (!this.hasReasonPreviewTarget || !this.hasRejectionReasonSelectTarget) return

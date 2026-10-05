@@ -2,7 +2,6 @@
 
 module Users
   class Vendor < User
-    # Products represent equipment
     has_many :products, foreign_key: :user_id
     has_many :vouchers
     has_many :processed_vouchers, -> { where.not(status: :pending) }, class_name: 'Voucher', foreign_key: :vendor_id
@@ -13,10 +12,9 @@ module Users
 
     has_one_attached :w9_form
 
-    # Fields a W-9 certifies. A change leaves the W9 on file describing old details.
+    # A change to these certified fields leaves the W9 on file with old details.
     W9_CERTIFIED_FIELDS = %w[business_name business_tax_id physical_address_1 physical_address_2 city state zip_code].freeze
 
-    # Callbacks
     after_update :log_w9_details_changed, if: :w9_details_changed_on_file?
     after_save :note_w9_form_attached
     after_commit :update_w9_status_on_form_upload, on: :update
@@ -35,7 +33,6 @@ module Users
     attribute :vendor_authorization_status, :integer, default: 0
     enum :vendor_authorization_status, { pending: 0, approved: 1, suspended: 2 }, prefix: :vendor
 
-    # Explicitly declare the attribute type for w9_status
     attribute :w9_status, :integer, default: 0
     enum :w9_status, { not_submitted: 0, pending_review: 1, approved: 2, rejected: 3 }, prefix: :w9_status
 
@@ -93,16 +90,11 @@ module Users
       w9_status_not_submitted? || w9_status_rejected?
     end
 
-    # Virtual attribute for handling terms acceptance.
-    # When the form sends a "terms_accepted" value (e.g., "1" for checked),
-    # this getter returns true if "terms_accepted_at" is present.
     def terms_accepted
       !!terms_accepted_at
     end
 
-    # The setter converts the submitted value into a timestamp.
-    # If the value is truthy (checked), it sets terms_accepted_at to the current time;
-    # otherwise, it clears the timestamp.
+    # Repeated acceptance preserves the first timestamp. Withdrawal clears it.
     def terms_accepted=(value)
       if ActiveModel::Type::Boolean.new.cast(value)
         self.terms_accepted_at ||= Time.current
@@ -113,8 +105,8 @@ module Users
 
     private
 
-    # Only a newly attached W9 needs review. Other saves, such as a profile edit
-    # or an account lockout, keep the current W9 status.
+    # This callback marks new W9 attachments for review.
+    # Profile edits and account lockouts preserve the current W9 status.
     def note_w9_form_attached
       @w9_form_attached_in_save = attachment_changes.key?('w9_form')
     end
