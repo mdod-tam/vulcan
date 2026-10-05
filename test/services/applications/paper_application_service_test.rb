@@ -461,7 +461,7 @@ module Applications
         medical_certification_custom_rejection_reason: custom_note
       }
 
-      reviewer_result = stub(success?: true)
+      reviewer_result = BaseService::Result.new(success: true, data: { provider_delivery: { success: true, outcome: :deferred } })
       Applications::MedicalCertificationReviewer.any_instance.expects(:reject).with(
         rejection_reason: custom_note,
         notes: nil,

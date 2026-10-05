@@ -58,6 +58,8 @@ module Admin
 
       if result.success?
         redirect_to admin_application_path(@application), flash: proof_review_success_flash(result)
+      elsif result.data.is_a?(Hash) && result.data[:commit_state] == :unknown
+        redirect_to admin_application_path(@application), status: :see_other, alert: result.message
       else
         @proof_type = proof_review_params[:proof_type]
         @proof_review = @application.proof_reviews.build(proof_review_params)
@@ -69,7 +71,8 @@ module Admin
                  when 'id'
                    @application.id_proof
                  end
-        render :new, status: :unprocessable_content, alert: 'Proof review failed to save'
+        flash.now[:alert] = result.message
+        render :new, status: :unprocessable_content
       end
     end
 
@@ -96,10 +99,12 @@ module Admin
 
     def proof_review_success_flash(result)
       flash_options = { notice: t('.proof_completed') }
+      alerts = result.data.is_a?(Hash) ? [result.data[:warning]].compact : []
       if proof_resubmission_delivery_failed?(result)
         key = result.data[:resubmission_suppressed] ? 'resubmission_suppressed' : 'resubmission_not_delivered'
-        flash_options[:alert] = t("admin.proof_reviews.create.#{key}", locale: :en)
+        alerts << t("admin.proof_reviews.create.#{key}", locale: :en)
       end
+      flash_options[:alert] = alerts.join(' ') if alerts.any?
       flash_options
     end
 

@@ -70,13 +70,10 @@
           <%# Review Form Section %>
           <div>
             <h2 class="text-lg font-medium text-gray-900 mb-4">Review Decision</h2>
-            <%= form_with(model: [ :admin, @application, @proof_review ], 
-                          local: true, 
-                          class: "space-y-6",
-                          data: { 
-                            controller: "proof-review",
-                            action: "proof-review#validateForm"
-                          }) do |f| %>
+            <%= form_with(model: @proof_review,
+                          url: admin_proof_reviews_path(application_id: @application.id),
+                          local: true,
+                          class: 'space-y-6') do |f| %>
               
               <%= f.hidden_field :proof_type, value: @proof_type %>
 
@@ -85,16 +82,14 @@
                   <legend class="sr-only">Review Status</legend>
                   <div class="space-y-4">
                     <div class="flex items-center">
-                      <%= f.radio_button :status, :approved, 
-                          class: "h-4 w-4 text-indigo-600 focus:ring-indigo-500 border-gray-300",
-                          data: { action: "proof-review#toggleRejectionReason" } %>
+                      <%= f.radio_button :status, :approved,
+                                         class: 'h-4 w-4 text-indigo-600 focus:ring-indigo-500 border-gray-300' %>
                       <%= f.label :status_approved, "Approve", 
                           class: "ml-3 block text-sm font-medium text-gray-700" %>
                     </div>
                     <div class="flex items-center">
                       <%= f.radio_button :status, :rejected,
-                          class: "h-4 w-4 text-indigo-600 focus:ring-indigo-500 border-gray-300",
-                          data: { action: "proof-review#toggleRejectionReason" } %>
+                                         class: 'h-4 w-4 text-indigo-600 focus:ring-indigo-500 border-gray-300' %>
                       <%= f.label :status_rejected, "Reject", 
                           class: "ml-3 block text-sm font-medium text-gray-700" %>
                     </div>
@@ -102,18 +97,19 @@
                 </fieldset>
               </div>
 
-              <div data-proof-review-target="rejectionSection" class="hidden">
+              <div>
                 <div class="mt-6">
-                  <%= f.label :rejection_reason, "Reason for Rejection", 
-                      class: "block text-sm font-medium text-gray-700" %>
+                  <%= f.label :rejection_reason, 'Reason for Rejection (required when rejecting)',
+                              class: 'block text-sm font-medium text-gray-700' %>
                   <div class="mt-1">
                     <%= f.text_area :rejection_reason,
-                        rows: 4,
-                        class: "shadow-sm focus:ring-indigo-500 focus:border-indigo-500 block w-full sm:text-sm border-gray-300 rounded-md",
-                        placeholder: "Please provide a clear explanation for why this proof is being rejected..." %>
+                                    rows: 4,
+                                    class: 'shadow-sm focus:ring-indigo-500 focus:border-indigo-500 block w-full sm:text-sm border-gray-300 rounded-md',
+                                    aria: { describedby: 'proof_review_rejection_reason_help' },
+                                    placeholder: 'Please provide a clear explanation for why this proof is being rejected...' %>
                   </div>
-                  <p class="mt-2 text-sm text-gray-500">
-                    This reason will be included in the email sent to the constituent.
+                  <p id="proof_review_rejection_reason_help" class="mt-2 text-sm text-gray-500">
+                    Required when rejecting. Leave blank when approving. This reason will be included in the email sent to the constituent.
                   </p>
                 </div>
               </div>
@@ -124,10 +120,6 @@
                     class: "inline-flex items-center px-4 py-2 border border-gray-300 shadow-sm text-sm font-medium rounded-md text-gray-700 bg-white hover:bg-gray-50 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-indigo-500" %>
                 
                 <div class="flex space-x-3">
-                  <%= f.submit "Submit & Continue",
-                      name: "continue",
-                      class: "inline-flex items-center px-4 py-2 border border-transparent text-sm font-medium rounded-md shadow-sm text-white bg-indigo-600 hover:bg-indigo-700 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-indigo-500" %>
-                  
                   <%= f.submit "Submit & Exit",
                       class: "inline-flex items-center px-4 py-2 border border-transparent text-sm font-medium rounded-md shadow-sm text-white bg-indigo-600 hover:bg-indigo-700 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-indigo-500" %>
                 </div>

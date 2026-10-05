@@ -976,7 +976,16 @@ module Applications
         rejection_reason_code: reason_payload[:reason_code]
       )
 
-      return { success: true } if reviewer_result.success?
+      if reviewer_result.success?
+        ActiveRecord.after_all_transactions_commit do
+          delivery = reviewer_result.data.fetch(:provider_delivery)
+          upload_request_failed = reviewer_result.data[:secure_upload_request]&.dig(:success) == false
+          if !delivery[:success] || delivery[:tracking_status] == :failed || upload_request_failed || reviewer_result.data[:warnings].present?
+            add_warning(reviewer_result.message)
+          end
+        end
+        return { success: true, provider_delivery: reviewer_result.data[:provider_delivery] }
+      end
 
       { success: false, error: StandardError.new(reviewer_result.message) }
     end

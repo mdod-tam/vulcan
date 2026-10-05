@@ -12,81 +12,34 @@ module Evaluators
     def index
       # Unfiltered visits enter through the dashboard.
       if params[:status].present? || params[:scope].present? || params[:filter].present?
-        scope_param = params[:scope] || (current_user.admin? ? 'all' : 'mine')
-        status_param = params[:status]
-
-        @evaluations = filter_evaluations(scope_param, status_param)
-
-        @current_scope = scope_param
-        @current_status = status_param
+        filter
       else
         redirect_to evaluators_dashboard_path
       end
     end
 
     def filter
-      scope_param = params[:scope] || (current_user.admin? ? 'all' : 'mine')
-      status_param = params[:status]
-
-      @evaluations = filter_evaluations(scope_param, status_param)
-
-      @current_scope = scope_param
-      @current_status = status_param
-
-      render :index
+      render_filtered_evaluations(params[:status])
     end
 
     def requested
-      @evaluations = if current_user.admin?
-                       Evaluation.where(status: :requested)
-                                 .includes(:constituent)
-                                 .order(created_at: :desc)
-                     else
-                       current_user.evaluations.requested_sessions
-                                   .includes(:constituent)
-                                   .order(created_at: :desc)
-                     end
-      render :index
+      render_filtered_evaluations('requested')
     end
 
     def scheduled
-      @evaluations = if current_user.admin?
-                       Evaluation.where(status: %i[scheduled confirmed])
-                                 .includes(:constituent)
-                                 .order(evaluation_date: :asc)
-                     else
-                       current_user.evaluations.active
-                                   .includes(:constituent)
-                                   .order(evaluation_date: :asc)
-                     end
-      render :index
+      render_filtered_evaluations('scheduled')
     end
 
     def pending
-      @evaluations = current_user.evaluations.pending
-                                 .includes(:constituent)
-                                 .order(created_at: :desc)
-      render :index
+      render_filtered_evaluations('scheduled')
     end
 
     def completed
-      @evaluations = current_user.evaluations.completed_sessions
-                                 .includes(:constituent)
-                                 .order(evaluation_date: :desc)
-      render :index
+      render_filtered_evaluations('completed')
     end
 
     def needs_followup
-      @evaluations = if current_user.admin?
-                       Evaluation.where(status: %i[no_show cancelled])
-                                 .includes(:constituent)
-                                 .order(updated_at: :desc)
-                     else
-                       current_user.evaluations.needing_followup
-                                   .includes(:constituent)
-                                   .order(updated_at: :desc)
-                     end
-      render :index
+      render_filtered_evaluations('needs_followup')
     end
 
     def show
@@ -280,35 +233,42 @@ module Evaluators
       redirect_to redirect_target, alert: 'Only the assigned evaluator can update this evaluation.'
     end
 
-    def filter_evaluations(_scope, status)
-      base_query = if current_user.admin?
-                     # The scope parameter does not restrict administrator results.
+    def render_filtered_evaluations(status)
+      @current_scope = current_user.admin? && params[:scope] != 'mine' ? 'all' : 'mine'
+      @current_status = status if Evaluation.statuses.key?(status) || status == 'needs_followup'
+      @evaluations = filter_evaluations(@current_scope, @current_status)
+
+      render :index
+    end
+
+    def filter_evaluations(scope, status)
+      base_query = if scope == 'all' && current_user.admin?
                      Evaluation.all
                    else
-                     current_user.evaluations
+                     Evaluation.where(evaluator_id: current_user.id)
                    end
 
-      filtered_query = if status.present?
-                         base_query.where(status: status.to_sym)
+      filtered_query = case status
+                       when 'scheduled'
+                         base_query.active
+                       when 'needs_followup'
+                         base_query.needing_followup
                        else
-                         base_query
+                         status.present? ? base_query.where(status: status) : base_query
                        end
 
-      ordered_query =
-        case status
-        when 'completed'
-          filtered_query.order(evaluation_date: :desc)
-        when 'scheduled', 'confirmed'
-          filtered_query.order(evaluation_date: :asc)
-        when 'requested'
-          filtered_query.order(created_at: :desc)
-        when 'no_show', 'cancelled', nil, ''
-          nil
-        end
+      ordering = case status
+                 when 'completed'
+                   { evaluation_date: :desc }
+                 when 'scheduled', 'confirmed'
+                   { evaluation_date: :asc }
+                 when 'requested'
+                   { created_at: :desc }
+                 else
+                   { updated_at: :desc }
+                 end
 
-      ordered_query ||= filtered_query.order(updated_at: :desc)
-
-      ordered_query.includes(:constituent)
+      filtered_query.order(ordering).includes(:constituent)
     end
 
     def assigned_evaluator?

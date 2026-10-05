@@ -311,6 +311,65 @@ module Admin
       assert_equal 'requested', @application.reload.medical_certification_status
     end
 
+    %w[text/html text/vnd.turbo-stream.html].each do |format|
+      test "#{format} certification confirmation reports provider submission rather than receipt" do
+        message = 'Disability certification rejected. Provider email submitted.'
+        Applications::MedicalCertificationReviewer.any_instance.expects(:reject).returns(
+          BaseService::Result.new(success: true, message: message, data: { provider_delivery: { success: true, outcome: :submitted } })
+        )
+
+        patch update_certification_status_admin_application_path(@application),
+              params: { status: 'rejected', rejection_reason: 'Missing signature' }, headers: { 'Accept' => format }
+
+        assert_redirected_to admin_application_path(@application)
+        assert_equal message, flash[:notice]
+        assert_not_includes flash[:notice], 'provider notified'
+      end
+
+      test "#{format} proof approval keeps committed follow-up warning on its redirect" do
+        warning = 'The proof review was saved, but workflow follow-up failed. Verify the application status before continuing.'
+        ProofReviewService.any_instance.expects(:call).returns(
+          BaseService::Result.new(success: true, data: { warning: warning })
+        )
+
+        patch update_proof_status_admin_application_path(@application),
+              params: { proof_type: 'income', status: 'approved' }, headers: { 'Accept' => format }
+
+        assert_redirected_to admin_application_path(@application)
+        assert_equal warning, flash[:alert]
+        assert_includes flash[:notice], 'approved successfully'
+        assert_response :see_other if format == 'text/vnd.turbo-stream.html'
+      end
+
+      test "#{format} unconfirmed proof outcome redirects with non-retry guidance" do
+        message = 'The proof review may have been saved, but that could not be confirmed. Check this application before reviewing it again.'
+        ProofReviewService.any_instance.expects(:call).returns(
+          BaseService::Result.new(success: false, message: message, data: { commit_state: :unknown })
+        )
+
+        patch update_proof_status_admin_application_path(@application),
+              params: { proof_type: 'income', status: 'approved' }, headers: { 'Accept' => format }
+
+        assert_redirected_to admin_application_path(@application)
+        assert_response :see_other
+        assert_equal message, flash[:alert]
+      end
+    end
+
+    test 'rejected proof warnings retain resubmission failure guidance in the Turbo response' do
+      warning = 'The proof review was saved, but workflow follow-up failed.'
+      ProofReviewService.any_instance.expects(:call).returns(
+        BaseService::Result.new(success: true, data: { warning: warning, resubmission_delivered: false })
+      )
+
+      patch update_proof_status_admin_application_path(@application),
+            params: { proof_type: 'income', status: 'rejected' }, headers: { 'Accept' => 'text/vnd.turbo-stream.html' }
+
+      assert_response :success
+      assert_includes response.body, warning
+      assert_includes response.body, I18n.t('admin.proof_reviews.create.resubmission_not_delivered', locale: :en)
+    end
+
     test 'show page displays the correct application status' do
       approved_app = create(:application,
                             user: create(:constituent, email: generate(:email)),

@@ -265,26 +265,158 @@ module Applications
       assert_equal 'draft', result.application.status
     end
 
-    test 'logs dependent application events' do
+    test 'dependent application creation records creation without an update event' do
       create_guardian_relationship(@user, @dependent)
       form = create_valid_dependent_form(@user, @dependent)
+      result = nil
+      assert_no_difference -> { Event.where(action: 'application_for_dependent_updated').count } do
+        assert_difference -> { Event.where(action: 'application_created').count }, 1 do
+          result = ApplicationCreator.call(form)
+        end
+      end
 
-      mock_service = Minitest::Mock.new
-      mock_service.expect :log_dependent_application_update, nil do |args|
-        args[:dependent] == @dependent && args[:relationship_type] == 'parent'
+      assert result.success?, result.error_messages.inspect
+      event = Event.find_by!(action: 'application_created', auditable: result.application)
+      assert_equal @user.id, event.user_id
+      assert_equal @dependent.id, result.application.reload.user_id
+      assert_equal @user.id, result.application.managing_guardian_id
+    end
+
+    test 'dependent application edits record one contextual update instead of a generic update' do
+      application = create_dependent_draft
+      form = dependent_update_form(application)
+      form.annual_income = '60000'
+
+      assert_no_difference -> { Event.where(action: 'application_updated', auditable: application).count } do
+        assert_difference -> { dependent_update_events(application).count }, 1 do
+          result = ApplicationCreator.call(form)
+          assert result.success?, result.error_messages.inspect
+        end
+      end
+
+      event = dependent_update_events(application).sole
+      assert_equal @user.id, event.user_id
+      assert_equal @dependent.id, event.metadata['dependent_id']
+      assert_equal @user.id, event.metadata['managing_guardian_id']
+      assert_equal 'parent', event.metadata['guardian_relationship']
+      assert_equal ['application.annual_income'], event.metadata['changed_fields']
+      assert_match(/\A[0-9a-f]{8}(?:-[0-9a-f]{4}){3}-[0-9a-f]{12}\z/, event.metadata['operation_id'])
+      assert_equal %w[__service_generated application_id changed_fields dependent_id guardian_relationship
+                      managing_guardian_id operation_id timestamp], event.metadata.keys.sort
+      assert_equal 60_000, application.reload.annual_income
+    end
+
+    test 'dependent-only edits record the persisted applicant change' do
+      @dependent.update!(locale: 'en')
+      application = create_dependent_draft
+      form = dependent_update_form(application)
+      form.locale = 'es'
+
+      assert_difference -> { dependent_update_events(application).count }, 1 do
+        result = ApplicationCreator.call(form)
+        assert result.success?, result.error_messages.inspect
+      end
+
+      assert_equal 'es', @dependent.reload.locale
+      assert_equal ['dependent.locale'], dependent_update_events(application).sole.metadata['changed_fields']
+    end
+
+    test 'unchanged dependent drafts ignore guardian dirt and do not log repeat updates' do
+      application = create_dependent_draft
+      original_name = @user.first_name
+      @user.first_name = 'Unsaved guardian name'
+
+      assert_no_difference -> { dependent_update_events(application).count } do
+        2.times do
+          result = ApplicationCreator.call(dependent_update_form(application))
+          assert result.success?, result.error_messages.inspect
+          travel 6.seconds
+        end
+      end
+
+      assert_equal original_name, @user.reload.first_name
+    end
+
+    test 'dependent submission retains field changes before its later lifecycle save' do
+      application = create_dependent_draft
+      form = dependent_update_form(application)
+      form.annual_income = '60000'
+      form.locale = 'es'
+      form.is_submission = true
+
+      assert_difference -> { dependent_update_events(application).count }, 1 do
+        result = ApplicationCreator.call(form)
+        assert result.success?, result.error_messages.inspect
+      end
+
+      assert_equal 'in_progress', application.reload.status
+      assert_equal 60_000, application.annual_income
+      assert_equal 'es', @dependent.reload.locale
+      assert_equal %w[application.annual_income dependent.locale],
+                   dependent_update_events(application).sole.metadata['changed_fields']
+    end
+
+    test 'distinct dependent edits inside the audit window retain both events' do
+      application = create_dependent_draft
+
+      assert_difference -> { dependent_update_events(application).count }, 2 do
+        %w[60000 70000].each do |income|
+          form = dependent_update_form(application)
+          form.annual_income = income
+          result = ApplicationCreator.call(form)
+          assert result.success?, result.error_messages.inspect
+        end
+      end
+
+      assert_equal 70_000, application.reload.annual_income
+      operation_ids = dependent_update_events(application).map { |event| event.metadata['operation_id'] }
+      assert_equal 2, operation_ids.compact.uniq.size
+    end
+
+    test 'dependent update audit records fields without persisting address income or disability values' do
+      application = create_dependent_draft
+      form = dependent_update_form(application)
+      form.annual_income = '60000'
+      form.physical_address_1 = '145 Private Lane'
+      form.hearing_disability = false
+      form.vision_disability = true
+
+      result = ApplicationCreator.call(form)
+      assert result.success?, result.error_messages.inspect
+
+      event = dependent_update_events(application).sole
+      assert_equal %w[application.annual_income dependent.hearing_disability
+                      dependent.physical_address_1 dependent.vision_disability], event.metadata['changed_fields']
+      assert_equal %w[__service_generated application_id changed_fields dependent_id guardian_relationship
+                      managing_guardian_id operation_id timestamp], event.metadata.keys.sort
+      assert_equal '145 Private Lane', @dependent.reload.physical_address_1
+      assert_not @dependent.hearing_disability?
+      assert_equal 60_000, application.reload.annual_income
+    end
+
+    test 'dependent update audit failure rolls back applicant and application changes' do
+      application = create_dependent_draft
+      application_before = application.reload.attributes
+      dependent_before = @dependent.reload.attributes
+      form = dependent_update_form(application)
+      form.annual_income = '60000'
+      form.locale = 'es'
+      original_log = AuditEventService.method(:log)
+      fail_update_audit = lambda do |**arguments|
+        raise 'dependent audit unavailable' if arguments[:action] == 'application_for_dependent_updated'
+
+        original_log.call(**arguments)
       end
 
       result = nil
-      Applications::EventService.stub :new, mock_service do
-        result = ApplicationCreator.call(form)
+      assert_no_difference 'Event.count' do
+        AuditEventService.stub(:log, fail_update_audit) { result = ApplicationCreator.call(form) }
       end
 
-      assert result.success?
-      assert_not_nil result.application
-      assert_equal @dependent, result.application.user
-      assert_equal @user, result.application.managing_guardian
-
-      mock_service.verify
+      assert result.failure?
+      assert_includes result.error_messages, 'dependent audit unavailable'
+      assert_equal application_before, application.reload.attributes
+      assert_equal dependent_before, @dependent.reload.attributes
     end
 
     # Pending identity review
@@ -528,6 +660,23 @@ module Applications
     end
 
     private
+
+    def create_dependent_draft
+      create_guardian_relationship(@user, @dependent)
+      result = ApplicationCreator.call(create_valid_dependent_form(@user, @dependent))
+      assert result.success?, result.error_messages.inspect
+      result.application
+    end
+
+    def dependent_update_form(application)
+      form = create_valid_dependent_form(@user, @dependent)
+      form.application = application
+      form
+    end
+
+    def dependent_update_events(application)
+      Event.where(action: 'application_for_dependent_updated', auditable: application)
+    end
 
     def pending_identity_review_message(locale: I18n.default_locale)
       I18n.t('activemodel.errors.models.application_form.attributes.base.pending_identity_review',
