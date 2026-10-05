@@ -65,7 +65,7 @@ module Admin
       within '#proofRejectionModal' do
         assert_selector('textarea[name="rejection_reason"]', wait: 5)
 
-        # This test sets the hidden proof type directly.
+        # This override leaves the modal's proof-type assignment untested.
         page.execute_script("document.getElementById('rejection-proof-type').value = 'income'")
 
         click_modal_button('Wrong Document Type')

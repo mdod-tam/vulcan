@@ -73,21 +73,14 @@ module Admin
       assert_equal application.id, review_case.metadata['application_id']
     end
 
-    test 'old pages reach canonical review without losing multipart documents or authorizing a legacy decision' do
-      assert_no_difference ['User.count', 'Application.count', 'DuplicateReviewCase.count', 'Event.count'] do
-        post identity_review_admin_paper_applications_path, params: { constituent: @params[:constituent] }, as: :json
-      end
-      assert_response :success
-      assert_equal({ 'state' => 'clear' }, response.parsed_body)
-      assert_equal 'no-store', response.headers['Cache-Control']
-
-      legacy = @params.merge(identity_decision: 'obsolete-decision')
+    test 'multipart POST retains all four documents for identity review and retry' do
+      multipart = @params.dup
       @blobs.each_key do |key|
-        legacy.delete("#{key}_signed_id")
-        legacy[key] = fixture_file_upload('income_proof.pdf', 'application/pdf')
+        multipart.delete("#{key}_signed_id")
+        multipart[key] = fixture_file_upload('income_proof.pdf', 'application/pdf')
       end
       assert_no_difference ['User.count', 'Application.count', 'DuplicateReviewCase.count', 'Event.count'] do
-        post admin_paper_applications_path, params: legacy
+        post admin_paper_applications_path, params: multipart
       end
       assert_response :unprocessable_content
       assert_select '#identity-review-heading'
@@ -98,6 +91,7 @@ module Admin
         assert_empty blob.attachments
         ["#{key}_signed_id", signed_id]
       end
+      assert_equal 4, retained.size
 
       assert_difference ['User.count', 'Application.count', 'DuplicateReviewCase.count'], 1 do
         post admin_paper_applications_path, params: @params.merge(retained).merge(
@@ -110,13 +104,17 @@ module Admin
       @blobs.each_key { |key| assert_equal retained["#{key}_signed_id"], application.public_send(key).blob.signed_id }
     end
 
-    test 'legacy preview still requires an authenticated admin' do
+    test 'paper submission requires an authenticated admin' do
       sign_out
-      post identity_review_admin_paper_applications_path, as: :json
+      assert_no_difference ['User.count', 'Application.count', 'DuplicateReviewCase.count', 'Event.count'] do
+        post admin_paper_applications_path, params: @params, as: :json
+      end
       assert_response :unauthorized
 
       sign_in_for_integration_test(create(:constituent))
-      post identity_review_admin_paper_applications_path, as: :json
+      assert_no_difference ['User.count', 'Application.count', 'DuplicateReviewCase.count', 'Event.count'] do
+        post admin_paper_applications_path, params: @params, as: :json
+      end
       assert_redirected_to root_path
     end
 

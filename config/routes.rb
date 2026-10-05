@@ -163,7 +163,6 @@ Rails.application.routes.draw do
         post :reject_for_income
         get :dependent_form
         get :recipient_preference
-        post :identity_review # Legacy forms continue to the canonical create-time review.
       end
     end
 
