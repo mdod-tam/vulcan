@@ -146,6 +146,8 @@ module Admin
 
       if result.success?
         handle_successful_review(result)
+      elsif result.data&.dig(:commit_state) == :unknown
+        redirect_to admin_application_path(@application), alert: result.message, status: :see_other
       else
         load_certification_delivery_data
         handle_error_response(
@@ -172,10 +174,12 @@ module Admin
     # Approval can reconcile application or certification status, so it requires a full Turbo redirect.
     def handle_successful_review(result)
       message = "#{params[:proof_type].capitalize} proof #{params[:status]} successfully."
-      alert_message = proof_resubmission_delivery_alert(result)
+      alert_message = [result.data&.dig(:warning), proof_resubmission_delivery_alert(result)].compact_blank.join(' ')
       @application.reload
 
       if params[:status] == 'approved'
+        return handle_successful_review_with_alert(message, alert_message, redirect: true) if alert_message.present?
+
         handle_success_response(
           html_redirect_path: admin_application_path(@application),
           html_message: message,
@@ -193,7 +197,7 @@ module Admin
       end
     end
 
-    def handle_successful_review_with_alert(message, alert_message)
+    def handle_successful_review_with_alert(message, alert_message, redirect: false)
       respond_to do |format|
         format.html do
           redirect_to admin_application_path(@application),
@@ -201,8 +205,13 @@ module Admin
         end
 
         format.turbo_stream do
-          flash.now[:alert] = alert_message
-          handle_turbo_stream_success(message: message, updates: proof_review_turbo_updates)
+          if redirect
+            redirect_to admin_application_path(@application),
+                        flash: { notice: message, alert: alert_message }, status: :see_other
+          else
+            flash.now[:alert] = alert_message
+            handle_turbo_stream_success(message: message, updates: proof_review_turbo_updates)
+          end
         end
       end
     end
@@ -324,7 +333,7 @@ module Admin
       )
 
       if result.success?
-        handle_successful_certification_update('Disability certification rejected and provider notified.')
+        handle_successful_certification_update(result.message)
       else
         handle_error_response(
           error_message: "Failed to reject certification: #{result.message}",

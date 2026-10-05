@@ -70,7 +70,6 @@ module Applications
         set_medical_provider_details
         attach_file_uploads
         save_application_with_audit
-        log_events
       end
 
       success_result
@@ -231,6 +230,7 @@ module Applications
       }.merge(address_attributes).compact
 
       applicant_user.update!(user_attrs)
+      @applicant_changes = applicant_user.saved_changes.slice(*user_attrs.keys.map(&:to_s))
     end
 
     def address_attributes
@@ -311,11 +311,14 @@ module Applications
       # Submission clears autosave ordering in this transaction. A refusal preserves the draft's ordering.
       target_application.autosave_revisions = {} if @form.is_submission
       target_application.save!
+      application_changes = target_application.saved_changes.except('updated_at', 'autosave_revisions')
       actor = determine_audit_actor
 
       if was_new_record
         log_application_created_event(actor)
-      elsif should_log_application_updated_event?
+      elsif dependent_application?
+        log_dependent_application_updated_event(application_changes)
+      elsif application_changes.any?
         log_application_updated_event(actor)
       end
 
@@ -361,18 +364,13 @@ module Applications
       )
     end
 
-    def should_log_application_updated_event?
-      target_application.saved_changes.except('updated_at', 'autosave_revisions').any?
-    end
-
-    def log_events
-      return unless target_application.persisted?
-
-      return unless dependent_application? && target_application.managing_guardian && target_application.user
-
+    # Guardian-managed edits have one update event with both application and dependent changes.
+    def log_dependent_application_updated_event(application_changes)
       relationship = find_guardian_relationship
       event_service = Applications::EventService.new(target_application, user: current_user)
       event_service.log_dependent_application_update(
+        application_changes: application_changes,
+        dependent_changes: @applicant_changes,
         dependent: target_application.user,
         relationship_type: relationship&.relationship_type
       )

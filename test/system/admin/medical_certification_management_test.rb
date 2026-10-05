@@ -72,6 +72,9 @@ module Admin
     end
 
     test 'admin can reject a medical certification without uploading' do
+      MedicalProviderNotifier.any_instance.expects(:send_certification_rejection_notice)
+                             .returns(success: true, outcome: :submitted, tracking_status: :recorded)
+
       RejectionReason.find_or_create_by!(
         code: 'missing_signature',
         proof_type: 'medical_certification',
@@ -96,7 +99,7 @@ module Admin
 
       wait_for_turbo
 
-      assert_success_message('Disability certification rejected and provider notified.')
+      assert_success_message('Disability certification rejected. Provider email submitted.')
       @application.reload
       assert_equal 'rejected', @application.medical_certification_status
       expected_reason = RejectionReason.find_by!(code: 'missing_signature', proof_type: 'medical_certification', locale: 'en').body

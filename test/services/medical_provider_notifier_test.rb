@@ -27,7 +27,7 @@ class MedicalProviderNotifierTest < ActiveSupport::TestCase
 
     notifier = MedicalProviderNotifier.new(@application)
     notifier.stubs(:notify_by_email).returns(
-      { success: true, method: 'email', message_id: 'MSG-123' }
+      { success: true, method: 'email', outcome: :submitted, message_id: 'MSG-123' }
     )
 
     result = nil
@@ -39,7 +39,9 @@ class MedicalProviderNotifierTest < ActiveSupport::TestCase
       )
     end
 
-    assert_equal true, result
+    assert result[:success]
+    assert_equal :submitted, result[:outcome]
+    assert_equal :recorded, result[:tracking_status]
     notification.reload
     assert_equal 'email', notification.metadata['delivery_method']
     assert_equal 'MSG-123', notification.metadata['message_id']
@@ -63,7 +65,7 @@ class MedicalProviderNotifierTest < ActiveSupport::TestCase
     notifier = MedicalProviderNotifier.new(@application)
     DocumentSigning::SubmissionService.expects(:new).never
     notifier.stubs(:notify_by_email).returns(
-      { success: true, method: 'email', message_id: 'MSG-456' }
+      { success: true, method: 'email', outcome: :submitted, message_id: 'MSG-456' }
     )
 
     result = notifier.send_certification_rejection_notice(
@@ -72,7 +74,7 @@ class MedicalProviderNotifierTest < ActiveSupport::TestCase
       notification_id: notification.id
     )
 
-    assert_equal true, result
+    assert result[:success]
     notification.reload
     assert_equal 'email', notification.metadata['delivery_method']
     assert_equal 'MSG-456', notification.metadata['message_id']
@@ -97,7 +99,8 @@ class MedicalProviderNotifierTest < ActiveSupport::TestCase
 
     result = notifier.send_certification_rejection_notice(rejection_reason: 'Missing signature', admin: @admin,
                                                           secure_upload_url: 'https://example.test/secure_certification_form?token=abc')
-    assert_equal true, result
+    assert result[:success]
+    assert_equal :submitted, result[:outcome]
   end
 
   test 'redacts secure upload urls from email errors and notification metadata' do
@@ -136,7 +139,8 @@ class MedicalProviderNotifierTest < ActiveSupport::TestCase
       Rails.logger = original_logger
     end
 
-    assert_equal false, result
+    assert_not result[:success]
+    assert_equal :failed, result[:outcome]
     notification.reload
     assert_equal 'SMTP rejected message containing [REDACTED_URL]',
                  notification.metadata.fetch('provider_notification_error')
@@ -149,11 +153,13 @@ class MedicalProviderNotifierTest < ActiveSupport::TestCase
     notification = create(:notification, recipient: @application.user, actor: @admin, notifiable: @application,
                                          action: 'medical_certification_rejected')
     notifier = MedicalProviderNotifier.new(@application)
-    notifier.stubs(:notify_by_email).returns(success: false, method: 'email', error: 'smtp timeout')
+    notifier.stubs(:notify_by_email).returns(success: false, method: 'email', outcome: :failed, error: 'smtp timeout')
     FaxService.any_instance.expects(:send_fax).never
 
-    assert_equal false, notifier.send_certification_rejection_notice(rejection_reason: 'Missing signature', admin: @admin,
-                                                                     notification_id: notification.id)
+    result = notifier.send_certification_rejection_notice(rejection_reason: 'Missing signature', admin: @admin,
+                                                          notification_id: notification.id)
+    assert_not result[:success]
+    assert_equal :failed, result[:outcome]
     assert_nil notification.reload.metadata['fax_sid']
     assert_equal 'smtp timeout', notification.metadata['provider_notification_error']
   end
@@ -162,9 +168,47 @@ class MedicalProviderNotifierTest < ActiveSupport::TestCase
     @application.update_column(:medical_provider_email, nil)
     notification = create(:notification, recipient: @application.user, actor: @admin, notifiable: @application,
                                          action: 'medical_certification_rejected')
-    assert_equal false, MedicalProviderNotifier.new(@application).send_certification_rejection_notice(
+    result = MedicalProviderNotifier.new(@application).send_certification_rejection_notice(
       rejection_reason: 'Missing signature', admin: @admin, notification_id: notification.id
     )
+    assert_not result[:success]
+    assert_equal :unavailable, result[:outcome]
     assert_equal FaxService::UNAVAILABLE_MESSAGE, notification.reload.metadata['provider_notification_error']
+  end
+
+  %i[queued deferred suppressed configuration_error enqueue_failed].each do |outcome|
+    test "retains the #{outcome} queue outcome in the result and rejection tracking" do
+      notification = create(:notification, recipient: @application.user, actor: @admin, notifiable: @application,
+                                           action: 'medical_certification_rejected')
+      EmailDelivery.stubs(:verify!)
+      MedicalProviderMailer.stubs(:with).returns(stub(certification_rejected: mock('mail')))
+      EmailDelivery.expects(:deliver_later).returns(outcome)
+
+      result = MedicalProviderNotifier.new(@application).send_certification_rejection_notice(
+        rejection_reason: 'Missing signature', admin: @admin, notification_id: notification.id
+      )
+
+      assert_equal outcome, result[:outcome]
+      assert_equal %i[queued deferred].include?(outcome), result[:success]
+      assert_equal :recorded, result[:tracking_status]
+      assert_equal outcome.to_s, notification.reload.metadata['provider_delivery_outcome']
+    end
+  end
+
+  test 'tracking failure preserves accepted email submission without suggesting another send' do
+    notification = create(:notification, recipient: @application.user, actor: @admin, notifiable: @application,
+                                         action: 'medical_certification_rejected')
+    notifier = MedicalProviderNotifier.new(@application)
+    notifier.stubs(:notify_by_email).returns(success: true, method: 'email', outcome: :submitted, message_id: 'MSG-ACCEPTED')
+    Notification.any_instance.expects(:update!).raises(ActiveRecord::RecordInvalid.new(notification))
+
+    result = notifier.send_certification_rejection_notice(rejection_reason: 'Missing signature', admin: @admin,
+                                                          notification_id: notification.id)
+
+    assert result[:success]
+    assert_equal :submitted, result[:outcome]
+    assert_equal 'MSG-ACCEPTED', result[:message_id]
+    assert_equal :failed, result[:tracking_status]
+    assert_equal 'ActiveRecord::RecordInvalid', result[:tracking_error]
   end
 end

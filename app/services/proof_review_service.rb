@@ -1,7 +1,7 @@
 # frozen_string_literal: true
 
 # Validates admin review parameters, runs Applications::ProofReviewer, and returns a BaseService::Result.
-# The result reports a review error as a failure. It does not raise the error.
+# Rolled-back reviews fail; committed follow-up failures carry a warning.
 class ProofReviewService < BaseService
   attr_reader :application, :admin_user, :params, :proof_type, :status, :proof_review
 
@@ -47,9 +47,18 @@ class ProofReviewService < BaseService
       perform_review
       log_review_success
       success(success_message, review_result_data)
+    rescue Applications::ProofReviewer::CommitUnconfirmed => e
+      log_review_error(e)
+      failure(e.message, { commit_state: :unknown })
     rescue StandardError => e
       log_review_error(e)
-      failure("Proof review failed: #{e.message}")
+      message = if e.is_a?(ActiveRecord::RecordInvalid) && e.record.is_a?(ProofReview) &&
+                   e.record.errors.of_kind?(:rejection_reason, :blank)
+                  'Enter a rejection reason before submitting this review.'
+                else
+                  'The proof review could not be completed. Check this application before reviewing it again.'
+                end
+      failure(message)
     end
   end
 
@@ -57,6 +66,7 @@ class ProofReviewService < BaseService
     reviewer = Applications::ProofReviewer.new(application, admin_user)
     reviewer.review(**review_params)
     @proof_review = reviewer.proof_review
+    @review_warning = reviewer.warning
   end
 
   def review_params
@@ -75,12 +85,17 @@ class ProofReviewService < BaseService
 
   def review_result_data
     data = { proof_review: proof_review }
+    data[:warning] = @review_warning if @review_warning
     return data unless proof_review&.status_rejected?
 
     data.merge(
       resubmission_delivered: proof_resubmission_delivered?,
       resubmission_suppressed: proof_resubmission_suppressed?
     )
+  rescue StandardError => e
+    log_review_error(e)
+    warning = 'The proof review was saved, but resubmission delivery could not be confirmed. Check this application before reviewing it again.'
+    data.merge(warning: [data[:warning], warning].compact.join(' '))
   end
 
   # True when the email controls stopped the resubmission email on purpose.
@@ -107,7 +122,7 @@ class ProofReviewService < BaseService
   end
 
   def log_review_error(error)
-    Rails.logger.error "ProofReviewService: Error during review for Application ##{application.id}: #{error.message}"
+    Rails.logger.error "ProofReviewService: Error during review for Application ##{application.id}: #{error.class.name}"
     Rails.logger.error error.backtrace.join("\n")
     # Possible improvement: report the error to an error tracker such as Honeybadger.
   end

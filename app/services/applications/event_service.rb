@@ -11,16 +11,17 @@ module Applications
       @user = user || application.user
     end
 
-    # Records an update only when the application, dependent, or managing guardian has unsaved changes.
+    # Records persisted changes from one existing-application update, before later saves replace dirty tracking.
+    # @param application_changes [Hash] Meaningful application changes from this save
+    # @param dependent_changes [Hash] Meaningful dependent changes from this operation
     # @param dependent [User, nil] The dependent, or nil to use application.user
     # @param relationship_type [String, nil] The relationship type, or nil to look it up
     # @return [Event, nil] The event, or nil if no changes exist or audit deduplication suppresses it
-    def log_dependent_application_update(dependent: nil, relationship_type: nil)
+    def log_dependent_application_update(application_changes:, dependent_changes:, dependent: nil, relationship_type: nil)
       dependent ||= application.user
-
-      relevant_changes = application.changed? || dependent.changed? || application.managing_guardian&.changed?
-
-      return nil unless relevant_changes
+      changed_fields = application_changes.keys.map { |field| "application.#{field}" } +
+                       dependent_changes.keys.map { |field| "dependent.#{field}" }
+      return nil if changed_fields.empty?
 
       relationship_type ||= GuardianRelationship.find_by(
         guardian_id: application.managing_guardian_id,
@@ -36,6 +37,8 @@ module Applications
           dependent_id: dependent.id,
           managing_guardian_id: application.managing_guardian_id,
           guardian_relationship: relationship_type,
+          changed_fields: changed_fields.sort,
+          operation_id: SecureRandom.uuid,
           timestamp: Time.current.iso8601
         }
       )

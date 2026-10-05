@@ -96,9 +96,12 @@ class AuditEventService < BaseService
        %w[profile_created_by_admin_via_paper alternate_contact_updated medical_provider_info_updated].include?(action.to_s)
       changes = metadata['changes'] || metadata[:changes]
       if changes.present?
-        # Field names and the first 51 characters of string-keyed 'new' values distinguish these changes.
+        # Caller hashes and persisted JSON use different key types. Preserve false values in both.
         # A hash limits the fingerprint size.
-        changes_hash = changes.map { |k, v| "#{k}:#{v['new'].to_s[0..50]}" }.sort.join('|')
+        changes_hash = changes.map do |field, change|
+          new_value = change.key?('new') ? change['new'] : change[:new]
+          "#{field}:#{new_value.to_s[0..50]}"
+        end.sort.join('|')
         fingerprint_hash = Digest::MD5.hexdigest(changes_hash)
         return "#{base}_#{fingerprint_hash}"
       end
@@ -153,7 +156,7 @@ class AuditEventService < BaseService
       return "#{base}_#{Array(changed_fields).sort.join('_')}" if changed_fields.present?
     end
 
-    if action.to_s == 'proof_resubmission_request_failed'
+    if %w[proof_resubmission_request_failed proof_review_follow_up_failed].include?(action.to_s)
       proof_review_id = metadata['proof_review_id'] || metadata[:proof_review_id]
       return "#{base}_#{proof_review_id}" if proof_review_id.present?
     end

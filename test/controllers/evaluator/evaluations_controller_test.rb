@@ -19,9 +19,114 @@ class EvaluationsControllerTest < ActionDispatch::IntegrationTest
     assert_response :success
   end
 
-  test 'gets completed' do
+  test 'administrator completed route applies the selected assignment scope' do
+    assigned = create(:evaluation, :completed, evaluator: @admin)
+    other = create(:evaluation, :completed, evaluator: @evaluator)
+    sign_in_for_controller_test(@admin)
+
+    get completed_evaluators_evaluations_path, params: { scope: 'mine' }
+
+    assert_evaluation_rows(included: [assigned], excluded: [other, @evaluation, @requested_evaluation])
+    assert_select '#evaluations-list-heading', text: /Completed Evaluations.*Assigned to Me/m
+
     get completed_evaluators_evaluations_path
-    assert_response :success
+
+    assert_evaluation_rows(included: [assigned, other], excluded: [@evaluation, @requested_evaluation])
+    assert_select '#evaluations-list-heading', text: /All Evaluators/
+    assert_select 'a[aria-current="page"]', text: 'Completed'
+  end
+
+  test 'administrator can switch between assigned and all evaluations' do
+    assigned = create(:evaluation, evaluator: @admin, status: :scheduled)
+    sign_in_for_controller_test(@admin)
+
+    get evaluators_evaluations_path, params: { scope: 'mine' }
+
+    assert_evaluation_rows(included: [assigned], excluded: [@evaluation, @requested_evaluation])
+    assert_select '#evaluations-list-heading', text: /Assigned to Me/
+    assert_select "a[href='#{evaluators_evaluations_path(scope: 'mine')}'].bg-white", text: 'My Evaluations'
+
+    get evaluators_evaluations_path, params: { scope: 'all' }
+
+    assert_evaluation_rows(included: [assigned, @evaluation, @requested_evaluation])
+    assert_select '#evaluations-list-heading', text: /All Evaluators/
+    assert_select "a[href='#{evaluators_evaluations_path(scope: 'all')}'].bg-white", text: 'All Evaluators'
+  end
+
+  test 'evaluator cannot expand scope beyond their assignments' do
+    other = create(:evaluation, evaluator: @other_evaluator, status: :scheduled)
+
+    get evaluators_evaluations_path, params: { scope: 'all', status: 'scheduled' }
+
+    assert_evaluation_rows(included: [@evaluation], excluded: [other, @requested_evaluation])
+    assert_select "a[aria-current='page'][href='#{evaluators_evaluations_path(scope: 'mine', status: 'scheduled')}']",
+                  text: 'Scheduled'
+  end
+
+  test 'scheduled filters include confirmed evaluations in date order' do
+    @evaluation.update!(evaluation_date: 3.days.from_now)
+    confirmed = create(:evaluation, evaluator: @evaluator, status: :confirmed, evaluation_date: 2.days.from_now)
+
+    [evaluators_evaluations_path(scope: 'mine', status: 'scheduled'), scheduled_evaluators_evaluations_path,
+     pending_evaluators_evaluations_path].each do |path|
+      get path
+
+      assert_evaluation_rows(included: [confirmed, @evaluation], excluded: [@requested_evaluation])
+      assert_body_order(%(href="#{evaluators_evaluation_path(confirmed)}"), %(href="#{evaluators_evaluation_path(@evaluation)}"))
+      assert_select '#evaluations-list-heading', text: 'Scheduled Evaluations'
+      assert_select 'a[aria-current="page"]', text: 'Scheduled'
+    end
+  end
+
+  test 'follow-up filters combine cancelled and no-show within the selected scope' do
+    cancelled = create(:evaluation, evaluator: @admin, status: :cancelled)
+    no_show = create(:evaluation, evaluator: @admin, status: :no_show)
+    other = create(:evaluation, evaluator: @evaluator, status: :cancelled)
+    sign_in_for_controller_test(@admin)
+
+    get evaluators_evaluations_path, params: { scope: 'mine', status: 'needs_followup' }
+
+    assert_evaluation_rows(included: [cancelled, no_show], excluded: [other, @evaluation, @requested_evaluation])
+    assert_select '#evaluations-list-heading', text: /Evaluations Needing Follow-up.*Assigned to Me/m
+    assert_select 'a[aria-current="page"]', text: 'Needs Follow-up'
+
+    get needs_followup_evaluators_evaluations_path
+
+    assert_evaluation_rows(included: [cancelled, no_show, other], excluded: [@evaluation, @requested_evaluation])
+    assert_select '#evaluations-list-heading', text: /All Evaluators/
+    assert_select 'a[aria-current="page"]', text: 'Needs Follow-up'
+  end
+
+  test 'ordinary status filters remain distinct from aggregate filters' do
+    cancelled = create(:evaluation, evaluator: @evaluator, status: :cancelled)
+    no_show = create(:evaluation, evaluator: @evaluator, status: :no_show)
+
+    get filtered_evaluators_evaluations_path(scope: 'mine', status: 'cancelled')
+
+    assert_evaluation_rows(included: [cancelled], excluded: [no_show, @evaluation, @requested_evaluation])
+
+    get requested_evaluators_evaluations_path
+
+    assert_evaluation_rows(included: [@requested_evaluation], excluded: [cancelled, no_show, @evaluation])
+    assert_select '#evaluations-list-heading', text: 'Needs Scheduling'
+    assert_select 'a[aria-current="page"]', text: 'Needs Scheduling'
+  end
+
+  test 'unsupported filters fall back to authorized scope and show the applied selection' do
+    other = create(:evaluation, evaluator: @other_evaluator, status: :scheduled)
+
+    get evaluators_evaluations_path, params: { scope: 'unsupported', status: 'unsupported' }
+
+    assert_evaluation_rows(included: [@evaluation, @requested_evaluation], excluded: [other])
+    assert_select 'a[aria-current="page"]', text: 'All'
+    assert_select "a[href='#{evaluators_evaluations_path(scope: 'mine')}']", text: 'All'
+
+    sign_in_for_controller_test(@admin)
+    get evaluators_evaluations_path, params: { scope: 'unsupported', status: 'unsupported' }
+
+    assert_evaluation_rows(included: [@evaluation, @requested_evaluation, other])
+    assert_select '#evaluations-list-heading', text: /All Evaluators/
+    assert_select "a[aria-current='page'][href='#{evaluators_evaluations_path(scope: 'all')}']", text: 'All'
   end
 
   test 'submits report' do
@@ -495,6 +600,12 @@ class EvaluationsControllerTest < ActionDispatch::IntegrationTest
   end
 
   private
+
+  def assert_evaluation_rows(included:, excluded: [])
+    assert_response :success
+    included.each { |evaluation| assert_select "tbody a[href='#{evaluators_evaluation_path(evaluation)}']", count: 1 }
+    excluded.each { |evaluation| assert_select "tbody a[href='#{evaluators_evaluation_path(evaluation)}']", count: 0 }
+  end
 
   def assert_body_order(*snippets)
     positions = snippets.map do |snippet|

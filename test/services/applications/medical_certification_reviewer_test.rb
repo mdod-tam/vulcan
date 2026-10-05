@@ -8,6 +8,7 @@ module Applications
       @application = create(:application, :completed)
       @admin = create(:admin)
       @service = MedicalCertificationReviewer.new(@application, @admin)
+      ActiveRecord.stubs(:after_all_transactions_commit).yields
 
       @application.update(
         medical_provider_name: 'Dr. Test Provider',
@@ -34,7 +35,7 @@ module Applications
         admin: @admin,
         notification_id: 1234,
         secure_upload_url: 'https://example.test/secure_certification_form?token=abc'
-      ).returns(true)
+      ).returns(success: true, outcome: :submitted, tracking_status: :recorded)
       request_result = BaseService::Result.new(
         success: true,
         message: 'sent',
@@ -45,6 +46,9 @@ module Applications
       MedicalCertificationAttachmentService.stub(:reject_certification, ->(**_args) { { success: true, notification_id: 1234 } }) do
         result = @service.reject(rejection_reason: 'Invalid documentation')
         assert(result.success?, 'Expected reviewer service to pass through success when notifier succeeds')
+        assert_equal :submitted, result.data[:provider_delivery][:outcome]
+        assert_equal 1234, result.data[:notification_id]
+        assert_includes result.message, 'Provider email submitted.'
       end
     end
 
@@ -56,7 +60,7 @@ module Applications
         admin: @admin,
         notification_id: 1234,
         secure_upload_url: nil
-      ).returns(true)
+      ).returns(success: true, outcome: :queued, tracking_status: :recorded)
       request_result = BaseService::Result.new(success: false, message: 'temporary failure', data: {})
       RequestCertificationUpload.any_instance.expects(:call).returns(request_result)
 
@@ -72,7 +76,7 @@ module Applications
       assert_match(/Rejection reason is required/, result.message)
     end
 
-    test 'continues rejection notification over fax when provider email is missing' do
+    test 'retains rejection while reporting unavailable delivery when provider email is missing' do
       @application.update(medical_provider_email: nil, medical_provider_fax: '555-123-4567')
       mock_notifier = mock('medical_provider_notifier')
       MedicalProviderNotifier.expects(:new).with(@application).returns(mock_notifier)
@@ -81,13 +85,15 @@ module Applications
         admin: @admin,
         notification_id: 1234,
         secure_upload_url: nil
-      ).returns(true)
+      ).returns(success: false, outcome: :unavailable, tracking_status: :recorded)
       request_result = BaseService::Result.new(success: false, message: 'Provider email required', data: {})
       RequestCertificationUpload.any_instance.expects(:call).returns(request_result)
 
       MedicalCertificationAttachmentService.stub(:reject_certification, ->(**_args) { { success: true, notification_id: 1234 } }) do
         result = @service.reject(rejection_reason: 'Invalid documentation')
-        assert(result.success?, 'Expected fax-capable rejection to succeed when secure upload link cannot be issued')
+        assert result.success?
+        assert_equal :unavailable, result.data[:provider_delivery][:outcome]
+        assert_includes result.message, 'Provider email was not sent.'
       end
     end
 
@@ -116,14 +122,48 @@ module Applications
       end
     end
 
-    test 'proceeds even when notification fails' do
-      # This success stub does not simulate a notification failure.
-      MedicalCertificationAttachmentService.stub(:reject_certification, ->(**_args) { { success: true } }) do
+    test 'retains durable rejection and reports actual provider failure' do
+      notifier = stub(send_certification_rejection_notice: { success: false, outcome: :failed, tracking_status: :recorded })
+      MedicalProviderNotifier.expects(:new).with(@application).returns(notifier)
+      RequestCertificationUpload.any_instance.stubs(:call).returns(
+        BaseService::Result.new(success: true, data: { secure_upload_url: nil })
+      )
+      assert_difference -> { ApplicationStatusChange.where(application: @application, to_status: 'rejected').count }, 1 do
         result = @service.reject(rejection_reason: 'Invalid documentation')
-        assert(result.success?, 'Expected reviewer service to return success even if internal notification failed')
+        assert result.success?
+        assert_equal :failed, result.data[:provider_delivery][:outcome]
+        assert_includes result.message, 'Provider email was not sent.'
       end
+      assert @application.reload.medical_certification_status_rejected?
+    end
 
-      # assert_equal('rejected', @application.reload.medical_certification_status)
+    test 'does not misreport accepted provider email when tracking fails' do
+      MedicalCertificationAttachmentService.stubs(:reject_certification).returns(success: true, notification_id: 1234)
+      RequestCertificationUpload.any_instance.stubs(:call).returns(BaseService::Result.new(success: true, data: {}))
+      MedicalProviderNotifier.any_instance.stubs(:send_certification_rejection_notice).returns(
+        success: true, outcome: :submitted, tracking_status: :failed, tracking_error: 'ActiveRecord::RecordInvalid'
+      )
+
+      result = @service.reject(rejection_reason: 'Invalid documentation')
+
+      assert result.success?
+      assert result.data[:provider_delivery][:success]
+      assert_includes result.message, 'Provider email submitted.'
+      assert_includes result.message, 'Delivery tracking failed; verify provider email before retrying.'
+      assert_not_includes result.message, 'Provider email was not sent.'
+    end
+
+    test 'note failure does not turn a saved rejection into a retryable failure or expose exception text' do
+      RequestCertificationUpload.any_instance.stubs(:call).returns(BaseService::Result.new(success: true, data: {}))
+      MedicalProviderNotifier.any_instance.stubs(:send_certification_rejection_notice).returns(success: true, outcome: :queued)
+      ApplicationNote.any_instance.expects(:save!).raises(StandardError, 'private note failure')
+
+      result = @service.reject(rejection_reason: 'Missing signature', notes: 'Review the signature')
+
+      assert result.success?
+      assert @application.reload.medical_certification_status_rejected?
+      assert_includes result.message, 'The rejection note could not be saved.'
+      assert_not_includes result.message, 'private note failure'
     end
 
     test 'returns error when attachment service fails' do

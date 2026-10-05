@@ -23,7 +23,7 @@ class MedicalProviderNotifier
   # @param admin [User] The admin who rejected the certification
   # @param notification_id [Integer, nil] Existing rejection notification id to enrich with delivery metadata
   # @param secure_upload_url [String, nil] Tokenized upload URL for email delivery only
-  # @return [Boolean] True if email submission or enqueue succeeds and metadata persistence does not fail
+  # @return [Hash] Transport outcome and independent notification tracking status
   def send_certification_rejection_notice(rejection_reason:, admin:, notification_id: nil, secure_upload_url: nil)
     Rails.logger.info "Notifying medical provider about certification rejection for Application ID: #{application.id}"
 
@@ -31,7 +31,7 @@ class MedicalProviderNotifier
     delivery_result = if email_available?
                         notify_by_email(rejection_reason, admin, secure_upload_url: secure_upload_url)
                       else
-                        failure_result(method: FAX_METHOD, error: FaxService::UNAVAILABLE_MESSAGE)
+                        failure_result(method: FAX_METHOD, outcome: :unavailable, error: FaxService::UNAVAILABLE_MESSAGE)
                       end
 
     handle_delivery_result(delivery_result, notification_id: notification_id)
@@ -118,25 +118,28 @@ class MedicalProviderNotifier
 
   def handle_delivery_result(delivery_result, notification_id: nil)
     update_notification_metadata(delivery_result, notification_id: notification_id)
-    delivery_result[:success]
+    delivery_result.merge(tracking_status: notification_id ? :recorded : :not_requested)
   rescue StandardError => e
     Rails.logger.error "Failed to handle delivery result for Application ID: #{application.id} - #{sanitize_secure_error_message(e.message)}"
-    false
+    delivery_result.merge(tracking_status: :failed, tracking_error: e.class.name)
   end
 
   def update_notification_metadata(delivery_result, notification_id: nil)
     notification = find_rejection_notification(notification_id)
 
-    return unless notification
+    return unless notification_id
+
+    raise ActiveRecord::RecordNotFound, 'Rejection notification not found' unless notification
 
     notification.with_lock do
       metadata = (notification.metadata || {}).merge(
         'notification_methods' => notification_methods, 'provider_notification_attempted_at' => Time.current.iso8601,
-        'provider_delivery_contexts' => @delivery_contexts
+        'provider_delivery_contexts' => @delivery_contexts,
+        'provider_delivery_outcome' => delivery_result[:outcome].to_s
       )
       if delivery_result[:success]
         metadata['delivery_method'] = delivery_result[:method]
-        metadata['provider_delivery_outcome'] = delivery_result[:outcome].to_s
+        metadata.delete('provider_notification_error')
         apply_success_metadata(metadata, delivery_result)
       elsif delivery_result[:error].present?
         metadata['provider_notification_error'] = sanitize_secure_error_message(delivery_result[:error])
@@ -162,11 +165,12 @@ class MedicalProviderNotifier
     end
   end
 
-  def failure_result(error: nil, method: nil)
+  def failure_result(error: nil, method: nil, outcome: :failed)
     sanitized_error = error.present? ? sanitize_secure_error_message(error) : nil
     {
       success: false,
       method: method,
+      outcome: outcome,
       error: sanitized_error
     }.compact
   end
