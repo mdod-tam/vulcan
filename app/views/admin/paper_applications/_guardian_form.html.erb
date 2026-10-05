@@ -36,17 +36,14 @@
               class: "mt-1 block w-full rounded-md border-gray-300 shadow-sm focus:border-indigo-500 focus:ring-indigo-500 sm:text-sm bg-white" %>
         </div>
         <div class="md:col-span-2">
-          <%= g.label :date_of_birth, "Date of Birth", class: "block text-sm font-medium text-gray-700 required-label" %>
-          <%= g.text_field :date_of_birth,
+          <%= g.label :date_of_birth, t("shared.date_of_birth.label"), class: "block text-sm font-medium text-gray-700 required-label" %>
+          <%= date_of_birth_text_field g,
               required: true,
-              value: accessible_date_value(g.object.respond_to?(:date_of_birth) ? g.object.date_of_birth : g.object&.[](:date_of_birth)),
-              placeholder: "MM/DD/YYYY",
-              autocomplete: "bday",
-              inputmode: "numeric",
+              value: date_of_birth_input_value(g.object),
               class: "mt-1 block w-full rounded-md border-gray-300 shadow-sm focus:border-indigo-500 focus:ring-indigo-500 sm:text-sm bg-white",
               "aria-required": "true",
               "aria-describedby": "guardian_dob_hint" %>
-          <p id="guardian_dob_hint" class="text-xs text-gray-500 mt-1">Enter date of birth as MM/DD/YYYY</p>
+          <p id="guardian_dob_hint" class="text-xs text-gray-500 mt-1"><%= t("shared.date_of_birth.hint") %></p>
         </div>
       </div>
 

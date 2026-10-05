@@ -1,25 +1,32 @@
 # frozen_string_literal: true
 
-# Service to handle voucher date of birth verification
+# Checks a constituent's date of birth before a vendor may redeem their voucher. Failed guesses are
+# counted per voucher and vendor in VoucherVerificationThrottle; the session only carries the
+# resulting grant.
 class VoucherVerificationService
-  attr_reader :voucher, :submitted_dob_str, :session, :max_attempts
+  attr_reader :voucher, :vendor, :submitted_dob_str, :session, :max_attempts
 
-  def initialize(voucher, submitted_dob_str, session)
+  def initialize(voucher, submitted_dob_str, session, vendor:)
     @voucher = voucher
+    @vendor = vendor
     @submitted_dob_str = submitted_dob_str
     @session = session
-    @max_attempts = Policy.get('voucher_verification_max_attempts') || 3
+    @max_attempts = (Policy.get('voucher_verification_max_attempts') || 3).to_i
   end
 
   def verify
-    # Parse the submitted DOB
-    return failed_result(:invalid_format) unless valid_dob_format?
-
-    # Check if the DOB matches
-    if dobs_match?
-      handle_successful_verification
-    else
-      handle_failed_verification
+    VoucherVerificationThrottle.with_row_lock(voucher, vendor) do |throttle|
+      # The lockout is checked first, so a correct guess during it is refused like any other.
+      # Unreadable input is a typing problem, not a wrong answer, so it does not use an attempt.
+      if throttle.locked?
+        locked_result(throttle)
+      elsif !valid_dob_format?
+        remaining_result(throttle, 'dob_verification_invalid_format')
+      elsif dobs_match?
+        handle_successful_verification(throttle)
+      else
+        handle_failed_verification(throttle)
+      end
     end
   end
 
@@ -29,12 +36,9 @@ class VoucherVerificationService
     !parsed_dob.nil?
   end
 
+  # Month first, like every date-of-birth field. Date.parse would read 09/10/1980 as October 9.
   def parsed_dob
-    @parsed_dob ||= begin
-      Date.parse(submitted_dob_str)
-    rescue StandardError
-      nil
-    end
+    @parsed_dob ||= DateInputNormalizer.normalize(submitted_dob_str)
   end
 
   def dobs_match?
@@ -42,73 +46,59 @@ class VoucherVerificationService
     constituent.date_of_birth && parsed_dob == constituent.date_of_birth
   end
 
-  def handle_successful_verification
-    # Reset attempts counter
-    reset_verification_attempts
-
-    # Mark this voucher as verified
+  def handle_successful_verification(throttle)
+    attempt_number = throttle.failed_attempts + 1
+    throttle.destroy!
     verified_vouchers << voucher.id
 
+    VerificationResult.new(success: true, message_key: 'dob_verification_success', attempt_number: attempt_number)
+  end
+
+  def handle_failed_verification(throttle)
+    throttle.record_failure!(max_attempts)
+    throttle.locked? ? locked_result(throttle) : remaining_result(throttle, 'dob_verification_failed')
+  end
+
+  def remaining_result(throttle, message_key)
     VerificationResult.new(
-      success: true,
-      message_key: 'dob_verification_success'
+      success: false,
+      message_key: message_key,
+      attempts_left: [max_attempts - throttle.failed_attempts, 0].max,
+      attempt_number: throttle.failed_attempts
     )
   end
 
-  def handle_failed_verification
-    # Increment failed attempts counter
-    increment_verification_attempts
-
-    current_attempts = verification_attempts
-
-    if current_attempts >= max_attempts
-      VerificationResult.new(
-        success: false,
-        message_key: 'dob_verification_too_many_attempts',
-        attempts_left: 0
-      )
-    else
-      attempts_left = max_attempts - current_attempts
-      VerificationResult.new(
-        success: false,
-        message_key: 'dob_verification_failed',
-        attempts_left: attempts_left
-      )
-    end
-  end
-
-  def verification_attempts
-    verification_attempts_hash[voucher.id.to_s] || 0
-  end
-
-  def increment_verification_attempts
-    verification_attempts_hash[voucher.id.to_s] = verification_attempts + 1
-  end
-
-  def reset_verification_attempts
-    verification_attempts_hash[voucher.id.to_s] = 0
-  end
-
-  def verification_attempts_hash
-    session[:voucher_verification_attempts] ||= {}
+  def locked_result(throttle)
+    VerificationResult.new(
+      success: false,
+      message_key: 'dob_verification_too_many_attempts',
+      attempts_left: 0,
+      attempt_number: throttle.failed_attempts,
+      retry_at: throttle.locked_until
+    )
   end
 
   def verified_vouchers
     session[:verified_vouchers] ||= []
   end
 
-  # Simple value object to represent verification result
   class VerificationResult
-    attr_reader :success, :message_key, :attempts_left
+    attr_reader :success, :message_key, :attempts_left, :attempt_number, :retry_at
 
-    def initialize(success:, message_key:, attempts_left: nil)
+    def initialize(success:, message_key:, attempts_left: nil, attempt_number: nil, retry_at: nil)
       @success = success
       @message_key = message_key
       @attempts_left = attempts_left
+      @attempt_number = attempt_number
+      @retry_at = retry_at
     end
 
     def success?
       @success
+    end
+
+    def locked_out?
+      retry_at.present?
     end
   end
 end

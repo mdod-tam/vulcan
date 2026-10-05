@@ -470,6 +470,7 @@ module Applications
 
     # Only an explicit, freshly verified decision can override soft matches.
     def identity_review_permits_creation?(review)
+      return add_error(PaperIdentityReview::INVALID_DATE_OF_BIRTH_MESSAGE) if review.invalid_input?
       return add_error('Duplicate detection failed. Try again.') if review.error?
       return add_error('The applicant details or possible matches changed since you reviewed them. Review again.') if review.invalid_decision?
 
@@ -524,6 +525,7 @@ module Applications
       )
       PaperIdentityCreationLock.lock!(owner.identity_facts)
       @identity_review = owner.call(lock: true)
+      return add_error(PaperIdentityReview::INVALID_DATE_OF_BIRTH_MESSAGE) if @identity_review.invalid_input?
       return add_error('Review the current matches and select an eligible person.') unless @identity_review.selected?
       return add_error('Explain the identity decision before continuing.') if params[:identity_rationale].blank?
 

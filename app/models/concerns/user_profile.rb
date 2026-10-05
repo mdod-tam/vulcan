@@ -70,24 +70,26 @@ module UserProfile
     [first_name, last_name].compact.join(' ')
   end
 
+  # The column is encrypted text holding ISO dates, so reading goes through the same parser as
+  # writing. Date.parse would read a stray value day-first and answer with a different date.
   def date_of_birth
     raw_value = super
     return nil if raw_value.blank?
-    return raw_value if raw_value.is_a?(Date)
 
-    begin
-      Date.parse(raw_value.to_s)
-    rescue ArgumentError
-      Rails.logger.warn "Invalid date format for user #{id}"
-      nil
+    DateInputNormalizer.normalize(raw_value).tap do |date|
+      Rails.logger.warn "Invalid date format for user #{id}" if date.nil?
     end
   end
 
+  # Unreadable input is never stored: it would reach the encrypted column and identity lookups.
+  # It is kept on the instance only so a re-rendered form shows what the person typed.
   def date_of_birth=(value)
     normalized_date = DateInputNormalizer.normalize(value)
-    @invalid_date_of_birth = value.present? && normalized_date.blank?
-    super(normalized_date || value.presence)
+    @rejected_date_of_birth_input = normalized_date.nil? && value.present? ? value.to_s : nil
+    super(normalized_date)
   end
+
+  attr_reader :rejected_date_of_birth_input
 
   def disabilities
     disability_list = []
@@ -153,7 +155,7 @@ module UserProfile
   end
 
   def date_of_birth_must_be_valid
-    errors.add(:date_of_birth, 'must be in MM/DD/YYYY format') if @invalid_date_of_birth
+    errors.add(:date_of_birth, :invalid) if rejected_date_of_birth_input
   end
 
   def validate_address_for_letter_preference
