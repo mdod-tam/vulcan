@@ -68,6 +68,57 @@ class ProofReviewServiceTest < ActiveSupport::TestCase
     assert_not Current.reviewing_single_proof?
   end
 
+  test 'a rejected review with a blank reason returns corrective feedback without saving' do
+    ['', " \t\n "].each do |reason|
+      result = nil
+      assert_no_difference ['ProofReview.count', 'ApplicationStatusChange.count', 'Event.count', 'Notification.count'] do
+        assert_no_enqueued_jobs do
+          result = ProofReviewService.new(@application, @admin,
+                                          { proof_type: 'income', status: 'rejected', rejection_reason: reason }).call
+        end
+      end
+
+      assert result.failure?
+      assert_equal 'Enter a rejection reason before submitting this review.', result.message
+      assert_equal 'not_reviewed', @application.reload.income_proof_status
+      assert_equal 'in_progress', @application.status
+      assert_not Current.reviewing_single_proof?
+    end
+  end
+
+  test 'a rejected review accepts a resolved reason code without submitted reason text' do
+    reason = create(:rejection_reason)
+
+    result = ProofReviewService.new(@application, @admin,
+                                    { proof_type: 'income', status: 'rejected', rejection_reason_code: reason.code }).call
+
+    assert result.success?, result.message
+    review = @application.proof_reviews.where(proof_type: :income, status: :rejected).sole
+    assert_equal reason.code, review.rejection_reason_code
+    assert_equal reason.body, review.rejection_reason
+    assert_equal review, result.data[:proof_review]
+    assert_equal 'rejected', @application.reload.income_proof_status
+  end
+
+  test 'an unrelated record validation failure stays generic and does not expose details' do
+    private_details = 'proof-review-private@example.test token=proof-review-secret-225'
+    @application.errors.add(:base, private_details)
+    @application.stubs(:update!).raises(ActiveRecord::RecordInvalid.new(@application))
+
+    result = nil
+    assert_no_difference ['ProofReview.count', 'ApplicationStatusChange.count', 'Event.count', 'Notification.count'] do
+      assert_no_enqueued_jobs do
+        result = review_income
+      end
+    end
+
+    assert result.failure?
+    assert_equal 'The proof review could not be completed. Check this application before reviewing it again.', result.message
+    assert_not_includes result.message, private_details
+    assert_equal 'not_reviewed', @application.reload.income_proof_status
+    assert_equal 'in_progress', @application.status
+  end
+
   test 'a delivery confirmation query failure does not report the saved rejection as failed' do
     Applications::RequestProofResubmission.stubs(:delivery_confirmed_for_review?).raises(ActiveRecord::ConnectionNotEstablished)
 

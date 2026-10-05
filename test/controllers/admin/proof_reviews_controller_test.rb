@@ -85,8 +85,8 @@ module Admin
       assert_select 'input[type="submit"][value="Submit & Exit"]', count: 1
     end
 
-    test 'a rejected review without a reason renders the native reason field and keeps the decision' do
-      assert_no_difference -> { @application.proof_reviews.count } do
+    test 'a rejected review without a reason gives corrective feedback and saves after correction' do
+      assert_no_difference ['ProofReview.count', 'ApplicationStatusChange.count', 'Event.count', 'Notification.count'] do
         post admin_proof_reviews_path, params: {
           application_id: @application.id,
           proof_review: { proof_type: 'income', status: 'rejected', rejection_reason: '' }
@@ -95,11 +95,24 @@ module Admin
 
       assert_response :unprocessable_content
       assert_equal 'not_reviewed', @application.reload.income_proof_status
-      assert_select '[data-testid="flash-alert"]', text: 'The proof review could not be completed. Check this application before reviewing it again.'
+      assert_equal 'in_progress', @application.status
+      assert_select '[data-testid="flash-alert"]', text: 'Enter a rejection reason before submitting this review.'
       assert_select 'input[name="proof_review[status]"][value="rejected"][checked]'
       assert_select 'label[for="proof_review_rejection_reason"]', text: 'Reason for Rejection (required when rejecting)'
       assert_select '#proof_review_rejection_reason_help', text: /Required when rejecting\. Leave blank when approving\./
       assert_select '.hidden #proof_review_rejection_reason', count: 0
+
+      reason = 'The income document has no applicant name.'
+      assert_difference -> { @application.proof_reviews.count }, 1 do
+        post admin_proof_reviews_path, params: {
+          application_id: @application.id,
+          proof_review: { proof_type: 'income', status: 'rejected', rejection_reason: reason }
+        }
+      end
+
+      assert_redirected_to admin_application_path(@application)
+      assert @application.reload.income_proof_status_rejected?
+      assert_equal reason, @application.proof_reviews.sole.rejection_reason
     end
 
     test 'a rolled-back rejection keeps the submitted reason editable in the native form' do

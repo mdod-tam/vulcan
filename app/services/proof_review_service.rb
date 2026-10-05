@@ -52,7 +52,13 @@ class ProofReviewService < BaseService
       failure(e.message, { commit_state: :unknown })
     rescue StandardError => e
       log_review_error(e)
-      failure('The proof review could not be completed. Check this application before reviewing it again.')
+      message = if e.is_a?(ActiveRecord::RecordInvalid) && e.record.is_a?(ProofReview) &&
+                   e.record.errors.of_kind?(:rejection_reason, :blank)
+                  'Enter a rejection reason before submitting this review.'
+                else
+                  'The proof review could not be completed. Check this application before reviewing it again.'
+                end
+      failure(message)
     end
   end
 
