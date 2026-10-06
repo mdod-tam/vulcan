@@ -8,7 +8,7 @@ module VendorPortal
       # Create vendor with all necessary attributes for authentication
       @vendor = Users::Vendor.create!(
         email: 'test_vendor@example.com',
-        password: 'password123',
+        password: 'password1234',
         first_name: 'Test',
         last_name: 'Vendor',
         business_name: 'Test Business',

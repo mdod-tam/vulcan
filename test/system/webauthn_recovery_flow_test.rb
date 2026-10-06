@@ -14,7 +14,7 @@ class WebauthnRecoveryFlowTest < ApplicationSystemTestCase
   test 'recovery link appears on webauthn authentication page' do
     visit sign_in_path
     fill_in 'contact-input', with: @user.email
-    fill_in 'password-input', with: 'password123'
+    fill_in 'password-input', with: 'password1234'
     click_button 'Sign In'
 
     assert_text 'Use your device (fingerprint or face) or a physical security key to complete sign-in.'
@@ -99,7 +99,7 @@ class WebauthnRecoveryFlowTest < ApplicationSystemTestCase
 
     visit sign_in_path
     fill_in 'contact-input', with: @user.email
-    fill_in 'password-input', with: 'password123'
+    fill_in 'password-input', with: 'password1234'
     click_button 'Sign In'
 
     # Only proves the WebAuthn prompt is absent. It does not prove sign-in succeeded.

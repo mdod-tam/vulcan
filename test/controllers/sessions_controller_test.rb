@@ -10,7 +10,7 @@ class SessionsControllerTest < ActionDispatch::IntegrationTest
   end
 
   def test_should_redirect_admin_without_mfa_to_setup
-    post sign_in_path, params: { email: @admin.email, password: 'password123' }
+    post sign_in_path, params: { email: @admin.email, password: 'password1234' }
 
     assert_redirected_to setup_two_factor_authentication_path
   end
@@ -101,7 +101,7 @@ class SessionsControllerTest < ActionDispatch::IntegrationTest
     user = create(:constituent, failed_attempts: UserAuthentication::MAX_LOGIN_ATTEMPTS, locked_at: Time.current)
 
     assert_no_difference('Session.count') do
-      post sign_in_path, params: { email: user.email, password: 'password123' }
+      post sign_in_path, params: { email: user.email, password: 'password1234' }
     end
 
     assert_redirected_to sign_in_path
@@ -110,7 +110,7 @@ class SessionsControllerTest < ActionDispatch::IntegrationTest
   def test_should_sign_in_constituent_without_mfa
     user = create(:constituent)
 
-    post sign_in_path, params: { email: user.email, password: 'password123' }
+    post sign_in_path, params: { email: user.email, password: 'password1234' }
 
     assert_redirected_to constituent_portal_dashboard_path
   end
@@ -120,7 +120,7 @@ class SessionsControllerTest < ActionDispatch::IntegrationTest
 
     AuthRateLimit.expects(:check!).never
 
-    post sign_in_path, params: { email: user.email, password: 'password123' }
+    post sign_in_path, params: { email: user.email, password: 'password1234' }
 
     assert_redirected_to constituent_portal_dashboard_path
   end
@@ -128,7 +128,7 @@ class SessionsControllerTest < ActionDispatch::IntegrationTest
   def test_should_sign_in_with_normalized_email
     user = create(:constituent, email: 'casey@example.com')
 
-    post sign_in_path, params: { email: "  #{user.email.upcase}  ", password: 'password123' }
+    post sign_in_path, params: { email: "  #{user.email.upcase}  ", password: 'password1234' }
 
     assert_redirected_to constituent_portal_dashboard_path
   end
@@ -143,7 +143,7 @@ class SessionsControllerTest < ActionDispatch::IntegrationTest
 
     SessionsController.any_instance.stubs(:ensure_sms_challenge_for_user).returns(:sending)
 
-    post sign_in_path, params: { email: user.email, password: 'password123' }
+    post sign_in_path, params: { email: user.email, password: 'password1234' }
 
     assert_redirected_to verify_method_two_factor_authentication_path(type: 'sms')
     assert_equal I18n.t('two_factor_verification.sms.sending', locale: :en), flash[:notice]
@@ -153,7 +153,7 @@ class SessionsControllerTest < ActionDispatch::IntegrationTest
   def test_should_sign_in_constituent_by_phone
     user = create(:constituent)
 
-    post sign_in_path, params: { contact: user.phone, password: 'password123' }
+    post sign_in_path, params: { contact: user.phone, password: 'password1234' }
 
     assert_redirected_to constituent_portal_dashboard_path
   end
@@ -161,7 +161,7 @@ class SessionsControllerTest < ActionDispatch::IntegrationTest
   def test_should_sign_in_with_normalized_phone
     create(:constituent, phone: '410-555-0100')
 
-    post sign_in_path, params: { contact: '4105550100', password: 'password123' }
+    post sign_in_path, params: { contact: '4105550100', password: 'password1234' }
 
     assert_redirected_to constituent_portal_dashboard_path
   end
@@ -169,7 +169,7 @@ class SessionsControllerTest < ActionDispatch::IntegrationTest
   def test_backward_compat_email_param_still_works
     user = create(:constituent)
 
-    post sign_in_path, params: { email: user.email, password: 'password123' }
+    post sign_in_path, params: { email: user.email, password: 'password1234' }
 
     assert_redirected_to constituent_portal_dashboard_path
   end
@@ -185,14 +185,14 @@ class SessionsControllerTest < ActionDispatch::IntegrationTest
         communication_preference: :letter,
         physical_address_1: '123 Main St', city: 'Baltimore', state: 'MD', zip_code: '21201',
         date_of_birth: Date.new(1950, 1, 1),
-        password: 'password123', password_confirmation: 'password123',
+        password: 'password1234', password_confirmation: 'password1234',
         hearing_disability: true
       )
     ensure
       Current.reset
     end
 
-    post sign_in_path, params: { contact: user.phone, password: 'password123' }
+    post sign_in_path, params: { contact: user.phone, password: 'password1234' }
 
     assert_redirected_to sign_in_path
     follow_redirect!
@@ -210,7 +210,7 @@ class SessionsControllerTest < ActionDispatch::IntegrationTest
         communication_preference: :letter,
         physical_address_1: '123 Main St', city: 'Baltimore', state: 'MD', zip_code: '21201',
         date_of_birth: Date.new(1950, 1, 1),
-        password: 'password123', password_confirmation: 'password123',
+        password: 'password1234', password_confirmation: 'password1234',
         hearing_disability: true
       )
     ensure
@@ -223,7 +223,7 @@ class SessionsControllerTest < ActionDispatch::IntegrationTest
       verified_at: Time.current
     )
 
-    post sign_in_path, params: { contact: user.phone, password: 'password123' }
+    post sign_in_path, params: { contact: user.phone, password: 'password1234' }
 
     assert_redirected_to sign_in_path
     follow_redirect!
@@ -244,7 +244,7 @@ class SessionsControllerTest < ActionDispatch::IntegrationTest
     user = create(:constituent, failed_attempts: UserAuthentication::MAX_LOGIN_ATTEMPTS, locked_at: Time.current)
 
     assert_no_difference('Session.count') do
-      post sign_in_path, params: { contact: user.phone, password: 'password123' }
+      post sign_in_path, params: { contact: user.phone, password: 'password1234' }
     end
 
     assert_redirected_to sign_in_path
@@ -253,7 +253,7 @@ class SessionsControllerTest < ActionDispatch::IntegrationTest
   def test_placeholder_phone_cannot_sign_in
     user = create(:constituent, phone: '000-000-5678', email: "dep.#{SecureRandom.hex(3)}@system.matvulcan.local")
 
-    post sign_in_path, params: { contact: user.phone, password: 'password123' }
+    post sign_in_path, params: { contact: user.phone, password: 'password1234' }
 
     assert_redirected_to sign_in_path
     follow_redirect!
@@ -263,7 +263,7 @@ class SessionsControllerTest < ActionDispatch::IntegrationTest
   def test_guardian_generated_synthetic_phone_cannot_sign_in
     create(:constituent, phone: '000-234-5678', email: "dep.#{SecureRandom.hex(3)}@system.matvulcan.local")
 
-    post sign_in_path, params: { contact: '0002345678', password: 'password123' }
+    post sign_in_path, params: { contact: '0002345678', password: 'password1234' }
 
     assert_redirected_to sign_in_path
     follow_redirect!
@@ -273,7 +273,7 @@ class SessionsControllerTest < ActionDispatch::IntegrationTest
   def test_system_email_cannot_sign_in
     user = create(:constituent, email: "dep.#{SecureRandom.hex(3)}@system.matvulcan.local", phone: '410-555-0177')
 
-    post sign_in_path, params: { contact: user.email, password: 'password123' }
+    post sign_in_path, params: { contact: user.email, password: 'password1234' }
 
     assert_redirected_to sign_in_path
   end
@@ -290,14 +290,14 @@ class SessionsControllerTest < ActionDispatch::IntegrationTest
         communication_preference: :letter,
         physical_address_1: '123 Main St', city: 'Baltimore', state: 'MD', zip_code: '21201',
         date_of_birth: Date.new(1950, 1, 1),
-        password: 'password123', password_confirmation: 'password123',
+        password: 'password1234', password_confirmation: 'password1234',
         hearing_disability: true
       )
     ensure
       Current.reset
     end
 
-    post sign_in_path, params: { contact: '4105550143@', password: 'password123' }
+    post sign_in_path, params: { contact: '4105550143@', password: 'password1234' }
 
     assert_redirected_to sign_in_path
     follow_redirect!

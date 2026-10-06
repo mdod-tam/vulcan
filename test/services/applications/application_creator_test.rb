@@ -706,8 +706,8 @@ module Applications
         first_name: 'Test',
         last_name: 'User',
         phone: "555#{@timestamp[-7..]}",
-        password: 'password123',
-        password_confirmation: 'password123',
+        password: 'password1234',
+        password_confirmation: 'password1234',
         type: 'Users::Constituent'
       )
     end
@@ -718,8 +718,8 @@ module Applications
         first_name: 'Dependent',
         last_name: 'User',
         phone: "556#{@timestamp[-7..]}",
-        password: 'password123',
-        password_confirmation: 'password123',
+        password: 'password1234',
+        password_confirmation: 'password1234',
         type: 'Users::Constituent'
       )
     end

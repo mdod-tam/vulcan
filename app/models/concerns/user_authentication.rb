@@ -4,6 +4,9 @@
 module UserAuthentication
   extend ActiveSupport::Concern
 
+  # Maryland's external-user authentication guidance requires at least 12 characters. Forms read this
+  # for their minlength and hint, so the browser and the server state the same rule.
+  PASSWORD_MIN_LENGTH = 12
   MAX_LOGIN_ATTEMPTS = 5
   LOCK_DURATION = 1.hour
 
@@ -28,7 +31,7 @@ module UserAuthentication
     has_many :totp_credentials, dependent: :destroy
     has_many :sms_credentials, dependent: :destroy
 
-    validates :password, length: { minimum: 8 }, if: -> { password.present? }
+    validates :password, length: { minimum: PASSWORD_MIN_LENGTH }, if: -> { password.present? }
     validates :reset_password_token, uniqueness: true, allow_nil: true
   end
 

@@ -634,8 +634,8 @@ class ApplicationNotificationsMailerTest < ActionMailer::TestCase
       last_name: 'Doe',
       email: "unique-#{SecureRandom.hex(4)}@example.com",
       phone: "555-555-#{SecureRandom.rand(1000..9999)}",
-      password: 'password',
-      password_confirmation: 'password',
+      password: 'password1234',
+      password_confirmation: 'password1234',
       hearing_disability: true
     )
     temp_password = 'temporary123'
@@ -726,8 +726,8 @@ class ApplicationNotificationsMailerTest < ActionMailer::TestCase
       last_name: 'Doe',
       email: "unique-#{SecureRandom.hex(4)}@example.com",
       phone: "555-555-#{SecureRandom.rand(1000..9999)}",
-      password: 'password',
-      password_confirmation: 'password',
+      password: 'password1234',
+      password_confirmation: 'password1234',
       hearing_disability: true,
       communication_preference: 'letter',
       physical_address_1: '123 Main St',
@@ -820,8 +820,8 @@ class ApplicationNotificationsMailerTest < ActionMailer::TestCase
       last_name: 'Smith',
       email: "unique-#{SecureRandom.hex(4)}@example.com",
       phone: "555-555-#{SecureRandom.rand(1000..9999)}",
-      password: 'password',
-      password_confirmation: 'password',
+      password: 'password1234',
+      password_confirmation: 'password1234',
       hearing_disability: true
     )
 
@@ -860,8 +860,8 @@ class ApplicationNotificationsMailerTest < ActionMailer::TestCase
       last_name: 'Smith',
       email: "unique-#{SecureRandom.hex(4)}@example.com",
       phone: "555-555-#{SecureRandom.rand(1000..9999)}",
-      password: 'password',
-      password_confirmation: 'password',
+      password: 'password1234',
+      password_confirmation: 'password1234',
       hearing_disability: true,
       communication_preference: 'letter',
       physical_address_1: '123 Main St',

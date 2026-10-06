@@ -23,7 +23,7 @@ class WebauthnPublicFeedbackTest < ActionDispatch::IntegrationTest
 
   %i[en es].each do |locale|
     test "credential lookup, challenge and verifier failures have identical public results in #{locale}" do
-      post sign_in_path(locale: locale), params: { contact: @user.email, password: 'password123' }
+      post sign_in_path(locale: locale), params: { contact: @user.email, password: 'password1234' }
       assert_redirected_to verify_method_two_factor_authentication_path(type: 'webauthn', locale: locale)
       follow_redirect!
       assert_select 'html[lang=?]', locale.to_s
@@ -80,7 +80,7 @@ class WebauthnPublicFeedbackTest < ActionDispatch::IntegrationTest
 
   %w[text/html text/vnd.turbo-stream.html].each do |format|
     test "#{format} verification errors use the same translated public message" do
-      post sign_in_path(locale: :es), params: { contact: @user.email, password: 'password123' }
+      post sign_in_path(locale: :es), params: { contact: @user.email, password: 'password1234' }
       %i[unknown_credential wrong_challenge].each do |failure|
         assertion = assertion_for(:es)
         if failure == :unknown_credential
@@ -100,7 +100,7 @@ class WebauthnPublicFeedbackTest < ActionDispatch::IntegrationTest
 
   test 'invalid locale falls back to the public default instead of the account locale' do
     @user.update!(locale: :es)
-    post sign_in_path(locale: 'unsupported'), params: { contact: @user.email, password: 'password123' }
+    post sign_in_path(locale: 'unsupported'), params: { contact: @user.email, password: 'password1234' }
     assert_redirected_to verify_method_two_factor_authentication_path(type: 'webauthn')
     follow_redirect!
     assert_select 'html[lang=en]'
@@ -111,7 +111,7 @@ class WebauthnPublicFeedbackTest < ActionDispatch::IntegrationTest
     test "missing MFA user returns localized code errors with status 422 in #{locale}" do
       @user.totp_credentials.create!(secret: ROTP::Base32.random_base32, nickname: 'Authenticator')
       @user.sms_credentials.create!(phone_number: '410-555-1234', verified_at: Time.current)
-      post sign_in_path(locale: locale), params: { contact: @user.email, password: 'password123' }
+      post sign_in_path(locale: locale), params: { contact: @user.email, password: 'password1234' }
       assert_redirected_to verify_two_factor_authentication_path(locale: locale)
       @user.update!(status: :suspended)
 
@@ -126,7 +126,7 @@ class WebauthnPublicFeedbackTest < ActionDispatch::IntegrationTest
     end
 
     test "missing MFA user keeps sign-in guidance for WebAuthn responses in #{locale}" do
-      post sign_in_path(locale: locale), params: { contact: @user.email, password: 'password123' }
+      post sign_in_path(locale: locale), params: { contact: @user.email, password: 'password1234' }
       assertion = assertion_for(locale)
       @user.update!(status: :suspended)
       message = I18n.t('two_factor_verification.errors.user_session', locale: locale)
@@ -148,7 +148,7 @@ class WebauthnPublicFeedbackTest < ActionDispatch::IntegrationTest
     end
 
     test "verified key with session failure has a distinct localized response in #{locale}" do
-      post sign_in_path(locale: locale), params: { contact: @user.email, password: 'password123' }
+      post sign_in_path(locale: locale), params: { contact: @user.email, password: 'password1234' }
       assertion = assertion_for(locale)
       TwoFactorAuthenticationsController.any_instance.expects(:_create_and_set_session_cookie).returns(nil)
 

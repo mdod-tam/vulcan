@@ -8,12 +8,12 @@ require 'test_helper'
 class MergedUserTwoFactorGateTest < ActionDispatch::IntegrationTest
   setup do
     @secret = ROTP::Base32.random_base32
-    @user = create(:constituent, password: 'password123', password_confirmation: 'password123')
+    @user = create(:constituent, password: 'password1234', password_confirmation: 'password1234')
     @user.totp_credentials.create!(secret: @secret, nickname: 'Authenticator App', last_used_at: Time.current)
   end
 
   test 'user retired mid-flow cannot complete TOTP 2FA' do
-    post sign_in_path, params: { email: @user.email, password: 'password123' }
+    post sign_in_path, params: { email: @user.email, password: 'password1234' }
     assert_equal @user.id, session[TwoFactorAuth::SESSION_KEYS[:temp_user_id]]
 
     canonical = create(:constituent)
@@ -30,7 +30,7 @@ class MergedUserTwoFactorGateTest < ActionDispatch::IntegrationTest
   end
 
   test 'user retired mid-flow submitting a wrong TOTP code fails closed without crashing' do
-    post sign_in_path, params: { email: @user.email, password: 'password123' }
+    post sign_in_path, params: { email: @user.email, password: 'password1234' }
     assert_equal @user.id, session[TwoFactorAuth::SESSION_KEYS[:temp_user_id]]
 
     canonical = create(:constituent)
@@ -42,7 +42,7 @@ class MergedUserTwoFactorGateTest < ActionDispatch::IntegrationTest
   end
 
   test 'active user completes TOTP 2FA and gets a session' do
-    post sign_in_path, params: { email: @user.email, password: 'password123' }
+    post sign_in_path, params: { email: @user.email, password: 'password1234' }
     assert_equal @user.id, session[TwoFactorAuth::SESSION_KEYS[:temp_user_id]]
 
     assert_difference '@user.sessions.count', 1 do

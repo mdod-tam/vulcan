@@ -125,7 +125,7 @@ class SystemAuditActorSafetyTest < ActionDispatch::IntegrationTest
 
   def register_conflicting_constituent
     post sign_up_path, params: { user: {
-      email: PublicAuditActor::SYSTEM_AUDIT_EMAIL, password: 'password123', password_confirmation: 'password123',
+      email: PublicAuditActor::SYSTEM_AUDIT_EMAIL, password: 'password1234', password_confirmation: 'password1234',
       first_name: 'Synthetic', last_name: "SystemActor#{SecureRandom.hex(4)}", date_of_birth: '1991-02-03',
       phone: nil, phone_type: 'contact_email', timezone: 'Eastern Time (US & Canada)', locale: 'en', hearing_disability: true
     } }
@@ -143,7 +143,7 @@ class SystemAuditActorSafetyTest < ActionDispatch::IntegrationTest
       user = User.find(@conflicting_user.id)
       assert_equal 'Users::Constituent', user.type
       assert_equal @password_digest, user.password_digest
-      assert user.authenticate('password123')
+      assert user.authenticate('password1234')
     else
       assert_nil User.find_by(email: PublicAuditActor::SYSTEM_AUDIT_EMAIL)
     end

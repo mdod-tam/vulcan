@@ -91,7 +91,6 @@ en:
         text: "Text/SMS"
       security_legend: "Security"
       password_label: "Password"
-      password_hint: "Minimum 6 characters"
       password_confirmation_label: "Confirm Password"
       date_of_birth_label: "Date of Birth"
       date_of_birth_placeholder: "MM/DD/YYYY"
@@ -570,6 +569,9 @@ en:
     edit: "Edit"
     enable: "Enable"
     disable: "Disable"
+    # Every new-password field. The count is UserAuthentication::PASSWORD_MIN_LENGTH.
+    password:
+      hint: "Use at least %{count} characters."
   alerts:
     invalid_voucher_code: "Invalid voucher code"
     session_fail: "Unable to create session"

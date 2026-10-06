@@ -3,7 +3,7 @@
 FactoryBot.define do
   factory :medical_provider, class: 'MedicalProvider' do
     sequence(:email) { |n| "doctor#{n}@example.com" }
-    password { 'password123' }
+    password { 'password1234' }
     first_name { 'Dr.' }
     last_name { 'Provider' }
     phone { '555-555-5555' }

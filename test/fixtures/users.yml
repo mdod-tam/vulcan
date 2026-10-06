@@ -6,7 +6,7 @@ admin:
   email: admin@example.com
   first_name: Admin
   last_name: User
-  password_digest: <%= User.digest('password123') %>
+  password_digest: <%= User.digest('password1234') %>
   phone: 555-100-0001
   email_verified: true
   date_of_birth: <%= 45.years.ago.to_date %>
@@ -21,7 +21,7 @@ confirmed_user:
   email: user@example.com
   first_name: Test
   last_name: User
-  password_digest: <%= User.digest('password123') %>
+  password_digest: <%= User.digest('password1234') %>
   email_verified: true
   hearing_disability: true
   date_of_birth: <%= 32.years.ago.to_date %>
@@ -37,7 +37,7 @@ confirmed_user2:
   email: user2@example.com
   first_name: Jane
   last_name: Doe
-  password_digest: <%= User.digest('password123') %>
+  password_digest: <%= User.digest('password1234') %>
   email_verified: true
   hearing_disability: true
   date_of_birth: <%= 29.years.ago.to_date %>
@@ -53,7 +53,7 @@ unconfirmed_user:
   email: unconfirmed@example.com
   first_name: New
   last_name: User
-  password_digest: <%= User.digest('password123') %>
+  password_digest: <%= User.digest('password1234') %>
   email_verified: false
   hearing_disability: true
   date_of_birth: <%= 27.years.ago.to_date %>
@@ -69,7 +69,7 @@ trainer:
   email: trainer@example.com
   first_name: Trainer
   last_name: Person
-  password_digest: <%= User.digest('password123') %>
+  password_digest: <%= User.digest('password1234') %>
   phone: 555-100-0002
   email_verified: true
   date_of_birth: <%= 39.years.ago.to_date %>
@@ -84,7 +84,7 @@ evaluator:
   email: evaluator@example.com
   first_name: Evaluator
   last_name: Person
-  password_digest: <%= User.digest('password123') %>
+  password_digest: <%= User.digest('password1234') %>
   phone: 555-100-0003
   email_verified: true
   date_of_birth: <%= 42.years.ago.to_date %>
@@ -99,7 +99,7 @@ medical_provider:
   email: medical@example.com
   first_name: Doctor
   last_name: Smith
-  password_digest: <%= User.digest('password123') %>
+  password_digest: <%= User.digest('password1234') %>
   phone: 555-100-0004
   email_verified: true
   date_of_birth: <%= 48.years.ago.to_date %>
@@ -117,7 +117,7 @@ admin_david:
   email: david.bahar@maryland.gov
   first_name: David
   last_name: Bahar
-  password_digest: <%= User.digest('password123') %>
+  password_digest: <%= User.digest('password1234') %>
   phone: 555-555-1001 # Unique phone
   date_of_birth: <%= 44.years.ago.to_date %>
   timezone: "Eastern Time (US & Canada)"
@@ -135,7 +135,7 @@ admin_kevin:
   email: kevin.steffy@maryland.gov
   first_name: Kevin
   last_name: Steffy
-  password_digest: <%= User.digest('password123') %>
+  password_digest: <%= User.digest('password1234') %>
   phone: 555-555-1002 # Unique phone
   date_of_birth: <%= 55.years.ago.to_date %>
   timezone: "Eastern Time (US & Canada)"
@@ -153,7 +153,7 @@ admin_jane:
   email: jane.hager@maryland.gov
   first_name: Jane
   last_name: Hager
-  password_digest: <%= User.digest('password123') %>
+  password_digest: <%= User.digest('password1234') %>
   phone: 555-555-1003 # Unique phone
   date_of_birth: <%= 55.years.ago.to_date %>
   timezone: "Eastern Time (US & Canada)"
@@ -171,7 +171,7 @@ admin_brandie:
   email: brandie.callender@maryland.gov
   first_name: Brandie
   last_name: Callender
-  password_digest: <%= User.digest('password123') %>
+  password_digest: <%= User.digest('password1234') %>
   phone: 555-555-1004 # Unique phone
   date_of_birth: <%= 35.years.ago.to_date %>
   timezone: "Eastern Time (US & Canada)"
@@ -190,7 +190,7 @@ constituent_alex:
   email: alex.smith@example.com
   first_name: Alex
   last_name: Smith
-  password_digest: <%= User.digest('password123') %>
+  password_digest: <%= User.digest('password1234') %>
   phone: 555-555-2001 # Unique phone
   date_of_birth: <%= 30.years.ago.to_date %>
   physical_address_1: 127 Main St
@@ -208,7 +208,7 @@ constituent_john:
   email: john.doe@example.com
   first_name: John
   last_name: Doe
-  password_digest: <%= User.digest('password123') %>
+  password_digest: <%= User.digest('password1234') %>
   phone: 555-555-2002 # Unique phone
   date_of_birth: <%= 45.years.ago.to_date %>
   physical_address_1: 123 Main St
@@ -226,7 +226,7 @@ constituent_jane:
   email: jane.doe@example.com
   first_name: Jane
   last_name: Doe
-  password_digest: <%= User.digest('password123') %>
+  password_digest: <%= User.digest('password1234') %>
   phone: 555-555-2003 # Unique phone
   date_of_birth: <%= 25.years.ago.to_date %>
   physical_address_1: 124 Main St
@@ -244,7 +244,7 @@ constituent_kenneth:
   email: kenneth.klein@example.com
   first_name: Kenneth
   last_name: Klein
-  password_digest: <%= User.digest('password123') %>
+  password_digest: <%= User.digest('password1234') %>
   phone: 555-555-2004 # Unique phone
   date_of_birth: <%= 25.years.ago.to_date %>
   physical_address_1: 125 Main St
@@ -262,7 +262,7 @@ constituent_wilbur:
   email: wilbur.wright@example.com
   first_name: Wilbur
   last_name: Wright
-  password_digest: <%= User.digest('password123') %>
+  password_digest: <%= User.digest('password1234') %>
   phone: 555-555-0008
   date_of_birth: <%= 29.years.ago.to_date %>
   physical_address_1: 129 Main St
@@ -280,7 +280,7 @@ constituent_steven:
   email: steven.cooper@example.com
   first_name: Steven
   last_name: Cooper
-  password_digest: <%= User.digest('password123') %>
+  password_digest: <%= User.digest('password1234') %>
   phone: 555-555-2005 # Unique phone
   date_of_birth: <%= 25.years.ago.to_date %>
   physical_address_1: 126 Main St
@@ -298,7 +298,7 @@ constituent_mark:
   email: mark.jones@example.com
   first_name: Mark
   last_name: Jones
-  password_digest: <%= User.digest('password123') %>
+  password_digest: <%= User.digest('password1234') %>
   phone: 555-555-2006 # Unique phone
   date_of_birth: <%= 20.years.ago.to_date %>
   physical_address_1: 128 Main St
@@ -316,7 +316,7 @@ constituent_rex:
   email: rex.canine@example.com
   first_name: Rex
   last_name: Canine
-  password_digest: <%= User.digest('password123') %>
+  password_digest: <%= User.digest('password1234') %>
   phone: 555-555-3001 # Unique phone
   date_of_birth: <%= 18.years.ago.to_date %>
   physical_address_1: "300 Oar Street"
@@ -334,7 +334,7 @@ one:
   email: test1@example.com
   first_name: Test1
   last_name: User
-  password_digest: <%= User.digest('password123') %>
+  password_digest: <%= User.digest('password1234') %>
   email_verified: true
   date_of_birth: <%= 32.years.ago.to_date %>
   status: active
@@ -350,7 +350,7 @@ evaluator_betsy:
   email: betsya.hein@maryland.gov
   first_name: Betsy
   last_name: Hein
-  password_digest: <%= User.digest('password123') %>
+  password_digest: <%= User.digest('password1234') %>
   phone: 555-555-0003
   date_of_birth: <%= 50.years.ago.to_date %>
   timezone: "Eastern Time (US & Canada)"
@@ -372,7 +372,7 @@ vendor_ray:
   email: ray@testemail.com
   first_name: Ray
   last_name: Vendor
-  password_digest: <%= User.digest('password123') %>
+  password_digest: <%= User.digest('password1234') %>
   phone: 555-555-0004
   date_of_birth: <%= 50.years.ago.to_date %>
   timezone: "Eastern Time (US & Canada)"
@@ -391,7 +391,7 @@ vendor_teltex:
   email: teltex@testemail.com
   first_name: Teltex
   last_name: Vendor
-  password_digest: <%= User.digest('password123') %>
+  password_digest: <%= User.digest('password1234') %>
   phone: 555-555-0007
   date_of_birth: <%= 50.years.ago.to_date %>
   timezone: "Eastern Time (US & Canada)"
@@ -410,7 +410,7 @@ trainer_jane:
   email: jane.trainer@maryland.gov
   first_name: Jane
   last_name: Trainer
-  password_digest: <%= User.digest('password123') %>
+  password_digest: <%= User.digest('password1234') %>
   phone: 555-555-4001 # Unique phone
   date_of_birth: <%= 40.years.ago.to_date %>
   timezone: "Eastern Time (US & Canada)"
@@ -431,7 +431,7 @@ trainer_john:
   email: john.trainer@maryland.gov
   first_name: John
   last_name: Trainer
-  password_digest: <%= User.digest('password123') %>
+  password_digest: <%= User.digest('password1234') %>
   phone: 555-555-0006
   date_of_birth: <%= 35.years.ago.to_date %>
   timezone: "Eastern Time (US & Canada)"
@@ -452,7 +452,7 @@ constituent_with_webauthn:
   email: webauthn@example.com
   first_name: Secure
   last_name: User
-  password_digest: <%= User.digest('password123') %>
+  password_digest: <%= User.digest('password1234') %>
   email_verified: true
   hearing_disability: true
   date_of_birth: <%= 28.years.ago.to_date %>

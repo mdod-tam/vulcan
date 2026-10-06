@@ -12,6 +12,8 @@ es:
       sign_in_aria: "Iniciar sesión en su cuenta"
       sign_up: "Registrarse"
       sign_up_aria: "Registrarse para obtener una cuenta nueva"
+    password:
+      hint: "Use al menos %{count} caracteres."
   password_visibility:
     status:
       hidden: "La contraseña está oculta"
@@ -78,7 +80,6 @@ es:
         text: "Texto/SMS"
       security_legend: "Seguridad"
       password_label: "Contraseña"
-      password_hint: "Mínimo 6 caracteres"
       password_confirmation_label: "Confirmar contraseña"
       date_of_birth_label: "Fecha de nacimiento"
       date_of_birth_placeholder: "MM/DD/AAAA"
@@ -1008,3 +1009,56 @@ es:
 
   email_delivery:
     configuration_error: "No se envió el mensaje porque no se pudo verificar la configuración de envío. Comuníquese con un administrador."
+
+  # Rails validation messages for constituent-facing forms. Without these a Spanish page shows
+  # "Translation missing" for any built-in validation. Admin pages are English-only.
+  errors:
+    format: "%{attribute} %{message}"
+    messages:
+      accepted: "debe aceptarse"
+      blank: "no puede estar en blanco"
+      confirmation: "no coincide con %{attribute}"
+      empty: "no puede estar en blanco"
+      equal_to: "debe ser igual a %{count}"
+      even: "debe ser un número par"
+      exclusion: "no está disponible"
+      greater_than: "debe ser mayor que %{count}"
+      greater_than_or_equal_to: "debe ser mayor o igual que %{count}"
+      inclusion: "no está incluido en la lista"
+      invalid: "tiene un valor no válido"
+      less_than: "debe ser menor que %{count}"
+      less_than_or_equal_to: "debe ser menor o igual que %{count}"
+      model_invalid: "La validación falló: %{errors}"
+      not_a_number: "no es un número"
+      not_an_integer: "debe ser un número entero"
+      odd: "debe ser un número impar"
+      other_than: "debe ser distinto de %{count}"
+      present: "debe estar en blanco"
+      required: "debe existir"
+      taken: "ya está en uso"
+      # Phrased without adjectives so they agree with any field name.
+      too_long:
+        one: "tiene demasiados caracteres (máximo 1)"
+        other: "tiene demasiados caracteres (máximo %{count})"
+      too_short:
+        one: "tiene muy pocos caracteres (mínimo 1)"
+        other: "tiene muy pocos caracteres (mínimo %{count})"
+      wrong_length:
+        one: "debe tener exactamente 1 carácter"
+        other: "debe tener exactamente %{count} caracteres"
+  # Field names in those messages, for the fields constituents fill in. Model-specific names under
+  # activerecord.attributes take precedence.
+  attributes:
+    email: "Correo electrónico"
+    phone: "Teléfono"
+    phone_type: "Tipo de teléfono"
+    first_name: "Nombre"
+    last_name: "Apellido"
+    password: "Contraseña"
+    password_confirmation: "Confirmación de contraseña"
+    password_challenge: "Contraseña actual"
+    physical_address_1: "Dirección"
+    physical_address_2: "Dirección (línea 2)"
+    city: "Ciudad"
+    state: "Estado"
+    zip_code: "Código postal"

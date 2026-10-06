@@ -8,8 +8,8 @@ class StiUserTest < ActiveSupport::TestCase
       email: "test-admin-#{Time.now.to_i}@example.com",
       first_name: 'Test',
       last_name: 'Admin',
-      password: 'password123',
-      password_confirmation: 'password123'
+      password: 'password1234',
+      password_confirmation: 'password1234'
     )
 
     assert_equal Users::Administrator, admin.class
@@ -27,8 +27,8 @@ class StiUserTest < ActiveSupport::TestCase
       email: "test-constituent-#{Time.now.to_i}@example.com",
       first_name: 'Test',
       last_name: 'Constituent',
-      password: 'password123',
-      password_confirmation: 'password123'
+      password: 'password1234',
+      password_confirmation: 'password1234'
     )
 
     assert_equal Users::Constituent, constituent.class
