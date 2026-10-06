@@ -81,9 +81,14 @@
                                       <span class="inline-block bg-gray-100 rounded px-2 py-1 mr-1">
                                         <%= field.humanize %>
                                       </span>
-                                      <span class="text-red-600"><%= values['old'] %></span>
-                                      <span class="text-gray-500">→</span>
-                                      <span class="text-green-600"><%= values['new'] %></span>
+                                      <% if values.key?('new') %>
+                                        <span class="text-red-600"><%= values['old'] %></span>
+                                        <span class="text-gray-500">→</span>
+                                        <span class="text-green-600"><%= values['new'] %></span>
+                                      <% else %>
+                                        <%# Recorded by name only; see UserProfile::VALUELESS_AUDIT_FIELDS. %>
+                                        <span>changed</span>
+                                      <% end %>
                                     </div>
                                   <% end %>
                                 </div>

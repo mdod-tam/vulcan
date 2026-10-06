@@ -146,9 +146,14 @@
                                     <% change.metadata['changes'].each do |field, values| %>
                                       <div class="mb-1">
                                         <span class="font-medium"><%= field.humanize %>:</span>
-                                        <span class="text-red-600 line-through"><%= values['old'] || 'blank' %></span>
-                                        <span class="mx-1">→</span>
-                                        <span class="text-green-600"><%= values['new'] || 'blank' %></span>
+                                        <% if values.key?('new') %>
+                                          <span class="text-red-600 line-through"><%= values['old'] || 'blank' %></span>
+                                          <span class="mx-1">→</span>
+                                          <span class="text-green-600"><%= values['new'] || 'blank' %></span>
+                                        <% else %>
+                                          <%# Recorded by name only; see UserProfile::VALUELESS_AUDIT_FIELDS. %>
+                                          <span>changed</span>
+                                        <% end %>
                                       </div>
                                     <% end %>
                                   </div>

@@ -5,9 +5,9 @@ module VendorPortal
   class VouchersController < BaseController
     include ActionView::Helpers::NumberHelper # For number_to_currency
 
-    # Before the voucher lookup, so an unapproved vendor cannot use the DOB check, or the code
-    # lookup, on someone else's voucher.
-    before_action :require_voucher_processing_approval, only: %i[verify verify_dob]
+    # Every action given a voucher code looks it up, so the gate runs first whenever there is one;
+    # the code-free index still lists a vendor's own vouchers.
+    before_action :require_voucher_processing_approval, if: -> { params[:code].present? }
     before_action :set_voucher, only: %i[show verify verify_dob redeem process_redemption]
     before_action :check_voucher_active, only: %i[verify redeem]
     before_action :check_identity_verified, only: %i[redeem]
@@ -90,12 +90,6 @@ module VendorPortal
     end
 
     private
-
-    def require_voucher_processing_approval
-      return if current_user.can_process_vouchers?
-
-      redirect_to vendor_portal_dashboard_path, alert: t('alerts.vendor_not_approved_for_vouchers')
-    end
 
     def set_voucher
       # Voucher lookup gracefully handles invalid codes by redirecting with error message

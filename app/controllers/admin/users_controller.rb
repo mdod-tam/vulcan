@@ -801,6 +801,14 @@ module Admin
           raise ActiveRecord::Rollback
         end
 
+        # save(validate: false) below skips Users::Constituent's date-of-birth rule, so it is applied
+        # here: a constituent created by conversion needs one like any other.
+        if new_klass <= Users::Constituent && locked_user.date_of_birth.blank?
+          render json: { success: false, message: 'Add a date of birth before making this user a constituent.' },
+                 status: :unprocessable_content
+          raise ActiveRecord::Rollback
+        end
+
         converted_user = convert_user_to_new_type(locked_user, new_klass)
         save_converted_user(converted_user, locked_user)
       end
@@ -859,10 +867,6 @@ module Admin
         success: false,
         message: converted_user.errors.full_messages.join(', ')
       }, status: :unprocessable_content
-    end
-
-    def user_params
-      params.expect(user: [:type, { capabilities: [] }])
     end
 
     def admin_user_params

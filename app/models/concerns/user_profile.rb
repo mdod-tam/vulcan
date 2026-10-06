@@ -6,6 +6,8 @@ module UserProfile
   # The phone_type enum includes email and letter preferences as legacy values.
   # For a real phone, validate submitted phone_type against these telephone routes, not the full enum.
   REAL_PHONE_TYPES = %w[voice videophone text].freeze
+  # Profile-change audit events record that these changed, not their values.
+  VALUELESS_AUDIT_FIELDS = %w[date_of_birth].freeze
 
   included do
     attr_accessor :phone_type_submitted
@@ -191,10 +193,11 @@ module UserProfile
     profile_fields = %w[first_name last_name email phone physical_address_1 physical_address_2 city state zip_code date_of_birth]
 
     profile_fields.each do |field|
-      if saved_change_to_attribute?(field)
-        old_value, new_value = saved_change_to_attribute(field)
-        changed_attributes[field] = { old: old_value, new: new_value }
-      end
+      next unless saved_change_to_attribute?(field)
+
+      old_value, new_value = saved_change_to_attribute(field)
+      # Event metadata is not encrypted, so a value stored here would undo the column's encryption.
+      changed_attributes[field] = VALUELESS_AUDIT_FIELDS.include?(field) ? {} : { old: old_value, new: new_value }
     end
 
     # The merge owns duplicate_user_merged. Do not add profile events for its contact transfers.

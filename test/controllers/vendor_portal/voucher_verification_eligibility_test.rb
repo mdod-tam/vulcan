@@ -42,6 +42,29 @@ module VendorPortal
       assert_equal 'Your account is not approved for processing vouchers yet', flash[:alert]
     end
 
+    # A real code and a made-up one get the same answer on every path that takes a code.
+    test 'an unapproved vendor gets the same answer for real and unknown codes everywhere' do
+      sign_in_for_integration_test(create(:vendor, :pending))
+
+      [@voucher.code, 'NO-SUCH-CODE'].each do |code|
+        get vendor_portal_vouchers_path(code: code)
+        assert_redirected_to vendor_portal_dashboard_path, code
+
+        [vendor_portal_voucher_path(code), redeem_vendor_portal_voucher_path(code)].each do |path|
+          get path
+          assert_redirected_to vendor_portal_dashboard_path, path
+        end
+      end
+    end
+
+    test 'an unapproved vendor still sees their voucher list' do
+      sign_in_for_integration_test(create(:vendor, :pending))
+
+      get vendor_portal_vouchers_path
+
+      assert_response :success
+    end
+
     test 'an eligible vendor reaches verification' do
       sign_in_for_integration_test(create(:vendor, :approved))
 
