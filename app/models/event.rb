@@ -24,8 +24,7 @@ class Event < ApplicationRecord
   # The recorded changes, with values of encrypted fields restored. Read changes through this, not
   # metadata['changes'], which holds an empty placeholder for each of those fields.
   def field_changes
-    stored = change_values.present? ? JSON.parse(change_values) : {}
-    (metadata['changes'] || {}).to_h { |field, change| [field, stored.fetch(field, change)] }
+    (metadata['changes'] || {}).to_h { |field, change| [field, stored_change_values.fetch(field, change)] }
   end
 
   # Scope for finding events by metadata key/value
@@ -34,6 +33,14 @@ class Event < ApplicationRecord
   }
 
   private
+
+  # A corrupt or undecryptable cell is logged and treated as empty, so history pages still render.
+  def stored_change_values
+    change_values.present? ? JSON.parse(change_values) : {}
+  rescue JSON::ParserError, ActiveRecord::Encryption::Errors::Base => e
+    Rails.logger.error("Event #{id}: unreadable change_values (#{e.class})")
+    {}
+  end
 
   def validate_metadata_structure
     return if metadata.is_a?(Hash)

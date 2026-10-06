@@ -29,7 +29,7 @@
         </div>
       </form>
       <% else %>
-        <p class="text-gray-700"><%= t('alerts.vendor_not_approved_for_vouchers') %>.</p>
+        <p class="text-gray-700"><%= t('alerts.vendor_not_approved_for_vouchers') %></p>
       <% end %>
     </div>
   </div>
@@ -66,7 +66,7 @@
                     </span>
                   </td>
                   <td class="px-6 py-4 whitespace-nowrap text-sm text-gray-500">
-                    <% if voucher.can_redeem?(Policy.voucher_minimum_redemption_amount) %>
+                    <% if current_user.can_process_vouchers? && voucher.can_redeem?(Policy.voucher_minimum_redemption_amount) %>
                       <%= link_to "Redeem", redeem_vendor_portal_voucher_path(voucher), class: "inline-flex items-center px-3 py-1 border border-transparent text-sm leading-4 font-medium rounded-md text-white bg-indigo-600 hover:bg-indigo-700 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-indigo-500" %>
                     <% else %>
                       <span class="text-gray-500">Cannot redeem</span>

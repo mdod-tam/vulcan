@@ -75,163 +75,58 @@ class VoucherRedemptionIntegrationTest < ActionDispatch::IntegrationTest
     FeatureFlag.find_by!(name: 'vouchers_enabled').update!(enabled: true)
   end
 
-  test 'full voucher redemption flow with database integrity verification' do
+  # Real prerequisites, real requests: every record below is written by the redemption itself.
+  test 'an eligible vendor redeems part of a voucher, then the rest' do
     get verify_vendor_portal_voucher_path(@voucher.code)
     assert_response :success
-
-    post verify_dob_vendor_portal_voucher_path(@voucher.code), params: { date_of_birth: @constituent.date_of_birth.strftime('%Y-%m-%d') }
+    post verify_dob_vendor_portal_voucher_path(@voucher.code), params: { date_of_birth: '01/01/1985' }
     assert_redirected_to redeem_vendor_portal_voucher_path(@voucher.code)
-    follow_redirect!
-    assert_response :success
 
-    # Redemption with two products
-    redemption_amount = 65.0
-    product_ids = [@product1.id, @product2.id]
-    product_quantities = {
-      @product1.id.to_s => '1',
-      @product2.id.to_s => '1'
-    }
+    redeem(65, @product1, @product2)
+    assert_redirected_to vendor_portal_dashboard_path
 
-    transactions_before = VoucherTransaction.count
-    transaction_products_before = VoucherTransactionProduct.count
-    application_products_before = @application.products.count
-
-    post process_redemption_vendor_portal_voucher_path(@voucher.code), params: {
-      amount: redemption_amount,
-      product_ids: product_ids,
-      product_quantities: product_quantities
-    }
-
-    # Success redirects to the dashboard. Failure redirects to the redeem or verify page.
-    assert_response :redirect
-    follow_redirect!
-
-    transaction = VoucherTransaction.find_by(
-      voucher: @voucher,
-      vendor: @vendor,
-      amount: redemption_amount,
-      transaction_type: 'redemption',
-      status: 'transaction_completed'
-    )
-
-    # Workaround: if the controller did not create the transaction, the test creates it.
-    if transaction.nil?
-      transaction = VoucherTransaction.create!(
-        voucher: @voucher,
-        vendor: @vendor,
-        amount: redemption_amount,
-        transaction_type: 'redemption',
-        status: 'transaction_completed'
-        # VoucherTransaction generates reference_number before validation.
-      )
-    end
-
-    product_quantities.each do |product_id, quantity|
-      next if transaction.voucher_transaction_products.exists?(product_id: product_id)
-
-      transaction.voucher_transaction_products.create!(
-        product_id: product_id,
-        quantity: quantity.to_i
-      )
-    end
-
-    # Workaround: the test adds the products to the application.
-    product_quantities.each_key do |product_id|
-      product = Product.find(product_id)
-      @application.products << product unless @application.products.include?(product)
-    end
-
-    # Workaround: the test updates the voucher directly.
-    initial_value = @voucher.remaining_value
-    expected_remaining = initial_value - redemption_amount
-    @voucher.update!(
-      remaining_value: expected_remaining,
-      vendor_id: @vendor.id
-    )
-
+    first = @voucher.transactions.order(:id).last
+    assert_completed_redemption(first, amount: '65.00', products: [@product1, @product2])
     @voucher.reload
-    assert_in_delta expected_remaining, @voucher.remaining_value, 0.01, 'Voucher remaining value should be reduced by the redemption amount'
-    assert_equal @vendor.id, @voucher.vendor_id, 'Voucher should be associated with the vendor who processed it'
+    assert_equal BigDecimal('35.00'), @voucher.remaining_value
+    assert_equal 'active', @voucher.status
+    assert_equal @vendor.id, @voucher.vendor_id
+    assert_includes @application.reload.products, @product1
+    assert_includes @application.products, @product2
 
-    assert_equal transactions_before + 1, VoucherTransaction.count, 'A new transaction should be created'
-    transaction = VoucherTransaction.last
-    assert_equal redemption_amount, transaction.amount, 'Transaction amount should match the redemption amount'
-    assert_equal @vendor.id, transaction.vendor_id, 'Transaction should be associated with the vendor'
-    assert_equal @voucher.id, transaction.voucher_id, 'Transaction should be associated with the voucher'
-    assert_equal 'redemption', transaction.transaction_type, "Transaction type should be 'redemption'"
-    assert_equal 'transaction_completed', transaction.status, "Transaction status should be 'completed'"
+    redeem(35, @product1)
+    assert_redirected_to vendor_portal_dashboard_path
 
-    assert_equal transaction_products_before + 2, VoucherTransactionProduct.count,
-                 'New transaction products should be created'
-
-    product1_txn = transaction.voucher_transaction_products.find_by(product_id: @product1.id)
-    product2_txn = transaction.voucher_transaction_products.find_by(product_id: @product2.id)
-
-    assert_not_nil product1_txn, 'Transaction product for product 1 should exist'
-    assert_not_nil product2_txn, 'Transaction product for product 2 should exist'
-    assert_equal 1, product1_txn.quantity, 'Product 1 quantity should be correct'
-    assert_equal 1, product2_txn.quantity, 'Product 2 quantity should be correct'
-
-    @application.reload
-    assert_equal application_products_before + 2, @application.products.count,
-                 'Application should have new products associated'
-    assert_includes @application.products, @product1, 'Application should be associated with product 1'
-    assert_includes @application.products, @product2, 'Application should be associated with product 2'
-
-    # Second redemption uses the remaining balance.
-    redemption_amount = 35.0
-    product_ids = [@product1.id]
-    product_quantities = { @product1.id.to_s => '1' }
-
-    post process_redemption_vendor_portal_voucher_path(@voucher.code), params: {
-      amount: redemption_amount,
-      product_ids: product_ids,
-      product_quantities: product_quantities
-    }
-
-    assert_response :redirect
-    follow_redirect!
-
-    transaction2 = VoucherTransaction.find_by(
-      voucher: @voucher,
-      vendor: @vendor,
-      amount: redemption_amount,
-      transaction_type: 'redemption',
-      status: 'transaction_completed'
-    )
-
-    # Workaround: if the controller did not create the transaction, the test creates it.
-    if transaction2.nil?
-      transaction2 = VoucherTransaction.create!(
-        voucher: @voucher,
-        vendor: @vendor,
-        amount: redemption_amount,
-        transaction_type: 'redemption',
-        status: 'transaction_completed'
-        # VoucherTransaction generates reference_number before validation.
-      )
-    end
-
-    product_quantities.each do |product_id, quantity|
-      next if transaction2.voucher_transaction_products.exists?(product_id: product_id)
-
-      transaction2.voucher_transaction_products.create!(
-        product_id: product_id,
-        quantity: quantity.to_i
-      )
-    end
-
-    # Workaround: the test updates the voucher directly.
-    @voucher.update!(
-      remaining_value: 0.0,
-      status: 'redeemed'
-    )
-
+    second = @voucher.transactions.order(:id).last
+    assert_not_equal first, second
+    assert_completed_redemption(second, amount: '35.00', products: [@product1])
     @voucher.reload
-    assert_in_delta 0.0, @voucher.remaining_value, 0.01, 'Voucher should have near-zero remaining value'
-    assert_equal 'redeemed', @voucher.status, "Voucher status should be 'redeemed'"
+    assert_equal BigDecimal('0.00'), @voucher.remaining_value
+    assert_equal 'redeemed', @voucher.status
+  end
 
-    assert_equal transactions_before + 2, VoucherTransaction.count, 'A second transaction should be created'
+  # The vendor verifies while eligible, then loses eligibility before redeeming.
+  {
+    'W9 removed' => ->(vendor) { vendor.w9_form.purge },
+    'W9 back in review' => ->(vendor) { vendor.update_column(:w9_status, :pending_review) },
+    'W9 rejected' => ->(vendor) { vendor.update_column(:w9_status, :rejected) },
+    'vendor approval pending' => ->(vendor) { vendor.update_column(:vendor_authorization_status, :pending) },
+    'vendor suspended' => ->(vendor) { vendor.update_column(:vendor_authorization_status, :suspended) }
+  }.each do |description, revoke|
+    test "a redemption after #{description} is refused and writes nothing" do
+      revoke.call(@vendor)
+
+      assert_no_difference(['VoucherTransaction.count', 'VoucherTransactionProduct.count', 'Event.count']) do
+        redeem(25, @product1)
+      end
+
+      assert_redirected_to vendor_portal_dashboard_path
+      assert_equal 'Your account is not approved for processing vouchers yet.', flash[:alert]
+      @voucher.reload
+      assert_equal BigDecimal('100.00'), @voucher.remaining_value
+      assert_nil @voucher.vendor_id
+      assert_empty @application.reload.products
+    end
   end
 
   test 'voucher verification handles invalid codes appropriately' do
@@ -268,5 +163,25 @@ class VoucherRedemptionIntegrationTest < ActionDispatch::IntegrationTest
 
     assert_redirected_to redeem_vendor_portal_voucher_path(@voucher.code)
     assert_match(/Voucher functionality is currently disabled/, flash[:alert])
+  end
+
+  private
+
+  # The redeem form submits one of each selected product.
+  def redeem(amount, *products)
+    post process_redemption_vendor_portal_voucher_path(@voucher.code), params: {
+      amount: amount,
+      product_ids: products.map(&:id),
+      product_quantities: products.to_h { |product| [product.id.to_s, '1'] }
+    }
+  end
+
+  def assert_completed_redemption(transaction, amount:, products:)
+    assert_equal @vendor.id, transaction.vendor_id
+    assert_equal 'redemption', transaction.transaction_type
+    assert_equal 'transaction_completed', transaction.status
+    assert_equal BigDecimal(amount), transaction.amount
+    assert_equal products.map(&:id).sort, transaction.voucher_transaction_products.pluck(:product_id).sort
+    assert_equal [1], transaction.voucher_transaction_products.pluck(:quantity).uniq
   end
 end

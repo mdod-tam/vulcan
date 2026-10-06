@@ -252,7 +252,7 @@
                       target_user = target_user_id == @application.user_id.to_s ? @application.user : User.find_by(id: target_user_id)
                       user_name = target_user&.full_name || "Unknown User"
                       editor_role = log.action == 'profile_updated_by_admin' ? 'MAT staff' : 'guardian'
-                      editor_name = log.user&.full_name || editor_role.capitalize
+                      editor_name = log.user&.full_name || 'Unknown user'
                       changes_summary = log.metadata['changes']&.keys&.map(&:humanize)&.join(', ') || 'profile fields'
                       "#{editor_name} (#{editor_role}) updated #{user_name}'s profile (#{changes_summary})"
                     when 'alternate_contact_updated', 'medical_provider_info_updated'

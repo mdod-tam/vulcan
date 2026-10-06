@@ -23,7 +23,7 @@ module VendorPortal
 
         get verify_vendor_portal_voucher_path(@voucher.code)
         assert_redirected_to vendor_portal_dashboard_path
-        assert_equal 'Your account is not approved for processing vouchers yet', flash[:alert]
+        assert_equal 'Your account is not approved for processing vouchers yet.', flash[:alert]
 
         assert_no_difference -> { Event.where(action: 'voucher_verification_attempt').count } do
           post verify_dob_vendor_portal_voucher_path(@voucher.code), params: { date_of_birth: '09/10/1980' }
@@ -39,7 +39,7 @@ module VendorPortal
       get verify_vendor_portal_voucher_path('NO-SUCH-CODE')
 
       assert_redirected_to vendor_portal_dashboard_path
-      assert_equal 'Your account is not approved for processing vouchers yet', flash[:alert]
+      assert_equal 'Your account is not approved for processing vouchers yet.', flash[:alert]
     end
 
     # A real code and a made-up one get the same answer on every path that takes a code.
@@ -73,7 +73,18 @@ module VendorPortal
 
       assert_response :success
       assert_select 'form#voucher-form', count: 0
-      assert_match 'Your account is not approved for processing vouchers yet', response.body
+      assert_match 'Your account is not approved for processing vouchers yet.', response.body
+    end
+
+    test 'an unapproved vendor sees no Redeem link for a voucher on their list' do
+      vendor = create(:vendor, :pending)
+      create(:voucher, :active, vendor: vendor, application: create(:application, user: @constituent))
+      sign_in_for_integration_test(vendor)
+
+      get vendor_portal_vouchers_path
+
+      assert_select 'a', text: 'Redeem', count: 0
+      assert_match 'Cannot redeem', response.body
     end
 
     test 'the dashboard offers Process Voucher only to an eligible vendor' do

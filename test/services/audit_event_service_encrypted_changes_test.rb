@@ -45,6 +45,13 @@ class AuditEventServiceEncryptedChangesTest < ActiveSupport::TestCase
     assert log(@constituent, changes: { 'phone' => { 'old' => '555-000-0002', 'new' => '555-000-0003' } })
   end
 
+  test 'an unreadable change_values cell falls back without breaking reads' do
+    event = log(@constituent, changes: { 'email' => { 'old' => 'a@example.com', 'new' => 'b@example.com' } })
+    Event.connection.execute("UPDATE events SET change_values = 'not encrypted' WHERE id = #{event.id}")
+
+    assert_equal({ 'email' => {} }, event.reload.field_changes)
+  end
+
   private
 
   def log(auditable, changes:, action: 'profile_updated')

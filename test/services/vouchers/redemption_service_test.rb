@@ -17,7 +17,7 @@ module Vouchers
       result = redeem(vendor)
 
       assert result.failure?
-      assert_equal 'Your account is not approved for processing vouchers yet', result.message
+      assert_equal 'Your account is not approved for processing vouchers yet.', result.message
     end
 
     test 'a vendor awaiting approval cannot redeem' do
