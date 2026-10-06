@@ -153,6 +153,7 @@ module Applications
       @identity_review = review_owner.call(lock: true)
       @guardian_user.reload
 
+      return add_error?(Applications::PaperIdentityReview::INVALID_DATE_OF_BIRTH_MESSAGE) if @identity_review.invalid_input?
       return add_error?('Duplicate detection failed. Try again.') if @identity_review.error?
       return add_error?(dependent_decision_error(@identity_review)) if @identity_review.invalid_decision?
       return add_error?(DEPENDENT_CONTACT_COLLISION_MESSAGE) if @identity_review.blocked?

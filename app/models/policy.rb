@@ -33,6 +33,7 @@ class Policy < ApplicationRecord
     account_recovery_rate_limit_user_ip
     account_recovery_rate_limit_ip
     account_recovery_rate_period
+    voucher_verification_max_attempts
   ].freeze
 
   VOUCHER_KEYS = %w[

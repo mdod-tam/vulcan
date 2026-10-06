@@ -74,9 +74,9 @@ module ConstituentPortal
     def normalized_date(value)
       return '' if value.blank?
 
-      holder = Users::Constituent.new
-      holder.date_of_birth = value
-      holder.date_of_birth&.iso8601.to_s
+      # Unreadable input stays distinct from blank and from every real date: the writer stores
+      # neither, and a rejected 9/9/26 must not replay as a request that stored 2009-09-26.
+      DateInputNormalizer.normalize(value)&.iso8601 || "invalid:#{value.to_s.strip}"
     end
 
     def normalized_boolean(value)

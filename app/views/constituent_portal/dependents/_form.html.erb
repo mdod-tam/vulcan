@@ -154,16 +154,13 @@
       </div>
 
       <div>
-        <%= form.label :date_of_birth, "Date of Birth", class: "block text-sm font-medium text-gray-700" %>
-        <%= form.text_field :date_of_birth,
-            value: accessible_date_value(dependent_user.date_of_birth),
-            placeholder: "MM/DD/YYYY",
-            autocomplete: "bday",
-            inputmode: "numeric",
+        <%= form.label :date_of_birth, t('shared.date_of_birth.label'), class: 'block text-sm font-medium text-gray-700' %>
+        <%= date_of_birth_text_field form,
+            value: date_of_birth_input_value(dependent_user),
             "aria-describedby": "dependent-date-of-birth-hint",
             class: "mt-1 block w-full py-2 px-3 border border-gray-300 rounded-md shadow-sm focus:outline-none focus:ring-indigo-500 focus:border-indigo-500 sm:text-sm",
             required: true %>
-        <p id="dependent-date-of-birth-hint" class="mt-1 text-xs text-gray-700">Enter date of birth as MM/DD/YYYY</p>
+        <p id="dependent-date-of-birth-hint" class="mt-1 text-xs text-gray-700"><%= t('shared.date_of_birth.hint') %></p>
       </div>
     </div>
   </section>

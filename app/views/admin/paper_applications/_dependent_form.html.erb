@@ -102,14 +102,11 @@
               data: { "applicant-type-target": "dependentField" } %>
         </div>
         <div>
-          <%= d.label :date_of_birth, "Date of Birth", class: "block text-sm font-medium text-gray-700" %>
-          <%= d.text_field :date_of_birth,
+          <%= d.label :date_of_birth, t('shared.date_of_birth.label'), class: 'block text-sm font-medium text-gray-700', for: 'dependent_constituent_date_of_birth' %>
+          <%= date_of_birth_text_field d,
               id: "dependent_constituent_date_of_birth",
-              value: accessible_date_value(dependent&.date_of_birth),
+              value: date_of_birth_input_value(dependent),
               required: true,
-              autocomplete: "bday",
-              inputmode: "numeric",
-              placeholder: "MM/DD/YYYY",
               class: "mt-1 block w-full rounded-md border-gray-300 shadow-sm focus:border-indigo-500 focus:ring-indigo-500 sm:text-sm",
               "aria-required": "true",
               "aria-describedby": "dependent_dob_hint",
@@ -117,7 +114,7 @@
           <% if mode == :edit && dependent.present? %>
             <p id="dependent_dob_hint" class="text-xs text-amber-600 mt-1">Enter as MM/DD/YYYY. Verify carefully before changing.</p>
           <% else %>
-            <p id="dependent_dob_hint" class="text-xs text-gray-500 mt-1">Enter date of birth as MM/DD/YYYY</p>
+            <p id="dependent_dob_hint" class="text-xs text-gray-500 mt-1"><%= t('shared.date_of_birth.hint') %></p>
           <% end %>
         </div>
       </div>

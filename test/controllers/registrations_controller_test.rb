@@ -113,7 +113,10 @@ class RegistrationsControllerTest < ActionDispatch::IntegrationTest
     end
 
     assert_response :unprocessable_content
-    assert_includes assigns(:user).errors[:date_of_birth], 'must be in MM/DD/YYYY format'
+    assert_includes assigns(:user).errors[:date_of_birth], 'is not a valid date. Enter it as MM/DD/YYYY'
+    assert_nil assigns(:user).read_attribute(:date_of_birth)
+    # Shown back as typed for correction, not blanked or reinterpreted.
+    assert_select 'input[name="user[date_of_birth]"][value="January 15 1990"]'
   end
 
   def test_should_create_constituent_without_disabilities

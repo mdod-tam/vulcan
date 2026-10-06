@@ -31,7 +31,9 @@ The [vendor portal controller](../../app/controllers/vendor_portal/vouchers_cont
 
 ### Verification limits
 
-DOB verification compares the application owner's date of birth and stores successful voucher IDs in `session[:verified_vouchers]`. Mismatch counts are session-based, with a policy threshold defaulting to three. The controller resets the counter on the verification page; this is not a persistent lockout.
+DOB verification reads the submitted date with [DateInputNormalizer](../../app/services/date_input_normalizer.rb), month first, compares it with the application owner's date of birth, and stores successful voucher IDs in `session[:verified_vouchers]`.
+
+Failed checks are counted per voucher and vendor in [VoucherVerificationThrottle](../../app/models/voucher_verification_throttle.rb), not in the session, so reloading the form or signing out does not reset them. Reaching the `voucher_verification_max_attempts` policy (default 3, allowed 1–100) within 30 minutes of the first failure locks that vendor out of that voucher for 30 minutes; other vendors are unaffected. The lockout is checked before the date is compared, so a correct date during it is refused. Input that cannot be read as a date, and an owner with no date of birth on file, use no attempt. A success clears the count. Every attempt is audited with its attempt number.
 
 The redemption service simplifies vendor authorization in the test environment. Passing a portal test alone does not establish that the production W9 requirement works; cover `can_process_vouchers?` directly when changing eligibility.
 

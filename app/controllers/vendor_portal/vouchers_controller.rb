@@ -27,39 +27,30 @@ module VendorPortal
       # Show voucher details for vendor
     end
 
+    # Viewing the form never resets the failure count; only a successful check or the lockout
+    # period does.
     def verify
-      # Initialize the verification attempts
-      reset_verification_attempts
+      retry_at = VoucherVerificationThrottle.locked_until_for(@voucher, current_user)
+      return unless retry_at
+
+      redirect_to vendor_portal_vouchers_path, alert: locked_out_message(retry_at)
     end
 
     def verify_dob
-      # Use the verification service to check the DOB
-      verification_service = VoucherVerificationService.new(
-        @voucher,
-        params[:date_of_birth],
-        session
-      )
+      result = VoucherVerificationService.new(@voucher, params[:date_of_birth], session, vendor: current_user).verify
 
-      result = verification_service.verify
-
-      # Record verification attempt in events
-      record_verification_event(result.success?)
+      record_verification_event(result)
 
       if result.success?
         flash[:notice] = t("alerts.#{result.message_key}")
         redirect_to redeem_vendor_portal_voucher_path(@voucher.code)
+      elsif result.locked_out?
+        redirect_to vendor_portal_vouchers_path, alert: locked_out_message(result.retry_at)
+      elsif result.unavailable?
+        redirect_to vendor_portal_vouchers_path, alert: t("alerts.#{result.message_key}")
       else
-        flash[:alert] = if result.attempts_left&.positive?
-                          t("alerts.#{result.message_key}", attempts_left: result.attempts_left)
-                        else
-                          t("alerts.#{result.message_key}")
-                        end
-
-        if result.attempts_left&.zero?
-          redirect_to vendor_portal_vouchers_path
-        else
-          redirect_to verify_vendor_portal_voucher_path(@voucher.code)
-        end
+        flash[:alert] = t("alerts.#{result.message_key}", attempts_left: result.attempts_left)
+        redirect_to verify_vendor_portal_voucher_path(@voucher.code)
       end
     end
 
@@ -126,12 +117,11 @@ module VendorPortal
         session[:verified_vouchers].include?(voucher.id)
     end
 
-    def reset_verification_attempts
-      session[:voucher_verification_attempts] ||= {}
-      session[:voucher_verification_attempts][@voucher.id.to_s] = 0
+    def locked_out_message(retry_at)
+      t('alerts.dob_verification_too_many_attempts', retry_at: retry_at.in_time_zone.strftime('%-I:%M %p'))
     end
 
-    def record_verification_event(successful)
+    def record_verification_event(result)
       AuditEventService.log(
         actor: current_user,
         action: 'voucher_verification_attempt',
@@ -140,8 +130,12 @@ module VendorPortal
           voucher_id: @voucher.id,
           voucher_code: @voucher.code,
           constituent_id: @voucher.application.user_id,
-          successful: successful,
-          attempt_number: session[:voucher_verification_attempts][@voucher.id.to_s] || 0
+          successful: result.success?,
+          locked_out: result.locked_out?,
+          attempt_number: result.attempt_number,
+          # Each request is its own attempt; without this, rapid guesses fall inside the audit
+          # dedup window and go unrecorded.
+          operation_id: "voucher_verification:#{request.request_id}"
         }
       )
     end

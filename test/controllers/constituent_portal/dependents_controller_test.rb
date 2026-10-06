@@ -378,7 +378,7 @@ module ConstituentPortal
 
     test 'should reject dependent with malformed text date of birth' do
       Rails.logger.stubs(:error)
-      Rails.logger.expects(:error).with(regexp_matches(%r{Date of birth must be in MM/DD/YYYY format})).twice
+      Rails.logger.expects(:error).with(regexp_matches(/Date of birth is not a valid date/)).once
 
       assert_no_difference ['User.count', 'GuardianRelationship.count'] do
         post constituent_portal_dependents_url, params: {
@@ -395,7 +395,34 @@ module ConstituentPortal
       end
 
       assert_response :unprocessable_content
-      assert_match(%r{Date of birth must be in MM/DD/YYYY format}, response.body)
+      assert_match(/Date of birth is not a valid date/, response.body)
+      assert_select 'input[name="dependent[date_of_birth]"][value="May 15 2010"]'
+    end
+
+    test 'accepts dash and compact date of birth spellings as the same date' do
+      { '05-15-2010' => 'Dash', '05152010' => 'Compact' }.each do |spelling, first_name|
+        body = dependent_body(date_of_birth: spelling, first_name: first_name)
+        post_dependent(body)
+
+        assert_redirected_to constituent_portal_dashboard_url
+        assert_equal Date.new(2010, 5, 15), User.find_by!(email: body[:email]).date_of_birth, spelling
+      end
+    end
+
+    # Replay and admission both run before model validation. Date.parse read 9/9/26 as 2009-09-26,
+    # so a rejected date used to fingerprint as the real one and report "already added".
+    test 'an unreadable date of birth is refused before replay with a spent key' do
+      key = SecureRandom.hex(16)
+      body = dependent_body(date_of_birth: '2009-09-26')
+      post_dependent(body, portal_creation_key: key)
+
+      assert_no_difference ['User.count', 'GuardianRelationship.count'] do
+        post_dependent(body.merge(date_of_birth: '9/9/26'), portal_creation_key: key)
+      end
+
+      assert_response :unprocessable_content
+      assert_no_match(/already added/i, flash[:notice].to_s)
+      assert_match(/Date of birth is not a valid date/, response.body)
     end
 
     test 'should create dependent with guardian email fallback when dependent email is blank' do
