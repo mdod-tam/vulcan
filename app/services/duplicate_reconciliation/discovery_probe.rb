@@ -812,9 +812,9 @@ module DuplicateReconciliation
 
       raw_value = Users::Constituent.type_for_attribute('date_of_birth').deserialize(raw_dob)
       return false if raw_value.blank?
-      return true if raw_value.is_a?(Date)
 
-      Date.parse(raw_value.to_s).is_a?(Date)
+      # Same parser as UserProfile#date_of_birth, so this counts the rows that read back as nil.
+      DateInputNormalizer.normalize(raw_value).present?
     rescue ActiveRecord::Encryption::Errors::Base, ArgumentError
       false
     end

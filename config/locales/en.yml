@@ -92,9 +92,6 @@ en:
       security_legend: "Security"
       password_label: "Password"
       password_confirmation_label: "Confirm Password"
-      date_of_birth_label: "Date of Birth"
-      date_of_birth_placeholder: "MM/DD/YYYY"
-      date_of_birth_hint: "Enter date of birth as MM/DD/YYYY"
       language_preference_label: "Language Preference"
       language_prompt: "Select Language"
       language_hint: "Select from our supported languages"
@@ -120,6 +117,8 @@ en:
       on_file: "On file:"
   activerecord:
     attributes:
+      user:
+        date_of_birth: "Date of birth"
       application:
         income_proof: "Income proof"
         residency_proof: "Residency proof"
@@ -133,6 +132,8 @@ en:
               portal_self_registration_unavailable_contact: "We couldn't complete your registration with the information provided. Please contact the MAT Team at %{support_email} or %{support_phone} for assistance."
             phone_type:
               portal_self_registration_phone_type_required: "must be selected when a phone number is provided"
+            date_of_birth:
+              invalid: "is not a valid date. Enter it as MM/DD/YYYY"
         application:
           attributes:
             base:
@@ -211,6 +212,8 @@ en:
       create:
         # Duplicate submissions report the original success, not an error.
         already_added: "%{name} was already added to your account."
+        # Checked before any duplicate or replay decision, so an unreadable date never matches a person.
+        invalid_date_of_birth: "Date of birth is not a valid date. Enter it as MM/DD/YYYY."
         # The server refuses a stale page that reuses a request key with different identity details.
         stale_request: "This form was out of date, so nothing was changed. Please reload the page and try again."
         # Each guardian can add one dependent per name and birthdate.
@@ -553,6 +556,11 @@ en:
 
         If you have questions, please contact %{support_email}.
   shared:
+    # Every date-of-birth text field. DateInputNormalizer reads month first in every locale.
+    date_of_birth:
+      label: "Date of Birth"
+      placeholder: "MM/DD/YYYY"
+      hint: "Enter date of birth as MM/DD/YYYY"
     header:
       main_navigation: "Main Navigation"
       primary_navigation: "Primary Navigation"
@@ -582,8 +590,10 @@ en:
     unauthorized_page: "You do not have permission to access this page"
     must_be_vendor: "You must be a vendor to access this section"
     dob_verification_failed: "Date of birth verification failed. You have %{attempts_left} attempts remaining."
-    dob_verification_too_many_attempts: "Too many failed verification attempts. Please contact support."
+    dob_verification_too_many_attempts: "Too many failed date of birth checks for this voucher. Try again after %{retry_at}."
     dob_verification_success: "Identity verification successful."
+    dob_verification_invalid_format: "Enter the date of birth as MM/DD/YYYY. This did not count as an attempt."
+    dob_verification_unavailable: "This constituent has no date of birth on file, so their identity cannot be verified here. Contact the MAT Team."
     unfiltered_error: "Filter error – showing unfiltered results."
     e_template_not_found: "Email template not found."
   admin:

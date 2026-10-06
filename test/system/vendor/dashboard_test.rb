@@ -4,44 +4,18 @@ require 'application_system_test_case'
 
 module VendorPortal
   class DashboardTest < ApplicationSystemTestCase
+    include SystemTestAuthentication
+
     setup do
-      # Create vendor with all necessary attributes for authentication
-      @vendor = Users::Vendor.create!(
-        email: 'test_vendor@example.com',
-        password: 'password1234',
-        first_name: 'Test',
-        last_name: 'Vendor',
-        business_name: 'Test Business',
-        business_tax_id: '123456789',
-        vendor_authorization_status: :approved,
-        verified: true,
-        email_verified: true,
-        terms_accepted_at: 1.day.ago,
-        w9_status: :approved
-      )
+      @vendor = create(:vendor, :approved)
     end
 
+    # Signs in for real. Stubbing current_user on this controller never reached the dashboard:
+    # authentication runs earlier in the controller chain, so the test only ever saw the sign-in page.
     test 'chart has proper accessibility attributes' do
-      # Stub authentication for this accessibility-focused test
-      VendorPortal::DashboardController.any_instance.stubs(:current_user).returns(@vendor)
-      VendorPortal::DashboardController.any_instance.stubs(:authenticate_vendor!).returns(true)
-
-      # Mock the vendor methods that the dashboard needs
-      @vendor.stubs(:latest_transactions).returns(VoucherTransaction.none)
-      @vendor.stubs(:pending_transaction_total).returns(0)
-      @vendor.stubs(:total_transactions_by_period).returns({})
-      @vendor.stubs(:vendor_pending?).returns(false)
-
-      # Mock W9 form
-      w9_mock = Object.new
-      w9_mock.stubs(:attached?).returns(true)
-      @vendor.stubs(:w9_form).returns(w9_mock)
-
-      # Visit dashboard
-      with_browser_rescue(max_retries: 3) do
-        visit vendor_portal_dashboard_path
-        wait_for_page_stable
-      end
+      system_test_sign_in(@vendor)
+      visit vendor_portal_dashboard_path
+      assert_selector 'h2#monthly-totals-heading'
 
       # Check that the table has proper accessibility attributes
       assert_selector "table#monthly-totals-table[aria-labelledby='monthly-totals-heading']"
