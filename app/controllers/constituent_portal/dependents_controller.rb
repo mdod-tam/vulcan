@@ -495,8 +495,8 @@ module ConstituentPortal
 
     def get_recent_profile_changes(user)
       Event.where(
-        "(action = 'profile_updated' AND user_id = ?) OR (action = 'profile_updated_by_guardian' AND metadata->>'user_id' = ?)",
-        user.id, user.id.to_s
+        "(action = 'profile_updated' AND user_id = ?) OR (action IN (?) AND metadata->>'user_id' = ?)",
+        user.id, UserProfile::PROFILE_CHANGE_ON_BEHALF_ACTIONS, user.id.to_s
       ).order(created_at: :desc).limit(10)
     end
 

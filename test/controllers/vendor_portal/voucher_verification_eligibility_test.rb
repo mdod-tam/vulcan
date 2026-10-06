@@ -57,12 +57,34 @@ module VendorPortal
       end
     end
 
-    test 'an unapproved vendor still sees their voucher list' do
+    test 'a refusal is logged with the vendor and action, never the code' do
+      vendor = create(:vendor, :pending)
+      sign_in_for_integration_test(vendor)
+      Rails.logger.stubs(:warn)
+      Rails.logger.expects(:warn).with("VendorPortal: refused vouchers#verify for vendor #{vendor.id}: not approved to process vouchers")
+
+      get verify_vendor_portal_voucher_path(@voucher.code)
+    end
+
+    test 'an unapproved vendor still sees their voucher list, without the code form' do
       sign_in_for_integration_test(create(:vendor, :pending))
 
       get vendor_portal_vouchers_path
 
       assert_response :success
+      assert_select 'form#voucher-form', count: 0
+      assert_match 'Your account is not approved for processing vouchers yet', response.body
+    end
+
+    test 'the dashboard offers Process Voucher only to an eligible vendor' do
+      sign_in_for_integration_test(create(:vendor, :pending))
+      get vendor_portal_dashboard_path
+      assert_select 'a', text: 'Process Voucher', count: 0
+      assert_select 'span[aria-disabled=true][aria-describedby=process-voucher-unavailable]', text: 'Process Voucher'
+
+      sign_in_for_integration_test(create(:vendor, :approved))
+      get vendor_portal_dashboard_path
+      assert_select 'a[href=?]', vendor_portal_vouchers_path, text: 'Process Voucher'
     end
 
     test 'an eligible vendor reaches verification' do

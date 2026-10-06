@@ -6,6 +6,9 @@ module UserProfile
   # The phone_type enum includes email and letter preferences as legacy values.
   # For a real phone, validate submitted phone_type against these telephone routes, not the full enum.
   REAL_PHONE_TYPES = %w[voice videophone text].freeze
+  # Profile changes made by someone other than the user. They record the changed user in
+  # metadata['user_id'] and the person who made the change as the event's user.
+  PROFILE_CHANGE_ON_BEHALF_ACTIONS = %w[profile_updated_by_guardian profile_updated_by_admin].freeze
   # Profile-change audit events record that these changed, not their values.
   VALUELESS_AUDIT_FIELDS = %w[date_of_birth].freeze
 
@@ -208,6 +211,8 @@ module UserProfile
                'profile_created_by_admin_via_paper'
              elsif actor == self
                'profile_updated'
+             elsif actor.admin?
+               'profile_updated_by_admin'
              else
                'profile_updated_by_guardian'
              end

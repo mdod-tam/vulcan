@@ -14,6 +14,9 @@ module VendorPortal
     def require_voucher_processing_approval
       return if current_user.can_process_vouchers?
 
+      # For operators watching for probing. Never the submitted code: it may be someone's voucher.
+      Rails.logger.warn("VendorPortal: refused #{controller_name}##{action_name} for vendor #{current_user.id}: " \
+                        'not approved to process vouchers')
       message = t('alerts.vendor_not_approved_for_vouchers')
       redirect_to vendor_portal_dashboard_path, alert: message
     end

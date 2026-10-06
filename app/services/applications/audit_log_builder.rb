@@ -182,10 +182,10 @@ module Applications
       Event
         .select('id, user_id, action, created_at, metadata')
         .includes(:user)
-        .where(action: %w[profile_updated profile_updated_by_guardian])
+        .where(action: ['profile_updated', *UserProfile::PROFILE_CHANGE_ON_BEHALF_ACTIONS])
         .where(
-          "(action = 'profile_updated' AND user_id IN (?)) OR (action = 'profile_updated_by_guardian' AND metadata->>'user_id' IN (?))",
-          user_ids, user_ids.map(&:to_s)
+          "(action = 'profile_updated' AND user_id IN (?)) OR (action IN (?) AND metadata->>'user_id' IN (?))",
+          user_ids, UserProfile::PROFILE_CHANGE_ON_BEHALF_ACTIONS, user_ids.map(&:to_s)
         )
         .order(created_at: :desc)
         .to_a
