@@ -15,6 +15,9 @@ class VoucherVerificationService
   end
 
   def verify
+    # No answer can ever match, so counting attempts would only lock vendors out for nothing.
+    return no_dob_on_file_result if owner_date_of_birth.nil?
+
     VoucherVerificationThrottle.with_row_lock(voucher, vendor) do |throttle|
       # The lockout is checked first, so a correct guess during it is refused like any other.
       # Unreadable input is a typing problem, not a wrong answer, so it does not use an attempt.
@@ -41,9 +44,16 @@ class VoucherVerificationService
     @parsed_dob ||= DateInputNormalizer.normalize(submitted_dob_str)
   end
 
+  def owner_date_of_birth
+    voucher.application.user&.date_of_birth
+  end
+
   def dobs_match?
-    constituent = voucher.application.user
-    constituent.date_of_birth && parsed_dob == constituent.date_of_birth
+    parsed_dob == owner_date_of_birth
+  end
+
+  def no_dob_on_file_result
+    VerificationResult.new(success: false, message_key: 'dob_verification_unavailable')
   end
 
   def handle_successful_verification(throttle)
@@ -99,6 +109,11 @@ class VoucherVerificationService
 
     def locked_out?
       retry_at.present?
+    end
+
+    # Retrying cannot help; the vendor needs the MAT Team.
+    def unavailable?
+      message_key == 'dob_verification_unavailable'
     end
   end
 end

@@ -102,7 +102,7 @@
               data: { "applicant-type-target": "dependentField" } %>
         </div>
         <div>
-          <%= d.label :date_of_birth, t("shared.date_of_birth.label"), class: "block text-sm font-medium text-gray-700" %>
+          <%= d.label :date_of_birth, t('shared.date_of_birth.label'), class: 'block text-sm font-medium text-gray-700', for: 'dependent_constituent_date_of_birth' %>
           <%= date_of_birth_text_field d,
               id: "dependent_constituent_date_of_birth",
               value: date_of_birth_input_value(dependent),
@@ -114,7 +114,7 @@
           <% if mode == :edit && dependent.present? %>
             <p id="dependent_dob_hint" class="text-xs text-amber-600 mt-1">Enter as MM/DD/YYYY. Verify carefully before changing.</p>
           <% else %>
-            <p id="dependent_dob_hint" class="text-xs text-gray-500 mt-1"><%= t("shared.date_of_birth.hint") %></p>
+            <p id="dependent_dob_hint" class="text-xs text-gray-500 mt-1"><%= t('shared.date_of_birth.hint') %></p>
           <% end %>
         </div>
       </div>

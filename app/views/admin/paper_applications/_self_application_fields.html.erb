@@ -43,14 +43,14 @@
       </div>
       
       <div class="mb-4">
-        <%= c.label :date_of_birth, t("shared.date_of_birth.label"), class: "block text-sm font-medium text-gray-700  required-label" %>
+        <%= c.label :date_of_birth, t('shared.date_of_birth.label'), class: 'block text-sm font-medium text-gray-700  required-label' %>
         <%= date_of_birth_text_field c,
             required: true,
             value: date_of_birth_input_value(c.object),
             class: "mt-1 block w-full max-w-xs rounded-md border-gray-300 shadow-sm focus:border-indigo-500 focus:ring-indigo-500 sm:text-sm",
             "aria-required": "true",
             "aria-describedby": "constituent_dob_hint" %>
-        <p id="constituent_dob_hint" class="text-xs text-gray-500 mt-1"><%= t("shared.date_of_birth.hint") %></p>
+        <p id="constituent_dob_hint" class="text-xs text-gray-500 mt-1"><%= t('shared.date_of_birth.hint') %></p>
       </div>
 
       <div class="mt-6 flex items-start">

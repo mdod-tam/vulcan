@@ -30,15 +30,15 @@
     
     <%= form_with(url: verify_dob_vendor_portal_voucher_path(@voucher), method: :post, id: "verification-form", class: "space-y-6") do |f| %>
       <div class="mb-4">
-        <%= f.label :date_of_birth, t("shared.date_of_birth.label"), class: "block text-sm font-medium text-gray-700" %>
+        <%= f.label :date_of_birth, t('shared.date_of_birth.label'), class: 'block text-sm font-medium text-gray-700' %>
         <div class="mt-1">
           <%= date_of_birth_text_field f,
-                                       autocomplete: "off",
-                                       class: "block w-full rounded-md border-gray-300 shadow-sm focus:border-indigo-500 focus:ring-indigo-500",
+                                       autocomplete: 'off',
+                                       class: 'block w-full rounded-md border-gray-300 shadow-sm focus:border-indigo-500 focus:ring-indigo-500',
                                        required: true,
-                                       aria: { describedby: "voucher_dob_hint" } %>
+                                       aria: { describedby: 'voucher_dob_hint' } %>
         </div>
-        <p id="voucher_dob_hint" class="mt-1 text-sm text-gray-500"><%= t("shared.date_of_birth.hint") %></p>
+        <p id="voucher_dob_hint" class="mt-1 text-sm text-gray-500"><%= t('shared.date_of_birth.hint') %></p>
       </div>
 
       <div class="flex justify-end space-x-4">

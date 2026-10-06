@@ -46,6 +46,8 @@ module VendorPortal
         redirect_to redeem_vendor_portal_voucher_path(@voucher.code)
       elsif result.locked_out?
         redirect_to vendor_portal_vouchers_path, alert: locked_out_message(result.retry_at)
+      elsif result.unavailable?
+        redirect_to vendor_portal_vouchers_path, alert: t("alerts.#{result.message_key}")
       else
         flash[:alert] = t("alerts.#{result.message_key}", attempts_left: result.attempts_left)
         redirect_to verify_vendor_portal_voucher_path(@voucher.code)

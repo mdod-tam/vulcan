@@ -64,6 +64,16 @@ module VendorPortal
       assert_redirected_to redeem_vendor_portal_voucher_path(@voucher.code)
     end
 
+    test 'an owner with no date of birth on file sends the vendor to the MAT Team' do
+      @constituent.update_column(:date_of_birth, nil)
+
+      4.times { post_dob('09/10/1980') }
+
+      assert_redirected_to vendor_portal_vouchers_path
+      assert_match(/no date of birth on file/, flash[:alert])
+      assert_nil VoucherVerificationThrottle.find_by(voucher: @voucher, vendor: @vendor)
+    end
+
     private
 
     def post_dob(value)

@@ -118,6 +118,18 @@ class VoucherVerificationServiceTest < ActiveSupport::TestCase
     assert_nil VoucherVerificationThrottle.find_by(voucher: @voucher, vendor: @vendor)
   end
 
+  # No answer can match, so counting attempts would only lock every vendor out.
+  test 'an owner with no date of birth on file is reported without using an attempt' do
+    @constituent.update_column(:date_of_birth, nil)
+
+    result = verify('09/10/1980')
+
+    assert result.unavailable?
+    assert_not result.locked_out?
+    assert_nil VoucherVerificationThrottle.find_by(voucher: @voucher, vendor: @vendor)
+    assert I18n.exists?("alerts.#{result.message_key}", :en)
+  end
+
   private
 
   def verify(dob, session: @session, vendor: @vendor)
