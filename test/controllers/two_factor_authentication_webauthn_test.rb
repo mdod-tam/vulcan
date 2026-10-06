@@ -21,7 +21,7 @@ class TwoFactorAuthenticationWebauthnTest < ActionDispatch::IntegrationTest
 
   test 'should get new form for WebAuthn authentication after password step' do
     # Step 1: Sign in, expect redirect to 2FA verify page
-    post sign_in_path, params: { email: @user.email, password: 'password123' }
+    post sign_in_path, params: { email: @user.email, password: 'password1234' }
     assert_response :redirect
     assert_redirected_to verify_method_two_factor_authentication_path(type: 'webauthn')
 
@@ -34,7 +34,7 @@ class TwoFactorAuthenticationWebauthnTest < ActionDispatch::IntegrationTest
 
   test 'should generate options for WebAuthn authentication' do
     # Step 1: Sign in, expect redirect to 2FA verify page
-    post sign_in_path, params: { email: @user.email, password: 'password123' }
+    post sign_in_path, params: { email: @user.email, password: 'password1234' }
     assert_response :redirect
     assert_redirected_to verify_method_two_factor_authentication_path(type: 'webauthn')
 
@@ -62,7 +62,7 @@ class TwoFactorAuthenticationWebauthnTest < ActionDispatch::IntegrationTest
 
   test 'should correctly route WebAuthn credential verification requests' do
     # Step 1: Sign in, expect redirect to 2FA verify page
-    post sign_in_path, params: { email: @user.email, password: 'password123' }
+    post sign_in_path, params: { email: @user.email, password: 'password1234' }
     assert_response :redirect
     assert_redirected_to verify_method_two_factor_authentication_path(type: 'webauthn')
 
@@ -95,7 +95,7 @@ class TwoFactorAuthenticationWebauthnTest < ActionDispatch::IntegrationTest
 
   test 'should have proper error handling for malformed credentials' do
     # Step 1: Sign in, expect redirect to 2FA verify page
-    post sign_in_path, params: { email: @user.email, password: 'password123' }
+    post sign_in_path, params: { email: @user.email, password: 'password1234' }
     assert_response :redirect
     assert_redirected_to verify_method_two_factor_authentication_path(type: 'webauthn')
 

@@ -80,7 +80,7 @@ class MfaEnrollmentPolicyTest < ActionDispatch::IntegrationTest
 
     post sign_in_path, params: {
       email: admin.email,
-      password: 'password123'
+      password: 'password1234'
     }
     assert_redirected_to verify_method_two_factor_authentication_path(type: 'totp')
 

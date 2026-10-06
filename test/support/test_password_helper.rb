@@ -5,7 +5,7 @@ require 'bcrypt'
 module TestPasswordHelper
   # Default plain-text password used in tests
   def default_password
-    'password123'
+    'password1234'
   end
 
   # Generates the password digest using User.digest

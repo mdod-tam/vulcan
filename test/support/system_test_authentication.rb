@@ -80,7 +80,7 @@ module SystemTestAuthentication
 
     within('form[action="/sign_in"]') do
       fill_in 'contact-input', with: user.email
-      fill_in 'password-input', with: 'password123'
+      fill_in 'password-input', with: 'password1234'
       click_button 'Sign In'
     end
 
@@ -152,7 +152,7 @@ module SystemTestAuthentication
 
     within('form[action="/sign_in"]') do
       fill_in 'contact-input', with: user.email
-      fill_in 'password-input', with: 'password123'
+      fill_in 'password-input', with: 'password1234'
       click_button 'Sign In'
     end
 

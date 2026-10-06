@@ -36,7 +36,7 @@ A guardian adds a dependent from their own dashboard, before applying for anyone
 
 Behind the button, [`ConstituentPortal::DependentsController#create`](../../app/controllers/constituent_portal/dependents_controller.rb) checks the submitted contact details against existing records, locks the guardian and any candidates a review case would name, derives shared contact from that locked guardian, and then writes the dependent, the relationship, and any review case in one transaction. Nothing is written unless all of it succeeds.
 
-Four things a guardian can see instead of that success message:
+Five things a guardian can see instead of that success message:
 
 | What happened | What they see |
 | --- | --- |
@@ -44,6 +44,7 @@ Four things a guardian can see instead of that success message:
 | They already have a dependent with this name and date of birth | A message naming that dependent, with the MAT Team's email and phone. Each guardian gets one dependent per name-and-birthdate pair, so genuinely different people who share both are sorted out by staff. |
 | They double-clicked, or the browser retried the request | "… was already added to your account." No second person is created — see [Repeated submissions](#repeated-submissions). |
 | They submitted a stale page after changing the details | "This form was out of date, so nothing was changed. Please reload the page and try again." |
+| The date of birth cannot be read as a date | "Date of birth is not a valid date. Enter it as MM/DD/YYYY." The form shows what they typed. This is checked before any duplicate or replay check, so an unreadable date never matches anyone. |
 
 A fifth case is invisible to the guardian. When the new dependent's name and date of birth resemble an unrelated person already on file, creation succeeds with the ordinary message and staff get a `portal_dependent` review case to look at. The dependent is not reused, the guardian is not told, and the new dependent can still apply — only an open `registration_soft_match` case blocks submission.
 
@@ -71,13 +72,14 @@ This skips everything the form does around the write: duplicate detection, the r
 
 ### Repeated submissions
 
-Each form carries a `portal_creation_key`. The relationship stores that key and a [server-keyed fingerprint](../../app/services/constituent_portal/dependent_request_fingerprint.rb) of the submitted choices.
+Each form carries a `portal_creation_key`. The relationship stores that key and a [server-keyed fingerprint](../../app/services/constituent_portal/dependent_request_fingerprint.rb) of the submitted choices. Every accepted spelling of one date (`5/15/2010`, `05-15-2010`, `05152010`, ISO) fingerprints the same; an unreadable date never matches a real one or a blank.
 
 | Request | Result |
 | --- | --- |
 | Unused key for this guardian | Continue through normal creation checks. |
 | Used key with the same submitted choices | Return the original dependent without new writes. |
 | Used key with changed choices | Refuse the stale form without changing either record. |
+| Any key with a date of birth that cannot be read | Refuse before the key is checked; the form shows what was typed. |
 
 Keys are scoped to the authenticated guardian, so one guardian's key cannot retrieve another's dependent. The database enforces uniqueness on `(guardian_id, portal_creation_key)` when a key is present, and requires the key and fingerprint to be stored together. Failed creation leaves the key available for a corrected submission.
 

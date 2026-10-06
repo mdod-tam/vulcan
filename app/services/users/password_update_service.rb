@@ -3,6 +3,11 @@
 module Users
   # Service object to handle updating a user's password.
   class PasswordUpdateService < BaseService
+    # Shared with the reset-link path in PasswordsController, which saves through its own lock.
+    def self.failure_message(user)
+      "Unable to update password. #{user.errors.full_messages.to_sentence}."
+    end
+
     def initialize(user, password_challenge, new_password, new_password_confirmation)
       super()
       @user = user
@@ -47,7 +52,7 @@ module Users
       if @user.update(password: @new_password, force_password_change: false)
         success_result(message: 'Password successfully updated.')
       else
-        fail_with_error('Unable to update password. Please check requirements.', @user.errors.full_messages)
+        fail_with_error(self.class.failure_message(@user))
       end
     end
 

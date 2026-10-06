@@ -14,8 +14,8 @@ class VoucherRedemptionIntegrationTest < ActionDispatch::IntegrationTest
       last_name: 'Tester',
       type: 'Users::Constituent',
       email: "integration_test.#{SecureRandom.hex(4)}@example.com",
-      password: 'password',
-      password_confirmation: 'password',
+      password: 'password1234',
+      password_confirmation: 'password1234',
       phone: "555-#{rand(100..999)}-#{rand(1000..9999)}" # Phone must be unique
     )
 

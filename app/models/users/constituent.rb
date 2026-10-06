@@ -62,12 +62,7 @@ module Users
       end
 
       def format_date_for_encryption(date_of_birth)
-        case date_of_birth
-        when String then Date.iso8601(date_of_birth)
-        when Date then date_of_birth
-        end
-      rescue ArgumentError
-        nil
+        DateInputNormalizer.normalize(date_of_birth) if date_of_birth.is_a?(String) || date_of_birth.is_a?(Date)
       end
 
       def build_duplicate_query(first_name, last_name, formatted_date)

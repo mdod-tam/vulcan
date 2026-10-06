@@ -70,6 +70,7 @@ module Applications
 
     def review_error_message
       case review.state
+      when :invalid_input then PaperIdentityReview::INVALID_DATE_OF_BIRTH_MESSAGE
       when :error then 'Identity review is temporarily unavailable. Try again.'
       when :blocked then 'A guardian with this email or phone already exists. Select that guardian or correct the contact information.'
       when :needs_confirmation then 'Review the possible matches before creating a new guardian.'

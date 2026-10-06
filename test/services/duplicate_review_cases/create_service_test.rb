@@ -80,8 +80,8 @@ module DuplicateReviewCases
         first_name: 'Unsaved',
         last_name: 'Subject',
         email: "unsaved-#{SecureRandom.hex(3)}@example.com",
-        password: 'password123',
-        password_confirmation: 'password123',
+        password: 'password1234',
+        password_confirmation: 'password1234',
         date_of_birth: Date.new(1990, 1, 1),
         hearing_disability: true
       )

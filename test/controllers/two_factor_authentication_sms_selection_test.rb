@@ -68,7 +68,7 @@ class TwoFactorAuthenticationSmsSelectionTest < ActionDispatch::IntegrationTest
     admin = create(:admin)
     EmailDelivery::ControlWriter.set(name: EmailDelivery::ALL_CONTROL, enabled: false, actor: admin, operation_id: SecureRandom.uuid)
     assert_difference -> { Event.where(action: 'essential_communication_submitted').count }, 1 do
-      post sign_in_path, params: { email: @user.email, password: 'password123' }
+      post sign_in_path, params: { email: @user.email, password: 'password1234' }
     end
     assert_redirected_to verify_method_two_factor_authentication_path(type: 'sms')
     assert Rails.cache.read(TwoFactor::SmsLoginChallenge.cache_key(@user.sms_credentials.first.id))
@@ -156,7 +156,7 @@ class TwoFactorAuthenticationSmsSelectionTest < ActionDispatch::IntegrationTest
 
     post sign_in_path, params: {
       email: user.email,
-      password: 'password123'
+      password: 'password1234'
     }
 
     assert_redirected_to verify_method_two_factor_authentication_path(type: 'sms')
@@ -167,7 +167,7 @@ class TwoFactorAuthenticationSmsSelectionTest < ActionDispatch::IntegrationTest
 
   %i[en es].each do |locale|
     test "unavailable verification methods use #{locale} feedback" do
-      post sign_in_path(locale: locale), params: { contact: @user.email, password: 'password123' }
+      post sign_in_path(locale: locale), params: { contact: @user.email, password: 'password1234' }
       get verify_method_two_factor_authentication_path(type: 'webauthn', locale: locale)
       assert_redirected_to setup_two_factor_authentication_path(locale: locale)
       assert_equal I18n.t('two_factor_verification.errors.key_unavailable', locale: locale), flash[:alert]
@@ -180,7 +180,7 @@ class TwoFactorAuthenticationSmsSelectionTest < ActionDispatch::IntegrationTest
     end
 
     test "TOTP and SMS keep #{locale} through forms, errors, resend and verification" do
-      post sign_in_path(locale: locale), params: { contact: @user.email, password: 'password123' }
+      post sign_in_path(locale: locale), params: { contact: @user.email, password: 'password1234' }
       assert_redirected_to verify_two_factor_authentication_path(locale: locale)
       follow_redirect!
       assert_select 'a[href=?]', verify_method_two_factor_authentication_path(type: 'totp', locale: locale)
@@ -219,7 +219,7 @@ class TwoFactorAuthenticationSmsSelectionTest < ActionDispatch::IntegrationTest
   def start_password_step
     post sign_in_path, params: {
       email: @user.email,
-      password: 'password123'
+      password: 'password1234'
     }
 
     assert_redirected_to verify_two_factor_authentication_path

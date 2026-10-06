@@ -77,7 +77,7 @@ Every document field — paper intake, portal proof resubmission, the vendor W-9
 
 [`PasswordFieldHelper#password_visibility_data`](../../app/helpers/password_field_helper.rb) wires the [`visibility` controller](../../app/javascript/controllers/ui/visibility_controller.js) and supplies translated labels. The form templates render the fields, toggles, and live status elements. Revealed passwords re-hide after five seconds, and the toggle maintains `aria-pressed`, its label, and live status text.
 
-Form length hints should track [the server validation](../../app/models/concerns/user_authentication.rb), currently eight characters.
+Every password input renders through [`shared/_password_field`](../../app/views/shared/_password_field.html.erb). New-password fields take their `minlength` and hint from `UserAuthentication::PASSWORD_MIN_LENGTH` (12), the same constant [the server validation](../../app/models/concerns/user_authentication.rb) uses.
 
 ## Charts
 

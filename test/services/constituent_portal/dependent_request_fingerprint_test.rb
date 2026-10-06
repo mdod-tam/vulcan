@@ -43,7 +43,22 @@ module ConstituentPortal
 
     # Canonicalized by the writer, so two spellings of one stored value are the same request.
     test 'equivalent date formats are the same request' do
-      assert_equal fingerprint(date_of_birth: '05/15/2010'), fingerprint(date_of_birth: '2010-05-15')
+      expected = fingerprint(date_of_birth: '2010-05-15')
+
+      %w[05/15/2010 5/15/2010 05-15-2010 05.15.2010 05152010].each do |spelling|
+        assert_equal expected, fingerprint(date_of_birth: spelling), spelling
+      end
+    end
+
+    # The writer stores nothing for an unreadable date, so it must not look like any stored date.
+    # Date.parse read 9/9/26 as 2009-09-26 and 09-10-26 as a day-first date.
+    test 'an unreadable date of birth is not the same request as any real date' do
+      assert_not_equal fingerprint(date_of_birth: '2009-09-26'), fingerprint(date_of_birth: '9/9/26')
+      assert_not_equal fingerprint(date_of_birth: '2026-10-09'), fingerprint(date_of_birth: '09-10-26')
+    end
+
+    test 'an unreadable date of birth is not the same request as a blank one' do
+      assert_not_equal fingerprint(date_of_birth: ''), fingerprint(date_of_birth: 'not a date')
     end
 
     test 'equivalent phone formatting is the same request' do

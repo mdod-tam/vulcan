@@ -46,7 +46,7 @@ class PublicAuthEvidenceTest < ApplicationSystemTestCase
     take_screenshot('public-auth-registration-es-mobile', html: true)
     resize_browser_to(width: 1200, height: 800)
 
-    user = create(:constituent, password: 'password123', password_confirmation: 'password123')
+    user = create(:constituent, password: 'password1234', password_confirmation: 'password1234')
     system_test_sign_in(user)
     visit edit_profile_path
     assert_text 'Edit Profile'

@@ -7,6 +7,8 @@ module VendorPortal
     include SystemTestAuthentication
 
     def setup
+      # The shared test setup leaves the voucher workflow off; redemption requires it.
+      FeatureFlag.enable!(:vouchers_enabled)
       @vendor = create(:vendor, :approved)
 
       @constituent = create(:constituent,
@@ -65,7 +67,7 @@ module VendorPortal
       assert_text 'Identity Verification'
       assert_text @voucher.code
 
-      find_field('date_of_birth').set(@constituent.date_of_birth.strftime('%Y-%m-%d'))
+      find_field('date_of_birth').set(@constituent.date_of_birth.strftime('%m/%d/%Y'))
       click_button 'Verify Identity'
 
       assert_text 'Identity verification successful.'
@@ -118,7 +120,7 @@ module VendorPortal
       visit redeem_vendor_portal_voucher_path(@voucher.code)
 
       assert_text 'Identity Verification'
-      find_field('date_of_birth').set(@constituent.date_of_birth.strftime('%Y-%m-%d'))
+      find_field('date_of_birth').set(@constituent.date_of_birth.strftime('%m/%d/%Y'))
       click_button 'Verify Identity'
 
       assert_text 'Identity verification successful.'
@@ -149,7 +151,7 @@ module VendorPortal
       visit redeem_vendor_portal_voucher_path(@voucher.code)
 
       assert_text 'Identity Verification'
-      find_field('date_of_birth').set(@constituent.date_of_birth.strftime('%Y-%m-%d'))
+      find_field('date_of_birth').set(@constituent.date_of_birth.strftime('%m/%d/%Y'))
       click_button 'Verify Identity'
 
       assert_text 'Identity verification successful.'
@@ -172,7 +174,7 @@ module VendorPortal
       visit redeem_vendor_portal_voucher_path(@voucher.code)
 
       assert_text 'Identity Verification'
-      find_field('date_of_birth').set(@constituent.date_of_birth.strftime('%Y-%m-%d'))
+      find_field('date_of_birth').set(@constituent.date_of_birth.strftime('%m/%d/%Y'))
       click_button 'Verify Identity'
 
       assert_text 'Identity verification successful.'

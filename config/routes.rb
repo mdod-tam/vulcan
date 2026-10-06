@@ -34,10 +34,6 @@ Rails.application.routes.draw do
   get 'sign_out', to: 'sessions#destroy' # Retain direct sign-out links.
   get 'sessions', to: 'sessions#index'
 
-  namespace :identity do
-    resources :password_resets, only: %i[edit update], param: :token
-  end
-
   # Registration
   get 'sign_up', to: 'registrations#new'
   post 'sign_up', to: 'registrations#create'

@@ -40,6 +40,12 @@ module ConstituentPortal
         handle_creation_failure(contact_strategy_errors)
         return
       end
+      # Before duplicate detection, replay, and admission: each compares a date of birth, and an
+      # unreadable one must not match, or be refused as, anyone's.
+      if DateInputNormalizer.invalid?(dependent_user_params[:date_of_birth])
+        handle_creation_failure([t('.invalid_date_of_birth')])
+        return
+      end
       duplicate_detection = detect_portal_dependent_duplicates(dependent_attrs)
       return unless duplicate_detection
       return if portal_dependent_duplicate_blocked?(duplicate_detection, dependent_attrs)
@@ -425,15 +431,13 @@ module ConstituentPortal
 
     def duplicate_detection_attrs(attrs)
       data = attrs.with_indifferent_access
-      dob_holder = Users::Constituent.new
-      dob_holder.date_of_birth = data[:date_of_birth] if data.key?(:date_of_birth)
 
       {
         email: data[:email],
         phone: data[:phone],
         first_name: data[:first_name],
         last_name: data[:last_name],
-        date_of_birth: dob_holder.date_of_birth,
+        date_of_birth: DateInputNormalizer.normalize(data[:date_of_birth]),
         physical_address_1: data[:physical_address_1],
         physical_address_2: data[:physical_address_2],
         city: data[:city],

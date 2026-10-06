@@ -24,7 +24,7 @@ class SecurityKeyFeedbackTest < ApplicationSystemTestCase
       user.sms_credentials.create!(phone_number: '410-555-1234', verified_at: Time.current)
 
       fill_in 'contact-input', with: user.email
-      fill_in 'password-input', with: 'password123'
+      fill_in 'password-input', with: 'password1234'
       click_button I18n.t('sessions.form.submit', locale: locale)
       assert_current_path verify_two_factor_authentication_path(locale: locale)
       assert_selector 'h1', text: I18n.t('two_factor_verification.choice.heading', locale: locale)
@@ -91,7 +91,7 @@ class SecurityKeyFeedbackTest < ApplicationSystemTestCase
 
       visit sign_in_path(locale: locale)
       fill_in 'contact-input', with: user.email
-      fill_in 'password-input', with: 'password123'
+      fill_in 'password-input', with: 'password1234'
       click_button I18n.t('sessions.form.submit', locale: locale)
       click_link I18n.t('two_factor_verification.choice.key', locale: locale)
       install_authenticator_prompt
@@ -112,7 +112,7 @@ class SecurityKeyFeedbackTest < ApplicationSystemTestCase
     user = create(:constituent, email_verified: true, verified: true)
     visit sign_in_path(locale: :es)
     fill_in 'contact-input', with: user.email
-    fill_in 'password-input', with: 'password123'
+    fill_in 'password-input', with: 'password1234'
     click_button I18n.t('sessions.form.submit', locale: :es)
     assert_current_path constituent_portal_dashboard_path(locale: :es)
     visit setup_two_factor_authentication_path(locale: :es)
@@ -130,7 +130,7 @@ class SecurityKeyFeedbackTest < ApplicationSystemTestCase
     assert_current_path sign_in_path
     visit sign_in_path(locale: :es)
     fill_in 'contact-input', with: user.email
-    fill_in 'password-input', with: 'password123'
+    fill_in 'password-input', with: 'password1234'
     click_button I18n.t('sessions.form.submit', locale: :es)
     assert_current_path verify_two_factor_authentication_path(locale: :es)
     visit verify_method_two_factor_authentication_path(type: 'unknown', locale: :es)

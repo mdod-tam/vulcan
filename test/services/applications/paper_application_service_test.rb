@@ -135,7 +135,7 @@ module Applications
 
       service = PaperApplicationService.new(params: confirmed_paper_params(service_params, admin: @admin), admin: @admin, skip_proof_processing: true)
       assert_not service.create
-      assert service.errors.any? { |error| error.include?('Date of birth must be in MM/DD/YYYY format') },
+      assert service.errors.any? { |error| error.include?('Date of birth is not a valid date') },
              "Expected DOB format error, got: #{service.errors.inspect}"
     end
 
@@ -1397,7 +1397,7 @@ module Applications
         dependent_phone: ''
       )
 
-      clear_review = stub(error?: false, invalid_decision?: false, blocked?: false,
+      clear_review = stub(invalid_input?: false, error?: false, invalid_decision?: false, blocked?: false,
                           confirmed?: false, clear?: true)
       blocked_review = stub(blocked?: true)
       Applications::PaperIdentityReview.any_instance.expects(:call).twice.returns(clear_review, blocked_review)

@@ -14,7 +14,7 @@ class RegistrationsTest < ApplicationSystemTestCase
         communication_preference: :letter,
         physical_address_1: '123 Main St', city: 'Baltimore', state: 'MD', zip_code: '21201',
         date_of_birth: Date.new(1950, 1, 1),
-        password: 'password123', password_confirmation: 'password123',
+        password: 'password1234', password_confirmation: 'password1234',
         hearing_disability: true
       )
     ensure
@@ -27,8 +27,8 @@ class RegistrationsTest < ApplicationSystemTestCase
     fill_in 'Email Address', with: "neutral-registration-#{SecureRandom.hex(4)}@example.com"
     fill_in 'Phone Number (Optional)', with: phone
     choose 'Text/SMS'
-    fill_in 'Password', with: 'password123'
-    fill_in 'Confirm Password', with: 'password123'
+    fill_in 'Password', with: 'password1234'
+    fill_in 'Confirm Password', with: 'password1234'
     fill_in 'Date of Birth', with: '01/01/1990'
     select 'English', from: 'Language Preference'
 
@@ -51,8 +51,8 @@ class RegistrationsTest < ApplicationSystemTestCase
     visit sign_up_path
     ensure_stimulus_loaded
 
-    find_field('Password').set('password123')
-    find_field('Confirm Password').set('password123')
+    find_field('Password').set('password1234')
+    find_field('Confirm Password').set('password1234')
 
     assert_equal 'password', find_field('Password')[:type]
     assert_equal 'password', find_field('Confirm Password')[:type]
@@ -79,7 +79,7 @@ class RegistrationsTest < ApplicationSystemTestCase
 
     page.execute_script("document.querySelector('[data-visibility-timeout-value]').setAttribute('data-visibility-timeout-value', '2000')")
 
-    find_field('Password').set('password123')
+    find_field('Password').set('password1234')
 
     find_field('Password').sibling("button[aria-label='Show password']").click
 
@@ -94,7 +94,7 @@ class RegistrationsTest < ApplicationSystemTestCase
     visit sign_up_path
     ensure_stimulus_loaded
 
-    find_field('Password').set('password123')
+    find_field('Password').set('password1234')
 
     toggle_btn = first("button[data-action='visibility#togglePassword']")
 
@@ -111,8 +111,8 @@ class RegistrationsTest < ApplicationSystemTestCase
     visit sign_up_path
     ensure_stimulus_loaded
 
-    find_field('Password').set('password123')
-    find_field('Confirm Password').set('password123')
+    find_field('Password').set('password1234')
+    find_field('Confirm Password').set('password1234')
 
     password_toggle = first("button[data-action='visibility#togglePassword']")
     password_toggle.click

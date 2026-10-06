@@ -316,7 +316,7 @@ module Admin
         'constituent_disabilities_text_list' => "- Disability 1\n- Disability 2",
         'evaluators_evaluation_url' => 'http://example.com/evaluators/evaluations/1',
         'verification_url' => 'EMAIL_VERIFICATION_FLOW_NOT_CONFIGURED',
-        'reset_url' => 'http://example.com/identity/password_resets/TOKEN',
+        'reset_url' => 'http://example.com/password/edit?token=TOKEN',
         'invoice_number' => 'INV-2025-001',
         'total_amount_formatted' => '$1,234.56',
         'transactions_text_list' => "- Txn 1: $100\n- Txn 2: $200",

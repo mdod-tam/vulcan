@@ -9,6 +9,8 @@ module Applications
       dependent: { detection: :paper_new_dependent, contact_scope: nil }
     }.freeze
 
+    INVALID_DATE_OF_BIRTH_MESSAGE = 'Date of birth is not a valid date. Enter it as MM/DD/YYYY.'
+
     Result = Struct.new(:state, :candidates, :selectable_candidates, :presented_candidates,
                         :reasons, :token, :decision_reason, :identity_facts, :context, :selected_user) do
       def blocked? = state == :blocked
@@ -18,6 +20,7 @@ module Applications
       def needs_confirmation? = state == :needs_confirmation
       def error? = state == :error
       def invalid_decision? = state == :invalid_decision
+      def invalid_input? = state == :invalid_input
       def candidate_ids = Array(candidates).map(&:id)
       def permits_creation? = clear? || confirmed?
     end
@@ -40,6 +43,10 @@ module Applications
     # rubocop:enable Metrics/ParameterLists
 
     def call(lock: false)
+      # Detection, receipts, and selection all read identity_facts, where an unreadable date of
+      # birth would look the same as none at all.
+      return result(:invalid_input) if DateInputNormalizer.invalid?(applicant_data[:date_of_birth])
+
       detection = detect
       return result(:error) unless detection
 
@@ -78,15 +85,12 @@ module Applications
              else
                attrs.to_h.with_indifferent_access
              end
-      dob_holder = Users::Constituent.new
-      dob_holder.date_of_birth = data[:date_of_birth] if data.key?(:date_of_birth)
-
       {
         email: User.normalize_email(data[:email]),
         phone: User.normalize_phone(data[:phone]),
         first_name: data[:first_name],
         last_name: data[:last_name],
-        date_of_birth: dob_holder.date_of_birth,
+        date_of_birth: DateInputNormalizer.normalize(data[:date_of_birth]),
         physical_address_1: data[:physical_address_1],
         physical_address_2: data[:physical_address_2],
         city: data[:city],
