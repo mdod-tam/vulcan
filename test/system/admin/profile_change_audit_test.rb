@@ -83,7 +83,7 @@ module Admin
 
       within '#audit-logs' do
         assert_text 'Profile Updated', wait: 10
-        assert_text "#{guardian.full_name} updated #{dependent.full_name}'s profile", wait: 5
+        assert_text "#{guardian.full_name} (guardian) updated #{dependent.full_name}'s profile", wait: 5
         assert_text 'First name, Physical address 1', wait: 5
       end
 
