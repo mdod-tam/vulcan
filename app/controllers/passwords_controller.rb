@@ -288,7 +288,7 @@ class PasswordsController < ApplicationController
     if update_succeeded
       redirect_to sign_in_path, notice: 'Password successfully updated.'
     else
-      flash.now[:alert] = "Unable to update password. Please check requirements., #{@user.errors.full_messages.join(', ')}"
+      flash.now[:alert] = Users::PasswordUpdateService.failure_message(@user)
       render :edit, status: :unprocessable_content
     end
   end

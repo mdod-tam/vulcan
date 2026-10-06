@@ -41,9 +41,9 @@ controls:
       priority: { label: "High", value: 2 }
       owner: "@david"
       implementation:
-        summary: "Minimum password length is eight characters."
+        summary: "Minimum password length is 12 characters (UserAuthentication::PASSWORD_MIN_LENGTH), matching the cited external-user guidance; every new-password field states it."
         files: ["app/models/concerns/user_authentication.rb"]
-      verification_needed: "Resolve the difference from the cited external-user guidance; see baseline_policy.md."
+      verification_needed: "Confirm the guidance's sensitivity-based authentication requirements beyond length; see baseline_policy.md."
 
     - id: "AUTH-004"
       name: "Session Management"

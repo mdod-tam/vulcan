@@ -399,7 +399,7 @@ class PasswordsControllerTest < ActionDispatch::IntegrationTest
     }
 
     assert_response :unprocessable_content
-    assert_equal 'Unable to update password. Please check requirements., Password is too short (minimum is 12 characters)', flash.now[:alert]
+    assert_equal 'Unable to update password. Password is too short (minimum is 12 characters).', flash.now[:alert]
 
     @user.reload
     assert_equal @original_password_digest, @user.password_digest

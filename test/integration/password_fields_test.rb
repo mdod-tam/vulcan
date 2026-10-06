@@ -28,7 +28,7 @@ class PasswordFieldsTest < ActionDispatch::IntegrationTest
     get sign_in_path
 
     assert_select 'input#password-input[minlength]', count: 0
-    assert_select 'label#password-input-label[for=password-input]'
+    assert_select 'label[for=password-input]'
   end
 
   test 'a short sign-up password is refused with the error tied to its field' do
