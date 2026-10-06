@@ -575,6 +575,7 @@ en:
     session_fail: "Unable to create session"
     review_not_found: "Review not found"
     w9_missing: "W9 form is missing"
+    vendor_not_approved_for_vouchers: "Your account is not approved for processing vouchers yet"
     app_not_found: "Application not found"
     unauthorized_action: "You are not authorized to perform this action"
     unauthorized_page: "You do not have permission to access this page"

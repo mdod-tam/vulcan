@@ -29,7 +29,7 @@ module Vouchers
     def call # rubocop:disable Metrics/AbcSize
       return failure('Voucher functionality is currently disabled') unless FeatureFlag.enabled?(:vouchers_enabled)
 
-      return failure('Your account is not approved for processing vouchers yet') unless vendor_authorized?
+      return failure(I18n.t('alerts.vendor_not_approved_for_vouchers')) unless vendor.can_process_vouchers?
       return failure('This voucher is not active or has already been processed') unless voucher_active?
       return failure('Identity verification is required before redemption', { error_type: :identity_verification_required }) unless identity_verified?
 
@@ -56,15 +56,6 @@ module Vouchers
     end
 
     private
-
-    # Tests require vendor approval without the W9 requirements.
-    def vendor_authorized?
-      if Rails.env.test?
-        vendor.vendor_approved?
-      else
-        vendor.can_process_vouchers?
-      end
-    end
 
     def voucher_active?
       voucher.voucher_active?

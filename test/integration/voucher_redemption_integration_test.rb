@@ -6,23 +6,8 @@ class VoucherRedemptionIntegrationTest < ActionDispatch::IntegrationTest
   def setup
     Policy.stubs(:voucher_minimum_redemption_amount).returns(10.0)
 
-    @vendor = Vendor.create!(
-      first_name: 'Integration',
-      last_name: 'Vendor',
-      email: "integration_vendor.#{SecureRandom.hex(4)}@example.com",
-      password: 'password',
-      password_confirmation: 'password',
-      vendor_authorization_status: 'approved',
-      business_name: 'Integration Test Business',
-      business_tax_id: '123123123',
-      terms_accepted_at: Time.current,
-      w9_status: 'approved'
-    )
-
-    # Vendor#can_process_vouchers? requires a W9. In the test environment,
-    # RedemptionService checks only vendor_approved?.
-    attachment = fixture_file_upload('test/fixtures/files/sample_w9.pdf', 'application/pdf')
-    @vendor.w9_form.attach(attachment)
+    # Fully eligible: approved, with an approved W9 on file.
+    @vendor = create(:vendor, :approved)
 
     @constituent = User.create!(
       first_name: 'Integration',

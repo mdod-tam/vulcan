@@ -33,7 +33,7 @@ The [vendor portal controller](../../app/controllers/vendor_portal/vouchers_cont
 
 DOB verification compares the application owner's date of birth and stores successful voucher IDs in `session[:verified_vouchers]`. Mismatch counts are session-based, with a policy threshold defaulting to three. The controller resets the counter on the verification page; this is not a persistent lockout.
 
-The redemption service simplifies vendor authorization in the test environment. Passing a portal test alone does not establish that the production W9 requirement works; cover `can_process_vouchers?` directly when changing eligibility.
+Vendor eligibility has one rule, `Users::Vendor#can_process_vouchers?` (approved vendor with an approved W9), in every environment. The vouchers controller checks it before DOB verification and before looking up the voucher code, and the redemption service checks it again before writing.
 
 ## State, history, and messages
 
