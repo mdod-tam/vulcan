@@ -26,6 +26,8 @@ class AuditEventService < BaseService
       return nil
     end
 
+    metadata, change_values = split_encrypted_change_values(auditable, metadata)
+
     # Caller metadata takes precedence over service metadata. Internal keys use a separate namespace.
     final_metadata = metadata.reverse_merge(
       __service_generated: true
@@ -37,6 +39,7 @@ class AuditEventService < BaseService
       auditable: auditable,
       metadata: final_metadata
     }
+    event_attributes[:change_values] = change_values.to_json if change_values
 
     event_attributes[:created_at] = created_at if created_at.present?
 
@@ -58,6 +61,30 @@ class AuditEventService < BaseService
     raise # Expose invalid events to callers and tests.
   end
 
+  # A stored event's metadata with encrypted change values restored, so it fingerprints like the
+  # caller's metadata, which still holds them.
+  def self.stored_metadata(event)
+    return event.metadata unless event.metadata.key?('changes')
+
+    event.metadata.merge('changes' => event.field_changes)
+  end
+
+  # A field the audited record encrypts keeps only its name in metadata (which is plain JSON); its
+  # old and new values go to Event#change_values, which is encrypted. Every writer that records
+  # metadata[:changes] gets this, whatever shape its values take.
+  def self.split_encrypted_change_values(auditable, metadata)
+    key = metadata.key?(:changes) ? :changes : 'changes'
+    changes = metadata[key]
+    encrypted = auditable.class.try(:encrypted_attributes)&.map(&:to_s)
+    return [metadata, nil] unless changes.is_a?(Hash) && encrypted.present?
+
+    values = changes.select { |field, _change| encrypted.include?(field.to_s) }
+    return [metadata, nil] if values.empty?
+
+    masked = changes.to_h { |field, change| [field, values.key?(field) ? {} : change] }
+    [metadata.merge(key => masked), values.deep_stringify_keys]
+  end
+
   # Matches action, auditable, and fingerprint within DEDUP_WINDOW.
   # Metadata differences can identify separate events.
   def self.recent_duplicate_exists?(action:, auditable:, metadata: {})
@@ -67,7 +94,7 @@ class AuditEventService < BaseService
 
     Event.where(action: action.to_s, auditable: auditable)
          .where(created_at: DEDUP_WINDOW.ago..)
-         .any? { |event| create_event_fingerprint(event.action, event.metadata) == fingerprint }
+         .any? { |event| create_event_fingerprint(event.action, stored_metadata(event)) == fingerprint }
   end
 
   # These fingerprints select the metadata that affects deduplication.

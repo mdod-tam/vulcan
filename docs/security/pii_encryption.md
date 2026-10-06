@@ -17,8 +17,14 @@ Encryption covers the declarations below, not every piece of personal informatio
 | [MedicalProviderSecureRequestForm](../../app/models/medical_provider_secure_request_form.rb) | `provider_email` | — |
 | [VendorSecureRequestForm](../../app/models/vendor_secure_request_form.rb) | `recipient_email` | — |
 | [Application](../../app/models/application.rb) | — | `document_signing_audit_url`, `document_signing_document_url` |
+| [EmailDeliveryAttempt](../../app/models/email_delivery_attempt.rb) | — | `destination` |
+| [Event](../../app/models/event.rb) | — | `change_values` (see [audit events](#audit-events)) |
 
 Deterministic encryption produces matching ciphertext for matching values under the same encryption configuration. This supports equality queries and unique indexes, but reveals equality patterns. Use it only when lookup or uniqueness requires it.
+
+### Audit events
+
+`Event#metadata` is plain JSON, so it must not hold values whose columns are encrypted. When `metadata[:changes]` names a field the audited record encrypts, [`AuditEventService.log`](../../app/services/audit_event_service.rb) keeps the field name in metadata, with an empty placeholder, and moves its old and new values to the encrypted `Event#change_values`. Read recorded changes with `Event#field_changes`, which restores those values; reading `metadata['changes']` directly shows only the names. Fields the record does not encrypt are stored as given.
 
 The password digest is a BCrypt hash that is also encrypted at rest. A WebAuthn public key is not a cryptographic secret, though this application encrypts its stored value.
 

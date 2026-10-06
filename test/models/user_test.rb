@@ -181,7 +181,7 @@ class UserTest < ActiveSupport::TestCase
     assert_equal @existing_constituent.id, event.metadata['user_id']
     assert_equal @existing_constituent.id, event.metadata['updated_by']
 
-    changes = event.metadata['changes']
+    changes = event.field_changes
     assert_equal 'Updated Name', changes['first_name']['new']
     assert_equal original_first_name, changes['first_name']['old']
     assert_equal 'updated@example.com', changes['email']['new']
@@ -202,7 +202,7 @@ class UserTest < ActiveSupport::TestCase
     assert_equal @dependent_user1.id, event.metadata['user_id'] # Target is the dependent
     assert_equal @guardian_user.id, event.metadata['updated_by']
 
-    changes = event.metadata['changes']
+    changes = event.field_changes
     assert_equal 'Updated Dependent', changes['first_name']['new']
     assert_equal unique_phone, changes['phone']['new']
   end
@@ -242,7 +242,7 @@ class UserTest < ActiveSupport::TestCase
     end
 
     event = Event.last
-    changes = event.metadata['changes']
+    changes = event.field_changes
 
     assert_equal 'New First', changes['first_name']['new']
     assert_equal 'New Last', changes['last_name']['new']
@@ -289,7 +289,7 @@ class UserTest < ActiveSupport::TestCase
     end
 
     event = Event.last
-    changes = event.metadata['changes']
+    changes = event.field_changes
     assert_equal unique_phone, changes['phone']['old']
     assert_nil changes['phone']['new']
   end
@@ -303,7 +303,7 @@ class UserTest < ActiveSupport::TestCase
     end
 
     event = Event.last
-    changes = event.metadata['changes']
+    changes = event.field_changes
     assert_nil changes['physical_address_1']['old']
     assert_equal '123 Main St', changes['physical_address_1']['new']
   end

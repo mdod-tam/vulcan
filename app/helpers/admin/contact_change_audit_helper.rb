@@ -14,7 +14,7 @@ module Admin
 
     # Lists each changed field as "old -> new" so staff can review the change.
     def contact_field_change_detail(log)
-      changes = (log.metadata['changes'] || {}).map do |field, change|
+      changes = log.field_changes.map do |field, change|
         "#{field.to_s.humanize}: #{change['old'].presence || '(blank)'} -> #{change['new'].presence || '(blank)'}"
       end
       detail = changes.join('; ')

@@ -628,7 +628,8 @@ module ConstituentPortal
       assert_equal @dependent.id, event.metadata['user_id']
       assert_equal @guardian.id, event.metadata['updated_by']
 
-      changes = event.metadata['changes']
+      changes = event.field_changes
+      assert_equal({}, event.metadata['changes']['email'], 'encrypted values stay out of metadata')
       assert_equal 'Updated Dependent', changes['first_name']['new']
       assert_equal 'New Last Name', changes['last_name']['new']
       assert_equal 'updated.dependent@example.com', changes['email']['new']

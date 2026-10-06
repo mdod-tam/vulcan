@@ -74,21 +74,16 @@
                                   <%= change.user.full_name %>
                                 </span>
                               </p>
-                              <% if change.metadata['changes'].present? %>
+                              <% if change.field_changes.present? %>
                                 <div class="mt-1 text-xs text-gray-600">
-                                  <% change.metadata['changes'].each do |field, values| %>
+                                  <% change.field_changes.each do |field, values| %>
                                     <div class="mb-1">
                                       <span class="inline-block bg-gray-100 rounded px-2 py-1 mr-1">
                                         <%= field.humanize %>
                                       </span>
-                                      <% if values.key?('new') %>
-                                        <span class="text-red-600"><%= values['old'] %></span>
-                                        <span class="text-gray-500">→</span>
-                                        <span class="text-green-600"><%= values['new'] %></span>
-                                      <% else %>
-                                        <%# Recorded by name only; see UserProfile::VALUELESS_AUDIT_FIELDS. %>
-                                        <span>changed</span>
-                                      <% end %>
+                                      <span class="text-red-600"><%= values['old'] %></span>
+                                      <span class="text-gray-500">→</span>
+                                      <span class="text-green-600"><%= values['new'] %></span>
                                     </div>
                                   <% end %>
                                 </div>
