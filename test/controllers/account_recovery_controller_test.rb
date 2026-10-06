@@ -219,7 +219,7 @@ class AccountRecoveryControllerTest < ActionDispatch::IntegrationTest
         communication_preference: :letter,
         physical_address_1: '123 Main St', city: 'Baltimore', state: 'MD', zip_code: '21201',
         date_of_birth: Date.new(1950, 1, 1),
-        password: 'password123', password_confirmation: 'password123',
+        password: 'password1234', password_confirmation: 'password1234',
         hearing_disability: true
       )
     ensure

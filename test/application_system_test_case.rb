@@ -51,7 +51,7 @@ module SeedLookupHelpers
     user_class, attributes = case sym
                              when :admin, :admin_david
                                [Users::Administrator, {
-                                 password: 'password123',
+                                 password: 'password1234',
                                  first_name: sym.to_s.titleize.split('_').first,
                                  last_name: 'User',
                                  status: :active,
@@ -60,28 +60,28 @@ module SeedLookupHelpers
                                }]
                              when :evaluator
                                [Users::Evaluator, {
-                                 password: 'password123',
+                                 password: 'password1234',
                                  first_name: sym.to_s.titleize.split('_').first,
                                  last_name: 'User',
                                  status: :active
                                }]
                              when :trainer
                                [Users::Trainer, {
-                                 password: 'password123',
+                                 password: 'password1234',
                                  first_name: sym.to_s.titleize.split('_').first,
                                  last_name: 'User',
                                  status: :active
                                }]
                              when :medical_provider
                                [Users::MedicalProvider, {
-                                 password: 'password123',
+                                 password: 'password1234',
                                  first_name: sym.to_s.titleize.split('_').first,
                                  last_name: 'User',
                                  status: :active
                                }]
                              when :vendor_ray, :vendor_teltex
                                [Users::Vendor, {
-                                 password: 'password123',
+                                 password: 'password1234',
                                  first_name: sym.to_s.titleize.split('_').first,
                                  last_name: 'Vendor',
                                  status: :active,
@@ -94,7 +94,7 @@ module SeedLookupHelpers
                                }]
                              else
                                [Users::Constituent, {
-                                 password: 'password123',
+                                 password: 'password1234',
                                  first_name: sym.to_s.titleize.split('_').first,
                                  last_name: 'User',
                                  status: (sym == :unconfirmed_user ? :inactive : :active),

@@ -162,7 +162,7 @@ class AuthenticationTest < ActionDispatch::IntegrationTest
 
     post sign_in_path, params: {
       email: @user.email,
-      password: 'password123'
+      password: 'password1234'
     }
 
     assert_redirected_to constituent_portal_dashboard_path

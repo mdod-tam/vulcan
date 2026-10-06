@@ -46,7 +46,7 @@ class HomeControllerTest < ActionDispatch::IntegrationTest
       secret = ROTP::Base32.random_base32
       user.totp_credentials.create!(secret: secret, nickname: 'Authenticator')
 
-      post sign_in_path, params: { email: user.email, password: 'password123' }
+      post sign_in_path, params: { email: user.email, password: 'password1234' }
       assert_redirected_to verify_method_two_factor_authentication_path(type: 'totp')
       post process_verification_two_factor_authentication_path(type: 'totp'), params: { code: ROTP::TOTP.new(secret).now }
       assert_redirected_to public_send(destination)
@@ -61,7 +61,7 @@ class HomeControllerTest < ActionDispatch::IntegrationTest
 
   test 'password-only constituents can reach their dashboard' do
     user = create(:constituent)
-    post sign_in_path, params: { email: user.email, password: 'password123' }
+    post sign_in_path, params: { email: user.email, password: 'password1234' }
 
     get root_path
 
@@ -70,7 +70,7 @@ class HomeControllerTest < ActionDispatch::IntegrationTest
 
   test 'expired sessions return to sign-in' do
     user = create(:constituent)
-    post sign_in_path, params: { email: user.email, password: 'password123' }
+    post sign_in_path, params: { email: user.email, password: 'password1234' }
     user.sessions.last.update!(expires_at: 1.minute.ago)
 
     get root_path
@@ -82,7 +82,7 @@ class HomeControllerTest < ActionDispatch::IntegrationTest
   test 'pending MFA does not grant access to a dashboard' do
     user = create(:admin)
     user.totp_credentials.create!(secret: ROTP::Base32.random_base32, nickname: 'Authenticator')
-    post sign_in_path, params: { email: user.email, password: 'password123' }
+    post sign_in_path, params: { email: user.email, password: 'password1234' }
     assert_redirected_to verify_method_two_factor_authentication_path(type: 'totp')
 
     get root_path
@@ -93,7 +93,7 @@ class HomeControllerTest < ActionDispatch::IntegrationTest
 
   test 'required MFA enrollment still precedes dashboard access' do
     user = create(:admin)
-    post sign_in_path, params: { email: user.email, password: 'password123' }
+    post sign_in_path, params: { email: user.email, password: 'password1234' }
     assert_redirected_to setup_two_factor_authentication_path
 
     get root_path
@@ -103,7 +103,7 @@ class HomeControllerTest < ActionDispatch::IntegrationTest
 
   test 'required password changes still precede MFA enrollment and dashboard access' do
     user = create(:admin, force_password_change: true)
-    post sign_in_path, params: { email: user.email, password: 'password123' }
+    post sign_in_path, params: { email: user.email, password: 'password1234' }
 
     get root_path
 
@@ -112,7 +112,7 @@ class HomeControllerTest < ActionDispatch::IntegrationTest
 
   test 'access-denied notices survive the root redirect' do
     user = create(:constituent)
-    post sign_in_path, params: { email: user.email, password: 'password123' }
+    post sign_in_path, params: { email: user.email, password: 'password1234' }
     get admin_dashboard_path
     assert_redirected_to root_path
     notice = flash[:alert]

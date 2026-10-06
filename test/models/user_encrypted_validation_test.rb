@@ -9,7 +9,7 @@ class UserEncryptedValidationTest < ActiveSupport::TestCase
       last_name: 'Doe',
       email: "test_#{SecureRandom.hex(8)}@example.com",
       phone: "555-#{format('%03d', rand(100..999))}-#{format('%04d', rand(1000..9999))}",
-      password: 'password123',
+      password: 'password1234',
       type: 'Users::Constituent',
       hearing_disability: true,
       ssn_last4: '1234',
@@ -212,7 +212,7 @@ class UserEncryptedValidationTest < ActiveSupport::TestCase
     assert_equal attrs[:zip_code], user.zip_code
 
     # encrypts protects the BCrypt digest at rest. Authentication still compares the supplied password.
-    assert user.authenticate('password123')
+    assert user.authenticate('password1234')
   end
 
   test 'data remains accessible after reload' do

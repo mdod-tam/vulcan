@@ -47,8 +47,8 @@ class RegistrationsControllerTest < ActionDispatch::IntegrationTest
     assert_difference('User.count') do
       post sign_up_path, params: { user: {
         email: 'newuser@example.com',
-        password: 'password123',
-        password_confirmation: 'password123',
+        password: 'password1234',
+        password_confirmation: 'password1234',
         first_name: 'New',
         last_name: 'User',
         date_of_birth: '1990-01-01',
@@ -78,8 +78,8 @@ class RegistrationsControllerTest < ActionDispatch::IntegrationTest
     assert_difference('User.count') do
       post sign_up_path, params: { user: {
         email: 'newuser-mm-dd-yyyy@example.com',
-        password: 'password123',
-        password_confirmation: 'password123',
+        password: 'password1234',
+        password_confirmation: 'password1234',
         first_name: 'New',
         last_name: 'User',
         date_of_birth: '01/15/1990',
@@ -99,8 +99,8 @@ class RegistrationsControllerTest < ActionDispatch::IntegrationTest
     assert_no_difference('User.count') do
       post sign_up_path, params: { user: {
         email: 'newuser-bad-dob@example.com',
-        password: 'password123',
-        password_confirmation: 'password123',
+        password: 'password1234',
+        password_confirmation: 'password1234',
         first_name: 'New',
         last_name: 'User',
         date_of_birth: 'January 15 1990',
@@ -123,8 +123,8 @@ class RegistrationsControllerTest < ActionDispatch::IntegrationTest
     assert_difference('User.count', 1) do
       post sign_up_path, params: { user: {
         email: 'nodisability@example.com',
-        password: 'password123',
-        password_confirmation: 'password123',
+        password: 'password1234',
+        password_confirmation: 'password1234',
         first_name: 'New',
         last_name: 'User',
         date_of_birth: '1990-01-01',
@@ -151,8 +151,8 @@ class RegistrationsControllerTest < ActionDispatch::IntegrationTest
   def test_should_not_create_phone_only_user_without_email
     assert_no_difference('User.count') do
       post sign_up_path, params: { user: {
-        password: 'password123',
-        password_confirmation: 'password123',
+        password: 'password1234',
+        password_confirmation: 'password1234',
         first_name: 'Phone',
         last_name: 'Only',
         date_of_birth: '1990-01-01',
@@ -172,8 +172,8 @@ class RegistrationsControllerTest < ActionDispatch::IntegrationTest
     assert_no_difference('User.count') do
       post sign_up_path, params: { user: {
         email: 'newuser@example.com',
-        password: 'password123',
-        password_confirmation: 'password123',
+        password: 'password1234',
+        password_confirmation: 'password1234',
         first_name: 'New',
         last_name: 'User',
         date_of_birth: '1990-01-01',
@@ -196,8 +196,8 @@ class RegistrationsControllerTest < ActionDispatch::IntegrationTest
                           'DuplicateReviewCaseCandidate.count', 'Event.count']) do
       post sign_up_path, params: { user: {
         email: existing_user.email,
-        password: 'password123',
-        password_confirmation: 'password123',
+        password: 'password1234',
+        password_confirmation: 'password1234',
         first_name: 'New',
         last_name: 'User',
         date_of_birth: '1990-01-01',
@@ -227,8 +227,8 @@ class RegistrationsControllerTest < ActionDispatch::IntegrationTest
     assert_no_difference(['User.count', 'Session.count']) do
       post sign_up_path, params: { user: {
         email: "  #{existing_user.email.upcase}  ",
-        password: 'password123',
-        password_confirmation: 'password123',
+        password: 'password1234',
+        password_confirmation: 'password1234',
         first_name: 'New',
         last_name: 'User',
         date_of_birth: '1990-01-01',
@@ -255,8 +255,8 @@ class RegistrationsControllerTest < ActionDispatch::IntegrationTest
                           'DuplicateReviewCaseCandidate.count', 'Event.count']) do
       post sign_up_path, params: { user: {
         email: "unique-email-#{SecureRandom.hex(4)}@example.com",
-        password: 'password123',
-        password_confirmation: 'password123',
+        password: 'password1234',
+        password_confirmation: 'password1234',
         first_name: 'New',
         last_name: 'User',
         date_of_birth: '1990-01-01',
@@ -285,8 +285,8 @@ class RegistrationsControllerTest < ActionDispatch::IntegrationTest
     assert_difference('User.count') do
       post sign_up_path, params: { user: {
         email: "email-only-#{SecureRandom.hex(4)}@example.com",
-        password: 'password123',
-        password_confirmation: 'password123',
+        password: 'password1234',
+        password_confirmation: 'password1234',
         first_name: 'Email',
         last_name: 'Only',
         date_of_birth: '1990-01-01',
@@ -305,8 +305,8 @@ class RegistrationsControllerTest < ActionDispatch::IntegrationTest
   def test_should_not_create_address_only_registration
     assert_no_difference('User.count') do
       post sign_up_path, params: { user: {
-        password: 'password123',
-        password_confirmation: 'password123',
+        password: 'password1234',
+        password_confirmation: 'password1234',
         first_name: 'Address',
         last_name: 'Only',
         date_of_birth: '1990-01-01',
@@ -330,8 +330,8 @@ class RegistrationsControllerTest < ActionDispatch::IntegrationTest
   def test_should_not_create_address_and_phone_without_email_registration
     assert_no_difference('User.count') do
       post sign_up_path, params: { user: {
-        password: 'password123',
-        password_confirmation: 'password123',
+        password: 'password1234',
+        password_confirmation: 'password1234',
         first_name: 'Address',
         last_name: 'AndPhone',
         date_of_birth: '1990-01-01',
@@ -366,7 +366,7 @@ class RegistrationsControllerTest < ActionDispatch::IntegrationTest
         communication_preference: :letter,
         physical_address_1: '123 Main St', city: 'Baltimore', state: 'MD', zip_code: '21201',
         date_of_birth: Date.new(1950, 1, 1),
-        password: 'password123', password_confirmation: 'password123',
+        password: 'password1234', password_confirmation: 'password1234',
         hearing_disability: true
       )
     ensure
@@ -378,8 +378,8 @@ class RegistrationsControllerTest < ActionDispatch::IntegrationTest
     assert_no_difference('User.count') do
       post sign_up_path, params: { user: {
         email: submitted_email,
-        password: 'password123',
-        password_confirmation: 'password123',
+        password: 'password1234',
+        password_confirmation: 'password1234',
         first_name: 'New',
         last_name: 'Registrant',
         date_of_birth: '1990-01-01',
@@ -416,7 +416,7 @@ class RegistrationsControllerTest < ActionDispatch::IntegrationTest
         communication_preference: :letter,
         physical_address_1: '123 Main St', city: 'Baltimore', state: 'MD', zip_code: '21201',
         date_of_birth: Date.new(1950, 1, 1),
-        password: 'password123', password_confirmation: 'password123',
+        password: 'password1234', password_confirmation: 'password1234',
         hearing_disability: true
       )
     ensure
@@ -426,8 +426,8 @@ class RegistrationsControllerTest < ActionDispatch::IntegrationTest
     assert_no_difference('User.count') do
       post sign_up_path, params: { user: {
         email: "new-no-handoff-#{SecureRandom.hex(4)}@example.com",
-        password: 'password123',
-        password_confirmation: 'password123',
+        password: 'password1234',
+        password_confirmation: 'password1234',
         first_name: 'New',
         last_name: 'Registrant',
         date_of_birth: '1990-01-01',
@@ -462,7 +462,7 @@ class RegistrationsControllerTest < ActionDispatch::IntegrationTest
         phone_type: 'text',
         communication_preference: :email,
         date_of_birth: Date.new(1950, 1, 1),
-        password: 'password123', password_confirmation: 'password123',
+        password: 'password1234', password_confirmation: 'password1234',
         hearing_disability: true
       )
     ensure
@@ -473,8 +473,8 @@ class RegistrationsControllerTest < ActionDispatch::IntegrationTest
                           'DuplicateReviewCaseCandidate.count', 'Event.count']) do
       post sign_up_path, params: { user: {
         email: synthetic_email,
-        password: 'password123',
-        password_confirmation: 'password123',
+        password: 'password1234',
+        password_confirmation: 'password1234',
         first_name: 'New',
         last_name: 'Registrant',
         date_of_birth: '1990-01-01',
@@ -495,7 +495,7 @@ class RegistrationsControllerTest < ActionDispatch::IntegrationTest
   def test_re_render_preserves_submitted_phone_type_selection
     post sign_up_path, params: { user: {
       email: "phone-type-rerender-#{SecureRandom.hex(4)}@example.com",
-      password: 'password123',
+      password: 'password1234',
       password_confirmation: 'wrong-password',
       first_name: 'Phone',
       last_name: 'Type',
@@ -516,8 +516,8 @@ class RegistrationsControllerTest < ActionDispatch::IntegrationTest
     assert_no_difference('User.count') do
       post sign_up_path, params: { user: {
         email: "missing-phone-type-#{SecureRandom.hex(4)}@example.com",
-        password: 'password123',
-        password_confirmation: 'password123',
+        password: 'password1234',
+        password_confirmation: 'password1234',
         first_name: 'Phone',
         last_name: 'Type',
         date_of_birth: '1990-01-01',
@@ -539,8 +539,8 @@ class RegistrationsControllerTest < ActionDispatch::IntegrationTest
     assert_no_difference('User.count') do
       post sign_up_path, params: { user: {
         email: "blank-phone-type-#{SecureRandom.hex(4)}@example.com",
-        password: 'password123',
-        password_confirmation: 'password123',
+        password: 'password1234',
+        password_confirmation: 'password1234',
         first_name: 'Phone',
         last_name: 'Type',
         date_of_birth: '1990-01-01',
@@ -564,8 +564,8 @@ class RegistrationsControllerTest < ActionDispatch::IntegrationTest
       assert_no_difference('User.count') do
         post sign_up_path, params: { user: {
           email: "invalid-phone-type-#{submitted_phone_type}-#{SecureRandom.hex(4)}@example.com",
-          password: 'password123',
-          password_confirmation: 'password123',
+          password: 'password1234',
+          password_confirmation: 'password1234',
           first_name: 'Phone',
           last_name: 'Type',
           date_of_birth: '1990-01-01',
@@ -594,8 +594,8 @@ class RegistrationsControllerTest < ActionDispatch::IntegrationTest
     assert_no_difference('User.count') do
       post sign_up_path, params: { user: {
         email: "unique-email-#{SecureRandom.hex(4)}@example.com",
-        password: 'password123',
-        password_confirmation: 'password123',
+        password: 'password1234',
+        password_confirmation: 'password1234',
         first_name: 'New',
         last_name: 'User',
         date_of_birth: '1990-01-01',
@@ -623,8 +623,8 @@ class RegistrationsControllerTest < ActionDispatch::IntegrationTest
     assert_no_difference(['User.count', 'Session.count']) do
       post sign_up_path, params: { user: {
         email: existing_user.email,
-        password: 'password123',
-        password_confirmation: 'password123',
+        password: 'password1234',
+        password_confirmation: 'password1234',
         first_name: 'Nuevo',
         last_name: 'Usuario',
         date_of_birth: '1990-01-01',
@@ -648,8 +648,8 @@ class RegistrationsControllerTest < ActionDispatch::IntegrationTest
     assert_no_difference(['User.count', 'Session.count']) do
       post sign_up_path, params: { user: {
         email: email_user.email,
-        password: 'password123',
-        password_confirmation: 'password123',
+        password: 'password1234',
+        password_confirmation: 'password1234',
         first_name: 'New',
         last_name: 'User',
         date_of_birth: '1990-01-01',
@@ -678,8 +678,8 @@ class RegistrationsControllerTest < ActionDispatch::IntegrationTest
         assert_difference -> { Event.where(action: 'duplicate_review_case_opened').count }, 1 do
           post sign_up_path, params: { user: {
             email: test_email,
-            password: 'password123',
-            password_confirmation: 'password123',
+            password: 'password1234',
+            password_confirmation: 'password1234',
             first_name: 'Duplicate',
             last_name: 'USER',
             date_of_birth: '05/15/1985',
@@ -720,8 +720,8 @@ class RegistrationsControllerTest < ActionDispatch::IntegrationTest
                           'DuplicateReviewCaseCandidate.count', 'Event.count']) do
       post sign_up_path, params: { user: {
         email: "missing-actor-duplicate-#{SecureRandom.hex(4)}@example.com",
-        password: 'password123',
-        password_confirmation: 'password123',
+        password: 'password1234',
+        password_confirmation: 'password1234',
         first_name: 'MissingActor',
         last_name: 'Duplicate',
         date_of_birth: '05/15/1985',
@@ -748,7 +748,7 @@ class RegistrationsControllerTest < ActionDispatch::IntegrationTest
                           'DuplicateReviewCaseCandidate.count', 'Event.count']) do
       post sign_up_path, params: { user: {
         email: "invalid-duplicate-name-dob-#{SecureRandom.hex(4)}@example.com",
-        password: 'password123',
+        password: 'password1234',
         password_confirmation: 'different123',
         first_name: 'Invalid',
         last_name: 'Duplicate',
@@ -771,8 +771,8 @@ class RegistrationsControllerTest < ActionDispatch::IntegrationTest
       assert_no_difference('DuplicateReviewCase.count') do
         post sign_up_path, params: { user: {
           email: email,
-          password: 'password123',
-          password_confirmation: 'password123',
+          password: 'password1234',
+          password_confirmation: 'password1234',
           first_name: 'Ignore',
           last_name: 'Param',
           date_of_birth: '1990-01-01',
@@ -793,7 +793,7 @@ class RegistrationsControllerTest < ActionDispatch::IntegrationTest
     assert_no_difference('User.count') do
       post sign_up_path, params: { user: {
         email: 'newuser@example.com',
-        password: 'password123',
+        password: 'password1234',
         password_confirmation: 'different123',
         first_name: 'New',
         last_name: 'User',
@@ -815,8 +815,8 @@ class RegistrationsControllerTest < ActionDispatch::IntegrationTest
 
     user_params = {
       email: 'testuser@example.com',
-      password: 'password123',
-      password_confirmation: 'password123',
+      password: 'password1234',
+      password_confirmation: 'password1234',
       first_name: 'Test',
       last_name: 'User',
       date_of_birth: '1990-01-01',
@@ -904,8 +904,8 @@ class RegistrationsControllerTest < ActionDispatch::IntegrationTest
       assert_enqueued_jobs 1 do
         post sign_up_path, params: { user: {
           email: email,
-          password: 'password123',
-          password_confirmation: 'password123',
+          password: 'password1234',
+          password_confirmation: 'password1234',
           first_name: 'Prueba',
           last_name: 'Usuario',
           date_of_birth: '1990-01-01',

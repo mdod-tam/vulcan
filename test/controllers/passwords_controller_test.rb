@@ -10,7 +10,7 @@ class PasswordsControllerTest < ActionDispatch::IntegrationTest
 
     create_basic_email_templates
 
-    @user = create(:constituent, password: 'password123', password_confirmation: 'password123')
+    @user = create(:constituent, password: 'password1234', password_confirmation: 'password1234')
     @original_password_digest = @user.password_digest
     @system_audit_actor = User.find_by(email: PublicAuditActor::SYSTEM_AUDIT_EMAIL) ||
                           create(:admin, email: PublicAuditActor::SYSTEM_AUDIT_EMAIL)
@@ -310,7 +310,7 @@ class PasswordsControllerTest < ActionDispatch::IntegrationTest
 
   def test_should_update_password_with_valid_inputs
     patch password_path, params: {
-      password_challenge: 'password123',
+      password_challenge: 'password1234',
       password: 'NewValid*Password123',
       password_confirmation: 'NewValid*Password123'
     }
@@ -326,7 +326,7 @@ class PasswordsControllerTest < ActionDispatch::IntegrationTest
   def test_should_redirect_turbo_stream_password_update_to_dashboard
     patch password_path,
           params: {
-            password_challenge: 'password123',
+            password_challenge: 'password1234',
             password: 'NewValid*Password123',
             password_confirmation: 'NewValid*Password123'
           },
@@ -340,7 +340,7 @@ class PasswordsControllerTest < ActionDispatch::IntegrationTest
     @user.update!(force_password_change: true)
 
     patch password_path, params: {
-      password_challenge: 'password123',
+      password_challenge: 'password1234',
       password: 'NewValid*Password123',
       password_confirmation: 'NewValid*Password123'
     }
@@ -351,11 +351,11 @@ class PasswordsControllerTest < ActionDispatch::IntegrationTest
 
   def test_should_redirect_required_role_without_mfa_to_setup_after_password_update
     sign_out
-    admin = create(:admin, password: 'password123', password_confirmation: 'password123')
+    admin = create(:admin, password: 'password1234', password_confirmation: 'password1234')
     sign_in_for_integration_test(admin)
 
     patch password_path, params: {
-      password_challenge: 'password123',
+      password_challenge: 'password1234',
       password: 'NewValid*Password123',
       password_confirmation: 'NewValid*Password123'
     }
@@ -379,7 +379,7 @@ class PasswordsControllerTest < ActionDispatch::IntegrationTest
 
   def test_should_not_update_password_with_mismatched_confirmation
     patch password_path, params: {
-      password_challenge: 'password123',
+      password_challenge: 'password1234',
       password: 'NewValid*Password123',
       password_confirmation: 'DifferentPassword123'
     }
@@ -393,13 +393,13 @@ class PasswordsControllerTest < ActionDispatch::IntegrationTest
 
   def test_should_not_update_password_with_invalid_new_password
     patch password_path, params: {
-      password_challenge: 'password123',
+      password_challenge: 'password1234',
       password: 'short',
       password_confirmation: 'short'
     }
 
     assert_response :unprocessable_content
-    assert_equal 'Unable to update password. Please check requirements., Password is too short (minimum is 8 characters)', flash.now[:alert]
+    assert_equal 'Unable to update password. Password is too short (minimum is 12 characters).', flash.now[:alert]
 
     @user.reload
     assert_equal @original_password_digest, @user.password_digest
@@ -418,7 +418,7 @@ class PasswordsControllerTest < ActionDispatch::IntegrationTest
         communication_preference: :letter,
         physical_address_1: '123 Main St', city: 'Baltimore', state: 'MD', zip_code: '21201',
         date_of_birth: Date.new(1950, 1, 1),
-        password: 'password123', password_confirmation: 'password123',
+        password: 'password1234', password_confirmation: 'password1234',
         hearing_disability: true
       )
     ensure
@@ -441,8 +441,8 @@ class PasswordsControllerTest < ActionDispatch::IntegrationTest
     user = create(:constituent,
                   email: "dep.#{SecureRandom.hex(3)}@system.matvulcan.local",
                   phone: '410-555-0166',
-                  password: 'password123',
-                  password_confirmation: 'password123')
+                  password: 'password1234',
+                  password_confirmation: 'password1234')
 
     SmsService.expects(:send_message).never
 
@@ -460,8 +460,8 @@ class PasswordsControllerTest < ActionDispatch::IntegrationTest
     user = create(:constituent,
                   phone: '000-000-4321',
                   email: "real.#{SecureRandom.hex(3)}@example.com",
-                  password: 'password123',
-                  password_confirmation: 'password123')
+                  password: 'password1234',
+                  password_confirmation: 'password1234')
 
     SmsService.expects(:send_message).never
 
@@ -478,8 +478,8 @@ class PasswordsControllerTest < ActionDispatch::IntegrationTest
     create(:constituent,
            phone: '000-345-6789',
            email: "real.#{SecureRandom.hex(3)}@example.com",
-           password: 'password123',
-           password_confirmation: 'password123')
+           password: 'password1234',
+           password_confirmation: 'password1234')
 
     SmsService.expects(:send_message).never
 
@@ -508,8 +508,8 @@ class PasswordsControllerTest < ActionDispatch::IntegrationTest
                   phone: '410-555-0144',
                   phone_type: 'voice',
                   email: "voice.#{SecureRandom.hex(3)}@example.com",
-                  password: 'password123',
-                  password_confirmation: 'password123')
+                  password: 'password1234',
+                  password_confirmation: 'password1234')
 
     SmsService.expects(:send_message).never
 
@@ -533,8 +533,8 @@ class PasswordsControllerTest < ActionDispatch::IntegrationTest
                   phone: '410-555-0145',
                   phone_type: 'voice',
                   email: "voice-rate-limit-#{SecureRandom.hex(3)}@example.com",
-                  password: 'password123',
-                  password_confirmation: 'password123')
+                  password: 'password1234',
+                  password_confirmation: 'password1234')
     limit = 2
     set_auth_rate_limit_policy('account_access_rate_limit_ip', 10)
     set_auth_rate_limit_policy('account_access_rate_limit_contact_ip', 10)
@@ -571,7 +571,7 @@ class PasswordsControllerTest < ActionDispatch::IntegrationTest
         communication_preference: :letter,
         physical_address_1: '123 Main St', city: 'Baltimore', state: 'MD', zip_code: '21201',
         date_of_birth: Date.new(1950, 1, 1),
-        password: 'password123', password_confirmation: 'password123',
+        password: 'password1234', password_confirmation: 'password1234',
         hearing_disability: true
       )
     ensure
@@ -603,7 +603,7 @@ class PasswordsControllerTest < ActionDispatch::IntegrationTest
         communication_preference: :letter,
         physical_address_1: '123 Main St', city: 'Baltimore', state: 'MD', zip_code: '21201',
         date_of_birth: Date.new(1950, 1, 1),
-        password: 'password123', password_confirmation: 'password123',
+        password: 'password1234', password_confirmation: 'password1234',
         hearing_disability: true
       )
     ensure

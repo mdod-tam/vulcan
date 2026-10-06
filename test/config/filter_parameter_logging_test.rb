@@ -38,7 +38,7 @@ class FilterParameterLoggingTest < ActiveSupport::TestCase
     filter = ActiveSupport::ParameterFilter.new(Rails.application.config.filter_parameters)
     filtered = filter.filter(
       'contact' => '410-555-0198',
-      'password' => 'password123',
+      'password' => 'password1234',
       'controller' => 'sessions',
       'action' => 'create'
     )

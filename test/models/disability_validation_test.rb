@@ -6,7 +6,7 @@ class DisabilityValidationTest < ActiveSupport::TestCase
   setup do
     @constituent = Constituent.create!(
       email: "test_user_#{Time.now.to_i}@example.com",
-      password: 'password123',
+      password: 'password1234',
       first_name: 'Test',
       last_name: 'User'
     )
@@ -27,7 +27,7 @@ class DisabilityValidationTest < ActiveSupport::TestCase
   test 'constituent can be created without disability' do
     constituent = Constituent.new(
       email: "test_user_#{Time.now.to_i + 1}@example.com",
-      password: 'password123',
+      password: 'password1234',
       first_name: 'Test',
       last_name: 'User'
     )
@@ -37,7 +37,7 @@ class DisabilityValidationTest < ActiveSupport::TestCase
   test 'constituent can be changed to admin without disability' do
     constituent = Constituent.create!(
       email: "test_user_#{Time.now.to_i + 2}@example.com",
-      password: 'password123',
+      password: 'password1234',
       first_name: 'Test',
       last_name: 'User'
     )
@@ -84,7 +84,7 @@ class DisabilityValidationTest < ActiveSupport::TestCase
       # Create a new constituent for each disability type to avoid 3-year validation
       constituent = Constituent.create!(
         email: "test_user_#{Time.now.to_i}_#{index}@example.com",
-        password: 'password123',
+        password: 'password1234',
         first_name: 'Test',
         last_name: 'User'
       )

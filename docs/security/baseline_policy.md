@@ -18,7 +18,7 @@ The requirements below retain the project's baseline. Confirm external deadlines
 
 | Area | Current implementation and boundary |
 | --- | --- |
-| Authentication | BCrypt passwords, an eight-character minimum, account lockout, and public-auth throttling. MFA is required for administrators, evaluators, trainers, and vendors; constituents can opt in. See [authentication](authentication_system.md). |
+| Authentication | BCrypt passwords, a 12-character minimum (`UserAuthentication::PASSWORD_MIN_LENGTH`, stated by every new-password field), account lockout, and public-auth throttling. MFA is required for administrators, evaluators, trainers, and vendors; constituents can opt in. See [authentication](authentication_system.md). |
 | Sessions | Signed session-token cookies with HttpOnly and production Secure flags. Sessions expire after 24 hours by default; the previously stated 30-minute idle-timeout target is not implemented by that expiry. |
 | Personal data | Selected fields use Active Record Encryption. Stable keys and safe logging are essential; see the [field inventory and key constraints](pii_encryption.md). |
 | Requests and access | Base-controller CSRF protection, role checks, scoped record access, and purpose-specific token/throttle paths. Public endpoints need their own authentication or token contract. |
@@ -47,7 +47,7 @@ See [current automation](../compliance/required_reports_audits.md#current-automa
 
 ## Open policy checks
 
-- Reconcile the password and MFA policy with applicable external-user requirements. The cited [2021 external-user guidance](https://doit.maryland.gov/policies/ci/Pages/standards-and-guidance-for-authentication-of-external-users.aspx) specifies a 12-character password minimum and sensitivity-based authentication requirements; the application's eight-character minimum is not evidence of compliance.
+- Reconcile the MFA policy with applicable external-user requirements. The password minimum now matches the 12 characters in the cited [2021 external-user guidance](https://doit.maryland.gov/policies/ci/Pages/standards-and-guidance-for-authentication-of-external-users.aspx), which also sets sensitivity-based authentication requirements; existing passwords shorter than 12 keep working until changed.
 - Verify the stated BCrypt cost target of at least 12, session-idle timeout, and session replacement behavior before marking those controls complete.
 - Confirm deployed TLS, headers/CSP, upload scanning, centralized logging, and retention. Source files alone do not establish hosting or provider controls.
 - Replace unknown audit results with real reports and review dates. The catalog's null evidence fields mean unverified.

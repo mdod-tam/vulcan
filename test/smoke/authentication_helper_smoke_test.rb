@@ -21,7 +21,7 @@ if ENV['CI']
     end
 
     test 'thread-local user ID can be assigned and cleared' do
-      user = create(:user, password: 'password123', verified: true)
+      user = create(:user, password: 'password1234', verified: true)
 
       Thread.current[:test_user_id] = user.id
 
@@ -33,7 +33,7 @@ if ENV['CI']
     end
 
     test 'can create a valid session record' do
-      user = create(:user, password: 'password123', verified: true)
+      user = create(:user, password: 'password1234', verified: true)
 
       session = create_test_session(user)
 
@@ -45,7 +45,7 @@ if ENV['CI']
     end
 
     test 'Current.user can be set and cleared' do
-      user = create(:user, password: 'password123', verified: true)
+      user = create(:user, password: 'password1234', verified: true)
 
       Current.user = user if defined?(Current)
 
@@ -57,7 +57,7 @@ if ENV['CI']
     end
 
     test 'integration helper permits profile access and sign_out sends root to sign-in' do
-      user = create(:user, password: 'password123', verified: true)
+      user = create(:user, password: 'password1234', verified: true)
 
       sign_in_for_integration_test(user)
 
@@ -76,8 +76,8 @@ if ENV['CI']
     end
 
     test 'sign_out sends root to sign-in before a second user signs in' do
-      user1 = create(:user, password: 'password123', verified: true)
-      user2 = create(:user, password: 'password123', verified: true)
+      user1 = create(:user, password: 'password1234', verified: true)
+      user2 = create(:user, password: 'password1234', verified: true)
 
       sign_in_for_integration_test(user1)
 

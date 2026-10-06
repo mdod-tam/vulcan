@@ -21,8 +21,8 @@ class WebauthnSignInTest < ApplicationSystemTestCase
     fill_in 'First Name', with: '2FA'
     fill_in 'Last Name', with: 'Tester'
     fill_in 'Email Address', with: 'new_2fa_user@example.com'
-    fill_in 'Password', with: 'password123'
-    fill_in 'Confirm Password', with: 'password123'
+    fill_in 'Password', with: 'password1234'
+    fill_in 'Confirm Password', with: 'password1234'
     fill_in 'Phone Number', with: '555-555-5555'
     choose 'Text/SMS' # Registration requires a phone type when a phone is present.
 
@@ -54,7 +54,7 @@ class WebauthnSignInTest < ApplicationSystemTestCase
 
     within('form[action="/sign_in"]') do
       fill_in 'contact-input', with: user.email
-      fill_in 'password-input', with: 'password123'
+      fill_in 'password-input', with: 'password1234'
       click_button 'Sign In'
     end
 
@@ -72,8 +72,8 @@ class WebauthnSignInTest < ApplicationSystemTestCase
   test 'welcome page links to security key enrollment' do
     user = User.create!(
       email: 'webauthn_test@example.com',
-      password: 'password123',
-      password_confirmation: 'password123',
+      password: 'password1234',
+      password_confirmation: 'password1234',
       first_name: 'WebAuthn',
       last_name: 'Tester',
       date_of_birth: 30.years.ago,
@@ -98,7 +98,7 @@ class WebauthnSignInTest < ApplicationSystemTestCase
   test 'security key success page confirms setup for an enrolled user' do
     user = User.create!(
       email: "webauthn_setup_ui_#{SecureRandom.hex(4)}@example.com",
-      password: 'password123', password_confirmation: 'password123',
+      password: 'password1234', password_confirmation: 'password1234',
       first_name: 'WebAuthn', last_name: 'SetupUI', type: 'Users::Constituent',
       date_of_birth: 30.years.ago, phone: '555-111-2222'
     )

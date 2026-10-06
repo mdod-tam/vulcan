@@ -16,8 +16,8 @@ class TwoFactorAuthenticationFlowTest < ApplicationSystemTestCase
 
     @user = User.create!(
       email: "2fa_flow_test_#{SecureRandom.hex(4)}@example.com",
-      password: 'password123',
-      password_confirmation: 'password123',
+      password: 'password1234',
+      password_confirmation: 'password1234',
       first_name: '2FA',
       last_name: 'Tester',
       date_of_birth: 30.years.ago,
@@ -325,7 +325,7 @@ class TwoFactorAuthenticationFlowTest < ApplicationSystemTestCase
 
     visit sign_in_path
     find_by_id('contact-input').send_keys(@user.email)
-    find_by_id('password-input').send_keys('password123')
+    find_by_id('password-input').send_keys('password1234')
     click_button 'Sign In'
 
     wait_for_turbo
@@ -347,7 +347,7 @@ class TwoFactorAuthenticationFlowTest < ApplicationSystemTestCase
 
     visit sign_in_path
     find_by_id('contact-input').send_keys(@user.email)
-    find_by_id('password-input').send_keys('password123')
+    find_by_id('password-input').send_keys('password1234')
     click_button 'Sign In'
 
     wait_for_turbo

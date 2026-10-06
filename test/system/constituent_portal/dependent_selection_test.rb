@@ -13,8 +13,8 @@ module ConstituentPortal
         phone: "555123#{timestamp.to_s[-4..]}",
         first_name: 'Guardian',
         last_name: 'User',
-        password: 'password123',
-        password_confirmation: 'password123'
+        password: 'password1234',
+        password_confirmation: 'password1234'
       )
 
       @dependent1 = Users::Constituent.create!(
@@ -22,8 +22,8 @@ module ConstituentPortal
         last_name: 'Dependent',
         email: "dep1.#{timestamp}@example.com",
         phone: "555234#{timestamp.to_s[-4..]}",
-        password: 'password123',
-        password_confirmation: 'password123'
+        password: 'password1234',
+        password_confirmation: 'password1234'
       )
 
       @dependent2 = Users::Constituent.create!(
@@ -31,8 +31,8 @@ module ConstituentPortal
         last_name: 'Dependent',
         email: "dep2.#{timestamp}@example.com",
         phone: "555345#{timestamp.to_s[-4..]}",
-        password: 'password123',
-        password_confirmation: 'password123'
+        password: 'password1234',
+        password_confirmation: 'password1234'
       )
 
       GuardianRelationship.find_or_create_by!(

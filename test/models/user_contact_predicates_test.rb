@@ -115,7 +115,7 @@ class UserContactPredicatesTest < ActiveSupport::TestCase
         communication_preference: :letter,
         physical_address_1: '123 Main St', city: 'Baltimore', state: 'MD', zip_code: '21201',
         date_of_birth: Date.new(1950, 1, 1),
-        password: 'password123', password_confirmation: 'password123',
+        password: 'password1234', password_confirmation: 'password1234',
         hearing_disability: true,
         force_password_change: true
       )
@@ -126,7 +126,7 @@ class UserContactPredicatesTest < ActiveSupport::TestCase
     assert_nil user.email
     assert user.send(:email_optional?)
 
-    assert user.update(password: 'newpassword123', password_confirmation: 'newpassword123', force_password_change: false)
+    assert user.update(password: 'newpassword1234', password_confirmation: 'newpassword1234', force_password_change: false)
   end
 
   test 'email is required for new portal signup even with phone present' do
@@ -135,7 +135,7 @@ class UserContactPredicatesTest < ActiveSupport::TestCase
       phone: '410-555-0311',
       phone_type: 'voice',
       date_of_birth: Date.new(1990, 1, 1),
-      password: 'password123', password_confirmation: 'password123',
+      password: 'password1234', password_confirmation: 'password1234',
       hearing_disability: true
     )
 
@@ -153,7 +153,7 @@ class UserContactPredicatesTest < ActiveSupport::TestCase
         communication_preference: :letter,
         physical_address_1: '123 Main St', city: 'Baltimore', state: 'MD', zip_code: '21201',
         date_of_birth: Date.new(1960, 1, 1),
-        password: 'password123', password_confirmation: 'password123',
+        password: 'password1234', password_confirmation: 'password1234',
         hearing_disability: true
       )
     ensure
