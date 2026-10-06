@@ -43,6 +43,18 @@
                   class: "mt-1 block w-full rounded-md border-gray-300 shadow-sm focus:border-indigo-500 focus:ring-indigo-500" %>
           </div>
 
+          <% if @user.constituent? %>
+            <div>
+              <%= f.label :date_of_birth, t('shared.date_of_birth.label'), class: 'block text-sm font-medium text-gray-700' %>
+              <%= date_of_birth_text_field f,
+                                           value: date_of_birth_input_value(@user),
+                                           required: true,
+                                           class: 'mt-1 block w-full rounded-md border-gray-300 shadow-sm focus:border-indigo-500 focus:ring-indigo-500',
+                                           aria: { describedby: 'admin_user_dob_hint' } %>
+              <p id="admin_user_dob_hint" class="mt-1 text-xs text-gray-600"><%= t('shared.date_of_birth.hint') %></p>
+            </div>
+          <% end %>
+
           <div>
             <%= f.label :phone, class: "block text-sm font-medium text-gray-700" %>
             <%= f.telephone_field :phone,

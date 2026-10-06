@@ -10,6 +10,13 @@ module Users
 
     encrypts :date_of_birth, deterministic: true
 
+    # Voucher identity checks and name-and-birthdate duplicate detection both need it. Required when
+    # the record is created or the date is changed, so an older record without one still saves
+    # unrelated edits. Unreadable input already has its own error.
+    validates :date_of_birth, presence: true,
+                              if: -> { new_record? || will_save_change_to_date_of_birth? },
+                              unless: :rejected_date_of_birth_input
+
     scope :needs_evaluation, -> { joins(:applications).where(applications: { status: :approved }) }
     scope :active, -> { where.not(status: %i[withdrawn rejected expired]) }
     scope :ytd, lambda {

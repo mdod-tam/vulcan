@@ -66,4 +66,37 @@ class UserDateOfBirthTest < ActiveSupport::TestCase
     assert_empty Users::Constituent.find_duplicates('Spelling', 'Lookup', '10/09/1980')
     assert_empty Users::Constituent.find_duplicates('Spelling', 'Lookup', '9/10/80')
   end
+
+  test 'a new constituent needs a date of birth' do
+    constituent = build(:constituent, date_of_birth: nil)
+
+    assert_not constituent.valid?
+    assert_includes constituent.errors[:date_of_birth], "can't be blank"
+  end
+
+  # Only creation and changes are checked, so an older record without one still saves other edits.
+  test 'a constituent without a date of birth can still save unrelated changes' do
+    constituent = create(:constituent)
+    constituent.update_column(:date_of_birth, nil)
+
+    assert constituent.reload.update(first_name: 'Renamed')
+  end
+
+  test 'an existing date of birth cannot be blanked' do
+    constituent = create(:constituent)
+
+    assert_not constituent.update(date_of_birth: '')
+    assert_includes constituent.errors[:date_of_birth], "can't be blank"
+  end
+
+  test 'unreadable input reports only that it is not a valid date' do
+    constituent = build(:constituent, date_of_birth: '9/9/26')
+
+    assert_not constituent.valid?
+    assert_equal ['is not a valid date. Enter it as MM/DD/YYYY'], constituent.errors[:date_of_birth]
+  end
+
+  test 'other user types do not need a date of birth' do
+    assert build(:vendor, :approved, date_of_birth: nil).valid?
+  end
 end

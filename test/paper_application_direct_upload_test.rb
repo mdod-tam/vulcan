@@ -32,7 +32,7 @@ class PaperApplicationDirectUploadTest < ActionDispatch::IntegrationTest
       post admin_paper_applications_path, params: {
         constituent: {
           first_name: 'Test',
-          last_name: 'User',
+          last_name: 'User', date_of_birth: '01/15/1980',
           email: 'test@example.com',
           phone: '555-555-5555',
           physical_address_1: '123 Main St',

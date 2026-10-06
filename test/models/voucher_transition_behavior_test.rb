@@ -160,7 +160,7 @@ class VoucherTransitionBehaviorTest < ActiveSupport::TestCase
     timestamp = Time.now.to_i
     params = {
       constituent: {
-        first_name: 'Test', last_name: 'User',
+        first_name: 'Test', last_name: 'User', date_of_birth: '01/15/1980',
         email: "threshold-test-#{timestamp}@example.com",
         phone: "20255500#{timestamp.to_s[-2..]}",
         physical_address_1: '123 Test St', city: 'Baltimore', state: 'MD', zip_code: '21201',
@@ -193,7 +193,7 @@ class VoucherTransitionBehaviorTest < ActiveSupport::TestCase
     timestamp = Time.now.to_i
     params = {
       constituent: {
-        first_name: 'Test', last_name: 'Status',
+        first_name: 'Test', last_name: 'Status', date_of_birth: '01/15/1980',
         email: "status-test-#{timestamp}@example.com",
         phone: "20255501#{timestamp.to_s[-2..]}",
         physical_address_1: '123 Test St', city: 'Baltimore', state: 'MD', zip_code: '21201',
@@ -246,7 +246,7 @@ class VoucherTransitionBehaviorTest < ActiveSupport::TestCase
     timestamp = Time.now.to_i
     params = {
       constituent: {
-        first_name: 'Test', last_name: 'ProofSkip',
+        first_name: 'Test', last_name: 'ProofSkip', date_of_birth: '01/15/1980',
         email: "proof-skip-#{timestamp}@example.com",
         phone: "20255502#{timestamp.to_s[-2..]}",
         physical_address_1: '123 Test St', city: 'Baltimore', state: 'MD', zip_code: '21201',

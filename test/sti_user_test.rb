@@ -27,6 +27,7 @@ class StiUserTest < ActiveSupport::TestCase
       email: "test-constituent-#{Time.now.to_i}@example.com",
       first_name: 'Test',
       last_name: 'Constituent',
+      date_of_birth: Date.new(1980, 1, 15),
       password: 'password1234',
       password_confirmation: 'password1234'
     )

@@ -12,6 +12,7 @@ class VoucherRedemptionIntegrationTest < ActionDispatch::IntegrationTest
     @constituent = User.create!(
       first_name: 'Integration',
       last_name: 'Tester',
+      date_of_birth: Date.new(1980, 1, 15),
       type: 'Users::Constituent',
       email: "integration_test.#{SecureRandom.hex(4)}@example.com",
       password: 'password1234',

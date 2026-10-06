@@ -28,6 +28,7 @@ module Applications
       @constituent_params = {
         first_name: 'Test',
         last_name: 'User',
+        date_of_birth: '01/15/1980',
         email: "test-#{@timestamp}@example.com",
         phone: "202555#{@timestamp.to_s[-4..]}",
         physical_address_1: '123 Test St',

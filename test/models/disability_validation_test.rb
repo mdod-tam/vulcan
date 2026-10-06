@@ -8,7 +8,8 @@ class DisabilityValidationTest < ActiveSupport::TestCase
       email: "test_user_#{Time.now.to_i}@example.com",
       password: 'password1234',
       first_name: 'Test',
-      last_name: 'User'
+      last_name: 'User',
+      date_of_birth: Date.new(1980, 1, 15)
     )
 
     @application_params = {
@@ -29,7 +30,8 @@ class DisabilityValidationTest < ActiveSupport::TestCase
       email: "test_user_#{Time.now.to_i + 1}@example.com",
       password: 'password1234',
       first_name: 'Test',
-      last_name: 'User'
+      last_name: 'User',
+      date_of_birth: Date.new(1980, 1, 15)
     )
     assert constituent.save, 'Constituent should be saved without disability'
   end
@@ -39,7 +41,8 @@ class DisabilityValidationTest < ActiveSupport::TestCase
       email: "test_user_#{Time.now.to_i + 2}@example.com",
       password: 'password1234',
       first_name: 'Test',
-      last_name: 'User'
+      last_name: 'User',
+      date_of_birth: Date.new(1980, 1, 15)
     )
     constituent.type = 'Admin'
     assert constituent.save, 'Constituent should be changed to admin without disability'
@@ -86,7 +89,8 @@ class DisabilityValidationTest < ActiveSupport::TestCase
         email: "test_user_#{Time.now.to_i}_#{index}@example.com",
         password: 'password1234',
         first_name: 'Test',
-        last_name: 'User'
+        last_name: 'User',
+        date_of_birth: Date.new(1980, 1, 15)
       )
 
       # Reset all disabilities to false, then set just one disability to true

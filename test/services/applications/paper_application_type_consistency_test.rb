@@ -20,7 +20,7 @@ module Applications
       @valid_params = {
         constituent: {
           first_name: 'John',
-          last_name: 'Malone',
+          last_name: 'Malone', date_of_birth: '01/15/1980',
           email: "john.malone.#{@timestamp}@example.com",
           phone: "202424#{@timestamp[-4..]}",
           physical_address_1: '12122 long ridge ln',
