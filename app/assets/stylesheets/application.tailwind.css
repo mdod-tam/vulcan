@@ -4,6 +4,30 @@
 @tailwind components;
 @tailwind utilities;
 
+/* Form fields across the app are written for @tailwindcss/forms ("rounded-md border-gray-300
+   shadow-sm focus:border-indigo-500"), which this build does not use. Tailwind's reset sets border
+   width and padding to 0, so those fields rendered with no visible edge and no inner space. This
+   supplies the missing defaults. Each selector is one element (input:where(...), select, textarea):
+   that outranks the reset's element rules by coming later, while any class utility on a field
+   (padding, border, radius) still outranks it. */
+@layer base {
+  input:where(:not([type]), [type='text'], [type='email'], [type='password'], [type='tel'],
+              [type='number'], [type='search'], [type='url'], [type='date'], [type='datetime-local'],
+              [type='time'], [type='month']),
+  select,
+  textarea {
+    @apply rounded-md border border-gray-300 bg-white px-3 py-2;
+  }
+
+  input:where(:not([type]), [type='text'], [type='email'], [type='password'], [type='tel'],
+              [type='number'], [type='search'], [type='url'], [type='date'], [type='datetime-local'],
+              [type='time'], [type='month']):focus,
+  select:focus,
+  textarea:focus {
+    @apply border-indigo-500 outline-none ring-1 ring-indigo-500;
+  }
+}
+
 
 @layer components {
   .btn {
