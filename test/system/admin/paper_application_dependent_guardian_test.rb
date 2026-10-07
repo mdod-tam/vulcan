@@ -2,10 +2,12 @@
 
 require 'application_system_test_case'
 require Rails.root.join('test/support/system_test_evidence')
+require_relative 'paper_applications_test_helper'
 
 module Admin
   class PaperApplicationDependentGuardianTest < ApplicationSystemTestCase
     include SystemTestEvidence
+    include PaperApplicationsTestHelper
 
     test 'complete guardian creation and application workflow' do
       perform_complete_guardian_creation_workflow
@@ -72,7 +74,7 @@ module Admin
       visit new_admin_paper_application_path
 
       # Guardian validation
-      assert_selector 'label', text: 'A Dependent (must select existing guardian in system or enter guardian\'s information)'
+      assert_selector 'label', text: 'A Dependent (minor or adult requiring guardian)'
       choose 'applicant_is_minor'
 
       assert_selector '#guardian-info-section', visible: true
@@ -80,7 +82,7 @@ module Admin
       assert_selector '#dependent-info-section', visible: false
 
       within '#guardian-info-section' do
-        click_link 'Or Create New Guardian'
+        click_link 'Create New Guardian'
         assert_text 'Create New Guardian', wait: 3
 
         fill_in 'guardian_attributes[first_name]', with: ''
@@ -139,33 +141,11 @@ module Admin
       choose 'applicant_is_minor'
       assert_selector '#guardian-info-section', visible: true
 
-      # If search does not find the guardian, the test creates a new guardian instead.
       within '#guardian-info-section' do
-        assert_selector '[data-guardian-picker-target="searchPane"]', visible: true, wait: 5
-
-        if page.has_field?('guardian_search_q', wait: 3)
-          fill_in 'guardian_search_q', with: 'Existing'
-
-          if page.has_selector?('#guardian_search_results li', wait: 5)
-            within('#guardian_search_results') do
-              if page.has_selector?('li', text: /Existing/i, wait: 3)
-                find('li', text: /Existing/i).click
-              else
-                click_link 'Or Create New Guardian'
-                fill_existing_guardian_form
-              end
-            end
-          else
-            puts 'INFO: Guardian search results not appearing, falling back to creation workflow...'
-            click_link 'Or Create New Guardian'
-            fill_existing_guardian_form
-          end
-        else
-          puts 'INFO: Guardian search field missing, falling back to creation workflow...'
-          click_link 'Or Create New Guardian'
-          fill_existing_guardian_form
-        end
+        fill_in 'guardian_search_q', with: existing_guardian.full_name
+        within('#guardian_search_results') { find('li', text: existing_guardian.full_name, wait: 10).click }
       end
+      assert_selector '[data-guardian-picker-target="selectedPane"]', text: existing_guardian.full_name, wait: 10
 
       assert_selector '#dependent-info-section', visible: true, wait: 10
       assert_selector '[data-guardian-picker-target="selectedPane"]', visible: true, wait: 5
@@ -184,46 +164,12 @@ module Admin
       verify_existing_guardian_workflow(existing_guardian)
     end
 
-    def fill_existing_guardian_form
-      assert_text 'Create New Guardian', wait: 3
-      fill_in 'guardian_attributes[first_name]', with: 'Fallback'
-      fill_in 'guardian_attributes[last_name]', with: 'Guardian'
-      fill_in 'guardian_attributes[date_of_birth]', with: 40.years.ago.strftime('%Y-%m-%d')
-      fill_in 'guardian_attributes[email]', with: "existing-fallback-#{Time.now.to_i}@example.com"
-      fill_in 'guardian_attributes[phone]', with: '5551234567'
-      fill_in 'guardian_attributes[physical_address_1]', with: '789 Existing Ave'
-      fill_in 'guardian_attributes[city]', with: 'Baltimore'
-      fill_in 'guardian_attributes[state]', with: 'MD'
-      fill_in 'guardian_attributes[zip_code]', with: '21203'
-      choose 'guardian_phone_type_voice'
-      choose 'guardian_communication_preference_email'
-
-      assert_difference 'User.count', 1 do
-        click_button 'Save Guardian'
-        assert_selector '[data-guardian-picker-target="selectedPane"]',
-                        text: 'Fallback Guardian', visible: true, wait: 5
-      end
-      guardian = User.find_by!(first_name: 'Fallback', last_name: 'Guardian')
-      assert_field 'guardian_id', type: :hidden, with: guardian.id, visible: :all
-    end
-
     def complete_application_form
-      check 'applicant_attributes[self_certify_disability]'
-      check 'applicant_attributes[hearing_disability]'
-
-      fill_in 'application_household_size', with: '3'
-      fill_in 'application_annual_income', with: '25000'
-      check 'application_maryland_resident'
-      check 'applicant_attributes_self_certify_disability'
-
-      fill_in 'application_medical_provider_name', with: 'Dr. Pediatric'
-      fill_in 'application_medical_provider_phone', with: '5555551234'
-      fill_in 'application_medical_provider_email', with: 'drpediatric@example.com'
-
-      attach_pdf_proof('income')
-      choose 'accept_income_proof'
-      attach_pdf_proof('residency')
-      choose 'accept_residency_proof'
+      fill_in_disability_information
+      attach_and_accept_proofs
+      fill_in_application_details(household_size: 3, annual_income: 25_000)
+      fill_in_medical_provider_information(name: 'Dr. Pediatric', phone: '555-555-1234', email: 'drpediatric@example.com')
+      complete_paper_application_attestations
     end
 
     def verify_complete_workflow
@@ -244,33 +190,15 @@ module Admin
       end
     end
 
-    def verify_existing_guardian_workflow(_existing_guardian)
-      before_count = Application.count
-      before_relationship_count = GuardianRelationship.count
-
-      assert_button 'Submit Paper Application', disabled: false, wait: 15
-      click_button 'Submit Paper Application'
-      wait_for_network_idle(timeout: 10)
-
-      current_path_check = current_path
-      if current_path_check.match?(%r{/admin/applications/\d+})
-        assert_equal before_count + 1, Application.count, 'Application count should have increased by 1'
-
-        assert_equal before_relationship_count + 1, GuardianRelationship.count, 'Guardian relationship count should have increased by 1'
-
-        dependent_user = User.where('created_at > ?', 1.minute.ago)
-                             .find_by(first_name: 'TestDependent', last_name: 'ForExisting')
-        assert dependent_user.present?, 'Dependent user should have been created'
-
-        newest_app = Application.order(created_at: :desc).first
-        assert_equal 'Users::Constituent', newest_app.user.type, 'Application user should be a Constituent'
-        assert newest_app.user.first_name.include?('TestDependent'), 'Application should belong to the dependent user'
-      else
-        # Without a redirect, this checks only that the dependent exists.
-        dependent_user = User.where('created_at > ?', 1.minute.ago)
-                             .find_by(first_name: 'TestDependent', last_name: 'ForExisting')
-        assert dependent_user.present?, 'Dependent user should have been created even if form validation failed'
+    def verify_existing_guardian_workflow(existing_guardian)
+      assert_difference ['Application.count', 'GuardianRelationship.count'], 1 do
+        click_button 'Submit Paper Application'
+        assert_selector 'h1', text: /Application #\d+ Details/, wait: 20
       end
+
+      application = Application.order(:id).last
+      assert_equal %w[TestDependent ForExisting], [application.user.first_name, application.user.last_name]
+      assert_equal existing_guardian, application.managing_guardian
     end
 
     def verify_successful_application_creation(before_count, _before_user_count, before_relationship_count, guardian_first_name, dependent_first_name)

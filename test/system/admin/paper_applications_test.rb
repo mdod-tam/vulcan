@@ -96,7 +96,7 @@ module Admin
       assert_selector "[data-income-validation-target='warningContainer']", visible: true, text: /Income Exceeds Threshold/
 
       assert_selector '#rejection-button', visible: :visible, wait: 10
-      assert_selector 'input[type=submit][disabled]'
+      assert_button 'Submit Paper Application', disabled: true
 
       assert_button 'Reject (Income Over Threshold)', disabled: false, wait: 10
 
@@ -267,9 +267,22 @@ module Admin
         assert_selector 'select[name="income_proof_rejection_reason"]', visible: true
 
         select 'Missing Income Amount', from: 'income_proof_rejection_reason'
-      end
 
-      assert_selector 'input[type=submit]'
+        choose 'accept_residency_proof', allow_label_click: true
+        attach_file 'residency_proof', Rails.root.join('test/fixtures/files/residency_proof.pdf')
+        choose 'accept_id_proof', allow_label_click: true
+        attach_file 'id_proof', Rails.root.join('test/fixtures/files/residency_proof.pdf')
+      end
+      attach_file 'medical_certification', Rails.root.join('test/fixtures/files/medical_certification_valid.pdf')
+      complete_paper_application_attestations
+
+      assert_difference 'Application.count', 1 do
+        click_button 'Submit Paper Application'
+        assert_selector 'h1', text: /Application #\d+ Details/, wait: 20
+      end
+      application = Application.order(:id).last
+      assert application.income_proof_status_rejected?
+      assert application.residency_proof_status_approved?
     end
 
     test 'attachments are preserved when validation fails' do
@@ -709,188 +722,28 @@ module Admin
       assert_equal 'approved', application.medical_certification_status.to_s, 'Medical certification should be approved'
     end
 
-    test 'paper application submission shows income rejection path' do
-      Policy.find_or_create_by(key: 'fpl_1_person').update(value: 15_650)
-      Policy.find_or_create_by(key: 'fpl_modifier_percentage').update(value: 400)
-
-      safe_visit new_admin_paper_application_path
-      wait_for_network_idle
-
-      choose 'An Adult (applying for themselves)'
-      wait_for_turbo
-
-      page.execute_script(<<~JS)
-        var commonSections = document.querySelector('[data-applicant-type-target="commonSections"]');
-        var adultSection = document.querySelector('[data-applicant-type-target="adultSection"]');
-
-        if (commonSections) {
-          commonSections.classList.remove('hidden');
-          commonSections.style.display = 'block';
-        }
-
-        if (adultSection) {
-          adultSection.classList.remove('hidden');
-          adultSection.style.display = 'block';
-        }
-
-        ['application[household_size]', 'application[annual_income]', 'income_proof', 'residency_proof', 'id_proof'].forEach((name) => {
-          const field = document.querySelector(`[name="${name}"]`);
-          let node = field;
-          while (node && node !== document.body) {
-            node.hidden = false;
-            node.disabled = false;
-            node.classList?.remove('hidden');
-            if (node.style) node.style.display = node.tagName === 'INPUT' ? '' : 'block';
-            node = node.parentElement;
-          }
-        });
-      JS
-      wait_for_turbo
-      reveal_adult_application_sections
-
-      applicant_section = find_by_id('self-info-section', visible: true)
-      assert applicant_section.visible?, 'Applicant information section should be visible'
-
-      within applicant_section do
-        fill_in 'constituent[first_name]', with: 'Income'
-        fill_in 'constituent[last_name]', with: 'Reject'
-        fill_in 'constituent[email]', with: "income.reject.#{Time.now.to_i}@example.com"
-        fill_in 'constituent[phone]', with: '555-111-2222'
-      end
-
-      proof_documents = find('section', text: 'Proof Documents', visible: true)
-      assert proof_documents.visible?, 'Proof documents section should be visible'
-
-      within proof_documents do
-        fill_in 'application[household_size]', with: '1'
-        fill_in 'application[annual_income]', with: '100000'
-      end
-
-      # Move focus to trigger blur validation.
-      find('body').click
-      wait_for_turbo
-
-      assert_selector "[data-income-validation-target='warningContainer'][role='alert']", visible: true
-
-      page.execute_script("document.querySelector('input[type=submit]').disabled = true;")
-      assert_selector 'input[type=submit][disabled]'
-
-      page.execute_script(<<~JS)
-        const rejectionButton = document.querySelector('#rejection-button');
-        if (rejectionButton) {
-          rejectionButton.classList.remove('hidden');
-          rejectionButton.style.display = 'block';
-          rejectionButton.style.visibility = 'visible';
-        }
-      JS
-      wait_for_turbo
-
-      assert_selector '#rejection-button', visible: true
-    end
-
-    test 'paper application submission respects waiting period' do
+    # The search refuses an applicant still inside the waiting period; the server-side rule is covered
+    # by Applications::PaperApplicationEligibilityTest.
+    test 'an applicant inside the waiting period is shown as ineligible and cannot be selected' do
       original_skip_flag = Application.skip_wait_period_validation
       Application.skip_wait_period_validation = false
+      Policy.find_or_create_by(key: 'waiting_period_years').update(value: 3)
+      constituent = FactoryBot.create(:constituent, first_name: 'Waiting', last_name: 'Period')
+      # Archived applications do not block another application, but they still count toward the waiting period.
+      FactoryBot.create(:application, user: constituent, status: :archived, application_date: 2.years.ago)
 
-      begin
-        waiting_period_years = 3
-        Policy.find_or_create_by(key: 'waiting_period_years').update(value: waiting_period_years)
-        Policy.find_or_create_by(key: 'fpl_1_person').update(value: 15_650)
-        Policy.find_or_create_by(key: 'fpl_modifier_percentage').update(value: 400)
+      safe_visit new_admin_paper_application_path
+      fill_in 'adult_search_q', with: constituent.full_name
 
-        assert_equal 15_650, Policy.get('fpl_1_person'), 'FPL 1 person policy should be 15,650'
-        assert_equal 400, Policy.get('fpl_modifier_percentage'), 'FPL modifier percentage should be 400'
-
-        constituent = FactoryBot.create(:constituent, first_name: 'Waiting', last_name: 'Period')
-        # Archived applications do not block another application, but they still count toward the waiting period.
-        FactoryBot.create(:application, user: constituent, status: :archived, application_date: (waiting_period_years - 1).years.ago)
-
-        safe_visit new_admin_paper_application_path
-        wait_for_network_idle
-
-        choose 'An Adult (applying for themselves)'
-        wait_for_turbo
-
-        page.execute_script(<<~JS)
-          var commonSections = document.querySelector('[data-applicant-type-target="commonSections"]');
-          var adultSection = document.querySelector('[data-applicant-type-target="adultSection"]');
-
-          if (commonSections) {
-            commonSections.classList.remove('hidden');
-            commonSections.style.display = 'block';
-          }
-
-          if (adultSection) {
-            adultSection.classList.remove('hidden');
-            adultSection.style.display = 'block';
-          }
-        JS
-        wait_for_turbo
-        reveal_adult_application_sections
-
-        applicant_section = find_by_id('self-info-section', visible: true)
-        assert applicant_section.visible?, 'Applicant information section should be visible'
-
-        within applicant_section do
-          fill_in 'constituent[first_name]', with: constituent.first_name
-          fill_in 'constituent[last_name]', with: constituent.last_name
-          fill_in 'constituent[email]', with: constituent.email
-          fill_in 'constituent[phone]', with: '555-123-4567'
-          find('input[name="constituent[date_of_birth]"]').set('1980-01-15')
-        end
-
-        disability_fieldset = find('fieldset', text: 'Disability Information', visible: true)
-        medical_provider_fieldset = find('fieldset', text: 'Certifying Professional Information', visible: true)
-        proof_documents_fieldset = find('section', text: 'Proof Documents', visible: true)
-
-        within proof_documents_fieldset do
-          fill_in 'application[household_size]', with: '1'
-          fill_in 'application[annual_income]', with: '5000'
-          check 'application[maryland_resident]'
-        end
-
-        within disability_fieldset do
-          check 'applicant_attributes[self_certify_disability]'
-          check 'applicant_attributes[mobility_disability]'
-        end
-
-        within medical_provider_fieldset do
-          fill_in 'application[medical_provider_name]', with: 'Dr. Wait'
-          fill_in 'application[medical_provider_phone]', with: '555-999-8888'
-          fill_in 'application[medical_provider_email]', with: 'dr.wait@example.com'
-        end
-
-        within proof_documents_fieldset do
-          safe_interaction { find("input[id='accept_income_proof']").click }
-          attach_file 'income_proof', Rails.root.join('test/fixtures/files/blank.pdf')
-
-          safe_interaction { find("input[id='accept_residency_proof']").click }
-          attach_file 'residency_proof', Rails.root.join('test/fixtures/files/blank.pdf')
-
-          safe_interaction { find("input[id='accept_id_proof']").click }
-          attach_file 'id_proof', Rails.root.join('test/fixtures/files/blank.pdf')
-        end
-
-        check 'application[terms_accepted]'
-        check 'application[information_verified]'
-        check 'application[medical_release_authorized]'
-
-        reveal_paper_application_common_sections
-
-        # Bypass the client gate to exercise server validation of the waiting period.
-        page.execute_script(<<~JS)
-          document.querySelector('form[aria-label="Paper application upload form"]').submit();
-        JS
-
-        wait_for_turbo
-
-        assert_selector '[role="alert"]', text: /must wait #{waiting_period_years} years/i, wait: 10
-        # The controller renders the new form after a failed POST, so the browser stays on the collection URL.
-        assert_current_path admin_paper_applications_path
-        assert_selector 'h1', text: 'Apply for Constituent'
-      ensure
-        Application.skip_wait_period_validation = original_skip_flag
+      within '#adult_search_results' do
+        result = find('li[aria-disabled="true"]', text: constituent.full_name, wait: 10)
+        assert_equal 'Ineligible', result.find('span', text: 'Ineligible').text
+        assert_text constituent.ineligible_reason if constituent.respond_to?(:ineligible_reason) && constituent.ineligible_reason.present?
+        result.click
       end
+      assert_no_selector '[data-adult-picker-target="selectedPane"]', text: 'Applicant Selected'
+    ensure
+      Application.skip_wait_period_validation = original_skip_flag
     end
 
     test 'form validation prevents submission without required proof selections' do

@@ -1,10 +1,13 @@
 # frozen_string_literal: true
 
 require 'application_system_test_case'
+require_relative 'paper_applications_test_helper'
 
 module Admin
   class ApplicationCreationAuditTest < ApplicationSystemTestCase
     include ActiveStorageHelper
+    include OnlineApplicationTestHelpers
+    include PaperApplicationsTestHelper
 
     setup do
       @admin = create(:admin)
@@ -26,22 +29,11 @@ module Admin
       sign_in(@constituent)
 
       visit new_constituent_portal_application_path
-
-      fill_in 'Household Size', with: '2'
-      fill_in 'Annual Income', with: '30000'
-      check 'I certify that I am a resident of Maryland'
-      check 'I certify that I have a disability that affects my ability to access telecommunications services'
-
-      within('section', text: 'Certifying Professional Information and Authorization to Contact') do
-        fill_in 'Name', with: 'Dr. Smith'
-        fill_in 'Email', with: 'smith@example.com'
-        fill_in 'Phone', with: '555-123-4567'
-        check 'I authorize the release and sharing of my disability-related information as described above'
-      end
-
+      fill_in_complete_online_application
+      wait_for_fpl_data_to_load(timeout: 15)
       click_button 'Submit Application'
 
-      assert_text 'Application submitted successfully'
+      assert_success_message('Application submitted successfully')
 
       sign_out
       # The session reset clears any stored location.
@@ -77,40 +69,13 @@ module Admin
 
     test 'admin can see application creation event for paper applications' do
       sign_in(@admin)
-      visit new_admin_paper_application_path
-
-      choose 'An Adult (applying for themselves)'
-      click_button 'Create New Applicant'
-
-      within '#self-info-section' do
-        fill_in 'First Name', with: 'John'
-        fill_in 'Last Name', with: 'Paper'
-        fill_in 'Date of Birth', with: '1980-01-15'
-        check 'I accept the terms and conditions'
-        fill_in 'Email Address', with: 'john.paper@example.com'
-        fill_in 'Phone Number', with: '555-987-6543'
-        fill_in 'Street Address', with: '123 Paper St'
-        fill_in 'City', with: 'Baltimore'
-        fill_in 'ZIP Code', with: '21201'
-      end
-
-      assert_selector '[data-applicant-type-target="commonSections"]:not(.hidden)', wait: 5
-
-      fill_in 'Household Size', with: '3'
-      fill_in 'Annual Income', with: '45000'
-      check 'The applicant has marked that they are a resident of Maryland'
-      check 'The applicant certifies that they have a disability that affects their ability to access telecommunications services'
-      check 'Hearing'
-
-      within('fieldset', text: 'Certifying Professional Information') do
-        fill_in 'Provider Name', with: 'Dr. Jones'
-        fill_in 'Email', with: 'jones@example.com'
-        fill_in 'Phone', with: '555-333-4444'
-        check 'I authorize medical release'
-      end
-
-      attach_file 'income_proof', Rails.root.join('test/fixtures/files/income_proof.pdf')
-      attach_file 'residency_proof', Rails.root.join('test/fixtures/files/residency_proof.pdf')
+      start_new_adult_paper_application
+      fill_in_applicant_information(first_name: 'John', last_name: 'Paper', email: 'john.paper@example.com', phone: '555-987-6543')
+      attach_and_accept_proofs
+      fill_in_application_details(household_size: 3, annual_income: 45_000)
+      fill_in_disability_information
+      fill_in_medical_provider_information(name: 'Dr. Jones', email: 'jones@example.com')
+      complete_paper_application_attestations
 
       click_button 'Submit Paper Application'
 

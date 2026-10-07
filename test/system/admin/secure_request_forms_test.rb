@@ -474,7 +474,10 @@ module AdminTests
       Rails.root.join('test/fixtures/files/sample.png').open do |proof|
         application.income_proof.attach(io: proof, filename: 'income.png', content_type: 'image/png')
       end
-      SmsService.expects(:send_message).with(recipient.phone, anything, sensitive: true, context: anything).once.returns(true)
+      SmsService.expects(:send_message)
+                .with(recipient.phone, anything, sensitive: true, context: anything, action: 'SmsService#proof_resubmission',
+                                                 delivery_context: anything)
+                .once.returns(true)
 
       system_test_sign_in(@admin)
       visit_admin_application_with_retry(application, user: @admin)
@@ -484,12 +487,8 @@ module AdminTests
         click_button 'Reject'
       end
       wait_for_modal_open('proofRejectionModal')
-      within '#proofRejectionModal' do
-        find("button[data-action='click->rejection-form#selectOther']").click
-        fill_in 'Reason for Rejection', with: 'Unreadable document'
-        take_full_page_screenshot('proof-turbo-recovery-rejection-modal')
-        click_button 'Submit'
-      end
+      take_full_page_screenshot('proof-turbo-recovery-rejection-modal')
+      submit_custom_proof_rejection('Unreadable document')
 
       assert_no_selector '#proofRejectionModal[open]'
       assert_text I18n.t('admin.proof_reviews.create.resubmission_not_delivered', locale: :en)

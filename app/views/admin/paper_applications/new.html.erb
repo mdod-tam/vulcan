@@ -33,25 +33,6 @@
                         .reject { |reason| %w[none_provided other].include?(reason.code) }
                         .sort_by(&:code)
        end %>
-    <% custom_reason_labels = {
-         'missing_amount' => 'Missing Income Amount',
-         'exceeds_threshold' => 'Income Exceeds Threshold',
-         'outdated_ss_award' => 'Outdated Social Security Award Letter',
-         'missing_signature' => 'Missing Signature',
-         'wrong_document' => 'Wrong Document Type',
-         'address_mismatch' => 'Address Mismatch',
-         'missing_name' => 'Missing Name',
-         'missing_provider_credentials' => 'Missing Provider Credentials',
-         'incomplete_disability_documentation' => 'Incomplete Disability Documentation',
-         'outdated_certification' => 'Outdated Certification',
-         'missing_functional_limitations' => 'Missing Functional Limitations',
-         'incorrect_form_used' => 'Incorrect Form Used',
-         'incomplete_documentation' => 'Incomplete Documentation',
-         'illegible' => 'Illegible or Unclear'
-       } %>
-    <% reason_label_for = lambda do |code|
-         custom_reason_labels[code.to_s] || code.to_s.humanize.titleize.gsub('Ss', 'SS')
-       end %>
     <% income_reason_options = reason_options_for.call('income') %>
     <% residency_reason_options = reason_options_for.call('residency') %>
     <% id_reason_options = reason_options_for.call('id') %>
@@ -676,7 +657,7 @@
                                 data-reason-text="No disability certification was provided with the application.">None Provided</option>
                         <% medical_reason_options.each do |reason| %>
                           <option value="<%= reason.code %>" <%= 'selected' if submitted_params[:medical_certification_rejection_reason] == reason.code %>
-                                  data-reason-text="<%= h reason.body %>"><%= reason_label_for.call(reason.code) %></option>
+                                  data-reason-text="<%= h reason.body %>"><%= RejectionReason.label_for(reason.code) %></option>
                         <% end %>
                         <option value="other" <%= 'selected' if submitted_params[:medical_certification_rejection_reason] == 'other' %>>Other</option>
                       </select>
@@ -904,7 +885,7 @@
                               data-reason-text="No income proof was provided with the application.">None Provided</option>
                       <% income_reason_options.each do |reason| %>
                         <option value="<%= reason.code %>" <%= 'selected' if submitted_params[:income_proof_rejection_reason] == reason.code %>
-                                data-reason-text="<%= h reason.body %>"><%= reason_label_for.call(reason.code) %></option>
+                                data-reason-text="<%= h reason.body %>"><%= RejectionReason.label_for(reason.code) %></option>
                       <% end %>
                       <option value="other" <%= 'selected' if submitted_params[:income_proof_rejection_reason] == 'other' %>>Other</option>
                     </select>
@@ -1035,7 +1016,7 @@
                               data-reason-text="No residency proof was provided with the application.">None Provided</option>
                       <% residency_reason_options.each do |reason| %>
                         <option value="<%= reason.code %>" <%= 'selected' if submitted_params[:residency_proof_rejection_reason] == reason.code %>
-                                data-reason-text="<%= h reason.body %>"><%= reason_label_for.call(reason.code) %></option>
+                                data-reason-text="<%= h reason.body %>"><%= RejectionReason.label_for(reason.code) %></option>
                       <% end %>
                       <option value="other" <%= 'selected' if submitted_params[:residency_proof_rejection_reason] == 'other' %>>Other</option>
                     </select>
@@ -1148,7 +1129,7 @@
                             data-reason-text="No ID proof was provided with the application.">None Provided</option>
                     <% id_reason_options.each do |reason| %>
                       <option value="<%= reason.code %>" <%= 'selected' if submitted_params[:id_proof_rejection_reason] == reason.code %>
-                              data-reason-text="<%= h reason.body %>"><%= reason_label_for.call(reason.code) %></option>
+                              data-reason-text="<%= h reason.body %>"><%= RejectionReason.label_for(reason.code) %></option>
                     <% end %>
                     <option value="other" <%= 'selected' if submitted_params[:id_proof_rejection_reason] == 'other' %>>Other</option>
                   </select>

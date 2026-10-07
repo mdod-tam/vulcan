@@ -1,28 +1,28 @@
 # frozen_string_literal: true
 
 require 'application_system_test_case'
+require_relative 'paper_applications_test_helper'
 
 module Admin
   class PaperApplicationRejectionTest < ApplicationSystemTestCase
+    include PaperApplicationsTestHelper
+
     setup do
       @admin = create(:admin)
       system_test_sign_in(@admin)
       visit admin_applications_path
       wait_for_turbo
-      assert_selector 'h1', text: 'Dashboard'
+      assert_selector 'h1', text: 'Applications'
     end
 
     test 'admin can see all rejection reasons for income proof' do
-      visit new_admin_paper_application_path
-      wait_for_turbo
-
-      assert_selector 'fieldset legend', text: 'Proof Documents', visible: true
+      start_new_adult_paper_application
 
       find_by_id('reject_income_proof').click
 
       within('#income_proof_rejection select') do
         assert_selector 'option', text: 'Address Mismatch'
-        assert_selector 'option', text: 'Expired Documentation'
+        assert_selector 'option', text: 'Expired'
         assert_selector 'option', text: 'Missing Name'
         assert_selector 'option', text: 'Wrong Document Type'
         assert_selector 'option', text: 'Missing Income Amount'
@@ -32,16 +32,13 @@ module Admin
     end
 
     test 'admin can see appropriate rejection reasons for residency proof' do
-      visit new_admin_paper_application_path
-      wait_for_turbo
-
-      assert_selector 'fieldset legend', text: 'Proof Documents', visible: true
+      start_new_adult_paper_application
 
       find_by_id('reject_residency_proof').click
 
       within('#residency_proof_rejection select') do
         assert_selector 'option', text: 'Address Mismatch'
-        assert_selector 'option', text: 'Expired Documentation'
+        assert_selector 'option', text: 'Expired'
         assert_selector 'option', text: 'Missing Name'
         assert_selector 'option', text: 'Wrong Document Type'
 
@@ -52,10 +49,7 @@ module Admin
     end
 
     test 'selecting a predefined rejection reason shows read-only content and hides custom reason input' do
-      visit new_admin_paper_application_path
-      wait_for_turbo
-
-      assert_selector 'fieldset legend', text: 'Proof Documents', visible: true
+      start_new_adult_paper_application
 
       find_by_id('reject_income_proof').click
 
@@ -69,10 +63,7 @@ module Admin
     end
 
     test 'selecting Other allows admin to enter a custom rejection reason' do
-      visit new_admin_paper_application_path
-      wait_for_turbo
-
-      assert_selector 'fieldset legend', text: 'Proof Documents', visible: true
+      start_new_adult_paper_application
 
       find_by_id('reject_income_proof').click
 
@@ -86,8 +77,7 @@ module Admin
     end
 
     test 'language guidance reflects applicant locale for custom reasons' do
-      visit new_admin_paper_application_path
-      wait_for_turbo
+      start_new_adult_paper_application
 
       select 'Spanish', from: 'constituent_locale'
 
@@ -98,8 +88,7 @@ module Admin
     end
 
     test 'medical certification custom reason copy is certificate-signer specific and stays English' do
-      visit new_admin_paper_application_path
-      wait_for_turbo
+      start_new_adult_paper_application
 
       # Certification notes address the certificate signer in English, regardless of the applicant locale.
       select 'Spanish', from: 'constituent_locale'

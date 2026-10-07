@@ -45,7 +45,7 @@ module Admin
       within "section[aria-labelledby='common-tasks-heading']" do
         assert_selector 'a', text: /Proofs Needing Review \(\d+\)/, wait: 10
 
-        assert_selector 'a', text: /Medical Certs to Review \(\d+\)/, wait: 10
+        assert_selector 'a', text: /Disability Certs to Review \(\d+\)/, wait: 10
 
         assert_selector 'a', text: /Training Requests \(\d+\)/, wait: 10
       end
@@ -65,7 +65,7 @@ module Admin
 
       assert_selector 'h1', text: 'Admin Dashboard', wait: 10
 
-      click_on 'Medical Certs to Review'
+      click_on 'Disability Certs to Review'
 
       assert_current_path admin_applications_path(filter: 'medical_certs_to_review')
       assert_selector 'h1', text: 'Applications', wait: 10

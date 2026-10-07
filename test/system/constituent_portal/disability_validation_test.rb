@@ -4,6 +4,8 @@ require 'application_system_test_case'
 
 module ConstituentPortal
   class DisabilityValidationTest < ApplicationSystemTestCase
+    include OnlineApplicationTestHelpers
+
     setup do
       @constituent = create(:constituent)
       @valid_pdf = file_fixture('income_proof.pdf').to_s
@@ -243,17 +245,6 @@ module ConstituentPortal
     end
 
     private
-
-    def attach_required_documents
-      attach_file 'Upload Residency Proof Document', @valid_image
-      attach_file 'Upload Income Proof Document', @valid_pdf
-      attach_file 'Upload ID Proof Document', @valid_image
-    end
-
-    def accept_submit_confirmations
-      find_by_id('terms_accepted').check
-      find_by_id('information_verified').check
-    end
 
     def clear_disability_type_checkboxes
       %w[Hearing Vision Speech Mobility Cognition].each do |label|

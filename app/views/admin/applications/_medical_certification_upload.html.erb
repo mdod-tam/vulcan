@@ -113,7 +113,7 @@
                     data-document-proof-handler-target="rejectionReasonSelect">
               <option value="">Select a reason</option>
               <% cert_reason_codes.each do |code| %>
-                <option value="<%= code %>" data-reason-text="<%= cert_reason_texts[code] %>"><%= code.humanize.titleize %></option>
+                <option value="<%= code %>" data-reason-text="<%= cert_reason_texts[code] %>"><%= RejectionReason.label_for(code) %></option>
               <% end %>
               <option value="other">Other (custom reason)</option>
             </select>

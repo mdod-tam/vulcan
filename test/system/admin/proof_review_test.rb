@@ -27,7 +27,7 @@ module AdminTests
       wait_for_turbo
 
       visit admin_applications_path
-      assert_text 'Admin Dashboard', wait: 10
+      assert_selector 'h1', text: 'Applications', wait: 10
     end
 
     test 'modal properly handles scroll state when rejecting proof with letter_opener' do
@@ -55,10 +55,7 @@ module AdminTests
 
         wait_for_modal_open('proofRejectionModal', timeout: 15)
 
-        within('#proofRejectionModal') do
-          fill_in 'Reason for Rejection', with: 'Test rejection reason'
-          click_on 'Submit'
-        end
+        submit_custom_proof_rejection('Test rejection reason')
 
         wait_for_turbo
         assert_no_selector('#proofRejectionModal', wait: 10)
@@ -176,8 +173,7 @@ module AdminTests
       # The button must open the modal through Stimulus without a fallback.
       review_button.click
 
-      assert_selector 'dialog#incomeProofReviewModal[open]', visible: true, wait: 10,
-                                                             message: 'Modal should open via Stimulus controller when review button is clicked'
+      assert_selector 'dialog#incomeProofReviewModal[open]', visible: true, wait: 10
 
       within '#incomeProofReviewModal' do
         assert_selector 'button', text: 'Approve', wait: 5
@@ -188,8 +184,7 @@ module AdminTests
         click_button 'Close'
       end
 
-      assert_no_selector 'dialog#incomeProofReviewModal[open]', wait: 10,
-                                                                message: 'Modal should close when close button is clicked'
+      assert_no_selector 'dialog#incomeProofReviewModal[open]', wait: 10
     end
 
     test 'can open second proof modal after approving first proof via Turbo Stream' do
@@ -207,13 +202,12 @@ module AdminTests
       wait_for_turbo
       assert_no_selector 'dialog#incomeProofReviewModal[open]', wait: 10
 
-      assert_selector 'dialog#residencyProofReviewModal', wait: 5,
-                                                          message: 'Residency modal should still exist in DOM after Turbo Stream update'
+      # Still present (closed) after the Turbo Stream update.
+      assert_selector 'dialog#residencyProofReviewModal', visible: :all, wait: 5
 
       click_review_proof_and_wait('residency', timeout: 15)
 
-      assert_selector 'dialog#residencyProofReviewModal[open]', visible: true, wait: 10,
-                                                                message: 'Residency modal should open after income proof was approved'
+      assert_selector 'dialog#residencyProofReviewModal[open]', visible: true, wait: 10
 
       within '#residencyProofReviewModal' do
         assert_selector 'button', text: 'Approve', wait: 5
@@ -229,10 +223,9 @@ module AdminTests
 
       assert_selector '#medical-certification-section', wait: 10
 
-      click_button 'Review Certification'
+      click_button 'Review Disability Certification'
 
-      assert_selector 'dialog#medicalCertificationReviewModal[open]', visible: true, wait: 10,
-                                                                      message: 'Medical certification modal should open via Stimulus controller'
+      assert_selector 'dialog#medicalCertificationReviewModal[open]', visible: true, wait: 10
 
       within '#medicalCertificationReviewModal' do
         accept_confirm { click_button 'Approve' }

@@ -127,6 +127,31 @@ module PaperApplicationsTestHelper
     puts "#{description} took #{elapsed.round(2)} seconds" if ENV['VERBOSE_TESTS']
   end
 
+  # The path staff take for a new adult applicant: open the form and choose to create one, which
+  # shows the applicant fields and the shared sections (disability, certification, proofs).
+  def start_new_adult_paper_application
+    visit new_admin_paper_application_path
+    click_button 'Create New Applicant'
+    assert_selector '#proof-heading', text: 'Proof Documents'
+  end
+
+  def select_existing_adult_through_the_ui(applicant)
+    choose 'An Adult (applying for themselves)', allow_label_click: true
+    fill_in 'adult_search_q', with: applicant.full_name
+    within '#adult_search_results' do
+      find('li', text: /#{Regexp.escape(applicant.full_name)}/i, wait: 10).click
+    end
+    assert_selector '[data-adult-picker-target="selectedPane"]', text: 'Applicant Selected', wait: 15
+  end
+
+  # The existing-adult submit gate requires staff verification against the paper form.
+  def verify_existing_adult_contact
+    box = first('[data-adult-picker-target="verificationCheckbox"]', visible: :all)
+    return if box.nil? || box.checked?
+
+    box.click
+  end
+
   def reveal_adult_application_sections
     click_button 'Create New Applicant' if page.has_button?('Create New Applicant', wait: 1)
 

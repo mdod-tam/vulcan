@@ -21,19 +21,14 @@ module Admin
       clear_active_storage
     end
 
+    # Status changes only through workflow actions (Application#transition_status!); the edit form has no status.
     test 'admin can see application status changes in audit log' do
-      visit edit_admin_application_path(@application)
+      @application.transition_status!(:in_progress, actor: @admin)
 
-      select 'In Progress', from: 'Status'
-      click_button 'Update Application'
-      wait_for_turbo
-
-      assert_current_path admin_application_path(@application)
+      visit admin_application_path(@application)
 
       within('#audit-logs') do
-        find('tr', text: 'Status Change', wait: 15)
-
-        assert_text 'Status Change'
+        assert_selector 'tr', text: 'Status Change', wait: 15
         assert_text 'Application submitted for review'
         assert_text @admin.full_name
       end
@@ -84,7 +79,7 @@ module Admin
       within(audit_section) do
         find('tr', text: 'Admin Review', wait: 15)
 
-        assert_text 'Admin rejected Income proof - The document you submitted is not an acceptable type of income proof'
+        assert_text 'Income proof rejected - The document you submitted is not an acceptable type of income proof'
         assert_text @admin.full_name
       end
     end
@@ -116,17 +111,19 @@ module Admin
       @application.reload
 
       within('#audit-logs') do
-        assert_selector('tr', text: /Medical certification requested/i, wait: 15)
+        assert_selector('tr', text: /Disability certification requested/i, wait: 15)
       end
     end
 
     test 'admin can see evaluator assignments in audit log' do
-      @application.update!(status: 'approved')
+      # Evaluation services are offered only within the service window after the application date.
+      @application.update!(status: 'approved', application_date: Date.current)
 
       visit admin_application_path(@application)
 
-      click_button "Assign #{@evaluator.full_name}"
-      wait_for_turbo
+      select @evaluator.full_name, from: 'evaluator_id'
+      click_button 'Assign Evaluator'
+      assert_text I18n.t('admin.applications.assign_evaluator.eval_assign_pass')
 
       if page.has_css?('#audit-logs')
         # Resolve the section again to avoid a stale element.
@@ -140,6 +137,10 @@ module Admin
     end
 
     test 'admin can see voucher assignments in audit log' do
+      # Vouchers are assigned only to voucher-fulfillment applications, with the voucher feature on.
+      FeatureFlag.enable!(:vouchers_enabled)
+      @application.update_columns(fulfillment_type: Application.fulfillment_types[:voucher])
+      %i[income_proof residency_proof id_proof].each { |proof| attach_lightweight_proof(@application, proof) }
       @application.update!(
         status: 'approved',
         income_proof_status: 'approved',

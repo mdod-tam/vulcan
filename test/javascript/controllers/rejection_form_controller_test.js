@@ -57,6 +57,19 @@ describe("RejectionFormController", () => {
     document.body.innerHTML = ""
   })
 
+  test("announces a selected predefined reason to screen readers", () => {
+    jest.spyOn(window, "requestAnimationFrame").mockImplementation(callback => { callback(); return 0 })
+    const controller = application.getControllerForElementAndIdentifier(element, "rejection-form")
+    const button = element.querySelector('[data-reason-code="address_mismatch"]')
+
+    controller.selectPredefinedReason({ currentTarget: button })
+
+    expect(controller.liveRegionTarget.textContent)
+      .toBe("Selected rejection reason: Address mismatch. Reason text inserted in the reason field.")
+    expect(controller.reasonFieldTarget.readOnly).toBe(true)
+    window.requestAnimationFrame.mockRestore()
+  })
+
   test("shows general reasons when income proof type is selected", () => {
     const controller = application.getControllerForElementAndIdentifier(element, "rejection-form")
     const proofTypeInput = controller.proofTypeTarget

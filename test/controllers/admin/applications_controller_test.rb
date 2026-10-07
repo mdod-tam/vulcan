@@ -699,6 +699,21 @@ module Admin
       assert_redirected_to admin_application_path(@application)
     end
 
+    test 'the edit form cannot change status; status changes go through the workflow' do
+      original_status = @application.status
+
+      assert_no_difference -> { @application.status_changes.count } do
+        patch admin_application_path(@application), params: { application: { status: 'approved', household_size: 4 } }
+      end
+
+      @application.reload
+      assert_equal original_status, @application.status
+      assert_equal 4, @application.household_size
+
+      get edit_admin_application_path(@application)
+      assert_select 'select[name="application[status]"]', count: 0
+    end
+
     test 'request_documents passes the current admin as explicit lifecycle actor' do
       @application.expects(:request_documents!).with(user: @admin).returns(true)
       Application.expects(:find).with(@application.id.to_s).returns(@application)

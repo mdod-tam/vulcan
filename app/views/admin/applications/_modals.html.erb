@@ -209,7 +209,7 @@ end
               <% reason = data[:reason] %>
               <% display_proof_type = proof_type == 'medical_certification' ? 'medical' : proof_type %>
               <% interpolated_body = interpolate_address.call(reason.body) %>
-              <% label = code.humanize %>
+              <% label = RejectionReason.label_for(code) %>
               <button type="button"
                       class="<%= reason_button_classes %>"
                       data-action="click->rejection-form#selectPredefinedReason"
@@ -298,7 +298,7 @@ end
           <div class="flex flex-wrap gap-2 mb-2 medical-only-reasons" data-rejection-form-target="medicalOnlyReasons">
             <% medical_reasons.each do |code, reason| %>
               <% interpolated_body = interpolate_address.call(reason.body) %>
-              <% label = code.humanize %>
+              <% label = RejectionReason.label_for(code) %>
               <button type="button"
                       class="<%= reason_button_classes %>"
                       data-action="click->rejection-form#selectPredefinedReason"

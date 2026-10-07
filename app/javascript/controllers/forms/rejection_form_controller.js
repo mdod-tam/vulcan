@@ -137,6 +137,7 @@ export default class extends Controller {
     }
     this._setSelectedReasonButton(event.currentTarget)
     this._setCodeStatus(`Using predefined reason: ${reasonCode || 'none'}.`, 'linked')
+    this._announceReasonSelection(event.currentTarget.textContent.trim())
   }
 
   selectOther(event) {
