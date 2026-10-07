@@ -5,7 +5,6 @@ class Voucher < ApplicationRecord
   has_many :email_delivery_attempts, as: :origin, dependent: :nullify
   belongs_to :application
   belongs_to :vendor, optional: true, class_name: 'User'
-  belongs_to :invoice, optional: true
   has_many :transactions, class_name: 'VoucherTransaction', dependent: :restrict_with_error
   has_many :events, as: :auditable, dependent: :destroy
 
@@ -28,7 +27,6 @@ class Voucher < ApplicationRecord
 
   scope :available, -> { where(status: :active) }
   scope :for_vendor, ->(vendor_id) { where(vendor_id: vendor_id) }
-  scope :not_invoiced, -> { where(invoice_id: nil) }
   scope :expiring_soon, lambda {
     expiration_threshold = 7.days
     where(status: :active)
