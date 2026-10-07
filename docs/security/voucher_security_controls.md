@@ -47,6 +47,21 @@ Issuance owns `voucher_assigned`, redemption owns `voucher_redeemed`, and the ad
 
 Assignment, redemption, and expiration messages use [VoucherNotificationsMailer](../../app/mailers/voucher_notifications_mailer.rb) directly; they do not create `NotificationService` records.
 
+## After a purchase: fulfillment and packages
+
+A completed redemption is a purchase the vendor can fulfill. [VoucherTransactions::FulfillmentService](../../app/services/voucher_transactions/fulfillment_service.rb) is the only writer of its fulfillment mode (shipping or local pickup) and its packages (tracking number, optional ship date and contents). It never changes the amount, vendor, status, or invoice.
+
+| Check | Owner |
+| --- | --- |
+| The purchase belongs to the signed-in vendor; a package belongs to that purchase | Vendor portal lookups through `current_user.voucher_transactions`, then `purchase.shipments` in the service |
+| Only completed redemptions are fulfilled | `VoucherTransaction#fulfillable?`, checked under the purchase row lock |
+| A form built from an older state is refused | The purchase's `fulfillment_version` (mode and new packages) and each package's `lock_version` (corrections) |
+| A tracking number is recorded once per purchase | Unique index on the normalized number per purchase |
+| A vendor suspended after a sale can still record tracking for that sale (deliberate: the customer still needs it, and the vendor saw these details at redemption) | Vendor portal lookups are scoped to the vendor's own purchases; voucher processing approval is not required |
+| Only the applicant of an unmanaged application, or its managing guardian, sees purchases | `VoucherTransaction.purchases_visible_to`, built on `Application.accessible_by` |
+
+Recording or correcting a package sends no email, letter, or notification. The applicant (or the managing guardian) sees packages on the application page and dashboard, and staff see them, with the fulfillment history, on the admin voucher page. A recorded package means only that the vendor reported tracking: the copy says "tracking available" and labels any date as the vendor-reported ship date. It is not evidence of dispatch, delivery, or acceptance, which can bear on payment. Switching to local pickup keeps recorded packages as history.
+
 ## Where this flow goes wrong
 
 Eligibility, balance changes, history, and messages are bundled into the owning methods on purpose; splitting any of them out is how a voucher gets issued twice, or spent without a matching transaction row. The failure modes worth having a test for are duplicate issuance, an ineligible vendor, a redemption with no DOB verification in session, an expired voucher, an amount over the remaining balance, and one under the policy minimum.

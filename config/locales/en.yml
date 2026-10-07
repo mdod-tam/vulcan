@@ -123,6 +123,11 @@ en:
         income_proof: "Income proof"
         residency_proof: "Residency proof"
         id_proof: "ID proof"
+      voucher_transaction_shipment:
+        tracking_number: "Tracking number"
+        normalized_tracking_number: "Tracking number"
+        dispatched_on: "Ship date"
+        contents: "Package contents"
     errors:
       models:
         user:
@@ -148,6 +153,13 @@ en:
             base:
               training_session_quota_exhausted: "This application has no remaining training session slots."
               historical_session_reopen: "Historical training sessions cannot be reopened. Schedule a follow-up session instead."
+        voucher_transaction_shipment:
+          attributes:
+            normalized_tracking_number:
+              taken: "is already recorded for this purchase"
+            dispatched_on:
+              invalid: "is not a valid date. Enter it as MM/DD/YYYY"
+              in_future: "can't be in the future"
   activemodel:
     errors:
       models:
@@ -1190,3 +1202,26 @@ en:
 
   email_delivery:
     configuration_error: "The message was not sent because its delivery settings could not be verified. Please contact an administrator."
+  # Purchases made with a voucher and how they reach the constituent. VoucherHelper#fulfillment_status_label owns status.
+  fulfillment:
+    status:
+      local_pickup: "Local pickup"
+      tracking_available:
+        one: "Tracking available for 1 package"
+        other: "Tracking available for %{count} packages"
+      awaiting_tracking: "Waiting for tracking"
+      awaiting_details: "Waiting for shipping details"
+    orders:
+      heading: "Orders and shipping"
+      empty: "No purchases have been made with this application's vouchers yet."
+      purchased_on: "Purchased %{date}"
+      amount: "Amount: %{amount}"
+      for_applicant: "For %{name}"
+      packages_heading: "Packages"
+      tracking_number: "Tracking number: %{number}"
+      ship_date: "Vendor-reported ship date: %{date}"
+      contents: "Contents: %{contents}"
+      more_packages_note: "An order can come in more than one package. Tracking for each package appears here when the vendor records it. Tracking comes from the vendor and does not confirm delivery."
+      support: "Questions about an order? Contact %{vendor}, or the MAT program at %{email} or %{phone}."
+      view_link: "View orders and shipping"
+      view_link_label: "View orders and shipping for %{vendor}, purchased %{date}"

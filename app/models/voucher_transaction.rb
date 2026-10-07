@@ -9,6 +9,8 @@ class VoucherTransaction < ApplicationRecord
 
   has_many :voucher_transaction_products, dependent: :destroy
   has_many :products, through: :voucher_transaction_products
+  has_many :shipments, -> { order(:created_at, :id) }, class_name: 'VoucherTransactionShipment',
+                                                       dependent: :restrict_with_error, inverse_of: :voucher_transaction
 
   validates :amount, presence: true,
                      numericality: { greater_than: 0 }
@@ -36,7 +38,24 @@ class VoucherTransaction < ApplicationRecord
     transaction_cancelled: 3      # Transaction was cancelled
   }, default: :transaction_pending
 
+  # How a completed purchase reaches the constituent. Set through VoucherTransactions::FulfillmentService.
+  enum :fulfillment_mode, { unspecified: 0, shipping: 1, local_pickup: 2 }, prefix: :fulfillment
+
   scope :completed, -> { where(status: :transaction_completed) }
+  # Only a completed redemption is a purchase that can be shipped; refunds and adjustments are not.
+  scope :fulfillable, -> { completed.redemption }
+  # The list form of needs_shipping_details?.
+  scope :needing_shipping_details, lambda {
+    without_packages = fulfillment_shipping.where.not(id: VoucherTransactionShipment.select(:voucher_transaction_id))
+    fulfillable.merge(fulfillment_unspecified.or(without_packages))
+  }
+  # Completed purchases on applications the user may open: their own, or ones they manage.
+  scope :purchases_visible_to, lambda { |user|
+    fulfillable.joins(:voucher)
+               .where(vouchers: { application_id: Application.accessible_by(user).select(:id) })
+               .includes(:vendor, :shipments, voucher: { application: :user })
+               .order(processed_at: :desc, id: :desc)
+  }
   scope :pending_invoice, -> { completed.where(invoice_id: nil) }
   scope :for_vendor, ->(vendor_id) { where(vendor_id: vendor_id) }
   scope :in_date_range, lambda { |start_date, end_date|
@@ -59,6 +78,15 @@ class VoucherTransaction < ApplicationRecord
     scope = completed.in_date_range(start_date, end_date)
     scope = scope.where(vendor_id: vendor_id) if vendor_id
     scope.group_by_day(:processed_at).sum(:amount).transform_values { |v| BigDecimal(v.to_s).to_i }
+  end
+
+  def fulfillable?
+    transaction_completed? && redemption?
+  end
+
+  # No mode chosen yet, or shipping chosen without any package recorded. Pickup needs nothing.
+  def needs_shipping_details?
+    fulfillable? && (fulfillment_unspecified? || (fulfillment_shipping? && shipments.none?))
   end
 
   def amount=(value)

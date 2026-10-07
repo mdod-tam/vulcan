@@ -395,8 +395,9 @@ Rails.application.routes.draw do
         post :process_redemption
       end
     end
-    resources :transactions, only: [:index] do
+    resources :transactions, only: %i[index show update] do
       get :report, on: :collection
+      resources :shipments, only: %i[create update]
     end
     resources :invoices, only: %i[index show]
   end

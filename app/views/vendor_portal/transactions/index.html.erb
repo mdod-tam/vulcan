@@ -61,6 +61,13 @@
             </div>
           </div>
 
+          <div class="flex items-center">
+            <%= f.check_box :needs_shipping_details,
+                            { checked: params[:needs_shipping_details] == '1',
+                              class: 'h-4 w-4 text-indigo-600 border-gray-300 rounded focus:ring-indigo-500' }, '1', nil %>
+            <%= f.label :needs_shipping_details, 'Only purchases that need shipping details', class: 'ml-2 text-sm text-gray-700' %>
+          </div>
+
           <div class="flex justify-end">
             <%= f.submit "Apply Filters",
                 class: "inline-flex justify-center py-2 px-4 border border-transparent shadow-sm text-sm font-medium rounded-md text-white bg-indigo-600 hover:bg-indigo-700 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-indigo-500" %>
@@ -81,6 +88,7 @@
               <th scope="col" class="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Status</th>
               <th scope="col" class="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Reference</th>
               <th scope="col" class="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Invoice</th>
+              <th scope="col" class="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Fulfillment</th>
             </tr>
           </thead>
           <tbody class="bg-white divide-y divide-gray-200">
@@ -99,7 +107,9 @@
                   <%= voucher_transaction_status_badge(transaction) %>
                 </td>
                 <td class="px-6 py-4 whitespace-nowrap text-sm text-gray-500">
-                  <%= transaction.reference_number %>
+                  <%= link_to transaction.reference_number, vendor_portal_transaction_path(transaction),
+                              class: 'text-indigo-600 hover:text-indigo-900',
+                              aria: { label: "View purchase #{transaction.reference_number}" } %>
                 </td>
                 <td class="px-6 py-4 whitespace-nowrap text-sm text-gray-500">
                   <% if transaction.invoice %>
@@ -110,11 +120,17 @@
                     <span class="text-gray-400">Pending</span>
                   <% end %>
                 </td>
+                <td class="px-6 py-4 whitespace-nowrap text-sm text-gray-500">
+                  <%= fulfillment_status_badge(transaction) %>
+                </td>
               </tr>
             <% end %>
           </tbody>
         </table>
       </div>
+      <% if @transactions.empty? %>
+        <p class="px-6 py-4 text-sm text-gray-500">No transactions match these filters.</p>
+      <% end %>
 
       <!-- Pagination -->
       <div class="bg-white px-4 py-3 border-t border-gray-200 sm:px-6">

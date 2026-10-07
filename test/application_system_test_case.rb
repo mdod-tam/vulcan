@@ -315,13 +315,20 @@ class ApplicationSystemTestCase < ActionDispatch::SystemTestCase
   end
 
   # This override preserves named screenshot calls and Rails' html: and screenshot: keywords.
-  def take_screenshot(name = nil, html: false, screenshot: nil)
+  # full: true captures the whole page, for content below the fold or a page opened at an anchor.
+  def take_screenshot(name = nil, html: false, screenshot: nil, full: false)
     return nil unless page&.driver
 
     @screenshot_artifact_label = name.presence
     wait_for_meaningful_page_content(timeout: 3) if respond_to?(:wait_for_meaningful_page_content)
 
-    super(html: html, screenshot: screenshot)
+    if full
+      increment_unique
+      page.save_screenshot(image_path, full: true) # rubocop:disable Lint/Debugger -- Required rendered-flow evidence.
+      File.write(html_path, page.html) if screenshot_html_enabled?(html)
+    else
+      super(html: html, screenshot: screenshot)
+    end
     path = image_path
     write_screenshot_sidecar(path, label: @screenshot_artifact_label, html_saved: screenshot_html_enabled?(html))
     puts screenshot_log_message(path)

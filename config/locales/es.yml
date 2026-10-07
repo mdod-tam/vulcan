@@ -117,6 +117,11 @@ es:
         income_proof: "Comprobante de ingresos"
         residency_proof: "Comprobante de residencia en Maryland"
         id_proof: "Comprobante de identidad"
+      voucher_transaction_shipment:
+        tracking_number: "Número de rastreo"
+        normalized_tracking_number: "Número de rastreo"
+        dispatched_on: "Fecha de envío"
+        contents: "Contenido del paquete"
     errors:
       models:
         user:
@@ -142,6 +147,13 @@ es:
             base:
               training_session_quota_exhausted: "Esta solicitud no tiene más espacios disponibles para capacitación."
               historical_session_reopen: "Las sesiones de capacitación históricas no se pueden reabrir. Programe una sesión de seguimiento."
+        voucher_transaction_shipment:
+          attributes:
+            normalized_tracking_number:
+              taken: "ya está registrado para esta compra"
+            dispatched_on:
+              invalid: "no es una fecha válida. Ingrésela como MM/DD/AAAA"
+              in_future: "no puede ser una fecha futura"
   activemodel:
     errors:
       models:
@@ -1069,3 +1081,26 @@ es:
     city: "Ciudad"
     state: "Estado"
     zip_code: "Código postal"
+  # Compras hechas con un vale y cómo llegan al solicitante. VoucherHelper#fulfillment_status_label es el dueño del estado.
+  fulfillment:
+    status:
+      local_pickup: "Recogida en tienda"
+      tracking_available:
+        one: "Rastreo disponible para 1 paquete"
+        other: "Rastreo disponible para %{count} paquetes"
+      awaiting_tracking: "En espera del número de rastreo"
+      awaiting_details: "En espera de los datos de envío"
+    orders:
+      heading: "Pedidos y envíos"
+      empty: "Todavía no se han hecho compras con los vales de esta solicitud."
+      purchased_on: "Comprado el %{date}"
+      amount: "Monto: %{amount}"
+      for_applicant: "Para %{name}"
+      packages_heading: "Paquetes"
+      tracking_number: "Número de rastreo: %{number}"
+      ship_date: "Fecha de envío informada por el proveedor: %{date}"
+      contents: "Contenido: %{contents}"
+      more_packages_note: "Un pedido puede llegar en más de un paquete. El rastreo de cada paquete aparece aquí cuando el proveedor lo registra. El rastreo proviene del proveedor y no confirma la entrega."
+      support: "¿Preguntas sobre un pedido? Comuníquese con %{vendor} o con el programa MAT en %{email} o al %{phone}."
+      view_link: "Ver pedidos y envíos"
+      view_link_label: "Ver pedidos y envíos de %{vendor}, comprado el %{date}"

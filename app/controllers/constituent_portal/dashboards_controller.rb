@@ -16,6 +16,7 @@ module ConstituentPortal
       load_training_sessions_information
       load_proof_status_information
       load_recent_activities
+      @recent_purchases = VoucherTransaction.purchases_visible_to(current_user).limit(5)
     end
 
     protected

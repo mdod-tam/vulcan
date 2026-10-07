@@ -4,9 +4,14 @@ module VendorPortal
   # Controller for managing vendor transactions
   class TransactionsController < BaseController
     include Pagy::Backend # Include Pagy::Backend for pagination
+    include PurchasePage
+
+    # How a vendor may say a purchase reaches the customer. Unspecified is only the starting state.
+    FULFILLMENT_MODES = %w[shipping local_pickup].freeze
 
     def index
-      transactions_scope = current_user.voucher_transactions.includes(voucher: { application: :user }).order(created_at: :desc)
+      transactions_scope = current_user.voucher_transactions.includes(:shipments, voucher: { application: :user }).order(created_at: :desc)
+      transactions_scope = transactions_scope.needing_shipping_details if params[:needs_shipping_details] == '1'
 
       # Apply date filters if provided
       if params[:start_date].present? && params[:end_date].present?
@@ -42,9 +47,22 @@ module VendorPortal
     end
 
     def show
-      @transaction = current_user.voucher_transactions.find(params[:id])
-      @voucher = @transaction.voucher
-      @products = @transaction.products
+      load_purchase(params[:id])
+      render_purchase_page
+    end
+
+    # Changes only how the purchase reaches the customer; see VoucherTransactions::FulfillmentService.
+    def update
+      load_purchase(params[:id])
+      mode = params.require(:fulfillment_mode)
+      return redirect_to_purchase(alert: 'Choose shipping or local pickup.') unless FULFILLMENT_MODES.include?(mode)
+
+      fulfillment_service.change_mode!(mode: mode, expected_version: params.require(:fulfillment_version))
+      redirect_to_purchase(notice: 'Fulfillment updated.')
+    rescue VoucherTransactions::FulfillmentService::StaleError
+      redirect_to_purchase(alert: STALE_MESSAGE)
+    rescue VoucherTransactions::FulfillmentService::NotFulfillableError
+      redirect_to_purchase(alert: NOT_FULFILLABLE_MESSAGE)
     end
 
     private
