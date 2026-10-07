@@ -213,10 +213,6 @@
     </div>
   </section>
 
-  <% if current_user.admin? && @evaluation.status_completed? && @evaluation.application.equipment_fulfillment? %>
-    <%= render "fulfillment_tracking", evaluation: @evaluation %>
-  <% end %>
-
   <section aria-label="<%= @can_manage_evaluation ? "Evaluation Actions" : "Evaluation Status" %>" class="mt-8" data-controller="evaluation-management">
     <% if @evaluation.errors.any? %>
       <div class="rounded-md bg-red-50 p-4 mb-6">
