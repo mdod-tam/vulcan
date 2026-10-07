@@ -8,6 +8,7 @@ class RecurringConfigTest < ActiveSupport::TestCase
     poll_email_delivery
     cleanup_unattached_uploads
     generate_vendor_invoices
+    send_owed_tracking_notices
     check_voucher_expiration
     proof_attachment_metrics
     record_secure_form_expirations

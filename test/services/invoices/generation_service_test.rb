@@ -43,6 +43,25 @@ module Invoices
       assert_equal BigDecimal('0'), voucher.reload.remaining_value
     end
 
+    test 'recorded packages survive invoicing and payment and do not multiply the invoiced amount' do
+      purchase = @transactions.first
+      service = VoucherTransactions::FulfillmentService.new(transaction: purchase, actor: @vendor)
+      service.add_shipment!(attributes: { 'tracking_number' => 'AAA111' }, expected_version: 0)
+      service.add_shipment!(attributes: { 'tracking_number' => 'BBB222' }, expected_version: 1)
+
+      result = Invoices::GenerationService.new.call
+
+      assert result.success?, result.message
+      invoice = Invoice.find_by!(vendor: @vendor)
+      invoice.update!(status: :invoice_approved)
+      invoice.update!(status: :invoice_paid, gad_invoice_reference: 'GAD-TEST-2')
+
+      assert_in_delta 250.25, invoice.reload.total_amount.to_f
+      assert_equal %w[AAA111 BBB222], purchase.reload.shipments.map(&:tracking_number)
+      assert purchase.fulfillment_shipping?
+      assert_equal invoice.id, purchase.invoice_id
+    end
+
     test 'the recurring job commits an invoice and delivers the vendor notice after commit' do
       perform_enqueued_jobs do
         GenerateVendorInvoicesJob.perform_now

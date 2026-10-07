@@ -335,6 +335,20 @@
       </section>
     <% end %>
 
+    <% if @purchases.any? || @application.vouchers.exists? %>
+      <section id="orders-and-shipping" aria-labelledby="orders-heading" class="mb-6 p-4 bg-gray-50 rounded">
+        <h2 id="orders-heading" class="text-xl font-semibold mb-2 text-gray-900"><%= t("fulfillment.orders.heading") %></h2>
+        <% if @purchases.any? %>
+          <p class="text-sm text-gray-600"><%= t("fulfillment.orders.more_packages_note") %></p>
+          <ul role="list" class="divide-y divide-gray-200">
+            <%= render partial: "constituent_portal/purchases/purchase", collection: @purchases, as: :purchase %>
+          </ul>
+        <% else %>
+          <p class="text-sm text-gray-600"><%= t("fulfillment.orders.empty") %></p>
+        <% end %>
+      </section>
+    <% end %>
+
     <%# Actions Section %>
     <section aria-labelledby="actions-heading" class="p-4 bg-gray-50 rounded">
       <h2 id="actions-heading" class="text-xl font-semibold mb-4 text-gray-900">Actions</h2>

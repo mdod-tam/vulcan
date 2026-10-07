@@ -10,7 +10,7 @@
 #
 # It's strongly recommended that you check this file into your version control system.
 
-ActiveRecord::Schema[8.1].define(version: 2026_10_06_150000) do
+ActiveRecord::Schema[8.1].define(version: 2026_10_07_010000) do
   # These are extensions that must be enabled in order to support this database
   enable_extension "pg_catalog.plpgsql"
 
@@ -946,9 +946,29 @@ ActiveRecord::Schema[8.1].define(version: 2026_10_06_150000) do
     t.index ["voucher_transaction_id"], name: "index_voucher_transaction_products_on_voucher_transaction_id"
   end
 
+  create_table "voucher_transaction_shipments", force: :cascade do |t|
+    t.bigint "voucher_transaction_id", null: false
+    t.string "tracking_number", null: false
+    t.string "normalized_tracking_number", null: false
+    t.date "dispatched_on"
+    t.text "contents"
+    t.bigint "created_by_id", null: false
+    t.bigint "updated_by_id"
+    t.integer "lock_version", default: 0, null: false
+    t.bigint "tracking_notification_id"
+    t.datetime "created_at", null: false
+    t.datetime "updated_at", null: false
+    t.index ["created_by_id"], name: "index_voucher_transaction_shipments_on_created_by_id"
+    t.index ["tracking_notification_id"], name: "index_shipments_on_tracking_notification", unique: true
+    t.index ["updated_by_id"], name: "index_voucher_transaction_shipments_on_updated_by_id"
+    t.index ["voucher_transaction_id", "normalized_tracking_number"], name: "index_shipments_on_transaction_and_tracking", unique: true
+  end
+
   create_table "voucher_transactions", force: :cascade do |t|
     t.decimal "amount", precision: 10, scale: 2, null: false
     t.datetime "created_at", null: false
+    t.integer "fulfillment_mode", default: 0, null: false
+    t.integer "fulfillment_version", default: 0, null: false
     t.bigint "invoice_id"
     t.text "notes"
     t.datetime "processed_at"
@@ -1101,6 +1121,10 @@ ActiveRecord::Schema[8.1].define(version: 2026_10_06_150000) do
   add_foreign_key "vendor_secure_request_forms", "users", column: "vendor_id", on_delete: :restrict
   add_foreign_key "voucher_transaction_products", "products"
   add_foreign_key "voucher_transaction_products", "voucher_transactions"
+  add_foreign_key "voucher_transaction_shipments", "notifications", column: "tracking_notification_id"
+  add_foreign_key "voucher_transaction_shipments", "users", column: "created_by_id"
+  add_foreign_key "voucher_transaction_shipments", "users", column: "updated_by_id"
+  add_foreign_key "voucher_transaction_shipments", "voucher_transactions"
   add_foreign_key "voucher_transactions", "invoices"
   add_foreign_key "voucher_transactions", "users", column: "vendor_id"
   add_foreign_key "voucher_transactions", "vouchers"

@@ -45,7 +45,21 @@ Vouchers have four states: `active`, `redeemed`, `expired`, and `cancelled`. Ful
 
 Issuance owns `voucher_assigned`, redemption owns `voucher_redeemed`, and the admin controller owns `voucher_cancelled` / `voucher_updated`. Model callbacks record status changes. [VoucherAuditLogBuilder](../../app/services/vouchers/voucher_audit_log_builder.rb) assembles the displayed history.
 
-Assignment, redemption, and expiration messages use [VoucherNotificationsMailer](../../app/mailers/voucher_notifications_mailer.rb) directly; they do not create `NotificationService` records.
+Assignment, redemption, and expiration messages use [VoucherNotificationsMailer](../../app/mailers/voucher_notifications_mailer.rb) directly; they do not create `NotificationService` records. The package tracking notice does; see below.
+
+## After a purchase: fulfillment and packages
+
+A completed redemption is a purchase the vendor can fulfill. [VoucherTransactions::FulfillmentService](../../app/services/voucher_transactions/fulfillment_service.rb) is the only writer of its fulfillment mode (shipping or local pickup) and its packages (tracking number, optional ship date and contents). It never changes the amount, vendor, status, or invoice.
+
+| Check | Owner |
+| --- | --- |
+| The purchase belongs to the signed-in vendor; a package belongs to that purchase | Vendor portal lookups through `current_user.voucher_transactions`, then `purchase.shipments` in the service |
+| Only completed redemptions are fulfilled | `VoucherTransaction#fulfillable?`, checked under the purchase row lock |
+| A form built from an older state is refused | The purchase's `fulfillment_version` (mode and new packages) and each package's `lock_version` (corrections) |
+| A tracking number is recorded once per purchase | Unique index on the normalized number per purchase |
+| Only the applicant of an unmanaged application, or its managing guardian, sees purchases | `VoucherTransaction.purchases_visible_to`, built on `Application.accessible_by` |
+
+Each new package owes one notice. [VoucherTransactions::TrackingNotice](../../app/services/voucher_transactions/tracking_notice.rb) sends it through `NotificationService` to the application's managing guardian, or to the applicant when no one manages it, and links the notification to the package under the package's row lock, so retries, the hourly sweep of owed notices, and concurrent runs create one notification. Email or letter follows the recipient's preference. Corrections send nothing. Switching to local pickup keeps recorded packages as history.
 
 ## Where this flow goes wrong
 

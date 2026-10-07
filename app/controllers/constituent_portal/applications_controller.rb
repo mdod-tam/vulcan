@@ -40,6 +40,7 @@ module ConstituentPortal
         notifiable: @application,
         action: 'medical_certification_requested'
       ).order(created_at: :desc)
+      @purchases = VoucherTransaction.purchases_visible_to(current_user).where(vouchers: { application_id: @application.id })
     end
 
     def new

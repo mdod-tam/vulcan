@@ -41,6 +41,68 @@ module VendorPortal
       # You might need more specific assertions to ensure the displayed transactions belong to @vendor_user
     end
 
-    # Add more tests as needed for filtering, sorting, or other transaction index/report page features.
+    test 'the shipping filter narrows the list, its totals, and its pages, and rows show fulfillment' do
+      needs_details = create(:voucher_transaction, vendor: @vendor_user, amount: 40)
+      shipped = create(:voucher_transaction, vendor: @vendor_user, amount: 60)
+      VoucherTransactions::FulfillmentService.new(transaction: shipped, actor: @vendor_user)
+                                             .add_shipment!(attributes: { 'tracking_number' => 'AAA111' }, expected_version: 0)
+
+      get vendor_portal_transactions_url(needs_shipping_details: '1')
+
+      assert_response :success
+      assert_select 'table.min-w-full tbody tr', count: 1
+      assert_select 'tbody a', text: needs_details.reference_number
+      assert_select 'tbody', text: /Waiting for shipping details/
+      assert_equal 1, controller.instance_variable_get(:@transaction_count)
+      assert_equal 40, controller.instance_variable_get(:@total_amount)
+
+      get vendor_portal_transactions_url
+      assert_select 'tbody', text: /1 package sent/
+    end
+
+    test 'a purchase page shows its packages; another vendor\'s purchase is not found' do
+      purchase = create(:voucher_transaction, vendor: @vendor_user)
+      VoucherTransactions::FulfillmentService.new(transaction: purchase, actor: @vendor_user)
+                                             .add_shipment!(attributes: { 'tracking_number' => 'AAA111' }, expected_version: 0)
+
+      get vendor_portal_transaction_url(purchase)
+      assert_response :success
+      assert_select 'h2', 'Packages'
+      assert_select 'li', text: /AAA111/
+
+      get vendor_portal_transaction_url(create(:voucher_transaction, vendor: create(:vendor_user)))
+      assert_response :not_found
+    end
+
+    test 'choosing local pickup records the mode; a stale form is refused' do
+      purchase = create(:voucher_transaction, vendor: @vendor_user)
+
+      patch vendor_portal_transaction_url(purchase), params: { fulfillment_mode: 'local_pickup', fulfillment_version: 0 }
+      assert_redirected_to vendor_portal_transaction_path(purchase)
+      assert purchase.reload.fulfillment_local_pickup?
+
+      patch vendor_portal_transaction_url(purchase), params: { fulfillment_mode: 'shipping', fulfillment_version: 0 }
+      assert_redirected_to vendor_portal_transaction_path(purchase)
+      assert_match(/Someone else changed this purchase/, flash[:alert])
+      assert purchase.reload.fulfillment_local_pickup?
+    end
+
+    test 'only shipping or pickup can be chosen' do
+      purchase = create(:voucher_transaction, vendor: @vendor_user)
+
+      patch vendor_portal_transaction_url(purchase), params: { fulfillment_mode: 'unspecified', fulfillment_version: 0 }
+
+      assert_equal 'Choose shipping or local pickup.', flash[:alert]
+      assert_equal 0, purchase.reload.fulfillment_version
+    end
+
+    test 'another vendor cannot change a purchase' do
+      purchase = create(:voucher_transaction, vendor: create(:vendor_user))
+
+      patch vendor_portal_transaction_url(purchase), params: { fulfillment_mode: 'local_pickup', fulfillment_version: 0 }
+
+      assert_response :not_found
+      assert purchase.reload.fulfillment_unspecified?
+    end
   end
 end

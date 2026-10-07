@@ -171,6 +171,35 @@ class VoucherTransactionTest < ActiveSupport::TestCase
     assert_equal 1, counts['transaction_failed']
   end
 
+  test 'needing_shipping_details matches needs_shipping_details? for every fulfillment state' do
+    vendor = create(:vendor)
+    unspecified = create(:voucher_transaction, vendor: vendor)
+    shipping_without_packages = create(:voucher_transaction, vendor: vendor, fulfillment_mode: :shipping)
+    shipped = create(:voucher_transaction, vendor: vendor)
+    VoucherTransactions::FulfillmentService.new(transaction: shipped, actor: vendor)
+                                           .add_shipment!(attributes: { 'tracking_number' => 'AAA111' }, expected_version: 0)
+    pickup = create(:voucher_transaction, vendor: vendor, fulfillment_mode: :local_pickup)
+    pending = create(:voucher_transaction, :pending, vendor: vendor)
+
+    listed = VoucherTransaction.for_vendor(vendor.id).needing_shipping_details
+    [unspecified, shipping_without_packages, shipped, pickup, pending].each do |purchase|
+      assert_equal purchase.reload.needs_shipping_details?, listed.include?(purchase), purchase.inspect
+    end
+    assert_equal [unspecified, shipping_without_packages].map(&:id).sort, listed.pluck(:id).sort
+  end
+
+  test 'purchases_visible_to lists completed purchases on applications the user may open' do
+    own = create(:application)
+    managed = create(:application, :for_dependent)
+    own_purchase = create(:voucher_transaction, voucher: create(:voucher, application: own))
+    managed_purchase = create(:voucher_transaction, voucher: create(:voucher, application: managed))
+    create(:voucher_transaction, :pending, voucher: create(:voucher, application: own))
+
+    assert_equal [own_purchase], VoucherTransaction.purchases_visible_to(own.user).to_a
+    assert_equal [managed_purchase], VoucherTransaction.purchases_visible_to(managed.managing_guardian).to_a
+    assert_empty VoucherTransaction.purchases_visible_to(managed.user), 'a managed application is listed for its guardian, not its applicant'
+  end
+
   test 'daily_totals calculates daily sums for completed transactions' do
     test_vendor = create(:vendor, email: 'daily_totals_test@example.com')
 

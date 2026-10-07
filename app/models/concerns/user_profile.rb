@@ -2,6 +2,7 @@
 
 module UserProfile
   extend ActiveSupport::Concern
+  include TypedDateInput
 
   # The phone_type enum includes email and letter preferences as legacy values.
   # For a real phone, validate submitted phone_type against these telephone routes, not the full enum.
@@ -47,7 +48,8 @@ module UserProfile
     validate :phone_must_be_unique
     validate :phone_number_must_be_valid, if: :phone_changed?, unless: :paper_context_no_phone?
     validate :dependent_phone_number_must_be_valid, if: :dependent_phone_changed?
-    validate :date_of_birth_must_be_valid
+    # Unreadable input is never stored: it would reach the encrypted column and identity lookups.
+    typed_date_input :date_of_birth
     validate :constituent_must_have_disability, if: :validate_constituent_disability?
     validate :validate_address_for_letter_preference
     validate :email_delivery_requires_real_email
@@ -83,16 +85,6 @@ module UserProfile
       Rails.logger.warn "Invalid date format for user #{id}" if date.nil?
     end
   end
-
-  # Unreadable input is never stored: it would reach the encrypted column and identity lookups.
-  # It is kept on the instance only so a re-rendered form shows what the person typed.
-  def date_of_birth=(value)
-    normalized_date = DateInputNormalizer.normalize(value)
-    @rejected_date_of_birth_input = normalized_date.nil? && value.present? ? value.to_s : nil
-    super(normalized_date)
-  end
-
-  attr_reader :rejected_date_of_birth_input
 
   def disabilities
     disability_list = []
@@ -155,10 +147,6 @@ module UserProfile
     digits = dependent_phone.gsub(/\D/, '')
     digits = digits[1..] if digits.length == 11 && digits.start_with?('1')
     errors.add(:dependent_phone, 'must be a valid 10-digit US phone number') if digits.length != 10
-  end
-
-  def date_of_birth_must_be_valid
-    errors.add(:date_of_birth, :invalid) if rejected_date_of_birth_input
   end
 
   def validate_address_for_letter_preference

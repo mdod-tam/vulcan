@@ -39,6 +39,28 @@ module VoucherHelper
     end
   end
 
+  # How a purchase's fulfillment reads to its vendor and its constituent. Packages are counted, never
+  # summed up as "shipped": only the vendor knows whether more packages are coming.
+  def fulfillment_status_label(transaction)
+    return unless transaction.fulfillable?
+
+    package_count = transaction.shipments.size
+    if transaction.fulfillment_local_pickup?
+      t('fulfillment.status.local_pickup')
+    elsif package_count.positive?
+      t('fulfillment.status.packages_sent', count: package_count)
+    elsif transaction.fulfillment_shipping?
+      t('fulfillment.status.awaiting_tracking')
+    else
+      t('fulfillment.status.awaiting_details')
+    end
+  end
+
+  def fulfillment_status_badge(transaction)
+    label = fulfillment_status_label(transaction)
+    badge_tag(label, transaction.needs_shipping_details? ? :warning : :info) if label
+  end
+
   private
 
   def badge_tag(text, style)

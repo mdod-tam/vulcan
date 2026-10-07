@@ -160,6 +160,38 @@
           </div>
         </div>
 
+        <% if @recent_purchases.any? %>
+          <section aria-labelledby="dashboard-orders-heading" class="mt-6 bg-white shadow overflow-hidden sm:rounded-lg">
+            <div class="px-4 py-5 border-b border-gray-200 sm:px-6">
+              <h3 id="dashboard-orders-heading" class="text-lg leading-6 font-medium text-gray-900"><%= t("fulfillment.orders.heading") %></h3>
+            </div>
+            <ul role="list" class="divide-y divide-gray-200 px-4 sm:px-6">
+              <% @recent_purchases.each do |purchase| %>
+                <% application = purchase.voucher.application %>
+                <% purchased_on = l(purchase.processed_at.to_date, format: :long) %>
+                <li class="py-4 flex flex-wrap items-center justify-between gap-2">
+                  <div>
+                    <p class="text-sm font-medium text-gray-900"><%= purchase.vendor.business_name %></p>
+                    <p class="text-sm text-gray-500">
+                      <%= t("fulfillment.orders.purchased_on", date: purchased_on) %>
+                      <% if application.user_id != current_user.id %>
+                        · <%= t("fulfillment.orders.for_applicant", name: application.user.full_name) %>
+                      <% end %>
+                    </p>
+                  </div>
+                  <div class="flex flex-wrap items-center gap-3">
+                    <%= fulfillment_status_badge(purchase) %>
+                    <%= link_to t("fulfillment.orders.view_link"),
+                          constituent_portal_application_path(application, anchor: "orders-and-shipping"),
+                          class: "text-sm text-indigo-700 hover:text-indigo-900",
+                          aria: { label: t("fulfillment.orders.view_link_label", vendor: purchase.vendor.business_name, date: purchased_on) } %>
+                  </div>
+                </li>
+              <% end %>
+            </ul>
+          </section>
+        <% end %>
+
         <% if current_user&.dependents.any? || @managed_applications&.any? %>
           <div class="mt-6 bg-white shadow overflow-hidden sm:rounded-lg">
             <div class="px-4 py-5 border-b border-gray-200 sm:px-6">

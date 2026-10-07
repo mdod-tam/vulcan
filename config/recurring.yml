@@ -16,6 +16,11 @@ production:
     schedule: "0 5 * * * UTC"
     description: "Purge unattached direct uploads after seven days"
 
+  send_owed_tracking_notices:
+    class: VoucherTransactions::TrackingNoticeJob
+    schedule: "40 * * * *"
+    description: "Send first-tracking notices whose queued run never happened"
+
   generate_vendor_invoices:
     class: GenerateVendorInvoicesJob
     schedule: "15 5 */14 * * UTC"
