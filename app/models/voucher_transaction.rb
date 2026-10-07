@@ -14,7 +14,11 @@ class VoucherTransaction < ApplicationRecord
                      numericality: { greater_than: 0 }
   validates :reference_number, presence: true, uniqueness: true
   validates :processed_at, presence: true
-  validate :amount_within_voucher_limit?, if: :redemption?
+  # A transaction records money that moved. It is checked against the voucher's balance once, when
+  # created; the balance falls with later redemptions, so a later save (such as invoicing) must not
+  # re-check it. Its money fields therefore never change once saved.
+  validate :amount_within_voucher_limit?, if: :redemption?, on: :create
+  attr_readonly :voucher_id, :vendor_id, :amount, :transaction_type, :reference_number, :processed_at
 
   before_validation :set_processed_at, on: :create
   before_validation :generate_reference_number, on: :create
