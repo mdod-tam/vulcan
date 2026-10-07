@@ -106,6 +106,20 @@ module VendorPortal
       assert_equal 'ZZZ999', shipment.reload.tracking_number
     end
 
+    # Product decision: a vendor suspended after a sale can still give the customer tracking for it.
+    # Only their own completed purchases are reachable, and they saw the same details at redemption.
+    test 'a suspended vendor can still record tracking on a purchase they completed' do
+      suspended = create(:vendor, :suspended)
+      purchase = create(:voucher_transaction, vendor: suspended)
+      assert_not suspended.can_process_vouchers?
+      sign_in_with_headers(suspended)
+
+      post vendor_portal_transaction_shipments_url(purchase), params: { fulfillment_version: 0, shipment: { tracking_number: 'AAA111' } }
+
+      assert_redirected_to vendor_portal_transaction_path(purchase)
+      assert_equal %w[AAA111], purchase.shipments.pluck(:tracking_number)
+    end
+
     test 'a pending purchase cannot be given packages' do
       pending = create(:voucher_transaction, :pending, vendor: @vendor)
 

@@ -117,6 +117,11 @@ es:
         income_proof: "Comprobante de ingresos"
         residency_proof: "Comprobante de residencia en Maryland"
         id_proof: "Comprobante de identidad"
+      voucher_transaction_shipment:
+        tracking_number: "Número de rastreo"
+        normalized_tracking_number: "Número de rastreo"
+        dispatched_on: "Fecha de envío"
+        contents: "Contenido del paquete"
     errors:
       models:
         user:
@@ -142,6 +147,13 @@ es:
             base:
               training_session_quota_exhausted: "Esta solicitud no tiene más espacios disponibles para capacitación."
               historical_session_reopen: "Las sesiones de capacitación históricas no se pueden reabrir. Programe una sesión de seguimiento."
+        voucher_transaction_shipment:
+          attributes:
+            normalized_tracking_number:
+              taken: "ya está registrado para esta compra"
+            dispatched_on:
+              invalid: "no es una fecha válida. Ingrésela como MM/DD/AAAA"
+              in_future: "no puede ser una fecha futura"
   activemodel:
     errors:
       models:

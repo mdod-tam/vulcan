@@ -57,6 +57,7 @@ A completed redemption is a purchase the vendor can fulfill. [VoucherTransaction
 | Only completed redemptions are fulfilled | `VoucherTransaction#fulfillable?`, checked under the purchase row lock |
 | A form built from an older state is refused | The purchase's `fulfillment_version` (mode and new packages) and each package's `lock_version` (corrections) |
 | A tracking number is recorded once per purchase | Unique index on the normalized number per purchase |
+| A vendor suspended after a sale can still record tracking for that sale (deliberate: the customer still needs it, and the vendor saw these details at redemption) | Vendor portal lookups are scoped to the vendor's own purchases; voucher processing approval is not required |
 | Only the applicant of an unmanaged application, or its managing guardian, sees purchases | `VoucherTransaction.purchases_visible_to`, built on `Application.accessible_by` |
 
 Recording or correcting a package sends no email, letter, or notification. The applicant (or the managing guardian) sees packages on the application page and dashboard, and staff see them, with the fulfillment history, on the admin voucher page. A recorded package means only that the vendor reported tracking: the copy says "tracking available" and labels any date as the vendor-reported ship date. It is not evidence of dispatch, delivery, or acceptance, which can bear on payment. Switching to local pickup keeps recorded packages as history.
