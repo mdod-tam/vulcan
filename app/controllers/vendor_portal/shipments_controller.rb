@@ -8,8 +8,11 @@ module VendorPortal
     before_action { load_purchase(params[:transaction_id]) }
 
     def create
+      was_pickup = @transaction.fulfillment_local_pickup?
       fulfillment_service.add_shipment!(attributes: shipment_params, expected_version: params.require(:fulfillment_version))
-      redirect_to_purchase(notice: 'Tracking number saved. The customer will be notified about this package.')
+      notice = 'Tracking number saved.'
+      notice += ' This purchase is now marked as shipping instead of local pickup.' if was_pickup
+      redirect_to_purchase(notice: notice)
     rescue ActiveRecord::RecordInvalid => e
       render_purchase_page(status: :unprocessable_content, new_shipment: e.record, expected_version: params[:fulfillment_version])
     rescue VoucherTransactions::FulfillmentService::StaleError

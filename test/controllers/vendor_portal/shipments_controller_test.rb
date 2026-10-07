@@ -12,15 +12,29 @@ module VendorPortal
       @purchase = create(:voucher_transaction, vendor: @vendor)
     end
 
-    test 'recording a package saves it and queues its notice' do
-      assert_enqueued_with(job: VoucherTransactions::TrackingNoticeJob) do
-        post vendor_portal_transaction_shipments_url(@purchase),
-             params: { fulfillment_version: 0, shipment: { tracking_number: '1Z999', dispatched_on: '9/9/2026', contents: 'Phone' } }
+    test 'recording a package saves it and sends no email, letter, or notification' do
+      assert_no_emails do
+        assert_no_difference(['Notification.count', 'PrintQueueItem.count']) do
+          post vendor_portal_transaction_shipments_url(@purchase),
+               params: { fulfillment_version: 0, shipment: { tracking_number: '1Z999', dispatched_on: '9/9/2026', contents: 'Phone' } }
+        end
       end
+      assert_equal 'Tracking number saved.', flash[:notice]
 
       assert_redirected_to vendor_portal_transaction_path(@purchase)
       shipment = @purchase.shipments.sole
       assert_equal ['1Z999', Date.new(2026, 9, 9), 'Phone'], [shipment.tracking_number, shipment.dispatched_on, shipment.contents]
+    end
+
+    test 'recording a package on a pickup purchase says it is now shipping' do
+      VoucherTransactions::FulfillmentService.new(transaction: @purchase, actor: @vendor).change_mode!(mode: :local_pickup, expected_version: 0)
+      get vendor_portal_transaction_url(@purchase)
+      assert_select 'p', text: /set to local pickup. Saving a tracking number changes it to shipping/
+
+      post vendor_portal_transaction_shipments_url(@purchase), params: { fulfillment_version: 1, shipment: { tracking_number: 'AAA111' } }
+
+      assert_match(/now marked as shipping instead of local pickup/, flash[:notice])
+      assert @purchase.reload.fulfillment_shipping?
     end
 
     test 'an invalid package re-renders with the typed input and an error summary' do

@@ -1,0 +1,15 @@
+<%# locals: (shipments:) %>
+<%# A purchase's recorded packages, as the vendor reported them. %>
+<ul role="list" class="mt-2 space-y-2">
+  <% shipments.each do |shipment| %>
+    <li class="text-sm text-gray-700">
+      <p class="break-all"><%= t('fulfillment.orders.tracking_number', number: shipment.tracking_number) %></p>
+      <% if shipment.dispatched? %>
+        <p><%= t('fulfillment.orders.ship_date', date: l(shipment.dispatched_on, format: :long)) %></p>
+      <% end %>
+      <% if shipment.contents.present? %>
+        <p><%= t('fulfillment.orders.contents', contents: shipment.contents) %></p>
+      <% end %>
+    </li>
+  <% end %>
+</ul>

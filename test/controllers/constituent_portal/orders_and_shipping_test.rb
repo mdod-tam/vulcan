@@ -24,9 +24,9 @@ module ConstituentPortal
       assert_select 'section#orders-and-shipping[aria-labelledby=orders-heading]' do
         assert_select 'h2', 'Orders and shipping'
         assert_select 'li', text: /Accessible Phones Co/
-        assert_select 'span', text: '2 packages sent'
+        assert_select 'span', text: 'Tracking available for 2 packages'
         assert_select 'li', text: /Tracking number: AAA111/
-        assert_select 'li', text: /Shipped September 09, 2026/
+        assert_select 'li', text: /Vendor-reported ship date: September 09, 2026/
         assert_select 'li', text: /Contents: Phone/
         assert_select 'li', text: /Tracking number: BBB222/
         assert_select 'p', text: /Contact Accessible Phones Co, or the MAT program at #{ProgramContact.support_email}/
@@ -41,7 +41,7 @@ module ConstituentPortal
       get constituent_portal_application_path(application)
 
       assert_select '#orders-and-shipping span', text: 'Waiting for shipping details'
-      assert_select '#orders-and-shipping', text: /sent/, count: 0
+      assert_select '#orders-and-shipping', text: /Tracking available/, count: 0
     end
 
     test 'the managing guardian sees the dependent\'s purchases on the application page and dashboard' do

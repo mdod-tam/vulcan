@@ -37,7 +37,7 @@ module Vouchers
       return [] unless voucher
 
       events = build_audit_logs
-      EventDeduplicationService.new.deduplicate(events)
+      Applications::EventDeduplicationService.new.deduplicate(events)
     rescue StandardError => e
       Rails.logger.error "Failed to build deduplicated audit logs for voucher #{voucher.id}: #{e.message}"
       Rails.logger.error e.backtrace.join("\n")

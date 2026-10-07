@@ -1,32 +1,19 @@
 <%# locals: (purchase:) %>
-<% purchased_on = l(purchase.processed_at.to_date, format: :long) %>
 <li class="py-4">
   <div class="flex flex-wrap items-center gap-2">
     <p class="text-base font-medium text-gray-900"><%= purchase.vendor.business_name %></p>
     <%= fulfillment_status_badge(purchase) %>
   </div>
   <p class="text-sm text-gray-600">
-    <%= t("fulfillment.orders.purchased_on", date: purchased_on) %> ·
-    <%= t("fulfillment.orders.amount", amount: number_to_currency(purchase.amount)) %>
+    <%= t('fulfillment.orders.purchased_on', date: purchase_date(purchase)) %> ·
+    <%= t('fulfillment.orders.amount', amount: number_to_currency(purchase.amount)) %>
   </p>
   <% if purchase.shipments.any? %>
-    <h4 class="sr-only"><%= t("fulfillment.orders.packages_heading") %></h4>
-    <ul role="list" class="mt-2 space-y-2">
-      <% purchase.shipments.each do |shipment| %>
-        <li class="text-sm text-gray-700">
-          <p class="break-all"><%= t("fulfillment.orders.tracking_number", number: shipment.tracking_number) %></p>
-          <% if shipment.dispatched? %>
-            <p><%= t("fulfillment.orders.shipped_on", date: l(shipment.dispatched_on, format: :long)) %></p>
-          <% end %>
-          <% if shipment.contents.present? %>
-            <p><%= t("fulfillment.orders.contents", contents: shipment.contents) %></p>
-          <% end %>
-        </li>
-      <% end %>
-    </ul>
+    <h4 class="sr-only"><%= t('fulfillment.orders.packages_heading') %></h4>
+    <%= render 'shared/packages', shipments: purchase.shipments %>
   <% end %>
   <p class="mt-2 text-sm text-gray-500">
-    <%= t("fulfillment.orders.support", vendor: purchase.vendor.business_name,
-          email: ProgramContact.support_email, phone: ProgramContact.support_phone) %>
+    <%= t('fulfillment.orders.support', vendor: purchase.vendor.business_name,
+                                        email: ProgramContact.support_email, phone: ProgramContact.support_phone) %>
   </p>
 </li>

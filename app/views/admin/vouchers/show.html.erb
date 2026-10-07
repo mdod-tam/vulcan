@@ -157,6 +157,14 @@
                                 class: "text-indigo-600 hover:text-indigo-900" %>
                           <% end %>
                         </div>
+                        <% if transaction.fulfillable? %>
+                          <div class="mt-2 text-sm text-gray-500">
+                            <span class="mr-2">Fulfillment:</span><%= fulfillment_status_badge(transaction) %>
+                            <% if transaction.shipments.any? %>
+                              <%= render 'shared/packages', shipments: transaction.shipments %>
+                            <% end %>
+                          </div>
+                        <% end %>
                       </div>
                     </div>
                   </div>
@@ -210,7 +218,9 @@
                         </div>
                         <% if event.metadata.present? && event.metadata["changes"].present? %>
                           <div class="mt-2 text-sm">
-                            <% event.metadata["changes"].each do |attribute, (before, after)| %>
+                            <%# Change values are {'old' => ..., 'new' => ...}; Event#field_changes restores encrypted ones. %>
+                            <% event.field_changes.transform_values { |change| change.is_a?(Hash) ? change.values_at('old', 'new') : Array(change) }
+                                    .each do |attribute, (before, after)| %>
                               <div class="text-gray-500">
                                 <span class="font-medium"><%= attribute.humanize %>:</span>
                                 <span class="line-through text-red-500"><%= before || "nil" %></span>

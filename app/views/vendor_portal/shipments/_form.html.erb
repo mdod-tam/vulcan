@@ -1,10 +1,10 @@
 <%# locals: (transaction:, shipment:, expected_version: nil) %>
 <%# One form for recording a new package and for correcting a recorded one. %>
-<% form_key = shipment.persisted? ? "shipment_#{shipment.id}" : "new_shipment" %>
+<% form_key = shipment.persisted? ? "shipment_#{shipment.id}" : 'new_shipment' %>
 <% errors_id = "#{form_key}_errors" %>
 <% url = shipment.persisted? ? vendor_portal_transaction_shipment_path(transaction, shipment) : vendor_portal_transaction_shipments_path(transaction) %>
-<% input_class = "mt-1 block w-full rounded-md border-gray-300 shadow-sm focus:border-indigo-500 focus:ring-indigo-500 sm:text-sm" %>
-<%= form_with model: shipment, scope: :shipment, url: url, namespace: form_key, class: "space-y-4" do |f| %>
+<% input_class = 'mt-1 block w-full rounded-md border-gray-300 shadow-sm focus:border-indigo-500 focus:ring-indigo-500 sm:text-sm' %>
+<%= form_with model: shipment, scope: :shipment, url: url, namespace: form_key, class: 'space-y-4' do |f| %>
   <% tracking_errors = shipment.errors[:tracking_number] + shipment.errors[:normalized_tracking_number] %>
   <% if shipment.errors.any? %>
     <div id="<%= errors_id %>" role="alert" tabindex="-1" data-controller="error-summary"
@@ -26,31 +26,31 @@
   <% end %>
 
   <div>
-    <%= f.label :tracking_number, "Tracking number", class: "block text-sm font-medium text-gray-700" %>
-    <%= f.text_field :tracking_number, required: true, maxlength: 64, autocomplete: "off", spellcheck: false,
-          class: input_class,
-          "aria-invalid": tracking_errors.any?,
-          "aria-describedby": (errors_id if tracking_errors.any?) %>
+    <%= f.label :tracking_number, 'Tracking number', class: 'block text-sm font-medium text-gray-700' %>
+    <%= f.text_field :tracking_number, required: true, maxlength: 64, autocomplete: 'off', spellcheck: false,
+                                       class: input_class,
+                                       'aria-invalid': tracking_errors.any?,
+                                       'aria-describedby': (errors_id if tracking_errors.any?) %>
   </div>
 
   <div>
-    <%= f.label :dispatched_on, "Ship date (optional)", class: "block text-sm font-medium text-gray-700" %>
-    <p id="<%= f.field_id(:dispatched_on, :hint) %>" class="text-sm text-gray-500">Enter as MM/DD/YYYY.</p>
+    <%= f.label :dispatched_on, 'Ship date (optional)', class: 'block text-sm font-medium text-gray-700' %>
+    <p id="<%= f.field_id(:dispatched_on, :hint) %>" class="text-sm text-gray-500">The date you sent this package, if known. Enter as MM/DD/YYYY.</p>
     <%= f.text_field :dispatched_on, typed_date_field_options(
           value: typed_date_input_value(shipment, :dispatched_on),
           class: input_class,
-          "aria-invalid": shipment.errors[:dispatched_on].any?,
-          "aria-describedby": [f.field_id(:dispatched_on, :hint), (errors_id if shipment.errors[:dispatched_on].any?)].compact.join(" ")
+          'aria-invalid': shipment.errors[:dispatched_on].any?,
+          'aria-describedby': [f.field_id(:dispatched_on, :hint), (errors_id if shipment.errors[:dispatched_on].any?)].compact.join(' ')
         ) %>
   </div>
 
   <div>
-    <%= f.label :contents, "What's in this package (optional)", class: "block text-sm font-medium text-gray-700" %>
+    <%= f.label :contents, "What's in this package (optional)", class: 'block text-sm font-medium text-gray-700' %>
     <%= f.text_area :contents, rows: 2, maxlength: 500, class: input_class,
-          "aria-invalid": shipment.errors[:contents].any?,
-          "aria-describedby": (errors_id if shipment.errors[:contents].any?) %>
+                               'aria-invalid': shipment.errors[:contents].any?,
+                               'aria-describedby': (errors_id if shipment.errors[:contents].any?) %>
   </div>
 
-  <%= f.submit shipment.persisted? ? "Save correction" : "Save tracking number",
-        class: "inline-flex justify-center py-2 px-4 border border-transparent shadow-sm text-sm font-medium rounded-md text-white bg-indigo-600 hover:bg-indigo-700 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-indigo-500" %>
+  <%= f.submit shipment.persisted? ? 'Save correction' : 'Save tracking number',
+               class: 'inline-flex justify-center py-2 px-4 border border-transparent shadow-sm text-sm font-medium rounded-md text-white bg-indigo-600 hover:bg-indigo-700 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-indigo-500' %>
 <% end %>

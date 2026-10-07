@@ -8,8 +8,6 @@ class VoucherTransactionShipment < ApplicationRecord
   belongs_to :voucher_transaction, inverse_of: :shipments
   belongs_to :created_by, class_name: 'User'
   belongs_to :updated_by, class_name: 'User', optional: true
-  # The package's first-tracking notice; see VoucherTransactions::TrackingNotice.
-  belongs_to :tracking_notification, class_name: 'Notification', optional: true
 
   normalizes :tracking_number, with: ->(number) { number.to_s.strip }
   before_validation :normalize_tracking_number
@@ -19,8 +17,6 @@ class VoucherTransactionShipment < ApplicationRecord
   validates :contents, length: { maximum: 500 }
   typed_date_input :dispatched_on
   validate :dispatched_on_not_in_future
-
-  scope :awaiting_tracking_notice, -> { where(tracking_notification_id: nil) }
 
   def dispatched?
     dispatched_on.present?

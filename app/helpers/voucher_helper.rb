@@ -39,8 +39,9 @@ module VoucherHelper
     end
   end
 
-  # How a purchase's fulfillment reads to its vendor and its constituent. Packages are counted, never
-  # summed up as "shipped": only the vendor knows whether more packages are coming.
+  # How a purchase's fulfillment reads to its vendor, its constituent, and staff. It says only that
+  # tracking exists: a tracking number is not proof of dispatch, delivery, or acceptance, which can
+  # matter to payment, and only the vendor knows whether more packages are coming.
   def fulfillment_status_label(transaction)
     return unless transaction.fulfillable?
 
@@ -48,12 +49,16 @@ module VoucherHelper
     if transaction.fulfillment_local_pickup?
       t('fulfillment.status.local_pickup')
     elsif package_count.positive?
-      t('fulfillment.status.packages_sent', count: package_count)
+      t('fulfillment.status.tracking_available', count: package_count)
     elsif transaction.fulfillment_shipping?
       t('fulfillment.status.awaiting_tracking')
     else
       t('fulfillment.status.awaiting_details')
     end
+  end
+
+  def purchase_date(transaction)
+    l(transaction.processed_at.to_date, format: :long)
   end
 
   def fulfillment_status_badge(transaction)

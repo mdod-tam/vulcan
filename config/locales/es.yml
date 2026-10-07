@@ -755,7 +755,6 @@ es:
       assigned_header: "¡Su vale de MAT está listo!"
       expired_header: "Importante: Su vale ha vencido"
       redeemed_header: "¡Su vale ha sido canjeado!"
-      shipment_header: "Un paquete de su pedido está en camino"
       transaction_history_entry: "- %{date}: %{amount} en %{vendor}"
       remaining_balance: "Su saldo restante es %{balance}. El monto mínimo de canje es %{minimum}."
       fully_redeemed: "Este vale ha sido canjeado por completo."
@@ -1074,9 +1073,9 @@ es:
   fulfillment:
     status:
       local_pickup: "Recogida en tienda"
-      packages_sent:
-        one: "1 paquete enviado"
-        other: "%{count} paquetes enviados"
+      tracking_available:
+        one: "Rastreo disponible para 1 paquete"
+        other: "Rastreo disponible para %{count} paquetes"
       awaiting_tracking: "En espera del número de rastreo"
       awaiting_details: "En espera de los datos de envío"
     orders:
@@ -1087,9 +1086,9 @@ es:
       for_applicant: "Para %{name}"
       packages_heading: "Paquetes"
       tracking_number: "Número de rastreo: %{number}"
-      shipped_on: "Enviado el %{date}"
+      ship_date: "Fecha de envío informada por el proveedor: %{date}"
       contents: "Contenido: %{contents}"
-      more_packages_note: "Un pedido puede llegar en más de un paquete. Cada paquete aparece aquí cuando el proveedor lo registra."
+      more_packages_note: "Un pedido puede llegar en más de un paquete. El rastreo de cada paquete aparece aquí cuando el proveedor lo registra. El rastreo proviene del proveedor y no confirma la entrega."
       support: "¿Preguntas sobre un pedido? Comuníquese con %{vendor} o con el programa MAT en %{email} o al %{phone}."
       view_link: "Ver pedidos y envíos"
       view_link_label: "Ver pedidos y envíos de %{vendor}, comprado el %{date}"

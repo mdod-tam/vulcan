@@ -539,7 +539,6 @@ en:
       assigned_header: "Your MAT Voucher is Ready!"
       expired_header: "Important: Your Voucher Has Expired"
       redeemed_header: "Your voucher has been redeemed!"
-      shipment_header: "A package from your order is on its way"
       transaction_history_entry: "- %{date}: %{amount} at %{vendor}"
       remaining_balance: "Your remaining balance is %{balance}. Minimum redemption amount is %{minimum}."
       fully_redeemed: "This voucher has been fully redeemed."
@@ -1207,9 +1206,9 @@ en:
   fulfillment:
     status:
       local_pickup: "Local pickup"
-      packages_sent:
-        one: "1 package sent"
-        other: "%{count} packages sent"
+      tracking_available:
+        one: "Tracking available for 1 package"
+        other: "Tracking available for %{count} packages"
       awaiting_tracking: "Waiting for tracking"
       awaiting_details: "Waiting for shipping details"
     orders:
@@ -1220,9 +1219,9 @@ en:
       for_applicant: "For %{name}"
       packages_heading: "Packages"
       tracking_number: "Tracking number: %{number}"
-      shipped_on: "Shipped %{date}"
+      ship_date: "Vendor-reported ship date: %{date}"
       contents: "Contents: %{contents}"
-      more_packages_note: "An order can arrive in more than one package. Each package appears here when the vendor records it."
+      more_packages_note: "An order can come in more than one package. Tracking for each package appears here when the vendor records it. Tracking comes from the vendor and does not confirm delivery."
       support: "Questions about an order? Contact %{vendor}, or the MAT program at %{email} or %{phone}."
       view_link: "View orders and shipping"
       view_link_label: "View orders and shipping for %{vendor}, purchased %{date}"

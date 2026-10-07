@@ -79,7 +79,6 @@ module EmailDelivery
       'VoucherNotificationsMailer#voucher_expired' => [:voucher, :preference, 'voucher_notifications_voucher_expired'],
       'VoucherNotificationsMailer#voucher_expiring_soon' => [:voucher, :preference, 'voucher_notifications_voucher_expiring_soon'],
       'VoucherNotificationsMailer#voucher_redeemed' => [:voucher, :preference, 'voucher_notifications_voucher_redeemed'],
-      'VoucherNotificationsMailer#shipment_tracking_added' => [:voucher, :preference, 'voucher_notifications_shipment_tracking_added'],
       # DocuSeal sends this request. DocumentSigning::SubmissionService applies the delivery policy.
       'DocuSeal#signing_request' => [:certification, :email_only, nil, 'DocumentSigning::SubmissionService']
     }.to_h do |key, (category, routing, template, owner)|
@@ -126,7 +125,6 @@ module EmailDelivery
       'medical_certification_not_provided' => ['ApplicationNotificationsMailer#medical_certification_not_provided',
                                                :notifiable_and_notification, :preference],
       'max_rejections_warning' => ['ApplicationNotificationsMailer#max_rejections_reached', :notifiable, :email],
-      'shipment_tracking_added' => ['VoucherNotificationsMailer#shipment_tracking_added', :notifiable_and_notification, :preference],
       'medical_certification_received' => AUDIT_ONLY,
       'documents_requested' => AUDIT_ONLY,
       'proof_approved' => AUDIT_ONLY,

@@ -18,7 +18,7 @@ module ConstituentPortal
 
       assert_current_path constituent_portal_application_path(application)
       assert_selector '#orders-and-shipping', text: 'Tracking number: AAA111'
-      assert_selector '#orders-and-shipping', text: '1 package sent'
+      assert_selector '#orders-and-shipping', text: 'Tracking available for 1 package'
       take_screenshot('constituent-orders-applicant', html: true, full: true)
     end
 

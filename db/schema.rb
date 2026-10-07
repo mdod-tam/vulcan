@@ -96,7 +96,6 @@ ActiveRecord::Schema[8.1].define(version: 2026_10_07_010000) do
     t.datetime "application_date"
     t.string "application_transfer_id"
     t.integer "application_type"
-    t.jsonb "autosave_revisions", default: {}, null: false
     t.datetime "created_at", null: false
     t.string "current_step"
     t.text "document_signing_audit_url"
@@ -148,6 +147,7 @@ ActiveRecord::Schema[8.1].define(version: 2026_10_07_010000) do
     t.datetime "training_requested_at"
     t.datetime "updated_at", null: false
     t.bigint "user_id", null: false
+    t.jsonb "autosave_revisions", default: {}, null: false
     t.index ["document_signing_service"], name: "index_applications_on_document_signing_service"
     t.index ["document_signing_status"], name: "index_applications_on_document_signing_status"
     t.index ["document_signing_submission_id"], name: "index_applications_on_document_signing_submission_id"
@@ -216,35 +216,35 @@ ActiveRecord::Schema[8.1].define(version: 2026_10_07_010000) do
   end
 
   create_table "email_delivery_attempts", force: :cascade do |t|
-    t.datetime "accepted_at"
-    t.bigint "application_id"
-    t.datetime "attempted_at", null: false
-    t.string "bounce_category"
-    t.bigint "bounce_event_id"
-    t.datetime "bounced_at"
-    t.integer "check_count", default: 0, null: false
-    t.datetime "check_failed_at"
-    t.datetime "complained_at"
     t.string "correlation_id", null: false
-    t.datetime "created_at", null: false
-    t.datetime "delayed_at"
-    t.datetime "delivered_at"
-    t.bigint "delivery_owner_id"
+    t.string "recipient_key", null: false
     t.text "destination", null: false
+    t.string "provider", default: "postmark", null: false
+    t.string "server_id", null: false
+    t.string "provider_message_id"
+    t.string "rfc_message_id"
+    t.string "mail_action", null: false
+    t.string "state", default: "unknown", null: false
+    t.bigint "notification_id"
+    t.bigint "application_id"
+    t.string "origin_type"
+    t.bigint "origin_id"
+    t.bigint "recipient_id"
+    t.bigint "delivery_owner_id"
+    t.bigint "bounce_event_id"
+    t.datetime "attempted_at", null: false
+    t.datetime "accepted_at"
+    t.datetime "delivered_at"
+    t.datetime "bounced_at"
+    t.datetime "complained_at"
+    t.datetime "delayed_at"
+    t.datetime "opened_at"
+    t.string "bounce_category"
     t.datetime "feedback_at"
     t.datetime "last_checked_at"
-    t.string "mail_action", null: false
-    t.bigint "notification_id"
-    t.datetime "opened_at"
-    t.bigint "origin_id"
-    t.string "origin_type"
-    t.string "provider", default: "postmark", null: false
-    t.string "provider_message_id"
-    t.bigint "recipient_id"
-    t.string "recipient_key", null: false
-    t.string "rfc_message_id"
-    t.string "server_id", null: false
-    t.string "state", default: "unknown", null: false
+    t.datetime "check_failed_at"
+    t.integer "check_count", default: 0, null: false
+    t.datetime "created_at", null: false
     t.datetime "updated_at", null: false
     t.index ["application_id"], name: "index_email_delivery_attempts_on_application_id"
     t.index ["bounce_event_id"], name: "index_email_delivery_attempts_on_bounce_event_id"
@@ -256,25 +256,24 @@ ActiveRecord::Schema[8.1].define(version: 2026_10_07_010000) do
     t.index ["server_id", "last_checked_at", "id"], name: "index_email_delivery_attempts_on_pollable", order: { last_checked_at: "NULLS FIRST" }, where: "((delivered_at IS NULL) AND (bounced_at IS NULL) AND (complained_at IS NULL) AND ((state)::text <> 'failed'::text) AND (provider_message_id IS NOT NULL) AND (check_count < 8))"
     t.index ["server_id", "provider_message_id", "recipient_key"], name: "email_attempt_provider_recipient", unique: true
     t.check_constraint "check_count >= 0", name: "email_attempt_check_count"
-    t.check_constraint "state::text = ANY (ARRAY['unknown'::character varying::text, 'accepted'::character varying::text, 'failed'::character varying::text])", name: "email_attempt_state"
+    t.check_constraint "state::text = ANY (ARRAY['unknown'::character varying, 'accepted'::character varying, 'failed'::character varying]::text[])", name: "email_attempt_state"
   end
 
   create_table "email_delivery_receipts", force: :cascade do |t|
-    t.datetime "created_at", null: false
     t.bigint "email_delivery_attempt_id", null: false
     t.string "event_key", null: false
     t.string "kind", null: false
     t.datetime "occurred_at", null: false
+    t.datetime "created_at", null: false
     t.datetime "updated_at", null: false
     t.index ["email_delivery_attempt_id", "event_key"], name: "email_receipt_event", unique: true
     t.index ["email_delivery_attempt_id"], name: "index_email_delivery_receipts_on_email_delivery_attempt_id"
-    t.check_constraint "kind::text = ANY (ARRAY['delivered'::character varying::text, 'bounced'::character varying::text, 'complained'::character varying::text, 'opened'::character varying::text, 'delayed'::character varying::text])", name: "email_receipt_kind"
+    t.check_constraint "kind::text = ANY (ARRAY['delivered'::character varying, 'bounced'::character varying, 'complained'::character varying, 'opened'::character varying, 'delayed'::character varying]::text[])", name: "email_receipt_kind"
   end
 
   create_table "email_templates", force: :cascade do |t|
     t.text "body"
     t.datetime "created_at", null: false
-    t.bigint "delivery_generation", default: 0, null: false
     t.text "description"
     t.boolean "enabled", default: true, null: false
     t.integer "format", default: 0
@@ -289,6 +288,7 @@ ActiveRecord::Schema[8.1].define(version: 2026_10_07_010000) do
     t.bigint "updated_by_id"
     t.jsonb "variables", default: {}
     t.integer "version", default: 1
+    t.bigint "delivery_generation", default: 0, null: false
     t.index ["enabled"], name: "index_email_templates_on_enabled"
     t.index ["name", "format", "locale"], name: "index_email_templates_on_name_format_locale", unique: true
     t.index ["updated_by_id"], name: "index_email_templates_on_updated_by_id"
@@ -327,13 +327,13 @@ ActiveRecord::Schema[8.1].define(version: 2026_10_07_010000) do
     t.string "action", null: false
     t.bigint "auditable_id"
     t.string "auditable_type"
-    t.text "change_values"
     t.datetime "created_at", null: false
     t.string "ip_address"
     t.jsonb "metadata", default: {}, null: false
     t.datetime "updated_at", null: false
     t.string "user_agent"
     t.bigint "user_id", null: false
+    t.text "change_values"
     t.index ["action", "auditable_type", "auditable_id"], name: "index_events_on_action_and_auditable"
     t.index ["auditable_type", "auditable_id"], name: "index_events_on_auditable"
     t.index ["metadata"], name: "index_events_on_metadata", using: :gin
@@ -342,10 +342,10 @@ ActiveRecord::Schema[8.1].define(version: 2026_10_07_010000) do
 
   create_table "feature_flags", force: :cascade do |t|
     t.datetime "created_at", null: false
-    t.bigint "delivery_generation", default: 0, null: false
     t.boolean "enabled", default: false, null: false
     t.string "name", null: false
     t.datetime "updated_at", null: false
+    t.bigint "delivery_generation", default: 0, null: false
     t.index ["name"], name: "index_feature_flags_on_name", unique: true
   end
 
@@ -401,7 +401,6 @@ ActiveRecord::Schema[8.1].define(version: 2026_10_07_010000) do
   create_table "medical_provider_secure_request_forms", force: :cascade do |t|
     t.bigint "application_id", null: false
     t.datetime "created_at", null: false
-    t.datetime "expiration_recorded_at"
     t.datetime "expires_at", null: false
     t.integer "kind", default: 0, null: false
     t.string "provider_email", null: false
@@ -414,6 +413,7 @@ ActiveRecord::Schema[8.1].define(version: 2026_10_07_010000) do
     t.integer "status", default: 0, null: false
     t.datetime "submitted_at"
     t.datetime "updated_at", null: false
+    t.datetime "expiration_recorded_at"
     t.index ["application_id", "kind", "provider_email", "sent_at"], name: "idx_med_provider_secure_forms_on_app_kind_email_sent"
     t.index ["application_id", "kind", "provider_email"], name: "idx_med_provider_secure_forms_one_active_provider", unique: true, where: "((status = 0) AND (kind = 0))"
     t.index ["application_id"], name: "index_medical_provider_secure_request_forms_on_application_id"
@@ -468,19 +468,19 @@ ActiveRecord::Schema[8.1].define(version: 2026_10_07_010000) do
   create_table "print_queue_items", force: :cascade do |t|
     t.bigint "admin_id"
     t.bigint "application_id"
-    t.datetime "canceled_at"
-    t.string "cancellation_reason"
     t.bigint "constituent_id", null: false
     t.datetime "created_at", null: false
-    t.jsonb "delivery_context"
-    t.jsonb "delivery_identity"
-    t.string "delivery_key"
     t.integer "letter_type", null: false
     t.datetime "printed_at"
-    t.datetime "released_at"
-    t.bigint "secure_request_form_id"
     t.integer "status", default: 0, null: false
     t.datetime "updated_at", null: false
+    t.string "delivery_key"
+    t.jsonb "delivery_context"
+    t.jsonb "delivery_identity"
+    t.datetime "released_at"
+    t.datetime "canceled_at"
+    t.string "cancellation_reason"
+    t.bigint "secure_request_form_id"
     t.index ["admin_id"], name: "index_print_queue_items_on_admin_id"
     t.index ["application_id"], name: "index_print_queue_items_on_application_id"
     t.index ["constituent_id"], name: "index_print_queue_items_on_constituent_id"
@@ -576,9 +576,6 @@ ActiveRecord::Schema[8.1].define(version: 2026_10_07_010000) do
   create_table "secure_request_forms", force: :cascade do |t|
     t.bigint "application_id", null: false
     t.datetime "created_at", null: false
-    t.bigint "delivery_owner_id"
-    t.string "delivery_source"
-    t.datetime "expiration_recorded_at"
     t.datetime "expires_at", null: false
     t.integer "kind", default: 0, null: false
     t.string "public_token_digest", null: false
@@ -595,6 +592,9 @@ ActiveRecord::Schema[8.1].define(version: 2026_10_07_010000) do
     t.integer "status", default: 0, null: false
     t.datetime "submitted_at"
     t.datetime "updated_at", null: false
+    t.bigint "delivery_owner_id"
+    t.string "delivery_source"
+    t.datetime "expiration_recorded_at"
     t.index ["application_id", "kind", "recipient_id", "sent_at"], name: "idx_secure_request_forms_on_app_kind_recipient_sent_at"
     t.index ["application_id", "kind", "recipient_id"], name: "idx_secure_request_forms_one_active_id_proof_recipient", unique: true, where: "((status = 0) AND (kind = 1))"
     t.index ["application_id", "kind", "recipient_id"], name: "idx_secure_request_forms_one_active_income_proof_recipient", unique: true, where: "((status = 0) AND (kind = 3))"
@@ -912,7 +912,6 @@ ActiveRecord::Schema[8.1].define(version: 2026_10_07_010000) do
 
   create_table "vendor_secure_request_forms", force: :cascade do |t|
     t.datetime "created_at", null: false
-    t.datetime "expiration_recorded_at"
     t.datetime "expires_at", null: false
     t.integer "kind", default: 0, null: false
     t.string "public_token_digest", null: false
@@ -925,6 +924,7 @@ ActiveRecord::Schema[8.1].define(version: 2026_10_07_010000) do
     t.datetime "submitted_at"
     t.datetime "updated_at", null: false
     t.bigint "vendor_id", null: false
+    t.datetime "expiration_recorded_at"
     t.index ["expires_at"], name: "index_vendor_secure_forms_on_open_expiration", where: "((status = 0) AND (submitted_at IS NULL) AND (revoked_at IS NULL) AND (expiration_recorded_at IS NULL))"
     t.index ["public_token_digest"], name: "idx_vendor_secure_forms_on_public_token_digest", unique: true
     t.index ["requested_by_id"], name: "index_vendor_secure_request_forms_on_requested_by_id"
@@ -955,11 +955,9 @@ ActiveRecord::Schema[8.1].define(version: 2026_10_07_010000) do
     t.bigint "created_by_id", null: false
     t.bigint "updated_by_id"
     t.integer "lock_version", default: 0, null: false
-    t.bigint "tracking_notification_id"
     t.datetime "created_at", null: false
     t.datetime "updated_at", null: false
     t.index ["created_by_id"], name: "index_voucher_transaction_shipments_on_created_by_id"
-    t.index ["tracking_notification_id"], name: "index_shipments_on_tracking_notification", unique: true
     t.index ["updated_by_id"], name: "index_voucher_transaction_shipments_on_updated_by_id"
     t.index ["voucher_transaction_id", "normalized_tracking_number"], name: "index_shipments_on_transaction_and_tracking", unique: true
   end
@@ -967,8 +965,6 @@ ActiveRecord::Schema[8.1].define(version: 2026_10_07_010000) do
   create_table "voucher_transactions", force: :cascade do |t|
     t.decimal "amount", precision: 10, scale: 2, null: false
     t.datetime "created_at", null: false
-    t.integer "fulfillment_mode", default: 0, null: false
-    t.integer "fulfillment_version", default: 0, null: false
     t.bigint "invoice_id"
     t.text "notes"
     t.datetime "processed_at"
@@ -978,6 +974,8 @@ ActiveRecord::Schema[8.1].define(version: 2026_10_07_010000) do
     t.datetime "updated_at", null: false
     t.bigint "vendor_id", null: false
     t.bigint "voucher_id", null: false
+    t.integer "fulfillment_mode", default: 0, null: false
+    t.integer "fulfillment_version", default: 0, null: false
     t.index ["invoice_id"], name: "index_voucher_transactions_on_invoice_id"
     t.index ["processed_at"], name: "index_voucher_transactions_on_processed_at"
     t.index ["reference_number"], name: "index_voucher_transactions_on_reference_number"
@@ -1121,7 +1119,6 @@ ActiveRecord::Schema[8.1].define(version: 2026_10_07_010000) do
   add_foreign_key "vendor_secure_request_forms", "users", column: "vendor_id", on_delete: :restrict
   add_foreign_key "voucher_transaction_products", "products"
   add_foreign_key "voucher_transaction_products", "voucher_transactions"
-  add_foreign_key "voucher_transaction_shipments", "notifications", column: "tracking_notification_id"
   add_foreign_key "voucher_transaction_shipments", "users", column: "created_by_id"
   add_foreign_key "voucher_transaction_shipments", "users", column: "updated_by_id"
   add_foreign_key "voucher_transaction_shipments", "voucher_transactions"

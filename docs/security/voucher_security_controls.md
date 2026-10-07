@@ -45,7 +45,7 @@ Vouchers have four states: `active`, `redeemed`, `expired`, and `cancelled`. Ful
 
 Issuance owns `voucher_assigned`, redemption owns `voucher_redeemed`, and the admin controller owns `voucher_cancelled` / `voucher_updated`. Model callbacks record status changes. [VoucherAuditLogBuilder](../../app/services/vouchers/voucher_audit_log_builder.rb) assembles the displayed history.
 
-Assignment, redemption, and expiration messages use [VoucherNotificationsMailer](../../app/mailers/voucher_notifications_mailer.rb) directly; they do not create `NotificationService` records. The package tracking notice does; see below.
+Assignment, redemption, and expiration messages use [VoucherNotificationsMailer](../../app/mailers/voucher_notifications_mailer.rb) directly; they do not create `NotificationService` records.
 
 ## After a purchase: fulfillment and packages
 
@@ -59,7 +59,7 @@ A completed redemption is a purchase the vendor can fulfill. [VoucherTransaction
 | A tracking number is recorded once per purchase | Unique index on the normalized number per purchase |
 | Only the applicant of an unmanaged application, or its managing guardian, sees purchases | `VoucherTransaction.purchases_visible_to`, built on `Application.accessible_by` |
 
-Each new package owes one notice. [VoucherTransactions::TrackingNotice](../../app/services/voucher_transactions/tracking_notice.rb) sends it through `NotificationService` to the application's managing guardian, or to the applicant when no one manages it, and links the notification to the package under the package's row lock, so retries, the hourly sweep of owed notices, and concurrent runs create one notification. Email or letter follows the recipient's preference. Corrections send nothing. Switching to local pickup keeps recorded packages as history.
+Recording or correcting a package sends no email, letter, or notification. The applicant (or the managing guardian) sees packages on the application page and dashboard, and staff see them, with the fulfillment history, on the admin voucher page. A recorded package means only that the vendor reported tracking: the copy says "tracking available" and labels any date as the vendor-reported ship date. It is not evidence of dispatch, delivery, or acceptance, which can bear on payment. Switching to local pickup keeps recorded packages as history.
 
 ## Where this flow goes wrong
 

@@ -10,10 +10,12 @@ module VoucherTransactions
       @purchase = create(:voucher_transaction, voucher: @voucher, vendor: @vendor, amount: 100)
     end
 
-    test 'recording a package makes the purchase shipping, bumps the version, audits, and queues one notice' do
+    test 'recording a package makes the purchase shipping, bumps the version, audits, and sends nothing' do
       shipment = nil
-      assert_enqueued_with(job: TrackingNoticeJob) do
-        shipment = service.add_shipment!(attributes: { 'tracking_number' => ' 1z-999 aa1 ' }, expected_version: 0)
+      assert_no_enqueued_jobs do
+        assert_no_difference('Notification.count') do
+          shipment = service.add_shipment!(attributes: { 'tracking_number' => ' 1z-999 aa1 ' }, expected_version: 0)
+        end
       end
 
       @purchase.reload
@@ -37,6 +39,21 @@ module VoucherTransactions
       assert_raises(FulfillmentService::StaleError) { service.change_mode!(mode: :local_pickup, expected_version: 0) }
       assert_equal 1, @purchase.shipments.count
       assert @purchase.reload.fulfillment_shipping?
+    end
+
+    test 'choosing the mode the purchase already has changes nothing and records nothing' do
+      service.change_mode!(mode: :local_pickup, expected_version: 0)
+
+      service.change_mode!(mode: :local_pickup, expected_version: 1)
+
+      assert_equal 1, @purchase.reload.fulfillment_version, 'another open form must not go stale'
+      assert_equal 1, Event.where(action: 'fulfillment_mode_changed', auditable: @purchase).count
+    end
+
+    test 'fulfillment events carry the voucher so its admin audit log shows them' do
+      service.add_shipment!(attributes: { 'tracking_number' => 'AAA111' }, expected_version: 0)
+
+      assert_includes Vouchers::VoucherAuditLogBuilder.new(@voucher).build_audit_logs.map(&:action), 'shipment_added'
     end
 
     test 'switching to pickup after packages were recorded keeps them as history' do
@@ -70,13 +87,11 @@ module VoucherTransactions
       assert_includes error.record.errors.full_messages, "Ship date can't be in the future"
     end
 
-    test 'a correction from a stale package form is refused, and a current one is audited without a new notice' do
+    test 'a correction from a stale package form is refused, and a current one is audited' do
       shipment = service.add_shipment!(attributes: { 'tracking_number' => 'AAA111' }, expected_version: 0)
       seen = shipment.lock_version
 
-      assert_no_enqueued_jobs(only: TrackingNoticeJob) do
-        service.correct_shipment!(shipment_id: shipment.id, attributes: { 'tracking_number' => 'AAA112' }, expected_lock_version: seen)
-      end
+      service.correct_shipment!(shipment_id: shipment.id, attributes: { 'tracking_number' => 'AAA112' }, expected_lock_version: seen)
       assert_raises(FulfillmentService::StaleError) do
         service.correct_shipment!(shipment_id: shipment.id, attributes: { 'tracking_number' => 'AAA113' }, expected_lock_version: seen)
       end
@@ -89,11 +104,11 @@ module VoucherTransactions
     test 'only fields a vendor may edit are written' do
       shipment = service.add_shipment!(
         attributes: { 'tracking_number' => 'AAA111', 'voucher_transaction_id' => create(:voucher_transaction).id,
-                      'tracking_notification_id' => 1 }, expected_version: 0
+                      'created_by_id' => create(:admin).id }, expected_version: 0
       )
 
       assert_equal @purchase.id, shipment.voucher_transaction_id
-      assert_nil shipment.tracking_notification_id
+      assert_equal @vendor, shipment.created_by
     end
 
     test 'a package belonging to another purchase cannot be corrected through this one' do

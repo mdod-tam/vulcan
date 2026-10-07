@@ -36,7 +36,7 @@ module VendorPortal
       page.driver.browser.keyboard.type(:end, *Array.new('13/45/2026'.length, :backspace), '9/9/2026', :enter)
 
       assert_text 'Tracking number saved'
-      assert_text '1 package sent'
+      assert_text 'Tracking available for 1 package'
       shipment = @purchase.shipments.sole
       assert_equal Date.new(2026, 9, 9), shipment.dispatched_on
       take_screenshot('vendor-shipment-saved-narrow', html: true)
@@ -48,7 +48,7 @@ module VendorPortal
 
       assert_text 'Package updated.'
       assert_text '1Z 999 AA2'
-      assert_text '1 package sent'
+      assert_text 'Tracking available for 1 package'
       assert_equal '1Z 999 AA2', shipment.reload.tracking_number
       take_screenshot('vendor-shipment-corrected', html: true)
     end

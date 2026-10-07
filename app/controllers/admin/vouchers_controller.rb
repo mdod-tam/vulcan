@@ -23,7 +23,7 @@ module Admin
 
     def show
       EmailDelivery::Visibility.preload([@voucher])
-      @transactions = @voucher.transactions.includes(:vendor)
+      @transactions = @voucher.transactions.includes(:vendor, :shipments)
                               .order(processed_at: :desc)
 
       @audit_logs = Vouchers::VoucherAuditLogBuilder.new(@voucher).build_deduplicated_audit_logs

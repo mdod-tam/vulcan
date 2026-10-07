@@ -19,9 +19,6 @@ class CreateVoucherTransactionShipments < ActiveRecord::Migration[8.1]
       t.references :created_by, null: false, foreign_key: { to_table: :users }
       t.references :updated_by, foreign_key: { to_table: :users }
       t.integer :lock_version, null: false, default: 0
-      # The package's first-tracking notice. Set once; an unset value means the notice is still owed.
-      t.references :tracking_notification, foreign_key: { to_table: :notifications },
-                                           index: { unique: true, name: 'index_shipments_on_tracking_notification' }
       t.timestamps
     end
 

@@ -57,7 +57,7 @@ module VendorPortal
       assert_equal 40, controller.instance_variable_get(:@total_amount)
 
       get vendor_portal_transactions_url
-      assert_select 'tbody', text: /1 package sent/
+      assert_select 'tbody', text: /Tracking available for 1 package/
     end
 
     test 'a purchase page shows its packages; another vendor\'s purchase is not found' do

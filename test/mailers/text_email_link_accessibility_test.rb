@@ -38,7 +38,6 @@ class TextEmailLinkAccessibilityTest < ActiveSupport::TestCase
     vendor_notifications_w9_rejected
     vendor_notifications_w9_expired
     vendor_notifications_w9_expiring_soon
-    voucher_notifications_shipment_tracking_added
   ].freeze
 
   STAFF_ONLY_TEMPLATE_NAMES = %w[
@@ -68,7 +67,6 @@ class TextEmailLinkAccessibilityTest < ActiveSupport::TestCase
     training_session_notifications_training_scheduled
     user_mailer_email_verification
     user_mailer_password_reset
-    voucher_notifications_shipment_tracking_added
     voucher_notifications_voucher_assigned
     voucher_notifications_voucher_expired
     voucher_notifications_voucher_expiring_soon

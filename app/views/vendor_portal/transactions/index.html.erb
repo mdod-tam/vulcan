@@ -62,9 +62,10 @@
           </div>
 
           <div class="flex items-center">
-            <%= f.check_box :needs_shipping_details, { checked: params[:needs_shipping_details] == "1",
-                  class: "h-4 w-4 text-indigo-600 border-gray-300 rounded focus:ring-indigo-500" }, "1", nil %>
-            <%= f.label :needs_shipping_details, "Only purchases that need shipping details", class: "ml-2 text-sm text-gray-700" %>
+            <%= f.check_box :needs_shipping_details,
+                            { checked: params[:needs_shipping_details] == '1',
+                              class: 'h-4 w-4 text-indigo-600 border-gray-300 rounded focus:ring-indigo-500' }, '1', nil %>
+            <%= f.label :needs_shipping_details, 'Only purchases that need shipping details', class: 'ml-2 text-sm text-gray-700' %>
           </div>
 
           <div class="flex justify-end">
@@ -107,8 +108,8 @@
                 </td>
                 <td class="px-6 py-4 whitespace-nowrap text-sm text-gray-500">
                   <%= link_to transaction.reference_number, vendor_portal_transaction_path(transaction),
-                        class: "text-indigo-600 hover:text-indigo-900",
-                        aria: { label: "View purchase #{transaction.reference_number}" } %>
+                              class: 'text-indigo-600 hover:text-indigo-900',
+                              aria: { label: "View purchase #{transaction.reference_number}" } %>
                 </td>
                 <td class="px-6 py-4 whitespace-nowrap text-sm text-gray-500">
                   <% if transaction.invoice %>
