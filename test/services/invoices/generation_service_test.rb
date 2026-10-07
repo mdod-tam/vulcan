@@ -16,6 +16,33 @@ module Invoices
       ActionMailer::Base.deliveries.clear
     end
 
+    # Transactions record what was spent at the time. A voucher redeemed since then has a lower
+    # balance, which must not make its earlier transactions invalid when they are invoiced.
+    test 'transactions from a partly and then fully redeemed voucher are invoiced' do
+      Policy.stubs(:voucher_minimum_redemption_amount).returns(10)
+      voucher = create(:voucher, initial_value: 100, remaining_value: 100, vendor: nil)
+      first = voucher.redeem!(65, @vendor)
+      second = voucher.redeem!(35, @vendor)
+      assert first && second, 'both redemptions should succeed'
+      assert voucher.reload.voucher_redeemed?
+
+      result = Invoices::GenerationService.new.call
+
+      assert result.success?, result.message
+      invoice = Invoice.find_by!(vendor: @vendor)
+      assert_includes invoice.voucher_transactions, first
+      assert_includes invoice.voucher_transactions, second
+      assert_in_delta 100 + 250.25, invoice.total_amount.to_f
+
+      invoice.update!(status: :invoice_approved)
+      invoice.update!(status: :invoice_paid, gad_invoice_reference: 'GAD-TEST-1')
+
+      assert_in_delta 350.25, invoice.reload.total_amount.to_f
+      assert_equal [BigDecimal('65'), BigDecimal('35')], [first.reload.amount, second.reload.amount]
+      assert_equal [invoice.id], [first.invoice_id, second.invoice_id].uniq
+      assert_equal BigDecimal('0'), voucher.reload.remaining_value
+    end
+
     test 'the recurring job commits an invoice and delivers the vendor notice after commit' do
       perform_enqueued_jobs do
         GenerateVendorInvoicesJob.perform_now

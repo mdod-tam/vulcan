@@ -17,37 +17,34 @@ class VoucherTransactionTest < ActiveSupport::TestCase
   end
 
   test 'requires voucher' do
-    @transaction.voucher = nil
-    assert_not @transaction.valid?
-    assert_includes @transaction.errors[:voucher], 'must exist'
+    transaction = build(:voucher_transaction, voucher: nil, vendor: @vendor, amount: 100)
+    assert_not transaction.valid?
+    assert_includes transaction.errors[:voucher], 'must exist'
   end
 
   test 'requires vendor' do
-    @transaction.vendor = nil
-    assert_not @transaction.valid?
-    assert_includes @transaction.errors[:vendor], 'must exist'
+    transaction = build(:voucher_transaction, voucher: @voucher, vendor: nil, amount: 100)
+    assert_not transaction.valid?
+    assert_includes transaction.errors[:vendor], 'must exist'
   end
 
+  # Amounts are set once, on a new transaction; see VoucherTransactionImmutabilityTest.
   test 'requires amount' do
-    @transaction.amount = nil
-    assert_not @transaction.valid?
-    assert_includes @transaction.errors[:amount], "can't be blank"
+    transaction = build(:voucher_transaction, voucher: @voucher, vendor: @vendor, amount: nil)
+    assert_not transaction.valid?
+    assert_includes transaction.errors[:amount], "can't be blank"
   end
 
   test 'requires positive amount' do
-    @transaction.amount = 0
-    assert_not @transaction.valid?
-    assert_includes @transaction.errors[:amount], 'must be greater than 0'
-
-    @transaction.amount = -50
-    assert_not @transaction.valid?
-    assert_includes @transaction.errors[:amount], 'must be greater than 0'
+    [0, -50].each do |amount|
+      transaction = build(:voucher_transaction, voucher: @voucher, vendor: @vendor, amount: amount)
+      assert_not transaction.valid?
+      assert_includes transaction.errors[:amount], 'must be greater than 0'
+    end
   end
 
-  test 'requires reference number' do
-    @transaction.reference_number = nil
-    assert_not @transaction.valid?
-    assert_includes @transaction.errors[:reference_number], "can't be blank"
+  test 'reference number cannot be cleared once saved' do
+    assert_raises(ActiveRecord::ReadonlyAttributeError) { @transaction.reference_number = nil }
   end
 
   test 'requires unique reference number' do
@@ -56,10 +53,8 @@ class VoucherTransactionTest < ActiveSupport::TestCase
     assert_includes duplicate.errors[:reference_number], 'has already been taken'
   end
 
-  test 'requires processed_at' do
-    @transaction.processed_at = nil
-    assert_not @transaction.valid?
-    assert_includes @transaction.errors[:processed_at], "can't be blank"
+  test 'processed_at cannot be cleared once saved' do
+    assert_raises(ActiveRecord::ReadonlyAttributeError) { @transaction.processed_at = nil }
   end
 
   test 'sets processed_at on create' do

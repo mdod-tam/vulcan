@@ -95,19 +95,24 @@ class Voucher < ApplicationRecord
   # @param notes [String] Optional notes about the redemption
   # @return [VoucherTransaction, false] The created transaction or false if redemption fails
   def redeem!(amount, vendor, product_data = nil, notes: nil)
-    return false unless can_redeem?(amount)
-
     transaction(requires_new: true) do
-      txn = create_redemption_transaction(amount, vendor, generate_reference_number, notes)
+      # The row lock makes a concurrent redemption wait, then re-read the balance this one leaves.
+      # Checking before the lock would let both spend the same balance.
+      lock!
+      if can_redeem?(amount)
+        txn = create_redemption_transaction(amount, vendor, generate_reference_number, notes)
 
-      process_product_data(product_data, txn) if product_data.present?
+        process_product_data(product_data, txn) if product_data.present?
 
-      update_voucher_after_redemption(amount, vendor)
+        update_voucher_after_redemption(amount, vendor)
 
-      notify_voucher_redemption(txn)
-      log_redemption_event(vendor, amount, txn, product_data)
+        notify_voucher_redemption(txn)
+        log_redemption_event(vendor, amount, txn, product_data)
 
-      txn
+        txn
+      else
+        false
+      end
     end
   end
 
