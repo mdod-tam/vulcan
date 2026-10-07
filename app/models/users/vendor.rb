@@ -12,6 +12,11 @@ module Users
 
     has_one_attached :w9_form
 
+    # Columns on users that only a vendor uses. Converting a vendor to another role resets each to
+    # its column default (Admin::UsersController#update_role).
+    VENDOR_ONLY_ATTRIBUTES = %w[business_name business_tax_id website_url terms_accepted_at vendor_authorization_status
+                                w9_status w9_rejections_count last_w9_reminder_sent_at].freeze
+
     # A change to these certified fields leaves the W9 on file with old details.
     W9_CERTIFIED_FIELDS = %w[business_name business_tax_id physical_address_1 physical_address_2 city state zip_code].freeze
 

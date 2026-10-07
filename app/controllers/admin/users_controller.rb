@@ -834,13 +834,11 @@ module Admin
     def clear_type_specific_fields(original_user, converted_user)
       return unless original_user.type_was == 'Users::Vendor' && !converted_user.is_a?(Users::Vendor)
 
-      Rails.logger.info "Admin::UsersController#update_role - Nullifying vendor-specific fields for user_id: #{original_user.id}"
-      converted_user.business_name = nil
-      converted_user.business_tax_id = nil
-      converted_user.terms_accepted_at = nil
-      converted_user.w9_status = nil
-
-      # For other roles with type-specific fields, clear those fields here.
+      Rails.logger.info "Admin::UsersController#update_role - Resetting vendor-only fields for user_id: #{original_user.id}"
+      # Column defaults, not nil: w9_status and w9_rejections_count are NOT NULL.
+      Users::Vendor::VENDOR_ONLY_ATTRIBUTES.each do |attribute|
+        converted_user[attribute] = User.column_defaults[attribute]
+      end
     end
 
     def save_converted_user(converted_user, original_user)

@@ -7,7 +7,10 @@ class RoleSelectController extends Controller {
   static values = {
     userId: String,
     updateRoleUrl: String,
-    updateCapabilitiesUrl: String
+    updateCapabilitiesUrl: String,
+    currentRole: String,
+    // Set only for a vendor: leaving the vendor role clears vendor data, so the admin confirms first.
+    conversionWarning: String
   }
 
   connect() {
@@ -21,9 +24,14 @@ class RoleSelectController extends Controller {
   }
 
   roleChanged(event) {
-    const data = { role: event.target.value }
+    const role = event.target.value
 
-    this.saveChanges('role', data)
+    if (this.conversionWarningValue && role !== this.currentRoleValue && !window.confirm(this.conversionWarningValue)) {
+      event.target.value = this.currentRoleValue
+      return
+    }
+
+    this.saveChanges('role', { role })
   }
 
   toggleCapability(event) {

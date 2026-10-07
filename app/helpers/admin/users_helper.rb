@@ -2,6 +2,12 @@
 
 module Admin
   module UsersHelper
+    # Shown before an admin moves a vendor to another role; the conversion clears vendor-only fields.
+    def vendor_conversion_warning
+      'Converting this vendor to another role may lose their W9 and transaction history: their vendor details and ' \
+        'W9 status are cleared, and their purchases and invoices will no longer belong to a vendor account. Convert anyway?'
+    end
+
     def capability_description(capability)
       case capability
       when 'can_evaluate'

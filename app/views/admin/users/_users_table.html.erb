@@ -125,7 +125,9 @@
                      data-controller="role-select"
                      data-role-select-user-id-value="<%= user.id %>"
                      data-role-select-update-role-url-value="<%= update_role_admin_user_path(user) %>"
-                     data-role-select-update-capabilities-url-value="<%= update_capabilities_admin_user_path(user) %>">
+                     data-role-select-update-capabilities-url-value="<%= update_capabilities_admin_user_path(user) %>"
+                     data-role-select-current-role-value="<%= user.type %>"
+                     <%= tag.attributes(data: { role_select_conversion_warning_value: (vendor_conversion_warning if user.vendor?) }) %>>
                   <!-- Primary Role Section -->
                   <div class="role-section">
                     <label for="role_<%= user.id %>" 
@@ -137,9 +139,10 @@
                     else
                       %w[Users::Administrator Users::Evaluator Users::Constituent Users::Trainer]
                     end %>
+                    <%# The user's own role is always listed, so the select shows it and a cancelled change can return to it. %>
                     <%= select_tag "role_#{user.id}",
                         options_for_select(
-                          role_options,
+                          role_options | [user.type],
                           selected: user.type
                         ),
                         data: { 
