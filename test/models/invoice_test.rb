@@ -79,29 +79,19 @@ class InvoiceTest < ActiveSupport::TestCase
     end
   end
 
-  test 'updates associated transaction statuses when paid' do
-    @invoice = create(:invoice, :with_transactions, transaction_count: 3)
+  test 'paying an invoice leaves its transactions and their vouchers unchanged' do
+    @invoice = create(:invoice, :with_transactions, transaction_count: 2)
+    vouchers = @invoice.voucher_transactions.map(&:voucher)
+    vouchers.first.update!(remaining_value: 25)
+    before = voucher_states(vouchers)
+    transactions_before = @invoice.voucher_transactions.order(:id).pluck(:id, :status, :amount)
 
     @invoice.update!(status: :invoice_approved)
-    @invoice.update!(
-      status: :invoice_paid,
-      gad_invoice_reference: 'GAD-123456'
-    )
+    @invoice.update!(status: :invoice_paid, gad_invoice_reference: 'GAD-123456')
 
-    assert(@invoice.voucher_transactions.all?(&:transaction_completed?))
-  end
-
-  test 'updates associated voucher statuses when paid' do
-    @invoice = create(:invoice, :with_transactions, transaction_count: 3)
-    active_vouchers = @invoice.vouchers.where(status: :voucher_active)
-
-    @invoice.update!(status: :invoice_approved)
-    @invoice.update!(
-      status: :invoice_paid,
-      gad_invoice_reference: 'GAD-123456'
-    )
-
-    assert(active_vouchers.reload.all?(&:voucher_redeemed?))
+    assert_equal before, voucher_states(vouchers)
+    assert_equal transactions_before, @invoice.voucher_transactions.order(:id).pluck(:id, :status, :amount)
+    assert(vouchers.first.voucher_active?, 'a voucher with a balance stays usable after the vendor is paid')
   end
 
   test 'generates unique invoice numbers' do
@@ -156,5 +146,11 @@ class InvoiceTest < ActiveSupport::TestCase
     next_invoice = build(:invoice, vendor: @vendor, start_date: period_end, end_date: 4.weeks.from_now.end_of_day)
 
     assert next_invoice.valid?, next_invoice.errors.full_messages.to_sentence
+  end
+
+  private
+
+  def voucher_states(vouchers)
+    vouchers.map { |voucher| voucher.reload.attributes.slice('status', 'remaining_value') }
   end
 end

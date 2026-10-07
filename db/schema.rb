@@ -10,7 +10,7 @@
 #
 # It's strongly recommended that you check this file into your version control system.
 
-ActiveRecord::Schema[8.1].define(version: 2026_10_07_010000) do
+ActiveRecord::Schema[8.1].define(version: 2026_10_07_020000) do
   # These are extensions that must be enabled in order to support this database
   enable_extension "pg_catalog.plpgsql"
 
@@ -1004,7 +1004,6 @@ ActiveRecord::Schema[8.1].define(version: 2026_10_07_010000) do
     t.string "code", null: false
     t.datetime "created_at", null: false
     t.decimal "initial_value", precision: 10, scale: 2, null: false
-    t.bigint "invoice_id"
     t.datetime "issued_at"
     t.datetime "last_used_at"
     t.text "notes"
@@ -1015,7 +1014,6 @@ ActiveRecord::Schema[8.1].define(version: 2026_10_07_010000) do
     t.bigint "vendor_id"
     t.index ["application_id"], name: "index_vouchers_on_application_id"
     t.index ["code"], name: "index_vouchers_on_code", unique: true
-    t.index ["invoice_id"], name: "index_vouchers_on_invoice_id"
     t.index ["issued_at"], name: "index_vouchers_on_issued_at"
     t.index ["status"], name: "index_vouchers_on_status"
     t.index ["vendor_id", "status"], name: "index_vouchers_on_vendor_id_and_status"
@@ -1128,7 +1126,6 @@ ActiveRecord::Schema[8.1].define(version: 2026_10_07_010000) do
   add_foreign_key "voucher_verification_throttles", "users", column: "vendor_id", on_delete: :cascade
   add_foreign_key "voucher_verification_throttles", "vouchers", on_delete: :cascade
   add_foreign_key "vouchers", "applications"
-  add_foreign_key "vouchers", "invoices"
   add_foreign_key "vouchers", "users", column: "vendor_id"
   add_foreign_key "w9_reviews", "users", column: "admin_id"
   add_foreign_key "w9_reviews", "users", column: "vendor_id"

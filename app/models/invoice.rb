@@ -3,7 +3,6 @@
 class Invoice < ApplicationRecord
   has_many :email_delivery_attempts, as: :origin, dependent: :nullify
   belongs_to :vendor, class_name: 'User'
-  has_many :vouchers, dependent: :nullify
   has_many :voucher_transactions, dependent: :nullify
   has_many :events, as: :auditable, dependent: :destroy
 
@@ -52,11 +51,9 @@ class Invoice < ApplicationRecord
   end
 
   def send_payment_notification
+    # Payment settles the vendor's invoice only. Transactions were already completed when invoiced,
+    # and a voucher's balance and status belong to its constituent, so neither changes here.
     VendorNotificationsMailer.with(invoice: self).payment_issued.deliver_later
-
-    # Update associated records
-    voucher_transactions.update_all(status: VoucherTransaction.statuses[:transaction_completed])
-    vouchers.where(status: :voucher_active).update_all(status: :voucher_redeemed)
   end
 
   def total_transaction_amount
