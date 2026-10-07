@@ -79,7 +79,7 @@
                         "Voucher Expired"
                       when "voucher_cancelled"
                         "Voucher Cancelled"
-                      when "profile_updated", "profile_updated_by_guardian"
+                      when "profile_updated", *UserProfile::PROFILE_CHANGE_ON_BEHALF_ACTIONS
                         "Profile Updated"
                       when 'alternate_contact_updated', 'medical_provider_info_updated'
                         contact_field_change_label(log)
@@ -247,13 +247,14 @@
                       user_name = target_user&.full_name || "Unknown User"
                       changes_summary = log.metadata['changes']&.keys&.map(&:humanize)&.join(', ') || 'profile fields'
                       "#{user_name} updated their profile (#{changes_summary})"
-                    when "profile_updated_by_guardian"
+                    when *UserProfile::PROFILE_CHANGE_ON_BEHALF_ACTIONS
                       target_user_id = log.metadata['user_id']
                       target_user = target_user_id == @application.user_id.to_s ? @application.user : User.find_by(id: target_user_id)
                       user_name = target_user&.full_name || "Unknown User"
-                      guardian_name = log.user&.full_name || "Guardian"
+                      editor_role = log.action == 'profile_updated_by_admin' ? 'MAT staff' : 'guardian'
+                      editor_name = log.user&.full_name || 'Unknown user'
                       changes_summary = log.metadata['changes']&.keys&.map(&:humanize)&.join(', ') || 'profile fields'
-                      "#{guardian_name} updated #{user_name}'s profile (#{changes_summary})"
+                      "#{editor_name} (#{editor_role}) updated #{user_name}'s profile (#{changes_summary})"
                     when 'alternate_contact_updated', 'medical_provider_info_updated'
                       contact_field_change_detail(log)
                     when 'proof_resubmission_request_failed'

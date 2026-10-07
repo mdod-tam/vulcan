@@ -6,7 +6,7 @@ class UserEncryptedValidationTest < ActiveSupport::TestCase
   def unique_attributes
     {
       first_name: 'John',
-      last_name: 'Doe',
+      last_name: 'Doe', date_of_birth: '01/15/1980',
       email: "test_#{SecureRandom.hex(8)}@example.com",
       phone: "555-#{format('%03d', rand(100..999))}-#{format('%04d', rand(1000..9999))}",
       password: 'password1234',

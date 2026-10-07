@@ -64,7 +64,6 @@ module Applications
       ActiveRecord::Base.transaction do
         lock_and_requalify_applicant!
         AutosaveRevisions.new(target_application).prepare!(context: @form.autosave_context, revision: @form.autosave_revision)
-        setup_applicant_user
         update_user_attributes
         create_or_update_application
         set_medical_provider_details
@@ -209,12 +208,6 @@ module Applications
       elsif target_application.persisted? && target_application.user_id != @current_user.id
         raise IneligibleApplicantError, 'This application no longer belongs to this participant.'
       end
-    end
-
-    def setup_applicant_user
-      return unless applicant_user
-
-      applicant_user.type = 'Users::Constituent' if applicant_user.type.blank?
     end
 
     def update_user_attributes

@@ -13,6 +13,7 @@ module ConstituentPortal
         phone: "555123#{timestamp.to_s[-4..]}",
         first_name: 'Guardian',
         last_name: 'User',
+        date_of_birth: Date.new(1980, 1, 15),
         password: 'password1234',
         password_confirmation: 'password1234'
       )
@@ -20,6 +21,7 @@ module ConstituentPortal
       @dependent1 = Users::Constituent.create!(
         first_name: 'First',
         last_name: 'Dependent',
+        date_of_birth: Date.new(1980, 1, 15),
         email: "dep1.#{timestamp}@example.com",
         phone: "555234#{timestamp.to_s[-4..]}",
         password: 'password1234',
@@ -29,6 +31,7 @@ module ConstituentPortal
       @dependent2 = Users::Constituent.create!(
         first_name: 'Second',
         last_name: 'Dependent',
+        date_of_birth: Date.new(1980, 1, 15),
         email: "dep2.#{timestamp}@example.com",
         phone: "555345#{timestamp.to_s[-4..]}",
         password: 'password1234',

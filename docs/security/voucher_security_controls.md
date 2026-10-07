@@ -35,7 +35,7 @@ DOB verification reads the submitted date with [DateInputNormalizer](../../app/s
 
 Failed checks are counted per voucher and vendor in [VoucherVerificationThrottle](../../app/models/voucher_verification_throttle.rb), not in the session, so reloading the form or signing out does not reset them. Reaching the `voucher_verification_max_attempts` policy (default 3, allowed 1–100) within 30 minutes of the first failure locks that vendor out of that voucher for 30 minutes; other vendors are unaffected. The lockout is checked before the date is compared, so a correct date during it is refused. Input that cannot be read as a date, and an owner with no date of birth on file, use no attempt. A success clears the count. Every attempt is audited with its attempt number.
 
-The redemption service simplifies vendor authorization in the test environment. Passing a portal test alone does not establish that the production W9 requirement works; cover `can_process_vouchers?` directly when changing eligibility.
+Vendor eligibility has one rule, `Users::Vendor#can_process_vouchers?` (approved vendor with an approved W9), in every environment. The vendor portal checks it before any request that carries a voucher code (lookup, DOB verification, redemption) looks the code up, so an unapproved vendor gets the same answer for real and unknown codes, and the redemption service checks it again before writing.
 
 ## State, history, and messages
 

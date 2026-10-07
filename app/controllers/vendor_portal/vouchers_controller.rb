@@ -5,6 +5,9 @@ module VendorPortal
   class VouchersController < BaseController
     include ActionView::Helpers::NumberHelper # For number_to_currency
 
+    # Every action given a voucher code looks it up, so the gate runs first whenever there is one;
+    # the code-free index still lists a vendor's own vouchers.
+    before_action :require_voucher_processing_approval, if: -> { params[:code].present? }
     before_action :set_voucher, only: %i[show verify verify_dob redeem process_redemption]
     before_action :check_voucher_active, only: %i[verify redeem]
     before_action :check_identity_verified, only: %i[redeem]

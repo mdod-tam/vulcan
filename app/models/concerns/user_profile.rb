@@ -6,6 +6,9 @@ module UserProfile
   # The phone_type enum includes email and letter preferences as legacy values.
   # For a real phone, validate submitted phone_type against these telephone routes, not the full enum.
   REAL_PHONE_TYPES = %w[voice videophone text].freeze
+  # Profile changes made by someone other than the user. They record the changed user in
+  # metadata['user_id'] and the person who made the change as the event's user.
+  PROFILE_CHANGE_ON_BEHALF_ACTIONS = %w[profile_updated_by_guardian profile_updated_by_admin].freeze
 
   included do
     attr_accessor :phone_type_submitted
@@ -191,10 +194,11 @@ module UserProfile
     profile_fields = %w[first_name last_name email phone physical_address_1 physical_address_2 city state zip_code date_of_birth]
 
     profile_fields.each do |field|
-      if saved_change_to_attribute?(field)
-        old_value, new_value = saved_change_to_attribute(field)
-        changed_attributes[field] = { old: old_value, new: new_value }
-      end
+      next unless saved_change_to_attribute?(field)
+
+      old_value, new_value = saved_change_to_attribute(field)
+      # AuditEventService.log stores values of encrypted fields encrypted (see Event#change_values).
+      changed_attributes[field] = { old: old_value, new: new_value }
     end
 
     # The merge owns duplicate_user_merged. Do not add profile events for its contact transfers.
@@ -205,6 +209,8 @@ module UserProfile
                'profile_created_by_admin_via_paper'
              elsif actor == self
                'profile_updated'
+             elsif actor.admin?
+               'profile_updated_by_admin'
              else
                'profile_updated_by_guardian'
              end

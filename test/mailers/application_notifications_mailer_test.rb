@@ -632,6 +632,7 @@ class ApplicationNotificationsMailerTest < ActionMailer::TestCase
     constituent = Constituent.create!(
       first_name: 'John',
       last_name: 'Doe',
+      date_of_birth: Date.new(1980, 1, 15),
       email: "unique-#{SecureRandom.hex(4)}@example.com",
       phone: "555-555-#{SecureRandom.rand(1000..9999)}",
       password: 'password1234',
@@ -724,6 +725,7 @@ class ApplicationNotificationsMailerTest < ActionMailer::TestCase
     constituent = Constituent.create!(
       first_name: 'John',
       last_name: 'Doe',
+      date_of_birth: Date.new(1980, 1, 15),
       email: "unique-#{SecureRandom.hex(4)}@example.com",
       phone: "555-555-#{SecureRandom.rand(1000..9999)}",
       password: 'password1234',
@@ -818,6 +820,7 @@ class ApplicationNotificationsMailerTest < ActionMailer::TestCase
     user = Constituent.create!(
       first_name: 'Jane',
       last_name: 'Smith',
+      date_of_birth: Date.new(1980, 1, 15),
       email: "unique-#{SecureRandom.hex(4)}@example.com",
       phone: "555-555-#{SecureRandom.rand(1000..9999)}",
       password: 'password1234',
@@ -858,6 +861,7 @@ class ApplicationNotificationsMailerTest < ActionMailer::TestCase
     user = Constituent.create!(
       first_name: 'Jane',
       last_name: 'Smith',
+      date_of_birth: Date.new(1980, 1, 15),
       email: "unique-#{SecureRandom.hex(4)}@example.com",
       phone: "555-555-#{SecureRandom.rand(1000..9999)}",
       password: 'password1234',

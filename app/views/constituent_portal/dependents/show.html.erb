@@ -141,9 +141,9 @@
                                     <%= change.user.full_name %>
                                   </span>
                                 </p>
-                                <% if change.metadata['changes'].present? %>
+                                <% if change.field_changes.present? %>
                                   <div class="mt-2 text-sm text-gray-700">
-                                    <% change.metadata['changes'].each do |field, values| %>
+                                    <% change.field_changes.each do |field, values| %>
                                       <div class="mb-1">
                                         <span class="font-medium"><%= field.humanize %>:</span>
                                         <span class="text-red-600 line-through"><%= values['old'] || 'blank' %></span>

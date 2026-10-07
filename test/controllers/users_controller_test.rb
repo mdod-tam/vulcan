@@ -43,7 +43,7 @@ class UsersControllerTest < ActionDispatch::IntegrationTest
     assert_equal @user.id, event.metadata['updated_by']
 
     # Verify changes are recorded
-    changes = event.metadata['changes']
+    changes = event.field_changes
     assert_equal 'Updated First', changes['first_name']['new']
     assert_equal 'Updated Last', changes['last_name']['new']
     assert_equal 'updated@example.com', changes['email']['new']

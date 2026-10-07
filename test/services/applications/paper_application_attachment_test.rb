@@ -122,7 +122,7 @@ module Applications
       {
         constituent: {
           first_name: 'Jane',
-          last_name: 'Doe',
+          last_name: 'Doe', date_of_birth: '01/15/1980',
           email: "jane.doe.#{@timestamp}@example.com",
           phone: "301555#{@timestamp[-4..]}",
           physical_address_1: '123 Main St',

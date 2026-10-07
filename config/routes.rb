@@ -387,12 +387,6 @@ Rails.application.routes.draw do
   namespace :vendor_portal do
     resource :dashboard, only: [:show], controller: :dashboard
     resource :profile, only: %i[edit update], controller: :profiles
-    resources :redemptions, only: %i[new create] do
-      collection do
-        get :check_voucher
-        get :verify
-      end
-    end
     resources :vouchers, only: %i[index show], param: :code do
       member do
         get :verify

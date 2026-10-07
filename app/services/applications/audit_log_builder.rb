@@ -69,7 +69,7 @@ module Applications
     def build_creation_event
       # Prefer the persisted event to preserve its recorded actor.
       persisted = Event
-                  .select('id, user_id, action, created_at, metadata, auditable_type, auditable_id')
+                  .select('id, user_id, action, created_at, metadata, change_values, auditable_type, auditable_id')
                   .includes(:user)
                   .where(action: 'application_created', auditable_type: 'Application', auditable_id: application.id)
                   .order(created_at: :asc)
@@ -78,7 +78,7 @@ module Applications
       return persisted if persisted.present?
 
       persisted_by_metadata = Event
-                              .select('id, user_id, action, created_at, metadata, auditable_type, auditable_id')
+                              .select('id, user_id, action, created_at, metadata, change_values, auditable_type, auditable_id')
                               .includes(:user)
                               .where(action: 'application_created')
                               .where("(metadata->>'application_id' = ?) OR metadata @> ?", application.id.to_s, { application_id: application.id }.to_json)
@@ -150,7 +150,7 @@ module Applications
 
     def load_application_events
       Event
-        .select('id, user_id, action, created_at, metadata, auditable_type, auditable_id')
+        .select('id, user_id, action, created_at, metadata, change_values, auditable_type, auditable_id')
         .includes(:user)
         .where(
           "action IN (?) AND (metadata->>'application_id' = ? OR metadata @> ? OR (auditable_type = 'Application' AND auditable_id = ?))",
@@ -180,12 +180,12 @@ module Applications
       user_ids << application.managing_guardian_id if application.managing_guardian_id.present?
 
       Event
-        .select('id, user_id, action, created_at, metadata')
+        .select('id, user_id, action, created_at, metadata, change_values')
         .includes(:user)
-        .where(action: %w[profile_updated profile_updated_by_guardian])
+        .where(action: ['profile_updated', *UserProfile::PROFILE_CHANGE_ON_BEHALF_ACTIONS])
         .where(
-          "(action = 'profile_updated' AND user_id IN (?)) OR (action = 'profile_updated_by_guardian' AND metadata->>'user_id' IN (?))",
-          user_ids, user_ids.map(&:to_s)
+          "(action = 'profile_updated' AND user_id IN (?)) OR (action IN (?) AND metadata->>'user_id' IN (?))",
+          user_ids, UserProfile::PROFILE_CHANGE_ON_BEHALF_ACTIONS, user_ids.map(&:to_s)
         )
         .order(created_at: :desc)
         .to_a

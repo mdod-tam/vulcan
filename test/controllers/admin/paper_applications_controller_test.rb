@@ -50,7 +50,7 @@ module Admin
         applicant_type: 'self',
         constituent: {
           first_name: '',
-          last_name: '',
+          last_name: '', date_of_birth: '01/15/1980',
           email: '',
           phone: '',
           physical_address_1: '',
@@ -207,7 +207,7 @@ module Admin
         relationship_type: 'Parent',
         show_create_guardian_form: 'true',
         guardian_attributes: {
-          first_name: 'Inline', last_name: 'Guardian',
+          first_name: 'Inline', last_name: 'Guardian', date_of_birth: '01/15/1980',
           email: 'inline-guardian@example.com', phone: '202-555-0188',
           physical_address_1: '1 Inline Way', city: 'Arlington', state: 'VA', zip_code: '22201'
         }
@@ -366,7 +366,7 @@ module Admin
         post admin_paper_applications_path, headers: default_headers, params: {
           constituent: {
             first_name: 'SelfApply',
-            last_name: 'Person',
+            last_name: 'Person', date_of_birth: '01/15/1980',
             email: unique_email,
             phone: '555-000-0001',
             physical_address_1: '100 Applicant Way',
@@ -413,7 +413,7 @@ module Admin
           no_medical_provider_information: true,
           constituent: {
             first_name: 'Workflow',
-            last_name: 'Warning',
+            last_name: 'Warning', date_of_birth: '01/15/1980',
             email: unique_email,
             phone: unique_phone,
             physical_address_1: '101 Warning Way',
@@ -452,7 +452,7 @@ module Admin
         post admin_paper_applications_path, headers: default_headers, params: {
           constituent: {
             first_name: 'Locale',
-            last_name: 'SelfApplicant',
+            last_name: 'SelfApplicant', date_of_birth: '01/15/1980',
             email: unique_email,
             phone: '555-000-0091',
             physical_address_1: '910 Locale Way',
@@ -493,7 +493,7 @@ module Admin
         post admin_paper_applications_path, headers: default_headers, params: {
           guardian_attributes: {
             first_name: 'NewGuard',
-            last_name: 'Ian',
+            last_name: 'Ian', date_of_birth: '01/15/1980',
             email: guardian_email,
             phone: '555-000-0002',
             physical_address_1: '200 Guardian Rd',
@@ -674,7 +674,7 @@ module Admin
             post admin_paper_applications_path, headers: default_headers, params: {
               guardian_id: existing_guardian.id,
               # A selected guardian takes precedence over blank guardian attributes.
-              guardian_attributes: { first_name: '', last_name: '', email: '' },
+              guardian_attributes: { first_name: '', last_name: '', date_of_birth: '01/15/1980', email: '' },
               constituent: {
                 first_name: 'Depend',
                 last_name: 'EntJr',
@@ -887,7 +887,7 @@ module Admin
     def constituent_attrs
       {
         first_name: 'Reject',
-        last_name: 'Proofs',
+        last_name: 'Proofs', date_of_birth: '01/15/1980',
         phone: '555-777-8888',
         physical_address_1: '789 Reject Ave',
         city: 'Testville',
@@ -947,7 +947,7 @@ module Admin
         income_proof: income_proof,
         constituent: {
           first_name: 'Jane',
-          last_name: 'Smith',
+          last_name: 'Smith', date_of_birth: '01/15/1980',
           email: 'test-paper-app@example.com',
           phone: '555-987-6543',
           physical_address_1: '456 Oak St',
@@ -998,7 +998,7 @@ module Admin
         post admin_paper_applications_path, headers: default_headers, params: {
           constituent: {
             first_name: 'John',
-            last_name: 'Doe',
+            last_name: 'Doe', date_of_birth: '01/15/1980',
             email: unique_email,
             phone: unique_phone,
             physical_address_1: '123 Main St',
@@ -1048,7 +1048,7 @@ module Admin
       post admin_paper_applications_path, headers: default_headers, params: {
         constituent: {
           first_name: constituent.first_name,
-          last_name: constituent.last_name,
+          last_name: constituent.last_name, date_of_birth: '01/15/1980',
           email: constituent.email,
           phone: constituent.phone,
           physical_address_1: '123 Main St',
@@ -1101,7 +1101,7 @@ module Admin
 
       post send_rejection_notification_admin_paper_applications_path, headers: default_headers, params: {
         first_name: 'John',
-        last_name: 'Doe',
+        last_name: 'Doe', date_of_birth: '01/15/1980',
         email: 'john.doe@example.com',
         phone: '555-123-4567',
         household_size: '2',
@@ -1151,7 +1151,7 @@ module Admin
 
       post send_rejection_notification_admin_paper_applications_path, headers: default_headers, params: {
         first_name: 'Dependent',
-        last_name: 'Recipient',
+        last_name: 'Recipient', date_of_birth: '01/15/1980',
         email: '',
         dependent_email: 'Dependent.Recipient@Example.COM',
         phone: '555-123-4567',
@@ -1171,7 +1171,7 @@ module Admin
 
       post send_rejection_notification_admin_paper_applications_path, headers: default_headers, params: {
         first_name: 'John',
-        last_name: 'Doe',
+        last_name: 'Doe', date_of_birth: '01/15/1980',
         email: recipient_email,
         phone: '555-123-4567',
         household_size: '2',
@@ -1188,7 +1188,7 @@ module Admin
       FeatureFlag.enable!(:vouchers_enabled)
 
       post reject_for_income_admin_paper_applications_path, headers: default_headers, params: {
-        first_name: 'John', last_name: 'Doe', email: 'john@example.com'
+        first_name: 'John', last_name: 'Doe', date_of_birth: '01/15/1980', email: 'john@example.com'
       }
 
       assert_redirected_to new_admin_paper_application_path
@@ -1199,7 +1199,7 @@ module Admin
       FeatureFlag.enable!(:vouchers_enabled)
 
       post send_rejection_notification_admin_paper_applications_path, headers: default_headers, params: {
-        first_name: 'John', last_name: 'Doe', email: 'john@example.com',
+        first_name: 'John', last_name: 'Doe', date_of_birth: '01/15/1980', email: 'john@example.com',
         communication_preference: 'email'
       }
 
@@ -1221,7 +1221,7 @@ module Admin
         post admin_paper_applications_path, headers: default_headers, params: {
           constituent: {
             first_name: 'John',
-            last_name: 'Doe',
+            last_name: 'Doe', date_of_birth: '01/15/1980',
             email: unique_email,
             phone: unique_phone,
             physical_address_1: '123 Main St',
@@ -1301,7 +1301,7 @@ module Admin
         income_proof: income_proof,
         constituent: {
           first_name: 'Test',
-          last_name: 'User',
+          last_name: 'User', date_of_birth: '01/15/1980',
           email: unique_email,
           phone: unique_phone,
           physical_address_1: '123 Main St',
@@ -1349,7 +1349,7 @@ module Admin
         post admin_paper_applications_path, headers: default_headers, params: {
           constituent: {
             first_name: 'Test',
-            last_name: 'User',
+            last_name: 'User', date_of_birth: '01/15/1980',
             email: unique_email,
             phone: unique_phone,
             physical_address_1: '123 Main St',
@@ -1392,7 +1392,7 @@ module Admin
           applicant_type: 'self',
           guardian_attributes: {
             first_name: 'GuardianFirstName',
-            last_name: 'GuardianLastName',
+            last_name: 'GuardianLastName', date_of_birth: '01/15/1980',
             email: guardian_email,
             phone: '555-111-2222',
             physical_address_1: '100 Guardian Rd',
@@ -1440,7 +1440,7 @@ module Admin
           applicant_type: 'self',
           constituent: {
             first_name: 'SelfApplicant',
-            last_name: 'WithDisability',
+            last_name: 'WithDisability', date_of_birth: '01/15/1980',
             email: constituent_email,
             phone: '555-222-3333',
             physical_address_1: '200 Applicant Way',
@@ -1491,7 +1491,7 @@ module Admin
           no_phone_number: '1',
           constituent: {
             first_name: 'Address',
-            last_name: 'Only',
+            last_name: 'Only', date_of_birth: '01/15/1980',
             email: 'ignored@example.com',
             phone: '555-000-9999',
             physical_address_1: '200 Letter Lane',
@@ -1535,7 +1535,7 @@ module Admin
           no_email_address: '1',
           constituent: {
             first_name: 'Phone',
-            last_name: 'Only',
+            last_name: 'Only', date_of_birth: '01/15/1980',
             email: 'ignored@example.com',
             phone: unique_phone,
             phone_type: 'voice',
@@ -1579,7 +1579,7 @@ module Admin
           no_phone_number: '1',
           constituent: {
             first_name: 'Email',
-            last_name: 'Only',
+            last_name: 'Only', date_of_birth: '01/15/1980',
             email: unique_email,
             phone: '555-000-8888',
             physical_address_1: '400 Email Road',
@@ -1620,7 +1620,7 @@ module Admin
           no_email_address: '1',
           constituent: {
             first_name: 'Missing',
-            last_name: 'Phone',
+            last_name: 'Phone', date_of_birth: '01/15/1980',
             email: 'ignored@example.com',
             phone: '',
             physical_address_1: '300 Phone Path',
@@ -1654,7 +1654,7 @@ module Admin
         no_phone_number: '1',
         constituent: {
           first_name: '',
-          last_name: 'Only',
+          last_name: 'Only', date_of_birth: '01/15/1980',
           email: 'ignored@example.com',
           phone: '555-000-9999',
           physical_address_1: '200 Letter Lane',
@@ -1752,7 +1752,7 @@ module Admin
         guardian_id: guardian.id,
         relationship_type: 'parent',
         constituent: rollback_probe_params[:constituent].merge(
-          first_name: 'Dependent', last_name: 'Child'
+          first_name: 'Dependent', last_name: 'Child', date_of_birth: '01/15/1980'
         )
       )
     end

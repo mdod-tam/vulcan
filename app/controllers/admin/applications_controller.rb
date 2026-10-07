@@ -581,7 +581,7 @@ module Admin
 
     def load_application_events
       Event
-        .select('id, user_id, action, created_at, metadata')
+        .select('id, user_id, action, created_at, metadata, change_values')
         .includes(:user)
         .where("action IN (?) AND (metadata->>'application_id' = ? OR metadata @> ?)",
                %w[

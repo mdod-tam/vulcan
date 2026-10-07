@@ -25,7 +25,7 @@ class PaperApplicationModeSwitchingTest < ActionDispatch::IntegrationTest
   def paper_self_applicant_params(contact = unique_paper_contact)
     {
       first_name: 'Paper',
-      last_name: 'Applicant',
+      last_name: 'Applicant', date_of_birth: '01/15/1980',
       email: contact[:email],
       phone: contact[:phone],
       physical_address_1: '123 Test St',
