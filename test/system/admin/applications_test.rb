@@ -113,6 +113,22 @@ module Admin
       end
     end
 
+    # Status changes only through workflow actions (Application#transition_status!), so the edit form has no status.
+    test 'the edit form saves application details and offers no status control' do
+      original_status = @application.status
+      visit edit_admin_application_path(@application)
+
+      assert_no_field 'Status'
+      assert_no_select 'application[status]'
+      fill_in 'application[medical_provider_name]', with: 'Dr. Edited'
+      click_button 'Update Application'
+
+      assert_text 'Application updated.'
+      @application.reload
+      assert_equal 'Dr. Edited', @application.medical_provider_name
+      assert_equal original_status, @application.status
+    end
+
     # Automatic certification requests are opt-in (dcf_auto_request_certification); see DcfAutoRequestTest.
     test 'with auto-request enabled, approving the required proofs requests the certification' do
       FeatureFlag.enable!(:dcf_auto_request_certification)

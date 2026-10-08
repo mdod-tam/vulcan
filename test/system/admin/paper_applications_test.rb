@@ -730,7 +730,8 @@ module Admin
       Policy.find_or_create_by(key: 'waiting_period_years').update(value: 3)
       constituent = FactoryBot.create(:constituent, first_name: 'Waiting', last_name: 'Period')
       # Archived applications do not block another application, but they still count toward the waiting period.
-      FactoryBot.create(:application, user: constituent, status: :archived, application_date: 2.years.ago)
+      archived = FactoryBot.create(:application, user: constituent, status: :archived, application_date: 2.years.ago)
+      applied_on = archived.reload.application_date
 
       safe_visit new_admin_paper_application_path
       fill_in 'adult_search_q', with: constituent.full_name
@@ -738,7 +739,7 @@ module Admin
       within '#adult_search_results' do
         result = find('li[aria-disabled="true"]', text: constituent.full_name, wait: 10)
         assert_equal 'Ineligible', result.find('span', text: 'Ineligible').text
-        assert_text constituent.ineligible_reason if constituent.respond_to?(:ineligible_reason) && constituent.ineligible_reason.present?
+        assert_text "Applied #{applied_on.strftime('%b %Y')} — eligible after #{(applied_on + 3.years).to_date.strftime('%b %d, %Y')}"
         result.click
       end
       assert_no_selector '[data-adult-picker-target="selectedPane"]', text: 'Applicant Selected'

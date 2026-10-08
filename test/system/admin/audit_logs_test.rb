@@ -75,6 +75,7 @@ module Admin
         assert_text 'Admin Review'
         assert_text @admin.full_name
         assert_text 'Income proof approved'
+        assert_no_text 'Admin Income proof approved'
 
         assert_selector 'tbody tr'
         income_approved_rows = all('tbody tr').select do |tr|

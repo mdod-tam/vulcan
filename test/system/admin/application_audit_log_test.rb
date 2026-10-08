@@ -80,6 +80,7 @@ module Admin
         find('tr', text: 'Admin Review', wait: 15)
 
         assert_text 'Income proof rejected - The document you submitted is not an acceptable type of income proof'
+        assert_no_text 'Admin Income proof rejected'
         assert_text @admin.full_name
       end
     end
