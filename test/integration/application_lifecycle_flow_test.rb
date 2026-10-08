@@ -194,70 +194,6 @@ class ApplicationLifecycleFlowTest < ActiveSupport::TestCase
     end
   end
 
-  test 'explicit document request keeps documents_requested behavior without requesting certification' do
-    with_after_commit_callbacks do
-      admin = create(:admin)
-      application = create_application_with_documents
-      set_application_state(
-        application,
-        status: :in_progress,
-        income_proof_status: :approved,
-        residency_proof_status: :approved,
-        id_proof_status: :approved,
-        medical_certification_status: :not_requested
-      )
-
-      MedicalProviderMailer.expects(:request_certification).never
-
-      service = Applications::DocumentRequester.new(application, by: admin)
-
-      assert_difference -> { Event.where(auditable: application, action: 'documents_requested').count }, 1 do
-        assert_difference -> { Notification.where(notifiable: application, action: 'documents_requested').count }, 1 do
-          assert service.call
-        end
-      end
-
-      application.reload
-
-      assert_equal 'awaiting_dcf', application.status
-      assert_equal 'not_requested', application.medical_certification_status
-      assert_equal 1, ApplicationStatusChange.where(application: application, to_status: 'awaiting_dcf').count
-    end
-  end
-
-  test 'explicit document request does not duplicate certification request when already requested' do
-    with_after_commit_callbacks do
-      admin = create(:admin)
-      application = create_application_with_documents
-      set_application_state(
-        application,
-        status: :in_progress,
-        income_proof_status: :approved,
-        residency_proof_status: :approved,
-        id_proof_status: :approved,
-        medical_certification_status: :requested
-      )
-
-      MedicalProviderMailer.expects(:request_certification).never
-
-      service = Applications::DocumentRequester.new(application, by: admin)
-
-      assert_difference -> { Event.where(auditable: application, action: 'documents_requested').count }, 1 do
-        assert_difference -> { Notification.where(notifiable: application, action: 'documents_requested').count }, 1 do
-          assert_no_difference -> { ApplicationStatusChange.where(application: application, change_type: 'medical_certification').count } do
-            assert service.call
-          end
-        end
-      end
-
-      application.reload
-
-      assert_equal 'awaiting_dcf', application.status
-      assert_equal 'requested', application.medical_certification_status
-      assert_equal 1, ApplicationStatusChange.where(application: application, to_status: 'awaiting_dcf').count
-    end
-  end
-
   test 'certification approval auto-approves the application via reconciler' do
     with_after_commit_callbacks do
       admin = create(:admin)
@@ -411,7 +347,7 @@ class ApplicationLifecycleFlowTest < ActiveSupport::TestCase
     end
   end
 
-  # CHARACTERIZATION: When status changes via transition_status! (e.g. Approver, DocumentRequester),
+  # CHARACTERIZATION: When status changes via transition_status! (e.g. Approver),
   # it creates both an ApplicationStatusChange and an application_status_changed event.
   # This is the explicit API-driven path.
   test 'transition_status! creates ApplicationStatusChange and application_status_changed for manual path' do
