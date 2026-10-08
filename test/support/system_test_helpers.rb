@@ -476,6 +476,15 @@ module SystemTestHelpers
     assert_selector '#attachments-section[data-test-rendered-at]', wait: timeout
   end
 
+  # The proof rejection dialog locks its reason until staff pick one, so a custom reason starts with Other.
+  def submit_custom_proof_rejection(reason, modal: '#proofRejectionModal')
+    within(modal) do
+      find("button[data-action='click->rejection-form#selectOther']").click
+      fill_in 'Reason for Rejection', with: reason
+      click_button 'Submit'
+    end
+  end
+
   # Scroll and click in one script to handle controls outside the viewport.
   def click_modal_button(button_selector_or_text, within_modal: nil, wait: 10)
     scope = within_modal ? find(within_modal, wait: wait) : page

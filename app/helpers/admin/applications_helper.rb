@@ -215,10 +215,6 @@ module Admin
       number_to_percentage((count.to_f / total) * 100, precision: 1)
     end
 
-    def application_status_options
-      Application.statuses.keys.map { |s| [s.titleize, s] }
-    end
-
     def application_type_options
       Application.application_types.keys.map { |s| [s.titleize, s] }
     end

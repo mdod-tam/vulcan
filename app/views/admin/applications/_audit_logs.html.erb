@@ -125,9 +125,9 @@
               <%= case
                   when log.is_a?(ProofReview)
                     if log.status_rejected?
-                      "Admin #{ProofNotificationCopy.rejected_text(log.proof_type, log.rejection_reason)}"
+                      ProofNotificationCopy.rejected_text(log.proof_type, log.rejection_reason)
                     else
-                      "Admin #{ProofNotificationCopy.approved_text(log.proof_type)}"
+                      ProofNotificationCopy.approved_text(log.proof_type)
                     end
                   when log.is_a?(ApplicationStatusChange)
                     if log.metadata.try(:[], 'change_type') == 'medical_certification'

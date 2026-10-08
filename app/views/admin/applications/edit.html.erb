@@ -16,11 +16,6 @@
     <% end %>
 
     <div class="grid grid-cols-1 md:grid-cols-2 gap-6">
-      <div>
-        <%= form.label :status, class: "block text-sm font-medium text-gray-700" %>
-        <%= form.select :status, application_status_options, {}, class: "mt-1 block w-full py-2 px-3 border border-gray-300 bg-white rounded-md shadow-sm focus:outline-none focus:ring-indigo-500 focus:border-indigo-500 sm:text-sm" %>
-      </div>
-
       <% if @application.income_proof_required? %>
         <div>
           <%= form.label :household_size, class: "block text-sm font-medium text-gray-700" %>

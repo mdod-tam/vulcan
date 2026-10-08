@@ -4,6 +4,8 @@ require 'application_system_test_case'
 
 module ConstituentPortal
   class IncomeThresholdTest < ApplicationSystemTestCase
+    include OnlineApplicationTestHelpers
+
     setup do
       @constituent = create(:constituent,
                             first_name: 'Sophia',
@@ -12,7 +14,7 @@ module ConstituentPortal
                             phone: '4105551234',
                             physical_address_1: '789 Elm Avenue',
                             city: 'Frederick',
-                            state: 'Maryland',
+                            state: 'MD',
                             zip_code: '21702')
       system_test_sign_in(@constituent)
 
@@ -29,8 +31,8 @@ module ConstituentPortal
       fill_in 'Household Size', with: '2'
       fill_in 'Annual Income', with: '100000'
 
-      # Move focus to trigger blur validation.
-      find('body').click
+      # Leave the field to trigger blur validation. A body click could toggle a checkbox mid-page.
+      find_field('Annual Income').send_keys(:tab)
 
       assert_selector '#income-threshold-warning:not(.hidden)', visible: true
 
@@ -51,27 +53,23 @@ module ConstituentPortal
       fill_in 'Household Size', with: '2'
       fill_in 'Annual Income', with: '50000'
 
-      # Move focus to trigger blur validation.
-      find('body').click
+      # Leave the field to trigger blur validation. A body click could toggle a checkbox mid-page.
+      find_field('Annual Income').send_keys(:tab)
 
       assert_selector '#income-threshold-warning[hidden]', visible: :all
 
       # Income within the threshold does not complete the required proof and consent controls.
       assert_selector "input[name='submit_application'][disabled]"
 
-      attach_file 'Upload Residency Proof Document', Rails.root.join('test/fixtures/files/residency_proof.pdf')
-      attach_file 'Upload Income Proof Document', Rails.root.join('test/fixtures/files/income_proof.pdf')
-      attach_file 'Upload ID Proof Document', Rails.root.join('test/fixtures/files/residency_proof.pdf')
-
-      within("[data-testid='medical-provider-fields']") do
+      attach_required_documents
+      within('#medical-provider-fields') do
         fill_in 'Name', with: 'Dr. Smith'
-        fill_in 'Phone', with: '5551234567'
+        fill_in 'Phone', with: '555-123-4567'
         fill_in 'Email', with: 'dr.smith@example.com'
+        check 'I authorize the release and sharing of my disability-related information as described above'
       end
-
-      check 'I authorize the release and sharing of my disability-related information as described above'
-      find_by_id('terms_accepted').check
-      find_by_id('information_verified').check
+      accept_submit_confirmations
+      wait_for_fpl_data_to_load(timeout: 15)
 
       assert_no_selector "input[name='submit_application'][disabled]"
     end
@@ -82,17 +80,17 @@ module ConstituentPortal
       fill_in 'Household Size', with: '2'
 
       fill_in 'Annual Income', with: '100000'
-      find('body').click
+      find_field('Annual Income').send_keys(:tab)
 
       assert_selector '#income-threshold-warning:not(.hidden)', visible: true
 
       fill_in 'Annual Income', with: '50000'
-      find('body').click
+      find_field('Annual Income').send_keys(:tab)
 
       assert_selector '#income-threshold-warning[hidden]', visible: :all
 
       fill_in 'Annual Income', with: '100000'
-      find('body').click
+      find_field('Annual Income').send_keys(:tab)
 
       assert_selector '#income-threshold-warning:not(.hidden)', visible: true
     end

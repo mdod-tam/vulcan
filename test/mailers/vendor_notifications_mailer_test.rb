@@ -58,10 +58,6 @@ class VendorNotificationsMailerTest < ActionMailer::TestCase
                  .returns(payment_template)
   end
 
-  test 'invoice_generated' do
-    skip 'Add invoice-generated email and PDF attachment assertions before enabling this test'
-  end
-
   test 'payment_issued' do
     expected_text = "Mock Payment Issued Body #{@invoice.invoice_number}"
     payment_template = mock('payment_template_specific')

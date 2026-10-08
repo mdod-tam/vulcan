@@ -438,23 +438,6 @@ module Admin
       assert_selector '#self-info-section', text: "Applicant's Information", wait: 10
     end
 
-    def select_existing_adult_through_the_ui(applicant)
-      choose 'An Adult (applying for themselves)', allow_label_click: true
-      fill_in 'adult_search_q', with: applicant.full_name
-      within '#adult_search_results' do
-        find('li', text: /#{Regexp.escape(applicant.full_name)}/i, wait: 10).click
-      end
-      assert_selector '[data-adult-picker-target="onFileSummary"]', visible: true, wait: 15
-    end
-
-    # The existing-adult submit gate requires staff verification against the paper form.
-    def verify_existing_adult_contact
-      box = first('[data-adult-picker-target="verificationCheckbox"]', visible: :all)
-      return if box.nil? || box.checked?
-
-      box.click
-    end
-
     def select_existing_dependent_through_the_ui(dependent)
       within '[data-guardian-picker-target="dependentsFrame"]' do
         click_button 'Select', match: :first, wait: 15

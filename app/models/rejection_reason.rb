@@ -7,6 +7,28 @@
 class RejectionReason < ApplicationRecord
   belongs_to :updated_by, class_name: 'User', optional: true
 
+  # Display names staff see for reason codes in every rejection form. Codes not listed read as titles.
+  LABELS = {
+    'missing_amount' => 'Missing Income Amount',
+    'exceeds_threshold' => 'Income Exceeds Threshold',
+    'outdated_ss_award' => 'Outdated Social Security Award Letter',
+    'missing_signature' => 'Missing Signature',
+    'wrong_document' => 'Wrong Document Type',
+    'address_mismatch' => 'Address Mismatch',
+    'missing_name' => 'Missing Name',
+    'missing_provider_credentials' => 'Missing Provider Credentials',
+    'incomplete_disability_documentation' => 'Incomplete Disability Documentation',
+    'outdated_certification' => 'Outdated Certification',
+    'missing_functional_limitations' => 'Missing Functional Limitations',
+    'incorrect_form_used' => 'Incorrect Form Used',
+    'incomplete_documentation' => 'Incomplete Documentation',
+    'illegible' => 'Illegible or Unclear'
+  }.freeze
+
+  def self.label_for(code)
+    LABELS.fetch(code.to_s) { code.to_s.humanize.titleize }
+  end
+
   validates :code,       presence: true
   validates :proof_type, presence: true
   validates :locale,     presence: true

@@ -206,15 +206,15 @@ module Admin
         assert_equal 'income', proof_type_field.value
 
         # Common rejection reasons.
-        assert_selector "button[data-reason-type='addressMismatch']", text: 'Address Mismatch'
-        assert_selector "button[data-reason-type='expired']", text: 'Expired Documentation'
-        assert_selector "button[data-reason-type='missingName']", text: 'Missing Name'
-        assert_selector "button[data-reason-type='wrongDocument']", text: 'Wrong Document Type'
+        assert_selector "button[data-reason-code='address_mismatch']", text: 'Address Mismatch'
+        assert_selector "button[data-reason-code='expired']", text: 'Expired'
+        assert_selector "button[data-reason-code='missing_name']", text: 'Missing Name'
+        assert_selector "button[data-reason-code='wrong_document']", text: 'Wrong Document Type'
 
         # Reasons specific to income proof.
-        assert_selector "button[data-reason-type='missingAmount']", text: 'Missing Amount'
-        assert_selector "button[data-reason-type='exceedsThreshold']", text: 'Income Exceeds Threshold'
-        assert_selector "button[data-reason-type='outdatedSsAward']", text: 'Outdated SS Award Letter'
+        assert_selector "button[data-reason-code='missing_amount']", text: 'Missing Income Amount'
+        assert_selector "button[data-reason-code='exceeds_threshold']", text: 'Income Exceeds Threshold'
+        assert_selector "button[data-reason-code='outdated_ss_award']", text: 'Outdated Social Security Award Letter'
 
         # The current scope already selects the modal.
         click_modal_button('Cancel')
@@ -246,14 +246,14 @@ module Admin
         proof_type_field = find_by_id('rejection-proof-type', visible: false)
         assert_equal 'residency', proof_type_field.value
 
-        assert_selector "button[data-reason-type='addressMismatch']", text: 'Address Mismatch'
-        assert_selector "button[data-reason-type='expired']", text: 'Expired Documentation'
-        assert_selector "button[data-reason-type='missingName']", text: 'Missing Name'
-        assert_selector "button[data-reason-type='wrongDocument']", text: 'Wrong Document Type'
+        assert_selector "button[data-reason-code='address_mismatch']", text: 'Address Mismatch'
+        assert_selector "button[data-reason-code='expired']", text: 'Expired'
+        assert_selector "button[data-reason-code='missing_name']", text: 'Missing Name'
+        assert_selector "button[data-reason-code='wrong_document']", text: 'Wrong Document Type'
 
-        assert_selector "button[data-reason-type='missingAmount']", visible: false
-        assert_selector "button[data-reason-type='exceedsThreshold']", visible: false
-        assert_selector "button[data-reason-type='outdatedSsAward']", visible: false
+        assert_selector "button[data-reason-code='missing_amount']", visible: false
+        assert_selector "button[data-reason-code='exceeds_threshold']", visible: false
+        assert_selector "button[data-reason-code='outdated_ss_award']", visible: false
 
         click_modal_button('Cancel')
       end
@@ -280,9 +280,9 @@ module Admin
       wait_for_modal_open('proofRejectionModal', timeout: 10)
 
       within('#proofRejectionModal') do
-        click_modal_button("button[data-reason-type='missingName']")
+        click_modal_button("button[data-reason-code='missing_name']")
 
-        selected_button = find("button[data-reason-type='missingName']")
+        selected_button = find("button[data-reason-code='missing_name']")
         assert_equal 'true', selected_button['aria-pressed']
 
         assert_selector("textarea[name='rejection_reason']")
@@ -290,7 +290,7 @@ module Admin
         reason_field = find("textarea[name='rejection_reason']")
         assert reason_field.value.present?, 'Rejection reason field should be populated'
         assert_includes reason_field.value, 'does not show your name'
-        assert_equal reason_field[:id], page.evaluate_script('document.activeElement.id')
+        assert reason_field[:readonly], 'A predefined reason is read-only'
 
         assert_selector("[data-rejection-form-target='liveRegion']",
                         text: /Selected rejection reason: Missing Name/i,
@@ -323,34 +323,23 @@ module Admin
       end
     end
 
-    test 'admin can modify the rejection reason text' do
+    test 'a predefined rejection reason cannot be edited; Other is the way to write one' do
       system_test_sign_in(@admin)
       visit_admin_application_with_retry(@application, user: @admin)
       assert_selector '#attachments-section', wait: 20
 
-      assert_selector 'h1', text: /Application.*Details/i, count: 1, wait: 15
-      assert_selector '#attachments-section', count: 1, wait: 15
-
       click_review_proof_and_wait('income', timeout: 15)
-
-      within('#incomeProofReviewModal') do
-        click_button 'Reject'
-      end
-
+      within('#incomeProofReviewModal') { click_button 'Reject' }
       wait_for_modal_open('proofRejectionModal', timeout: 10)
 
       within('#proofRejectionModal') do
-        click_modal_button("button[data-reason-type='missingName']")
-
-        assert_selector("textarea[name='rejection_reason']")
-
+        click_modal_button("button[data-reason-code='missing_name']")
         reason_field = find("textarea[name='rejection_reason']")
-        assert reason_field.value.present?, 'Field should be populated before modification'
+        predefined_text = reason_field.value
+        assert predefined_text.present?, 'Field should be populated with the predefined reason'
 
-        custom_message = 'Please provide a document with your full legal name clearly visible.'
-        reason_field.set(custom_message)
-
-        assert_equal custom_message, reason_field.value
+        reason_field.send_keys(' edited')
+        assert_equal predefined_text, reason_field.value
 
         click_modal_button('Cancel')
       end

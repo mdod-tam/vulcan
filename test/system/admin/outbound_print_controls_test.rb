@@ -129,6 +129,23 @@ module Admin
       take_full_page_screenshot('outbound-print-storage-retried')
     end
 
+    test 'a released letter can be marked as printed' do
+      sign_in(@admin)
+      visit admin_print_queue_index_path
+      within('section[aria-label="Awaiting release"]') do
+        find("#letter-#{@letter.id}").check
+        click_button 'Release and download selected'
+      end
+      within('section[aria-label="Released — awaiting print confirmation"]') do
+        find("#letter-#{@letter.id}").check
+        click_button 'Mark selected as printed'
+      end
+
+      assert_text 'Selected letters marked as printed.'
+      within('section[aria-label="Recently printed"]') { assert_link "Review letter ##{@letter.id}" }
+      assert @letter.reload.printed_at
+    end
+
     private
 
     def take_full_page_screenshot(label)

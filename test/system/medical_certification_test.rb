@@ -25,7 +25,7 @@ class MedicalCertificationTest < ApplicationSystemTestCase
     wait_for_turbo
     wait_for_network_idle(timeout: 10) if respond_to?(:wait_for_network_idle)
 
-    assert_text 'Medical Certification', wait: 10
+    assert_text 'Disability Certification', wait: 10
 
     assert_text @application.medical_provider_name, wait: 10
     assert_text @application.medical_provider_phone, wait: 10
@@ -102,8 +102,7 @@ class MedicalCertificationTest < ApplicationSystemTestCase
 
     assert_text 'Application Details', wait: 15
 
-    assert_text 'Medical', wait: 10
-    assert_text 'Certification', wait: 10
+    assert_text 'Disability Certification', wait: 10
 
     assert_text @application.medical_provider_name, wait: 10
 
@@ -125,7 +124,7 @@ class MedicalCertificationTest < ApplicationSystemTestCase
     wait_for_network_idle(timeout: 10) if respond_to?(:wait_for_network_idle)
 
     # The secure-upload request action is unavailable without a provider email.
-    assert_text 'Medical provider email is required', wait: 10
+    assert_text 'Secure cert upload form cannot be sent - provider email is missing.', wait: 10
     assert_no_button 'Send Secure Cert Upload Link', wait: 5
     assert_no_button 'Send Email', wait: 5
 

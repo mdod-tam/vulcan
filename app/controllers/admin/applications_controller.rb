@@ -612,9 +612,10 @@ module Admin
       redirect_to admin_applications_path, alert: t('.app_not_found')
     end
 
+    # Status is not editable here: it changes only through workflow actions, which go through
+    # Application#transition_status! and record history and audit events.
     def application_params
-      permitted = %i[status
-                     application_type
+      permitted = %i[application_type
                      submission_method
                      medical_provider_name
                      medical_provider_phone
