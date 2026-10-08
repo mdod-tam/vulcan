@@ -26,7 +26,8 @@ module Invoices
       assert first && second, 'both redemptions should succeed'
       assert voucher.reload.voucher_redeemed?
 
-      result = Invoices::GenerationService.new.call
+      # Purchases made today are invoiced by the next run, after the midnight cutoff.
+      result = Invoices::GenerationService.new(now: 1.day.from_now).call
 
       assert result.success?, result.message
       invoice = Invoice.find_by!(vendor: @vendor)
@@ -34,8 +35,7 @@ module Invoices
       assert_includes invoice.voucher_transactions, second
       assert_in_delta 100 + 250.25, invoice.total_amount.to_f
 
-      invoice.update!(status: :invoice_approved)
-      invoice.update!(status: :invoice_paid, gad_invoice_reference: 'GAD-TEST-1')
+      pay_invoice!(invoice, gad_invoice_reference: 'GAD-TEST-1')
 
       assert_in_delta 350.25, invoice.reload.total_amount.to_f
       assert_equal [BigDecimal('65'), BigDecimal('35')], [first.reload.amount, second.reload.amount]
@@ -53,8 +53,7 @@ module Invoices
 
       assert result.success?, result.message
       invoice = Invoice.find_by!(vendor: @vendor)
-      invoice.update!(status: :invoice_approved)
-      invoice.update!(status: :invoice_paid, gad_invoice_reference: 'GAD-TEST-2')
+      pay_invoice!(invoice, gad_invoice_reference: 'GAD-TEST-2')
 
       assert_in_delta 250.25, invoice.reload.total_amount.to_f
       assert_equal %w[AAA111 BBB222], purchase.reload.shipments.map(&:tracking_number)
@@ -141,8 +140,8 @@ module Invoices
       Invoices::GenerationService.new.call
       first = Invoice.find_by!(vendor: @vendor)
 
-      travel_to(first.end_date + 1.hour) do
-        later = create(:voucher_transaction, vendor: @vendor, amount: 40, processed_at: Time.current)
+      later = create(:voucher_transaction, vendor: @vendor, amount: 40, processed_at: Time.current)
+      travel_to(1.day.from_now) do
         result = Invoices::GenerationService.new.call
 
         assert_equal 1, result.data[:invoices_created]

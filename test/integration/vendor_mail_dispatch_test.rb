@@ -49,10 +49,10 @@ class VendorMailDispatchTest < ActiveSupport::TestCase
   end
 
   test 'recording an invoice payment delivers the payment notice after commit' do
-    invoice = create(:invoice, vendor: @vendor)
+    invoice = create(:invoice, :pending, vendor: @vendor)
 
     perform_enqueued_jobs do
-      invoice.update!(status: :invoice_paid, gad_invoice_reference: 'GAD-123')
+      pay_invoice!(invoice, gad_invoice_reference: 'GAD-123')
     end
 
     mail = ActionMailer::Base.deliveries.sole

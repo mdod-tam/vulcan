@@ -4,50 +4,69 @@ require 'test_helper'
 
 module VendorPortal
   class InvoicesControllerTest < ActionDispatch::IntegrationTest
-    # Assuming AuthenticationTestHelper exists and provides sign_in_with_headers and assert_authenticated
-    # If not, this helper might need to be created or adjusted based on the actual authentication setup.
-    # For now, we'll assume it exists as per the user's example.
     include AuthenticationTestHelper
-    include ActionView::Helpers::NumberHelper # Include number helpers for currency formatting
+    include ActionView::Helpers::NumberHelper
 
     setup do
-      @vendor_user = create(:vendor_user) # Use FactoryBot to create a vendor user
-      sign_in_with_headers(@vendor_user) # Sign in the vendor user
-      assert_authenticated(@vendor_user) # Verify authentication
-      # Create multiple invoices for the vendor in the setup to ensure consistent test data
-      @invoices = create_list(:invoice, 5, vendor: @vendor_user)
+      ensure_system_audit_actor!
+      @vendor_user = create(:vendor_user)
+      sign_in_with_headers(@vendor_user)
+      @invoices = create_list(:invoice, 3, vendor: @vendor_user)
     end
 
-    test 'should show invoices index' do
-      # Using vendor_portal_invoices_url route
+    test 'index lists the invoices by number and status' do
       get vendor_portal_invoices_url
+
       assert_response :success
-      # Add assertions to check for specific content on the invoices index page
-      assert_select 'h1', 'My Invoices' # Corrected assertion to match view
-      # Assert presence of invoice data by checking for list items within the unordered list
-      assert_select 'ul[role="list"].divide-y.divide-gray-200 li', count: @invoices.count
+      assert_select 'h1', 'My Invoices'
+      assert_select 'ul[role="list"] li', count: @invoices.count
+      @invoices.each { |invoice| assert_match "Invoice #{invoice.invoice_number}", response.body }
+      assert_match 'Awaiting approval', response.body
     end
 
-    test 'should show individual invoice' do
-      # Using vendor_portal_invoice_url route
-      invoice = create(:invoice, vendor: @vendor_user, total_amount: 123.45) # Create an invoice associated with the vendor user
+    test 'the vendor sees the same settlement facts staff recorded, without the internal ones' do
+      admin = create(:admin, first_name: 'Rhea', last_name: 'Ledger')
+      invoice = create(:invoice, :pending, :with_transactions, vendor: @vendor_user, transaction_count: 1, amount_per_transaction: 123.45)
+      pay_invoice!(invoice, actor: admin, payment_method: 'check', check_number: 'CHK-5521', payment_reference: nil,
+                            gad_invoice_reference: 'GAD-8812', payment_notes: 'Internal: cleared early')
+      shared = ['Invoice number', invoice.invoice_number, number_to_currency(123.45), 'Check', 'CHK-5521', 'GAD-8812',
+                I18n.l(Date.current, format: :long)]
+
       get vendor_portal_invoice_url(invoice)
       assert_response :success
-      # Add assertions to check for content on the invoice show page
-      assert_select 'h1', "Invoice ##{invoice.id}"
-      assert_select 'dd', text: number_to_currency(invoice.total_amount) # Updated assertion to match view
-      # Add more assertions to check for other invoice details displayed on the page
+      shared.each { |fact| assert_match fact, response.body }
+      ['Recorded by', 'Rhea Ledger', 'Internal: cleared early'].each { |fact| assert_no_match fact, response.body }
+
+      sign_in_with_headers(admin)
+      get admin_invoice_url(invoice)
+      assert_response :success
+      (shared + ['Recorded by', 'Rhea Ledger', 'Internal: cleared early']).each { |fact| assert_match fact, response.body }
     end
 
-    test 'should not show invoice belonging to another vendor' do
-      another_vendor_user = create(:vendor_user)
-      invoice_from_another_vendor = create(:invoice, vendor: another_vendor_user)
+    test 'a historical paid invoice shows unknown payment details as not recorded' do
+      invoice = create(:invoice, :paid, vendor: @vendor_user, check_number: nil)
+
+      get vendor_portal_invoice_url(invoice)
+
+      assert_response :success
+      assert_select 'dd', text: 'Not recorded'
+    end
+
+    test 'a suspended vendor keeps access to its invoices' do
+      @vendor_user.update_column(:vendor_authorization_status, Users::Vendor.vendor_authorization_statuses[:suspended])
+
+      get vendor_portal_invoice_url(@invoices.first)
+
+      assert_response :success
+      assert_match @invoices.first.invoice_number, response.body
+    end
+
+    test 'an invoice belonging to another vendor is not shown' do
+      invoice_from_another_vendor = create(:invoice, vendor: create(:vendor_user))
 
       get vendor_portal_invoice_url(invoice_from_another_vendor)
-      # Assuming the application redirects or returns a 404 for unauthorized access
-      assert_redirected_to vendor_portal_invoices_url # Updated assertion to expect redirect
-    end
 
-    # Add more tests as needed for filtering, sorting, or other invoice index/show page features.
+      assert_redirected_to vendor_portal_invoices_url
+    end
   end
 end

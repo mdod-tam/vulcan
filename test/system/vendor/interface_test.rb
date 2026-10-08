@@ -83,7 +83,7 @@ module VendorPortal
       visit vendor_portal_invoice_path(invoice)
       clear_pending_connections_fast
 
-      assert_text "Invoice ##{invoice.id}"
+      assert_text invoice.invoice_number
       assert_text(/invoice paid|paid/i)
     end
 

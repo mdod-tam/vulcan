@@ -57,39 +57,48 @@ module VendorPortal
       end
     end
 
+    # Each visit starts a new purchase with its own submission ID; process_redemption keeps it on a retry.
     def redeem
       # check_voucher_active and check_identity_verified before actions
       # will redirect if necessary
-      @products = Product.order(:name)
+      render_redemption_form(submission_id: SecureRandom.uuid)
     end
 
     def process_redemption
-      # Delegate to service for all business logic
       result = Vouchers::RedemptionService.call(
         voucher: @voucher,
         vendor: current_user,
         amount: params[:amount],
         product_ids: params[:product_ids],
         notes: params[:notes],
+        submission_id: params[:submission_id],
         session: session
       )
 
       if result.success?
         flash[:notice] = result.message
         redirect_to vendor_portal_dashboard_path
-      else
+      elsif result.data&.dig(:error_type) == :identity_verification_required
         flash[:alert] = result.message
-        # Redirect to verify page if identity verification is required, otherwise back to redeem form
-        redirect_path = if result.data&.dig(:error_type) == :identity_verification_required
-                          verify_vendor_portal_voucher_path(@voucher.code)
-                        else
-                          redeem_vendor_portal_voucher_path(@voucher.code)
-                        end
-        redirect_to redirect_path
+        redirect_to verify_vendor_portal_voucher_path(@voucher.code)
+      else
+        flash.now[:alert] = result.message
+        # The same submission ID keeps a corrected retry from recording a second purchase. A form used
+        # for a different purchase gets a new one.
+        retry_id = result.data&.dig(:error_type) == :submission_conflict ? SecureRandom.uuid : params[:submission_id]
+        render_redemption_form(submission_id: retry_id.presence || SecureRandom.uuid, status: :unprocessable_content)
       end
     end
 
     private
+
+    def render_redemption_form(submission_id:, status: :ok)
+      @products = Product.order(:name)
+      @submission_id = submission_id
+      @amount_input = params[:amount]
+      @selected_product_ids = Array(params[:product_ids]).map(&:to_s)
+      render :redeem, status: status
+    end
 
     def set_voucher
       # Voucher lookup gracefully handles invalid codes by redirecting with error message

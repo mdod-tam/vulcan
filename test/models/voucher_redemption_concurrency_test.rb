@@ -53,4 +53,49 @@ class VoucherRedemptionConcurrencyTest < ActiveSupport::TestCase
     end
     cleanup_duplicate_review_test_data!(*[vendor, voucher&.application&.user].compact)
   end
+
+  test 'a double-clicked submission waits for the first and returns the same purchase' do
+    Policy.stubs(:voucher_minimum_redemption_amount).returns(10)
+    vendor = create(:vendor, :approved)
+    voucher = create(:voucher, initial_value: 100, remaining_value: 100, vendor: nil)
+    submission_id = SecureRandom.uuid
+
+    holder_ready = Queue.new
+    release_holder = Queue.new
+    holder_pid_queue = Queue.new
+    first = nil
+    holder_thread = on_own_connection do
+      holder_pid_queue << backend_pid
+      ActiveRecord::Base.transaction do
+        first = Voucher.find(voucher.id).redeem!(BigDecimal('40'), vendor, submission_id: submission_id)
+        holder_ready << true
+        release_holder.pop
+      end
+    end
+    holder_pid = wait_for_signal(holder_pid_queue, thread: holder_thread)
+    wait_for_signal(holder_ready, thread: holder_thread)
+
+    contender_pid_queue = Queue.new
+    second = nil
+    contender_thread = on_own_connection do
+      contender_pid_queue << backend_pid
+      second = Voucher.find(voucher.id).redeem!(BigDecimal('40'), vendor, submission_id: submission_id)
+    end
+
+    confirm_blocked_then_release(
+      wait_for_signal(contender_pid_queue, thread: contender_thread),
+      holder_pid:, release_queue: release_holder, holder_thread:, contender_thread:
+    )
+
+    assert_equal first, second
+    assert_equal 1, voucher.transactions.count
+    assert_equal BigDecimal('60.00'), voucher.reload.remaining_value
+  ensure
+    if voucher
+      VoucherTransaction.where(voucher_id: voucher.id).delete_all
+      Event.where(auditable: voucher).delete_all
+      Voucher.where(id: voucher.id).delete_all
+    end
+    cleanup_duplicate_review_test_data!(*[vendor, voucher&.application&.user].compact)
+  end
 end

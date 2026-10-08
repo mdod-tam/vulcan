@@ -113,11 +113,12 @@
                 </td>
                 <td class="px-6 py-4 whitespace-nowrap text-sm text-gray-500">
                   <% if transaction.invoice %>
-                    <%= link_to "##{transaction.invoice.id}",
-                        vendor_portal_invoice_path(transaction.invoice),
-                        class: "text-indigo-600 hover:text-indigo-900" %>
+                    <%= link_to transaction.invoice.invoice_number, vendor_portal_invoice_path(transaction.invoice),
+                                class: 'text-indigo-600 hover:text-indigo-900' %>
+                  <% elsif transaction.on_billing_hold? %>
+                    <span class="text-amber-800">On hold — contact the program</span>
                   <% else %>
-                    <span class="text-gray-400">Pending</span>
+                    <span class="text-gray-500">Not yet invoiced</span>
                   <% end %>
                 </td>
                 <td class="px-6 py-4 whitespace-nowrap text-sm text-gray-500">

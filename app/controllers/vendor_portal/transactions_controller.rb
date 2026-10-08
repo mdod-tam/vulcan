@@ -10,7 +10,7 @@ module VendorPortal
     FULFILLMENT_MODES = %w[shipping local_pickup].freeze
 
     def index
-      transactions_scope = current_user.voucher_transactions.includes(:shipments, voucher: { application: :user }).order(created_at: :desc)
+      transactions_scope = current_user.voucher_transactions.includes(:shipments, :invoice, voucher: { application: :user }).order(created_at: :desc)
       transactions_scope = transactions_scope.needing_shipping_details if params[:needs_shipping_details] == '1'
 
       # Apply date filters if provided
@@ -83,6 +83,12 @@ module VendorPortal
       end
     end
 
+    def billing_label(transaction)
+      return helpers.invoice_status_label(transaction.invoice) if transaction.invoice
+
+      transaction.on_billing_hold? ? 'On hold' : 'Not yet invoiced'
+    end
+
     def transaction_to_hash(transaction)
       {
         'Date' => transaction.processed_at.strftime('%Y-%m-%d %H:%M'),
@@ -90,7 +96,9 @@ module VendorPortal
         'Amount' => transaction.amount,
         'Status' => transaction.status.humanize,
         'Reference Number' => transaction.reference_number,
-        'Constituent Name' => transaction.voucher&.application&.user&.full_name
+        'Constituent Name' => transaction.voucher&.application&.user&.full_name,
+        'Invoice Number' => transaction.invoice&.invoice_number,
+        'Billing' => billing_label(transaction)
       }
     end
   end

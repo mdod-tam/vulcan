@@ -9,17 +9,10 @@ module VoucherTestHelper
                          amount: amount,
                          status: :transaction_completed)
 
-    # Create invoice and move through approval process
-    invoice = create(:invoice, :approved,
-                     vendor: vendor,
-                     voucher_transactions: [transaction])
-    invoice.update!(
-      status: :invoice_paid,
-      gad_invoice_reference: "GAD-#{SecureRandom.hex(6).upcase}"
-    )
+    invoice = create(:invoice, :pending, vendor: vendor, voucher_transactions: [transaction])
+    pay_invoice!(invoice)
 
-    voucher.reload # Status updated by invoice callback
-    voucher
+    voucher.reload
   end
 
   def create_pending_invoice(vendor:, transaction_count: 3, amount: 100.00)
@@ -32,14 +25,9 @@ module VoucherTestHelper
   end
 
   def approve_and_record_payment(invoice:, gad_reference: nil)
-    invoice.update!(status: :invoice_approved)
-    invoice.update!(
-      status: :invoice_paid,
-      gad_invoice_reference: gad_reference || "GAD-#{SecureRandom.hex(6).upcase}",
-      check_number: "CHK#{SecureRandom.hex(4).upcase}", # Optional
-      payment_notes: 'Payment processed by GAD'
-    )
-    invoice
+    pay_invoice!(invoice, gad_invoice_reference: gad_reference || "GAD-#{SecureRandom.hex(6).upcase}",
+                          payment_method: 'check', check_number: "CHK#{SecureRandom.hex(4).upcase}",
+                          payment_notes: 'Payment processed by GAD')
   end
 
   def sign_in_vendor(vendor)

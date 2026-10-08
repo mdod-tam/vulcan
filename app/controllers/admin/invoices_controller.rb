@@ -1,238 +1,139 @@
 # frozen_string_literal: true
 
 module Admin
+  # Invoice list, detail, and the staff steps after generation. Every change goes through
+  # Invoices::Workflow; generation ("Invoice now", retry) goes through Invoices::GenerationService.
   class InvoicesController < Admin::BaseController
     include Pagy::Backend
 
-    before_action :set_invoice, only: %i[show update approve]
     before_action :require_admin!
+    before_action :set_invoice, only: %i[show approve record_payment withdraw correction_note]
+
+    CSV_COLUMNS = {
+      'Invoice Number' => :invoice_number,
+      'Vendor' => ->(invoice) { invoice.vendor.business_name },
+      'Period Start' => ->(invoice) { invoice.start_date.to_date.iso8601 },
+      'Covered Through' => ->(invoice) { invoice.covered_through.iso8601 },
+      'Total Amount' => ->(invoice) { format('%.2f', invoice.total_amount) },
+      'Status' => ->(invoice) { helpers.invoice_status_label(invoice) },
+      'Approved At' => ->(invoice) { invoice.approved_at&.to_date&.iso8601 },
+      'Payment Date' => ->(invoice) { invoice.payment_date&.to_date&.iso8601 },
+      'Payment Method' => ->(invoice) { helpers.invoice_payment_method_label(invoice) },
+      'Payment Reference' => :payment_reference,
+      'Check Number' => :check_number,
+      'GAD Reference' => :gad_invoice_reference,
+      'Recorded By' => ->(invoice) { invoice.paid_by&.full_name }
+    }.freeze
 
     def index
-      scope = Invoice.includes(:vendor)
-                     .order(created_at: :desc)
-
-      scope = apply_filters(scope)
-      @pagy, @invoices = pagy(scope, items: 25)
-
-      # Get vendor totals for current period (uninvoiced transactions)
-      @vendor_totals = Vendor.active
-                             .joins(:voucher_transactions)
-                             .where(voucher_transactions: { invoice_id: nil,
-                                                            status: VoucherTransaction.statuses[:transaction_completed] })
-                             .group('users.id, users.business_name')
-                             .select('users.id, users.business_name, ' \
-                                     'SUM(voucher_transactions.amount) as total_amount, ' \
-                                     'COUNT(DISTINCT voucher_transactions.id) as transaction_count')
-                             .order(total_amount: :desc)
+      @filter = Invoices::ListFilter.new(params)
+      scope = @filter.call
+      flash.now[:alert] = @filter.errors.to_sentence if @filter.errors.any?
 
       respond_to do |format|
-        format.html
+        format.html do
+          @pagy, @invoices = pagy(scope, limit: 25)
+          load_billing_overview
+        end
         format.csv do
-          send_data generate_csv(@invoices), filename: "invoices-#{Time.current.strftime('%Y%m%d')}.csv",
-                                             type: 'text/csv'
+          send_data invoices_csv(scope), filename: "invoices-#{Time.current.strftime('%Y%m%d')}.csv", type: 'text/csv'
         end
       end
     end
 
     def show
-      EmailDelivery::Visibility.preload([@invoice])
-      @transactions = @invoice.voucher_transactions
-                              .includes(:voucher)
-                              .order(processed_at: :desc)
-    end
-
-    def update
-      if missing_gad_reference?
-        handle_update_error("GAD reference can't be blank")
-        return
-      end
-
-      if @invoice.update(invoice_params)
-        log_event!('Updated invoice details', {
-                     status_changed: @invoice.saved_change_to_status?,
-                     new_status: @invoice.status,
-                     gad_reference: @invoice.gad_invoice_reference
-                   })
-        redirect_to [:admin, @invoice], notice: invoice_update_notice
-      else
-        handle_update_error(@invoice.errors.full_messages.join(', '))
-      end
+      load_show_data
     end
 
     def approve
-      if @invoice.status_invoice_pending?
-        @invoice.update!(status: :invoice_approved)
-        log_event!('Approved invoice')
-        redirect_to [:admin, @invoice], notice: t('.invoice_approved_pass')
-      else
-        redirect_to [:admin, @invoice], alert: t('.invoice_approved_pending')
-      end
+      workflow.approve!(expected_status: params[:expected_status])
+      redirect_to [:admin, @invoice], notice: 'Invoice approved.'
+    rescue Invoices::Workflow::Refused => e
+      redirect_to [:admin, @invoice], alert: e.message
+    end
+
+    def record_payment
+      workflow.record_payment!(expected_status: params[:expected_status], **payment_params.to_h.symbolize_keys)
+      redirect_to [:admin, @invoice], notice: 'Payment recorded.'
+    rescue Invoices::Workflow::Refused => e
+      redirect_to [:admin, @invoice], alert: e.message
+    rescue ActiveRecord::RecordInvalid => e
+      @payment_errors = e.record.errors
+      @payment_input = payment_params
+      load_show_data
+      flash.now[:alert] = 'The payment was not recorded.'
+      render :show, status: :unprocessable_content
+    end
+
+    def withdraw
+      workflow.withdraw!(expected_status: params[:expected_status], reason: params[:reason])
+      redirect_to [:admin, @invoice], notice: 'Invoice withdrawn. Its purchases are released and can be added to a later invoice.'
+    rescue Invoices::Workflow::Refused => e
+      redirect_to [:admin, @invoice], alert: e.message
+    end
+
+    def correction_note
+      workflow.add_correction_note!(reference: params[:reference], note: params[:note])
+      redirect_to [:admin, @invoice], notice: 'Correction note added.'
+    rescue Invoices::Workflow::Refused => e
+      redirect_to [:admin, @invoice], alert: e.message
+    end
+
+    def generate
+      vendor = Users::Vendor.find(params.expect(:vendor_id))
+      result = Invoices::GenerationService.new(vendor_ids: [vendor.id]).call
+      redirect_to admin_invoices_path, **generation_flash(result, vendor)
     end
 
     private
 
     def set_invoice
-      @invoice = Invoice.find(params[:id])
+      @invoice = Invoice.find(params.expect(:id))
     end
 
-    def invoice_params
-      params.expect(
-        invoice: %i[status
-                    payment_notes
-                    gad_invoice_reference]
-      )
+    def workflow
+      Invoices::Workflow.new(@invoice, actor: current_user)
     end
 
-    # Helpers for update action refactoring
-    def missing_gad_reference?
-      # params.expect() raises ArgumentError if structure doesn't match, which would fail the guard clause
-      # The form sends status as string 'invoice_paid', so check for that
-      status = params.dig(:invoice, :status)
-      status == 'invoice_paid' && params.dig(:invoice, :gad_invoice_reference).blank?
+    def payment_params
+      params.expect(payment: %i[payment_date payment_method payment_reference check_number gad_invoice_reference payment_notes])
     end
 
-    def handle_update_error(alert_message = nil)
-      flash[:alert] = alert_message if alert_message
-      set_transactions
-      render :show, status: :unprocessable_content
+    def load_show_data
+      EmailDelivery::Visibility.preload([@invoice])
+      @transactions = @invoice.voucher_transactions.includes(:voucher).order(processed_at: :desc)
+      @audit_events = @invoice.events.includes(:user).order(created_at: :desc)
     end
 
-    def invoice_update_notice
-      if @invoice.saved_change_to_status? && @invoice.status_invoice_approved?
-        'Invoice approved successfully'
-      elsif @invoice.saved_change_to_status? && @invoice.status_invoice_paid?
-        'Payment details recorded successfully'
-      else
-        'Invoice updated successfully'
+    # Purchases not yet on an invoice, by vendor (suspended vendors included), and vendors whose last
+    # automatic invoicing failed.
+    def load_billing_overview
+      @not_yet_invoiced = VoucherTransaction.pending_invoice.joins(:vendor)
+                                            .group('users.id', 'users.business_name')
+                                            .order('users.business_name')
+                                            .pluck('users.id', 'users.business_name',
+                                                   Arel.sql('SUM(CASE WHEN voucher_transactions.billing_hold_at IS NULL THEN voucher_transactions.amount ELSE 0 END)'),
+                                                   Arel.sql('COUNT(*) FILTER (WHERE voucher_transactions.billing_hold_at IS NULL)'),
+                                                   Arel.sql('COUNT(*) FILTER (WHERE voucher_transactions.billing_hold_at IS NOT NULL)'))
+      @generation_failures = InvoiceGenerationFailure.unresolved.includes(:vendor).order(:attempted_at)
+    end
+
+    def generation_flash(result, vendor)
+      return { alert: "Invoicing for #{vendor.business_name} failed. Try again later." } unless result.success?
+      return { alert: 'Invoicing is already running. Try again in a few minutes.' } if result.data[:already_running]
+      return { alert: "Invoicing for #{vendor.business_name} failed again. It stays on the retry list." } if result.data[:vendors_failed].to_i.positive?
+      return { notice: "#{vendor.business_name} has no purchases before today to invoice." } if result.data[:invoices_created].zero?
+
+      { notice: "Invoice created for #{vendor.business_name}." }
+    end
+
+    def invoices_csv(scope)
+      CSV.generate do |csv|
+        csv << CSV_COLUMNS.keys
+        scope.each do |invoice| # Same order as the page.
+          csv << CSV_COLUMNS.values.map { |value| value.is_a?(Symbol) ? invoice.public_send(value) : instance_exec(invoice, &value) }
+        end
       end
-    end
-
-    def set_transactions
-      @transactions = @invoice.voucher_transactions
-                              .includes(:voucher)
-                              .order(processed_at: :desc)
-    end
-
-    def apply_filters(scope)
-      scope = apply_basic_filters(scope)
-      scope = apply_date_range_filter(scope)
-      apply_payment_status_filter(scope)
-    end
-
-    def apply_basic_filters(scope)
-      scope = scope.where(status: params[:status]) if params[:status].present?
-      scope = scope.where(vendor_id: params[:vendor_id]) if params[:vendor_id].present?
-      scope
-    end
-
-    def apply_date_range_filter(scope)
-      return scope if params[:date_range].blank?
-
-      case params[:date_range]
-      when 'today'
-        scope.where(created_at: Time.current.all_day)
-      when 'week'
-        scope.where(created_at: 1.week.ago.beginning_of_day..Time.current.end_of_day)
-      when 'month'
-        scope.where(created_at: 1.month.ago.beginning_of_day..Time.current.end_of_day)
-      when 'custom'
-        apply_custom_date_range_filter(scope)
-      else
-        scope
-      end
-    end
-
-    def apply_custom_date_range_filter(scope)
-      return scope unless params[:start_date].present? && params[:end_date].present?
-
-      start_date = Date.parse(params[:start_date])
-      end_date = Date.parse(params[:end_date])
-      scope.where(created_at: start_date.beginning_of_day..end_date.end_of_day)
-    end
-
-    def apply_payment_status_filter(scope)
-      return scope if params[:payment_status].blank?
-
-      case params[:payment_status]
-      when 'pending_check'
-        scope.where(status: :approved, check_number: nil)
-      when 'check_issued'
-        scope.where.not(check_number: nil).where(check_cashed_at: nil)
-      when 'check_cashed'
-        scope.where.not(check_cashed_at: nil)
-      else
-        scope
-      end
-    end
-
-    def generate_csv(invoices)
-      require 'smarter_csv'
-      require 'tempfile'
-      require 'fileutils'
-
-      invoices_data = format_invoices_for_csv(invoices)
-      return '' if invoices_data.empty?
-
-      generate_csv_content(invoices_data)
-    end
-
-    def format_invoices_for_csv(invoices)
-      invoices.map do |invoice|
-        {
-          'Invoice Number' => invoice.invoice_number,
-          'Vendor' => invoice.vendor.business_name,
-          'Total Amount' => invoice.total_amount,
-          'Status' => invoice.status,
-          'Created At' => invoice.created_at.strftime('%Y-%m-%d %H:%M:%S'),
-          'Check Number' => invoice.check_number,
-          'Check Issued At' => invoice.check_issued_at&.strftime('%Y-%m-%d'),
-          'Check Cashed At' => invoice.check_cashed_at&.strftime('%Y-%m-%d'),
-          'GAD Reference' => invoice.gad_invoice_reference
-        }
-      end
-    end
-
-    def generate_csv_content(invoices_data)
-      temp_file = nil
-      csv_content = nil
-
-      begin
-        temp_file = create_temp_csv_file(invoices_data)
-        csv_content = read_csv_content(temp_file)
-      ensure
-        cleanup_temp_file(temp_file)
-      end
-
-      csv_content
-    end
-
-    def create_temp_csv_file(invoices_data)
-      temp_file = Tempfile.new(['invoices', '.csv'])
-      writer = SmarterCSV::Writer.new(temp_file.path)
-      writer << invoices_data
-      writer.finalize
-      temp_file
-    end
-
-    def read_csv_content(temp_file)
-      temp_file.rewind
-      temp_file.read
-    end
-
-    def cleanup_temp_file(temp_file)
-      temp_file&.close
-      temp_file&.unlink
-    end
-
-    def log_event!(action, metadata = {})
-      @invoice.events.create!(
-        user: current_user,
-        action: action,
-        metadata: metadata.merge(
-          changes: @invoice.saved_changes,
-          admin_id: current_user.id
-        )
-      )
     end
   end
 end

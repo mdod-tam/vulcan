@@ -213,7 +213,7 @@ class VendorNotificationsMailer < ApplicationMailer
       vendor_business_name: vendor.business_name,
       invoice_number: invoice.invoice_number,
       period_start_formatted: invoice.start_date.strftime('%B %d, %Y'),
-      period_end_formatted: invoice.end_date.strftime('%B %d, %Y'),
+      period_end_formatted: invoice.covered_through.strftime('%B %d, %Y'),
       total_amount_formatted: number_to_currency(invoice.total_amount),
       transactions_html_table: render_transactions_html(transactions),
       transactions_text_list: render_transactions_text(transactions),
@@ -351,7 +351,7 @@ class VendorNotificationsMailer < ApplicationMailer
 
       # Period
       pdf.text 'Period:', style: :bold
-      pdf.text "#{invoice.start_date.strftime('%B %d, %Y')} - #{invoice.end_date.strftime('%B %d, %Y')}"
+      pdf.text invoice.period_label
       pdf.move_down 20
 
       # Transactions, one line each (core Prawn has no table support)

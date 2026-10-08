@@ -6,6 +6,7 @@ class VoucherTransaction < ApplicationRecord
   belongs_to :voucher
   belongs_to :vendor, class_name: 'User'
   belongs_to :invoice, optional: true
+  belongs_to :billing_hold_by, class_name: 'User', optional: true
 
   has_many :voucher_transaction_products, dependent: :destroy
   has_many :products, through: :voucher_transaction_products
@@ -20,7 +21,9 @@ class VoucherTransaction < ApplicationRecord
   # created; the balance falls with later redemptions, so a later save (such as invoicing) must not
   # re-check it. Its money fields therefore never change once saved.
   validate :amount_within_voucher_limit?, if: :redemption?, on: :create
-  attr_readonly :voucher_id, :vendor_id, :amount, :transaction_type, :reference_number, :processed_at
+  attr_readonly :voucher_id, :vendor_id, :amount, :transaction_type, :reference_number, :processed_at, :submission_id
+
+  validate :invoice_allocation_allowed, on: :update, if: :will_save_change_to_invoice_id?
 
   before_validation :set_processed_at, on: :create
   before_validation :generate_reference_number, on: :create
@@ -57,6 +60,9 @@ class VoucherTransaction < ApplicationRecord
                .order(processed_at: :desc, id: :desc)
   }
   scope :pending_invoice, -> { completed.where(invoice_id: nil) }
+  # Staff holds keep a purchase off every invoice until released; see VoucherTransactions::BillingHold.
+  scope :on_billing_hold, -> { where.not(billing_hold_at: nil) }
+  scope :billable, -> { pending_invoice.where(billing_hold_at: nil) }
   scope :for_vendor, ->(vendor_id) { where(vendor_id: vendor_id) }
   scope :in_date_range, lambda { |start_date, end_date|
     where(processed_at: start_date.beginning_of_day..end_date.end_of_day)
@@ -93,6 +99,10 @@ class VoucherTransaction < ApplicationRecord
     super(value.try(:to_d))
   end
 
+  def on_billing_hold?
+    billing_hold_at.present?
+  end
+
   private
 
   def amount_within_voucher_limit?
@@ -120,5 +130,17 @@ class VoucherTransaction < ApplicationRecord
     random = SecureRandom.hex(3).upcase
 
     self.reference_number = "TX-#{voucher_part}-#{timestamp}-#{random}"
+  end
+
+  # An approved, paid, or withdrawn invoice bills a fixed set of purchases. Withdrawing marks the
+  # invoice withdrawn first, so releasing its purchases is the only way off it.
+  def invoice_allocation_allowed
+    leaving = Invoice.find_by(id: invoice_id_in_database)
+    errors.add(:invoice, 'is approved or paid; its purchases cannot change') if leaving&.status_invoice_approved? || leaving&.status_invoice_paid?
+
+    joining = Invoice.find_by(id: invoice_id)
+    return unless joining && Invoice::SETTLED_STATUSES.include?(joining.status)
+
+    errors.add(:invoice, 'is approved, paid, or withdrawn; purchases cannot be added')
   end
 end
