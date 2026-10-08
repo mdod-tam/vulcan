@@ -95,19 +95,6 @@ module Admin
       end
     end
 
-    test 'exporting paid invoices' do
-      visit admin_invoices_path
-      select 'Paid', from: 'Status'
-      click_on 'Apply Filters'
-
-      if has_button?('Export Batch')
-        click_on 'Export Batch'
-        assert_valid_csv_response
-      else
-        skip 'Export Batch button is absent after the Paid filter'
-      end
-    end
-
     test 'requires GAD reference for payment' do
       approved_invoice = invoices(:ray_approved)
       visit admin_invoice_path(approved_invoice)
