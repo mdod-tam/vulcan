@@ -167,7 +167,6 @@ class ApplicationTransitionStatusTest < ActiveSupport::TestCase
 
     assert_raises(ArgumentError) { application.approve! }
     assert_raises(ArgumentError) { application.reject! }
-    assert_raises(ArgumentError) { application.request_documents! }
   end
 
   test 'transition_status! rolls back the status change if status audit logging fails' do

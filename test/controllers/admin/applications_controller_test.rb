@@ -714,15 +714,6 @@ module Admin
       assert_select 'select[name="application[status]"]', count: 0
     end
 
-    test 'request_documents passes the current admin as explicit lifecycle actor' do
-      @application.expects(:request_documents!).with(user: @admin).returns(true)
-      Application.expects(:find).with(@application.id.to_s).returns(@application)
-
-      post request_documents_admin_application_path(@application)
-
-      assert_redirected_to admin_application_path(@application)
-    end
-
     test 'batch_approve updates multiple applications and redirects' do
       app1 = create(:application, :in_progress)
       app2 = create(:application, :in_progress)

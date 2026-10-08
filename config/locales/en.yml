@@ -728,8 +728,6 @@ en:
         b_approved: "Applications approved."
       batch_reject:
         b_rejected: "Applications rejected."
-      request_documents:
-        d_requested: "Documents requested."
       assign_evaluator:
         eval_assign_pass: "Evaluator successfully assigned."
         eval_assign_fail: "Failed to assign evaluator."

@@ -56,11 +56,56 @@ module Admin
       end
 
       assert_redirected_to admin_application_path(@application)
-      assert_equal 'Provide at least one fulfillment date.', flash[:alert]
+      assert_equal 'Provide a fulfillment date or a tracking number.', flash[:alert]
 
       @application.reload
       assert_equal Date.new(2026, 1, 1), @application.equipment_bids_sent_at.to_date
       assert_equal Date.new(2026, 2, 1), @application.equipment_po_sent_at.to_date
+    end
+
+    test 'dates may be typed in any accepted form, and a tracking number is recorded and audited' do
+      patch admin_application_equipment_fulfillment_path(@application),
+            params: { application: { equipment_bids_sent_at: '9/9/2026', equipment_po_sent_at: '09102026',
+                                     equipment_tracking_number: ' 1Z999AA1 ' } }
+
+      assert_equal 'Equipment fulfillment updated.', flash[:notice]
+      @application.reload
+      assert_equal Date.new(2026, 9, 9), @application.equipment_bids_sent_at.to_date
+      assert_equal Date.new(2026, 9, 10), @application.equipment_po_sent_at.to_date
+      assert_equal '1Z999AA1', @application.equipment_tracking_number
+      event = Event.find_by!(action: 'equipment_tracking_number_recorded', auditable: @application)
+      assert_equal({ 'old' => nil, 'new' => '1Z999AA1' }, event.metadata.dig('changes', 'equipment_tracking_number'))
+    end
+
+    test 'saving the form with unchanged dates audits only what changed' do
+      @application.update!(equipment_bids_sent_at: Date.new(2026, 1, 1), equipment_po_sent_at: Date.new(2026, 2, 1))
+
+      assert_no_difference -> { Event.where(action: %w[equipment_bids_sent equipment_po_sent], auditable: @application).count } do
+        patch admin_application_equipment_fulfillment_path(@application),
+              params: { application: { equipment_bids_sent_at: '01/01/2026', equipment_po_sent_at: '02/01/2026',
+                                       equipment_tracking_number: 'AAA111' } }
+      end
+      assert_equal 'AAA111', @application.reload.equipment_tracking_number
+    end
+
+    test 'an unreadable date changes nothing' do
+      patch admin_application_equipment_fulfillment_path(@application),
+            params: { application: { equipment_bids_sent_at: '13/45/2026', equipment_tracking_number: 'AAA111' } }
+
+      assert_equal 'Enter dates as MM/DD/YYYY.', flash[:alert]
+      @application.reload
+      assert_nil @application.equipment_bids_sent_at
+      assert_nil @application.equipment_tracking_number
+    end
+
+    test 'voucher applications have no equipment fulfillment' do
+      @application.update_columns(fulfillment_type: Application.fulfillment_types[:voucher])
+
+      patch admin_application_equipment_fulfillment_path(@application),
+            params: { application: { equipment_tracking_number: 'AAA111' } }
+
+      assert_equal 'Equipment fulfillment applies only to equipment applications.', flash[:alert]
+      assert_nil @application.reload.equipment_tracking_number
     end
   end
 end

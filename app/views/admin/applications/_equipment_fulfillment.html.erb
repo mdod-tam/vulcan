@@ -1,0 +1,39 @@
+<%# locals: (application:) %>
+<%# Staff-only. Bids and the purchase order follow a completed evaluation, which recommends the equipment. %>
+<section class="bg-white rounded-lg shadow p-6 mb-6" aria-labelledby="equipment-fulfillment-title">
+  <div class="flex flex-wrap items-center gap-3 mb-4">
+    <h2 id="equipment-fulfillment-title" class="text-xl font-semibold text-gray-900">Equipment Fulfillment</h2>
+    <%= admin_fulfillment_badge(application) %>
+  </div>
+
+  <% if application.evaluations.completed_sessions.any? %>
+    <% input_class = 'mt-1 block w-full rounded-md border-gray-300 shadow-sm focus:border-indigo-500 focus:ring-indigo-500 sm:text-sm' %>
+    <%= form_with model: application, url: admin_application_equipment_fulfillment_path(application), method: :patch,
+                  local: true, class: 'space-y-4' do |f| %>
+      <p id="equipment-fulfillment-date-hint" class="text-sm text-gray-600">Enter dates as MM/DD/YYYY.</p>
+      <div class="grid grid-cols-1 gap-4 md:grid-cols-3">
+        <div>
+          <%= f.label :equipment_bids_sent_at, 'Date bids sent', class: 'block text-sm font-medium text-gray-700' %>
+          <%= f.text_field :equipment_bids_sent_at,
+                           typed_date_field_options(value: accessible_date_value(application.equipment_bids_sent_at&.to_date),
+                                                    class: input_class, 'aria-describedby': 'equipment-fulfillment-date-hint') %>
+        </div>
+        <div>
+          <%= f.label :equipment_po_sent_at, 'Date PO sent', class: 'block text-sm font-medium text-gray-700' %>
+          <%= f.text_field :equipment_po_sent_at,
+                           typed_date_field_options(value: accessible_date_value(application.equipment_po_sent_at&.to_date),
+                                                    class: input_class, 'aria-describedby': 'equipment-fulfillment-date-hint') %>
+        </div>
+        <div>
+          <%= f.label :equipment_tracking_number, 'Tracking number', class: 'block text-sm font-medium text-gray-700' %>
+          <%= f.text_field :equipment_tracking_number, maxlength: 64, autocomplete: 'off', spellcheck: false, class: input_class %>
+        </div>
+      </div>
+      <%= f.submit 'Save equipment fulfillment',
+                   class: 'inline-flex justify-center py-2 px-4 border border-transparent shadow-sm text-sm font-medium rounded-md text-white ' \
+                          'bg-indigo-600 hover:bg-indigo-700 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-indigo-500' %>
+    <% end %>
+  <% else %>
+    <p class="text-sm text-gray-600">Bid, purchase order, and tracking details can be recorded once the evaluation is completed.</p>
+  <% end %>
+</section>

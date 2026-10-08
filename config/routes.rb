@@ -176,7 +176,6 @@ Rails.application.routes.draw do
 
       member do
         post :assign_voucher
-        post :request_documents
         post :review_proof
         post :update_proof_status
         patch :approve

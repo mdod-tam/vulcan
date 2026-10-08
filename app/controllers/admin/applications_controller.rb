@@ -15,7 +15,7 @@ module Admin
 
     before_action :set_application, only: %i[
       show edit update
-      request_documents review_proof update_proof_status
+      review_proof update_proof_status
       approve reject assign_evaluator assign_trainer request_evaluation
       update_certification_status resend_medical_certification assign_voucher
       upload_medical_certification send_document_signing_request
@@ -127,11 +127,6 @@ module Admin
         render json: { error: 'Unable to reject applications', details: result[:errors] },
                status: :unprocessable_content
       end
-    end
-
-    def request_documents
-      @application.request_documents!(user: current_user)
-      redirect_to admin_application_path(@application), notice: t('.d_requested')
     end
 
     def review_proof

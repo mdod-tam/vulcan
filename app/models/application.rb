@@ -121,6 +121,7 @@ class Application < ApplicationRecord
   validates :medical_certification, :additional_medical_certifications, document: { purpose: :certification }
 
   validates :application_date, presence: true
+  validates :equipment_tracking_number, length: { maximum: 64 }, allow_nil: true
   validates :status, presence: true
   validates :maryland_resident, inclusion: { in: [true], message: 'You must be a Maryland resident to apply' }, unless: :status_draft?
   validates :terms_accepted, acceptance: { accept: true }, if: :submitted?
@@ -362,10 +363,6 @@ class Application < ApplicationRecord
     Applications::Rejecter.new(self, by: user).call
   end
 
-  def request_documents!(user:)
-    Applications::DocumentRequester.new(self, by: user).call
-  end
-
   def submit!(actor:)
     transition_status!(
       :in_progress,
@@ -529,23 +526,28 @@ class Application < ApplicationRecord
     end
   end
 
+  # Equipment fulfillment, recorded by staff. Each writer skips a value that has not changed, so
+  # saving the fulfillment form audits only what was edited. Dates go through DateInputNormalizer.
   def mark_equipment_bids_sent!(date:, actor:)
-    update!(equipment_bids_sent_at: date)
-    AuditEventService.log(
-      action: 'equipment_bids_sent',
-      actor: actor,
-      auditable: self,
-      metadata: { date: date }
-    )
+    record_equipment_fulfillment_date!(:equipment_bids_sent_at, 'equipment_bids_sent', date, actor)
   end
 
   def mark_equipment_po_sent!(date:, actor:)
-    update!(equipment_po_sent_at: date)
+    record_equipment_fulfillment_date!(:equipment_po_sent_at, 'equipment_po_sent', date, actor)
+  end
+
+  # The carrier's tracking number for the equipment order, as staff entered it. Shown to staff only.
+  def record_equipment_tracking_number!(number:, actor:)
+    number = number.to_s.strip
+    return false if number.blank? || number == equipment_tracking_number
+
+    previous = equipment_tracking_number
+    update!(equipment_tracking_number: number)
     AuditEventService.log(
-      action: 'equipment_po_sent',
+      action: 'equipment_tracking_number_recorded',
       actor: actor,
       auditable: self,
-      metadata: { date: date }
+      metadata: { changes: { 'equipment_tracking_number' => { 'old' => previous, 'new' => number } } }
     )
   end
 
@@ -651,6 +653,15 @@ class Application < ApplicationRecord
   end
 
   private
+
+  def record_equipment_fulfillment_date!(attribute, action, value, actor)
+    date = DateInputNormalizer.normalize(value)
+    raise ArgumentError, "#{attribute} is not a readable date" unless date
+    return false if self[attribute]&.to_date == date
+
+    update!(attribute => date)
+    AuditEventService.log(action: action, actor: actor, auditable: self, metadata: { date: date.iso8601 })
+  end
 
   def reconcile_pending_letters_after_owner_change
     return unless saved_changes.keys.intersect?(PrintQueueItem::APPLICATION_IDENTITY_FIELDS)
