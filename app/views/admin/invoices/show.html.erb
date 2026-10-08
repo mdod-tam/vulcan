@@ -1,8 +1,3 @@
-<% input_class = 'mt-1 block w-full rounded-md border-gray-300 shadow-sm focus:border-indigo-500 focus:ring-indigo-500 sm:text-sm' %>
-<% primary_button = 'inline-flex items-center px-4 py-2 border border-transparent rounded-md shadow-sm text-sm font-medium text-white ' \
-                    'bg-indigo-600 hover:bg-indigo-700 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-indigo-500' %>
-<% secondary_button = 'inline-flex items-center px-4 py-2 border border-gray-300 rounded-md shadow-sm text-sm font-medium text-gray-700 ' \
-                      'bg-white hover:bg-gray-50 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-indigo-500' %>
 <div class="container mx-auto px-4 py-8 max-w-5xl">
   <nav aria-label="Breadcrumb" class="mb-2">
     <%= link_to 'Invoices', admin_invoices_path, class: 'text-sm font-medium text-gray-500 hover:text-gray-700' %>
@@ -21,9 +16,9 @@
   <% if @invoice.status_invoice_pending? %>
     <section aria-labelledby="approve-heading" class="bg-white shadow rounded-lg p-6 mb-6">
       <h2 id="approve-heading" class="text-lg font-medium text-gray-900 mb-2">Approve for payment</h2>
-      <p class="text-sm text-gray-600 mb-4">Approval fixes the purchases and total on this invoice.</p>
+      <p class="text-sm text-gray-600 mb-4">Approval fixes the voucher redemptions and total on this invoice.</p>
       <%= button_to 'Approve invoice', approve_admin_invoice_path(@invoice),
-                    method: :patch, params: { expected_status: @invoice.status }, class: primary_button %>
+                    method: :patch, params: { expected_status: @invoice.status }, class: invoice_form_class(:primary) %>
     </section>
   <% end %>
 
@@ -31,7 +26,6 @@
     <section aria-labelledby="payment-heading" class="bg-white shadow rounded-lg p-6 mb-6">
       <h2 id="payment-heading" class="text-lg font-medium text-gray-900 mb-2">Record payment</h2>
       <p id="payment-help" class="text-sm text-gray-600 mb-4">Record the one full payment for this invoice. Once recorded, payment details cannot be edited; corrections are added as notes.</p>
-      <% input = @payment_input || {} %>
       <%= form_with url: record_payment_admin_invoice_path(@invoice), method: :patch, scope: :payment, class: 'space-y-4',
                     html: { 'aria-describedby': 'payment-help' } do |f| %>
         <%= hidden_field_tag :expected_status, @invoice.status, id: nil %>
@@ -49,33 +43,33 @@
         <div class="grid grid-cols-1 gap-4 md:grid-cols-2">
           <div>
             <%= f.label :payment_date, 'Payment date', class: 'block text-sm font-medium text-gray-700' %>
-            <%= f.text_field :payment_date, typed_date_field_options(value: input[:payment_date], required: true, class: input_class,
+            <%= f.text_field :payment_date, typed_date_field_options(value: @payment_input[:payment_date], required: true, class: invoice_form_class(:input),
                                                                      'aria-describedby': 'payment-date-hint') %>
             <p id="payment-date-hint" class="text-xs text-gray-500 mt-1">The date the payment was made. Enter as MM/DD/YYYY.</p>
           </div>
           <div>
             <%= f.label :payment_method, 'Payment method', class: 'block text-sm font-medium text-gray-700' %>
-            <%= f.select :payment_method, invoice_payment_method_options, { include_blank: 'Choose a method', selected: input[:payment_method] },
-                         required: true, class: input_class %>
+            <%= f.select :payment_method, invoice_payment_method_options, { include_blank: 'Choose a method', selected: @payment_input[:payment_method] },
+                         required: true, class: invoice_form_class(:input) %>
           </div>
           <div>
             <%= f.label :payment_reference, 'Payment reference (direct deposit or EFT)', class: 'block text-sm font-medium text-gray-700' %>
-            <%= f.text_field :payment_reference, value: input[:payment_reference], class: input_class %>
+            <%= f.text_field :payment_reference, value: @payment_input[:payment_reference], class: invoice_form_class(:input) %>
           </div>
           <div>
             <%= f.label :check_number, 'Check number (checks)', class: 'block text-sm font-medium text-gray-700' %>
-            <%= f.text_field :check_number, value: input[:check_number], class: input_class %>
+            <%= f.text_field :check_number, value: @payment_input[:check_number], class: invoice_form_class(:input) %>
           </div>
           <div>
             <%= f.label :gad_invoice_reference, 'GAD invoice reference', class: 'block text-sm font-medium text-gray-700' %>
-            <%= f.text_field :gad_invoice_reference, value: input[:gad_invoice_reference], required: true, class: input_class %>
+            <%= f.text_field :gad_invoice_reference, value: @payment_input[:gad_invoice_reference], required: true, class: invoice_form_class(:input) %>
           </div>
         </div>
         <div>
           <%= f.label :payment_notes, 'Internal payment notes (optional, not shown to the vendor)', class: 'block text-sm font-medium text-gray-700' %>
-          <%= f.text_area :payment_notes, value: input[:payment_notes], rows: 2, class: input_class %>
+          <%= f.text_area :payment_notes, value: @payment_input[:payment_notes], rows: 2, class: invoice_form_class(:input) %>
         </div>
-        <%= f.submit 'Record payment', class: primary_button %>
+        <%= f.submit 'Record payment', class: invoice_form_class(:primary) %>
       <% end %>
     </section>
   <% end %>
@@ -84,19 +78,18 @@
     <section aria-labelledby="withdraw-heading" class="bg-white shadow rounded-lg p-6 mb-6">
       <h2 id="withdraw-heading" class="text-lg font-medium text-gray-900 mb-2">Withdraw invoice</h2>
       <p id="withdraw-help" class="text-sm text-gray-600 mb-4">
-        Its purchases are released and can be added to a later invoice. This invoice and its number are kept and marked Withdrawn.
-        To keep a purchase off the next invoice, put it on hold from its voucher page after withdrawing.
+        Its voucher redemptions are released and can be added to a later invoice. This invoice and its number are kept and marked Withdrawn.
+        To keep a voucher redemption off the next invoice, put it on hold from its voucher page after withdrawing.
       </p>
-      <% withdraw_confirm = 'Withdraw this invoice? Its purchases are released and can be added to a later invoice. ' \
-                            'The invoice and its number are kept and marked Withdrawn.' %>
       <%= form_with url: withdraw_admin_invoice_path(@invoice), method: :patch, class: 'space-y-4',
-                    data: { turbo_confirm: withdraw_confirm } do |f| %>
+                    data: { turbo_confirm: 'Withdraw this invoice? Its voucher redemptions are released and can be added to a later invoice. ' \
+                                           'The invoice and its number are kept and marked Withdrawn.' } do |f| %>
         <%= hidden_field_tag :expected_status, @invoice.status, id: nil %>
         <div>
           <%= label_tag :reason, 'Reason', class: 'block text-sm font-medium text-gray-700' %>
-          <%= text_area_tag :reason, nil, rows: 2, required: true, class: input_class, 'aria-describedby': 'withdraw-help' %>
+          <%= text_area_tag :reason, nil, rows: 2, required: true, class: invoice_form_class(:input), 'aria-describedby': 'withdraw-help' %>
         </div>
-        <%= submit_tag 'Withdraw invoice', class: secondary_button %>
+        <%= submit_tag 'Withdraw invoice', class: invoice_form_class(:secondary) %>
       <% end %>
     </section>
   <% end %>
@@ -112,20 +105,20 @@
         <div class="grid grid-cols-1 gap-4 md:grid-cols-3">
           <div>
             <%= label_tag :reference, 'Accounting reference', class: 'block text-sm font-medium text-gray-700' %>
-            <%= text_field_tag :reference, nil, required: true, autocomplete: 'off', class: input_class %>
+            <%= text_field_tag :reference, nil, required: true, autocomplete: 'off', class: invoice_form_class(:input) %>
           </div>
           <div class="md:col-span-2">
             <%= label_tag :note, 'Note', class: 'block text-sm font-medium text-gray-700' %>
-            <%= text_area_tag :note, nil, rows: 2, required: true, class: input_class, 'aria-describedby': 'correction-help' %>
+            <%= text_area_tag :note, nil, rows: 2, required: true, class: invoice_form_class(:input), 'aria-describedby': 'correction-help' %>
           </div>
         </div>
-        <%= submit_tag 'Add correction note', class: secondary_button %>
+        <%= submit_tag 'Add correction note', class: invoice_form_class(:secondary) %>
       <% end %>
     </section>
   <% end %>
 
-  <section aria-labelledby="purchases-heading" class="bg-white shadow rounded-lg p-6 mb-6">
-    <h2 id="purchases-heading" class="text-lg font-medium text-gray-900 mb-4">Purchases (<%= @transactions.size %>)</h2>
+  <section aria-labelledby="redemptions-heading" class="bg-white shadow rounded-lg p-6 mb-6">
+    <h2 id="redemptions-heading" class="text-lg font-medium text-gray-900 mb-4">Voucher redemptions (<%= @transactions.size %>)</h2>
     <% if @transactions.any? %>
       <ul role="list" class="divide-y divide-gray-200">
         <% @transactions.each do |transaction| %>
@@ -139,7 +132,7 @@
         <% end %>
       </ul>
     <% else %>
-      <p class="text-sm text-gray-500">No purchases are on this invoice.</p>
+      <p class="text-sm text-gray-500">No voucher redemptions are on this invoice.</p>
     <% end %>
   </section>
 
@@ -150,13 +143,7 @@
         <li class="py-3 text-sm">
           <span class="font-medium text-gray-900"><%= event.action.humanize %></span>
           <span class="text-gray-500">· <%= event.user&.full_name || 'System' %> · <%= l(event.created_at, format: :long) %></span>
-          <% details = event.metadata.to_h.slice('reason', 'reference', 'note', 'from_status', 'to_status').compact_blank %>
-          <% if details.any? %>
-            <p class="text-gray-700 mt-1">
-              <%= details.map { |key, value| "#{key.humanize}: #{key.end_with?('_status') ? InvoicesHelper::STATUS_LABELS.fetch(value, value) : value}" }
-                         .join(' · ') %>
-            </p>
-          <% end %>
+          <%= invoice_event_details(event) %>
         </li>
       <% end %>
     </ul>

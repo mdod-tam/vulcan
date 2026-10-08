@@ -100,6 +100,18 @@ module Invoices
 
     # Transactional tests share one connection across threads, so the competing run holds the lock on
     # its own database session.
+    test 'a failed vendor whose purchases are now all held is cleared by the next run without an invoice' do
+      held = purchase(processed_at: @now - 2.days)
+      InvoiceGenerationFailure.record!(vendor_id: @vendor.id, cutoff: @now, error: RuntimeError.new('boom'))
+      VoucherTransactions::BillingHold.new(held, actor: create(:admin)).hold!(reason: 'Under review')
+
+      result = Invoices::GenerationService.new(vendor_ids: [@vendor.id], now: @now).call
+
+      assert_equal [0, 0], result.data.values_at(:invoices_created, :vendors_failed)
+      assert_empty InvoiceGenerationFailure.unresolved.where(vendor_id: @vendor.id)
+      assert_empty Invoice.for_vendor(@vendor.id)
+    end
+
     test 'a run that finds another in progress reports that and changes nothing' do
       purchase(processed_at: @now - 2.days)
       config = ActiveRecord::Base.connection_db_config.configuration_hash

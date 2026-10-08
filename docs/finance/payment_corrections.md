@@ -1,6 +1,6 @@
 # Invoice payment corrections
 
-A recorded payment is final in the portal. The payment date, method, references, the purchases on the
+A recorded payment is final in the portal. The payment date, method, references, the voucher redemptions on the
 invoice, and its total cannot be edited after approval or payment. When an invoice turns out to be
 wrong, fix it in accounting and record the correction in the portal as a note. Do not edit the database.
 
@@ -13,10 +13,10 @@ wrong, fix it in accounting and record the correction in the portal as a note. D
 | Paid | Correction notes only |
 | Withdrawn | Correction notes only |
 
-Withdrawing an invoice keeps it and its number, marks it Withdrawn, and releases its purchases so they
-can be added to a later invoice. To keep a purchase off the next invoice (for example, while a possible
-fraud is reviewed), withdraw the invoice first, then put that purchase on hold from its voucher page.
-A held purchase is never invoiced until staff release the hold.
+Withdrawing an invoice keeps it and its number, marks it Withdrawn, and releases its voucher redemptions so they
+can be added to a later invoice. To keep a voucher redemption off the next invoice (for example, while a possible
+fraud is reviewed), withdraw the invoice first, then put that voucher redemption on hold from its voucher page.
+A held voucher redemption is never invoiced until staff release the hold.
 
 ## Correcting a paid invoice
 
@@ -31,7 +31,7 @@ A held purchase is never invoiced until staff release the hold.
 4. The note appears in the invoice's history with your name and the time. The original payment details
    stay as recorded, so the history shows both what was recorded and how it was corrected.
 
-If the vendor should be paid for purchases that were never invoiced, no correction is needed: they
+If the vendor should be paid for voucher redemptions that were never invoiced, no correction is needed: they
 appear under **Not yet invoiced** and go on the next invoice. Use **Invoice now** to bill them sooner.
 
 ## Historical invoices

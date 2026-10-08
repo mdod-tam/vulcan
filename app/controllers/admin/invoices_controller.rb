@@ -67,7 +67,7 @@ module Admin
 
     def withdraw
       workflow.withdraw!(expected_status: params[:expected_status], reason: params[:reason])
-      redirect_to [:admin, @invoice], notice: 'Invoice withdrawn. Its purchases are released and can be added to a later invoice.'
+      redirect_to [:admin, @invoice], notice: 'Invoice withdrawn. Its voucher redemptions are released and can be added to a later invoice.'
     rescue Invoices::Workflow::Refused => e
       redirect_to [:admin, @invoice], alert: e.message
     end
@@ -100,6 +100,7 @@ module Admin
     end
 
     def load_show_data
+      @payment_input ||= {}
       EmailDelivery::Visibility.preload([@invoice])
       @transactions = @invoice.voucher_transactions.includes(:voucher).order(processed_at: :desc)
       @audit_events = @invoice.events.includes(:user).order(created_at: :desc)
@@ -122,7 +123,10 @@ module Admin
       return { alert: "Invoicing for #{vendor.business_name} failed. Try again later." } unless result.success?
       return { alert: 'Invoicing is already running. Try again in a few minutes.' } if result.data[:already_running]
       return { alert: "Invoicing for #{vendor.business_name} failed again. It stays on the retry list." } if result.data[:vendors_failed].to_i.positive?
-      return { notice: "#{vendor.business_name} has no purchases before today to invoice." } if result.data[:invoices_created].zero?
+      if result.data[:invoices_created].zero?
+        return { notice: "No invoice was needed for #{vendor.business_name}: nothing from before today is waiting to be invoiced. " \
+                         'Voucher redemptions on hold stay off invoices until released.' }
+      end
 
       { notice: "Invoice created for #{vendor.business_name}." }
     end
@@ -131,7 +135,7 @@ module Admin
       CSV.generate do |csv|
         csv << CSV_COLUMNS.keys
         scope.each do |invoice| # Same order as the page.
-          csv << CSV_COLUMNS.values.map { |value| value.is_a?(Symbol) ? invoice.public_send(value) : instance_exec(invoice, &value) }
+          csv << CSV_COLUMNS.values.map { |value| SpreadsheetCell.safe(value.is_a?(Symbol) ? invoice.public_send(value) : instance_exec(invoice, &value)) }
         end
       end
     end

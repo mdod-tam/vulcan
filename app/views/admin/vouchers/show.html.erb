@@ -173,7 +173,7 @@
                                           method: :delete,
                                           class: 'mt-2 inline-flex items-center px-3 py-1.5 border border-gray-300 rounded-md text-xs font-medium ' \
                                                  'text-gray-700 bg-white hover:bg-gray-50',
-                                          form: { 'aria-label': "Release hold on purchase #{transaction.reference_number}" } %>
+                                          form: { 'aria-label': "Release hold on voucher redemption #{transaction.reference_number}" } %>
                           </div>
                         <% elsif transaction.transaction_completed? && transaction.invoice_id.nil? %>
                           <%= form_with url: admin_voucher_transaction_billing_hold_path(transaction), method: :post,

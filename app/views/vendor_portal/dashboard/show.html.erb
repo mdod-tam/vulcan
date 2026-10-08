@@ -103,7 +103,10 @@
             <dt class="text-sm font-medium text-gray-500">Not yet invoiced</dt>
             <dd class="mt-1 text-2xl font-semibold text-gray-900"><%= number_to_currency(@not_yet_invoiced_total) %></dd>
           </dl>
-          <p class="mt-1 text-sm text-gray-500">Goes on the next invoice.<% if @on_hold_count.positive? %> <%= pluralize(@on_hold_count, 'purchase') %> on hold — contact the program.<% end %></p>
+          <p class="mt-1 text-sm text-gray-500">
+            Goes on the next invoice.
+            <% if @on_hold_count.positive? %>Not included: <%= pluralize(@on_hold_count, 'voucher redemption') %> on hold — contact the program.<% end %>
+          </p>
         </div>
         <div class="bg-gray-50 px-5 py-3">
           <%= link_to 'View transactions', vendor_portal_transactions_path, class: 'text-sm font-medium text-indigo-700 hover:text-indigo-900' %>

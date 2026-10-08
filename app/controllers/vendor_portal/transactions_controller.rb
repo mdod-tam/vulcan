@@ -73,7 +73,7 @@ module VendorPortal
       require 'smarter_csv'
       require 'tempfile'
 
-      transactions_data = transactions.map { |t| transaction_to_hash(t) }
+      transactions_data = transactions.map { |t| transaction_to_hash(t).transform_values { |value| SpreadsheetCell.safe(value) } }
 
       Tempfile.create(['vendor-transactions', '.csv']) do |temp_file|
         writer = SmarterCSV::Writer.new(temp_file.path)

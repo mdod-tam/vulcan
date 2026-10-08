@@ -85,7 +85,7 @@ module Admin
       purchase = create(:voucher_transaction, vendor: @vendor, amount: 15, processed_at: 2.days.ago)
 
       get admin_invoices_path
-      assert_select 'section[aria-labelledby="not-invoiced-heading"]', text: /Ray Supply.*\$15\.00 in 1 purchase/m
+      assert_select 'section[aria-labelledby="not-invoiced-heading"]', text: /Ray Supply.*\$15\.00 in 1 voucher redemption/m
 
       post generate_admin_invoices_path, params: { vendor_id: @vendor.id }
 
@@ -154,6 +154,14 @@ module Admin
       assert_equal 27, rows.size
       assert_equal(page_numbers, rows.first(25).pluck('Invoice Number'))
       assert_equal ['Awaiting approval'], rows.pluck('Status').uniq
+    end
+
+    test 'the CSV neutralizes vendor-entered text that a spreadsheet would run as a formula' do
+      @vendor.update_column(:business_name, '=HYPERLINK("http://example.test","Ray")')
+
+      get admin_invoices_path(format: :csv), params: { vendor_id: @vendor.id }
+
+      assert_equal ["'=HYPERLINK(\"http://example.test\",\"Ray\")"], CSV.parse(response.body, headers: true).pluck('Vendor')
     end
 
     test 'staff who are not admins cannot reach invoices' do

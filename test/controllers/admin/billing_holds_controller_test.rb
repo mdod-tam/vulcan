@@ -19,7 +19,7 @@ module Admin
       assert_equal @admin, @purchase.billing_hold_by
       follow_redirect!
       assert_match 'Possible duplicate sale', response.body
-      assert_select "form[aria-label='Release hold on purchase #{@purchase.reference_number}']"
+      assert_select "form[aria-label='Release hold on voucher redemption #{@purchase.reference_number}']"
 
       delete admin_voucher_transaction_billing_hold_path(@purchase)
 

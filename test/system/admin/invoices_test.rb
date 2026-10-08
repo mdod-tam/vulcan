@@ -44,13 +44,13 @@ module Admin
       fill_in 'Reason', with: 'Billed to the wrong vendor'
       accept_confirm { click_on 'Withdraw invoice' }
 
-      assert_text 'Invoice withdrawn. Its purchases are released and can be added to a later invoice.'
+      assert_text 'Invoice withdrawn. Its voucher redemptions are released and can be added to a later invoice.'
       assert_text 'Withdrawn'
 
       visit admin_invoices_path
       within('section', text: 'Not yet invoiced') do
         assert_text 'Ray Supply'
-        assert_text '$100.00 in 2 purchases'
+        assert_text '$100.00 in 2 voucher redemptions'
         assert_button 'Invoice now'
       end
       take_screenshot('admin-invoices-not-yet-invoiced', html: true)

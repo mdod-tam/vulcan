@@ -1,7 +1,6 @@
 <%# locals: (invoice:, audience:) %>
 <%# The same billing and settlement facts for staff and vendors. Who recorded the payment and the internal
     notes are for staff only. Unknown values on older paid invoices read "Not recorded". %>
-<% not_recorded = tag.span('Not recorded', class: 'text-gray-500') %>
 <dl class="grid grid-cols-1 gap-x-4 gap-y-4 sm:grid-cols-2">
   <div>
     <dt class="text-sm font-medium text-gray-500">Invoice number</dt>
@@ -16,7 +15,7 @@
     <dd class="mt-1 text-sm text-gray-900"><%= number_to_currency(invoice.total_amount) %></dd>
   </div>
   <div>
-    <dt class="text-sm font-medium text-gray-500">Covers purchases</dt>
+    <dt class="text-sm font-medium text-gray-500">Covers voucher redemptions</dt>
     <dd class="mt-1 text-sm text-gray-900"><%= invoice.period_label %></dd>
   </div>
   <% if invoice.approved_at %>
@@ -28,7 +27,7 @@
   <% if invoice.status_invoice_paid? %>
     <div>
       <dt class="text-sm font-medium text-gray-500">Payment date</dt>
-      <dd class="mt-1 text-sm text-gray-900"><%= invoice.payment_date ? l(invoice.payment_date.to_date, format: :long) : not_recorded %></dd>
+      <dd class="mt-1 text-sm text-gray-900"><%= invoice.payment_date ? l(invoice.payment_date.to_date, format: :long) : invoice_not_recorded %></dd>
     </div>
     <div>
       <dt class="text-sm font-medium text-gray-500">Payment method</dt>
@@ -36,24 +35,23 @@
     </div>
     <div>
       <dt class="text-sm font-medium text-gray-500"><%= invoice.paid_by_check? ? 'Check number' : 'Payment reference' %></dt>
-      <% reference = invoice.paid_by_check? ? invoice.check_number : invoice.payment_reference %>
-      <dd class="mt-1 text-sm text-gray-900 break-all"><%= reference.presence || invoice.check_number.presence || not_recorded %></dd>
+      <dd class="mt-1 text-sm text-gray-900 break-all"><%= invoice_settlement_reference(invoice) || invoice_not_recorded %></dd>
     </div>
     <div>
       <dt class="text-sm font-medium text-gray-500">GAD invoice reference</dt>
-      <dd class="mt-1 text-sm text-gray-900 break-all"><%= invoice.gad_invoice_reference.presence || not_recorded %></dd>
+      <dd class="mt-1 text-sm text-gray-900 break-all"><%= invoice.gad_invoice_reference.presence || invoice_not_recorded %></dd>
     </div>
     <% if audience == :admin %>
       <div>
         <dt class="text-sm font-medium text-gray-500">Recorded by</dt>
-        <dd class="mt-1 text-sm text-gray-900"><%= invoice.paid_by&.full_name || not_recorded %></dd>
+        <dd class="mt-1 text-sm text-gray-900"><%= invoice.paid_by&.full_name || invoice_not_recorded %></dd>
       </div>
     <% end %>
   <% end %>
   <% if invoice.status_invoice_cancelled? %>
     <div class="sm:col-span-2">
       <dt class="text-sm font-medium text-gray-500">Withdrawn</dt>
-      <dd class="mt-1 text-sm text-gray-900">This invoice was withdrawn. Its purchases are released and can be added to a later invoice.</dd>
+      <dd class="mt-1 text-sm text-gray-900">This invoice was withdrawn. Its voucher redemptions are released and can be added to a later invoice.</dd>
     </div>
   <% end %>
   <% if audience == :admin && invoice.payment_notes.present? %>

@@ -14,11 +14,11 @@ module VoucherTransactions
 
     def hold!(reason:)
       reason = reason.to_s.strip
-      raise Refused, 'Give a reason for holding this purchase.' if reason.blank?
+      raise Refused, 'Give a reason for holding this voucher redemption.' if reason.blank?
 
       change('voucher_transaction_billing_hold_placed', reason: reason) do |purchase|
-        raise Refused, 'This purchase is already on hold.' if purchase.on_billing_hold?
-        raise Refused, 'This purchase is on an invoice. Withdraw the invoice before holding it.' if purchase.invoice_id
+        raise Refused, 'This voucher redemption is already on hold.' if purchase.on_billing_hold?
+        raise Refused, 'This voucher redemption is on an invoice. Withdraw the invoice before holding it.' if purchase.invoice_id
 
         purchase.update!(billing_hold_at: Time.current, billing_hold_by: @actor, billing_hold_reason: reason)
       end
@@ -26,7 +26,7 @@ module VoucherTransactions
 
     def release!
       change('voucher_transaction_billing_hold_released') do |purchase|
-        raise Refused, 'This purchase is not on hold.' unless purchase.on_billing_hold?
+        raise Refused, 'This voucher redemption is not on hold.' unless purchase.on_billing_hold?
 
         purchase.update!(billing_hold_at: nil, billing_hold_by: nil, billing_hold_reason: nil)
       end

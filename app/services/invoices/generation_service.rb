@@ -65,10 +65,12 @@ module Invoices
       VoucherTransaction.billable.where(processed_at: ...cutoff)
     end
 
+    # Vendors with something to claim, plus any whose last run failed: a run that finds nothing left to
+    # claim for them (it was held, or invoiced another way) still clears them from the retry list.
     def vendors_to_invoice
-      scope = eligible_purchases
-      scope = scope.where(vendor_id: @vendor_ids) if @vendor_ids
-      @vendors_attempted = scope.distinct.pluck(:vendor_id)
+      scopes = [eligible_purchases, InvoiceGenerationFailure.unresolved]
+      scopes = scopes.map { |scope| scope.where(vendor_id: @vendor_ids) } if @vendor_ids
+      @vendors_attempted = scopes.flat_map { |scope| scope.distinct.pluck(:vendor_id) }.uniq
     end
 
     def vendors_attempted

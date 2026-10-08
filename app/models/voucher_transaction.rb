@@ -136,11 +136,11 @@ class VoucherTransaction < ApplicationRecord
   # invoice withdrawn first, so releasing its purchases is the only way off it.
   def invoice_allocation_allowed
     leaving = Invoice.find_by(id: invoice_id_in_database)
-    errors.add(:invoice, 'is approved or paid; its purchases cannot change') if leaving&.status_invoice_approved? || leaving&.status_invoice_paid?
+    errors.add(:invoice, 'is approved or paid; its voucher redemptions cannot change') if leaving&.status_invoice_approved? || leaving&.status_invoice_paid?
 
     joining = Invoice.find_by(id: invoice_id)
     return unless joining && Invoice::SETTLED_STATUSES.include?(joining.status)
 
-    errors.add(:invoice, 'is approved, paid, or withdrawn; purchases cannot be added')
+    errors.add(:invoice, 'is approved, paid, or withdrawn; voucher redemptions cannot be added')
   end
 end

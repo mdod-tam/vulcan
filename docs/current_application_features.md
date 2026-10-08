@@ -45,7 +45,7 @@ The dependent owns the application; its managing guardian has responsibility for
 | --- | --- |
 | Equipment or voucher fulfillment | The voucher flag selects both fulfillment type and the inverse income-proof requirement at creation; see [fulfillment settings](features/application_workflow_guide.md#fulfillment-settings). |
 | Vouchers | When enabled, approval of a voucher application queues issuance after commit. Issuance rechecks eligibility and existing vouchers. Vendors verify the applicant and redeem value; see [voucher controls](security/voucher_security_controls.md). |
-| Vendor invoices | [Invoice generation](../app/services/invoices/generation_service.rb) groups completed, uninvoiced voucher transactions into vendor invoices. |
+| Vendor invoices | The biweekly [invoice job](../app/services/invoices/generation_service.rb) claims every completed, uninvoiced voucher redemption from before the run day (Eastern), except ones staff hold from billing; failed vendors stay on a retry list. Staff approve, record payment, or withdraw through [Invoices::Workflow](../app/services/invoices/workflow.rb); paid invoices take only [correction notes](finance/payment_corrections.md). |
 | Training | Staff assign trainers within the service window and session quota. Trainers schedule, complete, cancel, or arrange follow-up through [training services](../app/services/training_sessions). |
 | Evaluation | Staff assign evaluators within the service window; evaluators schedule visits and submit reports through [evaluation services](../app/services/evaluations). |
 

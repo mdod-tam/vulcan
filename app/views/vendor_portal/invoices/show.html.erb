@@ -18,21 +18,21 @@
     </section>
 
     <section aria-labelledby="invoice-purchases-heading" class="mt-8">
-      <h2 id="invoice-purchases-heading" class="text-xl font-semibold text-gray-900 mb-4">Purchases on this invoice</h2>
+      <h2 id="invoice-purchases-heading" class="text-xl font-semibold text-gray-900 mb-4">Voucher redemptions on this invoice</h2>
       <% if @invoice.voucher_transactions.any? %>
         <ul role="list" class="bg-white shadow sm:rounded-lg divide-y divide-gray-200">
           <% @invoice.voucher_transactions.order(:processed_at).each do |transaction| %>
             <li class="px-4 py-4 sm:px-6 flex flex-wrap justify-between gap-2 text-sm">
-              <%= link_to "Purchase #{transaction.reference_number}", vendor_portal_transaction_path(transaction),
+              <%= link_to "Voucher redemption #{transaction.reference_number}", vendor_portal_transaction_path(transaction),
                           class: 'font-medium text-indigo-600 hover:text-indigo-500' %>
               <span class="text-gray-700"><%= number_to_currency(transaction.amount) %> · <%= l(transaction.processed_at.to_date, format: :long) %></span>
             </li>
           <% end %>
         </ul>
       <% elsif @invoice.status_invoice_cancelled? %>
-        <p class="text-sm text-gray-600">This invoice was withdrawn. Its purchases are released and can be added to a later invoice.</p>
+        <p class="text-sm text-gray-600">This invoice was withdrawn. Its voucher redemptions are released and can be added to a later invoice.</p>
       <% else %>
-        <p class="text-sm text-gray-600">No purchases are on this invoice.</p>
+        <p class="text-sm text-gray-600">No voucher redemptions are on this invoice.</p>
       <% end %>
     </section>
   </div>

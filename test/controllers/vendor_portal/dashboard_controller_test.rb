@@ -44,8 +44,8 @@ module VendorPortal
       get vendor_portal_dashboard_path
 
       assert_response :success
-      assert_select 'dl', text: /Not yet invoiced\s*\$35\.00/
-      assert_match '1 purchase on hold', response.body
+      assert_select 'dl', text: /Not yet invoiced\s*\$30\.00/
+      assert_match 'Not included: 1 voucher redemption on hold', response.body
       assert_select 'dl', text: /Invoiced, awaiting payment\s*\$70\.00/
     end
   end

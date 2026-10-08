@@ -50,9 +50,9 @@ module Users
     }
     scope :with_pending_w9_reviews, -> { where(w9_status: :pending_review) }
 
-    # Completed purchases not yet on an invoice, including any staff are holding.
+    # Completed purchases that will go on the next invoice. Purchases staff are holding are left out.
     def pending_transaction_total
-      voucher_transactions.pending_invoice.sum(:amount)
+      voucher_transactions.billable.sum(:amount)
     end
 
     # On an invoice that is not yet paid (awaiting approval or approved).

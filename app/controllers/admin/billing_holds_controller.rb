@@ -8,14 +8,14 @@ module Admin
 
     def create
       hold.hold!(reason: params[:reason])
-      redirect_to admin_voucher_path(@purchase.voucher), notice: "Purchase #{@purchase.reference_number} is on hold and will not be invoiced until released."
+      redirect_to admin_voucher_path(@purchase.voucher), notice: "Voucher redemption #{@purchase.reference_number} is on hold and will not be invoiced until released."
     rescue VoucherTransactions::BillingHold::Refused => e
       redirect_to admin_voucher_path(@purchase.voucher), alert: e.message
     end
 
     def destroy
       hold.release!
-      redirect_to admin_voucher_path(@purchase.voucher), notice: "Purchase #{@purchase.reference_number} is released and will be on the next invoice."
+      redirect_to admin_voucher_path(@purchase.voucher), notice: "Voucher redemption #{@purchase.reference_number} is released and will be on the next invoice."
     rescue VoucherTransactions::BillingHold::Refused => e
       redirect_to admin_voucher_path(@purchase.voucher), alert: e.message
     end
