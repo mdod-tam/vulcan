@@ -363,10 +363,6 @@ class Application < ApplicationRecord
     Applications::Rejecter.new(self, by: user).call
   end
 
-  def request_documents!(user:)
-    Applications::DocumentRequester.new(self, by: user).call
-  end
-
   def submit!(actor:)
     transition_status!(
       :in_progress,

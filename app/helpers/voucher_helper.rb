@@ -26,13 +26,13 @@ module VoucherHelper
 
   def voucher_transaction_status_badge(transaction)
     case transaction.status
-    when 'completed'
+    when 'transaction_completed'
       badge_tag('Completed', :success)
-    when 'pending'
+    when 'transaction_pending'
       badge_tag('Pending', :warning)
-    when 'failed'
+    when 'transaction_failed'
       badge_tag('Failed', :danger)
-    when 'cancelled'
+    when 'transaction_cancelled'
       badge_tag('Cancelled', :warning)
     else
       badge_tag(transaction.status.titleize, :default)

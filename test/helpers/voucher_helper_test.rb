@@ -29,4 +29,14 @@ class VoucherHelperTest < ActionView::TestCase
     assert_nil fulfillment_status_label(create(:voucher_transaction, :pending, vendor: @vendor))
     assert_nil fulfillment_status_badge(create(:voucher_transaction, :pending, vendor: @vendor))
   end
+
+  test 'transaction status badges name each stored status' do
+    { transaction_completed: %w[Completed bg-green-100], transaction_pending: %w[Pending bg-yellow-100],
+      transaction_failed: %w[Failed bg-red-100], transaction_cancelled: %w[Cancelled bg-yellow-100] }.each do |status, (label, color)|
+      badge = voucher_transaction_status_badge(build(:voucher_transaction, status: status))
+
+      assert_includes badge, ">#{label}</span>", status
+      assert_includes badge, color, status
+    end
+  end
 end

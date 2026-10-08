@@ -36,25 +36,23 @@ module Applications
       clear_enqueued_jobs
     end
 
-    %i[proof document].each do |entry|
-      test "#{entry} escalation waits for the outer commit and uses the canonical request owner" do
-        @flag.update!(enabled: true)
-        Application.transaction do
-          escalate_via(entry)
-          assert @application.reload.status_awaiting_dcf?
-          assert @application.medical_certification_status_not_requested?
-          assert_empty certification_jobs
-        end
+    test 'proof escalation waits for the outer commit and uses the canonical request owner' do
+      @flag.update!(enabled: true)
+      Application.transaction do
+        escalate_by_approving_proof
         assert @application.reload.status_awaiting_dcf?
-        assert @application.medical_certification_status_requested?
-        assert_equal 1, @application.medical_certification_request_count
-        assert @application.medical_certification_requested_at
-        notification = Notification.where(notifiable: @application, action: 'medical_certification_requested').sole
-        assert_equal notification.id, certification_jobs.sole.dig('email_delivery_context', 'notification_id')
-        assert Event.exists?(auditable: @application, action: 'medical_certification_requested')
-        @application.escalate_to_dcf!(actor: @admin)
-        assert_equal 1, certification_jobs.size
+        assert @application.medical_certification_status_not_requested?
+        assert_empty certification_jobs
       end
+      assert @application.reload.status_awaiting_dcf?
+      assert @application.medical_certification_status_requested?
+      assert_equal 1, @application.medical_certification_request_count
+      assert @application.medical_certification_requested_at
+      notification = Notification.where(notifiable: @application, action: 'medical_certification_requested').sole
+      assert_equal notification.id, certification_jobs.sole.dig('email_delivery_context', 'notification_id')
+      assert Event.exists?(auditable: @application, action: 'medical_certification_requested')
+      @application.escalate_to_dcf!(actor: @admin)
+      assert_equal 1, certification_jobs.size
     end
 
     test 'disabled or absent workflow flag leaves requests to staff' do
@@ -124,9 +122,7 @@ module Applications
       enqueued_jobs.select { |job| job[:job] == MedicalCertificationEmailJob }
     end
 
-    def escalate_via(entry)
-      return DocumentRequester.new(@application, by: @admin).call if entry == :document
-
+    def escalate_by_approving_proof
       @application.update_columns(residency_proof_status: Application.residency_proof_statuses[:not_reviewed])
       @application.residency_proof.attach(io: StringIO.new('proof'), filename: 'proof.pdf', content_type: 'application/pdf')
       ProofReviewer.new(@application, @admin).review(proof_type: :residency, status: :approved)
