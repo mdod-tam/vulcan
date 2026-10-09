@@ -35,9 +35,10 @@ module Invoices
 
     def call
       with_run_lock do
+        @failed_vendor_ids = []
         invoices = vendors_to_invoice.filter_map { |vendor_id| invoice_vendor(vendor_id) }
-        failed = InvoiceGenerationFailure.unresolved.where(vendor_id: vendors_attempted).count
-        success("Generated #{invoices.size} invoices", { invoices_created: invoices.size, invoices: invoices, vendors_failed: failed })
+        success("Generated #{invoices.size} invoices",
+                { invoices_created: invoices.size, invoices: invoices, vendors_failed: @failed_vendor_ids.size })
       end
     rescue StandardError => e
       log_error(e, 'Failed to generate vendor invoices')
@@ -70,25 +71,29 @@ module Invoices
     def vendors_to_invoice
       scopes = [eligible_purchases, InvoiceGenerationFailure.unresolved]
       scopes = scopes.map { |scope| scope.where(vendor_id: @vendor_ids) } if @vendor_ids
-      @vendors_attempted = scopes.flat_map { |scope| scope.distinct.pluck(:vendor_id) }.uniq
-    end
-
-    def vendors_attempted
-      @vendors_attempted || []
+      scopes.flat_map { |scope| scope.distinct.pluck(:vendor_id) }.uniq
     end
 
     # Returns the committed invoice, or nil when nothing was claimed or the vendor failed.
+    # Only creating the invoice can fail the vendor. Once it commits, the notice is always queued, and
+    # clearing the retry entry is best effort: a later run clears an entry left behind.
     def invoice_vendor(vendor_id)
       invoice = create_invoice_with_unique_number(vendor_id)
-      InvoiceGenerationFailure.resolve!(vendor_id)
-      return unless invoice
-
-      queue_vendor_notification(invoice)
-      invoice
     rescue StandardError => e
       log_error(e, "Failed to generate invoice for vendor #{vendor_id}")
+      @failed_vendor_ids << vendor_id
       InvoiceGenerationFailure.record!(vendor_id: vendor_id, cutoff: cutoff, error: e)
       nil
+    else # Not covered by the rescue above: the invoice is committed by now.
+      queue_vendor_notification(invoice) if invoice
+      clear_failure(vendor_id)
+      invoice
+    end
+
+    def clear_failure(vendor_id)
+      InvoiceGenerationFailure.resolve!(vendor_id)
+    rescue StandardError => e
+      log_error(e, "Failed to clear the invoicing retry entry for vendor #{vendor_id}")
     end
 
     # A number collision rolls the whole vendor transaction back; only then is a new number tried.

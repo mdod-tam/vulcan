@@ -98,6 +98,26 @@ module Invoices
       assert failure.reload.resolved_at
     end
 
+    test 'a committed invoice still sends its notice when clearing the retry entry fails' do
+      purchase(processed_at: @now - 2.days)
+      InvoiceGenerationFailure.record!(vendor_id: @vendor.id, cutoff: @now, error: RuntimeError.new('earlier'))
+      InvoiceGenerationFailure.stubs(:resolve!).raises(ActiveRecord::StatementInvalid, 'simulated')
+
+      result = nil
+      assert_enqueued_jobs 1, only: EmailDelivery::MailDeliveryJob do
+        result = Invoices::GenerationService.new(vendor_ids: [@vendor.id], now: @now).call
+      end
+
+      assert_equal [1, 0], result.data.values_at(:invoices_created, :vendors_failed)
+      assert Invoice.exists?(vendor: @vendor)
+      assert InvoiceGenerationFailure.unresolved.exists?(vendor_id: @vendor.id), 'left for the next run to clear'
+
+      InvoiceGenerationFailure.unstub(:resolve!)
+      Invoices::GenerationService.new(vendor_ids: [@vendor.id], now: @now).call
+      assert_not InvoiceGenerationFailure.unresolved.exists?(vendor_id: @vendor.id)
+      assert_equal 1, Invoice.for_vendor(@vendor.id).count
+    end
+
     # Transactional tests share one connection across threads, so the competing run holds the lock on
     # its own database session.
     test 'a failed vendor whose purchases are now all held is cleared by the next run without an invoice' do
