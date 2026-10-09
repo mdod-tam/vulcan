@@ -346,7 +346,6 @@ class VendorNotificationsMailer < ApplicationMailer
       # Vendor Information
       pdf.text 'Vendor:', style: :bold
       pdf.text vendor.business_name.to_s
-      pdf.text vendor.business_tax_id.to_s
       pdf.move_down 20
 
       # Period

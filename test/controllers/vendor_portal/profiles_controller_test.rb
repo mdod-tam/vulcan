@@ -21,6 +21,8 @@ module VendorPortal
       # Add assertions to check for specific content on the edit page
       assert_select 'h1', 'Vendor Profile' # Updated assertion
       assert_select 'input[name="users_vendor[business_name]"][value=?]', @vendor_user.business_name
+      assert_select 'input[name="users_vendor[business_tax_id]"][value=""]'
+      assert_not_includes response.body, @vendor_user.business_tax_id
     end
 
     test 'should update profile with terms accepted' do
@@ -79,9 +81,11 @@ module VendorPortal
       assert_response :unprocessable_content
       assert_equal 'text/html', response.media_type
       assert_select 'li', text: /Website url must be a valid URL/
-      attributes.except(:terms_accepted).merge(phone: '410-555-1234').each do |field, value|
+      attributes.except(:terms_accepted, :business_tax_id).merge(phone: '410-555-1234').each do |field, value|
         assert_select "input[name='users_vendor[#{field}]'][value=?]", value
       end
+      assert_select 'input[name="users_vendor[business_tax_id]"][value=""]'
+      assert_not_includes response.body, '123456789'
       assert_equal original_name, @vendor_user.reload.business_name
 
       patch vendor_portal_profile_url, params: { users_vendor: attributes.merge(website_url: 'https://example.com') }, headers: headers
@@ -89,6 +93,21 @@ module VendorPortal
       assert_redirected_to vendor_portal_dashboard_url
       assert_equal 'Updated vendor', @vendor_user.reload.business_name
       assert_equal 'https://example.com', @vendor_user.website_url
+    end
+
+    test 'a blank profile tax ID keeps the stored value and an explicit replacement changes it' do
+      original_tax_id = @vendor_user.business_tax_id
+
+      patch vendor_portal_profile_url, params: { users_vendor: { business_tax_id: '', business_name: 'Blank Tax Edit' } }
+
+      assert_redirected_to vendor_portal_dashboard_url
+      assert_equal original_tax_id, @vendor_user.reload.business_tax_id
+      assert_equal 'Blank Tax Edit', @vendor_user.business_name
+
+      patch vendor_portal_profile_url, params: { users_vendor: { business_tax_id: '987654321' } }
+
+      assert_redirected_to vendor_portal_dashboard_url
+      assert_equal '987654321', @vendor_user.reload.business_tax_id
     end
 
     test 'refuses a W-9 that is not under the size limit and keeps the profile and W-9 unchanged' do

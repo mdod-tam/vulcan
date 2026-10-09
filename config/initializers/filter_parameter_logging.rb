@@ -11,7 +11,7 @@ Rails.application.config.filter_parameters += [
   :password, :password_confirmation, :current_password, :password_digest,
 
   # Contact, identity, and address data
-  :email, :phone, :contact, :details, :email_hint, :ssn_last4, :date_of_birth,
+  :email, :phone, :contact, :details, :email_hint, :ssn_last4, :business_tax_id, :date_of_birth,
   :physical_address_1, :physical_address_2, :city, :state, :zip_code,
 
   # Identity review and paper intake submit names with birth dates and addresses.

@@ -10,7 +10,7 @@
 #
 # It's strongly recommended that you check this file into your version control system.
 
-ActiveRecord::Schema[8.1].define(version: 2026_10_08_030000) do
+ActiveRecord::Schema[8.1].define(version: 2026_10_09_120000) do
   # These are extensions that must be enabled in order to support this database
   enable_extension "pg_catalog.plpgsql"
 
@@ -844,7 +844,7 @@ ActiveRecord::Schema[8.1].define(version: 2026_10_08_030000) do
   create_table "users", force: :cascade do |t|
     t.json "availability_schedule"
     t.string "business_name"
-    t.string "business_tax_id"
+    t.text "business_tax_id"
     t.string "city", limit: 500
     t.boolean "cognition_disability", default: false
     t.integer "communication_preference"
@@ -906,7 +906,6 @@ ActiveRecord::Schema[8.1].define(version: 2026_10_08_030000) do
     t.string "website_url"
     t.string "zip_code", limit: 300
     t.index ["business_name"], name: "index_users_on_business_name"
-    t.index ["business_tax_id"], name: "index_users_on_business_tax_id"
     t.index ["dependent_email"], name: "index_users_on_dependent_email"
     t.index ["dependent_phone"], name: "index_users_on_dependent_phone"
     t.index ["email"], name: "index_users_on_email"

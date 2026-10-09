@@ -43,21 +43,19 @@ class AuditEventService < BaseService
 
     event_attributes[:created_at] = created_at if created_at.present?
 
-    if action.to_s == 'application_created' && auditable.present?
+    application_creation = action.to_s == 'application_created' && auditable.present?
+    if application_creation
       Rails.logger.debug { "AuditEventService: Creating application_created event for application #{auditable.id}" }
       Rails.logger.debug { "Metadata: #{final_metadata.inspect}" }
     end
 
     event = Event.create!(event_attributes)
 
-    if action.to_s == 'application_created' && auditable.present? && event.persisted?
-      Rails.logger.debug { "AuditEventService: Successfully created event #{event.id} for application #{auditable.id}" }
-    end
+    Rails.logger.debug { "AuditEventService: Successfully created event #{event.id} for application #{auditable.id}" } if application_creation
 
     event
   rescue ActiveRecord::RecordInvalid => e
-    Rails.logger.error "AuditEventService: Failed to log event: #{e.message}"
-    Rails.logger.error "Event attributes: #{event_attributes.inspect}"
+    Rails.logger.error "AuditEventService: Failed to log event (#{e.class}) for #{auditable&.class&.name} ##{auditable&.id}"
     raise # Expose invalid events to callers and tests.
   end
 
@@ -120,13 +118,17 @@ class AuditEventService < BaseService
     end
 
     if action.to_s.include?('profile_updated') ||
-       %w[profile_created_by_admin_via_paper alternate_contact_updated medical_provider_info_updated].include?(action.to_s)
+       %w[profile_created_by_admin_via_paper alternate_contact_updated medical_provider_info_updated vendor_updated].include?(action.to_s)
       changes = metadata['changes'] || metadata[:changes]
       if changes.present?
         # Caller hashes and persisted JSON use different key types. Preserve false values in both.
         # A hash limits the fingerprint size.
         changes_hash = changes.map do |field, change|
-          new_value = change.key?('new') ? change['new'] : change[:new]
+          new_value = if change.is_a?(Array)
+                        change.last
+                      else
+                        change.key?('new') ? change['new'] : change[:new]
+                      end
           "#{field}:#{new_value.to_s[0..50]}"
         end.sort.join('|')
         fingerprint_hash = Digest::MD5.hexdigest(changes_hash)

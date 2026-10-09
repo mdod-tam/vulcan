@@ -11,14 +11,17 @@ Rails.application.configure do
 
   # Configure encryption keys from credentials (with fallback for missing credentials)
   encryption_config = Rails.application.credentials.active_record_encryption
+  missing_keys = %i[primary_key deterministic_key key_derivation_salt].select { |name| encryption_config&.[](name).blank? }
+  asset_build = ENV['SECRET_KEY_BASE_DUMMY'] == '1' && defined?(Rake) && Rake.application.top_level_tasks == ['assets:precompile']
 
-  if encryption_config.present?
+  raise 'Persistent Active Record encryption credentials are required in production.' if Rails.env.production? && missing_keys.any? && !asset_build
+
+  if encryption_config.present? && !(asset_build && missing_keys.any?)
     config.active_record.encryption.primary_key = encryption_config.primary_key
     config.active_record.encryption.deterministic_key = encryption_config.deterministic_key
     config.active_record.encryption.key_derivation_salt = encryption_config.key_derivation_salt
   else
-    # Generate temporary keys for development/test environments when credentials are missing
-    # In production, you should properly configure these in credentials
+    # Temporary keys are process-local for development/test or the exact Docker asset build.
     Rails.logger.warn '[ENCRYPTION] Active Record encryption credentials not found. Using temporary keys.'
 
     config.active_record.encryption.primary_key = SecureRandom.hex(32)

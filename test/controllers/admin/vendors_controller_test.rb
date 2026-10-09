@@ -57,5 +57,52 @@ module Admin
       assert_equal 'Renamed Supply', vendor.reload.business_name
       assert vendor.vendor_approved?
     end
+
+    test 'vendor index and detail show only a masked tax ID' do
+      vendor = create(:vendor, business_tax_id: '123456789')
+
+      [admin_vendors_path, admin_vendor_path(vendor)].each do |path|
+        get path
+
+        assert_response :success
+        assert_includes response.body, '•••••6789'
+        assert_not_includes response.body, '123456789'
+      end
+    end
+
+    test 'tax ID edit starts blank, preserves blank submissions, and audits an explicit replacement encrypted' do
+      vendor = create(:vendor, business_tax_id: '123456789')
+
+      get edit_admin_vendor_path(vendor)
+
+      assert_select 'input[name="vendor[business_tax_id]"][value=""]'
+      assert_select 'p', text: 'Leave blank to keep the tax ID on file.'
+      assert_not_includes response.body, '123456789'
+
+      patch admin_vendor_path(vendor), params: { vendor: { business_tax_id: ' ', business_name: 'Blank Tax Edit' } }
+
+      assert_redirected_to admin_vendor_path(vendor)
+      assert_equal '123456789', vendor.reload.business_tax_id
+      assert_equal 'Blank Tax Edit', vendor.business_name
+
+      patch admin_vendor_path(vendor), params: { vendor: { business_tax_id: '987654321' } }
+
+      assert_redirected_to admin_vendor_path(vendor)
+      assert_equal '987654321', vendor.reload.business_tax_id
+      event = Event.where(action: 'vendor_updated', auditable: vendor).order(:id).last
+      assert_equal %w[123456789 987654321], event.field_changes['business_tax_id']
+      assert_equal({}, event.metadata['changes']['business_tax_id'])
+    end
+
+    test 'failed admin edits do not echo a submitted replacement tax ID' do
+      vendor = create(:vendor, business_tax_id: '123456789')
+
+      patch admin_vendor_path(vendor), params: { vendor: { business_name: '', business_tax_id: '987654321' } }
+
+      assert_response :unprocessable_content
+      assert_select 'input[name="vendor[business_tax_id]"][value=""]'
+      %w[123456789 987654321].each { |tin| assert_not_includes response.body, tin }
+      assert_equal '123456789', vendor.reload.business_tax_id
+    end
   end
 end

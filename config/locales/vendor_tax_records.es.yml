@@ -1,0 +1,4 @@
+es:
+  vendor_tax_records:
+    tax_id_label: "Identificación fiscal (EIN/SSN)"
+    keep_tax_id: "Deje este campo en blanco para conservar la identificación fiscal registrada."

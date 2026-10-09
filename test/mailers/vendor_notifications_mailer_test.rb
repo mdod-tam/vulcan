@@ -88,6 +88,22 @@ class VendorNotificationsMailerTest < ActionMailer::TestCase
     assert_includes email.body.to_s, expected_text
   end
 
+  test 'new invoice PDFs identify the vendor without their tax ID' do
+    @vendor.update!(business_name: 'Private Tax Vendor', business_tax_id: '123456789')
+    EmailTemplate.unstub(:find_by!)
+    create_real_text_email_template(name: 'vendor_notifications_invoice_generated', subject: 'Invoice {{ invoice_number }}',
+                                    body: 'Invoice {{ invoice_number }} for {{ vendor_business_name }}',
+                                    required: %w[invoice_number vendor_business_name])
+
+    email = VendorNotificationsMailer.with(invoice: @invoice).invoice_generated.message
+    pdf = email.attachments["invoice-#{@invoice.invoice_number}.pdf"].decoded
+    text = pdf.scan(/<([0-9a-f]+)>/i).map { |hex| [hex.first].pack('H*') }.join
+
+    assert_includes text, 'Private Tax Vendor'
+    assert_includes text, @invoice.invoice_number
+    assert_not_includes text, '123456789'
+  end
+
   test 'payment_issued renders a real Liquid text template' do
     EmailTemplate.unstub(:find_by!)
     create_real_text_email_template(

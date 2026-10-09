@@ -50,6 +50,20 @@ module Users
     }
     scope :with_pending_w9_reviews, -> { where(w9_status: :pending_review) }
 
+    # Profile forms submit a replacement only; blank input keeps the tax ID already on file.
+    def business_tax_id=(value)
+      return if persisted? && value.blank?
+
+      super
+    end
+
+    def masked_business_tax_id
+      return if business_tax_id.blank?
+
+      digits = business_tax_id.to_s.gsub(/\D/, '')
+      "•••••#{digits.last(4) if digits.length > 4}"
+    end
+
     # Completed purchases that will go on the next invoice. Purchases staff are holding are left out.
     def pending_transaction_total
       voucher_transactions.billable.sum(:amount)
