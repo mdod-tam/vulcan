@@ -119,6 +119,53 @@ class VendorNotificationsMailerTest < ActionMailer::TestCase
     assert_equal [snapshot], email.to
   end
 
+  test 'a Spanish vendor receives Spanish W9 notices at their own email despite the English portal policy' do
+    EmailTemplate.unstub(:find_by!)
+    @vendor.update!(locale: 'es')
+    guardian = create(:constituent, locale: 'en')
+    create(:guardian_relationship, guardian_user: guardian, dependent_user: @vendor)
+    @vendor.w9_form.attach(io: file_fixture('sample_w9.pdf').open, filename: 'w9.pdf', content_type: 'application/pdf')
+    review = create(:w9_review, :rejected, vendor: @vendor, rejection_reason: 'El nombre fiscal no coincide.')
+    load_seeded_email_templates('vendor_notifications_w9_approved', 'vendor_notifications_w9_rejected')
+
+    emails = I18n.with_locale(:en) do
+      capture_emails do
+        VendorNotificationsMailer.with(vendor: @vendor).w9_approved.deliver_now
+        VendorNotificationsMailer.with(vendor: @vendor, w9_review: review,
+                                       secure_upload_url: 'https://example.test/upload').w9_rejected.deliver_now
+      end
+    end
+
+    assert_equal [[@vendor.email]] * 2, emails.map(&:to)
+    assert_equal 'Formulario W9 Aprobado', emails.first.subject
+    assert_includes decoded_text_part(emails.first), I18n.t('vendor_onboarding.approval_notice.body', locale: :es)
+    assert_equal 'El Formulario W9 Requiere Corrección', emails.last.subject
+    rejected_text = decoded_text_part(emails.last)
+    assert_includes rejected_text, I18n.t('vendor_notifications.w9_rejected.title', locale: :es)
+    assert_includes rejected_text, I18n.t('vendor_notifications.w9_rejected.body', reason: review.rejection_reason, locale: :es)
+    assert_includes rejected_text, 'Enlace seguro para cargar el formulario W9'
+    assert_not_includes rejected_text, 'W9 Rejected'
+    assert_not_includes rejected_text, 'Your W9 form requires attention'
+  end
+
+  test 'approval seeds preserve existing administrator content and delivery controls in both locales' do
+    EmailTemplate.unstub(:find_by!)
+
+    %w[en es].each do |locale|
+      template = create_real_text_email_template(name: 'vendor_notifications_w9_approved', locale: locale,
+                                                 subject: "Administrator #{locale} subject", body: "Administrator #{locale} body",
+                                                 required: [])
+      EmailDelivery::ControlWriter.set_template_pair(name: template.name, format: :text, enabled: false,
+                                                     actor: create(:admin), operation_id: SecureRandom.uuid)
+      original = template.reload.attributes
+      suffix = locale == 'en' ? '' : '_es'
+
+      load Rails.root.join("db/seeds/email_templates/vendor_notifications_w9_approved#{suffix}.rb")
+
+      assert_equal original, template.reload.attributes
+    end
+  end
+
   test 'new invoice PDFs identify the vendor without their tax ID' do
     @vendor.update!(business_name: 'Private Tax Vendor', business_tax_id: '123456789')
     EmailTemplate.unstub(:find_by!)
@@ -183,7 +230,6 @@ class VendorNotificationsMailerTest < ActionMailer::TestCase
   end
 
   test 'w9_rejected' do
-    Vendors::RequestW9Resubmission.any_instance.stubs(:call).returns(BaseService::Result.new(success: true, message: 'ok', data: {}))
     @vendor.w9_form.attach(io: file_fixture('sample_w9.pdf').open, filename: 'w9.pdf', content_type: 'application/pdf')
     review = create(:w9_review, :rejected, vendor: @vendor)
     secure_upload_url = 'https://example.test/secure_w9_form?token=abc'

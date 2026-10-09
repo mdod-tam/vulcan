@@ -66,19 +66,19 @@ class VendorNotificationsMailer < ApplicationMailer
     vendor     = params[:vendor]
     locale     = vendor_locale(vendor)
     w9_review  = params[:w9_review]
-    reason     = w9_review&.rejection_reason || 'No reason provided.'
+    reason     = w9_review&.rejection_reason.presence ||
+                 I18n.t('vendor_notifications.w9_rejected.reason_unavailable', locale: locale)
     secure_upload_url = params[:secure_upload_url].presence
     template_name = 'vendor_notifications_w9_rejected'
     text_template = find_text_template(template_name, locale: locale)
 
-    message = "Your W9 form requires attention. Reason: #{reason}."
     variables = build_w9_variables(
       vendor,
       status: :error,
       template: text_template,
-      fallback_header_title: 'W9 Form Requires Attention',
-      status_box_title: 'W9 Rejected',
-      status_box_message: message,
+      fallback_header_title: I18n.t('vendor_notifications.w9_rejected.header_title', locale: locale),
+      status_box_title: I18n.t('vendor_notifications.w9_rejected.title', locale: locale),
+      status_box_message: I18n.t('vendor_notifications.w9_rejected.body', reason: reason, locale: locale),
       subject_variables: { rejection_reason: reason, vendor_business_name: vendor.business_name },
       locale: locale
     )

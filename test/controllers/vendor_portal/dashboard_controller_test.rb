@@ -51,17 +51,24 @@ module VendorPortal
       end
     end
 
-    test 'dashboard guidance separates approved W9 from pending authorization in the vendor locale' do
+    test 'a Spanish vendor receives consistent English dashboard guidance and navigation' do
       @vendor.update!(vendor_authorization_status: :pending, locale: 'es')
 
-      get vendor_portal_dashboard_path
+      I18n.with_locale(:es) do
+        get vendor_portal_dashboard_path(locale: :es)
+        assert_equal :es, I18n.locale, 'the portal locale must not leak into another request'
+      end
 
       assert_response :success
-      assert_select '[data-vendor-onboarding-state="awaiting_authorization"][lang="es"]' do
-        assert_select 'h2', I18n.t('vendor_onboarding.states.awaiting_authorization.title', locale: :es)
-        assert_select 'dt', I18n.t('vendor_onboarding.w9_label', locale: :es)
-        assert_select 'dt', I18n.t('vendor_onboarding.authorization_label', locale: :es)
+      assert_select 'html[lang="en"]'
+      assert_select 'h1', 'Vendor Dashboard'
+      assert_select 'nav a, header a', text: 'Profile'
+      assert_select '[data-vendor-onboarding-state="awaiting_authorization"][lang="en"]' do
+        assert_select 'h2', I18n.t('vendor_onboarding.states.awaiting_authorization.title', locale: :en)
+        assert_select 'dt', I18n.t('vendor_onboarding.w9_label', locale: :en)
+        assert_select 'dt', I18n.t('vendor_onboarding.authorization_label', locale: :en)
       end
+      assert_not_includes response.body, I18n.t('vendor_onboarding.states.awaiting_authorization.title', locale: :es)
       assert_not_includes response.body, 'You are ready to redeem vouchers'
     end
 

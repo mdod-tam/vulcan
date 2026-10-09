@@ -491,6 +491,10 @@ en:
         2. Fax: Send the updated form to 410-767-4276
   vendor_notifications:
     w9_rejected:
+      header_title: "W9 Form Requires Attention"
+      title: "W9 Rejected"
+      body: "Your W9 form requires attention. Reason: %{reason}"
+      reason_unavailable: "No reason provided."
       secure_upload_instructions: |-
         1. Secure W9 upload link:
            %{secure_upload_url}

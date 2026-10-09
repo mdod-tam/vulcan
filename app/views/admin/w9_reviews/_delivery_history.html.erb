@@ -1,0 +1,13 @@
+<% if request_forms.present? %>
+  <section class="mt-6 rounded border p-4" aria-label="W9 request delivery">
+    <h2 class="text-lg font-semibold">W9 request delivery</h2>
+    <% request_forms.each do |form| %><%= delivery_visibility(form) %><% end %>
+  </section>
+<% end %>
+
+<% if (decision_delivery = safe_join(notifications.filter_map { |notification| delivery_visibility(notification).presence })).present? %>
+  <section class="mt-6 rounded border p-4" aria-label="W9 decision delivery">
+    <h2 class="text-lg font-semibold">W9 decision delivery</h2>
+    <%= decision_delivery %>
+  </section>
+<% end %>

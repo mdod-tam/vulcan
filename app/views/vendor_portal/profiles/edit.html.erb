@@ -190,7 +190,7 @@
       </div>
 
       <!-- Terms and Conditions -->
-      <% terms_locale = @vendor.locale.presence || I18n.default_locale %> <%# erb_lint:disable Rubocop %>
+      <% terms_locale = I18n.locale %> <%# erb_lint:disable Rubocop %>
       <div class="bg-white shadow rounded-lg" lang="<%= terms_locale %>">
         <div class="px-4 py-5 sm:p-6">
           <h2 class="text-lg font-medium text-gray-900 mb-4"><%= t('vendor_onboarding.terms.title', locale: terms_locale) %></h2>

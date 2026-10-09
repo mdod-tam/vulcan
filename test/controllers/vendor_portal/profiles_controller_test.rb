@@ -27,6 +27,35 @@ module VendorPortal
       assert_not_includes response.body, @vendor_user.business_tax_id
     end
 
+    test 'a Spanish vendor receives English profile guidance terms and validation errors' do
+      @vendor_user.update!(locale: 'es')
+
+      I18n.with_locale(:es) do
+        get edit_vendor_portal_profile_url(locale: :es)
+        assert_equal :es, I18n.locale
+      end
+
+      assert_response :success
+      assert_select 'html[lang="en"]'
+      assert_select 'h1', 'Vendor Profile'
+      assert_select 'section[lang="en"] h2', I18n.t('vendor_onboarding.states.missing_w9.title', locale: :en)
+      assert_select 'label[for="users_vendor_terms_accepted"]', I18n.t('vendor_onboarding.terms.acceptance_label', locale: :en)
+      assert_select 'a[href=?]', terms_path(locale: :en), text: I18n.t('vendor_onboarding.terms.review', locale: :en)
+      assert_not_includes response.body, I18n.t('vendor_onboarding.terms.acceptance_label', locale: :es)
+
+      VendorTerms.stubs(:published?).returns(false)
+      I18n.with_locale(:es) do
+        patch vendor_portal_profile_url, params: { users_vendor: { terms_accepted: '1' } }
+        assert_equal :es, I18n.locale
+      end
+
+      assert_response :unprocessable_content
+      assert_select 'html[lang="en"]'
+      assert_select 'li', text: /#{Regexp.escape(I18n.t('vendor_onboarding.terms.unavailable', locale: :en))}/
+      assert_not_includes response.body, I18n.t('vendor_onboarding.terms.unavailable', locale: :es)
+      assert_nil @vendor_user.reload.terms_accepted_at
+    end
+
     test 'unpublished terms show the blocker and reject forged acceptance' do
       VendorTerms.stubs(:published?).returns(false)
       original_name = @vendor_user.business_name
@@ -211,6 +240,58 @@ module VendorPortal
       assert_predicate @vendor_user, :w9_status_approved?
       assert_equal previous_w9.id, @vendor_user.w9_form.blob.id
       assert_select "input[name='users_vendor[w9_form_signed_id]']"
+    end
+
+    test 'retrying the approved current W9 reference updates the profile without reopening its review' do
+      @vendor_user.w9_form.attach(io: file_fixture('sample_w9.pdf').open, filename: 'approved.pdf', content_type: 'application/pdf')
+      @vendor_user.update!(w9_status: :approved)
+      current = @vendor_user.w9_form.blob
+      current.with_lock { Vendors::W9Document.protect!(current, vendor: @vendor_user) }
+      reference = Vendors::W9Document.reference(current, vendor: @vendor_user)
+      snapshot = lambda do
+        @vendor_user.reload
+        [@vendor_user.w9_form.blob.id, @vendor_user.w9_archive.blobs.ids.sort,
+         @vendor_user.w9_status, @vendor_user.w9_rejections_count,
+         @vendor_user.w9_reviews.count, Event.where(auditable: @vendor_user).count]
+      end
+
+      assert_no_changes snapshot do
+        patch vendor_portal_profile_url, params: {
+          users_vendor: { website_url: 'https://corrected.example.test', w9_form_signed_id: reference }
+        }
+      end
+
+      assert_redirected_to vendor_portal_dashboard_url
+      assert_equal 'https://corrected.example.test', @vendor_user.reload.website_url
+      assert_predicate @vendor_user, :w9_status_approved?
+      assert_equal current.id, Vendors::W9Document.restorable(reference, vendor: @vendor_user).id
+    end
+
+    test 'the original reference still permits a profile retry after its current W9 is reviewed and archived' do
+      current = Vendors::ReplaceW9.call(vendor: @vendor_user, file: fixture_file_upload('sample_w9.pdf', 'application/pdf'))
+      reference = Vendors::W9Document.reference(current, vendor: @vendor_user)
+      review = Vendors::ReviewW9.new(
+        vendor: @vendor_user, admin: create(:admin), attributes: { status: 'approved', reviewed_blob_id: current.id }
+      ).call
+      assert_predicate review, :success?
+      assert @vendor_user.reload.w9_archive.blobs.exists?(current.id)
+      snapshot = lambda do
+        @vendor_user.reload
+        [@vendor_user.w9_form.blob.id, @vendor_user.w9_archive.blobs.ids.sort,
+         @vendor_user.w9_status, @vendor_user.w9_rejections_count,
+         @vendor_user.w9_reviews.count, Event.where(auditable: @vendor_user).count]
+      end
+
+      assert_no_changes snapshot do
+        patch vendor_portal_profile_url, params: {
+          users_vendor: { website_url: 'https://reviewed.example.test', w9_form_signed_id: reference }
+        }
+      end
+
+      assert_redirected_to vendor_portal_dashboard_url
+      assert_equal 'https://reviewed.example.test', @vendor_user.reload.website_url
+      assert_predicate @vendor_user, :w9_status_approved?
+      assert_equal current.id, review.data[:review].reload.reviewed_blob_id
     end
 
     test 'a usable new W-9 is kept for the next attempt when another field fails' do

@@ -40,7 +40,9 @@ module Admin
     private
 
     def load_delivery_history
-      @w9_notifications = EmailDelivery::Visibility.preload(Notification.where(recipient: @vendor, action: %w[w9_approved w9_rejected]).order(created_at: :desc))
+      notifications = Notification.where(recipient: @vendor, action: %w[w9_approved w9_rejected])
+      notifications = notifications.where("metadata ->> 'w9_review_id' = ?", @w9_review.id.to_s) if @w9_review&.persisted?
+      @w9_notifications = EmailDelivery::Visibility.preload(notifications.order(created_at: :desc, id: :desc))
       @vendor_secure_request_forms = EmailDelivery::Visibility.preload(@vendor.vendor_secure_request_forms.order(sent_at: :desc))
     end
 

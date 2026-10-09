@@ -93,7 +93,9 @@ class VendorsW9ProtectionBackfillTest < ActiveSupport::TestCase
     old_key = blob.key
     blob.service.stubs(:delete).with(old_key).raises(IOError, 'storage deletion unavailable')
 
-    assert_raises(IOError) { run_backfill(cutover_at: Time.current) }
+    failure = assert_raises(Vendors::W9ProtectionBackfill::Incomplete) { run_backfill(cutover_at: Time.current) }
+    assert_equal [{ vendor_id: vendor.id, blob_id: blob.id, error_class: 'IOError' }], failure.failures
+    assert_equal @starting_vendor_id, failure.cursors[:after_vendor_id]
 
     blob.reload
     checkpoint_key = blob.key
@@ -140,7 +142,9 @@ class VendorsW9ProtectionBackfillTest < ActiveSupport::TestCase
     original_date = generic.created_at
     generic.service.stubs(:delete).with(old_key).raises(IOError, 'storage deletion unavailable')
 
-    assert_raises(IOError) { run_backfill(cutover_at: Time.current) }
+    failure = assert_raises(Vendors::W9ProtectionBackfill::Incomplete) { run_backfill(cutover_at: Time.current) }
+    assert_equal [{ vendor_id: nil, blob_id: generic.id, error_class: 'IOError' }], failure.failures
+    assert_equal @starting_blob_id, failure.cursors[:after_staged_blob_id]
 
     assert ActiveStorage::Blob.exists?(generic.id)
     assert generic.reload.metadata[Vendors::W9ProtectionBackfill::QUARANTINED]
@@ -180,6 +184,80 @@ class VendorsW9ProtectionBackfillTest < ActiveSupport::TestCase
   ensure
     ActiveStorage.logger = original_storage_logger
     ActiveRecord::Base.logger = original_record_logger
+  end
+
+  test 'a missing vendor file reports its ids and continues without advancing past the failed vendor' do
+    broken = create(:vendor, :with_w9)
+    missing = broken.w9_form.blob
+    missing.service.delete(missing.key)
+    healthy = create(:vendor, :with_w9)
+    healthy_blob = healthy.w9_form.blob
+    healthy_key = healthy_blob.key
+    progress = []
+
+    error = assert_raises(Vendors::W9ProtectionBackfill::Incomplete) do
+      run_backfill(cutover_at: Time.current, batch_size: 1) { |state| progress << state }
+    end
+
+    assert_equal [{ vendor_id: broken.id, blob_id: missing.id, error_class: 'ActiveStorage::FileNotFoundError' }], error.failures
+    assert_equal @starting_vendor_id, error.cursors[:after_vendor_id]
+    assert_not_equal healthy_key, healthy_blob.reload.key
+    assert healthy_blob.metadata[Vendors::W9ProtectionBackfill::ROTATED_AT].present?
+    assert_equal error.failures, progress.last[:failures]
+    assert_not_includes error.message, missing.key
+
+    missing.service.upload(missing.key, file_fixture('sample_w9.pdf').open, checksum: missing.checksum)
+    run_backfill(cutover_at: Time.current, **error.cursors)
+    assert missing.reload.metadata[Vendors::W9ProtectionBackfill::ROTATED_AT].present?
+    assert_equal healthy_blob.key, healthy_blob.reload.key
+  end
+
+  test 'a foreign owner reports an actionable failure while other vendors complete' do
+    broken = create(:vendor, :with_w9)
+    foreign_owner = create(:vendor)
+    blob = broken.w9_form.blob
+    blob.update!(metadata: blob.metadata.merge(Vendors::W9Document::OWNER_KEY => foreign_owner.id))
+    healthy = create(:vendor, :with_w9)
+    original_key = healthy.w9_form.blob.key
+
+    error = assert_raises(Vendors::W9ProtectionBackfill::Incomplete) { run_backfill(cutover_at: Time.current) }
+
+    assert_includes error.failures, { vendor_id: broken.id, blob_id: blob.id, error_class: 'UploadedDocument::Refused' }
+    assert_not_equal original_key, healthy.w9_form.blob.reload.key
+    assert_equal @starting_vendor_id, error.cursors[:after_vendor_id]
+    assert_not_includes error.message, blob.key
+
+    blob.reload.update!(metadata: blob.metadata.merge(Vendors::W9Document::OWNER_KEY => broken.id))
+    run_backfill(cutover_at: Time.current, **error.cursors)
+    assert blob.reload.metadata[Vendors::W9ProtectionBackfill::ROTATED_AT].present?
+  end
+
+  test 'failed retention reports the reviewed blob and does not rotate its storage key' do
+    vendor = create(:vendor, :with_w9)
+    reviewed = stored_blob('reviewed.pdf')
+    reviewed.update!(content_type: 'application/zip')
+    create(:w9_review, vendor: vendor, reviewed_blob: reviewed)
+    later_reviewed = stored_blob('later-reviewed.pdf')
+    create(:w9_review, vendor: vendor, reviewed_blob: later_reviewed)
+    old_key = reviewed.key
+    healthy = create(:vendor, :with_w9)
+
+    error = assert_raises(Vendors::W9ProtectionBackfill::Incomplete) { run_backfill(cutover_at: Time.current) }
+
+    assert_equal [{ vendor_id: vendor.id, blob_id: reviewed.id, error_class: 'ActiveRecord::RecordInvalid' }], error.failures
+    assert_equal @starting_vendor_id, error.cursors[:after_vendor_id]
+    assert_not vendor.reload.w9_archive.blobs.exists?(reviewed.id)
+    assert_equal old_key, reviewed.reload.key
+    assert reviewed.service.exist?(old_key)
+    assert_not reviewed.metadata.key?(Vendors::W9ProtectionBackfill::ROTATED_AT)
+    assert vendor.w9_archive.blobs.exists?(later_reviewed.id)
+    assert later_reviewed.reload.metadata[Vendors::W9ProtectionBackfill::ROTATED_AT].present?
+    assert healthy.w9_form.blob.reload.metadata[Vendors::W9ProtectionBackfill::ROTATED_AT].present?
+
+    reviewed.update!(content_type: 'application/pdf')
+    run_backfill(cutover_at: Time.current, **error.cursors)
+    assert vendor.reload.w9_archive.blobs.exists?(reviewed.id)
+    assert_not_equal old_key, reviewed.reload.key
   end
 
   private

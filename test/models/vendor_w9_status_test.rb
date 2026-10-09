@@ -52,6 +52,30 @@ class VendorW9StatusTest < ActiveSupport::TestCase
     end
   end
 
+  test 'the retained W9 archive rejects a newly attached unsupported document' do
+    blob = ActiveStorage::Blob.create_and_upload!(io: StringIO.new('plain notes'), filename: 'notes.txt',
+                                                  content_type: 'text/plain', identify: false)
+
+    @vendor.w9_archive.attach(blob)
+
+    assert_not @vendor.valid?
+    assert_includes @vendor.errors[:w9_archive], "must be a PDF or an image file (#{ProofUploadFormats::HUMAN_LABEL})"
+    assert_empty @vendor.reload.w9_archive.blobs
+  end
+
+  test 'the retained W9 archive uses the same strict size limit as the current W9' do
+    pdf = file_fixture('sample_w9.pdf').binread.ljust(ProofUploadFormats.max_bytes(:w9), ' ')
+    blob = ActiveStorage::Blob.create_and_upload!(io: StringIO.new(pdf), filename: 'oversize-w9.pdf',
+                                                  content_type: 'application/pdf', identify: false)
+    assert_equal ProofUploadFormats.max_bytes(:w9), blob.byte_size
+
+    @vendor.w9_archive.attach(blob)
+
+    assert_not @vendor.valid?
+    assert_includes @vendor.errors[:w9_archive], "must be smaller than #{ProofUploadFormats.max_megabytes(:w9)}MB."
+    assert_empty @vendor.reload.w9_archive.blobs
+  end
+
   private
 
   def force_w9_status(status)

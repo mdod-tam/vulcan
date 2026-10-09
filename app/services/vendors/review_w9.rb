@@ -10,7 +10,7 @@ module Vendors
     end
 
     def call
-      review = @vendor.w9_reviews.build(@attributes.except(:reviewed_blob_id, :status).merge(admin: @admin))
+      review = @vendor.w9_reviews.build(@attributes.except(:status).merge(admin: @admin))
       unless %w[approved rejected].include?(@attributes[:status].to_s)
         review.errors.add(:status, 'must be explicitly approved or rejected')
         return failure('Choose approval or rejection.', { review: review })

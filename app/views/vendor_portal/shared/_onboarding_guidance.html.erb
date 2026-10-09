@@ -1,4 +1,4 @@
-<%# locals: (vendor:, state: vendor_onboarding_state(vendor), locale: vendor.locale.presence || I18n.default_locale) -%>
+<%# locals: (vendor:, state: vendor_onboarding_state(vendor), locale: I18n.locale) -%>
 <section lang="<%= locale %>" aria-labelledby="vendor-onboarding-heading"
          class="mb-8 rounded-lg border border-blue-200 bg-blue-50 p-4 sm:p-6" data-vendor-onboarding-state="<%= state %>">
   <h2 id="vendor-onboarding-heading" class="text-lg font-semibold text-blue-950"><%= t("vendor_onboarding.states.#{state}.title", locale: locale) %></h2>

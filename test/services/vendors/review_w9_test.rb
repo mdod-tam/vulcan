@@ -48,7 +48,10 @@ module Vendors
     test 'no decision and an invalid decision are refused without writes' do
       [nil, '', 'something_else'].each do |status|
         assert_no_changes -> { [W9Review.count, Event.count] } do
-          assert_predicate decide(status: status), :failure?
+          result = decide(status: status)
+          assert_predicate result, :failure?
+          assert_equal @blob.id, result.data[:review].reviewed_blob_id
+          assert_includes result.data[:review].errors[:status], 'must be explicitly approved or rejected'
         end
       end
       assert_predicate @vendor.reload, :w9_status_pending_review?
@@ -91,6 +94,25 @@ module Vendors
         result = RequestW9Resubmission.new(vendor: @vendor, actor: @admin, review: review).call
         assert_predicate result, :failure?
       end
+    end
+
+    test 'retrying a reviewed current reference preserves its rejection and history without a replacement' do
+      @vendor.update!(w9_status: :rejected, w9_rejections_count: 1)
+      review = create(:w9_review, :rejected, vendor: @vendor, admin: @admin, reviewed_blob: @blob)
+      @blob.with_lock { W9Document.protect!(@blob, vendor: @vendor) }
+      reference = W9Document.reference(@blob, vendor: @vendor)
+      snapshot = lambda do
+        @vendor.reload
+        [@vendor.w9_form.blob.id, @vendor.w9_archive.blobs.ids.sort, @vendor.w9_status,
+         @vendor.w9_rejections_count, @vendor.w9_reviews.count, Event.where(auditable: @vendor).count]
+      end
+
+      assert_no_changes snapshot do
+        assert_equal @blob.id, ReplaceW9.call(vendor: @vendor, file: reference).id
+      end
+
+      assert_predicate @vendor, :w9_status_rejected?
+      assert_equal @blob.id, review.reload.reviewed_blob_id
     end
 
     private

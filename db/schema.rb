@@ -1053,6 +1053,7 @@ ActiveRecord::Schema[8.1].define(version: 2026_10_09_120100) do
     t.bigint "vendor_id", null: false
     t.bigint "reviewed_blob_id"
     t.index ["admin_id"], name: "index_w9_reviews_on_admin_id"
+    t.index ["reviewed_blob_id"], name: "index_w9_reviews_on_reviewed_blob_id"
     t.index ["vendor_id", "reviewed_blob_id"], name: "index_w9_reviews_on_vendor_id_and_reviewed_blob_id", unique: true
     t.index ["vendor_id"], name: "index_w9_reviews_on_vendor_id"
   end

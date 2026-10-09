@@ -7,6 +7,27 @@ module Vendors
     ROTATED_AT = 'w9_service_key_rotated_at'
     QUARANTINED = 'w9_cutover_quarantined'
 
+    class DocumentFailure < StandardError
+      attr_reader :vendor_id, :blob_id, :error_class
+
+      def initialize(vendor_id:, blob_id:, error:)
+        @vendor_id = vendor_id
+        @blob_id = blob_id
+        @error_class = error.class.name
+        super("vendor_id=#{vendor_id || 'none'} blob_id=#{blob_id || 'unknown'} error=#{error_class}")
+      end
+    end
+
+    class Incomplete < StandardError
+      attr_reader :failures, :cursors
+
+      def initialize(failures:, cursors:)
+        @failures = failures
+        @cursors = cursors
+        super("#{failures.length} document protection failures; application access must remain paused")
+      end
+    end
+
     def self.call(cutover_at:, after_vendor_id: 0, after_staged_blob_id: 0, batch_size: 100, &progress)
       raise ArgumentError, 'cutover_at must be in the past' if cutover_at.future?
       raise ArgumentError, 'batch_size must be positive' unless batch_size.positive?
@@ -20,6 +41,7 @@ module Vendors
       @after_staged_blob_id = after_staged_blob_id
       @batch_size = batch_size
       @progress = progress
+      @failures = []
     end
 
     def call
@@ -30,6 +52,8 @@ module Vendors
           quarantine_unattributed_staged_uploads
         end
       end
+      raise Incomplete.new(failures: @failures, cursors: cursors) if @failures.any?
+
       cursors
     end
 
@@ -38,10 +62,13 @@ module Vendors
     def protect_vendor_documents
       Users::Vendor.find_in_batches(start: @after_vendor_id + 1, batch_size: @batch_size) do |vendors|
         vendors.each do |vendor|
-          document_ids(vendor).each { |blob_id| protect_document(vendor, blob_id) }
-          @after_vendor_id = vendor.id
+          completed = attempt(vendor_id: vendor.id) do
+            document_ids(vendor).map { |blob_id| attempt(vendor_id: vendor.id, blob_id: blob_id) { protect_document(vendor, blob_id) } }.all?
+          end
+          @vendor_cursor_blocked ||= !completed
+          @after_vendor_id = vendor.id unless @vendor_cursor_blocked
         end
-        @progress&.call(cursors)
+        report_progress
       end
     end
 
@@ -51,14 +78,6 @@ module Vendors
         known = vendor.w9_reviews.where.not(reviewed_blob_id: nil).order(:reviewed_blob_id).pluck(:reviewed_blob_id)
         current = vendor.w9_form.blob&.id
         archived = vendor.w9_archive.blobs.map(&:id)
-        known.each do |blob_id|
-          next if blob_id == current || archived.include?(blob_id)
-
-          blob = ActiveStorage::Blob.lock.find(blob_id)
-          W9Document.protect!(blob, vendor: vendor)
-          vendor.w9_archive.attach(blob)
-          archived << blob_id
-        end
         staged = ActiveStorage::Blob.where('metadata::jsonb ->> ? = ?', W9Document::OWNER_KEY, vendor.id.to_s).ids
         ([current] + archived + known + staged).compact.uniq.sort
       end
@@ -66,12 +85,24 @@ module Vendors
 
     def protect_document(vendor, blob_id)
       descendants = with_document_lock(vendor, blob_id) do |blob|
+        retain_reviewed_document(vendor, blob)
         rotate_service_key(blob) unless blob.metadata[ROTATED_AT].present? || blob.metadata[OLD_KEY].present?
         derivative_ids(blob)
       end
       # The new key and old-key checkpoint have committed before deletion can fail.
       with_document_lock(vendor, blob_id) { |blob| remove_old_service_key(blob) }
       descendants.each { |id| protect_document(vendor, id) }
+    rescue DocumentFailure
+      raise
+    rescue StandardError => e
+      raise DocumentFailure.new(vendor_id: vendor.id, blob_id: blob_id, error: e)
+    end
+
+    def retain_reviewed_document(vendor, blob)
+      return if vendor.w9_form.blob&.id == blob.id || vendor.w9_archive.blobs.exists?(blob.id)
+      return unless vendor.w9_reviews.exists?(reviewed_blob_id: blob.id)
+
+      raise ActiveRecord::RecordInvalid, vendor unless vendor.w9_archive.attach(blob)
     end
 
     def with_document_lock(vendor, blob_id)
@@ -121,15 +152,18 @@ module Vendors
                          .where.not(id: known_reviews)
                          .find_in_batches(start: @after_staged_blob_id + 1, batch_size: @batch_size) do |blobs|
         blobs.each do |blob|
-          blob.with_lock do
-            next if blob.attachments.exists? || blob.metadata[W9Document::OWNER_KEY].present?
+          completed = attempt(blob_id: blob.id) do
+            blob.with_lock do
+              next if blob.attachments.exists? || blob.metadata[W9Document::OWNER_KEY].present?
 
-            blob.update!(metadata: blob.metadata.merge(QUARANTINED => true))
+              blob.update!(metadata: blob.metadata.merge(QUARANTINED => true))
+            end
+            quarantine_document(blob.id) if blob.metadata[QUARANTINED]
           end
-          quarantine_document(blob.id) if blob.metadata[QUARANTINED]
-          @after_staged_blob_id = blob.id
+          @staged_cursor_blocked ||= !completed
+          @after_staged_blob_id = blob.id unless @staged_cursor_blocked
         end
-        @progress&.call(cursors)
+        report_progress
       end
     end
 
@@ -142,6 +176,23 @@ module Vendors
       end
       blob.with_lock { remove_old_service_key(blob) }
       descendants.each { |id| quarantine_document(id) }
+    rescue DocumentFailure
+      raise
+    rescue StandardError => e
+      raise DocumentFailure.new(vendor_id: nil, blob_id: blob_id, error: e)
+    end
+
+    def attempt(vendor_id: nil, blob_id: nil)
+      result = yield
+      result != false
+    rescue StandardError => e
+      failure = e.is_a?(DocumentFailure) ? e : DocumentFailure.new(vendor_id: vendor_id, blob_id: blob_id, error: e)
+      @failures << { vendor_id: failure.vendor_id, blob_id: failure.blob_id, error_class: failure.error_class }
+      false
+    end
+
+    def report_progress
+      @progress&.call(cursors.merge(failures: @failures.dup))
     end
 
     def cursors

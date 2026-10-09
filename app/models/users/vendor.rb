@@ -28,6 +28,7 @@ module Users
     validates :business_tax_id, presence: true
     validates :w9_form, presence: true, if: -> { vendor_approved? && !new_record? }
     validates :w9_form, document: { purpose: :w9 }
+    validates :w9_archive, document: { purpose: :w9 }
     validates :terms_accepted_at, presence: true, if: :vendor_approved?
     validate :published_terms_before_acceptance
     validate :w9_approved_before_granting_approval, on: :update, if: :granting_approval?
@@ -134,7 +135,7 @@ module Users
       return unless @terms_acceptance_requested && terms_accepted_at_in_database.blank?
       return if VendorTerms.available?
 
-      errors.add(:terms_accepted, I18n.t('vendor_onboarding.terms.unavailable', locale: locale.presence || I18n.default_locale))
+      errors.add(:terms_accepted, I18n.t('vendor_onboarding.terms.unavailable', locale: I18n.locale))
     end
 
     def granting_approval?

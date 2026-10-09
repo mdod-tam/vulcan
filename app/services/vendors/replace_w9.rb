@@ -14,7 +14,7 @@ module Vendors
         end
         vendor.assign_attributes(attributes)
         vendor.w9_form = blob
-        vendor.w9_status = :pending_review
+        vendor.w9_status = :pending_review if previous&.id != blob.id
         vendor.save!
         blob
       end

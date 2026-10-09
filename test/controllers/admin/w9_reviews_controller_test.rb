@@ -135,6 +135,25 @@ module Admin
       assert w9_review.errors.any?, 'W9Review should have validation errors'
     end
 
+    test 'missing and invalid decisions retain the submitted document for a corrected retry' do
+      vendor = create(:vendor, :with_w9)
+      blob_id = vendor.w9_form.blob.id
+
+      [nil, '', 'invalid_decision'].each do |status|
+        assert_no_changes -> { [W9Review.count, Event.count, vendor.reload.w9_status] } do
+          post admin_vendor_w9_reviews_path(vendor), params: { w9_review: { reviewed_blob_id: blob_id, status: status } }
+        end
+        assert_response :unprocessable_content
+        assert_select "input[name='w9_review[reviewed_blob_id]'][type='hidden'][value='#{blob_id}']", count: 1
+      end
+
+      post admin_vendor_w9_reviews_path(vendor), params: { w9_review: { reviewed_blob_id: blob_id, status: 'approved' } }
+
+      assert_redirected_to admin_vendor_path(vendor)
+      assert_predicate vendor.reload, :w9_status_approved?
+      assert_equal blob_id, vendor.w9_reviews.last.reviewed_blob_id
+    end
+
     test 'should show w9 review' do
       vendor = create(:vendor, type: 'Vendor')
 
@@ -154,7 +173,8 @@ module Admin
     test 'review shows recorded delivery failure instead of claiming an email was sent' do
       vendor = create(:vendor, :with_w9)
       review = create(:w9_review, vendor: vendor, admin: @admin)
-      notification = create(:notification, recipient: vendor, actor: @admin, notifiable: vendor, action: 'w9_approved')
+      notification = create(:notification, recipient: vendor, actor: @admin, notifiable: vendor, action: 'w9_approved',
+                                           metadata: { w9_review_id: review.id })
       notification.mark_delivery_failed!(StandardError.new('Synthetic delivery failure'))
 
       get admin_vendor_w9_review_path(vendor, review)
@@ -162,6 +182,44 @@ module Admin
       assert_response :success
       assert_select 'section[aria-label="W9 decision delivery"]', text: /#{Regexp.escape(DeliveryStatusPresenter.new(notification).label)}/
       assert_no_match(/Yes, email sent/, response.body)
+    end
+
+    test 'review delivery belongs to its decision rather than a later decision for the same vendor' do
+      vendor = create(:vendor, :with_w9)
+      first_review = create(:w9_review, vendor: vendor, admin: @admin)
+      first_notification = create(:notification, recipient: vendor, actor: @admin, notifiable: vendor, action: 'w9_approved',
+                                                 metadata: { w9_review_id: first_review.id })
+      first_notification.mark_delivery_failed!(StandardError.new('Synthetic first-review delivery failure'))
+      Vendors::ReplaceW9.call(vendor: vendor, file: Rack::Test::UploadedFile.new(file_fixture('sample_w9.pdf'), 'application/pdf'))
+      second_review = create(:w9_review, vendor: vendor, admin: @admin)
+      second_notification = create(:notification, recipient: vendor, actor: @admin, notifiable: vendor, action: 'w9_approved',
+                                                  metadata: { w9_review_id: second_review.id })
+      second_notification.record_delivery_queued!
+
+      get admin_vendor_w9_review_path(vendor, first_review)
+
+      assert_response :success
+      assert_select 'section[aria-label="W9 decision delivery"] [data-delivery-status="failed"]', count: 1
+      assert_select 'section[aria-label="W9 decision delivery"] [data-delivery-status="queued"]', count: 0
+
+      get admin_vendor_w9_review_path(vendor, second_review)
+
+      assert_response :success
+      assert_select 'section[aria-label="W9 decision delivery"] [data-delivery-status="queued"]', count: 1
+      assert_select 'section[aria-label="W9 decision delivery"] [data-delivery-status="failed"]', count: 0
+    end
+
+    test 'a rejection notice without a delivery outcome does not render an empty delivery heading' do
+      vendor = create(:vendor, :with_w9)
+      review = create(:w9_review, :rejected, vendor: vendor, admin: @admin)
+      notification = create(:notification, recipient: vendor, actor: @admin, notifiable: vendor, action: 'w9_rejected',
+                                           metadata: { w9_review_id: review.id, channel: 'email' })
+      assert_equal 'unknown', DeliveryStatusPresenter.new(notification).status
+
+      get admin_vendor_w9_review_path(vendor, review)
+
+      assert_response :success
+      assert_select 'section[aria-label="W9 decision delivery"]', count: 0
     end
 
     test 'should require admin authentication' do

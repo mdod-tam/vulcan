@@ -105,7 +105,7 @@ heroku ps:scale web=0 worker=0 --app "$MAT_RESTORE_APP"
 Stop any additional process types too. On Fir, use the supported traffic controls instead of maintenance mode. Scaling web to zero in Private Spaces prevents its maintenance page from being served; account for that outage behavior. Stopping web also stops jobs embedded in Puma.
 
 - [ ] Restore files into the intended private bucket, retaining object keys. Use a separate bucket for rehearsals so test actions cannot delete production attachments.
-- [ ] Configure the matching encryption keys and effective `secret_key_base` before starting Rails. The current initializer can generate temporary keys when configuration is missing; successful boot alone is not proof of recoverability.
+- [ ] Configure the matching encryption keys and effective `secret_key_base` before starting Rails. Production startup now refuses missing or incomplete persistent Active Record encryption keys. Complete configuration alone does not prove that the keys match the backup; verify that existing encrypted records can be read before restoring access.
 
 ### Restore the selected backup
 

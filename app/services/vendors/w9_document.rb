@@ -8,10 +8,10 @@ module Vendors
     def self.protected?(blob)
       return false unless blob
       return true if blob.metadata[OWNER_KEY].present? || blob.metadata['w9_cutover_quarantined']
-      return true if blob.attachments.exists?(name: %w[w9_form w9_archive])
+      return true if blob.attachments.exists?(name: %w[w9_form w9_archive], record_type: User.polymorphic_name)
       return true if W9Review.exists?(reviewed_blob_id: blob.id)
 
-      blob.attachments.any? do |attachment|
+      blob.attachments.where(record_type: [ActiveStorage::Blob.polymorphic_name, ActiveStorage::VariantRecord.polymorphic_name]).any? do |attachment|
         parent = attachment.record
         (parent.is_a?(ActiveStorage::Blob) && protected?(parent)) ||
           (parent.is_a?(ActiveStorage::VariantRecord) && protected?(parent.blob))
@@ -70,7 +70,13 @@ module Vendors
 
         input = resolve_reference(input, vendor: vendor) || raise(UploadedDocument::Refused.new(:unavailable, purpose: :w9))
       end
-      blob = UploadedDocument.resolve!(input, record: vendor, name: 'w9_form', signed_ids: false, min_bytes: min_bytes)
+      # A reviewed current file also occupies the vendor's archive; retrying it is not a replacement.
+      current_owned = input.is_a?(ActiveStorage::Blob) && input.metadata[OWNER_KEY].to_i == vendor.id && vendor.w9_form.blob&.id == input.id
+      blob = UploadedDocument.resolve!(
+        input,
+        record: vendor, name: 'w9_form', signed_ids: false, min_bytes: min_bytes,
+        additional_attachment_names: current_owned ? ['w9_archive'] : []
+      )
       protect!(blob, vendor: vendor)
     end
 

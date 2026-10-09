@@ -114,16 +114,4 @@
   </div>
 </div>
 
-<% if @vendor_secure_request_forms.present? %>
-  <section class="mt-6 rounded border p-4" aria-label="W9 request delivery">
-    <h2 class="text-lg font-semibold">W9 request delivery</h2>
-    <% @vendor_secure_request_forms.each do |form| %><%= delivery_visibility(form) %><% end %>
-  </section>
-<% end %>
-
-<% if @w9_notifications.present? %>
-  <section class="mt-6 rounded border p-4" aria-label="W9 decision delivery">
-    <h2 class="text-lg font-semibold">W9 decision delivery</h2>
-    <% @w9_notifications.each do |notification| %><%= delivery_visibility(notification) %><% end %>
-  </section>
-<% end %>
+<%= render 'delivery_history', request_forms: @vendor_secure_request_forms, notifications: @w9_notifications %>

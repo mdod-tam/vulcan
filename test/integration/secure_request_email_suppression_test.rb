@@ -260,11 +260,9 @@ class SecureRequestEmailSuppressionTest < ActiveSupport::TestCase
   def rejected_vendor
     vendor = create(:vendor, :with_w9)
     vendor.update!(w9_status: :rejected)
-    W9Review.skip_callback(:commit, :after, :handle_post_review_actions)
-    create(:w9_review, :rejected, vendor: vendor, admin: @admin, rejection_reason: 'Tax ID mismatch')
+    create(:w9_review, :rejected, vendor: vendor, admin: @admin, reviewed_blob: vendor.w9_form.blob,
+                                  rejection_reason: 'Tax ID mismatch')
     vendor
-  ensure
-    W9Review.set_callback(:commit, :after, :handle_post_review_actions, on: :create)
   end
 
   def vendor_request_for(vendor)
