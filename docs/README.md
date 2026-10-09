@@ -58,6 +58,7 @@ Use the source and test links in the workflow guides to trace the current path. 
 | [Authentication and MFA](security/authentication_system.md) | Sign-in, sessions, factors, password reset, and recovery. |
 | [PII encryption](security/pii_encryption.md) | Encrypted fields, contact lookup, stable keys, and logging. |
 | [Voucher controls](security/voucher_security_controls.md) | Issuance, vendor verification, redemption, and history. |
+| [Invoice payment corrections](finance/payment_corrections.md) | What staff can change on an invoice at each stage, withdrawal and billing holds, and how to record a correction. |
 | [Security baseline](security/baseline_policy.md) | Policy requirements, implementation boundaries, and approval needs. |
 | [Control catalog](security/controls.yaml) | Control IDs, source pointers, and verification still needed. |
 | [Reports and audits](compliance/required_reports_audits.md) | Operational review schedules, responsible roles, and evidence. |

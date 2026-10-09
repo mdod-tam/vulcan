@@ -32,5 +32,21 @@ module VendorPortal
 
       assert_select '#monthly-totals-chart [data-controller="chart"][data-chart-format-value="currency"]'
     end
+
+    test 'the dashboard separates purchases not yet invoiced from invoices awaiting payment' do
+      ensure_system_audit_actor!
+      create(:voucher_transaction, vendor: @vendor, amount: 30)
+      held = create(:voucher_transaction, vendor: @vendor, amount: 5)
+      held.update_columns(billing_hold_at: Time.current, billing_hold_reason: 'Review')
+      create(:invoice, :pending, :with_transactions, vendor: @vendor, transaction_count: 1, amount_per_transaction: 70)
+      pay_invoice!(create(:invoice, :pending, :with_transactions, vendor: @vendor, transaction_count: 1, amount_per_transaction: 90))
+
+      get vendor_portal_dashboard_path
+
+      assert_response :success
+      assert_select 'dl', text: /Not yet invoiced\s*\$30\.00/
+      assert_match 'Not included: 1 voucher redemption on hold', response.body
+      assert_select 'dl', text: /Invoiced, awaiting payment\s*\$70\.00/
+    end
   end
 end

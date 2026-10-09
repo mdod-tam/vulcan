@@ -27,7 +27,8 @@ module Vouchers
     private
 
     def redeem(vendor)
-      RedemptionService.call(voucher: @voucher, vendor: vendor, amount: 10, product_ids: [], session: @session)
+      RedemptionService.call(voucher: @voucher, vendor: vendor, amount: 10, product_ids: [], session: @session,
+                             submission_id: SecureRandom.uuid)
     end
   end
 end

@@ -30,6 +30,7 @@ module Users
     validates :w9_form, presence: true, if: -> { vendor_approved? && !new_record? }
     validates :w9_form, document: { purpose: :w9 }
     validates :terms_accepted_at, presence: true, if: :vendor_approved?
+    validate :w9_approved_before_granting_approval, on: :update, if: :granting_approval?
     validates :website_url,
               format: { with: URI::DEFAULT_PARSER.make_regexp(%w[http https]),
                         message: 'must be a valid URL starting with http:// or https://' },
@@ -49,11 +50,14 @@ module Users
     }
     scope :with_pending_w9_reviews, -> { where(w9_status: :pending_review) }
 
+    # Completed purchases that will go on the next invoice. Purchases staff are holding are left out.
     def pending_transaction_total
-      voucher_transactions
-        .completed
-        .where(invoice_id: nil)
-        .sum(:amount)
+      voucher_transactions.billable.sum(:amount)
+    end
+
+    # On an invoice that is not yet paid (awaiting approval or approved).
+    def awaiting_payment_total
+      invoices.where(status: %i[invoice_pending invoice_approved]).sum(:total_amount)
     end
 
     def total_transactions_by_period(start_date, end_date)
@@ -109,6 +113,17 @@ module Users
     end
 
     private
+
+    def granting_approval?
+      will_save_change_to_vendor_authorization_status? && vendor_approved?
+    end
+
+    # Checked only when approval is granted: a vendor already approved keeps it while a new W9 is reviewed.
+    def w9_approved_before_granting_approval
+      return if w9_form.attached? && w9_status_approved?
+
+      errors.add(:vendor_authorization_status, 'cannot be set to Approved until the W9 is approved')
+    end
 
     # This callback marks new W9 attachments for review.
     # Profile edits and account lockouts preserve the current W9 status.

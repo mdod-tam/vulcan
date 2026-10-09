@@ -61,16 +61,20 @@ module VendorPortal
 
       mock_result = BaseService::Result.new(
         success: false,
-        message: 'Identity verification is required before redemption',
-        data: nil
+        message: 'Please select at least one product for this voucher redemption',
+        data: { error_type: :invalid_input }
       )
       Vouchers::RedemptionService.stubs(:call).returns(mock_result)
 
       post process_redemption_vendor_portal_voucher_path(@voucher.code),
-           params: { amount: 100.0, product_ids: [] }
+           params: { amount: '100.00', product_ids: [], submission_id: 'retry-me' }
 
-      assert_redirected_to redeem_vendor_portal_voucher_path(@voucher.code)
-      assert_equal 'Identity verification is required before redemption', flash[:alert]
+      # The form comes back with what was entered and the same submission ID, so a corrected retry
+      # cannot record a second purchase.
+      assert_response :unprocessable_content
+      assert_select 'body', text: /Please select at least one product/
+      assert_select 'input[name="submission_id"][value="retry-me"]', visible: :all
+      assert_select 'input[name="amount"][value="100.00"]'
     end
   end
 end

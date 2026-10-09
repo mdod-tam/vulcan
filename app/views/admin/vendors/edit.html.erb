@@ -14,7 +14,7 @@
       </p>
     </div>
     <div class="border-t border-gray-200 p-6">
-      <%= form_with(model: [:admin, @vendor], local: true, class: "space-y-6") do |f| %>
+      <%= form_with(model: @vendor, scope: :vendor, url: admin_vendor_path(@vendor), method: :patch, local: true, class: 'space-y-6') do |f| %>
         <% if @vendor.errors.any? %>
           <div class="bg-red-50 border-l-4 border-red-400 p-4 mb-4">
             <div class="flex">
@@ -54,32 +54,29 @@
             </div>
           </div>
 
-          <div>
-            <label for="vendor_email" class="block text-sm font-medium text-gray-700">Email</label>
-            <div class="mt-1">
-              <%= f.email_field :email, class: "shadow-sm focus:ring-indigo-500 focus:border-indigo-500 block w-full sm:text-sm border-gray-300 rounded-md" %>
-            </div>
+          <div class="md:col-span-2">
+            <h4 class="text-sm font-medium text-gray-700">Sign-in email and phone</h4>
+            <dl class="mt-1 grid grid-cols-1 gap-2 sm:grid-cols-2 text-sm text-gray-900">
+              <div><dt class="sr-only">Email</dt><dd><%= @vendor.email %></dd></div>
+              <div><dt class="sr-only">Phone</dt><dd><%= @vendor.phone.presence || 'No phone on file' %></dd></div>
+            </dl>
+            <p class="mt-1 text-xs text-gray-500">
+              These identify the vendor's account.
+              <%= link_to 'Change them in the user editor', edit_admin_user_path(@vendor), class: 'text-indigo-600 hover:text-indigo-900' %>.
+            </p>
           </div>
 
           <div>
-            <label for="vendor_phone" class="block text-sm font-medium text-gray-700">Phone</label>
+            <%= f.label :vendor_authorization_status, 'Vendor approval', class: 'block text-sm font-medium text-gray-700' %>
             <div class="mt-1">
-              <%= f.telephone_field :phone, class: "shadow-sm focus:ring-indigo-500 focus:border-indigo-500 block w-full sm:text-sm border-gray-300 rounded-md" %>
+              <%= f.select :vendor_authorization_status, Users::Vendor.vendor_authorization_statuses.keys.map { |s| [s.titleize, s] }, {},
+                           'aria-describedby': 'vendor-approval-hint',
+                           class: 'shadow-sm focus:ring-indigo-500 focus:border-indigo-500 block w-full sm:text-sm border-gray-300 rounded-md' %>
             </div>
-          </div>
-
-          <div>
-            <label for="vendor_status" class="block text-sm font-medium text-gray-700">Vendor Status</label>
-            <div class="mt-1">
-              <%= f.select :status, Vendor.statuses.keys.map { |s| [s.titleize, s] }, {}, class: "shadow-sm focus:ring-indigo-500 focus:border-indigo-500 block w-full sm:text-sm border-gray-300 rounded-md" %>
-            </div>
-          </div>
-
-          <div>
-            <label for="vendor_w9_status" class="block text-sm font-medium text-gray-700">W9 Status</label>
-            <div class="mt-1">
-              <%= f.select :w9_status, Vendor.w9_statuses.keys.map { |s| [s.titleize, s] }, {}, class: "shadow-sm focus:ring-indigo-500 focus:border-indigo-500 block w-full sm:text-sm border-gray-300 rounded-md" %>
-            </div>
+            <p id="vendor-approval-hint" class="mt-1 text-xs text-gray-500">
+              Approval needs an approved W9 (currently <%= @vendor.w9_status.humanize.downcase %>). Review the W9 from the vendor page.
+              A suspended vendor cannot redeem new vouchers but keeps its history, and its past voucher redemptions are still invoiced.
+            </p>
           </div>
         </div>
 

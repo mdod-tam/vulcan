@@ -4,115 +4,56 @@ require 'application_system_test_case'
 
 module Admin
   class InvoicesTest < ApplicationSystemTestCase
-    include VoucherTestHelper
-
     setup do
+      ensure_system_audit_actor!
       @admin = create(:admin)
-      @vendor = users(:vendor_ray)
-      @vendor2 = users(:vendor_teltex)
-
-      # Use past periods to avoid overlap with existing invoices.
-      @invoice = create(:invoice, :pending, :with_transactions,
-                        vendor: @vendor,
-                        start_date: 1.year.ago.beginning_of_day,
-                        end_date: 50.weeks.ago.end_of_day,
-                        transaction_count: 1,
-                        amount_per_transaction: 99.99)
-      @pending_invoice = create(:invoice, :pending, vendor: @vendor2,
-                                                    start_date: 48.weeks.ago.beginning_of_day,
-                                                    end_date: 46.weeks.ago.end_of_day)
-      @approved_invoice = create(:invoice, :approved, vendor: @vendor,
-                                                      start_date: 44.weeks.ago.beginning_of_day,
-                                                      end_date: 42.weeks.ago.end_of_day)
-      @paid_invoice = create(:invoice, :paid, vendor: @vendor2,
-                                              start_date: 40.weeks.ago.beginning_of_day,
-                                              end_date: 38.weeks.ago.end_of_day)
+      @vendor = create(:vendor, :approved, business_name: 'Ray Supply')
+      @invoice = create(:invoice, :pending, :with_transactions, vendor: @vendor,
+                                                                transaction_count: 2, amount_per_transaction: 50)
       sign_in(@admin)
     end
 
-    def invoices(fixture_name)
-      case fixture_name
-      when :test_pending_99
-        @invoice
-      when :one
-        @pending_invoice
-      when :ray_approved
-        @approved_invoice
-      when :paid
-        @paid_invoice
-      else
-        raise "Unknown test invoice: #{fixture_name}"
-      end
+    test 'staff approve an invoice and record a check payment' do
+      visit admin_invoice_path(@invoice)
+      click_on 'Approve invoice'
+      assert_text 'Invoice approved.'
+
+      fill_in 'Payment date', with: Date.current.strftime('%m/%d/%Y')
+      select 'Check', from: 'Payment method'
+      fill_in 'GAD invoice reference', with: 'GAD-2210'
+      click_on 'Record payment'
+
+      assert_text 'The payment was not recorded'
+      assert_text "Check number can't be blank"
+      take_screenshot('admin-invoice-payment-errors', html: true)
+      assert_field 'GAD invoice reference', with: 'GAD-2210'
+
+      fill_in 'Check number (checks)', with: 'CHK-4410'
+      click_on 'Record payment'
+
+      assert_text 'Payment recorded.'
+      assert_text 'CHK-4410'
+      assert_text 'GAD-2210'
+      assert_no_button 'Record payment'
+      take_screenshot('admin-invoice-paid', html: true)
+      assert @invoice.reload.status_invoice_paid?
     end
 
-    test 'viewing and approving invoice' do
-      assert_not_nil @invoice, 'Test invoice should exist'
-      assert_not_nil @invoice.id, 'Test invoice should have a valid ID'
-      assert_equal 'invoice_pending', @invoice.status, 'Test invoice should be pending'
+    test 'staff withdraw an invoice and its purchases return to not yet invoiced' do
+      visit admin_invoice_path(@invoice)
+      fill_in 'Reason', with: 'Billed to the wrong vendor'
+      accept_confirm { click_on 'Withdraw invoice' }
+
+      assert_text 'Invoice withdrawn. Its voucher redemptions are released and can be added to a later invoice.'
+      assert_text 'Withdrawn'
 
       visit admin_invoices_path
-
-      if has_selector?('.invoice-row')
-        assert_selector '.invoice-row'
-      elsif has_selector?('tr', text: @invoice.invoice_number)
-        assert_selector 'tr', text: @invoice.invoice_number
-      else
-        skip 'No invoice-row or row matching the invoice number is present'
+      within('section', text: 'Not yet invoiced') do
+        assert_text 'Ray Supply'
+        assert_text '$100.00 in 2 voucher redemptions'
+        assert_button 'Invoice now'
       end
-
-      begin
-        visit admin_invoice_path(@invoice)
-        assert_selector 'h1', text: 'Invoice Details'
-
-        if has_button?('Approve Invoice')
-          click_on 'Approve Invoice'
-          assert_text(/approved|success/i)
-        else
-          skip 'Approve Invoice button is absent on the invoice page'
-        end
-      rescue ActionController::RoutingError => e
-        skip "Invoice detail route not available: #{e.message}"
-      end
-    end
-
-    test 'recording GAD payment details' do
-      approved_invoice = invoices(:ray_approved)
-      visit admin_invoice_path(approved_invoice)
-
-      if has_field?('GAD Invoice Reference')
-        fill_in 'GAD Invoice Reference', with: 'GAD-123456'
-        fill_in 'Check Number', with: 'CHK-789' if has_field?('Check Number')
-        fill_in 'Payment Notes', with: 'Payment processed by GAD' if has_field?('Payment Notes')
-
-        if has_button?('Record Payment')
-          click_on 'Record Payment'
-          assert_success_message(/payment.*recorded|success/i)
-        else
-          skip 'Record Payment button is absent on the invoice page'
-        end
-      else
-        skip 'GAD Invoice Reference field is absent on the invoice page'
-      end
-    end
-
-    test 'requires GAD reference for payment' do
-      approved_invoice = invoices(:ray_approved)
-      visit admin_invoice_path(approved_invoice)
-
-      if has_field?('GAD Invoice Reference') && has_button?('Record Payment')
-        fill_in 'Check Number', with: 'CHK-789' if has_field?('Check Number')
-        fill_in 'Payment Notes', with: 'Payment processed by GAD' if has_field?('Payment Notes')
-        click_on 'Record Payment'
-
-        assert_error_message(/GAD.*reference.*blank|required/i)
-
-        fill_in 'GAD Invoice Reference', with: 'GAD-123456'
-        click_on 'Record Payment'
-
-        assert_success_message(/payment.*recorded|success/i)
-      else
-        skip 'GAD Invoice Reference field or Record Payment button is absent'
-      end
+      take_screenshot('admin-invoices-not-yet-invoiced', html: true)
     end
   end
 end

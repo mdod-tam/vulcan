@@ -104,5 +104,23 @@ module VendorPortal
       assert_response :not_found
       assert purchase.reload.fulfillment_unspecified?
     end
+
+    test 'each purchase shows its invoice number, a hold, or that it is not yet invoiced, on the page and in the CSV' do
+      invoice = create(:invoice, :pending, :with_transactions, vendor: @vendor_user, transaction_count: 1)
+      held = create(:voucher_transaction, vendor: @vendor_user)
+      held.update_columns(billing_hold_at: Time.current, billing_hold_reason: 'Internal review note')
+      create(:voucher_transaction, vendor: @vendor_user)
+
+      get vendor_portal_transactions_url
+      assert_select "a[href='#{vendor_portal_invoice_path(invoice)}']", text: invoice.invoice_number
+      assert_match 'On hold — contact the program', response.body
+      assert_match 'Not yet invoiced', response.body
+      assert_no_match 'Internal review note', response.body
+
+      get vendor_portal_transactions_url(format: :csv)
+      rows = CSV.parse(response.body, headers: true)
+      assert_equal ['Awaiting approval', 'Not yet invoiced', 'On hold'], rows.pluck('Billing').sort
+      assert_equal([invoice.invoice_number], rows.filter_map { |row| row['Invoice Number'].presence })
+    end
   end
 end

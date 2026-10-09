@@ -10,7 +10,7 @@
 #
 # It's strongly recommended that you check this file into your version control system.
 
-ActiveRecord::Schema[8.1].define(version: 2026_10_07_030000) do
+ActiveRecord::Schema[8.1].define(version: 2026_10_08_030000) do
   # These are extensions that must be enabled in order to support this database
   enable_extension "pg_catalog.plpgsql"
 
@@ -365,6 +365,19 @@ ActiveRecord::Schema[8.1].define(version: 2026_10_07_030000) do
     t.check_constraint "(portal_creation_key IS NULL) = (portal_creation_fingerprint IS NULL)", name: "guardian_relationships_portal_creation_pair_check"
   end
 
+  create_table "invoice_generation_failures", force: :cascade do |t|
+    t.bigint "vendor_id", null: false
+    t.datetime "attempted_at", null: false
+    t.datetime "cutoff", null: false
+    t.string "error_category", null: false
+    t.integer "attempts", default: 1, null: false
+    t.datetime "resolved_at"
+    t.datetime "created_at", null: false
+    t.datetime "updated_at", null: false
+    t.index ["vendor_id"], name: "index_invoice_generation_failures_on_vendor_id"
+    t.index ["vendor_id"], name: "index_unresolved_invoice_generation_failures", unique: true, where: "(resolved_at IS NULL)"
+  end
+
   create_table "invoices", force: :cascade do |t|
     t.datetime "approved_at"
     t.datetime "check_cashed_at"
@@ -385,12 +398,15 @@ ActiveRecord::Schema[8.1].define(version: 2026_10_07_030000) do
     t.decimal "total_amount", precision: 10, scale: 2, default: "0.0", null: false
     t.datetime "updated_at", null: false
     t.bigint "vendor_id", null: false
+    t.bigint "paid_by_id"
+    t.integer "payment_method"
     t.index ["approved_at"], name: "index_invoices_on_approved_at"
     t.index ["check_cashed_at"], name: "index_invoices_on_check_cashed_at"
     t.index ["check_issued_at"], name: "index_invoices_on_check_issued_at"
     t.index ["check_number"], name: "index_invoices_on_check_number"
     t.index ["gad_invoice_reference"], name: "index_invoices_on_gad_invoice_reference"
     t.index ["invoice_number"], name: "index_invoices_on_invoice_number", unique: true
+    t.index ["paid_by_id"], name: "index_invoices_on_paid_by_id"
     t.index ["payment_date"], name: "index_invoices_on_payment_date"
     t.index ["payment_recorded_at"], name: "index_invoices_on_payment_recorded_at"
     t.index ["start_date", "end_date"], name: "index_invoices_on_start_date_and_end_date"
@@ -977,10 +993,16 @@ ActiveRecord::Schema[8.1].define(version: 2026_10_07_030000) do
     t.bigint "voucher_id", null: false
     t.integer "fulfillment_mode", default: 0, null: false
     t.integer "fulfillment_version", default: 0, null: false
+    t.string "submission_id"
+    t.datetime "billing_hold_at"
+    t.bigint "billing_hold_by_id"
+    t.text "billing_hold_reason"
+    t.index ["billing_hold_by_id"], name: "index_voucher_transactions_on_billing_hold_by_id"
     t.index ["invoice_id"], name: "index_voucher_transactions_on_invoice_id"
     t.index ["processed_at"], name: "index_voucher_transactions_on_processed_at"
     t.index ["reference_number"], name: "index_voucher_transactions_on_reference_number"
     t.index ["status"], name: "index_voucher_transactions_on_status"
+    t.index ["submission_id"], name: "index_voucher_transactions_on_submission_id", unique: true
     t.index ["transaction_type"], name: "index_voucher_transactions_on_transaction_type"
     t.index ["vendor_id", "status"], name: "index_voucher_transactions_on_vendor_id_and_status"
     t.index ["vendor_id"], name: "index_voucher_transactions_on_vendor_id"
@@ -1075,6 +1097,8 @@ ActiveRecord::Schema[8.1].define(version: 2026_10_07_030000) do
   add_foreign_key "events", "users"
   add_foreign_key "guardian_relationships", "users", column: "dependent_id"
   add_foreign_key "guardian_relationships", "users", column: "guardian_id"
+  add_foreign_key "invoice_generation_failures", "users", column: "vendor_id"
+  add_foreign_key "invoices", "users", column: "paid_by_id"
   add_foreign_key "invoices", "users", column: "vendor_id"
   add_foreign_key "medical_provider_secure_request_forms", "applications", on_delete: :cascade
   add_foreign_key "medical_provider_secure_request_forms", "users", column: "requested_by_id"
@@ -1122,6 +1146,7 @@ ActiveRecord::Schema[8.1].define(version: 2026_10_07_030000) do
   add_foreign_key "voucher_transaction_shipments", "users", column: "updated_by_id"
   add_foreign_key "voucher_transaction_shipments", "voucher_transactions"
   add_foreign_key "voucher_transactions", "invoices"
+  add_foreign_key "voucher_transactions", "users", column: "billing_hold_by_id"
   add_foreign_key "voucher_transactions", "users", column: "vendor_id"
   add_foreign_key "voucher_transactions", "vouchers"
   add_foreign_key "voucher_verification_throttles", "users", column: "vendor_id", on_delete: :cascade

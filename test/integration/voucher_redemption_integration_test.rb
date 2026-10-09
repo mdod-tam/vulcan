@@ -161,15 +161,43 @@ class VoucherRedemptionIntegrationTest < ActionDispatch::IntegrationTest
       product_quantities: { @product1.id.to_s => '1' }
     }
 
-    assert_redirected_to redeem_vendor_portal_voucher_path(@voucher.code)
-    assert_match(/Voucher functionality is currently disabled/, flash[:alert])
+    assert_response :unprocessable_content
+    assert_select 'body', text: /Voucher functionality is currently disabled/
+  end
+
+  test 'a corrected retry and a resubmitted form record one purchase' do
+    submission_id = open_redeem_form
+
+    redeem('65.005', @product1, submission_id: submission_id)
+    assert_response :unprocessable_content
+    assert_select 'input[name="submission_id"][value=?]', submission_id, visible: :all
+    assert_select 'input[name="amount"][value="65.005"]'
+    assert_select "input[name='product_ids[]'][value='#{@product1.id}'][checked]"
+
+    redeem('65.00', @product1, submission_id: submission_id)
+    assert_redirected_to vendor_portal_dashboard_path
+    # The browser's back button or a network retry sends the same form again.
+    redeem('65.00', @product1, submission_id: submission_id)
+    assert_redirected_to vendor_portal_dashboard_path
+
+    assert_equal 1, @voucher.transactions.count
+    assert_equal BigDecimal('35.00'), @voucher.reload.remaining_value
+    assert_not_equal submission_id, open_redeem_form, 'opening the form again starts a new purchase'
   end
 
   private
 
   # The redeem form submits one of each selected product.
-  def redeem(amount, *products)
+  # Each redemption starts from the form, which carries its submission ID. A vendor who can no longer
+  # open it sends the ID of a form opened earlier.
+  def open_redeem_form
+    get redeem_vendor_portal_voucher_path(@voucher.code)
+    css_select('input[name="submission_id"]').first&.[]('value') || SecureRandom.uuid
+  end
+
+  def redeem(amount, *products, submission_id: open_redeem_form)
     post process_redemption_vendor_portal_voucher_path(@voucher.code), params: {
+      submission_id: submission_id,
       amount: amount,
       product_ids: products.map(&:id),
       product_quantities: products.to_h { |product| [product.id.to_s, '1'] }

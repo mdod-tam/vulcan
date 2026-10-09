@@ -322,15 +322,18 @@ Rails.application.routes.draw do
       end
     end
 
-    resources :invoices do
+    resources :invoices, only: %i[index show] do
       member do
         patch :approve
-        patch :cancel
+        patch :record_payment
+        patch :withdraw
+        post :correction_note
       end
-      collection do
-        get :paid
-        get :export_batch
-      end
+      # "Invoice now" and retrying a failed vendor run the scheduled generation for one vendor.
+      post :generate, on: :collection
+    end
+    resources :voucher_transactions, only: [] do
+      resource :billing_hold, only: %i[create destroy]
     end
   end
   namespace :evaluators do

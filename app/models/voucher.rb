@@ -84,21 +84,32 @@ class Voucher < ApplicationRecord
     true
   end
 
+  # A repeated form submission whose purchase details differ from the purchase it already recorded.
+  class SubmissionConflict < StandardError; end
+
   # Records the redemption and updates the voucher. The caller must verify
   # identity first (see VoucherVerificationService).
   #
-  # @param amount [Float] The amount to redeem
+  # With a submission_id, a repeat of the same form submission returns the purchase it already
+  # recorded, even after the balance or status has changed, and charges nothing again.
+  #
+  # @param amount [BigDecimal] The amount to redeem
   # @param vendor [User] The vendor processing the redemption
   # @param product_data [Hash] Optional hash of {product_id => quantity}
   # @param notes [String] Optional notes about the redemption
-  # @return [VoucherTransaction, false] The created transaction or false if redemption fails
-  def redeem!(amount, vendor, product_data = nil, notes: nil)
+  # @param submission_id [String] Optional identifier of the form submission
+  # @return [VoucherTransaction, false] The recorded transaction or false if redemption fails
+  # @raise [SubmissionConflict] when submission_id names a purchase with different details
+  def redeem!(amount, vendor, product_data = nil, notes: nil, submission_id: nil)
     transaction(requires_new: true) do
       # The row lock makes a concurrent redemption wait, then re-read the balance this one leaves.
       # Checking before the lock would let both spend the same balance.
       lock!
-      if can_redeem?(amount)
-        txn = create_redemption_transaction(amount, vendor, generate_reference_number, notes)
+      replayed = submission_id.present? && transactions.find_by(submission_id: submission_id)
+      if replayed
+        replay_redemption(replayed, amount, vendor, product_data)
+      elsif can_redeem?(amount)
+        txn = create_redemption_transaction(amount, vendor, generate_reference_number, notes, submission_id)
 
         process_product_data(product_data, txn) if product_data.present?
 
@@ -152,7 +163,7 @@ class Voucher < ApplicationRecord
 
   private
 
-  def create_redemption_transaction(amount, vendor, reference_number, notes)
+  def create_redemption_transaction(amount, vendor, reference_number, notes, submission_id = nil)
     transactions.create!(
       vendor: vendor,
       amount: amount,
@@ -160,8 +171,24 @@ class Voucher < ApplicationRecord
       status: :transaction_completed,
       processed_at: Time.current,
       reference_number: reference_number,
-      notes: notes
+      notes: notes,
+      submission_id: submission_id.presence
     )
+  end
+
+  # The same submission must describe the same purchase; anything else is a conflict, not a replay.
+  def replay_redemption(original, amount, vendor, product_data)
+    submitted_products = (product_data || {}).keys.map(&:to_i).sort
+    recorded_products = original.voucher_transaction_products.pluck(:product_id).sort
+    unless original.vendor_id == vendor.id && original.amount == amount.to_d && recorded_products == submitted_products
+      raise SubmissionConflict, "Submission #{original.submission_id} already recorded a different purchase"
+    end
+
+    AuditEventService.log(
+      action: 'voucher_redemption_replayed', actor: vendor, auditable: self,
+      metadata: { voucher_id: id, transaction_id: original.id, operation_id: SecureRandom.uuid }
+    )
+    original
   end
 
   def process_product_data(product_data, transaction)

@@ -1,26 +1,45 @@
 # frozen_string_literal: true
 
+require 'zlib'
+
 module Invoices
-  # Called by GenerateVendorInvoicesJob. For each vendor with completed, uninvoiced transactions:
-  # 1. The period starts at the last invoice end_date, or 14 days ago if the vendor has no invoice.
-  # 2. One transaction creates the invoice, links the transactions in the period, sets the total,
-  #    and records the audit event.
-  # 3. After commit, VendorNotificationsMailer.invoice_generated is queued.
-  # A failure for one vendor does not stop the other vendors.
+  # Called by GenerateVendorInvoicesJob every 14 days, and by staff ("Invoice now" / retry) for one vendor.
+  #
+  # Each run uses one cutoff: the start of the run day, Eastern. Every completed, uninvoiced purchase
+  # processed before it and not on a staff billing hold is invoiced, however old, so a missed or failed
+  # run loses nothing. A purchase at exactly midnight belongs to the next run.
+  #
+  # For each vendor, one transaction creates the invoice and claims the purchases with a conditional
+  # update (invoice_id IS NULL), so a purchase can be on only one invoice. The invoice period and total
+  # come from what was claimed; if nothing was claimed, no invoice is left behind.
+  #
+  # Runs never overlap: scheduled runs and staff retries share one session-level advisory lock. A run
+  # that finds the lock taken reports that invoicing is already running; it is not a failure.
+  # A vendor whose invoicing fails is recorded in InvoiceGenerationFailure for staff to retry; a later
+  # success resolves it. Invoice email is queued after commit and never undoes a committed invoice.
   class GenerationService < BaseService
+    LOCK_KEY = Zlib.crc32('invoices.generation')
+    ZONE = 'Eastern Time (US & Canada)'
+    NUMBER_ATTEMPTS = 3
+
+    def self.cutoff(now = Time.current)
+      now.in_time_zone(ZONE).beginning_of_day
+    end
+
+    # vendor_ids limits the run to those vendors (staff retry); nil means every vendor with eligible purchases.
+    def initialize(vendor_ids: nil, now: Time.current)
+      super()
+      @vendor_ids = vendor_ids
+      @cutoff = self.class.cutoff(now)
+    end
+
     def call
-      vendor_ids = find_vendors_with_uninvoiced_transactions
-
-      return success('No vendors found with uninvoiced transactions', { invoices_created: 0 }) if vendor_ids.empty?
-
-      invoices_created = 0
-
-      vendor_ids.each do |vendor_id|
-        result = generate_invoice_for_vendor(vendor_id)
-        invoices_created += 1 if result.success? && result.data&.dig(:invoice)
+      with_run_lock do
+        @failed_vendor_ids = []
+        invoices = vendors_to_invoice.filter_map { |vendor_id| invoice_vendor(vendor_id) }
+        success("Generated #{invoices.size} invoices",
+                { invoices_created: invoices.size, invoices: invoices, vendors_failed: @failed_vendor_ids.size })
       end
-
-      success("Generated #{invoices_created} invoices", { invoices_created: invoices_created })
     rescue StandardError => e
       log_error(e, 'Failed to generate vendor invoices')
       failure('Failed to generate vendor invoices')
@@ -28,82 +47,105 @@ module Invoices
 
     private
 
-    def find_vendors_with_uninvoiced_transactions
-      VoucherTransaction
-        .completed
-        .where(invoice_id: nil)
-        .select(:vendor_id)
-        .distinct
-        .pluck(:vendor_id)
+    attr_reader :cutoff
+
+    def with_run_lock
+      ActiveRecord::Base.connection_pool.with_connection do |connection|
+        locked = connection.select_value("SELECT pg_try_advisory_lock(#{LOCK_KEY})")
+        return success('Invoicing is already running', { already_running: true, invoices_created: 0 }) unless locked
+
+        begin
+          yield
+        ensure
+          connection.select_value("SELECT pg_advisory_unlock(#{LOCK_KEY})")
+        end
+      end
     end
 
-    def generate_invoice_for_vendor(vendor_id)
-      date_range = calculate_date_range_for_vendor(vendor_id)
-      transactions = find_uninvoiced_transactions(vendor_id, date_range)
+    def eligible_purchases
+      VoucherTransaction.billable.where(processed_at: ...cutoff)
+    end
 
-      return success('No transactions found for vendor') if transactions.empty?
+    # Vendors with something to claim, plus any whose last run failed: a run that finds nothing left to
+    # claim for them (it was held, or invoiced another way) still clears them from the retry list.
+    def vendors_to_invoice
+      scopes = [eligible_purchases, InvoiceGenerationFailure.unresolved]
+      scopes = scopes.map { |scope| scope.where(vendor_id: @vendor_ids) } if @vendor_ids
+      scopes.flat_map { |scope| scope.distinct.pluck(:vendor_id) }.uniq
+    end
 
-      invoice = ActiveRecord::Base.transaction do
-        created = create_invoice(vendor_id, date_range)
-        associate_transactions_with_invoice(transactions, created)
-        created.update!(total_amount: created.voucher_transactions.sum(:amount))
-        create_invoice_event(created, date_range)
-        created
-      end
-
-      # The invoice is committed. A notice that cannot be queued does not undo it.
-      notification = queue_vendor_notification(invoice)
-      success('Invoice generated successfully', { invoice: invoice, notification: notification })
+    # Returns the committed invoice, or nil when nothing was claimed or the vendor failed.
+    # Only creating the invoice can fail the vendor. Once it commits, the notice is always queued, and
+    # clearing the retry entry is best effort: a later run clears an entry left behind.
+    def invoice_vendor(vendor_id)
+      invoice = create_invoice_with_unique_number(vendor_id)
     rescue StandardError => e
       log_error(e, "Failed to generate invoice for vendor #{vendor_id}")
-      failure("Failed to generate invoice for vendor #{vendor_id}")
+      @failed_vendor_ids << vendor_id
+      InvoiceGenerationFailure.record!(vendor_id: vendor_id, cutoff: cutoff, error: e)
+      nil
+    else # Not covered by the rescue above: the invoice is committed by now.
+      queue_vendor_notification(invoice) if invoice
+      clear_failure(vendor_id)
+      invoice
     end
 
-    def calculate_date_range_for_vendor(vendor_id)
-      latest_invoice = Invoice.for_vendor(vendor_id).order(end_date: :desc).first
-      start_date = latest_invoice ? latest_invoice.end_date : 14.days.ago.beginning_of_day
-      end_date = Time.current.end_of_day
-
-      { start_date: start_date, end_date: end_date }
+    def clear_failure(vendor_id)
+      InvoiceGenerationFailure.resolve!(vendor_id)
+    rescue StandardError => e
+      log_error(e, "Failed to clear the invoicing retry entry for vendor #{vendor_id}")
     end
 
-    def find_uninvoiced_transactions(vendor_id, date_range)
-      VoucherTransaction
-        .completed
-        .where(invoice_id: nil)
-        .where(vendor_id: vendor_id)
-        .where(processed_at: date_range[:start_date]..date_range[:end_date])
+    # A number collision rolls the whole vendor transaction back; only then is a new number tried.
+    # The uniqueness validation usually reports it; the unique index catches a concurrent insert.
+    def create_invoice_with_unique_number(vendor_id)
+      attempts = 0
+      begin
+        attempts += 1
+        create_invoice(vendor_id)
+      rescue ActiveRecord::RecordInvalid, ActiveRecord::RecordNotUnique => e
+        raise unless invoice_number_collision?(e) && attempts < NUMBER_ATTEMPTS
+
+        retry
+      end
     end
 
-    def create_invoice(vendor_id, date_range)
-      Invoice.create!(
-        vendor_id: vendor_id,
-        start_date: date_range[:start_date],
-        end_date: date_range[:end_date],
-        status: :invoice_pending
-      )
+    def invoice_number_collision?(error)
+      if error.is_a?(ActiveRecord::RecordInvalid)
+        error.record.is_a?(Invoice) && error.record.errors.of_kind?(:invoice_number, :taken)
+      else
+        error.message.include?('index_invoices_on_invoice_number')
+      end
     end
 
-    def associate_transactions_with_invoice(transactions, invoice)
-      transactions.find_each do |transaction|
-        transaction.update!(invoice_id: invoice.id)
+    def create_invoice(vendor_id)
+      ActiveRecord::Base.transaction do
+        invoice = Invoice.create!(vendor_id: vendor_id, start_date: cutoff - 1.day, end_date: cutoff,
+                                  status: :invoice_pending, invoice_number: Invoice.generate_number)
+        claimed = eligible_purchases.where(vendor_id: vendor_id)
+                                    .update_all(invoice_id: invoice.id, updated_at: Time.current) # rubocop:disable Rails/SkipsModelValidations
+        raise ActiveRecord::Rollback if claimed.zero?
+
+        purchases = invoice.voucher_transactions
+        invoice.update!(start_date: purchases.minimum(:processed_at).in_time_zone(ZONE).beginning_of_day,
+                        total_amount: purchases.sum(:amount))
+        create_invoice_event(invoice, claimed)
+        invoice
       end
     end
 
     # With no system audit account, the invoice still saves and PublicAuditActor reports the gap.
-    def create_invoice_event(invoice, date_range)
+    def create_invoice_event(invoice, claimed)
       return unless (actor = PublicAuditActor.system_audit_actor_or_report('invoice generated event'))
 
       invoice.events.create!(
         user: actor,
         action: 'generated',
         metadata: {
-          transaction_count: invoice.voucher_transactions.count,
+          transaction_count: claimed,
           total_amount: invoice.total_amount,
-          period: {
-            start: date_range[:start_date],
-            end: date_range[:end_date]
-          }
+          period: { start: invoice.start_date, end: invoice.end_date },
+          cutoff: cutoff
         }
       )
     end

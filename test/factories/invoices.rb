@@ -43,10 +43,9 @@ FactoryBot.define do
                                    invoice: invoice,
                                    status: :transaction_completed)
 
-        # Update total amount
-        invoice.update!(
-          total_amount: transactions.sum(&:amount)
-        )
+        # The factory builds an already-issued record, so it sets the total directly, as an import would;
+        # approved and paid invoices otherwise refuse a changed total.
+        invoice.update_column(:total_amount, transactions.sum(&:amount))
       end
     end
 

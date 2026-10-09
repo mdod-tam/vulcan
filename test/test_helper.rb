@@ -23,22 +23,7 @@ end
 
 # SEEDS_LOADED guards seed loading within this process.
 unless defined?(SEEDS_LOADED)
-  if Rails.env.test?
-    # Resolve Invoice before the code changes its callbacks.
-    Invoice.name
-
-    # Seeds do not need payment email or updates to related invoice records.
-    # Suppress :send_payment_notification during seed loading.
-    # If the callback changes or disappears, log the problem and let seed loading continue.
-    begin
-      Invoice.skip_callback(:save, :after, :send_payment_notification)
-    rescue ArgumentError => e
-      Rails.logger.warn "Could not skip :send_payment_notification callback on Invoice: #{e.message}"
-    end
-  end
   Rails.application.load_seed
-  # Restore the callback so tests exercise the real payment notice.
-  Invoice.set_callback(:save, :after, :send_payment_notification, if: :payment_details_added?) if Rails.env.test?
   SEEDS_LOADED = true
 end
 

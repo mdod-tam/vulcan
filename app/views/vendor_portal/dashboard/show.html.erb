@@ -96,31 +96,33 @@
 
     <!-- Stats Overview -->
     <div class="grid grid-cols-1 gap-5 sm:grid-cols-2 lg:grid-cols-3 mb-8">
-      <!-- Pending Invoice Total -->
+      <!-- What the vendor is owed: not yet on an invoice, and invoiced but unpaid. -->
       <div class="bg-white overflow-hidden shadow rounded-lg">
         <div class="p-5">
-          <div class="flex items-center">
-            <div class="flex-shrink-0">
-              <svg class="h-6 w-6 text-gray-400" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 5H7a2 2 0 00-2 2v12a2 2 0 002 2h10a2 2 0 002-2V7a2 2 0 00-2-2h-2M9 5a2 2 0 002 2h2a2 2 0 002-2M9 5a2 2 0 012-2h2a2 2 0 012 2"/>
-              </svg>
-            </div>
-            <div class="ml-5 w-0 flex-1">
-              <dl>
-                <dt class="text-sm font-medium text-gray-500 truncate">Pending Payment</dt>
-                <dd class="flex items-baseline">
-                  <div class="text-2xl font-semibold text-gray-900">
-                    <%= number_to_currency(@pending_invoice_total) %>
-                  </div>
-                </dd>
-              </dl>
-            </div>
-          </div>
+          <dl>
+            <dt class="text-sm font-medium text-gray-500">Not yet invoiced</dt>
+            <dd class="mt-1 text-2xl font-semibold text-gray-900"><%= number_to_currency(@not_yet_invoiced_total) %></dd>
+          </dl>
+          <p class="mt-1 text-sm text-gray-500">
+            Goes on the next invoice.
+            <% if @on_hold_count.positive? %>Not included: <%= pluralize(@on_hold_count, 'voucher redemption') %> on hold — contact the program.<% end %>
+          </p>
         </div>
         <div class="bg-gray-50 px-5 py-3">
-          <%= link_to vendor_portal_transactions_path, class: "text-sm font-medium text-indigo-700 hover:text-indigo-900" do %>
-            View transactions
-          <% end %>
+          <%= link_to 'View transactions', vendor_portal_transactions_path, class: 'text-sm font-medium text-indigo-700 hover:text-indigo-900' %>
+        </div>
+      </div>
+
+      <div class="bg-white overflow-hidden shadow rounded-lg">
+        <div class="p-5">
+          <dl>
+            <dt class="text-sm font-medium text-gray-500">Invoiced, awaiting payment</dt>
+            <dd class="mt-1 text-2xl font-semibold text-gray-900"><%= number_to_currency(@awaiting_payment_total) %></dd>
+          </dl>
+          <p class="mt-1 text-sm text-gray-500">On invoices not yet paid.</p>
+        </div>
+        <div class="bg-gray-50 px-5 py-3">
+          <%= link_to 'View invoices', vendor_portal_invoices_path, class: 'text-sm font-medium text-indigo-700 hover:text-indigo-900' %>
         </div>
       </div>
 

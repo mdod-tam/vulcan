@@ -165,6 +165,30 @@
                             <% end %>
                           </div>
                         <% end %>
+                        <% if transaction.on_billing_hold? %>
+                          <div class="mt-2 rounded border border-amber-200 bg-amber-50 p-2 text-sm text-amber-900">
+                            On hold since <%= l(transaction.billing_hold_at.to_date, format: :long) %>
+                            by <%= transaction.billing_hold_by&.full_name || 'staff' %>: <%= transaction.billing_hold_reason %>
+                            <%= button_to 'Release hold', admin_voucher_transaction_billing_hold_path(transaction),
+                                          method: :delete,
+                                          class: 'mt-2 inline-flex items-center px-3 py-1.5 border border-gray-300 rounded-md text-xs font-medium ' \
+                                                 'text-gray-700 bg-white hover:bg-gray-50',
+                                          form: { 'aria-label': "Release hold on voucher redemption #{transaction.reference_number}" } %>
+                          </div>
+                        <% elsif transaction.transaction_completed? && transaction.invoice_id.nil? %>
+                          <%= form_with url: admin_voucher_transaction_billing_hold_path(transaction), method: :post,
+                                        class: 'mt-2 flex flex-wrap items-end gap-2' do |f| %>
+                            <div>
+                              <%= label_tag "hold_reason_#{transaction.id}", 'Hold from billing — reason', class: 'block text-xs font-medium text-gray-700' %>
+                              <%= text_field_tag :reason, nil,
+                                                 id: "hold_reason_#{transaction.id}", required: true, autocomplete: 'off',
+                                                 class: 'mt-1 block rounded-md border-gray-300 shadow-sm sm:text-sm' %>
+                            </div>
+                            <%= submit_tag 'Hold from billing',
+                                           class: 'inline-flex items-center px-3 py-1.5 border border-gray-300 rounded-md text-xs font-medium ' \
+                                                  'text-gray-700 bg-white hover:bg-gray-50' %>
+                          <% end %>
+                        <% end %>
                       </div>
                     </div>
                   </div>

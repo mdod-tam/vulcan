@@ -27,6 +27,10 @@ The [vendor portal controller](../../app/controllers/vendor_portal/vouchers_cont
 | Active, unexpired voucher; amount within balance and at least the policy minimum | `Voucher#can_redeem?`, called by `redeem!` |
 | Positive transaction amount within remaining value | [VoucherTransaction](../../app/models/voucher_transaction.rb) validation |
 
+### Duplicate submissions
+
+Each redemption form carries a `submission_id` the server mints when it renders the form; the redemption is stored with it under a unique index. `Voucher#redeem!` looks it up after taking the voucher row lock and before any spending check. A repeat with the same vendor, amount, and products returns the original redemption and records only a `voucher_redemption_replayed` event: no new row, balance change, or notice. A repeat with different details is refused as a conflict and the vendor gets a fresh form. A request without a submission ID is refused ("Reload the redemption form and try again."). Amounts are parsed strictly by [MoneyInput](../../app/services/money_input.rb): dollars with optional comma grouping and at most two decimal places.
+
 `Voucher#redeem!` writes the transaction, product associations, and new balance in a database transaction. It is deliberately not the whole check: vendor eligibility and DOB verification live in the service above it, so a call that reaches the model directly spends voucher value without either.
 
 ### Verification limits
@@ -64,7 +68,7 @@ Recording or correcting a package sends no email, letter, or notification. The a
 
 ## Where this flow goes wrong
 
-Eligibility, balance changes, history, and messages are bundled into the owning methods on purpose; splitting any of them out is how a voucher gets issued twice, or spent without a matching transaction row. The failure modes worth having a test for are duplicate issuance, an ineligible vendor, a redemption with no DOB verification in session, an expired voucher, an amount over the remaining balance, and one under the policy minimum.
+Eligibility, balance changes, history, and messages are bundled into the owning methods on purpose; splitting any of them out is how a voucher gets issued twice, or spent without a matching transaction row. The failure modes worth having a test for are duplicate issuance, an ineligible vendor, a redemption with no DOB verification in session, a repeated or altered submission, an expired voucher, an amount over the remaining balance, and one under the policy minimum.
 
 A transaction boundary is not by itself a concurrency argument — two redemptions of the same voucher can interleave inside one — so any change to balance handling needs that checked directly rather than inferred.
 
