@@ -33,6 +33,24 @@ module VendorPortal
       assert_select '#monthly-totals-chart [data-controller="chart"][data-chart-format-value="currency"]'
     end
 
+    test 'current month card table and chart agree across the Eastern month boundary' do
+      travel_to Time.zone.local(2026, 10, 9, 12) do
+        create(:voucher_transaction, vendor: @vendor, amount: 25, processed_at: Time.utc(2026, 10, 1, 3, 59, 59))
+        create(:voucher_transaction, vendor: @vendor, amount: 50, processed_at: Time.utc(2026, 10, 1, 4))
+
+        get vendor_portal_dashboard_path
+
+        assert_response :success
+        assert_select 'dl', text: /This Month's Total\s*\$50\.00/
+        assert_select '#monthly-totals-table tbody tr', text: /September 2026\s*\$25\.00/
+        assert_select '#monthly-totals-table tbody tr', text: /October 2026\s*\$50\.00/
+        assert_select '#chart-description', text: /The highest monthly total was \$50\.00 in October 2026\./
+        chart = css_select('#monthly-totals-chart [data-chart-data-value]').first
+        assert_equal({ 'September 2026' => 25.0, 'October 2026' => 50.0 },
+                     JSON.parse(chart['data-chart-data-value']).transform_values(&:to_f))
+      end
+    end
+
     test 'dashboard guidance separates approved W9 from pending authorization in the vendor locale' do
       @vendor.update!(vendor_authorization_status: :pending, locale: 'es')
 

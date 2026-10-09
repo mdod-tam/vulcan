@@ -9,7 +9,7 @@ module Admin
     before_action :load_delivery_history, only: %i[new show create]
 
     def index
-      @w9_reviews = @vendor.w9_reviews.includes(:admin).order(created_at: :desc, id: :desc)
+      @pagy, @w9_reviews = pagy(@vendor.w9_reviews.includes(:admin).order(created_at: :desc, id: :desc), limit: 20)
     end
 
     def show

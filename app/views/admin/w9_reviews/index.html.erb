@@ -18,6 +18,7 @@
     </div>
     <div class="border-t border-gray-200">
       <% if @w9_reviews.any? %>
+        <div class="overflow-x-auto">
         <table class="min-w-full divide-y divide-gray-200">
           <thead class="bg-gray-50">
             <tr>
@@ -58,11 +59,13 @@
             <% end %>
           </tbody>
         </table>
+        </div>
       <% else %>
         <div class="px-6 py-4 text-center text-sm text-gray-500">
           No W9 reviews found for this vendor.
         </div>
       <% end %>
     </div>
+    <%= render 'shared/pagination', pagy: @pagy, label: t('pagination.w9_reviews') %>
   </div>
 </div>

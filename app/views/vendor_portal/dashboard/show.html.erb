@@ -100,7 +100,7 @@
                 <dt class="text-sm font-medium text-gray-500 truncate">This Month's Total</dt>
                 <dd class="flex items-baseline">
                   <div class="text-2xl font-semibold text-gray-900">
-                    <%= number_to_currency(@monthly_totals[Time.current.beginning_of_month] || 0) %>
+                    <%= number_to_currency(@monthly_totals[@months.last] || 0) %>
                   </div>
                 </dd>
               </dl>
@@ -184,8 +184,7 @@
               </tr>
             </thead>
             <tbody class="bg-white divide-y divide-gray-200">
-              <% # Get the last 6 months, including current month %>
-              <% 6.times.map { |i| (Time.current - i.months).beginning_of_month }.reverse.each do |month| %>
+              <% @months.each do |month| %>
                 <% month_total = @monthly_totals[month] || 0 %>
                 <% if month_total > 0 %>
                   <tr>
@@ -211,9 +210,7 @@
       <div id="chart-description" class="sr-only">
         This chart displays the total voucher amounts processed each month for the past 6 months.
         <% if @monthly_totals_chart.present? %>
-          <% max_value = @monthly_totals_chart.values.map(&:to_f).max %>
-          <% max_month = @monthly_totals_chart.key(@monthly_totals_chart.values.map(&:to_s).find { |v| v.to_f == max_value }) %>
-          The highest monthly total was <%= number_to_currency(max_value) %> in <%= max_month %>.
+          The highest monthly total was <%= number_to_currency(@highest_month_total) %> in <%= @highest_month.strftime('%B %Y') %>.
         <% else %>
           No transaction data is available for this period.
         <% end %>

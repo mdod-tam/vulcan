@@ -75,11 +75,16 @@ module Users
     end
 
     def total_transactions_by_period(start_date, end_date)
+      zone = Time.find_zone!(Rails.application.config.time_zone)
+      month = Arel.sql("DATE_TRUNC('month', voucher_transactions.processed_at AT TIME ZONE 'UTC' " \
+                       "AT TIME ZONE #{self.class.connection.quote(zone.tzinfo.name)})::date")
       voucher_transactions
         .completed
-        .where('processed_at BETWEEN ? AND ?', start_date, end_date)
-        .group("DATE_TRUNC('month', processed_at)")
+        .where(processed_at: start_date..end_date)
+        .group(month)
+        .order(month)
         .sum(:amount)
+        .transform_keys(&:to_date)
     end
 
     def can_process_vouchers?
