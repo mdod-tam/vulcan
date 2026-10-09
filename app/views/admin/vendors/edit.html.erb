@@ -50,8 +50,10 @@
           <div>
             <label for="vendor_business_tax_id" class="block text-sm font-medium text-gray-700">Business Tax ID</label>
             <div class="mt-1">
-              <%= f.text_field :business_tax_id, class: "shadow-sm focus:ring-indigo-500 focus:border-indigo-500 block w-full sm:text-sm border-gray-300 rounded-md" %>
+              <%= f.text_field :business_tax_id, value: '', autocomplete: 'off', 'aria-describedby': 'vendor-tax-id-hint',
+                                                 class: 'shadow-sm focus:ring-indigo-500 focus:border-indigo-500 block w-full sm:text-sm border-gray-300 rounded-md' %>
             </div>
+            <p id="vendor-tax-id-hint" class="mt-2 text-sm text-gray-500">Leave blank to keep the tax ID on file.</p>
           </div>
 
           <div class="md:col-span-2">

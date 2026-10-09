@@ -5,7 +5,7 @@
 # Accepts a multipart upload, an ActiveStorage::Blob, or a signed blob ID when the caller permits one.
 # A signed blob ID does not authorize the submitter. Callers enforce request access and domain eligibility.
 #
-# Existing blobs must be unattached within the cleanup retention window, or attached to this record's same slot.
+# Existing blobs must be unattached within the cleanup retention window, or attached to this record's permitted slots.
 # Intake and CleanupUnattachedUploadsJob lock the same blob row to prevent a concurrent purge.
 # The slot's DocumentValidator declaration selects its purpose and size limit.
 # ProofAttachmentValidator inspects content at intake. Routine model saves do not inspect file content.
@@ -56,9 +56,10 @@ class UploadedDocument
 
   # record and name identify the attachment slot. Use the model class before a record exists.
   # Existing blobs then must be unattached. min_bytes applies only to channels with a minimum size.
-  def self.resolve!(input, record:, name:, signed_ids: true, min_bytes: nil)
+  # A domain owner can permit additional slots on this same record after checking document identity.
+  def self.resolve!(input, record:, name:, signed_ids: true, min_bytes: nil, additional_attachment_names: [])
     new(record: record, name: name, purpose: declared_purpose(record, name), signed_ids: signed_ids,
-        min_bytes: min_bytes).resolve!(input)
+        min_bytes: min_bytes, additional_attachment_names: additional_attachment_names).resolve!(input)
   end
 
   def self.declared_purpose(record, name)
@@ -81,9 +82,10 @@ class UploadedDocument
     nil
   end
 
-  def initialize(record:, name:, purpose:, signed_ids:, min_bytes:)
+  def initialize(record:, name:, purpose:, signed_ids:, min_bytes:, additional_attachment_names: [])
     @record = record.is_a?(Class) ? nil : record
     @name = name.to_s
+    @allowed_attachment_names = [@name] + additional_attachment_names.map(&:to_s)
     @purpose = purpose
     @signed_ids = signed_ids
     @min_bytes = min_bytes
@@ -105,7 +107,7 @@ class UploadedDocument
   end
 
   def reusable?(blob)
-    !expired_unattached?(blob) && !attached_elsewhere?(blob)
+    !quarantined?(blob) && !expired_unattached?(blob) && !attached_elsewhere?(blob)
   end
 
   private
@@ -150,6 +152,7 @@ class UploadedDocument
 
   def checked_blob(blob)
     blob.lock!
+    refuse(:unavailable) if quarantined?(blob)
     refuse(:expired) if expired_unattached?(blob)
     refuse(:attached_elsewhere) if attached_elsewhere?(blob)
     check_size(blob.byte_size)
@@ -164,8 +167,12 @@ class UploadedDocument
     !blob.attachments.exists? && blob.created_at <= CleanupUnattachedUploadsJob::RETENTION.ago
   end
 
+  def quarantined?(blob)
+    blob.metadata['w9_cutover_quarantined'] == true
+  end
+
   def attached_elsewhere?(blob)
-    permitted = blob.attachments.where(record: @record, name: @name)
+    permitted = blob.attachments.where(record: @record, name: @allowed_attachment_names)
     blob.attachments.where.not(id: permitted.select(:id)).exists?
   end
 

@@ -24,9 +24,112 @@ module VendorPortal
       # Assert presence of transaction data and pagination links
       assert_select 'h1', 'Transaction History' # Updated assertion
       # Assert presence of the pagination nav element
-      assert_select 'nav.flex.items-center.justify-between'
+      assert_select 'nav[aria-label="Transaction pages"]'
       # Assertions to check for the correct number of transactions per page (default is 20 for Pagy)
       assert_select 'table.min-w-full tbody tr', count: 20 # Expect 20 transactions on the first page
+    end
+
+    test 'today uses Eastern processed time with an exclusive next midnight and a stable order' do
+      travel_to Time.zone.local(2026, 10, 9, 12) do
+        before = create(:voucher_transaction, vendor: @vendor_user, processed_at: Time.zone.local(2026, 10, 8, 23, 59, 59))
+        first = create(:voucher_transaction, vendor: @vendor_user, processed_at: Time.zone.local(2026, 10, 9), created_at: 2.months.ago)
+        tied = create(:voucher_transaction, vendor: @vendor_user, processed_at: first.processed_at, created_at: 3.months.ago)
+        last = create(:voucher_transaction, vendor: @vendor_user, processed_at: Time.zone.local(2026, 10, 9, 23, 59, 59))
+        after = create(:voucher_transaction, vendor: @vendor_user, processed_at: Time.zone.local(2026, 10, 10))
+
+        get vendor_portal_transactions_url(period: 'today')
+
+        assert_response :success
+        assert_equal [last.id, tied.id, first.id], controller.instance_variable_get(:@transactions).map(&:id)
+        assert_no_match before.reference_number, response.body
+        assert_no_match after.reference_number, response.body
+      end
+    end
+
+    test 'this week and this month select calendar periods instead of rolling intervals' do
+      travel_to Time.zone.local(2026, 10, 9, 12) do
+        september = create(:voucher_transaction, vendor: @vendor_user, processed_at: Time.zone.local(2026, 9, 30, 23, 59, 59))
+        month_start = create(:voucher_transaction, vendor: @vendor_user, processed_at: Time.zone.local(2026, 10, 1))
+        week_start = create(:voucher_transaction, vendor: @vendor_user, processed_at: Time.zone.local(2026, 10, 5))
+        week_end = create(:voucher_transaction, vendor: @vendor_user, processed_at: Time.zone.local(2026, 10, 11, 23, 59, 59))
+        next_week = create(:voucher_transaction, vendor: @vendor_user, processed_at: Time.zone.local(2026, 10, 12))
+        november = create(:voucher_transaction, vendor: @vendor_user, processed_at: Time.zone.local(2026, 11, 1))
+
+        get vendor_portal_transactions_url(period: 'week')
+        assert_equal [week_end.id, week_start.id], controller.instance_variable_get(:@transactions).map(&:id)
+
+        get vendor_portal_transactions_url(period: 'month')
+        assert_equal [next_week.id, week_end.id, week_start.id, month_start.id], controller.instance_variable_get(:@transactions).map(&:id)
+        assert_no_match september.reference_number, response.body
+        assert_no_match november.reference_number, response.body
+      end
+    end
+
+    test 'a custom range uses the shared date parser and includes the entire Eastern DST day' do
+      first = create(:voucher_transaction, vendor: @vendor_user, processed_at: Time.utc(2026, 11, 1, 4))
+      last = create(:voucher_transaction, vendor: @vendor_user, processed_at: Time.utc(2026, 11, 2, 4, 59, 59))
+      create(:voucher_transaction, vendor: @vendor_user, processed_at: Time.utc(2026, 11, 2, 5))
+
+      get vendor_portal_transactions_url(period: 'custom', start_date: '11/1/2026', end_date: '2026-11-01')
+
+      assert_response :success
+      assert_equal [last.id, first.id], controller.instance_variable_get(:@transactions).map(&:id)
+    end
+
+    test 'totals and the complete CSV share the filtered query across pages and retain filters in links' do
+      matches = create_list(:voucher_transaction, 23, vendor: @vendor_user, processed_at: Time.zone.local(2026, 10, 9, 12), amount: 40)
+      create(:voucher_transaction, vendor: @vendor_user, processed_at: Time.zone.local(2026, 10, 8), amount: 90)
+      create(:voucher_transaction, vendor: create(:vendor_user), processed_at: matches.first.processed_at, amount: 120)
+      filters = { period: 'custom', start_date: '10/09/2026', end_date: '10/09/2026', needs_shipping_details: '1' }
+
+      get vendor_portal_transactions_url(**filters, page: 2)
+
+      assert_response :success
+      assert_select 'table tbody tr', count: 3
+      assert_equal 23, controller.instance_variable_get(:@transaction_count)
+      assert_equal 920, controller.instance_variable_get(:@total_amount)
+      assert_select 'nav[aria-label="Transaction pages"] [aria-current="page"]', text: '2'
+      assert_select 'nav a[rel="prev"]' do |links|
+        query = Rack::Utils.parse_nested_query(URI.parse(links.first['href']).query)
+        assert_equal filters.stringify_keys.merge('page' => '1'), query
+      end
+      assert_select 'a', text: 'Export CSV' do |links|
+        query = Rack::Utils.parse_nested_query(URI.parse(links.first['href']).query)
+        assert_equal filters.stringify_keys, query
+      end
+      assert_select 'form input[name="page"]', count: 0
+
+      get vendor_portal_transactions_url(**filters, page: 2, format: :csv)
+
+      assert_response :success
+      rows = CSV.parse(response.body, headers: true)
+      assert_equal matches.map(&:reference_number).sort, rows.pluck('Reference Number').sort
+      assert_equal(920, rows.sum { |row| row['Amount'].to_d })
+    end
+
+    test 'incomplete invalid and reversed custom ranges remain visible and cannot export all history' do
+      purchase = create(:voucher_transaction, vendor: @vendor_user)
+      [
+        ['10/09/2026', '', 'Enter both a start date and an end date.'],
+        ['13/45/2026', '10/09/2026', 'Start date is invalid. Use MM/DD/YYYY.'],
+        ['10/09/2026', 'yesterday', 'End date is invalid. Use MM/DD/YYYY.'],
+        ['10/10/2026', '10/09/2026', 'Start date must be on or before the end date.']
+      ].each do |first, last, error|
+        filters = { period: 'custom', start_date: first, end_date: last }
+        get vendor_portal_transactions_url(**filters)
+        assert_response :unprocessable_content
+        assert_select '[role="alert"]', text: /#{Regexp.escape(error)}/
+        assert_select('input[name="start_date"]') { |inputs| assert_equal first, inputs.first['value'].to_s }
+        assert_select('input[name="end_date"]') { |inputs| assert_equal last, inputs.first['value'].to_s }
+        assert_select 'select[name="period"] option[value="custom"][selected]'
+        assert_select 'table tbody tr', count: 0
+        assert_equal 0, controller.instance_variable_get(:@total_amount)
+
+        get vendor_portal_transactions_url(**filters, format: :csv)
+        assert_response :unprocessable_content
+        assert_match error, response.body
+        assert_no_match purchase.reference_number, response.body
+      end
     end
 
     test 'should not show transactions belonging to another vendor' do
@@ -72,6 +175,27 @@ module VendorPortal
 
       get vendor_portal_transaction_url(create(:voucher_transaction, vendor: create(:vendor_user)))
       assert_response :not_found
+    end
+
+    test 'multiple packages do not multiply a purchase in the total or CSV' do
+      purchase = create(:voucher_transaction, vendor: @vendor_user, amount: 75)
+      service = VoucherTransactions::FulfillmentService.new(transaction: purchase, actor: @vendor_user)
+      service.add_shipment!(attributes: { 'tracking_number' => 'AAA111' }, expected_version: 0)
+      service.add_shipment!(attributes: { 'tracking_number' => 'BBB222' }, expected_version: 1)
+
+      get vendor_portal_transactions_url
+
+      assert_response :success
+      assert_equal 1, controller.instance_variable_get(:@transaction_count)
+      assert_equal 75, controller.instance_variable_get(:@total_amount)
+      assert_select 'table tbody tr', count: 1
+
+      get vendor_portal_transactions_url(format: :csv)
+
+      rows = CSV.parse(response.body, headers: true)
+      assert_equal 1, rows.size
+      assert_equal purchase.reference_number, rows.sole['Reference Number']
+      assert_equal 75, rows.sole['Amount'].to_d
     end
 
     test 'choosing local pickup records the mode; a stale form is refused' do

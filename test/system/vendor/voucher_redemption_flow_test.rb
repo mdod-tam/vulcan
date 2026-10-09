@@ -112,7 +112,7 @@ module VendorPortal
       click_button 'Verify Voucher'
 
       assert_text 'Invalid voucher code'
-      assert_current_path vendor_portal_vouchers_path
+      assert_current_path vendor_portal_vouchers_path(code: @invalid_voucher_code)
     end
 
     test 'vendor can select multiple products with different quantities' do
@@ -163,7 +163,7 @@ module VendorPortal
       page.execute_script("document.getElementById('redemption-form').submit()")
 
       assert_text 'Please select at least one product for this voucher redemption'
-      assert_current_path redeem_vendor_portal_voucher_path(@voucher.code)
+      assert_current_path process_redemption_vendor_portal_voucher_path(@voucher.code)
 
       @voucher.reload
       assert_equal 100.0, @voucher.remaining_value
@@ -188,7 +188,7 @@ module VendorPortal
 
       # The full message also includes the formatted balance.
       assert_text 'Cannot redeem more than the available amount'
-      assert_current_path redeem_vendor_portal_voucher_path(@voucher.code)
+      assert_current_path process_redemption_vendor_portal_voucher_path(@voucher.code)
 
       @voucher.reload
       assert_equal 100.0, @voucher.remaining_value
@@ -197,14 +197,7 @@ module VendorPortal
     private
 
     def sign_in_as_vendor
-      begin
-        system_test_sign_in(@vendor)
-      rescue RuntimeError => e
-        # Continue if the sign-in assertion failed but the session is signed in.
-        raise unless e.message.include?('Sign-in failed') && current_path != sign_in_path
-
-        debug_puts 'Authentication check failed but user is signed in - continuing test'
-      end
+      system_test_sign_in(@vendor)
 
       visit vendor_portal_dashboard_path
       assert_text 'Vendor Dashboard'

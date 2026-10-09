@@ -6,89 +6,63 @@ module Admin
   class W9ReviewsTest < ApplicationSystemTestCase
     setup do
       @admin = create(:admin)
-      sign_in(@admin)
-
-      skip 'Update PDF selectors and Confirm Reject interactions before enabling W9 browser coverage'
+      @vendor = create(:vendor, :with_w9)
+      system_test_sign_in(@admin)
     end
 
-    test 'viewing vendor with pending W9' do
-      vendor = create(:vendor, :with_w9)
-      visit admin_vendor_path(vendor)
-
-      assert_text 'W9 Status'
+    test 'staff preview and approve the submitted document without authorizing the vendor' do
+      visit admin_vendor_path(@vendor)
       assert_text 'Pending Review'
-      assert_link 'Review W9'
-
-      click_on 'Review W9'
-      assert_current_path new_admin_vendor_w9_review_path(vendor)
-
-      click_on 'Load PDF Preview'
-
-      assert_selector '[data-pdf-loader-target="container"]:not(.hidden) iframe'
-      assert_selector '[data-pdf-loader-target="container"]:not(.hidden) iframe[data-turbo="false"]'
-      assert_selector '[data-pdf-loader-target="container"]:not(.hidden) iframe[src]'
-      assert_selector '[data-pdf-loader-target="container"]:not(.hidden) iframe[data-original-src]'
-
-      click_on 'Approve'
-
-      assert_current_path admin_vendor_path(vendor)
+      click_link 'Review W9'
+      click_button 'Load PDF Preview'
+      assert_selector '[data-pdf-loader-target="container"] iframe[data-turbo="false"][src]'
+      reviewed_blob = @vendor.w9_form.blob
+      click_button 'Approve'
       assert_text 'W9 review completed successfully'
-      assert_text 'Approved'
+      assert @vendor.reload.w9_status_approved?
+      assert @vendor.vendor_pending?
+      review = @vendor.w9_reviews.sole
+      assert_equal reviewed_blob.id, review.reviewed_blob_id
+      visit admin_vendor_w9_review_path(@vendor, review)
+      assert_text 'Review Details'
+      assert_selector 'iframe[title="Reviewed W9 document"][src]'
+      assert_no_text 'Reviewed document unknown.'
+      take_screenshot('admin-w9-approved-document-history', html: true, full: true)
     end
 
-    test 'rejecting a W9 form' do
-      vendor = create(:vendor, :with_w9)
-      visit admin_vendor_path(vendor)
-      click_on 'Review W9'
-
-      click_on 'Load PDF Preview'
-      assert_selector "iframe[data-turbo='false']"
-
-      click_on 'Reject'
+    test 'staff provide a reason and confirm rejection at phone width' do
+      visit admin_vendor_path(@vendor)
+      click_link 'Review W9'
+      page.current_window.resize_to(390, 844)
+      click_button 'Reject'
       assert_selector '.rejection-reason', visible: true
-
-      accept_alert 'Please select a rejection reason and provide a detailed explanation' do
-        click_on 'Reject'
-      end
-      assert_selector '.rejection-reason', visible: true
-
-      choose 'Address Mismatch'
+      assert_selector '#w9_review_rejection_reason_code_address_mismatch:focus'
+      find_field('Address Mismatch').send_keys(:space)
       fill_in 'Detailed Explanation', with: 'The address on the W9 does not match our records.'
-      click_on 'Reject'
-
-      assert_current_path admin_vendor_path(vendor)
+      take_screenshot('admin-w9-rejection-reason-narrow', html: true, full: true)
+      click_button 'Confirm Reject'
       assert_text 'W9 review completed successfully'
+      assert @vendor.reload.w9_status_rejected?
+      assert_equal 1, @vendor.w9_rejections_count
+      review = @vendor.w9_reviews.sole
+      visit admin_vendor_w9_review_path(@vendor, review)
       assert_text 'Rejected'
-
-      vendor.reload
-      assert_equal 'rejected', vendor.w9_status
-    end
-
-    test 'viewing W9 review details' do
-      vendor = create(:vendor, :with_w9)
-      review = create(:w9_review, vendor: vendor, admin: @admin, status: :approved)
-
-      visit admin_vendor_w9_review_path(vendor, review)
-
-      assert_selector "iframe[data-turbo='false']"
-      assert_selector "iframe[type='application/pdf']"
-      assert_selector 'iframe[src]'
-      assert_selector 'iframe[data-original-src]'
-
-      assert_text 'Review Details'
-      assert_text 'Approved'
-    end
-
-    test 'viewing rejected W9 review details' do
-      vendor = create(:vendor, :with_w9)
-      review = create(:w9_review, :rejected, vendor: vendor, admin: @admin)
-
-      visit admin_vendor_w9_review_path(vendor, review)
-
-      assert_text 'Review Details'
-      assert_text 'Rejected'
-      assert_text 'Rejection Reason'
       assert_text review.rejection_reason
+      take_screenshot('admin-w9-rejected-history-narrow', html: true, full: true)
+      page.current_window.resize_to(1200, 800)
+    end
+
+    test 'a historical review without a document remains explicitly unknown' do
+      W9Review.insert_all!([{ vendor_id: @vendor.id, admin_id: @admin.id, status: W9Review.statuses[:approved],
+                              reviewed_at: 1.year.ago, created_at: 1.year.ago, updated_at: 1.year.ago }])
+      review = @vendor.w9_reviews.sole
+      visit admin_vendor_path(@vendor)
+      assert_text 'Reviewed document unknown.'
+      visit admin_vendor_w9_review_path(@vendor, review)
+      assert_text 'Reviewed document unknown.'
+      assert_no_selector 'iframe'
+      assert_no_link 'Open in New Tab'
+      take_screenshot('admin-w9-historical-document-unknown', html: true, full: true)
     end
   end
 end

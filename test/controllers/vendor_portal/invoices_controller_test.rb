@@ -24,6 +24,27 @@ module VendorPortal
       assert_match 'Awaiting approval', response.body
     end
 
+    test 'invoice pages retain vendor scope and use stable newest-first ordering' do
+      # rubocop:disable-next FactoryBot/ExcessiveCreateList -- Exercises more than one 20-row page.
+      create_list(:invoice, 20, vendor: @vendor_user)
+      other_invoice = create(:invoice, vendor: create(:vendor_user))
+      expected = @vendor_user.invoices.order(created_at: :desc, id: :desc).to_a
+
+      get vendor_portal_invoices_url
+
+      assert_response :success
+      assert_select 'ul[role="list"] li', count: 20
+      assert_select 'nav[aria-label="Invoice pages"] [aria-current="page"]', text: '1'
+      assert_no_match other_invoice.invoice_number, response.body
+
+      get vendor_portal_invoices_url(page: 2)
+
+      assert_response :success
+      assert_select 'ul[role="list"] li', count: 3
+      expected.last(3).each { |invoice| assert_match invoice.invoice_number, response.body }
+      assert_select 'nav[aria-label="Invoice pages"] [aria-current="page"]', text: '2'
+    end
+
     test 'the vendor sees the same settlement facts staff recorded, without the internal ones' do
       admin = create(:admin, first_name: 'Rhea', last_name: 'Ledger')
       invoice = create(:invoice, :pending, :with_transactions, vendor: @vendor_user, transaction_count: 1, amount_per_transaction: 123.45)

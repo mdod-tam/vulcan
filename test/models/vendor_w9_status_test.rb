@@ -27,8 +27,8 @@ class VendorW9StatusTest < ActiveSupport::TestCase
   test 'a newly attached W9 moves an approved W9 to review' do
     force_w9_status(:approved)
 
-    @vendor.w9_form.attach(io: Rails.root.join('test/fixtures/files/sample_w9.pdf').open,
-                           filename: 'new_w9.pdf', content_type: 'application/pdf')
+    file = Rack::Test::UploadedFile.new(Rails.root.join('test/fixtures/files/sample_w9.pdf'), 'application/pdf')
+    Vendors::ReplaceW9.call(vendor: @vendor, file: file)
 
     assert_predicate @vendor.reload, :w9_status_pending_review?
   end
@@ -50,6 +50,30 @@ class VendorW9StatusTest < ActiveSupport::TestCase
     assert_no_difference -> { Event.where(action: 'w9_details_changed').count } do
       @vendor.update!(business_tax_id: '98-7654321')
     end
+  end
+
+  test 'the retained W9 archive rejects a newly attached unsupported document' do
+    blob = ActiveStorage::Blob.create_and_upload!(io: StringIO.new('plain notes'), filename: 'notes.txt',
+                                                  content_type: 'text/plain', identify: false)
+
+    @vendor.w9_archive.attach(blob)
+
+    assert_not @vendor.valid?
+    assert_includes @vendor.errors[:w9_archive], "must be a PDF or an image file (#{ProofUploadFormats::HUMAN_LABEL})"
+    assert_empty @vendor.reload.w9_archive.blobs
+  end
+
+  test 'the retained W9 archive uses the same strict size limit as the current W9' do
+    pdf = file_fixture('sample_w9.pdf').binread.ljust(ProofUploadFormats.max_bytes(:w9), ' ')
+    blob = ActiveStorage::Blob.create_and_upload!(io: StringIO.new(pdf), filename: 'oversize-w9.pdf',
+                                                  content_type: 'application/pdf', identify: false)
+    assert_equal ProofUploadFormats.max_bytes(:w9), blob.byte_size
+
+    @vendor.w9_archive.attach(blob)
+
+    assert_not @vendor.valid?
+    assert_includes @vendor.errors[:w9_archive], "must be smaller than #{ProofUploadFormats.max_megabytes(:w9)}MB."
+    assert_empty @vendor.reload.w9_archive.blobs
   end
 
   private

@@ -3,10 +3,16 @@
 module VendorPortal
   # Base controller for all vendor portal controllers
   class BaseController < ApplicationController
+    prepend_around_action :with_vendor_portal_locale
     before_action :authenticate_vendor!
     layout 'vendor_portal'
 
     private
+
+    # The portal is English until all of its screens support another locale.
+    def with_vendor_portal_locale(&)
+      I18n.with_locale(:en, &)
+    end
 
     # Users::Vendor#can_process_vouchers? is the one eligibility rule. Every path that checks a date
     # of birth or looks up a voucher code runs this first, so an unapproved vendor learns nothing

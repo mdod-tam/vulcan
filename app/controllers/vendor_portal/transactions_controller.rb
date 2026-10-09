@@ -3,42 +3,30 @@
 module VendorPortal
   # Controller for managing vendor transactions
   class TransactionsController < BaseController
-    include Pagy::Backend # Include Pagy::Backend for pagination
+    include Pagy::Backend
     include PurchasePage
 
     # How a vendor may say a purchase reaches the customer. Unspecified is only the starting state.
     FULFILLMENT_MODES = %w[shipping local_pickup].freeze
 
     def index
-      transactions_scope = current_user.voucher_transactions.includes(:shipments, :invoice, voucher: { application: :user }).order(created_at: :desc)
-      transactions_scope = transactions_scope.needing_shipping_details if params[:needs_shipping_details] == '1'
-
-      # Apply date filters if provided
-      if params[:start_date].present? && params[:end_date].present?
-        start_date = begin
-          Date.parse(params[:start_date])
-        rescue StandardError
-          nil
-        end
-        end_date = begin
-          Date.parse(params[:end_date])
-        rescue StandardError
-          nil
-        end
-
-        transactions_scope = transactions_scope.where(created_at: start_date.beginning_of_day..end_date.end_of_day) if start_date && end_date
-      end
-
-      # Calculate totals for the filtered transactions (before pagination)
+      filter = VoucherTransactions::ListFilter.new(vendor: current_user, params: params)
+      transactions_scope = filter.call
+      @filter_errors = filter.errors
       @total_amount = transactions_scope.sum(:amount)
       @transaction_count = transactions_scope.count
 
-      # Paginate the transactions
-      @pagy, @transactions = pagy(transactions_scope)
-
       respond_to do |format|
-        format.html
+        format.html do
+          @pagy, @transactions = pagy(transactions_scope, limit: 20)
+          render :index, status: @filter_errors.any? ? :unprocessable_content : :ok
+        end
         format.csv do
+          if @filter_errors.any?
+            render plain: @filter_errors.join("\n"), status: :unprocessable_content
+            next
+          end
+
           send_data generate_csv(transactions_scope),
                     filename: "vendor-transactions-#{Time.current.strftime('%Y%m%d')}.csv",
                     type: 'text/csv'

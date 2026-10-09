@@ -81,6 +81,42 @@ class AuditEventServiceTest < ActiveSupport::TestCase
     end
   end
 
+  test 'W9 decisions for successive documents retain separate audits at the same time and refuse stale decisions' do
+    travel_to Time.zone.local(2026, 10, 9, 12) do
+      %w[approved rejected].each do |status|
+        vendor = create(:vendor, :with_w9)
+        first_blob = vendor.w9_form.blob
+        attributes = { status: status, reviewed_blob_id: first_blob.id,
+                       rejection_reason_code: 'other', rejection_reason: 'Please correct the document.' }
+        assert_predicate Vendors::ReviewW9.new(vendor: vendor, admin: @admin, attributes: attributes).call, :success?
+
+        second_blob = Vendors::ReplaceW9.call(
+          vendor: vendor, file: Rack::Test::UploadedFile.new(file_fixture('sample_w9.pdf'), 'application/pdf')
+        )
+        assert_not_equal first_blob.id, second_blob.id
+        second_review = Vendors::ReviewW9.new(
+          vendor: vendor, admin: @admin, attributes: attributes.merge(reviewed_blob_id: second_blob.id)
+        ).call
+        assert_predicate second_review, :success?
+
+        events = Event.where(auditable: vendor, action: "w9_#{status}")
+        reviewed_documents = events.order(:id).pluck(:metadata).map { |metadata| metadata['reviewed_blob_id'] }
+        assert_equal [first_blob.id, second_blob.id], reviewed_documents
+        assert_equal [Time.current], events.distinct.pluck(:created_at)
+        assert_equal 2, vendor.w9_reviews.count
+
+        [first_blob, second_blob].each do |blob|
+          assert_no_changes -> { [events.count, vendor.w9_reviews.count, vendor.reload.w9_status, vendor.w9_rejections_count] } do
+            result = Vendors::ReviewW9.new(
+              vendor: vendor, admin: @admin, attributes: attributes.merge(reviewed_blob_id: blob.id)
+            ).call
+            assert_predicate result, :failure?
+          end
+        end
+      end
+    end
+  end
+
   private
 
   def log_toggle(enabled:, operation_id: nil)

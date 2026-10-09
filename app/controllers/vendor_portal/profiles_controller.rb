@@ -17,7 +17,19 @@ module VendorPortal
         redirect_to vendor_portal_dashboard_path
       else
         # A usable new W-9 rides along so the vendor need not choose it again
-        @retained_w9 = UploadedDocument.retained(params[:users_vendor], record: @vendor, field: 'w9_form')
+        saved_errors = @vendor.errors.dup
+        retry_phone = @vendor.phone
+        @vendor.reload
+        @retained_w9 = @vendor.with_lock { Vendors::W9Document.retained(params[:users_vendor], vendor: @vendor) }
+        @vendor.assign_attributes(vendor_params.except(:w9_form, :w9_form_signed_id))
+        @vendor.phone = retry_phone if vendor_params.key?(:phone)
+        @vendor.errors.copy!(saved_errors)
+        submitted_reference = params[:users_vendor][:w9_form_signed_id]
+        @retained_w9_reference = if @retained_w9 && Vendors::W9Document.resolve_reference(submitted_reference, vendor: @vendor)&.id == @retained_w9.id
+                                   submitted_reference
+                                 elsif @retained_w9
+                                   Vendors::W9Document.reference(@retained_w9, vendor: @vendor)
+                                 end
         flash.now[:alert] = 'There was an error updating your profile'
         render :edit, status: :unprocessable_content
       end
@@ -30,13 +42,19 @@ module VendorPortal
     def update_vendor
       attributes = vendor_params.except(:w9_form, :w9_form_signed_id)
       w9_form = UploadedDocument.submitted(params[:users_vendor], 'w9_form')
-      Users::Vendor.transaction do
-        attributes[:w9_form] = UploadedDocument.resolve!(w9_form, record: @vendor, name: 'w9_form') if w9_form.present?
-        @vendor.update(attributes) || raise(ActiveRecord::Rollback)
+      @vendor.with_lock do
+        if w9_form.present?
+          Vendors::ReplaceW9.call(vendor: @vendor, file: w9_form, attributes: attributes)
+        else
+          @vendor.update!(attributes)
+        end
       end
+      true
     rescue UploadedDocument::Refused => e
-      @vendor.assign_attributes(attributes.except(:w9_form))
+      @vendor.assign_attributes(attributes)
       @vendor.errors.add(:w9_form, e.user_message)
+      false
+    rescue ActiveRecord::RecordInvalid
       false
     end
 

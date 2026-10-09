@@ -28,7 +28,7 @@
         </div>
         <div class="bg-gray-50 px-4 py-5 sm:grid sm:grid-cols-3 sm:gap-4 sm:px-6">
           <dt class="text-sm font-medium text-gray-500">Business Tax ID</dt>
-          <dd class="mt-1 text-sm text-gray-900 sm:mt-0 sm:col-span-2"><%= @vendor.business_tax_id %></dd>
+          <dd class="mt-1 text-sm text-gray-900 sm:mt-0 sm:col-span-2"><%= @vendor.masked_business_tax_id %></dd>
         </div>
         <div class="bg-white px-4 py-5 sm:grid sm:grid-cols-3 sm:gap-4 sm:px-6">
           <dt class="text-sm font-medium text-gray-500">Email</dt>
@@ -72,7 +72,8 @@
                 <svg class="h-5 w-5 text-gray-400 mr-2" xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" stroke="currentColor">
                   <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M7 21h10a2 2 0 002-2V9.414a1 1 0 00-.293-.707l-5.414-5.414A1 1 0 0012.586 3H7a2 2 0 00-2 2v14a2 2 0 002 2z" />
                 </svg>
-                <%= link_to "View W9 Form", rails_blob_path(@vendor.w9_form, disposition: "inline"), target: "_blank", class: "text-indigo-600 hover:text-indigo-900" %>
+                <%= link_to 'View W9 Form', vendor_w9_document_path(@vendor, @vendor.w9_form.blob, disposition: 'inline'),
+                            target: '_blank', rel: 'noopener', class: 'text-indigo-600 hover:text-indigo-900' %>
               </div>
             <% else %>
               <span class="text-red-500">No W9 form uploaded</span>

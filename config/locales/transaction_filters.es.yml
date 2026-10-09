@@ -1,0 +1,29 @@
+es:
+  pagination:
+    summary: "Mostrando %{first}–%{last} de %{count}"
+    previous: Anterior
+    next: Siguiente
+    page: "Página %{page}"
+    current_page: "Página %{page}, página actual"
+    transactions: Páginas de transacciones
+    invoices: Páginas de facturas
+    vendors: Páginas de proveedores
+    w9_reviews: Páginas de revisiones del W9
+  vendor_portal:
+    transactions:
+      filters:
+        invalid_period: Elija un período válido.
+        incomplete_range: Ingrese la fecha de inicio y la fecha de fin.
+        invalid_start: La fecha de inicio no es válida. Use MM/DD/AAAA.
+        invalid_end: La fecha de fin no es válida. Use MM/DD/AAAA.
+        reversed_range: La fecha de inicio debe ser anterior o igual a la fecha de fin.
+      index:
+        date_hint: "Use MM/DD/AAAA. Las fechas usan la hora del Este."
+        filter_errors: Revise los filtros de fechas
+        summary: "%{count} compras por un total de %{amount}"
+        periods:
+          all: Todo el historial
+          today: Hoy
+          week: Esta semana
+          month: Este mes
+          custom: Período personalizado

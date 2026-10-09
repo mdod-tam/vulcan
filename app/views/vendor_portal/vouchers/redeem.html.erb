@@ -31,14 +31,16 @@
     </div>
   </div>
 
-  <%= form_with(url: process_redemption_vendor_portal_voucher_path(@voucher), method: :post, id: "redemption-form", class: "space-y-6") do |f| %>
+  <%= form_with(url: process_redemption_vendor_portal_voucher_path(@voucher), method: :post,
+                id: 'redemption-form', class: 'space-y-6',
+                data: { controller: 'voucher-redemption', action: 'submit->voucher-redemption#submit' }) do |f| %>
     <%# One purchase per submission: a retried or repeated submit returns the purchase already recorded. %>
     <%= hidden_field_tag :submission_id, @submission_id, id: nil %>
     <!-- Redemption Amount -->
     <div class="bg-white shadow rounded-lg p-6 mb-6">
       <h2 class="text-xl font-semibold mb-4">Redemption Details</h2>
       <div class="mb-4">
-        <%= f.label :amount, "Redemption Amount", class: "block text-sm font-medium text-gray-700" %>
+        <%= f.label :amount, 'Redemption Amount', for: 'redemption-amount', class: 'block text-sm font-medium text-gray-700' %>
         <div class="mt-1 relative rounded-md shadow-sm">
           <div class="pointer-events-none absolute inset-y-0 left-0 flex items-center pl-3">
             <span class="text-gray-500 sm:text-sm">$</span>
@@ -63,7 +65,8 @@
             <div class="flex items-start">
               <%= check_box_tag 'product_ids[]', product.id, @selected_product_ids.include?(product.id.to_s),
                                 { class: 'form-checkbox product-checkbox h-5 w-5 text-indigo-600 mt-0.5 flex-shrink-0',
-                                  id: "product_#{product.id}", data: { product_name: product.name } } %>
+                                  id: "product_#{product.id}",
+                                  data: { product_name: product.name, voucher_redemption_target: 'product', action: 'change->voucher-redemption#update' } } %>
               <label for="product_<%= product.id %>" class="ml-3 block text-sm cursor-pointer flex-1">
                 <span class="font-semibold text-gray-900"><%= product.name %></span>
                 <p class="mt-1 text-sm text-gray-500"><%= product.description %></p>
@@ -72,14 +75,14 @@
           </div>
         <% end %>
       </div>
-      <div id="no-products-warning" class="mt-4 p-3 bg-red-50 border border-red-200 rounded-md text-sm text-red-700 hidden">
+      <div id="no-products-warning" data-voucher-redemption-target="warning" role="alert" class="mt-4 p-3 bg-red-50 border border-red-200 rounded-md text-sm text-red-700 hidden">
         <strong>⚠️ Please select at least one product</strong> for this voucher redemption.
       </div>
 
       <!-- Selected Products Summary -->
-      <div id="selected-products-summary" class="mt-6 p-4 border-2 border-indigo-200 rounded-lg bg-indigo-50 hidden">
+      <div id="selected-products-summary" data-voucher-redemption-target="summary" class="mt-6 p-4 border-2 border-indigo-200 rounded-lg bg-indigo-50 hidden">
         <h4 class="text-lg font-semibold text-indigo-900 mb-3">Selected Products</h4>
-        <ul id="selected-products-list" class="space-y-2">
+        <ul id="selected-products-list" data-voucher-redemption-target="list" class="space-y-2">
           <!-- JavaScript will populate this -->
         </ul>
       </div>
@@ -87,76 +90,12 @@
 
     <!-- Action Buttons -->
     <div class="flex justify-end space-x-4">
-      <%= f.submit "Process Redemption", class: "inline-flex items-center px-6 py-3 border border-transparent rounded-md shadow-sm text-base font-medium text-white bg-indigo-600 hover:bg-indigo-700 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-indigo-500", id: "submit-redemption", data: { disable_with: "Processing..." } %>
+      <%= f.submit 'Process Redemption', id: 'submit-redemption',
+                                         class: 'inline-flex items-center px-6 py-3 border border-transparent rounded-md shadow-sm text-base font-medium ' \
+                                                'text-white bg-indigo-600 hover:bg-indigo-700 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-indigo-500',
+                                         data: { disable_with: 'Processing...', voucher_redemption_target: 'submit' } %>
       <%= link_to "Cancel", vendor_portal_vouchers_path, class: "inline-flex items-center px-6 py-3 border border-gray-300 rounded-md text-base font-medium text-gray-700 bg-white hover:bg-gray-50 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-indigo-500" %>
     </div>
   <% end %>
 </div>
-
-<script>
-  document.addEventListener('DOMContentLoaded', function() {
-    const productCheckboxes = document.querySelectorAll('.product-checkbox');
-    const submitButton = document.getElementById('submit-redemption');
-    const noProductsWarning = document.getElementById('no-products-warning');
-    const selectedProductsSummary = document.getElementById('selected-products-summary');
-    const selectedProductsList = document.getElementById('selected-products-list');
-
-    // Add event listeners to each checkbox
-    productCheckboxes.forEach(checkbox => {
-      checkbox.addEventListener('change', updateSelectedProducts);
-    });
-
-    function updateSelectedProducts() {
-      const selectedProducts = [];
-      
-      productCheckboxes.forEach(checkbox => {
-        if (checkbox.checked) {
-          const productName = checkbox.dataset.productName;
-          selectedProducts.push(productName);
-        }
-      });
-
-      // Update the summary section
-      if (selectedProducts.length === 0) {
-        selectedProductsSummary.classList.add('hidden');
-        noProductsWarning.classList.remove('hidden');
-        submitButton.disabled = true;
-      } else {
-        selectedProductsSummary.classList.remove('hidden');
-        noProductsWarning.classList.add('hidden');
-        submitButton.disabled = false;
-        
-        // Build the list of selected products
-        selectedProductsList.innerHTML = selectedProducts.map(name => 
-          `<li class="flex items-center text-sm">
-            <svg class="h-5 w-5 text-indigo-600 mr-2" fill="currentColor" viewBox="0 0 20 20">
-              <path fill-rule="evenodd" d="M10 18a8 8 0 100-16 8 8 0 000 16zm3.707-9.293a1 1 0 00-1.414-1.414L9 10.586 7.707 9.293a1 1 0 00-1.414 1.414l2 2a1 1 0 001.414 0l4-4z" clip-rule="evenodd"/>
-            </svg>
-            <span class="text-gray-900 font-medium">${name}</span>
-          </li>`
-        ).join('');
-      }
-    }
-
-    // Prevent form submission if no products are selected
-    document.getElementById('redemption-form').addEventListener('submit', function(e) {
-      let hasSelected = false;
-      productCheckboxes.forEach(checkbox => {
-        if (checkbox.checked) {
-          hasSelected = true;
-        }
-      });
-      if (!hasSelected) {
-        e.preventDefault();
-        noProductsWarning.classList.remove('hidden');
-        window.scrollTo({
-          top: noProductsWarning.offsetTop - 100,
-          behavior: 'smooth'
-        });
-      }
-    });
-
-    // Run initial update on page load
-    updateSelectedProducts();
-  });
-</script>
+</main>

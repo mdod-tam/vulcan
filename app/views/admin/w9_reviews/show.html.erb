@@ -16,11 +16,11 @@
         </p>
       </div>
       <div class="border-t border-gray-200 p-4">
-        <% if @w9_form.attached? %>
+        <% if @w9_form.present? %>
           <div class="w-full h-[600px] overflow-hidden">
             <% if @w9_form.content_type.to_s.start_with?('image/') %>
               <div class="flex h-full items-center justify-center bg-gray-50">
-                <%= image_tag url_for(@w9_form),
+                <%= image_tag vendor_w9_document_path(@vendor, @w9_form.is_a?(ActiveStorage::Blob) ? @w9_form : @w9_form.blob),
                     class: "max-h-full max-w-full object-contain",
                     alt: "W9 form image for #{@vendor.business_name}" %>
               </div>
@@ -32,8 +32,9 @@
                 DO NOT REMOVE the src attribute or change this iframe without thorough testing.
               %>
               <iframe
-                src="<%= url_for(@w9_form) %>"
-                data-original-src="<%= url_for(@w9_form) %>"
+                src="<%= vendor_w9_document_path(@vendor, @w9_form.is_a?(ActiveStorage::Blob) ? @w9_form : @w9_form.blob) %>"
+                data-original-src="<%= vendor_w9_document_path(@vendor, @w9_form.is_a?(ActiveStorage::Blob) ? @w9_form : @w9_form.blob) %>"
+                title="Reviewed W9 document"
                 type="application/pdf"
                 width="100%"
                 height="600px"
@@ -42,19 +43,23 @@
                 allow="fullscreen">
                 <p class="text-gray-500">
                   It appears your browser cannot display this PDF inline.
-                  <%= link_to "Click here to download the file", rails_blob_path(@w9_form, disposition: :attachment),
-                      class: "text-indigo-600 hover:text-indigo-500",
-                      target: "_blank" %>
+                  <%= link_to 'Click here to download the file',
+                              vendor_w9_document_path(@vendor, @w9_form.is_a?(ActiveStorage::Blob) ? @w9_form : @w9_form.blob, disposition: :attachment),
+                              class: 'text-indigo-600 hover:text-indigo-500', target: '_blank', rel: 'noopener' %>
                 </p>
               </iframe>
             <% end %>
           </div>
           <div class="mt-4 flex justify-center">
-            <%= link_to "Open in New Tab", rails_blob_path(@w9_form, disposition: "inline"), target: "_blank", class: "inline-flex items-center px-4 py-2 border border-gray-300 rounded-md shadow-sm text-sm font-medium text-gray-700 bg-white hover:bg-gray-50 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-indigo-500" %>
+            <%= link_to 'Open in New Tab',
+                        vendor_w9_document_path(@vendor, @w9_form.is_a?(ActiveStorage::Blob) ? @w9_form : @w9_form.blob, disposition: 'inline'),
+                        target: '_blank', rel: 'noopener',
+                        class: 'inline-flex items-center px-4 py-2 border border-gray-300 rounded-md shadow-sm text-sm font-medium ' \
+                               'text-gray-700 bg-white hover:bg-gray-50 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-indigo-500' %>
           </div>
         <% else %>
           <div class="flex items-center justify-center h-[600px] bg-gray-100">
-            <p class="text-gray-500">W9 form no longer available</p>
+            <p class="text-gray-500">Reviewed document unknown.</p>
           </div>
         <% end %>
       </div>
@@ -103,21 +108,10 @@
             </div>
           <% end %>
 
-          <div class="<%= @w9_review.status_rejected? ? 'bg-gray-50' : 'bg-white' %> px-4 py-5 sm:grid sm:grid-cols-3 sm:gap-4 sm:px-6">
-            <dt class="text-sm font-medium text-gray-500">Vendor Notified</dt>
-            <dd class="mt-1 text-sm text-gray-900 sm:mt-0 sm:col-span-2">
-              Yes, email sent on <%= @w9_review.created_at.strftime("%B %d, %Y at %I:%M %p") %>
-            </dd>
-          </div>
         </dl>
       </div>
     </div>
   </div>
 </div>
 
-<% if @vendor_secure_request_forms.present? %>
-  <section class="mt-6 rounded border p-4" aria-label="W9 request delivery">
-    <h2 class="text-lg font-semibold">W9 request delivery</h2>
-    <% @vendor_secure_request_forms.each do |form| %><%= delivery_visibility(form) %><% end %>
-  </section>
-<% end %>
+<%= render 'delivery_history', request_forms: @vendor_secure_request_forms, notifications: @w9_notifications %>

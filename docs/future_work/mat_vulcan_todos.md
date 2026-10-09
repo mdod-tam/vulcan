@@ -20,10 +20,11 @@ This document lists only remaining work. Tasks are small, explicit, and testable
 
 ## Encryption startup validation
 
-- [ ] In [the encryption initializer](../../config/initializers/active_record_encryption.rb), reject an absent credentials section or missing/blank `primary_key`, `deterministic_key`, or `key_derivation_salt` outside development/test. Fail before serving requests, running jobs, or executing database tasks. Report missing setting names only, never values. Preserve configured keys and current encryption behavior; no key rotation or data migration is needed.
-- [ ] Restrict any temporary-key fallback to disposable development/test use. Keep the [Docker asset build](../../Dockerfile) working without production secrets through a narrowly scoped asset-precompilation path; `SECRET_KEY_BASE_DUMMY` alone must not bypass runtime validation or leave reusable dummy keys in the image.
-- [ ] Add isolated initializer/boot tests for an absent section, each absent/blank entry, configured startup with an existing encrypted-value round trip, and the development/test fallback. Cover asset compilation separately and prove server/worker/console/release startup cannot use the build exception. Use generated test material without production credentials or database access.
-- [ ] Run focused tests, changed-file RuboCop, and Brakeman. Update the [PII encryption guide](../security/pii_encryption.md) and [recovery guide](../infrastructure/backup_and_recovery.md) when the guard ships; a presence check still cannot prove that supplied keys match a restored database.
+The [encryption initializer](../../config/initializers/active_record_encryption.rb) now rejects absent, missing, and blank production key settings. The [Docker asset build](../../Dockerfile) permits process-local temporary keys only when `SECRET_KEY_BASE_DUMMY=1` and the sole top-level Rake task is `assets:precompile`. [Guard tests](../../test/config/encryption_key_configuration_test.rb) cover that exception and reject dummy-key runtime and database tasks.
+
+- [ ] Add isolated boot coverage for configured startup with an existing encrypted-value round trip and the development/test fallback, using generated material without production credentials or database access.
+- [ ] Exercise the Docker asset build in its deployment environment and verify that server, worker, console, and release startup require persistent keys in the resulting image.
+- [ ] Verify restored encrypted data with the configured keys using the [recovery guide](../infrastructure/backup_and_recovery.md). A presence check cannot establish that supplied keys match a restored database.
 
 ## Application & Dependent Contact Management  [DATA-001][DATA-002][AUTHZ-002][AUDIT-002]
 

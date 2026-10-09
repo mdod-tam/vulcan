@@ -2,6 +2,7 @@
 
 module Admin
   class VendorsController < ApplicationController
+    include Pagy::Backend
     include TurboStreamResponseHandling
 
     before_action :authenticate_user!
@@ -10,12 +11,9 @@ module Admin
 
     def index
       # Preload W9 attachments. The list uses their presence to offer W9 review.
-      @vendors = Users::Vendor.includes([:w9_form_attachment]).order(:business_name)
-
-      # Filter by W9 status if provided
-      return if params[:w9_status].blank?
-
-      @vendors = @vendors.where(w9_status: params[:w9_status])
+      vendors = Users::Vendor.includes([:w9_form_attachment]).order(:business_name, :id)
+      vendors = vendors.where(w9_status: params[:w9_status]) if params[:w9_status].present?
+      @pagy, @vendors = pagy(vendors, limit: 20)
     end
 
     def show

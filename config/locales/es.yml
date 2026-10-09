@@ -636,6 +636,10 @@ es:
         2. Fax: Envíe el formulario actualizado al 410-767-4276
   vendor_notifications:
     w9_rejected:
+      header_title: "El formulario W9 requiere atención"
+      title: "W9 rechazado"
+      body: "Su formulario W9 requiere atención. Motivo: %{reason}"
+      reason_unavailable: "No se proporcionó un motivo."
       secure_upload_instructions: |-
         1. Enlace seguro para cargar el formulario W9:
            %{secure_upload_url}

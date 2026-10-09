@@ -1,0 +1,29 @@
+en:
+  pagination:
+    summary: "Showing %{first}–%{last} of %{count}"
+    previous: Previous
+    next: Next
+    page: "Page %{page}"
+    current_page: "Page %{page}, current page"
+    transactions: Transaction pages
+    invoices: Invoice pages
+    vendors: Vendor pages
+    w9_reviews: W9 review pages
+  vendor_portal:
+    transactions:
+      filters:
+        invalid_period: Choose a valid time period.
+        incomplete_range: Enter both a start date and an end date.
+        invalid_start: Start date is invalid. Use MM/DD/YYYY.
+        invalid_end: End date is invalid. Use MM/DD/YYYY.
+        reversed_range: Start date must be on or before the end date.
+      index:
+        date_hint: "Use MM/DD/YYYY. Dates use Eastern time."
+        filter_errors: Check the date filters
+        summary: "%{count} purchases totaling %{amount}"
+        periods:
+          all: All Time
+          today: Today
+          week: This Week
+          month: This Month
+          custom: Custom Range

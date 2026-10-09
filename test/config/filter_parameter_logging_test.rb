@@ -3,6 +3,16 @@
 require 'test_helper'
 
 class FilterParameterLoggingTest < ActiveSupport::TestCase
+  test 'vendor TIN parameters are filtered at every request nesting level' do
+    filter = ActiveSupport::ParameterFilter.new(Rails.application.config.filter_parameters)
+    filtered = filter.filter('business_tax_id' => '123456789', 'vendor' => { 'business_tax_id' => '987654321' },
+                             'users_vendor' => { 'business_tax_id' => '98-7654321' })
+
+    assert_equal '[FILTERED]', filtered['business_tax_id']
+    assert_equal '[FILTERED]', filtered.dig('vendor', 'business_tax_id')
+    assert_equal '[FILTERED]', filtered.dig('users_vendor', 'business_tax_id')
+  end
+
   test 'Postmark filters do not hide unrelated request diagnostics' do
     parameters = {
       'content_type' => 'application/json', 'description' => 'equipment category',

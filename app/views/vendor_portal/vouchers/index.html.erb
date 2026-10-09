@@ -17,7 +17,7 @@
       <% if current_user.can_process_vouchers? %>
       <p class="mb-4 text-gray-700">Enter a voucher code to redeem it for products.</p>
 
-      <form id="voucher-form" class="space-y-4">
+      <form id="voucher-form" action="<%= vendor_portal_vouchers_path %>" method="get" class="space-y-4">
         <div class="md:w-1/2">
           <div class="mb-4">
             <label for="voucher_code" class="block text-sm font-medium text-gray-700 mb-1">Voucher Code</label>
@@ -86,17 +86,3 @@
     <% end %>
   </div>
 </div>
-
-<script>
-  document.addEventListener('DOMContentLoaded', function() {
-    const form = document.getElementById('voucher-form');
-    if (!form) return; // Not shown to a vendor who cannot process vouchers.
-    form.addEventListener('submit', function(e) {
-      e.preventDefault();
-      const code = document.getElementById('voucher_code').value;
-      if (!code) return;
-      // Build the URL directly with the code
-      window.location.href = `/vendor_portal/vouchers/${code}/redeem`;
-    });
-  });
-</script>

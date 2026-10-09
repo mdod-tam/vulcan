@@ -29,6 +29,36 @@ class AuditEventServiceEncryptedChangesTest < ActiveSupport::TestCase
     assert_equal %w[555-000-0001 555-000-0002], event.field_changes['phone']
   end
 
+  test 'vendor tax changes are encrypted in audit storage' do
+    event = log(create(:vendor), action: 'vendor_updated', changes: { business_tax_id: %w[123456789 987654321] })
+
+    assert_equal({}, event.metadata['changes']['business_tax_id'])
+    assert_equal %w[123456789 987654321], event.reload.field_changes['business_tax_id']
+    raw = Event.connection.select_one("SELECT metadata::text, change_values FROM events WHERE id = #{event.id}")
+    %w[123456789 987654321].each { |tin| assert_not_includes raw.values.join, tin }
+  end
+
+  test 'an audit validation error does not log submitted tax values or event attributes' do
+    vendor = create(:vendor, business_tax_id: '123456789')
+    invalid_event = Event.new
+    invalid_event.errors.add(:base, 'submitted tax value 987654321 was rejected')
+    Event.stubs(:create!).raises(ActiveRecord::RecordInvalid.new(invalid_event))
+    messages = []
+    Rails.logger.stubs(:error).with do |message|
+      messages << message
+      true
+    end
+
+    assert_raises(ActiveRecord::RecordInvalid) do
+      log(vendor, action: 'vendor_updated', changes: { business_tax_id: %w[123456789 987654321] })
+    end
+
+    assert_includes messages.join, 'ActiveRecord::RecordInvalid'
+    assert_not_includes messages.join, '123456789'
+    assert_not_includes messages.join, '987654321'
+    assert_not_includes messages.join, 'Event attributes'
+  end
+
   test 'records without encrypted fields are stored as given' do
     application = create(:application)
     event = log(application, changes: { 'alternate_contact_name' => { 'old' => 'A', 'new' => 'B' } })
@@ -43,6 +73,18 @@ class AuditEventServiceEncryptedChangesTest < ActiveSupport::TestCase
 
     assert_nil log(@constituent, changes: changes)
     assert log(@constituent, changes: { 'phone' => { 'old' => '555-000-0002', 'new' => '555-000-0003' } })
+  end
+
+  test 'separate vendor edits within the deduplication window retain separate encrypted tax history' do
+    vendor = create(:vendor)
+    changes = { business_tax_id: %w[123456789 987654321] }
+
+    assert log(vendor, action: 'vendor_updated', changes: changes)
+    assert_nil log(vendor, action: 'vendor_updated', changes: changes)
+    event = log(vendor, action: 'vendor_updated', changes: { business_tax_id: %w[987654321 111223333] })
+
+    assert event
+    assert_equal %w[987654321 111223333], event.field_changes['business_tax_id']
   end
 
   test 'an unreadable change_values cell falls back without breaking reads' do

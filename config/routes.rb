@@ -12,6 +12,7 @@ Rails.application.routes.draw do
   # Static pages
   get 'privacy', to: 'pages#privacy'
   get 'terms', to: 'pages#terms'
+  get 'vendors/:vendor_id/w9_documents/:id', to: 'w9_documents#show', as: :vendor_w9_document
   get 'accessibility', to: 'pages#accessibility'
   get 'help', to: 'pages#help', as: :help
   get 'how_it_works', to: 'pages#how_it_works', as: :how_it_works
@@ -389,6 +390,7 @@ Rails.application.routes.draw do
   namespace :vendor_portal do
     resource :dashboard, only: [:show], controller: :dashboard
     resource :profile, only: %i[edit update], controller: :profiles
+    resources :w9_uploads, only: :create
     resources :vouchers, only: %i[index show], param: :code do
       member do
         get :verify

@@ -31,6 +31,7 @@ module UserProfile
     encrypts :dependent_phone, deterministic: true
     encrypts :ssn_last4, deterministic: true
     encrypts :password_digest
+    encrypts :business_tax_id
     encrypts :date_of_birth, deterministic: true
     encrypts :physical_address_1
     encrypts :physical_address_2

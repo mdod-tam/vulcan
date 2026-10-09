@@ -139,12 +139,18 @@ class ApplicationMailer < ActionMailer::Base
     EmailDelivery::Routing.prefers_letter?(recipient, override: override)
   end
 
-  def recipient_email_for(recipient)
+  def recipient_email_for(recipient, own_email: false)
+    return record_delivery_contact(recipient.email, recipient: recipient, owner: recipient) if own_email
+
     contact = recipient.dependent_email_contact(contact_guardian: recipient.guardian_for_contact) if recipient.respond_to?(:dependent?) && recipient.dependent?
     address = contact&.value.presence || (recipient.effective_email if recipient.respond_to?(:effective_email)).presence || recipient.email
+    record_delivery_contact(address, recipient: recipient, owner: contact&.owner || recipient)
+  end
+
+  def record_delivery_contact(address, recipient:, owner:)
     if address.present?
       @delivery_contacts ||= {}
-      @delivery_contacts[address.downcase] = { recipient: recipient, owner: contact&.owner || recipient }
+      @delivery_contacts[address.downcase] = { recipient: recipient, owner: owner }
     end
     address
   end

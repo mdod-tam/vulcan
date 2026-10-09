@@ -17,7 +17,9 @@
       </div>
       <div class="border-t border-gray-200 p-4">
         <% if @w9_form.attached? %>
-          <div class="w-full h-[600px] overflow-hidden" data-controller="pdf-loader" data-pdf-loader-pdf-url-value="<%= url_for(@w9_form) %>">
+          <div class="w-full h-[600px] overflow-hidden" data-controller="pdf-loader"
+               data-pdf-loader-pdf-url-value="<%= vendor_w9_document_path(@vendor,
+                                                                          @w9_form.is_a?(ActiveStorage::Blob) ? @w9_form : @w9_form.blob) %>">
             <%# PDF Preview Placeholder (shown initially) %>
             <div data-pdf-loader-target="placeholder" class="flex flex-col items-center justify-center h-full bg-gray-100">
               <div class="text-center mb-4">
@@ -35,7 +37,11 @@
             </div>
           </div>
           <div class="mt-4 flex justify-center">
-            <%= link_to "Open in New Tab", rails_blob_path(@w9_form, disposition: "inline"), target: "_blank", class: "inline-flex items-center px-4 py-2 border border-gray-300 rounded-md shadow-sm text-sm font-medium text-gray-700 bg-white hover:bg-gray-50 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-indigo-500" %>
+            <%= link_to 'Open in New Tab',
+                        vendor_w9_document_path(@vendor, @w9_form.is_a?(ActiveStorage::Blob) ? @w9_form : @w9_form.blob, disposition: 'inline'),
+                        target: '_blank', rel: 'noopener',
+                        class: 'inline-flex items-center px-4 py-2 border border-gray-300 rounded-md shadow-sm text-sm font-medium ' \
+                               'text-gray-700 bg-white hover:bg-gray-50 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-indigo-500' %>
           </div>
         <% else %>
           <div class="flex items-center justify-center h-[600px] bg-gray-100">
@@ -79,6 +85,7 @@
             </div>
           <% end %>
 
+          <%= f.hidden_field :reviewed_blob_id %>
           <%= f.hidden_field :status, id: "w9_review_status", data: { w9_review_target: "status" } %>
 
           <!-- Rejection Reason (only applicable if rejecting) -->
@@ -137,9 +144,4 @@
   </div>
 </div>
 
-<% if @vendor_secure_request_forms.present? %>
-  <section class="mt-6 rounded border p-4" aria-label="W9 request delivery">
-    <h2 class="text-lg font-semibold">W9 request delivery</h2>
-    <% @vendor_secure_request_forms.each do |form| %><%= delivery_visibility(form) %><% end %>
-  </section>
-<% end %>
+<%= render 'delivery_history', request_forms: @vendor_secure_request_forms, notifications: @w9_notifications %>

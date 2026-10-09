@@ -10,7 +10,7 @@
 #
 # It's strongly recommended that you check this file into your version control system.
 
-ActiveRecord::Schema[8.1].define(version: 2026_10_08_030000) do
+ActiveRecord::Schema[8.1].define(version: 2026_10_09_120100) do
   # These are extensions that must be enabled in order to support this database
   enable_extension "pg_catalog.plpgsql"
 
@@ -844,7 +844,7 @@ ActiveRecord::Schema[8.1].define(version: 2026_10_08_030000) do
   create_table "users", force: :cascade do |t|
     t.json "availability_schedule"
     t.string "business_name"
-    t.string "business_tax_id"
+    t.text "business_tax_id"
     t.string "city", limit: 500
     t.boolean "cognition_disability", default: false
     t.integer "communication_preference"
@@ -906,7 +906,6 @@ ActiveRecord::Schema[8.1].define(version: 2026_10_08_030000) do
     t.string "website_url"
     t.string "zip_code", limit: 300
     t.index ["business_name"], name: "index_users_on_business_name"
-    t.index ["business_tax_id"], name: "index_users_on_business_tax_id"
     t.index ["dependent_email"], name: "index_users_on_dependent_email"
     t.index ["dependent_phone"], name: "index_users_on_dependent_phone"
     t.index ["email"], name: "index_users_on_email"
@@ -1049,10 +1048,13 @@ ActiveRecord::Schema[8.1].define(version: 2026_10_08_030000) do
     t.text "rejection_reason"
     t.integer "rejection_reason_code"
     t.datetime "reviewed_at", null: false
-    t.integer "status", default: 0, null: false
+    t.integer "status", null: false
     t.datetime "updated_at", null: false
     t.bigint "vendor_id", null: false
+    t.bigint "reviewed_blob_id"
     t.index ["admin_id"], name: "index_w9_reviews_on_admin_id"
+    t.index ["reviewed_blob_id"], name: "index_w9_reviews_on_reviewed_blob_id"
+    t.index ["vendor_id", "reviewed_blob_id"], name: "index_w9_reviews_on_vendor_id_and_reviewed_blob_id", unique: true
     t.index ["vendor_id"], name: "index_w9_reviews_on_vendor_id"
   end
 
@@ -1153,6 +1155,7 @@ ActiveRecord::Schema[8.1].define(version: 2026_10_08_030000) do
   add_foreign_key "voucher_verification_throttles", "vouchers", on_delete: :cascade
   add_foreign_key "vouchers", "applications"
   add_foreign_key "vouchers", "users", column: "vendor_id"
+  add_foreign_key "w9_reviews", "active_storage_blobs", column: "reviewed_blob_id"
   add_foreign_key "w9_reviews", "users", column: "admin_id"
   add_foreign_key "w9_reviews", "users", column: "vendor_id"
   add_foreign_key "webauthn_credentials", "users"

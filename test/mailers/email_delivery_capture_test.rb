@@ -38,6 +38,23 @@ class EmailDeliveryCaptureTest < ActiveSupport::TestCase
     assert attempt.accepted_at
   end
 
+  test 'vendor invoice delivery captures the vendor as recipient and owner despite a guardian relationship' do
+    vendor = create(:vendor)
+    create(:guardian_relationship, guardian_user: @user, dependent_user: vendor)
+    invoice = create(:invoice, vendor: vendor)
+    load_seeded_email_templates('vendor_notifications_invoice_generated')
+    @transport.expects(:post).once.returns(@response)
+
+    mail = VendorNotificationsMailer.with(invoice: invoice).invoice_generated.deliver_now
+
+    attempt = invoice.email_delivery_attempts.sole
+    assert_equal [vendor.email], mail.to
+    assert_equal vendor.email, attempt.destination
+    assert_equal vendor.id, attempt.recipient_id
+    assert_equal vendor.id, attempt.delivery_owner_id
+    assert attempt.accepted_at
+  end
+
   test 'queued context keeps logical identity across a second job execution' do
     @transport.expects(:post).once.returns(@response)
     job = UserMailer.with(user: @user).password_reset.deliver_later

@@ -8,7 +8,7 @@ class DateRangeController extends Controller {
 
   connect() {
     // Check if custom range is already selected on page load
-    const picker = this.element.querySelector('[name="date_range"]')
+    const picker = this.element.querySelector('[name="period"], [name="date_range"]')
     if (picker) {
       this.toggleCustomRange({ target: picker })
     }

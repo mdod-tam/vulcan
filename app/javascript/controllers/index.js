@@ -29,6 +29,7 @@ import FinalSubmitGateController from "./forms/final_submit_gate_controller"
 import PaperApplicationController from "./forms/paper_application_controller"
 import RejectionFormController from "./forms/rejection_form_controller"
 import TrainingDurationConfirmationController from "./forms/training_duration_confirmation_controller"
+import VoucherRedemptionController from "./forms/voucher_redemption_controller"
 
 // Review Controllers
 import EvaluationManagementController from "./reviews/evaluation_management_controller"
@@ -81,6 +82,7 @@ application.register("final-submit-gate", FinalSubmitGateController)
 application.register("paper-application", PaperApplicationController)
 application.register("rejection-form", RejectionFormController)
 application.register("training-duration-confirmation", TrainingDurationConfirmationController)
+application.register("voucher-redemption", VoucherRedemptionController)
 
 // Review Controllers
 application.register("evaluation-management", EvaluationManagementController)

@@ -81,9 +81,10 @@ class HotwireFormFeedbackTest < ApplicationSystemTestCase
       click_button 'Save Changes'
       assert_selector "html[data-profile-renders='#{index + 1}']", visible: :all
       assert_text 'Website url must be a valid URL starting with http:// or https://'
-      fields.each { |field, value| assert_field "users_vendor_#{field}", with: value }
+      fields.except(:business_tax_id).each { |field, value| assert_field "users_vendor_#{field}", with: value }
+      assert_field 'users_vendor_business_tax_id', with: ''
       assert_text 'Current W9 form: w9.pdf'
-      assert_selector 'input[name="users_vendor[terms_accepted]"][value="1"]', visible: :all
+      assert_no_selector 'input[name="users_vendor[terms_accepted]"]', visible: :all
       assert_button 'Save Changes', disabled: false
       assert_equal original_name, vendor.reload.business_name
     end
