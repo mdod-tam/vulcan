@@ -1,5 +1,20 @@
 # frozen_string_literal: true
 
+# Admin phone numbers must be unique across users. Runs that share the test database can see each
+# other's committed rows (non-transactional tests), so each process draws admin numbers from its own
+# random range in 888, which no fixture or test literal uses; numbers within a process never repeat.
+# The clock is not used: frozen or traveled time made it repeat.
+unless defined?(FactoryAdminPhones)
+  module FactoryAdminPhones
+    OFFSET = SecureRandom.random_number(9_000_000)
+
+    def self.for(sequence_number)
+      value = (sequence_number + OFFSET) % 9_000_000
+      "888-#{100 + (value / 10_000)}-#{format('%04d', value % 10_000)}"
+    end
+  end
+end
+
 FactoryBot.define do
   factory :user do
     sequence(:email) { |n| "testuser#{n}@example.com" }
@@ -65,7 +80,7 @@ FactoryBot.define do
       type { 'Users::Administrator' }
       first_name { 'Admin' }
       last_name { 'User' }
-      sequence(:phone) { |n| "888-#{format('%03d', ((n + Time.current.to_i) % 900) + 100)}-#{format('%04d', (((n * 17) + Time.current.to_i) % 9000) + 1000)}" }
+      sequence(:phone) { |n| FactoryAdminPhones.for(n) }
       phone_type { 'voice' }
       date_of_birth { 30.years.ago }
       timezone { 'Eastern Time (US & Canada)' }
