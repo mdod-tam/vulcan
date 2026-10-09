@@ -11,7 +11,7 @@ class ApplicationController < ActionController::Base
   helper PasswordFieldHelper
   helper EmailStatusHelper
   helper_method :dashboard_path_for_current_user, :mfa_required_for_current_user?,
-                :public_form_locale_param, :public_request_locale_param
+                :public_form_locale_param, :public_request_locale_param, :public_request_locale
 
   before_action :check_password_change_required
   before_action :enforce_required_mfa_enrollment

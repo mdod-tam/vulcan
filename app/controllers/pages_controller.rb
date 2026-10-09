@@ -3,7 +3,7 @@
 # Handles rendering of static content pages for the application
 class PagesController < ApplicationController
   skip_before_action :authenticate_user!,
-                     only: %i[help how_it_works eligibility apply contact privacy terms accessibility]
+                     only: %i[help how_it_works eligibility apply contact terms]
 
   def help; end
 
@@ -14,4 +14,6 @@ class PagesController < ApplicationController
   def apply; end
 
   def contact; end
+
+  def terms; end
 end

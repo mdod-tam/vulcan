@@ -10,7 +10,9 @@ module VendorPortal
     include AuthenticationTestHelper
 
     setup do
-      @vendor_user = create(:vendor_user, vendor_authorization_status: :pending) # Use FactoryBot to create a vendor user with pending status
+      VendorTerms.stubs(:published?).returns(true)
+      VendorTerms.stubs(:agreement).returns('Test-only vendor agreement for profile acceptance.')
+      @vendor_user = create(:vendor, vendor_authorization_status: :pending)
       sign_in_for_integration_test(@vendor_user) # Sign in the vendor user
       assert_authenticated(@vendor_user) # Verify authentication
     end
@@ -23,6 +25,44 @@ module VendorPortal
       assert_select 'input[name="users_vendor[business_name]"][value=?]', @vendor_user.business_name
       assert_select 'input[name="users_vendor[business_tax_id]"][value=""]'
       assert_not_includes response.body, @vendor_user.business_tax_id
+    end
+
+    test 'unpublished terms show the blocker and reject forged acceptance' do
+      VendorTerms.stubs(:published?).returns(false)
+      original_name = @vendor_user.business_name
+
+      get edit_vendor_portal_profile_url
+
+      assert_select 'p', text: I18n.t('vendor_onboarding.terms.unavailable')
+      assert_select 'input[name="users_vendor[terms_accepted]"]', count: 0
+
+      patch vendor_portal_profile_url, params: { users_vendor: { business_name: 'Forged acceptance', terms_accepted: '1' } }
+
+      assert_response :unprocessable_content
+      assert_includes response.body, I18n.t('vendor_onboarding.terms.unavailable')
+      assert_nil @vendor_user.reload.terms_accepted_at
+      assert_equal original_name, @vendor_user.business_name
+    end
+
+    test 'published empty terms also reject forged acceptance' do
+      VendorTerms.stubs(:agreement).returns(" \n ")
+
+      patch vendor_portal_profile_url, params: { users_vendor: { terms_accepted: '1' } }
+
+      assert_response :unprocessable_content
+      assert_nil @vendor_user.reload.terms_accepted_at
+    end
+
+    test 'an unpublished agreement permits profile edits and keeps prior acceptance' do
+      accepted_at = 3.days.ago.change(usec: 0)
+      @vendor_user.update!(terms_accepted_at: accepted_at)
+      VendorTerms.stubs(:published?).returns(false)
+
+      patch vendor_portal_profile_url, params: { users_vendor: { business_name: 'Updated Business', terms_accepted: '0' } }
+
+      assert_redirected_to vendor_portal_dashboard_url
+      assert_equal accepted_at, @vendor_user.reload.terms_accepted_at
+      assert_equal 'Updated Business', @vendor_user.business_name
     end
 
     test 'should update profile with terms accepted' do
@@ -81,6 +121,7 @@ module VendorPortal
       assert_response :unprocessable_content
       assert_equal 'text/html', response.media_type
       assert_select 'li', text: /Website url must be a valid URL/
+      assert_select 'input[type="checkbox"][name="users_vendor[terms_accepted]"][checked]'
       attributes.except(:terms_accepted, :business_tax_id).merge(phone: '410-555-1234').each do |field, value|
         assert_select "input[name='users_vendor[#{field}]'][value=?]", value
       end

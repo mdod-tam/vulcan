@@ -88,6 +88,37 @@ class VendorNotificationsMailerTest < ActionMailer::TestCase
     assert_includes email.body.to_s, expected_text
   end
 
+  test 'invoice payment and W9 notices use the vendor own email and locale despite guardian relationships' do
+    EmailTemplate.unstub(:find_by!)
+    guardian = create(:constituent, locale: 'es')
+    create(:guardian_relationship, guardian_user: guardian, dependent_user: @vendor)
+    assert_equal guardian.email, @vendor.effective_email, 'the generic dependent route would select the guardian'
+    @vendor.update!(locale: 'en')
+    load_seeded_email_templates('vendor_notifications_invoice_generated', 'vendor_notifications_payment_issued', 'vendor_notifications_w9_approved')
+
+    emails = capture_emails do
+      VendorNotificationsMailer.with(invoice: @invoice).invoice_generated.deliver_now
+      VendorNotificationsMailer.with(invoice: @invoice).payment_issued.deliver_now
+      VendorNotificationsMailer.with(vendor: @vendor).w9_approved.deliver_now
+      VendorNotificationsMailer.with(vendor: @vendor, secure_upload_url: 'https://example.test/upload').w9_upload_requested.deliver_now
+    end
+
+    assert_equal [[@vendor.email]] * 4, emails.map(&:to)
+    assert_equal 'W9 Form Approved', emails[2].subject
+    assert_includes decoded_text_part(emails[2]), 'W9 approval and vendor authorization are separate steps'
+    assert_not_includes decoded_text_part(emails[2]), 'now fully activated'
+  end
+
+  test 'secure W9 notices preserve the recipient snapshot after the vendor email changes' do
+    EmailTemplate.unstub(:find_by!)
+    snapshot = 'original.vendor@example.test'
+
+    email = VendorNotificationsMailer.with(vendor: @vendor, recipient_email: snapshot,
+                                           secure_upload_url: 'https://example.test/upload').w9_upload_requested.deliver_now
+
+    assert_equal [snapshot], email.to
+  end
+
   test 'new invoice PDFs identify the vendor without their tax ID' do
     @vendor.update!(business_name: 'Private Tax Vendor', business_tax_id: '123456789')
     EmailTemplate.unstub(:find_by!)

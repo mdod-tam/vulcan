@@ -1,0 +1,5 @@
+# Blank vendor agreement template. Add approved agreement text, then explicitly
+# publish it. Deploy both changes together before collecting new acceptances.
+shared:
+  published: false
+  agreement: ""

@@ -13,14 +13,14 @@ class VendorNotificationsMailer < ApplicationMailer
   def invoice_generated
     invoice      = params[:invoice]
     vendor       = invoice.vendor
-    locale       = resolve_template_locale(recipient: vendor)
+    locale       = vendor_locale(vendor)
     transactions = invoice.voucher_transactions.includes(:voucher)
 
     text_template = find_text_template('vendor_notifications_invoice_generated', locale: locale)
     variables = build_invoice_variables(invoice, vendor, transactions)
     attachments["invoice-#{invoice.invoice_number}.pdf"] = generate_invoice_pdf(invoice, vendor, transactions)
 
-    send_template_email(recipient_email_for(vendor), text_template, variables)
+    send_template_email(recipient_email_for(vendor, own_email: true), text_template, variables)
   rescue StandardError => e
     log_mail_error(e, vendor, 'vendor_notifications_invoice_generated')
     raise e
@@ -29,12 +29,12 @@ class VendorNotificationsMailer < ApplicationMailer
   def payment_issued
     invoice = params[:invoice]
     vendor  = invoice.vendor
-    locale  = resolve_template_locale(recipient: vendor)
+    locale  = vendor_locale(vendor)
 
     text_template = find_text_template('vendor_notifications_payment_issued', locale: locale)
     variables = build_payment_variables(invoice, vendor)
 
-    send_template_email(recipient_email_for(vendor), text_template, variables)
+    send_template_email(recipient_email_for(vendor, own_email: true), text_template, variables)
   rescue StandardError => e
     log_mail_error(e, vendor, 'vendor_notifications_payment_issued')
     raise e
@@ -42,7 +42,7 @@ class VendorNotificationsMailer < ApplicationMailer
 
   def w9_approved
     vendor = params[:vendor]
-    locale = resolve_template_locale(recipient: vendor)
+    locale = vendor_locale(vendor)
     template_name = 'vendor_notifications_w9_approved'
     text_template = find_text_template(template_name, locale: locale)
 
@@ -51,12 +51,12 @@ class VendorNotificationsMailer < ApplicationMailer
       status: :success,
       template: text_template,
       fallback_header_title: 'W9 Form Approved',
-      status_box_title: 'W9 Approved',
-      status_box_message: 'Your W9 form has been approved. No further action is needed at this time.',
+      status_box_title: I18n.t('vendor_onboarding.approval_notice.title', locale: locale),
+      status_box_message: I18n.t('vendor_onboarding.approval_notice.body', locale: locale),
       subject_variables: { vendor_business_name: vendor.business_name },
       locale: locale
     )
-    send_template_email(recipient_email_for(vendor), text_template, variables)
+    send_template_email(recipient_email_for(vendor, own_email: true), text_template, variables)
   rescue StandardError => e
     log_mail_error(e, vendor, template_name)
     raise e
@@ -64,7 +64,7 @@ class VendorNotificationsMailer < ApplicationMailer
 
   def w9_rejected
     vendor     = params[:vendor]
-    locale     = resolve_template_locale(recipient: vendor)
+    locale     = vendor_locale(vendor)
     w9_review  = params[:w9_review]
     reason     = w9_review&.rejection_reason || 'No reason provided.'
     secure_upload_url = params[:secure_upload_url].presence
@@ -102,7 +102,7 @@ class VendorNotificationsMailer < ApplicationMailer
 
   def w9_upload_requested
     vendor = params[:vendor]
-    locale = resolve_template_locale(recipient: vendor)
+    locale = vendor_locale(vendor)
     secure_upload_url = params[:secure_upload_url]
     template_name = 'vendor_notifications_w9_upload_requested'
 
@@ -128,7 +128,7 @@ class VendorNotificationsMailer < ApplicationMailer
 
   def w9_expiring_soon
     vendor = params[:vendor]
-    locale = resolve_template_locale(recipient: vendor)
+    locale = vendor_locale(vendor)
     return if vendor.w9_expiration_date.blank?
 
     template_name = 'vendor_notifications_w9_expiring_soon'
@@ -161,7 +161,7 @@ class VendorNotificationsMailer < ApplicationMailer
                   vendor_portal_url: resolve_vendor_portal_url
                 )
 
-    send_template_email(recipient_email_for(vendor), text_template, variables)
+    send_template_email(recipient_email_for(vendor, own_email: true), text_template, variables)
   rescue StandardError => e
     log_mail_error(e, vendor, template_name)
     raise e
@@ -169,7 +169,7 @@ class VendorNotificationsMailer < ApplicationMailer
 
   def w9_expired
     vendor = params[:vendor]
-    locale = resolve_template_locale(recipient: vendor)
+    locale = vendor_locale(vendor)
     return if vendor.w9_expiration_date.blank?
 
     template_name = 'vendor_notifications_w9_expired'
@@ -200,13 +200,17 @@ class VendorNotificationsMailer < ApplicationMailer
                   vendor_portal_url: resolve_vendor_portal_url
                 )
 
-    send_template_email(recipient_email_for(vendor), text_template, variables)
+    send_template_email(recipient_email_for(vendor, own_email: true), text_template, variables)
   rescue StandardError => e
     log_mail_error(e, vendor, template_name)
     raise e
   end
 
   private
+
+  def vendor_locale(vendor)
+    normalize_locale(vendor.locale) || normalize_locale(I18n.default_locale)
+  end
 
   def build_invoice_variables(invoice, vendor, transactions)
     {

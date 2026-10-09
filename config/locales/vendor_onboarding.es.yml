@@ -1,0 +1,54 @@
+es:
+  vendor_onboarding:
+    w9_label: "Revisión del documento W9"
+    authorization_label: "Autorización del programa"
+    w9_statuses:
+      not_submitted: "No presentado"
+      pending_review: "En espera de revisión"
+      approved: "Aprobado"
+      rejected: "Rechazado — se necesita un W9 corregido"
+    authorization_statuses:
+      pending: "En espera de aprobación del programa"
+      approved: "Autorizado para canjear vales al completar los requisitos"
+      suspended: "Suspendido"
+    states:
+      missing_w9:
+        title: "Cargue su W9"
+        body: "Agregue su W9 en su perfil. El personal debe revisar el W9 y autorizar por separado su cuenta de proveedor antes de que pueda canjear vales."
+        action: "Cargar el W9 en su perfil"
+      awaiting_w9_review:
+        title: "Su W9 está en espera de revisión"
+        body: "El personal revisará el W9 que presentó. No puede canjear vales hasta que su W9 actual esté aprobado y su cuenta de proveedor esté autorizada."
+      rejected_w9:
+        title: "Su W9 necesita una corrección"
+        body: "Lea el motivo en el aviso de su W9 y cargue un archivo corregido en su perfil o mediante su enlace seguro. El personal debe revisar el nuevo archivo antes de que pueda canjear vales."
+        action: "Cargar un W9 corregido"
+      awaiting_authorization:
+        title: "W9 aprobado; la autorización del proveedor está pendiente"
+        body: "Su W9 ha sido aprobado. El personal del programa debe autorizar por separado su cuenta de proveedor antes de que pueda canjear vales. Comuníquese con el programa si necesita información."
+      suspended:
+        title: "Su cuenta de proveedor está suspendida"
+        body: "No puede canjear vales mientras su cuenta esté suspendida, aunque su W9 esté aprobado. Comuníquese con el programa para saber qué debe hacer."
+      ready:
+        title: "Ya puede canjear vales"
+        body: "Su W9 actual está aprobado y el programa ha autorizado su cuenta de proveedor. Ya puede procesar un vale."
+        action: "Procesar un vale"
+      terms_unpublished:
+        title: "Los términos para proveedores aún no están disponibles"
+        body: "Su W9 está aprobado, pero el acuerdo para proveedores no se ha publicado. Puede seguir actualizando su perfil. Debe leer y aceptar el acuerdo publicado antes de que el personal pueda autorizar una nueva cuenta."
+        action: "Ver la página de términos para proveedores"
+      terms_required:
+        title: "Lea y acepte los términos para proveedores"
+        body: "Su W9 está aprobado. Lea el acuerdo publicado en su perfil y acéptelo antes de que el personal pueda autorizar su cuenta de proveedor."
+        action: "Leer los términos en su perfil"
+    terms:
+      title: "Términos y condiciones para proveedores"
+      unavailable: "Los términos para proveedores no se han publicado. No se pueden aceptar términos nuevos."
+      publication_help: "El programa debe publicar el acuerdo aprobado antes de que los proveedores que nunca lo han aceptado puedan completar los requisitos. Las aceptaciones anteriores se conservan."
+      accepted_on: "Términos aceptados el %{date}."
+      review: "Leer los términos y condiciones para proveedores"
+      acceptance_label: "Acepto los términos y condiciones publicados para proveedores."
+      acceptance_help: "Lea el acuerdo antes de aceptarlo. La aprobación del W9 y la autorización del programa son pasos separados."
+    approval_notice:
+      title: "W9 aprobado"
+      body: "Su W9 ha sido aprobado. La aprobación del W9 no autoriza su cuenta de proveedor. Consulte su panel para ver los pasos pendientes y el estado de autorización del programa."

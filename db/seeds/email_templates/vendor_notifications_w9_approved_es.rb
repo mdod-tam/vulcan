@@ -5,7 +5,7 @@
 # --------------------------------------------------
 EmailTemplate.create_or_find_by!(name: 'vendor_notifications_w9_approved', format: :text, locale: 'es') do |template|
   template.subject = 'Formulario W9 Aprobado'
-  template.description = 'Enviado a un proveedor cuando su formulario W9 enviado ha sido revisado y aprobado, activando su cuenta.'
+  template.description = 'Enviado a un proveedor cuando su formulario W9 enviado ha sido revisado y aprobado. La autorización del programa es un paso separado.'
   template.body = <<~TEXT
     %<header_text>s
 
@@ -15,7 +15,7 @@ EmailTemplate.create_or_find_by!(name: 'vendor_notifications_w9_approved', forma
 
     %<status_box_text>s
 
-    Su cuenta de proveedor ahora está completamente activada y puede comenzar a procesar vales a través de nuestro sistema.
+    La aprobación del W9 y la autorización del proveedor son pasos separados. Antes de procesar vales, el programa también debe autorizar su cuenta de proveedor. Consulte su panel para ver los pasos pendientes.
 
     Si tiene alguna pregunta o necesita ayuda, no dude en comunicarse con nuestro equipo de soporte al %<support_email>s o llame al (410) 767-6960.
 

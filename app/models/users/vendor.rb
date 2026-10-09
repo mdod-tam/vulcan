@@ -29,6 +29,7 @@ module Users
     validates :w9_form, presence: true, if: -> { vendor_approved? && !new_record? }
     validates :w9_form, document: { purpose: :w9 }
     validates :terms_accepted_at, presence: true, if: :vendor_approved?
+    validate :published_terms_before_acceptance
     validate :w9_approved_before_granting_approval, on: :update, if: :granting_approval?
     validates :website_url,
               format: { with: URI::DEFAULT_PARSER.make_regexp(%w[http https]),
@@ -116,16 +117,20 @@ module Users
       !!terms_accepted_at
     end
 
-    # Repeated acceptance preserves the first timestamp. Withdrawal clears it.
+    # Profile submissions preserve prior acceptance, including an unchecked box.
     def terms_accepted=(value)
-      if ActiveModel::Type::Boolean.new.cast(value)
-        self.terms_accepted_at ||= Time.current
-      else
-        self.terms_accepted_at = nil
-      end
+      @terms_acceptance_requested = ActiveModel::Type::Boolean.new.cast(value)
+      self.terms_accepted_at ||= Time.current if @terms_acceptance_requested && VendorTerms.available?
     end
 
     private
+
+    def published_terms_before_acceptance
+      return unless @terms_acceptance_requested && terms_accepted_at_in_database.blank?
+      return if VendorTerms.available?
+
+      errors.add(:terms_accepted, I18n.t('vendor_onboarding.terms.unavailable', locale: locale.presence || I18n.default_locale))
+    end
 
     def granting_approval?
       will_save_change_to_vendor_authorization_status? && vendor_approved?

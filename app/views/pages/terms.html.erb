@@ -1,0 +1,9 @@
+<section lang="<%= public_request_locale %>" class="mx-auto max-w-3xl px-4 py-8" aria-labelledby="vendor-terms-heading">
+  <h1 id="vendor-terms-heading" class="text-3xl font-bold text-gray-900"><%= t('vendor_onboarding.terms.title', locale: public_request_locale) %></h1>
+  <% if VendorTerms.available? %>
+    <div class="mt-6 space-y-4 text-gray-800"><%= simple_format(VendorTerms.agreement) %></div>
+  <% else %>
+    <p class="mt-6 text-gray-800"><%= t('vendor_onboarding.terms.unavailable', locale: public_request_locale) %></p>
+    <p class="mt-3 text-gray-800"><%= t('vendor_onboarding.terms.publication_help', locale: public_request_locale) %></p>
+  <% end %>
+</section>

@@ -1,0 +1,54 @@
+en:
+  vendor_onboarding:
+    w9_label: "W9 document review"
+    authorization_label: "Program authorization"
+    w9_statuses:
+      not_submitted: "Not submitted"
+      pending_review: "Awaiting review"
+      approved: "Approved"
+      rejected: "Rejected — a corrected W9 is needed"
+    authorization_statuses:
+      pending: "Awaiting program approval"
+      approved: "Authorized to redeem vouchers once onboarding is complete"
+      suspended: "Suspended"
+    states:
+      missing_w9:
+        title: "Upload your W9"
+        body: "Add your W9 on your profile. Staff must review the W9 and separately authorize your vendor account before you can redeem vouchers."
+        action: "Upload W9 on your profile"
+      awaiting_w9_review:
+        title: "Your W9 is awaiting review"
+        body: "Staff will review the W9 you submitted. You cannot redeem vouchers until your current W9 is approved and your vendor account is authorized."
+      rejected_w9:
+        title: "Your W9 needs a correction"
+        body: "Read the reason in your W9 notice and upload a corrected file on your profile or through your secure upload link. Staff must review the replacement before you can redeem vouchers."
+        action: "Upload a corrected W9"
+      awaiting_authorization:
+        title: "W9 approved; vendor authorization is still pending"
+        body: "Your W9 has been approved. Program staff must separately authorize your vendor account before you can redeem vouchers. Contact the program if you need an update."
+      suspended:
+        title: "Your vendor account is suspended"
+        body: "You cannot redeem vouchers while your account is suspended, even if your W9 is approved. Contact the program to discuss the next step."
+      ready:
+        title: "You are ready to redeem vouchers"
+        body: "Your current W9 is approved and the program has authorized your vendor account. You can now process a voucher."
+        action: "Process a voucher"
+      terms_unpublished:
+        title: "Vendor terms are not yet available"
+        body: "Your W9 is approved, but the vendor agreement has not been published. You can keep updating your profile. You must review and accept the published agreement before staff can authorize a new vendor account."
+        action: "View the vendor terms page"
+      terms_required:
+        title: "Review and accept the vendor terms"
+        body: "Your W9 is approved. Review the published vendor agreement on your profile and accept it before staff can authorize your vendor account."
+        action: "Review terms on your profile"
+    terms:
+      title: "Vendor terms and conditions"
+      unavailable: "Vendor terms have not been published. New acceptance is unavailable."
+      publication_help: "The program must publish the approved agreement before vendors who have never accepted terms can complete onboarding. Any earlier acceptance stays on file."
+      accepted_on: "Terms accepted on %{date}."
+      review: "Review vendor terms and conditions"
+      acceptance_label: "I agree to the published vendor terms and conditions."
+      acceptance_help: "Read the agreement before accepting it. W9 approval and program authorization are separate steps."
+    approval_notice:
+      title: "W9 approved"
+      body: "Your W9 has been approved. W9 approval does not authorize your vendor account. Check your dashboard for any remaining steps and your program authorization status."
