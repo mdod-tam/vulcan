@@ -5,125 +5,82 @@ require 'application_system_test_case'
 module VendorPortal
   class InterfaceTest < ApplicationSystemTestCase
     setup do
+      FeatureFlag.enable!(:vouchers_enabled)
       @vendor = create(:vendor, :approved)
-      @voucher = create(:voucher, :active, vendor: @vendor)
-
+      @voucher = create(:voucher, :active, vendor: @vendor, initial_value: 100)
+      @product = create(:product)
       system_test_sign_in(@vendor)
     end
 
-    test 'viewing dashboard' do
+    test 'dashboard offers processing to an authorized vendor' do
       visit vendor_portal_dashboard_path
-      clear_pending_connections_fast
-
       assert_selector 'h1', text: 'Vendor Dashboard'
-
       assert_text 'Business Information'
       assert_text 'Recent Transactions'
-
+      assert_text 'You are ready to redeem vouchers'
       assert_link 'Process Voucher'
     end
 
-    test 'attempts voucher processing after code lookup' do
-      visit vendor_portal_vouchers_path
-      clear_pending_connections_fast
-
-      fill_in 'voucher_code', with: @voucher.code
-      click_on 'Verify Voucher'
-      clear_pending_connections_fast
-
-      if has_text?('Valid Voucher', wait: 3)
-        fill_in 'amount', with: '50.00'
-        click_on 'Process Voucher'
-        clear_pending_connections_fast
-
-        assert_text(/success|processed/i, wait: 5)
-      else
-        skip 'Add date-of-birth verification before the redemption assertions'
-      end
+    test 'normal navigation verifies identity and redeems a voucher' do
+      click_link 'Vouchers'
+      fill_in 'Voucher Code', with: @voucher.code
+      click_button 'Verify Voucher'
+      assert_text 'Identity Verification'
+      fill_in 'date_of_birth', with: @voucher.application.user.date_of_birth.strftime('%m/%d/%Y')
+      click_button 'Verify Identity'
+      assert_text 'Voucher Redemption'
+      fill_in 'Redemption Amount', with: '50.00'
+      check "product_#{@product.id}"
+      click_button 'Process Redemption'
+      assert_text 'Voucher successfully processed'
+      assert_equal 50, @voucher.reload.remaining_value
+      assert_equal [@product.id], @vendor.voucher_transactions.sole.products.pluck(:id)
+      take_screenshot('vendor-interface-redemption-complete', html: true, full: true)
     end
 
-    test 'attempting to process an invalid voucher' do
-      visit vendor_portal_vouchers_path
-      clear_pending_connections_fast
-
-      fill_in 'voucher_code', with: 'INVALID-CODE'
-      click_on 'Verify Voucher'
-      clear_pending_connections_fast
-
-      assert_text(/invalid|not found|error/i, wait: 5)
+    test 'invalid voucher lookup returns a visible error' do
+      click_link 'Vouchers'
+      fill_in 'Voucher Code', with: 'INVALID-CODE'
+      click_button 'Verify Voucher'
+      assert_text 'Invalid voucher code'
+      assert_current_path vendor_portal_vouchers_path, ignore_query: true
     end
 
-    test 'viewing transaction history' do
-      create_list(:voucher_transaction, 3,
-                  vendor: @vendor,
-                  status: 'transaction_completed')
-
+    test 'transaction rows display the vendor selected purchases' do
+      create_list(:voucher_transaction, 3, vendor: @vendor)
       visit vendor_portal_transactions_path
-      clear_pending_connections_fast
-
-      assert_text(/transaction|history/i)
-
-      assert_selector 'table tbody tr', minimum: 1 if has_selector?('table tbody tr', wait: 3)
+      assert_selector 'h1', text: 'Transaction History'
+      assert_selector 'table tbody tr', count: 3
+      assert_text '3 purchases totaling'
     end
 
-    test 'requests transaction history as CSV' do
-      create_list(:voucher_transaction, 3,
-                  vendor: @vendor,
-                  status: 'transaction_completed')
-
-      visit vendor_portal_transactions_path(format: :csv)
-      clear_pending_connections_fast
-
-      assert_match(/csv|text/, page.response_headers['Content-Type']) if page.response_headers['Content-Type']
+    test 'custom date filters preserve their dates in the complete export link' do
+      dates = { period: 'custom', start_date: '10/01/2026', end_date: '10/09/2026' }
+      visit vendor_portal_transactions_path
+      select 'Custom Range', from: 'Time Period'
+      fill_in 'Start Date', with: dates[:start_date]
+      fill_in 'End Date', with: dates[:end_date]
+      click_button 'Apply Filters'
+      assert_field 'Start Date', with: dates[:start_date], visible: true
+      assert_field 'End Date', with: dates[:end_date], visible: true
+      export_params = Rack::Utils.parse_nested_query(URI.parse(find_link('Export CSV')[:href]).query)
+      dates.each { |key, value| assert_equal value, export_params[key.to_s] }
+      assert_not export_params.key?('page')
     end
 
-    test 'viewing invoice details' do
+    test 'paid invoice details show the recorded payment' do
       invoice = create(:invoice, :paid, :with_transactions, vendor: @vendor)
-
       visit vendor_portal_invoice_path(invoice)
-      clear_pending_connections_fast
-
       assert_text invoice.invoice_number
-      assert_text(/invoice paid|paid/i)
+      assert_text 'Paid'
     end
 
-    test 'enters custom dates when the controls are present' do
-      visit vendor_portal_transactions_path
-      clear_pending_connections_fast
-
-      if has_select?('Time Period', wait: 2)
-        select 'Custom Range', from: 'Time Period'
-
-        if has_field?('Start Date', wait: 2)
-          fill_in 'Start Date', with: 1.month.ago.strftime('%Y-%m-%d')
-          fill_in 'End Date', with: Time.current.strftime('%Y-%m-%d')
-
-          click_on 'Apply Filters' if has_button?('Apply Filters')
-        else
-          skip 'Start Date field is absent after Custom Range selection'
-        end
-      else
-        skip 'Time Period select is absent on the transactions page'
-      end
-    end
-
-    test 'opens dashboard for a pending vendor' do
+    test 'a pending vendor sees the separate program authorization blocker' do
       @vendor.update!(vendor_authorization_status: :pending)
-
       visit vendor_portal_dashboard_path
-      clear_pending_connections_fast
-
-      assert_text(/pending|review|approval/i) if has_text?(/pending|review|approval/i, wait: 3)
-
-      assert_text(/w9|form|upload/i) if !@vendor.w9_form.attached? && has_text?(/w9|form|upload/i, wait: 2)
-    end
-
-    private
-
-    def clear_pending_connections_fast
-      super if defined?(super)
-    rescue StandardError => e
-      debug_puts "Connection clear warning in vendor interface: #{e.message}"
+      assert_text 'W9 approved; vendor authorization is still pending'
+      assert_no_link 'Process Voucher'
+      assert_selector '[data-vendor-onboarding-state="awaiting_authorization"]'
     end
   end
 end

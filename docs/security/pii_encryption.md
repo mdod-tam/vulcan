@@ -10,7 +10,7 @@ Encryption covers the declarations below, not every piece of personal informatio
 
 | Owner | Deterministic fields | Other encrypted fields |
 | --- | --- | --- |
-| [UserProfile](../../app/models/concerns/user_profile.rb) | `email`, `phone`, `dependent_email`, `dependent_phone`, `ssn_last4`, `date_of_birth` | `password_digest`, `physical_address_1`, `physical_address_2`, `city`, `state`, `zip_code` |
+| [UserProfile](../../app/models/concerns/user_profile.rb) | `email`, `phone`, `dependent_email`, `dependent_phone`, `ssn_last4`, `date_of_birth` | `password_digest`, `physical_address_1`, `physical_address_2`, `city`, `state`, `zip_code`, `business_tax_id` |
 | [TotpCredential](../../app/models/totp_credential.rb) | — | `secret` |
 | [WebauthnCredential](../../app/models/webauthn_credential.rb) | — | `public_key` |
 | [SecureRequestForm](../../app/models/secure_request_form.rb) | `recipient_email`, `recipient_phone` | — |
@@ -40,11 +40,11 @@ SQL `LOWER`, `LIKE`, and substring matching operate on ciphertext and silently r
 
 [The initializer](../../config/initializers/active_record_encryption.rb) reads `primary_key`, `deterministic_key`, and `key_derivation_salt` from `Rails.application.credentials.active_record_encryption`.
 
-**Persistent environments need stable keys.** Missing credentials trigger temporary random keys; the fallback is not restricted to development. Losing the matching keys makes encrypted records unreadable, including restored backups.
+**Persistent environments need stable keys.** Production startup refuses missing or incomplete encryption credentials. Development/test can use temporary random keys when credentials are absent; these cannot protect durable data across restarts. Losing the matching keys makes encrypted records unreadable, including restored backups.
 
 `RAILS_MASTER_KEY` decrypts the credentials file, not database columns. A replacement instance can use a different master key only with credentials re-encrypted under it that preserve the original Active Record keys and salt. Preserve the effective `secret_key_base` too: besides signed cookies/links, it supplies the HMAC key for the persisted email-search index. Changing it requires rebuilding those tokens.
 
-Use the [backup checklist and settings comparison](../infrastructure/backup_and_recovery.md) for recovery. The [planned startup guard](../future_work/mat_vulcan_todos.md#encryption-startup-validation) will reject missing runtime encryption configuration; it is not yet implemented.
+Use the [backup checklist and settings comparison](../infrastructure/backup_and_recovery.md) for recovery. See the [vendor tax-record cutover](../infrastructure/vendor_tax_records_cutover.md) for the stable-key check, resumable TIN/audit conversion, W9 storage-key rotation, and cache invalidation order.
 
 Two settings matter during migrations:
 

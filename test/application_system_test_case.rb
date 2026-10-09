@@ -4,6 +4,10 @@
 
 require 'test_helper'
 require 'json'
+require 'digest'
+# Bind recorded local captures when the optional repository harness is attached.
+artifact_receipt_source = Rails.root.join('.cursor/lib/artifact_receipt.rb')
+require artifact_receipt_source if artifact_receipt_source.file?
 require 'socket'
 require 'capybara/cuprite'
 begin
@@ -21,7 +25,8 @@ Capybara.configure do |config|
   config.server_host = '127.0.0.1'
   # Dynamic ports avoid conflicts between parallel workers.
   config.server_port = nil
-  config.save_path = Rails.root.join('tmp/capybara')
+  context = ArtifactReceipt.capture_context(root: Rails.root) if defined?(ArtifactReceipt)
+  config.save_path = context ? context.fetch('artifact_dir') : Rails.root.join('tmp/capybara')
   config.disable_animation = true
   config.enable_aria_label = true
 end
@@ -472,12 +477,14 @@ class ApplicationSystemTestCase < ActionDispatch::SystemTestCase
       screenshot_sidecar_path,
       JSON.pretty_generate(
         generated_at: Time.current.iso8601,
+        run_id: defined?(ArtifactReceipt) && ArtifactReceipt.capture_context(root: Rails.root)&.fetch('run_id'),
         test_class: self.class.name,
         test_name: name,
         label: label,
         artifact_usable_for_llm_qa: unusable_reasons.empty?,
         unusable_reasons: unusable_reasons,
         screenshot_path: path,
+        screenshot_sha256: Digest::SHA256.file(path).hexdigest,
         html_path: html_saved ? html_path : nil,
         browser_state: state,
         viewport_analysis: blank_analysis,
