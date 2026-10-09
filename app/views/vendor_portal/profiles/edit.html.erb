@@ -163,7 +163,7 @@
                   </p>
                   <div class="mt-2">
                     <%= link_to 'View Current W9',
-                                rails_blob_path(@stored_w9, disposition: 'inline'),
+                                vendor_w9_document_path(@vendor, @stored_w9, disposition: 'inline'),
                                 class: 'text-sm text-indigo-600 hover:text-indigo-500',
                                 target: '_blank', rel: 'noopener' %>
                   </div>
@@ -180,7 +180,8 @@
             <div class="mt-2">
               <%= render 'shared/document_upload',
                          form: f, field: 'w9_form', model: Users::Vendor, input_id: 'users_vendor_w9_form',
-                         blob: @retained_w9, described_by: 'w9_form_help' %>
+                         blob: @retained_w9, described_by: 'w9_form_help',
+                         upload_url: vendor_portal_w9_uploads_path, retained_reference: @retained_w9_reference %>
             </div>
           </div>
         </div>

@@ -11,6 +11,7 @@ class W9ReviewTest < ActiveSupport::TestCase
   test 'valid approved review' do
     review = W9Review.new(
       vendor: @vendor,
+      reviewed_blob: @vendor.w9_form.blob,
       admin: @admin,
       status: :approved,
       reviewed_at: Time.current
@@ -21,6 +22,7 @@ class W9ReviewTest < ActiveSupport::TestCase
   test 'valid rejected review' do
     review = W9Review.new(
       vendor: @vendor,
+      reviewed_blob: @vendor.w9_form.blob,
       admin: @admin,
       status: :rejected,
       rejection_reason_code: :address_mismatch,
@@ -33,6 +35,7 @@ class W9ReviewTest < ActiveSupport::TestCase
   test 'rejected review requires rejection reason' do
     review = W9Review.new(
       vendor: @vendor,
+      reviewed_blob: @vendor.w9_form.blob,
       admin: @admin,
       status: :rejected,
       rejection_reason_code: :address_mismatch,
@@ -46,6 +49,7 @@ class W9ReviewTest < ActiveSupport::TestCase
   test 'rejected review requires rejection reason code' do
     review = W9Review.new(
       vendor: @vendor,
+      reviewed_blob: @vendor.w9_form.blob,
       admin: @admin,
       status: :rejected,
       rejection_reason: 'Invalid information',
@@ -58,6 +62,7 @@ class W9ReviewTest < ActiveSupport::TestCase
   test 'approved review clears rejection fields' do
     review = W9Review.new(
       vendor: @vendor,
+      reviewed_blob: @vendor.w9_form.blob,
       admin: @admin,
       status: :approved,
       rejection_reason_code: :address_mismatch,
@@ -69,94 +74,19 @@ class W9ReviewTest < ActiveSupport::TestCase
     assert_nil review.rejection_reason_code
   end
 
-  test 'creating approved review updates vendor status' do
-    # Use truncation strategy for this test to ensure after_commit callbacks fire
-    DatabaseCleaner.strategy = :truncation
-    DatabaseCleaner.clean
-
-    # Recreate test data since we cleaned the database
-    vendor = create(:vendor, :with_w9)
-    admin = create(:admin)
-
-    assert_equal 'pending_review', vendor.w9_status
-
-    W9Review.create!(
-      vendor: vendor,
-      admin: admin,
-      status: :approved,
-      reviewed_at: Time.current
-    )
-
-    vendor.reload
-    assert_equal 'approved', vendor.w9_status
-  ensure
-    # Restore transaction strategy for other tests
-    DatabaseCleaner.strategy = :transaction
-  end
-
-  test 'creating rejected review updates vendor status' do
-    # Use truncation strategy for this test to ensure after_commit callbacks fire
-    DatabaseCleaner.strategy = :truncation
-    DatabaseCleaner.clean
-
-    # Recreate test data since we cleaned the database
-    vendor = create(:vendor, :with_w9)
-    admin = create(:admin)
-
-    assert_equal 'pending_review', vendor.w9_status
-
-    W9Review.create!(
-      vendor: vendor,
-      admin: admin,
-      status: :rejected,
-      rejection_reason_code: :address_mismatch,
-      rejection_reason: "Address doesn't match records",
-      reviewed_at: Time.current
-    )
-
-    vendor.reload
-    assert_equal 'rejected', vendor.w9_status
-  ensure
-    # Restore transaction strategy for other tests
-    DatabaseCleaner.strategy = :transaction
-  end
-
-  test 'rejected review records audit notification without direct mail delivery' do
-    review = W9Review.new(
-      vendor: @vendor,
-      admin: @admin,
-      status: :rejected,
-      rejection_reason_code: :address_mismatch,
-      rejection_reason: "Address doesn't match records",
-      reviewed_at: Time.current
-    )
-
-    Vendors::RequestW9Resubmission.any_instance.expects(:call).returns(BaseService::Result.new(success: true, message: 'ok', data: {}))
-    NotificationService
-      .expects(:create_and_deliver!)
-      .with(
-        has_entries(
-          type: 'w9_rejected',
-          recipient: @vendor,
-          actor: @admin,
-          notifiable: @vendor,
-          channel: :email,
-          audit: true,
-          deliver: false,
-          metadata: has_entries(
-            rejection_reason: "Address doesn't match records",
-            rejection_reason_code: 'address_mismatch'
-          )
-        )
-      )
-
-    review.send(:handle_post_review_actions)
+  test 'reviewed document is immutable' do
+    review = create(:w9_review, vendor: @vendor, admin: @admin)
+    replacement = ActiveStorage::Blob.create_and_upload!(io: file_fixture('sample_w9.pdf').open,
+                                                         filename: 'replacement.pdf', content_type: 'application/pdf')
+    assert_raises(ActiveRecord::ReadonlyAttributeError) { review.reviewed_blob_id = replacement.id }
+    assert_equal @vendor.w9_form.blob.id, review.reload.reviewed_blob_id
   end
 
   test 'admin must be an admin type' do
     non_admin = create(:vendor)
     review = W9Review.new(
       vendor: @vendor,
+      reviewed_blob: @vendor.w9_form.blob,
       admin: non_admin,
       status: :approved,
       reviewed_at: Time.current
@@ -180,6 +110,7 @@ class W9ReviewTest < ActiveSupport::TestCase
   test 'reviewed_at is set automatically on create' do
     review = W9Review.new(
       vendor: @vendor,
+      reviewed_blob: @vendor.w9_form.blob,
       admin: @admin,
       status: :approved
     )
@@ -191,6 +122,7 @@ class W9ReviewTest < ActiveSupport::TestCase
   test 'status must be present' do
     review = W9Review.new(
       vendor: @vendor,
+      reviewed_blob: @vendor.w9_form.blob,
       admin: @admin,
       reviewed_at: Time.current
     )

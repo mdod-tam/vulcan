@@ -11,6 +11,7 @@ module Users
     has_many :vendor_secure_request_forms, foreign_key: :vendor_id, dependent: :destroy
 
     has_one_attached :w9_form
+    has_many_attached :w9_archive
 
     # Columns on users that only a vendor uses. Converting a vendor to another role resets each to
     # its column default (Admin::UsersController#update_role).
@@ -21,8 +22,6 @@ module Users
     W9_CERTIFIED_FIELDS = %w[business_name business_tax_id physical_address_1 physical_address_2 city state zip_code].freeze
 
     after_update :log_w9_details_changed, if: :w9_details_changed_on_file?
-    after_save :note_w9_form_attached
-    after_commit :update_w9_status_on_form_upload, on: :update
 
     validates :vendor_authorization_status, presence: true
     validates :business_name, presence: true
@@ -137,21 +136,6 @@ module Users
       return if w9_form.attached? && w9_status_approved?
 
       errors.add(:vendor_authorization_status, 'cannot be set to Approved until the W9 is approved')
-    end
-
-    # This callback marks new W9 attachments for review.
-    # Profile edits and account lockouts preserve the current W9 status.
-    def note_w9_form_attached
-      @w9_form_attached_in_save = attachment_changes.key?('w9_form')
-    end
-
-    def update_w9_status_on_form_upload
-      return unless @w9_form_attached_in_save
-
-      @w9_form_attached_in_save = false
-      return if !w9_form.attached? || w9_status_pending_review?
-
-      update_column(:w9_status, :pending_review) # rubocop:disable Rails/SkipsModelValidations
     end
 
     # A changed name, tax ID, or address does not block vouchers. Staff see it in

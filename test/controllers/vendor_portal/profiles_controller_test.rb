@@ -150,6 +150,28 @@ module VendorPortal
       assert ActiveStorage::Blob.exists?(key: retained), 'the retained upload stays visible to cleanup'
     end
 
+    test 'invalid profile replacement keeps the accepted current W9 archive and status unchanged' do
+      @vendor_user.w9_form.attach(io: file_fixture('sample_w9.pdf').open, filename: 'accepted.pdf', content_type: 'application/pdf')
+      @vendor_user.update!(w9_status: :approved)
+      previous_w9 = @vendor_user.w9_form.blob
+      snapshot = lambda do
+        @vendor_user.reload
+        [@vendor_user.business_name, @vendor_user.website_url, @vendor_user.w9_form.blob.id,
+         @vendor_user.w9_archive.blobs.ids.sort, @vendor_user.w9_status, Event.count]
+      end
+
+      assert_no_changes snapshot do
+        patch vendor_portal_profile_url, params: {
+          users_vendor: { business_name: 'Unsaved replacement', website_url: 'not a url',
+                          w9_form: fixture_file_upload('sample_w9.pdf', 'application/pdf') }
+        }
+        assert_response :unprocessable_content
+      end
+      assert_predicate @vendor_user, :w9_status_approved?
+      assert_equal previous_w9.id, @vendor_user.w9_form.blob.id
+      assert_select "input[name='users_vendor[w9_form_signed_id]']"
+    end
+
     test 'a usable new W-9 is kept for the next attempt when another field fails' do
       @vendor_user.w9_form.attach(io: file_fixture('sample_w9.pdf').open, filename: 'w9.pdf', content_type: 'application/pdf')
       previous_w9 = @vendor_user.w9_form.blob

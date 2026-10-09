@@ -105,7 +105,7 @@ class UploadedDocument
   end
 
   def reusable?(blob)
-    !expired_unattached?(blob) && !attached_elsewhere?(blob)
+    !quarantined?(blob) && !expired_unattached?(blob) && !attached_elsewhere?(blob)
   end
 
   private
@@ -150,6 +150,7 @@ class UploadedDocument
 
   def checked_blob(blob)
     blob.lock!
+    refuse(:unavailable) if quarantined?(blob)
     refuse(:expired) if expired_unattached?(blob)
     refuse(:attached_elsewhere) if attached_elsewhere?(blob)
     check_size(blob.byte_size)
@@ -162,6 +163,10 @@ class UploadedDocument
 
   def expired_unattached?(blob)
     !blob.attachments.exists? && blob.created_at <= CleanupUnattachedUploadsJob::RETENTION.ago
+  end
+
+  def quarantined?(blob)
+    blob.metadata['w9_cutover_quarantined'] == true
   end
 
   def attached_elsewhere?(blob)

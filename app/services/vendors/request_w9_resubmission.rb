@@ -9,8 +9,9 @@ module Vendors
 
     attr_reader :vendor, :actor, :resend_of, :public_recovery
 
-    def initialize(vendor:, actor:, resend_of: nil, public_recovery: false)
+    def initialize(vendor:, actor:, resend_of: nil, public_recovery: false, review: nil)
       super()
+      @review = review
       @vendor = vendor
       @actor = actor
       @resend_of = resend_of
@@ -19,8 +20,9 @@ module Vendors
 
     def call
       return failure(message(:recipient_email_required)) if recipient_email.blank?
-      return failure(message(:request_not_needed)) unless requestable_w9_state?
-      return failure(message(:missing_rejection_review)) if vendor.w9_status_rejected? && latest_rejection_review.blank?
+
+      denial = request_state_denial
+      return denial if denial
 
       denial = authorize_delivery
       return denial if denial
@@ -29,6 +31,10 @@ module Vendors
 
       ApplicationRecord.transaction do
         vendor.with_lock do
+          @latest_rejection_review = nil
+          denial = request_state_denial
+          return denial if denial
+
           ensure_cooldown_allows!
           revoke_open_requests
           delivery = create_request
@@ -53,6 +59,15 @@ module Vendors
 
     private
 
+    def request_state_denial
+      return failure(message(:request_not_needed)) unless requestable_w9_state?
+      return failure(message(:missing_rejection_review)) if vendor.w9_status_rejected? && latest_rejection_review.blank?
+      return unless @review
+      return if vendor.w9_form.blob&.id == @review.reviewed_blob_id && latest_rejection_review&.id == @review.id
+
+      failure(message(:request_not_needed))
+    end
+
     def ensure_cooldown_allows!
       latest_request = VendorSecureRequestForm
                        .w9_upload
@@ -72,7 +87,7 @@ module Vendors
     def revoke_open_requests
       VendorSecureRequestForm
         .open_w9_upload_for_vendor(vendor_id: vendor.id)
-        .find_each { |request_form| request_form.revoke!(actor: actor, reason: :replacement_request) }
+        .order(:id).each { |request_form| request_form.with_lock { request_form.revoke!(actor: actor, reason: :replacement_request) } }
     end
 
     def create_request
@@ -179,7 +194,7 @@ module Vendors
     end
 
     def latest_rejection_review
-      @latest_rejection_review ||= vendor.w9_reviews.where(status: :rejected).order(reviewed_at: :desc, created_at: :desc).first
+      @latest_rejection_review ||= vendor.w9_reviews.where(status: :rejected).order(reviewed_at: :desc, created_at: :desc, id: :desc).first
     end
 
     def requestable_w9_state?

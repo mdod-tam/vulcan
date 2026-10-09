@@ -153,6 +153,7 @@ class VendorNotificationsMailerTest < ActionMailer::TestCase
 
   test 'w9_rejected' do
     Vendors::RequestW9Resubmission.any_instance.stubs(:call).returns(BaseService::Result.new(success: true, message: 'ok', data: {}))
+    @vendor.w9_form.attach(io: file_fixture('sample_w9.pdf').open, filename: 'w9.pdf', content_type: 'application/pdf')
     review = create(:w9_review, :rejected, vendor: @vendor)
     secure_upload_url = 'https://example.test/secure_w9_form?token=abc'
     EmailTemplate.unstub(:find_by!)

@@ -59,7 +59,7 @@ module Admin
     end
 
     def vendor_w9_history_item_detail(item)
-      return review_rejection_detail(item.record) if item.type == :review && item.record.status_rejected?
+      return vendor_w9_review_detail(item.record) if item.type == :review
       return vendor_w9_secure_request_notification_detail(item.record) if item.type == :secure_request_notification
       return unless item.type == :secure_request_event
 
@@ -79,6 +79,13 @@ module Admin
     end
 
     private
+
+    def vendor_w9_review_detail(review)
+      details = []
+      details << 'Reviewed document unknown.' if review.reviewed_blob_id.nil?
+      details << review_rejection_detail(review) if review.status_rejected?
+      details.compact.join(' ').presence
+    end
 
     def vendor_w9_secure_request_notification_detail(notification)
       metadata = (notification.metadata || {}).deep_stringify_keys

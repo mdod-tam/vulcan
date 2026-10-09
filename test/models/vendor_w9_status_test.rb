@@ -27,8 +27,8 @@ class VendorW9StatusTest < ActiveSupport::TestCase
   test 'a newly attached W9 moves an approved W9 to review' do
     force_w9_status(:approved)
 
-    @vendor.w9_form.attach(io: Rails.root.join('test/fixtures/files/sample_w9.pdf').open,
-                           filename: 'new_w9.pdf', content_type: 'application/pdf')
+    file = Rack::Test::UploadedFile.new(Rails.root.join('test/fixtures/files/sample_w9.pdf'), 'application/pdf')
+    Vendors::ReplaceW9.call(vendor: @vendor, file: file)
 
     assert_predicate @vendor.reload, :w9_status_pending_review?
   end

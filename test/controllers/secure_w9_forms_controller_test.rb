@@ -5,6 +5,7 @@ require 'test_helper'
 class SecureW9FormsControllerTest < ActionDispatch::IntegrationTest
   setup do
     @vendor = create(:vendor, :with_w9)
+    @vendor.update!(w9_status: :rejected)
     @raw_token = VendorSecureRequestForm.generate_public_token
     @secure_request_form = create(:vendor_secure_request_form,
                                   vendor: @vendor,

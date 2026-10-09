@@ -10,7 +10,7 @@
 #
 # It's strongly recommended that you check this file into your version control system.
 
-ActiveRecord::Schema[8.1].define(version: 2026_10_09_120000) do
+ActiveRecord::Schema[8.1].define(version: 2026_10_09_120100) do
   # These are extensions that must be enabled in order to support this database
   enable_extension "pg_catalog.plpgsql"
 
@@ -1048,10 +1048,12 @@ ActiveRecord::Schema[8.1].define(version: 2026_10_09_120000) do
     t.text "rejection_reason"
     t.integer "rejection_reason_code"
     t.datetime "reviewed_at", null: false
-    t.integer "status", default: 0, null: false
+    t.integer "status", null: false
     t.datetime "updated_at", null: false
     t.bigint "vendor_id", null: false
+    t.bigint "reviewed_blob_id"
     t.index ["admin_id"], name: "index_w9_reviews_on_admin_id"
+    t.index ["vendor_id", "reviewed_blob_id"], name: "index_w9_reviews_on_vendor_id_and_reviewed_blob_id", unique: true
     t.index ["vendor_id"], name: "index_w9_reviews_on_vendor_id"
   end
 
@@ -1152,6 +1154,7 @@ ActiveRecord::Schema[8.1].define(version: 2026_10_09_120000) do
   add_foreign_key "voucher_verification_throttles", "vouchers", on_delete: :cascade
   add_foreign_key "vouchers", "applications"
   add_foreign_key "vouchers", "users", column: "vendor_id"
+  add_foreign_key "w9_reviews", "active_storage_blobs", column: "reviewed_blob_id"
   add_foreign_key "w9_reviews", "users", column: "admin_id"
   add_foreign_key "w9_reviews", "users", column: "vendor_id"
   add_foreign_key "webauthn_credentials", "users"

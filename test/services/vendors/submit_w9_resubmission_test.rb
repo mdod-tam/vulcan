@@ -32,6 +32,30 @@ module Vendors
       assert_equal @vendor, event.user
     end
 
+    test 'audit failure rolls back the document archive status and consumed request together' do
+      previous_w9 = @vendor.w9_form.blob
+      create(:w9_review, :rejected, vendor: @vendor, reviewed_blob: previous_w9)
+      upload = fixture_file_upload('sample_w9.pdf', 'application/pdf')
+      AuditEventService.expects(:log).with(has_entries(action: 'w9_submitted_via_secure_form'))
+                       .raises(ActiveRecord::RecordInvalid.new(Event.new))
+
+      snapshot = lambda do
+        @vendor.reload
+        @secure_request_form.reload
+        [@vendor.w9_form.blob.id, @vendor.w9_archive.blobs.ids.sort, @vendor.w9_status,
+         @vendor.w9_rejections_count, @secure_request_form.status, @secure_request_form.submitted_at,
+         Event.count, @vendor.w9_reviews.count]
+      end
+
+      assert_no_changes snapshot do
+        result = SubmitW9Resubmission.new(vendor: @vendor, vendor_secure_request_form: @secure_request_form, file: upload).call
+        assert_predicate result, :failure?
+      end
+      assert_predicate @vendor, :w9_status_rejected?
+      assert_predicate @secure_request_form, :active_for_public_use?
+      assert_equal previous_w9.id, @vendor.w9_form.blob.id
+    end
+
     test 'fails when token does not belong to vendor' do
       other_vendor = create(:vendor, :with_w9)
       file = fixture_file_upload(Rails.root.join('test/fixtures/files/sample_w9.pdf'), 'application/pdf')

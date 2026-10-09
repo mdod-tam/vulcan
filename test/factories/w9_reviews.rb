@@ -6,6 +6,7 @@ FactoryBot.define do
     admin
     status { :approved }
     reviewed_at { Time.current }
+    reviewed_blob { vendor.w9_form.blob }
 
     trait :approved do
       status { :approved }

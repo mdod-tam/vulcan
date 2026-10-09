@@ -18,12 +18,13 @@ module Admin
         content_type: 'application/pdf'
       )
 
+      vendor.update!(w9_status: :pending_review)
       assert vendor.w9_form.attached?, 'W9 form should be attached'
 
       get new_admin_vendor_w9_review_path(vendor)
 
       assert_response :success
-      assert_select 'h1', 'Review W9 Form' if response.body.present?
+      assert_select 'h1', 'Review W9 Form'
     end
 
     test 'should create approved w9 review' do
@@ -33,6 +34,7 @@ module Admin
         filename: 'w9_form.pdf',
         content_type: 'application/pdf'
       )
+      vendor.update!(w9_status: :pending_review)
       assert vendor.w9_form.attached?
 
       W9Review.where(vendor_id: vendor.id).destroy_all
@@ -40,6 +42,7 @@ module Admin
       assert_difference('W9Review.count') do
         post admin_vendor_w9_reviews_path(vendor), params: {
           w9_review: {
+            reviewed_blob_id: vendor.w9_form.blob.id,
             status: 'approved',
             reviewed_at: Time.current.to_s
           }
@@ -65,6 +68,7 @@ module Admin
         content_type: 'application/pdf'
       )
 
+      vendor.update!(w9_status: :pending_review)
       assert vendor.w9_form.attached?
 
       W9Review.where(vendor_id: vendor.id).destroy_all
@@ -72,6 +76,7 @@ module Admin
       assert_difference('W9Review.count') do
         post admin_vendor_w9_reviews_path(vendor), params: {
           w9_review: {
+            reviewed_blob_id: vendor.w9_form.blob.id,
             status: 'rejected',
             rejection_reason_code: 'address_mismatch',
             rejection_reason: "The address doesn't match our records",
@@ -104,6 +109,7 @@ module Admin
         content_type: 'application/pdf'
       )
 
+      vendor.update!(w9_status: :pending_review)
       assert vendor.w9_form.attached?
 
       W9Review.where(vendor_id: vendor.id).destroy_all
@@ -114,6 +120,7 @@ module Admin
       assert_no_difference('W9Review.count') do
         post admin_vendor_w9_reviews_path(vendor), params: {
           w9_review: {
+            reviewed_blob_id: vendor.w9_form.blob.id,
             status: 'rejected',
             rejection_reason: '',
             rejection_reason_code: ''
@@ -142,6 +149,19 @@ module Admin
 
       get admin_vendor_w9_review_path(vendor, review)
       assert_response :success
+    end
+
+    test 'review shows recorded delivery failure instead of claiming an email was sent' do
+      vendor = create(:vendor, :with_w9)
+      review = create(:w9_review, vendor: vendor, admin: @admin)
+      notification = create(:notification, recipient: vendor, actor: @admin, notifiable: vendor, action: 'w9_approved')
+      notification.mark_delivery_failed!(StandardError.new('Synthetic delivery failure'))
+
+      get admin_vendor_w9_review_path(vendor, review)
+
+      assert_response :success
+      assert_select 'section[aria-label="W9 decision delivery"]', text: /#{Regexp.escape(DeliveryStatusPresenter.new(notification).label)}/
+      assert_no_match(/Yes, email sent/, response.body)
     end
 
     test 'should require admin authentication' do

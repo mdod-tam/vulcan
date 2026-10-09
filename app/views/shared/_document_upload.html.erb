@@ -1,4 +1,4 @@
-<%# locals: (form:, field:, model:, blob: nil, described_by: nil, input_id: field.to_s, input_data: {}) %>
+<%# locals: (form:, field:, model:, blob: nil, described_by: nil, input_id: field.to_s, input_data: {}, retained_reference: nil, upload_url: nil) %>
 <%# Rails uploads the file to storage before form submission.
     The retained upload uses "#{field}_signed_id". A new upload in field takes precedence.
     See UploadedDocument.submitted. %>
@@ -22,10 +22,10 @@
             'direct-upload:error->document-upload#failed',
             'direct-upload:end->document-upload#finished'
           ].join(' ')
-        }.merge(input_data)
+        }.merge(upload_url ? { direct_upload_url: upload_url } : {}).merge(input_data)
       ) %>
   <% if blob %>
-    <%= form.hidden_field "#{field}_signed_id", value: blob.signed_id, id: nil, data: { document_upload_target: 'retained' } %>
+    <%= form.hidden_field "#{field}_signed_id", value: retained_reference || blob.signed_id, id: nil, data: { document_upload_target: 'retained' } %>
   <% end %>
   <p id="<%= input_id %>_status" role="status" class="mt-2 text-sm" data-document-upload-target="status">
     <%= t('documents.upload.uploaded', filename: blob.filename) if blob %>

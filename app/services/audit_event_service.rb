@@ -104,6 +104,9 @@ class AuditEventService < BaseService
     operation_id = metadata['operation_id'] || metadata[:operation_id]
     return "#{base}_operation_#{operation_id}" if operation_id.present?
 
+    reviewed_blob_id = metadata['reviewed_blob_id'] || metadata[:reviewed_blob_id]
+    return "#{base}_blob_#{reviewed_blob_id}" if %w[w9_approved w9_rejected].include?(action.to_s) && reviewed_blob_id.present?
+
     if action.to_s.include?('proof_submitted') || action.to_s.include?('proof_attached')
       proof_type = metadata['proof_type'] || metadata[:proof_type]
       submission_method = metadata['submission_method'] || metadata[:submission_method]
