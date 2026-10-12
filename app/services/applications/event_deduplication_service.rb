@@ -94,7 +94,8 @@ module Applications
       when 'alternate_contact_updated', 'medical_provider_info_updated'
         # Each stored change is distinct. AuditEventService already drops identical repeats.
         event.id.to_s
-      when 'shipment_added', 'shipment_corrected', 'fulfillment_mode_changed', 'evaluator_reassigned'
+      when 'shipment_added', 'shipment_corrected', 'fulfillment_mode_changed',
+           'evaluator_reassigned', 'evaluation_working_notes_updated'
         # Distinct operation IDs retain real changes made in the same minute.
         metadata['operation_id'].presence || event.id.to_s
       end

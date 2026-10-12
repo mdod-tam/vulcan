@@ -5,8 +5,7 @@ module Evaluators
     FORM_ERROR_FIELDS = {
       schedule: %i[evaluation_date location notes],
       reschedule: %i[evaluation_date location reschedule_reason],
-      submit_report: %i[appointment_completed_at location notes attendees_field products_tried_field
-                        recommended_product_ids recommendation_outcome recommendation_notes],
+      submit_report: ::Evaluations::SubmissionService::REPORT_FIELDS,
       cancel: %i[notes], no_show: %i[notes], save_working_notes: %i[working_notes],
       supplemental_notes: %i[post_completion_notes]
     }.transform_values(&:freeze).freeze
@@ -70,9 +69,14 @@ module Evaluators
 
     def update
       unless @evaluation.status_completed? && supplemental_notes_update?
-        prepare_show_context
-        flash.now[:alert] = 'This evaluation action must use the appropriate lifecycle control.'
-        render :show, status: :unprocessable_content
+        action = if @evaluation.status_completed?
+                   :supplemental_notes
+                 elsif @evaluation.can_complete?
+                   :submit_report
+                 else
+                   :save_working_notes
+                 end
+        render_lifecycle_failure(action, {}, 'This evaluation action must use the appropriate lifecycle control.')
         return
       end
 
@@ -83,7 +87,6 @@ module Evaluators
         @evaluation_form_values = { supplemental_notes: supplemental_notes_params.to_h.with_indifferent_access }
         @evaluation_form_errors = { supplemental_notes: evaluation_form_errors(@evaluation.errors, :supplemental_notes) }
         prepare_show_context
-        flash.now[:alert] = "Failed to update evaluation: #{@evaluation.errors.full_messages.to_sentence}"
         render :show, status: :unprocessable_content
       end
     end
@@ -144,7 +147,7 @@ module Evaluators
       if result.success?
         redirect_to evaluators_evaluation_path(@evaluation), notice: result.message
       else
-        render_lifecycle_failure(:save_working_notes, working_notes_params, result.message)
+        render_lifecycle_failure(:save_working_notes, working_notes_params, "Failed to save working notes: #{result.message}")
       end
     end
 
@@ -171,7 +174,6 @@ module Evaluators
       @evaluation_form_values = { action => form_values.to_h.with_indifferent_access }
       @evaluation_form_errors = { action => form_errors }
       prepare_show_context
-      flash.now[:alert] = message
       render :show, status: :unprocessable_content
     end
 
@@ -206,9 +208,7 @@ module Evaluators
     end
 
     def report_form_params
-      params.expect(evaluation: [:appointment_completed_at, :location, :notes, :attendees_field,
-                                 :recommendation_outcome, :recommendation_notes,
-                                 { products_tried_field: [], recommended_product_ids: [] }])
+      ::Evaluations::SubmissionService.report_params(params)
     end
 
     def supplemental_notes_update?
@@ -216,19 +216,11 @@ module Evaluators
     end
 
     def schedule_params
-      if params[:evaluation].present?
-        params.expect(evaluation: %i[evaluation_date location notes])
-      else
-        params.permit(:evaluation_date, :location, :notes)
-      end
+      params.expect(evaluation: %i[evaluation_date location notes])
     end
 
     def reschedule_params
-      if params[:evaluation].present?
-        params.expect(evaluation: %i[evaluation_date location reschedule_reason])
-      else
-        params.permit(:evaluation_date, :location, :reschedule_reason)
-      end
+      params.expect(evaluation: %i[evaluation_date location reschedule_reason])
     end
 
     def require_evaluator!

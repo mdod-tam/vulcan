@@ -2,6 +2,25 @@
 
 module Evaluators
   module EvaluationsHelper
+    def evaluation_visible_form_actions(evaluation, can_manage:)
+      return [] unless can_manage
+
+      case evaluation.status
+      when 'requested'
+        evaluation.evaluation_date.blank? ? %i[schedule cancel] : []
+      when 'scheduled', 'confirmed'
+        actions = %i[submit_report cancel reschedule]
+        actions.insert(1, :no_show) if evaluation.evaluation_date.present? && evaluation.evaluation_date < Time.current
+        actions
+      when 'cancelled', 'no_show', 'rescheduled'
+        [:reschedule]
+      when 'completed'
+        [:supplemental_notes]
+      else
+        []
+      end
+    end
+
     def evaluation_action_errors(action, form_errors:)
       form_errors.fetch(action, {}).with_indifferent_access
     end

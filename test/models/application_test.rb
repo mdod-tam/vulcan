@@ -359,7 +359,6 @@ class ApplicationTest < ActiveSupport::TestCase
     assert_empty evaluation.attendees
     assert_empty evaluation.products_tried
     assert_empty evaluation.recommended_product_ids
-    assert_not evaluation.report_submitted
   ensure
     Current.user = nil
   end

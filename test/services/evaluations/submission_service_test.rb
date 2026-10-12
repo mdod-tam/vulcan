@@ -131,7 +131,6 @@ module Evaluations
         assert_in_delta scheduled_time, @evaluation.evaluation_date, 1.second
         assert_equal actual_time, @evaluation.appointment_completed_at
         assert_equal Time.current, @evaluation.report_submitted_at
-        assert @evaluation.report_submitted
 
         event = Event.find_by!(action: 'evaluation_completed', auditable: @evaluation)
         assert_equal scheduled_time.iso8601, event.metadata['evaluation_date']
@@ -156,7 +155,6 @@ module Evaluations
         assert_equal 'scheduled', @evaluation.status
         assert_nil @evaluation.appointment_completed_at
         assert_nil @evaluation.report_submitted_at
-        assert_not @evaluation.report_submitted
       end
     end
 
@@ -239,7 +237,7 @@ module Evaluations
         parameters[:evaluation][:recommendation_outcome] = outcome
         parameters[:evaluation][:recommendation_notes] = 'Assessment reason and any external product details'
         parameters[:evaluation].delete(:recommended_product_ids)
-        parameters[:evaluation][:products_tried] = []
+        parameters[:evaluation][:products_tried_field] = []
 
         assert_difference('Event.where(action: "evaluation_completed").count', 1) do
           result = SubmissionService.new(evaluation, parameters, actor: @evaluator).call
@@ -300,7 +298,7 @@ module Evaluations
       parameters[:evaluation][:recommendation_outcome] = 'no_suitable_product'
       parameters[:evaluation][:recommendation_notes] = ''
       parameters[:evaluation].delete(:recommended_product_ids)
-      parameters[:evaluation][:products_tried] = []
+      parameters[:evaluation][:products_tried_field] = []
 
       assert_no_difference('Event.where(action: "evaluation_completed").count') do
         result = SubmissionService.new(@evaluation, parameters, actor: @evaluator).call
@@ -363,8 +361,8 @@ module Evaluations
           location: 'Main Office',
           appointment_completed_at: Time.current,
           recommended_product_ids: [@product.id],
-          products_tried: [{ product_id: @product.id, reaction: 'Positive' }],
-          attendees: [{ name: 'Test Constituent', relationship: 'Self' }]
+          products_tried_field: [@product.id],
+          attendees_field: 'Test Constituent'
         }
       )
     end

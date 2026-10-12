@@ -4,6 +4,8 @@ require 'application_system_test_case'
 
 module Evaluators
   class EvaluationOutcomesTest < ApplicationSystemTestCase
+    include EvaluatorSystemAssertions
+
     setup do
       @evaluator = create(:evaluator)
       @product = create(:product, name: 'Outcome Trial Device')
@@ -17,24 +19,28 @@ module Evaluators
       within '#complete-evaluation-form' do
         choose 'Outside the catalog'
         fill_in 'Recommendation details', with: 'Initial recommendation for a specialist service.'
-        replace_products('products_tried_field')
+        replace_product_selection('products_tried_field')
         click_button 'Mark as Completed'
       end
       assert_selector '#submit-report-errors'
+      assert_single_action_error('submit-report-errors')
       assert_checked_field 'Outside the catalog'
       assert_field 'Recommendation details', with: 'Initial recommendation for a specialist service.'
       assert_catalog_disabled
+      assert_equal '', find('#complete-evaluation-form [role=status]', visible: :all).text(:all)
       take_screenshot('outcome-outside-restored', html: true, full: true)
       within '#complete-evaluation-form' do
         click_button 'Mark as Completed'
       end
       assert_selector '#submit-report-errors'
+      assert_single_action_error('submit-report-errors')
       assert_checked_field 'Outside the catalog'
       assert_field 'Recommendation details', with: 'Initial recommendation for a specialist service.'
       assert_catalog_disabled
 
       within '#complete-evaluation-form' do
         choose 'No suitable product'
+        assert_selector '[role=status]', text: I18n.t('evaluators.evaluations.recommendations.feedback.no_suitable_product'), visible: :all
         fill_in 'Appointment Date/Time', with: 1.hour.ago.strftime('%Y-%m-%dT%H:%M')
         fill_in 'Recommendation details', with: 'No suitable product; arrange a specialist assessment.'
         click_button 'Mark as Completed'
@@ -47,6 +53,28 @@ module Evaluators
       take_screenshot('outcome-no-suitable-completed', html: true, full: true)
     end
 
+    test 'noncatalog recommendations are hidden and excluded from submission without JavaScript after rejection' do
+      browser = page.driver.browser
+      browser.disable_javascript
+      %w[outside_catalog no_suitable_product].each do |outcome|
+        @evaluation.update!(recommendation_outcome: outcome)
+        visit evaluators_evaluation_path(@evaluation)
+        assert_server_catalog_disabled
+        fill_report(appointment_time: 1.day.from_now.strftime('%Y-%m-%dT%H:%M'))
+        within '#complete-evaluation-form' do
+          fill_in 'Recommendation details', with: 'Preserved noncatalog recommendation.'
+          click_button 'Mark as Completed'
+        end
+        assert_single_action_error('submit-report-errors')
+        assert_checked_field I18n.t("evaluations.recommendation_outcomes.#{outcome}")
+        assert_field 'Recommendation details', with: 'Preserved noncatalog recommendation.'
+        assert_server_catalog_disabled
+        take_screenshot("outcome-#{outcome}-restored-without-js", html: true, full: true)
+      end
+    ensure
+      browser&.page&.command('Emulation.setScriptExecutionDisabled', value: false)
+    end
+
     test 'an outside catalog report records truthful recommendations and optional catalog trials' do
       external_details = 'Recommend a specialist hearing clinic assessment outside this catalog. ' \
                          'https://example.org/accessibility/recommendations/specialist-assessment-resources-and-follow-up-options'
@@ -55,7 +83,7 @@ module Evaluators
       within '#complete-evaluation-form' do
         choose 'Outside the catalog'
         fill_in 'Recommendation details', with: external_details
-        replace_products('products_tried_field', @product)
+        replace_product_selection('products_tried_field', @product)
         click_button 'Mark as Completed'
       end
       assert_text 'Evaluation submitted successfully.'
@@ -77,19 +105,21 @@ module Evaluators
       within '#complete-evaluation-form' do
         choose 'Outside the catalog'
         fill_in 'Recommendation details', with: 'Restored recommendation context.'
-        replace_products('products_tried_field')
+        replace_product_selection('products_tried_field')
         click_button 'Mark as Completed'
       end
       assert_selector '#submit-report-errors'
+      assert_single_action_error('submit-report-errors')
       assert_checked_field 'Outside the catalog'
       assert_catalog_disabled
 
       within '#complete-evaluation-form' do
         choose 'Catalog products'
+        assert_selector '[role=status]', text: I18n.t('evaluators.evaluations.recommendations.feedback.catalog_products'), visible: :all
         fill_in 'Appointment Date/Time', with: 1.hour.ago.strftime('%Y-%m-%dT%H:%M')
         fill_in 'Recommendation details', with: 'Optional catalog context after retry.'
-        replace_products('products_tried_field', @product)
-        replace_products('recommended_product_ids', @product)
+        replace_product_selection('products_tried_field', @product)
+        replace_product_selection('recommended_product_ids', @product)
       end
       assert_selector '#catalog-recommendations-group'
       assert_selector '[data-recommendation-outcome-target="triedRequired"]', visible: true
@@ -119,6 +149,7 @@ module Evaluators
           click_button 'Save working notes'
         end
         assert_selector '#save-working-notes-errors'
+        assert_single_action_error('save-working-notes-errors')
       end
       assert_field 'Working notes', with: 'Reached voicemail; try again tomorrow.'
       assert_nil requested.reload.working_notes
@@ -163,6 +194,7 @@ module Evaluators
           click_button 'Add Note'
         end
         assert_selector '#supplemental-notes-errors'
+        assert_single_action_error('supplemental-notes-errors')
         assert_field 'New Note', with: 'Attempted supplemental follow-up.'
         assert_equal 'supplemental-notes-errors', page.evaluate_script('document.activeElement.id')
         assert_selector '#supplemental_evaluation_post_completion_notes[aria-invalid=true]'
@@ -202,8 +234,8 @@ module Evaluators
       visit evaluators_evaluation_path(@evaluation)
       fill_report
       within '#complete-evaluation-form' do
-        replace_products('products_tried_field', @product)
-        replace_products('recommended_product_ids')
+        replace_product_selection('products_tried_field', @product)
+        replace_product_selection('recommended_product_ids')
       end
       styles = page.evaluate_script(<<~JS)
         (() => {
@@ -216,6 +248,7 @@ module Evaluators
       assert_equal 'Mark as Completed', page.evaluate_script('document.activeElement.value')
       page.driver.browser.keyboard.type(:enter)
       assert_selector '#submit-report-errors'
+      assert_single_action_error('submit-report-errors')
       take_screenshot('report-error-summary-focused', html: true, full: true)
       assert_equal 'submit-report-errors', page.evaluate_script('document.activeElement.id')
       assert_selector '#catalog-recommendations-group[aria-invalid=true]'
@@ -278,16 +311,19 @@ module Evaluators
       end
     end
 
-    def replace_products(attribute, product = nil)
-      all("input[name='evaluation[#{attribute}][]'][type='checkbox']").each(&:uncheck)
-      find("input[name='evaluation[#{attribute}][]'][value='#{product.id}']").check if product
-    end
-
     def assert_catalog_disabled
       assert_no_selector '#catalog-recommendations-group', visible: true
       assert_selector '#catalog-recommendations-group input[type=checkbox]:disabled', visible: :all
       assert_equal true, page.evaluate_script('document.getElementById("complete_evaluation_recommendation_notes").required')
       assert_equal 'true', find_field('Recommendation details')['aria-required']
+    end
+
+    def assert_server_catalog_disabled
+      assert_selector '#catalog-recommendations-group[hidden][disabled]', visible: :all
+      assert_no_selector '#catalog-recommendations-group', visible: true
+      assert_selector '#catalog-recommendations-group input:disabled', visible: :all
+      assert_selector '#products-tried-group input[type=checkbox]:not(:disabled)'
+      assert_equal false, page.evaluate_script('new FormData(document.getElementById("complete-evaluation-form")).has("evaluation[recommended_product_ids][]")')
     end
 
     def action_visible_in_scroll_region?

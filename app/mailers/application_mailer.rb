@@ -146,8 +146,7 @@ class ApplicationMailer < ActionMailer::Base
 
   def prefers_letter_delivery?(recipient, override: nil)
     contact = application_contact_context_for(recipient)
-    recipient = contact.preference_owner if contact
-    EmailDelivery::Routing.prefers_letter?(recipient, override: override)
+    EmailDelivery::Routing.prefers_letter?(contact || recipient, override: override)
   end
 
   def recipient_email_for(recipient, own_email: false)
@@ -218,7 +217,7 @@ class ApplicationMailer < ActionMailer::Base
 
   def resolve_template_locale(recipient: nil)
     recipient_locale = if (context = application_contact_context_for(recipient))
-                         owner = context.preference_owner.communication_preference == 'letter' ? context.address_owner : context.email_owner
+                         owner = EmailDelivery::Routing.prefers_letter?(context) ? context.address_owner : context.email_owner
                          normalize_locale((owner || context.preference_owner).locale)
                        elsif recipient.respond_to?(:effective_locale)
                          normalize_locale(recipient.effective_locale)

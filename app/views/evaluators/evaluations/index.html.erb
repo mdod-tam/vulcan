@@ -105,16 +105,7 @@
               </td>
               <td class="px-6 py-4 whitespace-nowrap">
                 <!-- Status badge with color coding -->
-                <% status_classes = case evaluation.status
-                   when 'scheduled' then 'bg-blue-100 text-blue-800'
-                   when 'confirmed' then 'bg-green-100 text-green-800'
-                   when 'completed' then 'bg-purple-100 text-purple-800'
-                   when 'cancelled' then 'bg-yellow-100 text-yellow-800'
-                   when 'no_show' then 'bg-red-100 text-red-800'
-                   else 'bg-gray-100 text-gray-800'
-                   end %>
-
-                <span class="px-2 inline-flex text-xs leading-5 font-semibold rounded-full <%= status_classes %>">
+                <span class="px-2 inline-flex text-xs leading-5 font-semibold rounded-full <%= badge_class_for(:evaluation, evaluation.status) %>">
                   <span class="sr-only">Status: </span>
                   <% if evaluation.status == 'requested' %>
                     Needs Scheduling

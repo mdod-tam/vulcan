@@ -20,6 +20,14 @@ en:
         completed_report_help: "The submitted evaluation report above is locked. Use the form below to add supplemental notes."
         report_help: "Submit the report after the appointment has happened. Record the actual appointment time, notes, products tried, and recommendation outcome."
         errors_heading: "Please correct the following before saving:"
+        error_headings:
+          schedule: "Failed to schedule evaluation: correct the following before saving."
+          reschedule: "Failed to reschedule evaluation: correct the following before saving."
+          submit_report: "Failed to submit evaluation: correct the following before saving."
+          cancel: "Failed to cancel evaluation: correct the following before saving."
+          no_show: "Failed to mark evaluation as no-show: correct the following before saving."
+          save_working_notes: "Failed to save working notes: correct the following before saving."
+          supplemental_notes: "Failed to update evaluation: correct the following supplemental notes before saving."
       recommendations:
         outcome: "Recommendation outcome"
         outcome_help: "Choose the result of this evaluation."
@@ -30,6 +38,10 @@ en:
           catalog_products: "Select at least one product tried and at least one recommended catalog product below."
           outside_catalog: "Describe the equipment, resource, service, or next step recommended outside the catalog. No catalog recommendation will be submitted."
           no_suitable_product: "Explain why no suitable product was found and any next steps. No catalog recommendation will be submitted."
+        feedback:
+          catalog_products: "Catalog products: choose tried and recommended products. Recommendation details are optional."
+          outside_catalog: "Outside the catalog: catalog recommendations are hidden. Recommendation details are required; products tried are optional."
+          no_suitable_product: "No suitable product: catalog recommendations are hidden. Recommendation details are required; products tried are optional."
       working_notes:
         title: "Working Notes"
         label: "Working notes"

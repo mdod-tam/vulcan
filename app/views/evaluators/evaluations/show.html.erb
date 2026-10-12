@@ -193,17 +193,18 @@
   <%= render 'working_notes_form', evaluation: @evaluation,
                                    can_edit: @can_manage_evaluation && @evaluation.working_notes_editable? %>
 
-  <section aria-label="<%= @can_manage_evaluation ? 'Evaluation Actions' : 'Evaluation Status' %>" class="mt-8" data-controller="evaluation-management">
+  <% visible_form_actions = evaluation_visible_form_actions(@evaluation, can_manage: @can_manage_evaluation) # rubocop:disable Lint/UselessAssignment -- ERB local. %>
+  <section aria-label="<%= @can_manage_evaluation ? 'Evaluation Actions' : 'Evaluation Status' %>" class="mt-8">
     <% if !@can_manage_evaluation %>
       <div class="bg-slate-50 border border-slate-200 rounded-lg p-4 text-sm text-slate-700">
         This is a read-only oversight view. Only the assigned evaluator can update this evaluation.
       </div>
-    <% elsif @evaluation.status_requested? && @evaluation.evaluation_date.blank? %>
+    <% elsif visible_form_actions.include?(:schedule) %>
       <div class="space-y-6 mb-6">
         <%= render "schedule_form", evaluation: @evaluation %>
         <%= render "cancel_form", evaluation: @evaluation %>
       </div>
-    <% elsif (@evaluation.status_scheduled? || @evaluation.status_confirmed?) && @evaluation.evaluation_date.present? && @evaluation.evaluation_date < Time.current %>
+    <% elsif visible_form_actions.include?(:no_show) %>
       <div class="bg-blue-50 border border-blue-200 rounded-lg p-4 text-sm text-blue-900 mb-6">
         <p class="font-semibold">This evaluation needs an outcome.</p>
         <p class="mt-1">The scheduled time for this evaluation has passed. Record the evaluation outcome, or use a secondary action if the evaluation did not happen as planned.</p>
@@ -216,7 +217,7 @@
             evaluation: @evaluation,
             suggested_date: @evaluation.evaluation_date %>
       </div>
-    <% elsif @evaluation.status_scheduled? || @evaluation.status_confirmed? %>
+    <% elsif visible_form_actions.include?(:submit_report) %>
       <div class="space-y-6 mb-6">
         <%= render "completion_form", evaluation: @evaluation, available_products: @available_products %>
         <%= render "cancel_form", evaluation: @evaluation %>
@@ -224,15 +225,20 @@
             evaluation: @evaluation,
             suggested_date: @evaluation.evaluation_date %>
       </div>
-    <% elsif @evaluation.status_cancelled? || @evaluation.status_no_show? || @evaluation.status_rescheduled? %>
+    <% elsif visible_form_actions.include?(:reschedule) %>
       <%= render "reschedule_form",
           evaluation: @evaluation,
           suggested_date: 1.week.from_now %>
-    <% elsif @evaluation.status_completed? %>
+    <% elsif visible_form_actions.include?(:supplemental_notes) %>
       <%= render "completed_notes_form", evaluation: @evaluation %>
     <% else %>
       <div class="bg-slate-50 border border-slate-200 rounded-lg p-4 text-sm text-slate-700">
         No lifecycle actions are available for this evaluation status.
+      </div>
+    <% end %>
+    <% (@evaluation_form_errors.keys.map(&:to_sym) - visible_form_actions - [:save_working_notes]).each do |action| %>
+      <div class="mt-6">
+        <%= render 'action_errors', action: action, form: nil, form_errors: @evaluation_form_errors %>
       </div>
     <% end %>
   </section>

@@ -95,6 +95,8 @@ Equipment applications do not create vouchers. Vendor redemption is a separate w
 
 ## Evaluator workflow
 
+Staff interfaces, including the evaluator and administrator portals, and staff-directed messages use English for v1. English/Spanish localization is limited to constituent portals and constituent-facing communications.
+
 After approval, staff assign an active evaluator from the application's **Evaluation and Training Status** section, within the service window. Equipment fulfillment starts with an evaluation; voucher applications need one only when staff mark evaluator support as needed. Administrators can also be assigned as evaluators. [EvaluationManagement](../../app/models/concerns/evaluation_management.rb) owns assignment and reassignment.
 
 The assignment sends a notice to the evaluator and appears in their requested queue at `/evaluators/dashboard`. The evaluator opens the record, contacts the applicant or the application's managing guardian, agrees on an appointment, and enters its future date/time and any location or scheduling notes. Scheduling and rescheduling record arrangements; the evaluator shares those arrangements directly with the applicant. Missing email or phone is shown as unavailable and does not prevent the evaluator assignment notice.

@@ -42,6 +42,22 @@ class ApplicationContactRoutingTest < ActionMailer::TestCase
     ), mail.subject
   end
 
+  test 'ordinary email retains applicant preference and language after the managing guardian is removed' do
+    application, manager, remaining_guardian = dependent_application(own_email: true)
+    remaining_guardian.update!(locale: 'es')
+    manager.destroy!
+    application.reload
+    assert_nil application.managing_guardian
+    Letters::TextTemplateToPdfService.expects(:new).never
+
+    mail = ApplicationNotificationsMailer.application_submitted(application).deliver_now
+
+    assert_equal [application.user.email], mail.to
+    assert_equal EmailTemplate.find_by!(name: 'application_notifications_application_submitted', format: :text, locale: 'en').render_subject(
+      user_first_name: application.user.first_name, application_id: application.id
+    ), mail.subject
+  end
+
   test 'application context does not substitute contacts for another recipient or an explicit own email request' do
     application, guardian = dependent_application
     mailer = ApplicationMailer.new

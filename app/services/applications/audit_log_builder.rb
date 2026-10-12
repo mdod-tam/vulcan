@@ -159,6 +159,7 @@ module Applications
             application_created application_post_creation_step_failed
             duplicate_review_case_resolved
             evaluator_assigned evaluator_reassigned trainer_assigned
+            evaluation_working_notes_updated
             medical_certification_requested medical_certification_status_changed
             alternate_contact_updated medical_provider_info_updated proof_secure_submission_refused
             proof_resubmission_request_failed

@@ -124,6 +124,41 @@ module Applications
       end
     end
 
+    test 'application history retains distinct working-note changes and excludes another application' do
+      evaluator = create(:evaluator)
+      evaluation = create(:evaluation, application: @application, constituent: @application.user, evaluator: evaluator)
+      other_evaluation = create(:evaluation)
+
+      freeze_time do
+        %w[First Second].each do |note|
+          result = Evaluations::WorkingNotesService.new(evaluation, evaluator, { working_notes: note }).call
+          assert result.success?, result.message
+        end
+        other_result = Evaluations::WorkingNotesService.new(
+          other_evaluation, other_evaluation.evaluator, { working_notes: 'Another application' }
+        ).call
+        assert other_result.success?, other_result.message
+
+        events = Event.where(action: 'evaluation_working_notes_updated', auditable: evaluation).order(:id).to_a
+        unrelated = Event.find_by!(action: 'evaluation_working_notes_updated', auditable: other_evaluation)
+        displayed = AuditLogBuilder.new(@application).build_deduplicated_audit_logs.grep(Event)
+                                   .select { |event| event.action == 'evaluation_working_notes_updated' }
+
+        assert_equal 2, events.size
+        assert_equal events.map(&:id).sort, displayed.map(&:id).sort
+        assert_not_includes displayed, unrelated
+        assert_equal [evaluation.id, evaluation.id], displayed.map(&:auditable_id)
+        assert_equal [evaluator.id, evaluator.id], displayed.map(&:user_id)
+        assert_equal 2, displayed.map { |event| event.metadata['operation_id'] }.uniq.size
+        displayed.each do |event|
+          assert_equal @application.id, event.metadata['application_id']
+          assert_equal evaluation.id, event.metadata['evaluation_id']
+          assert_not_includes event.metadata.to_json, 'First'
+          assert_not_includes event.metadata.to_json, 'Second'
+        end
+      end
+    end
+
     test 'returns empty audit logs after a build failure' do
       skip 'Add failure injection and result assertions before enabling this test'
     end

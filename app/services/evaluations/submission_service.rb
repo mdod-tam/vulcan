@@ -2,6 +2,17 @@
 
 module Evaluations
   class SubmissionService < BaseService
+    REPORT_PARAMETERS = [
+      :appointment_completed_at, :location, :notes, :attendees_field,
+      :recommendation_outcome, :recommendation_notes,
+      { recommended_product_ids: [].freeze, products_tried_field: [].freeze }.freeze
+    ].freeze
+    REPORT_FIELDS = REPORT_PARAMETERS.flat_map { |parameter| parameter.is_a?(Hash) ? parameter.keys : parameter }.freeze
+
+    def self.report_params(params)
+      params.expect(evaluation: REPORT_PARAMETERS)
+    end
+
     def initialize(evaluation, params, actor: nil)
       super()
       @evaluation = evaluation
@@ -37,7 +48,6 @@ module Evaluations
       @evaluation.assign_attributes(submission_params)
       @evaluation.status = :completed
       @evaluation.report_submitted_at = Time.current
-      @evaluation.report_submitted = true
     end
 
     def validate_status!
@@ -74,19 +84,7 @@ module Evaluations
     end
 
     def submission_params
-      attributes = @params.require(:evaluation).permit(
-        :needs,
-        :location,
-        :notes,
-        :appointment_completed_at,
-        :attendees_field,
-        :recommendation_outcome,
-        :recommendation_notes,
-        recommended_product_ids: [],
-        products_tried_field: [],
-        attendees: %i[name relationship],
-        products_tried: %i[product_id reaction]
-      )
+      attributes = self.class.report_params(@params)
       if %w[outside_catalog no_suitable_product].include?(attributes[:recommendation_outcome]) &&
          !attributes.key?(:recommended_product_ids)
         attributes[:recommended_product_ids] = []

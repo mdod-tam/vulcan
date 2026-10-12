@@ -18,7 +18,9 @@
         ) do |f| %>
       <%= render 'action_errors', action: :schedule, form: f, form_errors: @evaluation_form_errors %>
       <div>
-        <%= f.label :evaluation_date, "Evaluation Date/Time", class: "block text-sm font-medium text-gray-700" %>
+        <%= f.label :evaluation_date, class: 'block text-sm font-medium text-gray-700' do %>
+          Evaluation Date/Time <span class="text-red-600">*</span><span class="sr-only"> (required)</span>
+        <% end %>
         <%= f.datetime_local_field(
               :evaluation_date,
               value: form_values.fetch(:evaluation_date, 1.week.from_now.strftime('%Y-%m-%dT%H:%M')),

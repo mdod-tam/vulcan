@@ -13,7 +13,6 @@ class EvaluationTest < ActiveSupport::TestCase
     evaluation = create(:evaluation, :completed)
     assert evaluation.valid?
     assert_equal 'completed', evaluation.status
-    assert evaluation.report_submitted
   end
 
   test 'creates an evaluation with custom attendees' do
@@ -76,6 +75,19 @@ class EvaluationTest < ActiveSupport::TestCase
     assert_not evaluation.update(status: :completed)
     assert_includes evaluation.errors[:appointment_completed_at], "can't be blank"
     assert_includes evaluation.errors[:report_submitted_at], "can't be blank"
+    assert_equal 'scheduled', evaluation.reload.status
+  end
+
+  test 'completion with blank notes yields one presence error' do
+    evaluation = create(:evaluation)
+
+    updated = evaluation.update(
+      status: :completed, notes: ' ',
+      appointment_completed_at: 1.hour.ago, report_submitted_at: Time.current
+    )
+
+    assert_not updated
+    assert_equal ["can't be blank"], evaluation.errors[:notes]
     assert_equal 'scheduled', evaluation.reload.status
   end
 

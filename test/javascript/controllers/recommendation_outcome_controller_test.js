@@ -14,18 +14,20 @@ describe("RecommendationOutcomeController", () => {
             <input type="radio" name="evaluation[recommendation_outcome]" value="${value}"
                    ${value === outcome ? "checked" : ""} required
                    data-recommendation-outcome-target="choice"
+                   data-recommendation-outcome-feedback="Feedback for ${value}"
                    data-action="recommendation-outcome#update">
           `).join("")}
         </fieldset>
         <span data-recommendation-outcome-target="triedRequired">Required tried products</span>
         <input type="hidden" name="evaluation[products_tried_field][]" value="">
         <input type="checkbox" name="evaluation[products_tried_field][]" value="12" checked>
-        <fieldset data-recommendation-outcome-target="catalog">
+        <fieldset data-recommendation-outcome-target="catalog" ${outcome === "catalog_products" ? "" : "hidden disabled"}>
           <input type="hidden" name="evaluation[recommended_product_ids][]" value="">
           <input type="checkbox" name="evaluation[recommended_product_ids][]" value="31" checked>
         </fieldset>
         <span data-recommendation-outcome-target="notesRequired">Required details</span>
         <textarea name="evaluation[recommendation_notes]" data-recommendation-outcome-target="notes">Restored details</textarea>
+        <p role="status" aria-live="polite" data-recommendation-outcome-target="status"></p>
       </form>
     `
     application = Application.start()
@@ -50,6 +52,9 @@ describe("RecommendationOutcomeController", () => {
     expect(notes.required).toBe(true)
     expect(notes.getAttribute("aria-required")).toBe("true")
     expect(form.querySelector('[data-recommendation-outcome-target="triedRequired"]')).toHaveClass("hidden")
+    expect(form.querySelector('[data-recommendation-outcome-target="catalog"]').hidden).toBe(true)
+    expect(form.querySelector('[data-recommendation-outcome-target="catalog"]').disabled).toBe(true)
+    expect(form.querySelector('[role="status"]')).toHaveTextContent("")
   })
 
   test("switching a restored external outcome to catalog restores submitted selections and optional details", async () => {
@@ -63,6 +68,9 @@ describe("RecommendationOutcomeController", () => {
     expect(notes.getAttribute("aria-required")).toBe("false")
     expect(form.querySelector('[data-recommendation-outcome-target="catalog"]')).not.toHaveClass("hidden")
     expect(form.querySelector('[data-recommendation-outcome-target="triedRequired"]')).not.toHaveClass("hidden")
+    expect(form.querySelector('[data-recommendation-outcome-target="catalog"]').hidden).toBe(false)
+    expect(form.querySelector('[data-recommendation-outcome-target="catalog"]').disabled).toBe(false)
+    expect(form.querySelector('[role="status"]')).toHaveTextContent("Feedback for catalog_products")
   })
 
   test("no suitable product allows zero tried products while requiring the reason", async () => {
@@ -74,6 +82,7 @@ describe("RecommendationOutcomeController", () => {
     expect(new FormData(form).getAll("evaluation[products_tried_field][]")).toEqual([""])
     expect(new FormData(form).has("evaluation[recommended_product_ids][]")).toBe(false)
     expect(notes.required).toBe(true)
+    expect(form.querySelector('[role="status"]')).toHaveTextContent("Feedback for no_suitable_product")
     expect(form.checkValidity()).toBe(false)
     notes.value = "No suitable equipment; arrange a specialist assessment."
     expect(form.checkValidity()).toBe(true)

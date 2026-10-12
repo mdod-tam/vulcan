@@ -3,7 +3,6 @@
 class Evaluation < ApplicationRecord
   has_many :email_delivery_attempts, as: :origin, dependent: :nullify
   include StatusManagement
-  include NotificationDelivery
 
   belongs_to :evaluator, class_name: 'User'
   belongs_to :constituent, class_name: 'Users::Constituent'
@@ -37,14 +36,12 @@ class Evaluation < ApplicationRecord
   validate :recommendations_match_outcome, if: :status_completed?
   validate :validate_attendees_structure, if: :status_completed?
   validate :validate_products_tried_structure, if: :status_completed?
-  validate :cannot_complete_without_notes, if: :will_save_change_to_status?
   validates :appointment_completed_at, :report_submitted_at, presence: true, if: :status_changed_to_completed?
   validate :appointment_time_must_not_be_future
 
   # Callbacks
   before_save :ensure_status_schedule_consistency
   after_save :update_application_record, if: :saved_change_to_status?
-  after_save :deliver_notifications, if: :should_deliver_notifications?
 
   # Virtual attributes for UI
   def attendees_field
@@ -161,12 +158,6 @@ class Evaluation < ApplicationRecord
     errors.add(:evaluation_date, 'must be in the future')
   end
 
-  def cannot_complete_without_notes
-    return unless status_changed? && status_completed? && notes.blank?
-
-    errors.add(:notes, 'must be provided when completing evaluation')
-  end
-
   def appointment_time_must_not_be_future
     return unless appointment_completed_at&.future?
 
@@ -175,10 +166,6 @@ class Evaluation < ApplicationRecord
 
   def status_changed_to_completed?
     status_completed? && status_changed?
-  end
-
-  def should_deliver_notifications?
-    status_changed? || saved_change_to_evaluation_date?
   end
 
   def ensure_status_schedule_consistency

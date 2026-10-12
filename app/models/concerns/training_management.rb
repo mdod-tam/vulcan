@@ -55,6 +55,11 @@ module TrainingManagement
     end
 
     with_lock do
+      unless trainer&.persisted? && trainer.assignable_trainer? && trainer.public_login_active?
+        errors.add(:base, 'Select an active trainer.')
+        return false
+      end
+
       # Admin assignment creates the initial requested session. Additional dated
       # sessions are scheduled by the assigned trainer from an existing session.
       if active_training_session_present?

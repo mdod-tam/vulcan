@@ -10,7 +10,6 @@ FactoryBot.define do
     evaluation_type { :initial }
     status { :requested }
     notes { 'Default evaluation notes' }
-    report_submitted { false }
     location { 'Main Office' }
     needs { 'Additional support for mobility.' }
 
@@ -41,7 +40,6 @@ FactoryBot.define do
     trait :completed do
       status { :completed }
       notes { 'Evaluation completed successfully.' }
-      report_submitted { true }
       evaluation_date { 1.day.from_now }
       appointment_completed_at { 1.hour.ago }
       report_submitted_at { Time.current }

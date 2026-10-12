@@ -42,7 +42,7 @@ module Evaluations
     end
 
     def cancellation_reason
-      @params[:notes].presence || @params[:cancellation_reason].presence
+      @params[:notes].presence
     end
 
     def create_event!

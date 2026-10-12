@@ -137,6 +137,93 @@ module Admin
       assert_equal 'This constituent has used all available training sessions.', flash[:alert]
     end
 
+    test 'evaluator assignment rejects missing malformed unavailable and deleted selections without side effects' do
+      @application.update!(application_date: Date.current)
+      eligible = create(:evaluator)
+      inactive = create(:evaluator, status: :inactive)
+      wrong_role = create(:trainer)
+      create(:role_capability, user: wrong_role, capability: 'can_evaluate')
+      deleted = create(:evaluator)
+      deleted_id = deleted.id
+      deleted.destroy!
+      missing_id = User.maximum(:id) + 1
+
+      [nil, '', missing_id, deleted_id, inactive.id, wrong_role.id, "#{eligible.id}invalid", [eligible.id]].each do |selected_id|
+        assert_no_difference ['Evaluation.count', 'Notification.count', "Event.where(action: 'evaluator_assigned').count"] do
+          assert_no_enqueued_emails do
+            post assign_evaluator_admin_application_path(@application), params: { evaluator_id: selected_id }
+          end
+        end
+
+        assert_redirected_to admin_application_path(@application)
+        assert_equal 'Select an active evaluator.', flash[:alert]
+      end
+    end
+
+    test 'a trainer becoming suspended after selection receives assignment validation feedback' do
+      @application.update!(application_date: Date.current)
+      trainer = create(:trainer)
+      get admin_application_path(@application)
+      assert_select "select[name=trainer_id] option[value='#{trainer.id}']"
+      trainer.update!(status: :suspended)
+
+      assert_no_difference ['TrainingSession.count', 'Notification.count', "Event.where(action: 'trainer_assigned').count"] do
+        assert_no_enqueued_emails do
+          post assign_trainer_admin_application_path(@application), params: { trainer_id: trainer.id }
+        end
+      end
+
+      assert_redirected_to admin_application_path(@application)
+      assert_equal 'Select an active trainer.', flash[:alert]
+    end
+
+    test 'trainer assignment rejects missing malformed wrong role and deleted selections without side effects' do
+      @application.update!(application_date: Date.current)
+      eligible = create(:trainer)
+      wrong_role = create(:evaluator)
+      create(:role_capability, user: wrong_role, capability: 'can_train')
+      deleted = create(:trainer)
+      deleted_id = deleted.id
+      deleted.destroy!
+      missing_id = User.maximum(:id) + 1
+
+      [nil, '', missing_id, deleted_id, wrong_role.id, "#{eligible.id}invalid", [eligible.id]].each do |selected_id|
+        assert_no_difference ['TrainingSession.count', 'Notification.count', "Event.where(action: 'trainer_assigned').count"] do
+          assert_no_enqueued_emails do
+            post assign_trainer_admin_application_path(@application), params: { trainer_id: selected_id }
+          end
+        end
+
+        assert_redirected_to admin_application_path(@application)
+        assert_equal 'Select an active trainer.', flash[:alert]
+      end
+    end
+
+    test 'assignment endpoints retain administrator and legacy null status assignees' do
+      @application.update!(application_date: Date.current)
+      assignee = create(:admin)
+      assignee.update_columns(status: nil)
+
+      post assign_evaluator_admin_application_path(@application), params: { evaluator_id: assignee.id }
+      assert_redirected_to admin_application_path(@application)
+      assert_equal assignee.id, @application.evaluations.last.evaluator_id
+      assert_nil flash[:alert]
+
+      post assign_trainer_admin_application_path(@application), params: { trainer_id: assignee.id }
+      assert_redirected_to admin_application_path(@application)
+      assert_equal assignee.id, @application.training_sessions.last.trainer_id
+      assert_nil flash[:alert]
+    end
+
+    test 'missing application retains the application lookup response for assignment actions' do
+      missing_id = Application.maximum(:id) + 1
+
+      [assign_evaluator_admin_application_path(missing_id), assign_trainer_admin_application_path(missing_id)].each do |path|
+        post path, params: { evaluator_id: '', trainer_id: '' }
+        assert_redirected_to admin_applications_path
+      end
+    end
+
     test 'trainer assignment form is hidden when completed training quota is exhausted' do
       Policy.find_or_create_by(key: 'max_training_sessions').update!(value: 3)
       trainer = create(:trainer)

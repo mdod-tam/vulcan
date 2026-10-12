@@ -44,6 +44,9 @@ class EvaluatorWorkingNotesControllerTest < ActionDispatch::IntegrationTest
     assert_equal original_notes, @evaluation.reload.working_notes
     assert_select '#working-notes-form textarea', text: 'Attempted outreach note'
     assert_select '#working-notes-form [data-controller="error-summary"][tabindex="-1"]'
+    assert_select '[role="alert"]', count: 1
+    assert_select '#save-working-notes-errors', text: /Failed to save working notes:/
+    assert_nil flash[:alert]
   end
 
   test 'unassigned evaluator and administrator cannot overwrite working notes' do
@@ -74,6 +77,8 @@ class EvaluatorWorkingNotesControllerTest < ActionDispatch::IntegrationTest
     assert_select 'textarea[name="evaluation[recommendation_notes]"]', text: ' '
     assert_select '#complete-evaluation-form [data-controller="error-summary"] a[href="#complete_evaluation_recommendation_notes"]'
     assert_select '#complete_evaluation_recommendation_notes[aria-invalid="true"]'
+    assert_select '[role="alert"]', count: 1
+    assert_nil flash[:alert]
 
     values[:recommendation_notes] = 'Consider a switch-access device outside the program catalog.'
     post submit_report_evaluators_evaluation_path(@evaluation), params: { evaluation: values }
@@ -94,6 +99,32 @@ class EvaluatorWorkingNotesControllerTest < ActionDispatch::IntegrationTest
     assert_response :unprocessable_content
     assert_select '#schedule-evaluation-form [data-controller="error-summary"] a[href="#schedule_evaluation_evaluation_date"]'
     assert_select '#schedule_evaluation_evaluation_date[aria-invalid="true"]'
+    assert_select '[role="alert"]', count: 1
+    assert_select '#schedule-evaluation-form label[for="schedule_evaluation_evaluation_date"] .sr-only', text: /required/
+    assert_nil flash[:alert]
     assert_nil @evaluation.reload.evaluation_date
+  end
+
+  test 'generic updates render one focused error in the visible form without changing ownership or status' do
+    [[:requested, 'save-working-notes-errors'], [:scheduled, 'submit-report-errors'],
+     [:completed, 'supplemental-notes-errors']].each do |status, summary_id|
+      evaluation = create(:evaluation, evaluator: @evaluator, status: status,
+                                       evaluation_date: (1.day.from_now unless status == :requested),
+                                       appointment_completed_at: (1.hour.ago if status == :completed),
+                                       report_submitted_at: (Time.current if status == :completed))
+      original = evaluation.attributes
+      other_application = create(:application)
+
+      patch evaluators_evaluation_path(evaluation), params: {
+        evaluation: { application_id: other_application.id, status: 'completed', notes: 'Forged report' }
+      }
+
+      assert_response :unprocessable_content
+      assert_equal original, evaluation.reload.attributes
+      assert_select "##{summary_id}[role=alert][tabindex='-1'][data-controller=error-summary]"
+      assert_select '[role="alert"]', count: 1
+      assert_includes response.body, 'This evaluation action must use the appropriate lifecycle control.'
+      assert_nil flash[:alert]
+    end
   end
 end

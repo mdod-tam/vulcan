@@ -242,8 +242,7 @@ module Admin
     end
 
     def assign_evaluator
-      @application = Application.find(params[:id])
-      evaluator = Users::Evaluator.available.find(params.expect(:evaluator_id))
+      evaluator = Users::Evaluator.available.find_by(id: assignment_selection_id(:evaluator_id))
 
       if @application.assign_evaluator!(evaluator)
         redirect_to admin_application_path(@application),
@@ -255,7 +254,7 @@ module Admin
     end
 
     def reassign_evaluator
-      evaluator = Users::Evaluator.available.find(params.expect(:evaluator_id))
+      evaluator = Users::Evaluator.available.find_by(id: assignment_selection_id(:evaluator_id))
 
       if @application.reassign_evaluator!(evaluator, actor: current_user)
         redirect_to admin_application_path(@application), notice: 'Evaluator reassigned. Existing appointment details have been preserved.'
@@ -265,8 +264,7 @@ module Admin
     end
 
     def assign_trainer
-      @application = Application.find(params[:id])
-      trainer = User.find(params[:trainer_id])
+      trainer = Users::Trainer.available.find_by(id: assignment_selection_id(:trainer_id))
 
       if @application.assign_trainer!(trainer)
         redirect_to admin_application_path(@application),
@@ -620,6 +618,11 @@ module Admin
       @application = load_application_with_attachments(params[:id])
     rescue ActiveRecord::RecordNotFound
       redirect_to admin_applications_path, alert: t('.app_not_found')
+    end
+
+    def assignment_selection_id(name)
+      selected_id = params[name]
+      selected_id if selected_id.to_s.match?(/\A[1-9]\d*\z/)
     end
 
     # Status is not editable here: it changes only through workflow actions, which go through

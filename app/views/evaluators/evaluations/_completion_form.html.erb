@@ -128,7 +128,10 @@
                         :submit_report, :recommendation_outcome,
                         describedby: "recommendation-#{outcome}-help", form_errors: @evaluation_form_errors
                       ),
-                      data: { recommendation_outcome_target: 'choice', action: 'recommendation-outcome#update' }
+                      data: {
+                        recommendation_outcome_target: 'choice', action: 'recommendation-outcome#update',
+                        recommendation_outcome_feedback: t("evaluators.evaluations.recommendations.feedback.#{outcome}", locale: :en)
+                      }
                     ) %>
                 <%= f.label :recommendation_outcome, t("evaluations.recommendation_outcomes.#{outcome}"),
                             value: outcome, class: 'text-sm font-medium text-gray-700' %>
@@ -141,11 +144,16 @@
         </div>
         <%= render 'field_errors', action: :submit_report, attribute: :recommendation_outcome, form_errors: @evaluation_form_errors %>
         <%= render 'field_errors', action: :submit_report, attribute: :recommended_product_ids, form_errors: @evaluation_form_errors %>
+        <p role="status" aria-live="polite" aria-atomic="true" class="sr-only" data-recommendation-outcome-target="status"></p>
       </fieldset>
 
       <fieldset id="catalog-recommendations-group" tabindex="-1" data-recommendation-outcome-target="catalog"
                 class="rounded-md focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-indigo-500"
-                <%= tag.attributes(aria: evaluation_field_aria(:submit_report, :recommended_product_ids, form_errors: @evaluation_form_errors)) %>>
+                <%= tag.attributes(
+                      hidden: recommendation_outcome != 'catalog_products',
+                      disabled: recommendation_outcome != 'catalog_products',
+                      aria: evaluation_field_aria(:submit_report, :recommended_product_ids, form_errors: @evaluation_form_errors)
+                    ) %>>
         <legend class="block text-sm font-medium text-gray-700">Recommended Products <span class="text-red-600">*</span><span class="sr-only"> (required)</span></legend>
         <div class="mt-2 space-y-2 max-h-48 overflow-y-auto border border-gray-300 rounded-md p-3 bg-white">
           <%= f.collection_check_boxes(

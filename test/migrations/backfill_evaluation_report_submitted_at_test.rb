@@ -95,22 +95,22 @@ class BackfillEvaluationReportSubmittedAtTest < ActiveSupport::TestCase
   test 'numeric and string metadata ids identify the same canonical event owner' do
     %i[number string].each do |format|
       evaluation = legacy_evaluation
-      submitted_at = 1.day.ago
+      submitted_at = 1.day.ago.change(nsec: 123_456_789)
       metadata = { evaluation_id: evaluation.id, application_id: evaluation.application_id }
       metadata.transform_values!(&:to_s) if format == :string
-      AuditEventService.log(action: 'evaluation_completed', actor: @evaluator, auditable: evaluation,
-                            metadata: metadata, created_at: submitted_at)
+      completion = AuditEventService.log(action: 'evaluation_completed', actor: @evaluator, auditable: evaluation,
+                                         metadata: metadata, created_at: submitted_at)
 
       @migration.up
 
-      assert_equal submitted_at, evaluation.reload.report_submitted_at
+      assert_equal completion.reload.created_at, evaluation.reload.report_submitted_at
     end
   end
 
   test 'repeating up and rolling down preserve recovered history and the original updated time' do
     evaluation = legacy_evaluation
-    submitted_at = 1.day.ago
-    log_completion(evaluation, created_at: submitted_at)
+    submitted_at = 1.day.ago.change(nsec: 123_456_789)
+    completion = log_completion(evaluation, created_at: submitted_at)
     @migration.up
     recovered = evaluation.reload.attributes
     log_completion(evaluation, created_at: 2.days.ago)
@@ -119,7 +119,7 @@ class BackfillEvaluationReportSubmittedAtTest < ActiveSupport::TestCase
     @migration.down
 
     assert_equal recovered, evaluation.reload.attributes
-    assert_equal submitted_at, evaluation.report_submitted_at
+    assert_equal completion.reload.created_at, evaluation.report_submitted_at
   end
 
   private

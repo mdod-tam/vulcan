@@ -4,6 +4,8 @@ require 'application_system_test_case'
 
 module Evaluators
   class EvaluationWorkflowTest < ApplicationSystemTestCase
+    include EvaluatorSystemAssertions
+
     setup do
       @evaluator = create(:evaluator)
       @product = create(:product, name: 'Retry Device')
@@ -29,6 +31,7 @@ module Evaluators
 
       2.times do |attempt|
         assert_text 'Failed to submit evaluation:'
+        assert_single_action_error('submit-report-errors')
         within '#complete-evaluation-form' do
           assert_field 'Appointment Date/Time', with: appointment_time
           assert_field 'Location', with: 'Retry Library'
@@ -75,6 +78,9 @@ module Evaluators
       requested = create(:evaluation, evaluator: @evaluator, status: :requested, evaluation_date: nil)
       past_time = 1.hour.ago.strftime('%Y-%m-%dT%H:%M')
       visit evaluators_evaluation_path(requested)
+      assert_selector 'label[for="schedule_evaluation_evaluation_date"] .text-red-600', text: '*'
+      assert_selector 'label[for="schedule_evaluation_evaluation_date"] .sr-only', text: '(required)', visible: :all
+      assert_selector '#schedule_evaluation_evaluation_date[required]'
 
       within '#schedule-evaluation-form' do
         fill_in 'Evaluation Date/Time', with: past_time
@@ -84,6 +90,7 @@ module Evaluators
       end
 
       assert_text 'Failed to schedule evaluation:'
+      assert_single_action_error('schedule-errors')
       within '#schedule-evaluation-form' do
         assert_field 'Evaluation Date/Time', with: past_time
         assert_field 'Location', with: ''
@@ -109,6 +116,7 @@ module Evaluators
       end
 
       assert_text 'Failed to reschedule evaluation:'
+      assert_single_action_error('reschedule-errors')
       within '#reschedule-evaluation-form' do
         assert_field 'New Date/Time', with: past_time
         assert_field 'Location', with: ''
@@ -134,22 +142,91 @@ module Evaluators
       unrelated = create(:evaluation, status: :no_show)
       cancelled.constituent.update!(first_name: 'Followup', last_name: 'Applicant')
       unrelated.constituent.update!(first_name: 'Unrelated', last_name: 'Applicant')
+      badge_selector = ".#{ApplicationController.helpers.badge_class_for(:evaluation, cancelled.status).split.join('.')}"
       visit evaluators_dashboard_path
 
       assert_selector '#followup-evaluations-section', text: cancelled.constituent.full_name
       assert_no_selector '#followup-evaluations-section', text: unrelated.constituent.full_name
+      within('#followup-evaluations-section tbody tr', text: cancelled.constituent.full_name) do
+        assert_selector "span#{badge_selector}"
+      end
+      followup_link = find("#followup-evaluations-section a[href='#{evaluators_evaluation_path(cancelled)}']")
+      assert followup_link['aria-label'].start_with?(followup_link.text)
       take_screenshot('evaluator-followup-dashboard', html: true, full: true)
       click_link 'View follow up'
 
       assert_selector '#evaluations-list-heading', text: 'Evaluations Needing Follow-up'
       assert_selector 'tbody', text: cancelled.constituent.full_name
       assert_no_selector 'tbody', text: unrelated.constituent.full_name
+      within('tbody tr', text: cancelled.constituent.full_name) do
+        assert_selector "span#{badge_selector}"
+      end
       take_screenshot('evaluator-followup-list', html: true, full: true)
       find("tbody a[href='#{evaluators_evaluation_path(cancelled)}']").click
 
       assert_selector '#reschedule-evaluation-form'
       assert_no_selector '#complete-evaluation-form'
       take_screenshot('evaluator-followup-recovery', html: true, full: true)
+    end
+
+    test 'dashboard shortcuts use matching labels and focus their own section headings' do
+      requested = create(:evaluation, evaluator: @evaluator, status: :requested, evaluation_date: nil)
+      visit evaluators_dashboard_path
+      within('#needs-scheduling-section tbody tr', text: requested.constituent.full_name) do
+        assert_selector 'span', text: 'Needs Scheduling'
+        assert_selector "span.#{ApplicationController.helpers.badge_class_for(:evaluation, requested.status).split.join('.')}"
+      end
+      {
+        'View requested' => 'needs-scheduling-heading',
+        'View scheduled' => 'upcoming-evaluations-heading',
+        'View completed' => 'recent-completed-heading'
+      }.each do |text, heading|
+        assert_selector "a[href='##{heading}'][data-turbo=false]", text: text
+        page.execute_script("document.querySelector('a[href=\"##{heading}\"]').focus()")
+        page.driver.browser.keyboard.type(:enter)
+        assert_equal heading, page.evaluate_script('document.activeElement.id')
+      end
+      take_screenshot('evaluator-dashboard-shortcut-focused', html: true, full: true)
+
+      admin = create(:admin)
+      assigned = create(:evaluation, evaluator: admin, status: :scheduled)
+      click_button 'Sign Out'
+      system_test_sign_in(admin)
+      visit evaluators_dashboard_path
+      link = find("a[href='#my-upcoming-evaluations-table-heading']")
+      assert link['aria-label'].start_with?(link.text)
+      assert_selector '#my-upcoming-evaluations-section', text: assigned.constituent.full_name
+      page.execute_script('document.querySelector("a[href=\"#my-upcoming-evaluations-table-heading\"]").focus()')
+      page.driver.browser.keyboard.type(:enter)
+      assert_equal 'my-upcoming-evaluations-table-heading', page.evaluate_script('document.activeElement.id')
+      take_screenshot('admin-my-scheduled-shortcut-focused', html: true, full: true)
+    end
+
+    test 'stale cancellation and rescheduling forms retain one focused rejection after report completion' do
+      { cancel: 'Cancel Evaluation', reschedule: 'Reschedule Evaluation' }.each do |action, button|
+        evaluation = create(:evaluation, evaluator: @evaluator, status: :scheduled)
+        visit evaluators_evaluation_path(evaluation)
+        form_id = "#{action}-evaluation-form"
+        within "##{form_id}" do
+          if action == :cancel
+            fill_in 'Cancellation Reason', with: 'Stale cancellation request'
+          else
+            fill_in 'Reason for Rescheduling', with: 'Stale rescheduling request'
+          end
+        end
+        evaluation.update!(status: :completed, appointment_completed_at: 1.hour.ago, report_submitted_at: Time.current)
+        within "##{form_id}" do
+          click_button button
+        end
+
+        assert_single_action_error("#{action}-errors")
+        assert_selector "##{action}-errors:focus"
+        assert_no_selector "##{action}-errors a"
+        assert_no_selector "##{form_id}"
+        assert_selector '#supplemental-notes-form'
+        assert_equal 'completed', evaluation.reload.status
+        take_screenshot("evaluator-completed-#{action}-rejected", html: true, full: true)
+      end
     end
 
     test 'cancellation and rolled-back no-show notes remain editable after rejection' do
@@ -161,6 +238,7 @@ module Evaluators
         click_button 'Cancel Evaluation'
       end
       assert_text 'Failed to cancel evaluation:'
+      assert_single_action_error('cancel-errors')
       within '#cancel-evaluation-form' do
         assert_field 'Cancellation Reason', with: ' '
       end
@@ -187,6 +265,7 @@ module Evaluators
           click_button 'Mark as No-Show'
         end
         assert_text 'Failed to mark evaluation as no-show:'
+        assert_single_action_error('no-show-errors')
       end
       assert_equal 'scheduled', missed.reload.status
       within '#no-show-evaluation-form' do
@@ -279,13 +358,6 @@ module Evaluators
       assert_selector 'h1', text: I18n.t('evaluator_context.title')
       assert_text application.user.full_name
       take_screenshot('replacement-evaluator-assessment', html: true, full: true)
-    end
-
-    private
-
-    def replace_product_selection(attribute, product = nil)
-      all("input[name='evaluation[#{attribute}][]'][type='checkbox']").each(&:uncheck)
-      find("input[name='evaluation[#{attribute}][]'][value='#{product.id}']").check if product
     end
   end
 end
