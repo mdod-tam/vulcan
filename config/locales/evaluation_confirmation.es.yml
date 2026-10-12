@@ -1,0 +1,6 @@
+es:
+  evaluation_confirmation:
+    outcomes:
+      outside_catalog: "El evaluador recomendó un producto que no está en el catálogo del programa."
+      no_suitable_product: "No se recomendó ningún producto adecuado."
+    staff_review: "El personal del programa debe revisar este resultado y conversar sobre los próximos pasos. Este informe no confirma un pedido de equipo ni cierra su solicitud."

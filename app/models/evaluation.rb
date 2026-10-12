@@ -12,6 +12,11 @@ class Evaluation < ApplicationRecord
   has_and_belongs_to_many :recommended_products, class_name: 'Product', join_table: 'evaluations_products'
 
   enum :evaluation_type, { initial: 0, renewal: 1, special: 2 }
+  enum :recommendation_outcome,
+       { catalog_products: 'catalog_products', outside_catalog: 'outside_catalog', no_suitable_product: 'no_suitable_product' },
+       prefix: true, validate: true
+
+  scope :by_report_submission, -> { order(Arel.sql('report_submitted_at DESC NULLS LAST'), updated_at: :desc) }
 
   # Simplified validations
   validates :reschedule_reason, presence: true, if: :rescheduling?
@@ -21,18 +26,22 @@ class Evaluation < ApplicationRecord
   # Conditional validations for completed status
   validates :evaluation_date,
             :location,
-            :recommended_products,
             :notes,
             presence: true,
             if: :status_completed?
+  validates :recommended_products, presence: true, if: -> { status_completed? && recommendation_outcome_catalog_products? }
+  validates :recommendation_notes, presence: true,
+                                   if: -> { status_completed? && (recommendation_outcome_outside_catalog? || recommendation_outcome_no_suitable_product?) }
 
-  validate :validate_products_tried_presence, if: :status_completed?
+  validate :validate_products_tried_presence, if: -> { status_completed? && recommendation_outcome_catalog_products? }
+  validate :recommendations_match_outcome, if: :status_completed?
   validate :validate_attendees_structure, if: :status_completed?
   validate :validate_products_tried_structure, if: :status_completed?
   validate :cannot_complete_without_notes, if: :will_save_change_to_status?
+  validates :appointment_completed_at, :report_submitted_at, presence: true, if: :status_changed_to_completed?
+  validate :appointment_time_must_not_be_future
 
   # Callbacks
-  before_save :set_completed_at, if: :status_changed_to_completed?
   before_save :ensure_status_schedule_consistency
   after_save :update_application_record, if: :saved_change_to_status?
   after_save :deliver_notifications, if: :should_deliver_notifications?
@@ -90,31 +99,17 @@ class Evaluation < ApplicationRecord
     end
   end
 
-  # Define method used in controller
-  def request_additional_info!
-    update(status: :requested)
-
-    # Log the audit event
-    AuditEventService.log(
-      action: 'requested_additional_info',
-      actor: evaluator,
-      auditable: self,
-      metadata: { evaluation_id: id }
-    )
-
-    # Send the notification
-    NotificationService.create_and_deliver!(
-      type: 'requested_additional_info',
-      recipient: constituent,
-      actor: evaluator,
-      notifiable: self,
-      metadata: { evaluation_id: id },
-      channel: :email,
-      deliver: false
-    )
+  def working_notes_editable?
+    %w[requested scheduled confirmed cancelled no_show rescheduled].include?(status)
   end
 
   private
+
+  def recommendations_match_outcome
+    return if recommendation_outcome_catalog_products? || recommended_products.empty?
+
+    errors.add(:recommended_products, 'must be empty when the outcome does not recommend catalog products')
+  end
 
   def validate_attendees_structure
     return true unless status_completed?
@@ -172,8 +167,10 @@ class Evaluation < ApplicationRecord
     errors.add(:notes, 'must be provided when completing evaluation')
   end
 
-  def set_completed_at
-    self.evaluation_date = Time.current if status_completed? && evaluation_date.nil?
+  def appointment_time_must_not_be_future
+    return unless appointment_completed_at&.future?
+
+    errors.add(:appointment_completed_at, 'cannot be in the future')
   end
 
   def status_changed_to_completed?

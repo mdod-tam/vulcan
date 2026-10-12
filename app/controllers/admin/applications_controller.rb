@@ -16,7 +16,7 @@ module Admin
     before_action :set_application, only: %i[
       show edit update
       review_proof update_proof_status
-      approve reject assign_evaluator assign_trainer request_evaluation
+      approve reject assign_evaluator reassign_evaluator assign_trainer request_evaluation
       update_certification_status resend_medical_certification assign_voucher
       upload_medical_certification send_document_signing_request
       queue_medical_certification_form
@@ -243,7 +243,7 @@ module Admin
 
     def assign_evaluator
       @application = Application.find(params[:id])
-      evaluator = User.find(params[:evaluator_id])
+      evaluator = Users::Evaluator.available.find(params.expect(:evaluator_id))
 
       if @application.assign_evaluator!(evaluator)
         redirect_to admin_application_path(@application),
@@ -251,6 +251,16 @@ module Admin
       else
         redirect_to admin_application_path(@application),
                     alert: @application.errors.full_messages.to_sentence.presence || t('.eval_assign_fail')
+      end
+    end
+
+    def reassign_evaluator
+      evaluator = Users::Evaluator.available.find(params.expect(:evaluator_id))
+
+      if @application.reassign_evaluator!(evaluator, actor: current_user)
+        redirect_to admin_application_path(@application), notice: 'Evaluator reassigned. Existing appointment details have been preserved.'
+      else
+        redirect_to admin_application_path(@application), alert: @application.errors.full_messages.to_sentence
       end
     end
 

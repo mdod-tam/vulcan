@@ -82,6 +82,46 @@ module EvaluationManagement
     false
   end
 
+  # Transfers the assignment without resetting appointment or outcome history.
+  def reassign_evaluator!(evaluator, actor:)
+    with_lock do
+      unless actor&.admin? && service_window_active?
+        errors.add(:base, :evaluation_service_window)
+        return false
+      end
+
+      evaluation = latest_evaluation
+      if evaluation.nil? || evaluations.exists?(status: :completed)
+        errors.add(:base, :evaluation_assignment_closed)
+        return false
+      end
+
+      evaluation.with_lock do
+        return true if evaluation.evaluator_id == evaluator.id
+
+        unless evaluator.assignable_evaluator? && evaluator.public_login_active?
+          errors.add(:base, 'Select an active evaluator.')
+          return false
+        end
+
+        previous_evaluator_id = evaluation.evaluator_id
+        evaluation.update!(evaluator: evaluator)
+        AuditEventService.log(
+          actor: actor,
+          action: 'evaluator_reassigned',
+          auditable: evaluation,
+          metadata: { operation_id: SecureRandom.uuid, application_id: id, evaluation_id: evaluation.id,
+                      previous_evaluator_id: previous_evaluator_id, evaluator_id: evaluator.id }
+        )
+        EvaluatorMailer.with(evaluation: evaluation).new_evaluation_assigned.deliver_later
+      end
+    end
+    true
+  rescue ActiveRecord::RecordInvalid => e
+    errors.add(:base, e.record.errors.full_messages.to_sentence)
+    false
+  end
+
   # Returns the most recent evaluation for this application
   # @return [Evaluation, nil] The latest evaluation or nil if none exists
   def latest_evaluation

@@ -1,3 +1,5 @@
+<%# locals: (evaluation:) -%>
+<% form_values = @evaluation_form_values.fetch(:supplemental_notes, {}) # rubocop:disable Lint/UselessAssignment -- Used by later ERB fragments. %>
 <%# Prominent completion banner %>
 <div class="mt-8 rounded-lg bg-green-50 border-2 border-green-300 px-6 py-5">
   <div class="flex items-start gap-4">
@@ -9,7 +11,7 @@
     <div>
       <p class="text-lg font-bold text-green-900">Evaluation Completed</p>
       <p class="mt-1 text-sm text-green-700">
-        Completed on <%= tag.strong(evaluation.evaluation_date&.strftime("%B %d, %Y")) %>. The evaluation report above is locked. Use the form below to add supplemental notes.
+        <%= t('evaluators.evaluations.forms.completed_report_help') %>
       </p>
     </div>
   </div>
@@ -32,15 +34,21 @@
       </div>
     <% end %>
 
-    <%= form_with(model: evaluation, url: evaluators_evaluation_path(evaluation), method: :patch, local: true, class: "space-y-4") do |f| %>
+    <%= form_with(model: evaluation, namespace: 'supplemental', url: evaluators_evaluation_path(evaluation),
+                  method: :patch, local: true, id: 'supplemental-notes-form', class: 'space-y-4') do |f| %>
+      <%= render 'action_errors', action: :supplemental_notes, form: f, form_errors: @evaluation_form_errors %>
       <div>
         <%= f.label :post_completion_notes,
                     evaluation.post_completion_notes.present? ? "Update Note" : "New Note",
                     class: "block text-sm font-medium text-gray-700" %>
         <%= f.text_area :post_completion_notes,
+                        value: form_values.fetch(:post_completion_notes, evaluation.post_completion_notes),
                         rows: 5,
                         placeholder: "Add follow-up observations, next steps, or supplemental information...",
-                        class: "mt-1 block w-full border border-gray-300 rounded-md shadow-sm py-2 px-3 focus:outline-none focus:ring-indigo-500 focus:border-indigo-500 sm:text-sm" %>
+                        class: 'mt-1 block w-full border border-gray-300 rounded-md shadow-sm py-2 px-3 ' \
+                               'focus:outline-none focus:ring-indigo-500 focus:border-indigo-500 sm:text-sm',
+                        aria: evaluation_field_aria(:supplemental_notes, :post_completion_notes, form_errors: @evaluation_form_errors) %>
+        <%= render 'field_errors', action: :supplemental_notes, attribute: :post_completion_notes, form_errors: @evaluation_form_errors %>
       </div>
 
       <%= f.submit evaluation.post_completion_notes.present? ? "Update Note" : "Add Note",

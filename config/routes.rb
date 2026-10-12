@@ -182,6 +182,7 @@ Rails.application.routes.draw do
         patch :approve
         patch :reject
         post :assign_evaluator
+        post :reassign_evaluator
         post :assign_trainer
         post :unassign_trainer
         post :request_evaluation
@@ -339,10 +340,11 @@ Rails.application.routes.draw do
   end
   namespace :evaluators do
     resource :dashboard, only: [:show], controller: :dashboards
-    resources :evaluations do
+    resources :evaluations, only: %i[index show update] do
       member do
+        get :application_details
         post :submit_report
-        post :request_additional_info
+        post :save_working_notes
         post :schedule
         post :reschedule
         post :cancel

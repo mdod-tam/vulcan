@@ -16,12 +16,19 @@ module ActivityHistoryHelper
     'evaluation_rescheduled' => 'Evaluation Rescheduled',
     'requested_additional_info' => 'Additional Info Requested',
     'evaluator_assigned' => 'Evaluator Assigned',
+    'evaluator_reassigned' => 'Evaluator Reassigned',
+    'evaluation_working_notes_updated' => 'Working Notes Updated',
     'equipment_bids_sent' => 'Equipment Bids Sent',
     'equipment_po_sent' => 'PO Sent to Vendor'
   }.freeze
 
   APPLICATION_ACTIONS = %w[evaluator_assigned].freeze
   APPLICATION_FULFILLMENT_ACTIONS = %w[equipment_bids_sent equipment_po_sent].freeze
+  STATIC_ACTIVITY_DETAILS = {
+    'requested_additional_info' => 'Additional information requested from the constituent',
+    'evaluator_reassigned' => 'Evaluation transferred to another evaluator',
+    'evaluation_working_notes_updated' => 'Internal working notes updated'
+  }.freeze
 
   def activity_label(event)
     I18n.t(
@@ -54,8 +61,6 @@ module ActivityHistoryHelper
                 rescheduled_detail(metadata, old_key: 'old_evaluation_date', new_key: 'evaluation_date')
               when 'evaluation_completed'
                 completed_evaluation_detail(metadata)
-              when 'requested_additional_info'
-                'Additional information requested from the constituent'
               when 'evaluator_assigned'
                 evaluator_assigned_detail(metadata)
               when 'equipment_bids_sent'
@@ -64,7 +69,7 @@ module ActivityHistoryHelper
                 date_detail(metadata, 'date', 'PO sent')
               end
 
-    details.presence || 'No additional details recorded'
+    details.presence || STATIC_ACTIVITY_DETAILS.fetch(event.action, 'No additional details recorded')
   end
 
   def activity_actor_name(event)
@@ -137,7 +142,9 @@ module ActivityHistoryHelper
 
   def completed_evaluation_detail(metadata)
     parts = []
-    parts << "Completed #{format_activity_time(metadata_value(metadata, 'evaluation_date'))}" if metadata_value(metadata, 'evaluation_date')
+    parts << "Scheduled for #{format_activity_time(metadata_value(metadata, 'evaluation_date'))}" if metadata_value(metadata, 'evaluation_date')
+    parts << "Appointment completed #{format_activity_time(metadata_value(metadata, 'appointment_completed_at'))}" if metadata_value(metadata, 'appointment_completed_at')
+    parts << "Report submitted #{format_activity_time(metadata_value(metadata, 'report_submitted_at'))}" if metadata_value(metadata, 'report_submitted_at')
     parts << "Products tried: #{metadata_value(metadata, 'products_tried_count')}" if metadata.key?('products_tried_count')
     parts << "Recommended products: #{metadata_value(metadata, 'recommended_products_count')}" if metadata.key?('recommended_products_count')
     parts << "Recommended: #{Array(metadata['recommended_product_names']).join(', ')}" if metadata['recommended_product_names'].present?

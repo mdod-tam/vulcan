@@ -1,0 +1,44 @@
+<%# locals: (evaluation:, can_edit:) -%>
+<% form_values = @evaluation_form_values.fetch(:save_working_notes, {}) # rubocop:disable Lint/UselessAssignment -- Used by later ERB fragments. %>
+<section class="mt-8 bg-white shadow rounded-lg p-6" aria-labelledby="working-notes-heading">
+  <h2 id="working-notes-heading" class="text-lg font-semibold text-gray-900"><%= t('evaluators.evaluations.working_notes.title') %></h2>
+  <p id="working-notes-help" class="mt-2 text-sm text-gray-600"><%= t('evaluators.evaluations.working_notes.help') %></p>
+  <% if can_edit %>
+    <%= form_with model: evaluation, namespace: 'working',
+                  url: save_working_notes_evaluators_evaluation_path(evaluation), method: :post,
+                  id: 'working-notes-form', class: 'mt-4 space-y-4' do |f| %>
+      <%= render 'action_errors', action: :save_working_notes, form: f, form_errors: @evaluation_form_errors %>
+      <div>
+        <%= f.label :working_notes, t('evaluators.evaluations.working_notes.label'), class: 'block text-sm font-medium text-gray-700' %>
+        <%= f.text_area(
+              :working_notes,
+              value: form_values.fetch(:working_notes, evaluation.working_notes),
+              rows: 5,
+              class: 'mt-1 block w-full border border-gray-300 rounded-md shadow-sm py-2 px-3 ' \
+                     'focus:outline-none focus:ring-indigo-500 focus:border-indigo-500 sm:text-sm',
+              aria: evaluation_field_aria(
+                :save_working_notes, :working_notes,
+                describedby: 'working-notes-help', form_errors: @evaluation_form_errors
+              )
+            ) %>
+        <%= render 'field_errors', action: :save_working_notes, attribute: :working_notes, form_errors: @evaluation_form_errors %>
+      </div>
+      <%= f.submit t('evaluators.evaluations.working_notes.save'),
+                   class: 'inline-flex justify-center py-2 px-4 border border-transparent shadow-sm text-sm font-medium ' \
+                          'rounded-md text-white bg-indigo-600 hover:bg-indigo-700 focus:outline-none focus:ring-2 ' \
+                          'focus:ring-offset-2 focus:ring-indigo-500' %>
+    <% end %>
+  <% else %>
+    <%= render 'action_errors', action: :save_working_notes, form: nil, form_errors: @evaluation_form_errors %>
+    <div class="mt-4 break-words text-sm text-gray-900">
+      <% if evaluation.working_notes.present? %>
+        <%= simple_format(evaluation.working_notes) %>
+      <% else %>
+        <%= t('evaluators.evaluations.working_notes.empty') %>
+      <% end %>
+    </div>
+    <% if evaluation.status_completed? %>
+      <p class="mt-2 text-sm text-gray-600"><%= t('evaluators.evaluations.working_notes.completed_help') %></p>
+    <% end %>
+  <% end %>
+</section>

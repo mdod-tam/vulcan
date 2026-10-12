@@ -82,6 +82,11 @@
         </div>
       <% end %>
     </div>
+    <% if local_assigns[:reassign_form_path].present? && !entity.status_completed? %>
+      <%= render 'evaluator_reassignment_form',
+                 reassign_form_path: reassign_form_path,
+                 available_assignees: available_assignees.where.not(id: assigned_person&.id) %>
+    <% end %>
   <% else %>
     <!-- Dropdown assignment: one select, one submit -->
     <h3 class="text-sm font-semibold text-gray-900 mb-3"><%= local_assigns[:assignment_heading].presence || "Assign #{type.titleize}" %></h3>

@@ -46,7 +46,7 @@ module Evaluations
     end
 
     test 'does not cancel completed evaluation' do
-      @evaluation.update!(status: :completed, evaluation_date: Time.current)
+      @evaluation.update!(status: :completed, appointment_completed_at: Time.current, report_submitted_at: Time.current)
 
       assert_no_difference('Event.where(action: "evaluation_cancelled").count') do
         result = CancelService.new(@evaluation, @evaluator, { notes: 'Too late' }).call
@@ -67,6 +67,21 @@ module Evaluations
       end
 
       assert_equal 'scheduled', @evaluation.reload.status
+    end
+
+    test 'stale cancellation cannot overwrite a completed report' do
+      stale_evaluation = Evaluation.find(@evaluation.id)
+      @evaluation.update!(status: :completed, appointment_completed_at: Time.current, report_submitted_at: Time.current)
+      original_notes = @evaluation.notes
+
+      assert_no_difference('Event.where(action: "evaluation_cancelled").count') do
+        result = CancelService.new(stale_evaluation, @evaluator, { notes: 'Stale cancellation' }).call
+
+        assert result.failure?
+      end
+
+      assert_equal 'completed', @evaluation.reload.status
+      assert_equal original_notes, @evaluation.notes
     end
   end
 end

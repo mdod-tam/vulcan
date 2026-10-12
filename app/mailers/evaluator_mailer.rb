@@ -28,14 +28,16 @@ class EvaluatorMailer < ApplicationMailer
   def evaluation_submission_confirmation
     evaluation = params[:evaluation]
     template_name = 'evaluator_mailer_evaluation_submission_confirmation'
-    locale = resolve_template_locale(recipient: evaluation&.constituent)
+    contact = Evaluations::ContactContext.new(evaluation)
+    delivery_owner = contact.communication_preference == 'letter' ? contact.address_owner : contact.email_owner
+    locale = normalize_locale(delivery_owner&.locale) || normalize_locale(I18n.default_locale) || 'en'
 
     text_template = load_email_template(template_name, locale: locale)
     variables = build_submission_confirmation_variables(evaluation, template: text_template, locale: locale)
 
-    return noop_letter_delivery if queue_letter_if_needed(evaluation, template_name, variables, locale: locale)
+    return noop_letter_delivery if queue_letter_if_needed(evaluation, contact, template_name, variables, locale: locale)
 
-    send_email(recipient_email_for(evaluation.constituent), text_template, variables)
+    send_email(confirmation_email_for(contact), text_template, variables)
   rescue StandardError => e
     log_mail_error(e, evaluation&.constituent, template_name)
     raise
@@ -54,6 +56,7 @@ class EvaluatorMailer < ApplicationMailer
     evaluator = evaluation.evaluator
     constituent = evaluation.constituent
     application = evaluation.application
+    contact = Evaluations::ContactContext.new(evaluation)
 
     evaluation_url = safe_evaluation_url(evaluation)
     header_title = header_title_from_template_subject(
@@ -66,13 +69,13 @@ class EvaluatorMailer < ApplicationMailer
     {
       evaluator_full_name: evaluator.full_name,
       constituent_full_name: constituent.full_name,
-      constituent_address_formatted: format_constituent_address(constituent),
-      constituent_phone_formatted: constituent.phone || 'Not Provided',
-      constituent_email: constituent.email,
-      constituent_contact_method: contact_method_label(constituent.phone_type),
-      constituent_preferred_language: language_label(constituent.locale),
-      constituent_communication_modality: constituent.preferred_means_of_communication.presence || 'Not specified',
-      constituent_delivery_preference: delivery_preference_label(constituent),
+      constituent_address_formatted: format_constituent_address(contact.address_owner),
+      constituent_phone_formatted: contact.phone.presence || 'Not Provided',
+      constituent_email: contact.email.presence || 'Not Provided',
+      constituent_contact_method: contact_method_label(contact.phone_type),
+      constituent_preferred_language: language_label(contact.locale),
+      constituent_communication_modality: contact.communication_modality.presence || 'Not specified',
+      constituent_delivery_preference: contact.communication_preference.to_s.humanize.presence || 'Not specified',
       evaluators_evaluation_url: evaluation_url,
       constituent_disabilities_html_list: format_disabilities_html(constituent),
       constituent_disabilities_text_list: format_disabilities_text(constituent),
@@ -89,7 +92,7 @@ class EvaluatorMailer < ApplicationMailer
     constituent = evaluation.constituent
     application = evaluation.application
     evaluator = evaluation.evaluator
-    submission_date_formatted = evaluation.evaluation_date&.strftime('%B %d, %Y at %I:%M %p %Z') || 'Not Provided'
+    submission_date_formatted = evaluation.report_submitted_at&.strftime('%B %d, %Y at %I:%M %p %Z') || 'Not recorded'
 
     header_title = header_title_from_template_subject(
       template: template,
@@ -103,7 +106,7 @@ class EvaluatorMailer < ApplicationMailer
       application_id: application.id,
       evaluator_full_name: evaluator.full_name,
       submission_date_formatted: submission_date_formatted,
-      recommended_products_text_list: format_recommended_products_text(evaluation),
+      recommended_products_text_list: format_recommended_products_text(evaluation, locale: locale),
       status_box_text: status_box_text(
         status: :success,
         title: I18n.t('evaluator_mailer.status_boxes.submitted.title', locale: locale),
@@ -167,18 +170,25 @@ class EvaluatorMailer < ApplicationMailer
     constituent.disabilities.map { |d| "- #{d}" }.join("\n")
   end
 
-  def format_recommended_products_text(evaluation)
-    evaluation.recommended_products.order(:name).map(&:name).join("\n")
+  # The existing editable-template variable carries the report outcome, including recommendations outside the catalog.
+  def format_recommended_products_text(evaluation, locale:)
+    if evaluation.recommendation_outcome_catalog_products?
+      products = evaluation.recommended_products.order(:name).map(&:name).join("\n")
+      [products, evaluation.recommendation_notes.presence].compact_blank.join("\n\n")
+    else
+      summary = I18n.t("evaluation_confirmation.outcomes.#{evaluation.recommendation_outcome}", locale: locale)
+      [summary, evaluation.recommendation_notes, I18n.t('evaluation_confirmation.staff_review', locale: locale)].compact_blank.join("\n\n")
+    end
   end
 
   # True means the letter route handles this message, including an existing queued letter, so no email follows.
-  def queue_letter_if_needed(evaluation, template_name, variables, locale:)
-    constituent = evaluation.constituent
-    return false unless prefers_letter_delivery?(constituent)
+  def queue_letter_if_needed(evaluation, contact, template_name, variables, locale:)
+    return false unless contact.communication_preference == 'letter'
 
     queue_letter_delivery(
       locale: locale,
-      recipient: constituent,
+      recipient: contact.applicant,
+      print_recipient: contact.address_owner,
       template_name: template_name,
       variables: variables,
       letter_type: :evaluation_submitted,
@@ -186,5 +196,13 @@ class EvaluatorMailer < ApplicationMailer
       application: evaluation.application
     )
     true
+  end
+
+  def confirmation_email_for(contact)
+    return if contact.email.blank?
+
+    @delivery_contacts ||= {}
+    @delivery_contacts[contact.email.downcase] = { recipient: contact.applicant, owner: contact.email_owner }
+    contact.email
   end
 end

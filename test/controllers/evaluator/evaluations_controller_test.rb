@@ -137,7 +137,7 @@ class EvaluationsControllerTest < ActionDispatch::IntegrationTest
             needs: 'Final needs assessment',
             notes: 'Final evaluation notes',
             location: 'Final location',
-            evaluation_date: Time.current,
+            appointment_completed_at: 1.hour.ago,
             recommended_product_ids: [@product.id],
             products_tried: [{
               product_id: @product.id,
@@ -215,7 +215,7 @@ class EvaluationsControllerTest < ActionDispatch::IntegrationTest
     get evaluators_evaluation_path(@evaluation)
 
     assert_response :success
-    assert_includes @response.body, 'View Full Application Details'
+    assert_select "a[href='#{application_details_evaluators_evaluation_path(@evaluation)}']", text: I18n.t('evaluator_context.link')
     assert_includes @response.body, 'Assigned Evaluator'
     assert_includes @response.body, 'Current Evaluator Notes'
     assert_includes @response.body, 'Call constituent before arrival'
@@ -335,12 +335,14 @@ class EvaluationsControllerTest < ActionDispatch::IntegrationTest
   end
 
   test 'show renders completed details and only supplemental notes action for completed evaluation' do
-    @evaluation.update!(status: :completed, evaluation_date: Time.current, notes: 'Completed evaluation notes')
+    @evaluation.update!(status: :completed, evaluation_date: Time.current, notes: 'Completed evaluation notes',
+                        appointment_completed_at: 1.hour.ago, report_submitted_at: Time.current)
 
     get evaluators_evaluation_path(@evaluation)
 
     assert_response :success
-    assert_includes @response.body, 'Completed At'
+    assert_includes @response.body, 'Appointment Completed At'
+    assert_includes @response.body, 'Report Submitted At'
     assert_includes @response.body, 'Evaluator Notes'
     assert_not_includes @response.body, 'Current Evaluator Notes'
     assert_includes @response.body, 'Attendees'
@@ -388,6 +390,7 @@ class EvaluationsControllerTest < ActionDispatch::IntegrationTest
       post submit_report_evaluators_evaluation_path(@evaluation), params: {
         evaluation: {
           needs: 'Final needs assessment',
+          appointment_completed_at: 1.hour.ago,
           notes: 'Final evaluation notes',
           location: 'Final location',
           recommended_product_ids: [@product.id],
@@ -410,6 +413,7 @@ class EvaluationsControllerTest < ActionDispatch::IntegrationTest
       post submit_report_evaluators_evaluation_path(@evaluation), params: {
         evaluation: {
           notes: '',
+          appointment_completed_at: 1.hour.ago,
           location: 'Final location',
           recommended_product_ids: [@product.id],
           products_tried_field: [@product.id],
@@ -423,6 +427,144 @@ class EvaluationsControllerTest < ActionDispatch::IntegrationTest
     assert_includes @response.body, 'Mark Evaluation as Completed'
     assert_not_includes @response.body, 'Add a Note'
     assert_equal 'scheduled', @evaluation.reload.status
+  end
+
+  test 'failed report preserves every visible input and remains retryable after clearing selections' do
+    original_date = @evaluation.evaluation_date
+    submitted = {
+      appointment_completed_at: 1.hour.ago.strftime('%Y-%m-%dT%H:%M'),
+      location: 'Retry Library', notes: 'Detailed observations to preserve', attendees_field: 'Interpreter, Family friend',
+      products_tried_field: [@product.id.to_s], recommended_product_ids: ['']
+    }
+
+    2.times do
+      post submit_report_evaluators_evaluation_path(@evaluation), params: { evaluation: submitted }
+
+      assert_response :unprocessable_content
+      assert_select '#complete_evaluation_appointment_completed_at[value=?]', submitted[:appointment_completed_at]
+      assert_select '#complete_evaluation_location[value=?]', submitted[:location]
+      assert_select '#complete_evaluation_attendees_field[value=?]', submitted[:attendees_field]
+      assert_select '#complete_evaluation_notes', text: submitted[:notes]
+      assert_select "#complete-evaluation-form input[name='evaluation[products_tried_field][]'][value='#{@product.id}'][checked]"
+      assert_select "#complete-evaluation-form input[name='evaluation[recommended_product_ids][]'][checked]", count: 0
+      assert_equal 'scheduled', @evaluation.reload.status
+      assert_equal original_date, @evaluation.evaluation_date
+      assert_not_equal submitted[:notes], @evaluation.notes
+    end
+
+    submitted[:attendees_field] = ''
+    submitted[:location] = 'Corrected Location'
+    submitted[:recommended_product_ids] = [@product.id.to_s]
+    post submit_report_evaluators_evaluation_path(@evaluation), params: { evaluation: submitted }
+
+    assert_redirected_to evaluators_evaluation_path(@evaluation)
+    assert_equal 'completed', @evaluation.reload.status
+    assert_equal [], @evaluation.attendees
+    assert_equal 'Corrected Location', @evaluation.location
+    assert_equal submitted[:notes], @evaluation.notes
+    assert_equal original_date, @evaluation.evaluation_date
+  end
+
+  test 'failed scheduling preserves typed values and a corrected retry schedules the persisted record' do
+    submitted = { evaluation_date: 1.hour.ago.strftime('%Y-%m-%dT%H:%M'), location: '', notes: 'Call before arrival' }
+
+    post schedule_evaluators_evaluation_path(@requested_evaluation), params: { evaluation: submitted }
+
+    assert_response :unprocessable_content
+    assert_select '#schedule_evaluation_evaluation_date[value=?]', submitted[:evaluation_date]
+    assert_select '#schedule_evaluation_location[value=""]'
+    assert_select '#schedule_evaluation_notes', text: submitted[:notes]
+    assert_equal 'requested', @requested_evaluation.reload.status
+
+    submitted[:evaluation_date] = 2.days.from_now.strftime('%Y-%m-%dT%H:%M')
+    submitted[:location] = 'Library'
+    post schedule_evaluators_evaluation_path(@requested_evaluation), params: { evaluation: submitted }
+
+    assert_redirected_to evaluators_evaluation_path(@requested_evaluation)
+    assert_equal 'scheduled', @requested_evaluation.reload.status
+    assert_equal 'Library', @requested_evaluation.location
+  end
+
+  test 'failed rescheduling preserves blank location and attempted date without changing the appointment' do
+    original_date = @evaluation.evaluation_date
+    submitted = { evaluation_date: 2.days.from_now.strftime('%Y-%m-%dT%H:%M'), location: '', reschedule_reason: '' }
+
+    post reschedule_evaluators_evaluation_path(@evaluation), params: { evaluation: submitted }
+
+    assert_response :unprocessable_content
+    assert_select '#reschedule_evaluation_evaluation_date[value=?]', submitted[:evaluation_date]
+    assert_select '#reschedule_evaluation_location[value=""]'
+    assert_select '#reschedule_evaluation_reschedule_reason', text: ''
+    assert_equal original_date, @evaluation.reload.evaluation_date
+
+    submitted[:reschedule_reason] = 'Contact person requested another time'
+    post reschedule_evaluators_evaluation_path(@evaluation), params: { evaluation: submitted }
+
+    assert_redirected_to evaluators_evaluation_path(@evaluation)
+    assert_equal '', @evaluation.reload.location
+    assert_equal submitted[:reschedule_reason], @evaluation.reschedule_reason
+  end
+
+  test 'action forms have distinct field IDs and matching labels' do
+    @evaluation.update!(evaluation_date: 1.hour.ago)
+
+    get evaluators_evaluation_path(@evaluation)
+
+    assert_select '[id]' do |elements|
+      ids = elements.pluck('id')
+      assert_equal ids.uniq, ids
+    end
+    %w[complete_evaluation_notes cancel_evaluation_notes no-show_evaluation_notes reschedule_evaluation_location].each do |id|
+      assert_select "label[for='#{id}']", count: 1
+      assert_select "[id='#{id}']", count: 1
+    end
+  end
+
+  test 'cancellation rejection preserves the entered reason for correction' do
+    post cancel_evaluators_evaluation_path(@evaluation), params: { evaluation: { notes: ' ' } }
+
+    assert_response :unprocessable_content
+    assert_select '#cancel_evaluation_notes', text: ' '
+    assert_equal 'scheduled', @evaluation.reload.status
+
+    post cancel_evaluators_evaluation_path(@evaluation), params: { evaluation: { notes: 'Contact person declined' } }
+
+    assert_redirected_to evaluators_evaluation_path(@evaluation)
+    assert_equal 'Contact person declined', @evaluation.reload.notes
+  end
+
+  test 'failed no-show audit rolls back the outcome and preserves the note for retry' do
+    @evaluation.update!(evaluation_date: 1.hour.ago)
+    failed_event = Event.new
+    failed_event.errors.add(:base, 'Audit record unavailable')
+
+    AuditEventService.stub(:log, ->(**) { raise ActiveRecord::RecordInvalid, failed_event }) do
+      post no_show_evaluators_evaluation_path(@evaluation), params: { evaluation: { notes: 'Reached voicemail' } }
+    end
+
+    assert_response :unprocessable_content
+    assert_select '#no-show_evaluation_notes', text: 'Reached voicemail'
+    assert_equal 'scheduled', @evaluation.reload.status
+
+    post no_show_evaluators_evaluation_path(@evaluation), params: { evaluation: { notes: '' } }
+
+    assert_redirected_to evaluators_evaluation_path(@evaluation)
+    assert_equal 'no_show', @evaluation.reload.status
+    assert_nil @evaluation.notes
+  end
+
+  test 'legacy completed evaluation dates remain explicitly unrecorded' do
+    @evaluation.update!(status: :completed, appointment_completed_at: 1.hour.ago, report_submitted_at: Time.current)
+    @evaluation.update_columns(appointment_completed_at: nil, report_submitted_at: nil)
+
+    get evaluators_evaluation_path(@evaluation)
+
+    assert_response :success
+    assert_select 'dt', text: 'Scheduled For'
+    assert_select 'dt', text: 'Appointment Completed At'
+    assert_select 'dt', text: 'Report Submitted At'
+    assert_select 'dd', text: 'Not recorded', count: 2
+    assert_select "textarea[name='evaluation[post_completion_notes]']", count: 1
   end
 
   test 'assigned evaluator can mark evaluation as no-show after scheduled time' do
@@ -461,7 +603,8 @@ class EvaluationsControllerTest < ActionDispatch::IntegrationTest
   end
 
   test 'supplemental notes update cannot reschedule completed evaluation' do
-    @evaluation.update!(status: :completed, evaluation_date: Time.current)
+    @evaluation.update!(status: :completed, evaluation_date: Time.current,
+                        appointment_completed_at: 1.hour.ago, report_submitted_at: Time.current)
     original_evaluation_date = @evaluation.evaluation_date
 
     assert_no_difference('Event.where(action: "evaluation_rescheduled").count') do
@@ -481,7 +624,8 @@ class EvaluationsControllerTest < ActionDispatch::IntegrationTest
   end
 
   test 'reschedule action rejects completed evaluation' do
-    @evaluation.update!(status: :completed, evaluation_date: Time.current)
+    @evaluation.update!(status: :completed, evaluation_date: Time.current,
+                        appointment_completed_at: 1.hour.ago, report_submitted_at: Time.current)
     original_evaluation_date = @evaluation.evaluation_date
 
     assert_no_difference('Event.where(action: "evaluation_rescheduled").count') do
@@ -502,7 +646,8 @@ class EvaluationsControllerTest < ActionDispatch::IntegrationTest
   end
 
   test 'update allows supplemental post-completion notes' do
-    @evaluation.update!(status: :completed, evaluation_date: Time.current)
+    @evaluation.update!(status: :completed, evaluation_date: Time.current,
+                        appointment_completed_at: 1.hour.ago, report_submitted_at: Time.current)
 
     patch evaluators_evaluation_path(@evaluation), params: {
       evaluation: {
@@ -516,7 +661,8 @@ class EvaluationsControllerTest < ActionDispatch::IntegrationTest
   end
 
   test 'cancel action rejects completed evaluation' do
-    @evaluation.update!(status: :completed, evaluation_date: Time.current)
+    @evaluation.update!(status: :completed, evaluation_date: Time.current,
+                        appointment_completed_at: 1.hour.ago, report_submitted_at: Time.current)
 
     post cancel_evaluators_evaluation_path(@evaluation), params: {
       evaluation: {

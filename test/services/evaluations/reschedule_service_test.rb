@@ -88,7 +88,7 @@ module Evaluations
     end
 
     test 'does not reschedule completed evaluation' do
-      @evaluation.update!(status: :completed, evaluation_date: Time.current)
+      @evaluation.update!(status: :completed, appointment_completed_at: Time.current, report_submitted_at: Time.current)
 
       assert_no_difference('Event.where(action: "evaluation_rescheduled").count') do
         result = RescheduleService.new(
@@ -113,6 +113,28 @@ module Evaluations
 
       assert result.failure?
       assert_equal 'evaluation_date must be in the future', result.message
+    end
+
+    test 'stale reschedule cannot change a completed report appointment date or location' do
+      stale_evaluation = Evaluation.find(@evaluation.id)
+      @evaluation.update!(status: :completed, appointment_completed_at: Time.current, report_submitted_at: Time.current)
+      original_date = @evaluation.evaluation_date
+      original_location = @evaluation.location
+
+      assert_no_difference('Event.where(action: "evaluation_rescheduled").count') do
+        result = RescheduleService.new(
+          stale_evaluation,
+          @evaluator,
+          { evaluation_date: 3.days.from_now, location: 'Replacement location', reschedule_reason: 'Stale appointment change' }
+        ).call
+
+        assert result.failure?
+      end
+
+      @evaluation.reload
+      assert_equal 'completed', @evaluation.status
+      assert_equal original_date, @evaluation.evaluation_date
+      assert_equal original_location, @evaluation.location
     end
   end
 end

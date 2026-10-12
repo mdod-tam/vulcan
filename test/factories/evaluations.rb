@@ -42,7 +42,9 @@ FactoryBot.define do
       status { :completed }
       notes { 'Evaluation completed successfully.' }
       report_submitted { true }
-      evaluation_date { 1.day.from_now } # Use evaluation_date instead of submitted_at
+      evaluation_date { 1.day.from_now }
+      appointment_completed_at { 1.hour.ago }
+      report_submitted_at { Time.current }
     end
 
     trait :pending do

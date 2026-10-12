@@ -1,24 +1,60 @@
+<%# locals: (evaluation:) -%>
+<% form_values = @evaluation_form_values.fetch(:schedule, {}) # rubocop:disable Lint/UselessAssignment -- Used by later ERB fragments. %>
 <div class="bg-white shadow rounded-lg mb-6">
   <div class="px-4 py-5 sm:p-6">
     <h3 class="text-lg leading-6 font-medium text-gray-900 mb-4">
       Schedule Initial Evaluation
     </h3>
 
-    <%= form_with(model: evaluation, url: schedule_evaluators_evaluation_path(evaluation), method: :post, local: true, class: "space-y-4") do |f| %>
+    <p class="text-sm text-gray-600 mb-4"><%= t('evaluators.evaluations.forms.schedule_contact_help') %></p>
+    <%= form_with(
+          model: evaluation,
+          namespace: 'schedule',
+          url: schedule_evaluators_evaluation_path(evaluation),
+          method: :post,
+          local: true,
+          id: 'schedule-evaluation-form',
+          class: 'space-y-4'
+        ) do |f| %>
+      <%= render 'action_errors', action: :schedule, form: f, form_errors: @evaluation_form_errors %>
       <div>
         <%= f.label :evaluation_date, "Evaluation Date/Time", class: "block text-sm font-medium text-gray-700" %>
-        <%= f.datetime_local_field :evaluation_date, value: 1.week.from_now.strftime('%Y-%m-%dT%H:%M'), class: "mt-1 block w-full border border-gray-300 rounded-md shadow-sm py-2 px-3 focus:outline-none focus:ring-indigo-500 focus:border-indigo-500 sm:text-sm", required: true %>
-        <p class="mt-1 text-sm text-gray-500">Select a date and time for the initial evaluation session.</p>
+        <%= f.datetime_local_field(
+              :evaluation_date,
+              value: form_values.fetch(:evaluation_date, 1.week.from_now.strftime('%Y-%m-%dT%H:%M')),
+              class: 'mt-1 block w-full border border-gray-300 rounded-md shadow-sm py-2 px-3 ' \
+                     'focus:outline-none focus:ring-indigo-500 focus:border-indigo-500 sm:text-sm',
+              required: true,
+              aria: evaluation_field_aria(:schedule, :evaluation_date, describedby: 'schedule-time-help', form_errors: @evaluation_form_errors)
+            ) %>
+        <p id="schedule-time-help" class="mt-1 text-sm text-gray-500"><%= t('evaluators.evaluations.forms.time_zone_help') %></p>
+        <%= render 'field_errors', action: :schedule, attribute: :evaluation_date, form_errors: @evaluation_form_errors %>
       </div>
 
       <div>
         <%= f.label :location, "Location", class: "block text-sm font-medium text-gray-700" %>
-        <%= f.text_field :location, class: "mt-1 block w-full border border-gray-300 rounded-md shadow-sm py-2 px-3 focus:outline-none focus:ring-indigo-500 focus:border-indigo-500 sm:text-sm" %>
+        <%= f.text_field(
+              :location,
+              value: form_values.fetch(:location, evaluation.location),
+              class: 'mt-1 block w-full border border-gray-300 rounded-md shadow-sm py-2 px-3 ' \
+                     'focus:outline-none focus:ring-indigo-500 focus:border-indigo-500 sm:text-sm',
+              aria: evaluation_field_aria(:schedule, :location, form_errors: @evaluation_form_errors)
+            ) %>
+        <%= render 'field_errors', action: :schedule, attribute: :location, form_errors: @evaluation_form_errors %>
       </div>
 
       <div>
         <%= f.label :notes, "Notes", class: "block text-sm font-medium text-gray-700" %>
-        <%= f.text_area :notes, rows: 3, class: "mt-1 block w-full border border-gray-300 rounded-md shadow-sm py-2 px-3 focus:outline-none focus:ring-indigo-500 focus:border-indigo-500 sm:text-sm", placeholder: "Optional scheduling notes..." %>
+        <%= f.text_area(
+              :notes,
+              value: form_values.fetch(:notes, evaluation.notes),
+              rows: 3,
+              class: 'mt-1 block w-full border border-gray-300 rounded-md shadow-sm py-2 px-3 ' \
+                     'focus:outline-none focus:ring-indigo-500 focus:border-indigo-500 sm:text-sm',
+              placeholder: 'Optional scheduling notes...',
+              aria: evaluation_field_aria(:schedule, :notes, form_errors: @evaluation_form_errors)
+            ) %>
+        <%= render 'field_errors', action: :schedule, attribute: :notes, form_errors: @evaluation_form_errors %>
       </div>
 
       <%= f.submit "Schedule Evaluation", class: "w-full inline-flex justify-center py-2 px-4 border border-transparent shadow-sm text-sm font-medium rounded-md text-white bg-blue-600 hover:bg-blue-700 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-blue-500" %>

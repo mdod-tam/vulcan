@@ -10,10 +10,12 @@ module Evaluations
     end
 
     def call
-      ApplicationRecord.transaction do
-        prepare_evaluation
-        save_evaluation!
-        create_event!
+      @evaluation.application.with_lock do
+        @evaluation.with_lock do
+          prepare_evaluation
+          save_evaluation!
+          create_event!
+        end
       end
 
       # The submission is committed; a confirmation that cannot be queued does not undo it.
@@ -34,9 +36,13 @@ module Evaluations
       validate_status!
       @evaluation.assign_attributes(submission_params)
       @evaluation.status = :completed
+      @evaluation.report_submitted_at = Time.current
+      @evaluation.report_submitted = true
     end
 
     def validate_status!
+      raise ArgumentError, 'Only the assigned evaluator can update this evaluation.' unless @evaluation.evaluator_id == @actor&.id
+
       return if @evaluation.can_complete?
 
       raise ArgumentError, 'Only scheduled or confirmed evaluations can be completed.'
@@ -55,27 +61,37 @@ module Evaluations
           evaluation_id: @evaluation.id,
           application_id: @evaluation.application_id,
           evaluation_date: @evaluation.evaluation_date&.iso8601,
+          appointment_completed_at: @evaluation.appointment_completed_at&.iso8601,
+          report_submitted_at: @evaluation.report_submitted_at&.iso8601,
           products_tried_count: @evaluation.products_tried.size,
           recommended_products_count: @evaluation.recommended_product_ids.size,
           recommended_product_ids: @evaluation.recommended_product_ids,
           recommended_product_names: @evaluation.recommended_products.map(&:name),
+          recommendation_outcome: @evaluation.recommendation_outcome,
           timestamp: Time.current.iso8601
         }
       )
     end
 
     def submission_params
-      @params.require(:evaluation).permit(
+      attributes = @params.require(:evaluation).permit(
         :needs,
         :location,
         :notes,
-        :evaluation_date,
+        :appointment_completed_at,
         :attendees_field,
+        :recommendation_outcome,
+        :recommendation_notes,
         recommended_product_ids: [],
         products_tried_field: [],
         attendees: %i[name relationship],
         products_tried: %i[product_id reaction]
       )
+      if %w[outside_catalog no_suitable_product].include?(attributes[:recommendation_outcome]) &&
+         !attributes.key?(:recommended_product_ids)
+        attributes[:recommended_product_ids] = []
+      end
+      attributes
     end
 
     def notify_constituent

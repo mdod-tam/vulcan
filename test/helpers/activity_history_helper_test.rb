@@ -58,6 +58,27 @@ class ActivityHistoryHelperTest < ActionView::TestCase
     assert_equal 'Application Fulfillment', activity_source_label(event)
   end
 
+  test 'distinguishes the appointment and report timestamps from the scheduled time' do
+    event = Event.new(action: 'evaluation_completed', metadata: {
+                        evaluation_date: 2.days.from_now.iso8601,
+                        appointment_completed_at: 1.hour.ago.iso8601,
+                        report_submitted_at: Time.current.iso8601
+                      })
+
+    detail = activity_detail(event)
+    assert_includes detail, 'Scheduled for'
+    assert_includes detail, 'Appointment completed'
+    assert_includes detail, 'Report submitted'
+  end
+
+  test 'legacy evaluation history does not label a scheduled date as completion' do
+    event = Event.new(action: 'evaluation_completed', metadata: { evaluation_date: 2.days.from_now.iso8601 })
+
+    assert_includes activity_detail(event), 'Scheduled for'
+    assert_not_includes activity_detail(event), 'Appointment completed'
+    assert_not_includes activity_detail(event), 'Report submitted'
+  end
+
   test 'handles missing metadata gracefully' do
     event = Event.new(action: 'evaluation_scheduled', metadata: {})
 

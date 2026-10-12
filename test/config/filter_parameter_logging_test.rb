@@ -59,6 +59,22 @@ class FilterParameterLoggingTest < ActiveSupport::TestCase
     assert_equal 'create', filtered['action']
   end
 
+  test 'evaluation working notes and recommendation rationale are filtered without hiding the outcome' do
+    filtered = ActiveSupport::ParameterFilter.new(Rails.application.config.filter_parameters).filter(
+      'working_notes' => 'Private scheduling context',
+      'evaluation' => {
+        'working_notes' => 'Private appointment context',
+        'recommendation_notes' => 'Personal assessment rationale',
+        'recommendation_outcome' => 'no_suitable_product'
+      }
+    )
+
+    assert_equal '[FILTERED]', filtered['working_notes']
+    assert_equal '[FILTERED]', filtered.dig('evaluation', 'working_notes')
+    assert_equal '[FILTERED]', filtered.dig('evaluation', 'recommendation_notes')
+    assert_equal 'no_suitable_product', filtered.dig('evaluation', 'recommendation_outcome')
+  end
+
   # Paper identity review posts the applicant's identifying facts and receives a short-lived
   # decision token, which the form then submits back. POST keeps those out of the URL; this keeps
   # them out of the log. The names matter here specifically because they travel alongside a date of

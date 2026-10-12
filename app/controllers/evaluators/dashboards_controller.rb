@@ -8,6 +8,7 @@ module Evaluators
       evaluation_completed
       evaluation_cancelled
       evaluation_no_show
+      evaluator_reassigned
       requested_additional_info
     ].freeze
 
@@ -56,10 +57,11 @@ module Evaluators
 
       # Data for dashboard tables - limit to 5 items for each section
       @requested_evaluations_display = @requested_evaluations.includes(:constituent).order(created_at: :desc).limit(5)
+      @followup_evaluations_display = @followup_evaluations.includes(:constituent).order(updated_at: :desc).limit(5)
       @upcoming_evaluations = (current_user.admin? ? Evaluation.active : current_user.evaluations.active)
                               .includes(:constituent).order(evaluation_date: :asc).limit(5)
       @recent_evaluations = (current_user.admin? ? Evaluation.completed_sessions : current_user.evaluations.completed_sessions)
-                            .includes(:constituent, :application).order(evaluation_date: :desc).limit(5)
+                            .includes(:constituent, :application).by_report_submission.limit(5)
 
       load_admin_display_data if current_user.admin?
     end

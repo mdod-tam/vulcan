@@ -1,4 +1,5 @@
 import { application } from "./application"
+import RecommendationOutcomeController from "./evaluators/recommendation_outcome_controller"
 
 // Admin Controllers
 import RoleSelectController from "./admin/role_select_controller"
@@ -86,6 +87,7 @@ application.register("voucher-redemption", VoucherRedemptionController)
 
 // Review Controllers
 application.register("evaluation-management", EvaluationManagementController)
+application.register("recommendation-outcome", RecommendationOutcomeController)
 application.register("w9-review", W9ReviewController)
 
 // UI Controllers

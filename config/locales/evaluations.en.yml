@@ -1,0 +1,41 @@
+en:
+  evaluations:
+    recommendation_outcomes:
+      catalog_products: "Catalog products"
+      outside_catalog: "Outside the catalog"
+      no_suitable_product: "No suitable product"
+  evaluators:
+    evaluations:
+      dates:
+        scheduled_for: "Scheduled For"
+        appointment_completed_at: "Appointment Completed At"
+        report_submitted_at: "Report Submitted At"
+        not_recorded: "Not recorded"
+      forms:
+        appointment_date_time: "Appointment Date/Time"
+        appointment_time_help: "Enter when the appointment happened, in Eastern Time. Use a time in the past or present."
+        time_zone_help: "Enter the agreed appointment date and time in Eastern Time."
+        schedule_contact_help: "Agree on the appointment with the contact person before saving. Share the date, time, and location directly."
+        reschedule_contact_help: "Agree on the new appointment with the contact person. Share the updated date, time, and location directly."
+        completed_report_help: "The submitted evaluation report above is locked. Use the form below to add supplemental notes."
+        report_help: "Submit the report after the appointment has happened. Record the actual appointment time, notes, products tried, and recommendation outcome."
+        errors_heading: "Please correct the following before saving:"
+      recommendations:
+        outcome: "Recommendation outcome"
+        outcome_help: "Choose the result of this evaluation."
+        tried_help: "Record any catalog products tried during the appointment. At least one is required when recommending catalog products; otherwise this may be left empty."
+        details: "Recommendation details"
+        details_help: "Describe recommendations outside the catalog, or explain why no suitable product was found and any next steps. Details are optional when recommending catalog products."
+        help:
+          catalog_products: "Select at least one product tried and at least one recommended catalog product below."
+          outside_catalog: "Describe the equipment, resource, service, or next step recommended outside the catalog. No catalog recommendation will be submitted."
+          no_suitable_product: "Explain why no suitable product was found and any next steps. No catalog recommendation will be submitted."
+      working_notes:
+        title: "Working Notes"
+        label: "Working notes"
+        help: "Save contact attempts, appointment coordination, preparation, and follow-up here. Saving working notes does not submit a report or change the appointment status."
+        save: "Save working notes"
+        empty: "No working notes recorded."
+        completed_help: "Working notes are read-only after report submission. Use supplemental notes below for later observations."
+      followup:
+        empty: "No evaluations currently need follow-up."

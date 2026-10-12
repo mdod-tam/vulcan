@@ -1,0 +1,6 @@
+en:
+  evaluation_confirmation:
+    outcomes:
+      outside_catalog: "The evaluator recommended a product outside the program's catalog."
+      no_suitable_product: "No suitable product was recommended."
+    staff_review: "Program staff must review this outcome and discuss next steps. This report does not confirm an equipment order or close your application."
