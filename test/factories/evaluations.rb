@@ -4,8 +4,8 @@
 FactoryBot.define do
   factory :evaluation do
     evaluator
-    constituent
     application
+    constituent { application.user }
     evaluation_date { 1.day.from_now }
     evaluation_type { :initial }
     status { :requested }

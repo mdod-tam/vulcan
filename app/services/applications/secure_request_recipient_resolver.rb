@@ -207,17 +207,15 @@ module Applications
     end
 
     def application_user_email_contact
-      @application_user_email_contact ||= application.user.dependent_email_contact(
-        contact_guardian: application.managing_guardian,
-        related_guardians: guardian_users
-      )
+      application_contact_context.email_contact
     end
 
     def application_user_phone_contact
-      @application_user_phone_contact ||= application.user.dependent_phone_contact(
-        contact_guardian: application.managing_guardian,
-        related_guardians: guardian_users
-      )
+      application_contact_context.phone_contact
+    end
+
+    def application_contact_context
+      @application_contact_context ||= ContactContext.new(application: application, related_guardians: guardian_users)
     end
 
     def resolver_selection(contact)
@@ -239,7 +237,7 @@ module Applications
       return recipient if role == :guardian
       return recipient unless dependent_recipient?(recipient)
 
-      recipient.dependent_mailing_address_owner(contact_guardian: application.managing_guardian)
+      application_contact_context.address_owner
     end
 
     def available_channels_for(email:, phone:, phone_type:, address_owner:)

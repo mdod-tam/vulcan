@@ -56,6 +56,15 @@ class ApplicationMailer < ActionMailer::Base
   # Pass required_delivery: true in mail_options when the email carries a secure link.
   def send_email(recipient_email, template, variables, mail_options = {})
     required_delivery = mail_options.delete(:required_delivery)
+    if recipient_email.blank?
+      EmailDelivery::Outcome.record_not_sent(EmailDelivery::Decision.suppressed(:missing_recipient),
+                                             context: @delivery_context,
+                                             mail_action: "#{self.class.name}##{action_name}")
+      raise DeliverySkipped.new(reason: 'missing_recipient') if required_delivery
+
+      return noop_delivery(channel: :email, reason: 'missing_recipient')
+    end
+
     unless template.enabled?
       Rails.logger.warn("Email template '#{template.name}' is disabled. Skipping delivery")
       # No message is built, so the final check never runs; record the suppression here.
@@ -136,11 +145,17 @@ class ApplicationMailer < ActionMailer::Base
   end
 
   def prefers_letter_delivery?(recipient, override: nil)
+    contact = application_contact_context_for(recipient)
+    recipient = contact.preference_owner if contact
     EmailDelivery::Routing.prefers_letter?(recipient, override: override)
   end
 
   def recipient_email_for(recipient, own_email: false)
     return record_delivery_contact(recipient.email, recipient: recipient, owner: recipient) if own_email
+
+    if (context = application_contact_context_for(recipient))
+      return record_delivery_contact(context.email, recipient: recipient, owner: context.email_owner)
+    end
 
     contact = recipient.dependent_email_contact(contact_guardian: recipient.guardian_for_contact) if recipient.respond_to?(:dependent?) && recipient.dependent?
     address = contact&.value.presence || (recipient.effective_email if recipient.respond_to?(:effective_email)).presence || recipient.email
@@ -184,6 +199,9 @@ class ApplicationMailer < ActionMailer::Base
   end
 
   def letter_recipient_for(recipient)
+    context = application_contact_context_for(recipient)
+    return context.address_owner if context
+
     return recipient unless recipient.respond_to?(:dependent?) && recipient.dependent?
     return recipient unless recipient.respond_to?(:guardian_for_contact) && recipient.guardian_for_contact.present?
 
@@ -199,7 +217,10 @@ class ApplicationMailer < ActionMailer::Base
   end
 
   def resolve_template_locale(recipient: nil)
-    recipient_locale = if recipient.respond_to?(:effective_locale)
+    recipient_locale = if (context = application_contact_context_for(recipient))
+                         owner = context.preference_owner.communication_preference == 'letter' ? context.address_owner : context.email_owner
+                         normalize_locale((owner || context.preference_owner).locale)
+                       elsif recipient.respond_to?(:effective_locale)
                          normalize_locale(recipient.effective_locale)
                        elsif recipient.respond_to?(:locale)
                          normalize_locale(recipient.locale)
@@ -207,6 +228,24 @@ class ApplicationMailer < ActionMailer::Base
     default_locale = normalize_locale(I18n.default_locale) || 'en'
 
     recipient_locale || default_locale
+  end
+
+  # Only the application's applicant uses its managing-guardian context; staff and other recipients retain their own routing.
+  def application_contact_context_for(recipient)
+    return unless recipient.respond_to?(:id) && recipient.id
+
+    subject = application_delivery_subject
+    application = subject.is_a?(Application) ? subject : (subject.application if subject.respond_to?(:application))
+    return unless application && application.user_id == recipient.id
+
+    @application_contact_contexts ||= {}
+    @application_contact_contexts[application.id] ||= Applications::ContactContext.new(application: application)
+  end
+
+  def application_delivery_subject
+    mailer_params = params || {}
+    mailer_params[:application] || @application || @delivery_subject ||
+      mailer_params[:evaluation] || mailer_params[:training_session] || mailer_params[:voucher]
   end
 
   def find_text_template(template_name, locale: nil)

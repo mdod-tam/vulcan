@@ -2,7 +2,7 @@
 
 require 'test_helper'
 
-module Evaluations
+module Applications
   class ContactContextTest < ActiveSupport::TestCase
     test 'uses the applications managing guardian rather than the first relationship' do
       first_guardian = create(:constituent, locale: 'en')
@@ -37,11 +37,15 @@ module Evaluations
 
       assert_equal applicant.email, contact.email
       assert_equal applicant, contact.email_owner
+      assert_equal :dependent_contact, contact.email_contact.source
       assert_equal guardian.phone, contact.phone
       assert_equal guardian, contact.phone_owner
       assert_equal 'en', contact.email_locale
       assert_equal 'es', contact.phone_locale
-      assert_equal 'email', contact.communication_preference
+      assert_equal guardian, contact.preference_owner
+      assert_equal guardian, contact.communication_owner
+      assert_equal 'letter', contact.communication_preference
+      assert_equal 'es', contact.locale
     end
 
     test 'does not use an unrelated guardian when the application has no managing guardian' do
@@ -75,10 +79,9 @@ module Evaluations
       create(:guardian_relationship, guardian_user: manager, dependent_user: applicant)
       create(:guardian_relationship, guardian_user: remaining_guardian, dependent_user: applicant)
       application = create(:application, user: applicant, managing_guardian: manager)
-      evaluation = create(:evaluation, application: application, constituent: applicant)
 
       manager.destroy!
-      contact = ContactContext.new(evaluation.reload)
+      contact = ContactContext.new(application: application.reload)
 
       assert_nil application.reload.managing_guardian
       assert_nil contact.guardian
@@ -96,7 +99,7 @@ module Evaluations
       application = Application.new(user: applicant, alternate_contact_name: 'Appointment Helper',
                                     alternate_contact_email: 'helper@example.com', alternate_contact_phone: '410-555-0123',
                                     alternate_contact_relationship_type: 'Friend')
-      contact = ContactContext.new(Evaluation.new(application: application, constituent: applicant))
+      contact = ContactContext.new(application: application)
 
       assert_nil contact.email
       assert_nil contact.phone
@@ -108,11 +111,43 @@ module Evaluations
       assert_equal 'Friend', contact.alternate_contact_relationship_type
     end
 
+    test 'uses the application applicant for standalone contact and preferences' do
+      applicant = create(:constituent, locale: 'es', communication_preference: 'letter')
+      contact = context_for(applicant)
+
+      assert_equal applicant, contact.applicant
+      assert_equal applicant, contact.email_owner
+      assert_equal applicant, contact.phone_owner
+      assert_equal :constituent, contact.email_contact.source
+      assert_equal :constituent, contact.phone_contact.source
+      assert_equal applicant, contact.preference_owner
+      assert_equal 'es', contact.locale
+    end
+
+    test 'uses supplied guardian scope to distinguish another guardians snapshot from an owned contact' do
+      other_guardian = create(:constituent)
+      manager = create(:constituent)
+      applicant = create(:constituent, dependent_email: other_guardian.email, dependent_phone: other_guardian.phone)
+      create(:guardian_relationship, guardian_user: other_guardian, dependent_user: applicant)
+      create(:guardian_relationship, guardian_user: manager, dependent_user: applicant)
+      application = Application.new(user: applicant, managing_guardian: manager)
+
+      contact = ContactContext.new(application: application, related_guardians: [other_guardian, manager])
+
+      assert_equal applicant.email, contact.email
+      assert_equal applicant, contact.email_owner
+      assert_equal :constituent, contact.email_contact.source
+      assert_equal applicant.phone, contact.phone
+      assert_equal applicant, contact.phone_owner
+      assert_equal :constituent, contact.phone_contact.source
+      assert_equal manager, contact.preference_owner
+    end
+
     private
 
     def context_for(applicant, guardian: nil)
       application = Application.new(user: applicant, managing_guardian: guardian)
-      ContactContext.new(Evaluation.new(application: application, constituent: applicant))
+      ContactContext.new(application: application)
     end
   end
 end

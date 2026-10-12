@@ -64,7 +64,7 @@ module Evaluators
       if current_user.admin?
         redirect_to admin_application_path(@evaluation.application)
       else
-        @contact_context = ::Evaluations::ContactContext.new(@evaluation)
+        @contact_context = ::Applications::ContactContext.new(application: @evaluation.application)
       end
     end
 
@@ -154,7 +154,7 @@ module Evaluators
       @evaluation_form_values ||= {}
       @evaluation_form_errors ||= {}
       @can_manage_evaluation = assigned_evaluator?
-      @contact_context = ::Evaluations::ContactContext.new(@evaluation)
+      @contact_context = ::Applications::ContactContext.new(application: @evaluation.application)
       @activity_logs = ::Evaluations::AuditLogBuilder.new(@evaluation).build
       @available_products = Product.order(:name)
     end

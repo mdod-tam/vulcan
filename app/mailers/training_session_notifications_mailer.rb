@@ -22,6 +22,7 @@ class TrainingSessionNotificationsMailer < ApplicationMailer
 
     constituent = training_session.constituent
     application = training_session.application
+    contact = Applications::ContactContext.new(application: application)
 
     header_title = header_title_from_template_subject(
       template: text_template,
@@ -43,13 +44,13 @@ class TrainingSessionNotificationsMailer < ApplicationMailer
       trainer_email: trainer.email,
       trainer_phone_formatted: trainer.phone,
       constituent_full_name: constituent.full_name,
-      constituent_address_formatted: format_constituent_address(constituent),
-      constituent_phone_formatted: constituent.phone,
-      constituent_email: recipient_email_for(constituent),
+      constituent_address_formatted: format_constituent_address(contact.address_owner).presence || localized_not_specified(locale),
+      constituent_phone_formatted: contact.phone.presence || localized_not_specified(locale),
+      constituent_email: contact.email.presence || localized_not_specified(locale),
       constituent_disabilities_text_list: format_disabilities_text(constituent),
-      constituent_language: format_constituent_language(constituent, locale),
-      constituent_contact_method: format_constituent_contact_method(constituent, locale),
-      constituent_communication_modality: format_constituent_communication_modality(constituent, locale),
+      constituent_language: format_constituent_language(contact, locale),
+      constituent_contact_method: format_constituent_contact_method(contact, locale),
+      constituent_communication_modality: format_constituent_communication_modality(contact, locale),
       status_box_text: status_box_text(status: :info, title: 'Training Assignment', message: 'Please contact the constituent to schedule this training session.'),
       application_id: application.id,
       training_session_schedule_text: training_session_schedule_text(training_session),
@@ -360,29 +361,17 @@ class TrainingSessionNotificationsMailer < ApplicationMailer
     disabilities.map { |disability| "- #{disability}" }.join("\n")
   end
 
-  def format_constituent_language(constituent, template_locale)
-    constituent_locale = if constituent.respond_to?(:effective_locale)
-                           constituent.effective_locale
-                         else
-                           constituent.locale
-                         end
-
-    language = constituent_locale.to_s == 'es' ? :spanish : :english
+  def format_constituent_language(contact, template_locale)
+    language = contact.locale.to_s == 'es' ? :spanish : :english
     localized_label(language, locale: template_locale)
   end
 
-  def format_constituent_contact_method(constituent, locale)
-    phone_type = if constituent.respond_to?(:effective_phone_type)
-                   constituent.effective_phone_type
-                 else
-                   constituent.phone_type
-                 end
-
-    localized_label(phone_type.to_s, locale: locale)
+  def format_constituent_contact_method(contact, locale)
+    localized_label(contact.phone_type.to_s, locale: locale)
   end
 
-  def format_constituent_communication_modality(constituent, locale)
-    localized_label(constituent.preferred_means_of_communication.to_s, locale: locale)
+  def format_constituent_communication_modality(contact, locale)
+    localized_label(contact.communication_modality.to_s, locale: locale)
   end
 
   def localized_label(value, locale:)

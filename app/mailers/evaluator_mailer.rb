@@ -28,16 +28,15 @@ class EvaluatorMailer < ApplicationMailer
   def evaluation_submission_confirmation
     evaluation = params[:evaluation]
     template_name = 'evaluator_mailer_evaluation_submission_confirmation'
-    contact = Evaluations::ContactContext.new(evaluation)
-    delivery_owner = contact.communication_preference == 'letter' ? contact.address_owner : contact.email_owner
-    locale = normalize_locale(delivery_owner&.locale) || normalize_locale(I18n.default_locale) || 'en'
+    contact = Applications::ContactContext.new(application: evaluation.application)
+    locale = resolve_template_locale(recipient: contact.applicant)
 
     text_template = load_email_template(template_name, locale: locale)
     variables = build_submission_confirmation_variables(evaluation, template: text_template, locale: locale)
 
     return noop_letter_delivery if queue_letter_if_needed(evaluation, contact, template_name, variables, locale: locale)
 
-    send_email(confirmation_email_for(contact), text_template, variables)
+    send_email(recipient_email_for(contact.applicant), text_template, variables)
   rescue StandardError => e
     log_mail_error(e, evaluation&.constituent, template_name)
     raise
@@ -56,7 +55,7 @@ class EvaluatorMailer < ApplicationMailer
     evaluator = evaluation.evaluator
     constituent = evaluation.constituent
     application = evaluation.application
-    contact = Evaluations::ContactContext.new(evaluation)
+    contact = Applications::ContactContext.new(application: application)
 
     evaluation_url = safe_evaluation_url(evaluation)
     header_title = header_title_from_template_subject(
@@ -183,7 +182,7 @@ class EvaluatorMailer < ApplicationMailer
 
   # True means the letter route handles this message, including an existing queued letter, so no email follows.
   def queue_letter_if_needed(evaluation, contact, template_name, variables, locale:)
-    return false unless contact.communication_preference == 'letter'
+    return false unless prefers_letter_delivery?(contact.applicant)
 
     queue_letter_delivery(
       locale: locale,
@@ -196,13 +195,5 @@ class EvaluatorMailer < ApplicationMailer
       application: evaluation.application
     )
     true
-  end
-
-  def confirmation_email_for(contact)
-    return if contact.email.blank?
-
-    @delivery_contacts ||= {}
-    @delivery_contacts[contact.email.downcase] = { recipient: contact.applicant, owner: contact.email_owner }
-    contact.email
   end
 end

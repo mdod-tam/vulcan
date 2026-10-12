@@ -25,7 +25,7 @@ en:
         outcome_help: "Choose the result of this evaluation."
         tried_help: "Record any catalog products tried during the appointment. At least one is required when recommending catalog products; otherwise this may be left empty."
         details: "Recommendation details"
-        details_help: "Describe recommendations outside the catalog, or explain why no suitable product was found and any next steps. Details are optional when recommending catalog products."
+        details_help: "Describe recommendations outside the catalog, or explain why no suitable product was found and any next steps. Details are optional when recommending catalog products. These details are shared verbatim in the confirmation email or letter to the applicant or managing guardian. Use Working Notes for internal information."
         help:
           catalog_products: "Select at least one product tried and at least one recommended catalog product below."
           outside_catalog: "Describe the equipment, resource, service, or next step recommended outside the catalog. No catalog recommendation will be submitted."
@@ -33,7 +33,7 @@ en:
       working_notes:
         title: "Working Notes"
         label: "Working notes"
-        help: "Save contact attempts, appointment coordination, preparation, and follow-up here. Saving working notes does not submit a report or change the appointment status."
+        help: "Save internal notes about contact attempts, appointment coordination, preparation, and follow-up here. Working Notes are not included in confirmation emails or letters to the applicant or managing guardian. Saving working notes does not submit a report or change the appointment status."
         save: "Save working notes"
         empty: "No working notes recorded."
         completed_help: "Working notes are read-only after report submission. Use supplemental notes below for later observations."

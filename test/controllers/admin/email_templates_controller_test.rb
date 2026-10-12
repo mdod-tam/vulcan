@@ -614,6 +614,25 @@ module Admin
       end
     end
 
+    test 'edit explains the evaluation confirmation outcome contract in both locale panels' do
+      en_template = template_pair('evaluator_mailer_evaluation_submission_confirmation').first
+
+      get edit_admin_email_template_path(en_template), headers: default_headers
+
+      assert_response :success
+      %w[en es].each do |locale|
+        assert_select "#confirmation-outcome-help-#{locale}",
+                      text: /outside the catalog.*no suitable product.*Recommendation details verbatim.*migration preserves custom bodies/m
+        assert_select "#body-editor-#{locale}[aria-describedby~='variable-help-#{locale}']"
+      end
+
+      unrelated = template_pair('unrelated_confirmation_help_test').first
+      get edit_admin_email_template_path(unrelated), headers: default_headers
+
+      assert_response :success
+      assert_select '[id^="confirmation-outcome-help-"]', count: 0
+    end
+
     test 'edit and show headings expose break points for long template names' do
       long_name = "very_long_email_template_name_without_breaks_#{'segment' * 8}"
       template = create(:email_template, :text, name: long_name)

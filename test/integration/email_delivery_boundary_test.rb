@@ -24,7 +24,7 @@ class EmailDeliveryBoundaryTest < ActionDispatch::IntegrationTest
   end
 
   test 'email requested while all email is off does not send after it is turned back on' do
-    evaluation = create(:evaluation, constituent: @user)
+    evaluation = create(:evaluation, application: create(:application, user: @user))
     clear_enqueued_jobs
     turn_global(false)
     EvaluatorMailer.with(evaluation: evaluation).evaluation_submission_confirmation.deliver_later
@@ -38,7 +38,7 @@ class EmailDeliveryBoundaryTest < ActionDispatch::IntegrationTest
 
   test 'a letter recipient requested while email is off still gets the letter' do
     @user.update!(communication_preference: 'letter')
-    evaluation = create(:evaluation, constituent: @user)
+    evaluation = create(:evaluation, application: create(:application, user: @user))
     clear_enqueued_jobs
     turn_global(false)
     Letters::TextTemplateToPdfService.any_instance.expects(:queue_for_printing).once

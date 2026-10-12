@@ -240,6 +240,14 @@
       <div id="<%= variable_help_id %>" class="rounded-md border border-gray-200 bg-gray-50 px-3 py-2 text-sm text-gray-600">
         <p>Inserted body variables are highlighted and cannot be edited.</p>
         <p class="mt-1">Liquid disables optional choices because sends may omit them.</p>
+        <% if email_template.text? && email_template.name == 'evaluator_mailer_evaluation_submission_confirmation' %>
+          <p id="confirmation-outcome-help-<%= locale_suffix %>" class="mt-2">
+            Evaluation confirmations can report catalog products, recommendations outside the catalog, or no suitable product.
+            Keep the Recommended Products Text List variable; it includes the outcome and the evaluator's Recommendation details verbatim.
+            Review custom wording in both EN and ES: the migration preserves custom bodies.
+            Do not imply a catalog product was recommended or promise delivery for every outcome. Working Notes remain internal.
+          </p>
+        <% end %>
       </div>
     </div>
     <p id="<%= editor_help_id %>" class="mt-2 text-sm text-gray-500">

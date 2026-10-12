@@ -68,7 +68,7 @@ class EvaluatorMailerContactTest < ActionMailer::TestCase
     assert_includes decoded_text_part(email), 'ha recibido su informe de evaluación'
   end
 
-  test 'confirmation retains independent applicant email and language despite a guardian phone' do
+  test 'confirmation follows the managing guardians letter preference despite an independent applicant email' do
     guardian = create(:constituent, locale: 'es', communication_preference: 'letter')
     applicant = create(:constituent, locale: 'en', communication_preference: 'email',
                                      phone: '000-123-4567', dependent_phone: guardian.phone)
@@ -76,11 +76,39 @@ class EvaluatorMailerContactTest < ActionMailer::TestCase
     create(:guardian_relationship, guardian_user: guardian, dependent_user: applicant)
     evaluation = evaluation_for(applicant, guardian: guardian)
 
-    assert_no_difference 'PrintQueueItem.count' do
-      email = EvaluatorMailer.with(evaluation: evaluation).evaluation_submission_confirmation.message
-      assert_equal [applicant.email], email.to
-      assert_equal 'Evaluation Submission Confirmation', email.subject
+    Letters::TextTemplateToPdfService.expects(:new).with do |**arguments|
+      arguments[:recipient] == guardian && arguments[:locale] == 'es'
+    end.returns(mock(queue_for_printing: true))
+
+    assert_no_emails do
+      EvaluatorMailer.with(evaluation: evaluation).evaluation_submission_confirmation.deliver_now
     end
+  end
+
+  test 'confirmation with preferred email and no email contact is explicitly not sent' do
+    ensure_system_audit_actor!
+    first_guardian = create(:constituent)
+    guardian = create(:constituent, communication_preference: 'email')
+    applicant = create(:constituent, email: "dependent-#{SecureRandom.uuid}@system.matvulcan.local",
+                                     dependent_email: first_guardian.email)
+    create(:guardian_relationship, guardian_user: first_guardian, dependent_user: applicant)
+    create(:guardian_relationship, guardian_user: guardian, dependent_user: applicant)
+    evaluation = evaluation_for(applicant, guardian: guardian)
+
+    assert_no_difference 'PrintQueueItem.count' do
+      assert_no_emails do
+        EvaluatorMailer.with(evaluation: evaluation).evaluation_submission_confirmation.deliver_now
+      end
+    end
+
+    assert_equal 'missing_recipient', EmailDelivery::Current.denial_reason
+    event = Event.where(action: EmailDelivery::Outcome::SUPPRESSED).order(:id).last
+    assert_equal 'missing_recipient', event.metadata['reason']
+    assert_equal 'EvaluatorMailer#evaluation_submission_confirmation', event.metadata['mail_action']
+    assert_not_includes event.metadata.values, first_guardian.email
+    assert_not Event.exists?(action: 'email_delivery_error')
+  ensure
+    EmailDelivery::Current.reset
   end
 
   test 'confirmation letter uses the managing guardian address and locale instead of the first guardian' do

@@ -19,6 +19,31 @@ class EvaluationsControllerTest < ActionDispatch::IntegrationTest
     assert_response :success
   end
 
+  test 'report and working notes help explains the confirmation audience in both locales' do
+    expected_help = {
+      en: {
+        recommendation: /shared verbatim.*applicant or managing guardian/,
+        working: /internal notes.*not included.*confirmation emails or letters/
+      },
+      es: {
+        recommendation: /se comparten sin cambios.*persona solicitante.*tutor/,
+        working: /notas internas.*no se incluyen.*correos electrónicos.*cartas/
+      }
+    }
+
+    expected_help.each do |locale, copy|
+      I18n.with_locale(locale) do
+        get evaluators_evaluation_path(@evaluation)
+
+        assert_response :success
+        assert_select '#recommendation-notes-help', text: copy.fetch(:recommendation)
+        assert_select '#working-notes-help', text: copy.fetch(:working)
+        assert_select '#complete_evaluation_recommendation_notes[aria-describedby~="recommendation-notes-help"]'
+        assert_select '#working_evaluation_working_notes[aria-describedby~="working-notes-help"]'
+      end
+    end
+  end
+
   test 'administrator completed route applies the selected assignment scope' do
     assigned = create(:evaluation, :completed, evaluator: @admin)
     other = create(:evaluation, :completed, evaluator: @evaluator)
@@ -658,6 +683,43 @@ class EvaluationsControllerTest < ActionDispatch::IntegrationTest
     assert_redirected_to evaluators_evaluation_path(@evaluation)
     assert_equal 'Evaluation updated successfully.', flash[:notice]
     assert_equal 'Follow-up note after submission', @evaluation.reload.post_completion_notes
+  end
+
+  test 'supplemental notes preserve submission time and completed report order' do
+    freeze_time do
+      older = create(
+        :evaluation, :completed, evaluator: @evaluator,
+                                 appointment_completed_at: 3.days.ago, report_submitted_at: 2.days.ago
+      )
+      newer = create(
+        :evaluation, :completed, evaluator: @evaluator,
+                                 appointment_completed_at: 2.days.ago, report_submitted_at: 1.day.ago
+      )
+      submitted_at = older.report_submitted_at
+      updated_at = older.updated_at
+      travel 1.minute
+
+      patch evaluators_evaluation_path(older), params: {
+        evaluation: { post_completion_notes: 'Additional observation on the older report' }
+      }
+
+      assert_redirected_to evaluators_evaluation_path(older)
+      assert_equal 'Additional observation on the older report', older.reload.post_completion_notes
+      assert_equal submitted_at, older.report_submitted_at
+      assert_operator older.updated_at, :>, updated_at
+      assert_operator older.updated_at, :>, newer.updated_at
+
+      get completed_evaluators_evaluations_path
+
+      assert_evaluation_rows(included: [newer, older], excluded: [@evaluation, @requested_evaluation])
+      assert_body_order(%(href="#{evaluators_evaluation_path(newer)}"), %(href="#{evaluators_evaluation_path(older)}"))
+
+      get evaluators_dashboard_path
+
+      assert_response :success
+      assert_select '#recent-completed-heading'
+      assert_body_order(%(href="#{evaluators_evaluation_path(newer)}"), %(href="#{evaluators_evaluation_path(older)}"))
+    end
   end
 
   test 'cancel action rejects completed evaluation' do

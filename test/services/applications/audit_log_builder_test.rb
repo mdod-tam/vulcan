@@ -74,6 +74,56 @@ module Applications
       end
     end
 
+    test 'includes evaluator transfers with their evaluation owner and excludes other applications' do
+      evaluator = create(:evaluator)
+      evaluation = create(:evaluation, application: @application, constituent: @application.user, evaluator: evaluator)
+      other_evaluation = create(:evaluation)
+      transfer = AuditEventService.log(
+        action: 'evaluator_reassigned', actor: @admin, auditable: evaluation,
+        metadata: { application_id: @application.id, evaluation_id: evaluation.id,
+                    previous_evaluator_id: evaluator.id, evaluator_id: create(:evaluator).id,
+                    operation_id: SecureRandom.uuid }
+      )
+      unrelated_transfer = AuditEventService.log(
+        action: 'evaluator_reassigned', actor: @admin, auditable: other_evaluation,
+        metadata: { application_id: other_evaluation.application_id, evaluation_id: other_evaluation.id,
+                    previous_evaluator_id: other_evaluation.evaluator_id, evaluator_id: evaluator.id,
+                    operation_id: SecureRandom.uuid }
+      )
+
+      logs = AuditLogBuilder.new(@application).build_audit_logs
+
+      assert_includes logs, transfer
+      assert_not_includes logs, unrelated_transfer
+      displayed = logs.grep(Event).find { |event| event.id == transfer.id }
+      assert_equal 'Evaluation', displayed.auditable_type
+      assert_equal evaluation.id, displayed.auditable_id
+      assert_equal evaluation.id, displayed.metadata['evaluation_id']
+      assert_equal @admin.id, displayed.user_id
+    end
+
+    test 'deduplicated application history retains both evaluator transfers made in the same minute' do
+      Policy.find_or_create_by!(key: 'waiting_period_years').update!(value: 3)
+      application = create(:application, :approved, application_date: Date.current)
+      evaluator = create(:evaluator)
+      replacement = create(:evaluator)
+      evaluation = create(:evaluation, application: application, constituent: application.user, evaluator: evaluator)
+
+      freeze_time do
+        assert application.reassign_evaluator!(replacement, actor: @admin), application.errors.full_messages.to_sentence
+        assert application.reassign_evaluator!(evaluator, actor: @admin), application.errors.full_messages.to_sentence
+
+        events = Event.where(action: 'evaluator_reassigned', auditable: evaluation).order(:id).to_a
+        displayed = AuditLogBuilder.new(application).build_deduplicated_audit_logs.grep(Event)
+                                   .select { |event| event.action == 'evaluator_reassigned' }
+
+        assert_equal 2, events.size
+        assert_equal events.map(&:id).sort, displayed.map(&:id).sort
+        assert_equal [evaluation.id, evaluation.id], displayed.map(&:auditable_id)
+        assert_equal [@admin.id, @admin.id], displayed.map(&:user_id)
+      end
+    end
+
     test 'returns empty audit logs after a build failure' do
       skip 'Add failure injection and result assertions before enabling this test'
     end
