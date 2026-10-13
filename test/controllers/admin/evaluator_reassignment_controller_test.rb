@@ -40,6 +40,34 @@ class AdminEvaluatorReassignmentControllerTest < ActionDispatch::IntegrationTest
     assert_equal @evaluator.id, @evaluation.reload.evaluator_id
   end
 
+  test 'reassignment requires the existing modal confirmation pattern and identifies same-name evaluators' do
+    same_name_replacement = create(:evaluator, first_name: @replacement.first_name, last_name: @replacement.last_name)
+
+    get admin_application_path(@application)
+    assert_response :success
+
+    assert_select 'button[type=button][data-controller=modal][data-action="click->modal#open"]' \
+                  '[data-modal-id=evaluator-reassign-confirm-dialog]', text: 'Reassign Evaluator'
+    assert_select 'dialog#evaluator-reassign-confirm-dialog[data-controller=modal]' \
+                  '[aria-labelledby=evaluator-reassign-confirm-heading][aria-describedby=evaluator-reassign-confirm-description]' do
+      assert_select 'h3#evaluator-reassign-confirm-heading', text: 'Reassign Evaluator'
+      assert_select 'p#evaluator-reassign-confirm-description', text: /#{Regexp.escape(@evaluator.email)}/
+      assert_select "form[action='#{reassign_evaluator_admin_application_path(@application)}'][method=post]", count: 1 do
+        assert_select 'label[for=reassign_evaluator_id]', text: 'New evaluator (required)'
+        assert_select 'select#reassign_evaluator_id[name=evaluator_id][required]' do
+          [@replacement, same_name_replacement].each do |person|
+            assert_select "option[value='#{person.id}']", text: "#{person.full_name} (#{person.email})"
+          end
+          assert_select "option[value='#{@evaluator.id}']", count: 0
+        end
+        assert_select 'button[type=button][data-action="click->modal#close"][autofocus]', text: 'Cancel'
+        assert_select 'input[type=submit][value="Confirm reassignment"][data-turbo-submits-with="Reassigning..."]'
+      end
+    end
+    assert_select 'form[action=?]', reassign_evaluator_admin_application_path(@application), count: 1
+    assert_select 'noscript p', text: 'Enable JavaScript to confirm evaluator reassignment.'
+  end
+
   test 'reassignment rejects missing malformed unavailable and deleted selections without changing the appointment' do
     inactive = create(:evaluator, status: :inactive)
     wrong_role = create(:trainer)

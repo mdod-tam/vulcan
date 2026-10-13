@@ -89,40 +89,41 @@ module EvaluationManagement
   # Transfers the assignment without resetting appointment or outcome history.
   def reassign_evaluator!(evaluator, actor:)
     with_lock do
+      errors.clear
       unless actor&.admin? && service_window_active?
         errors.add(:base, :evaluation_service_window)
-        return false
+        raise ActiveRecord::RecordInvalid, self
       end
 
       unless eligible_evaluator_for_assignment?(evaluator)
         errors.add(:base, 'Select an active evaluator.')
-        return false
+        raise ActiveRecord::RecordInvalid, self
       end
 
       evaluation = latest_evaluation
       if evaluation.nil? || evaluations.exists?(status: :completed)
         errors.add(:base, :evaluation_assignment_closed)
-        return false
+        raise ActiveRecord::RecordInvalid, self
       end
 
       evaluation.with_lock do
-        return true if evaluation.evaluator_id == evaluator.id
-
-        previous_evaluator_id = evaluation.evaluator_id
-        evaluation.update!(evaluator: evaluator)
-        AuditEventService.log(
-          actor: actor,
-          action: 'evaluator_reassigned',
-          auditable: evaluation,
-          metadata: { operation_id: SecureRandom.uuid, application_id: id, evaluation_id: evaluation.id,
-                      previous_evaluator_id: previous_evaluator_id, evaluator_id: evaluator.id }
-        )
-        EvaluatorMailer.with(evaluation: evaluation).new_evaluation_assigned.deliver_later
+        unless evaluation.evaluator_id == evaluator.id
+          previous_evaluator_id = evaluation.evaluator_id
+          evaluation.update!(evaluator: evaluator)
+          AuditEventService.log(
+            actor: actor,
+            action: 'evaluator_reassigned',
+            auditable: evaluation,
+            metadata: { operation_id: SecureRandom.uuid, application_id: id, evaluation_id: evaluation.id,
+                        previous_evaluator_id: previous_evaluator_id, evaluator_id: evaluator.id }
+          )
+          EvaluatorMailer.with(evaluation: evaluation).new_evaluation_assigned.deliver_later
+        end
       end
     end
     true
   rescue ActiveRecord::RecordInvalid => e
-    errors.add(:base, e.record.errors.full_messages.to_sentence)
+    errors.add(:base, e.record.errors.full_messages.to_sentence) unless e.record.equal?(self)
     false
   end
 

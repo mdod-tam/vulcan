@@ -59,7 +59,11 @@
         <%= render 'field_errors', action: :schedule, attribute: :notes, form_errors: @evaluation_form_errors %>
       </div>
 
-      <%= f.submit "Schedule Evaluation", class: "w-full inline-flex justify-center py-2 px-4 border border-transparent shadow-sm text-sm font-medium rounded-md text-white bg-blue-600 hover:bg-blue-700 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-blue-500" %>
+      <%= f.submit 'Schedule Evaluation',
+                   data: { turbo_submits_with: 'Scheduling...' },
+                   class: 'w-full inline-flex justify-center py-2 px-4 border border-transparent shadow-sm text-sm font-medium ' \
+                          'rounded-md text-white bg-blue-600 hover:bg-blue-700 focus:outline-none focus:ring-2 focus:ring-offset-2 ' \
+                          'focus:ring-blue-500' %>
     <% end %>
   </div>
 </div>

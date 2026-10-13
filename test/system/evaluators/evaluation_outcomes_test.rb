@@ -13,6 +13,90 @@ module Evaluators
       system_test_sign_in(@evaluator)
     end
 
+    test 'report outcome is an explicit choice through browser and server rejection' do
+      visit evaluators_evaluation_path(@evaluation)
+      fill_report
+      assert_no_selector '#complete-evaluation-form input[type=radio]:checked'
+      assert_equal false, page.evaluate_script('document.getElementById("complete-evaluation-form").checkValidity()')
+      assert_no_selector '#catalog-recommendations-group', visible: true
+      within '#complete-evaluation-form' do
+        click_button 'Mark as Completed'
+      end
+      assert_no_selector '#submit-report-errors'
+      assert_equal 'scheduled', @evaluation.reload.status
+      take_screenshot('outcome-choice-required', html: true, full: true)
+
+      page.execute_script('document.getElementById("complete-evaluation-form").noValidate = true')
+      within '#complete-evaluation-form' do
+        click_button 'Mark as Completed'
+      end
+      assert_single_action_error('submit-report-errors')
+      assert_selector '#submit-report-errors a[href="#recommendation-outcome-group"]', text: 'Recommendation outcome must be selected'
+      assert_no_selector '#complete-evaluation-form input[type=radio]:checked'
+      assert_field 'Evaluation Report Notes', with: 'Appointment observations recorded.'
+      assert_field 'Location', with: 'Accessible library meeting room'
+      assert_equal 'scheduled', @evaluation.reload.status
+      take_screenshot('outcome-choice-restored', html: true, full: true)
+
+      within '#complete-evaluation-form' do
+        choose 'No suitable product'
+        fill_in 'Recommendation details', with: 'Arrange a specialist assessment; no suitable catalog product.'
+        click_button 'Mark as Completed'
+      end
+      assert_text 'Evaluation submitted successfully.'
+      assert_equal 'no_suitable_product', @evaluation.reload.recommendation_outcome
+      assert_equal 1, Event.where(action: 'evaluation_completed', auditable: @evaluation).count
+      take_screenshot('outcome-choice-completed', html: true, full: true)
+    end
+
+    test 'Turbo blocks repeat clicks while a committed report response is pending and validation remains retryable' do
+      visit evaluators_evaluation_path(@evaluation)
+      fill_report(appointment_time: 1.day.from_now.strftime('%Y-%m-%dT%H:%M'))
+      within '#complete-evaluation-form' do
+        choose 'Catalog products'
+        replace_product_selection('products_tried_field', @product)
+        replace_product_selection('recommended_product_ids', @product)
+        click_button 'Mark as Completed'
+      end
+      assert_single_action_error('submit-report-errors')
+      assert_selector '#complete-evaluation-form input[type=submit]:not([disabled])', count: 1
+      assert_checked_field 'Catalog products'
+      fill_in 'Appointment Date/Time', with: 1.hour.ago.strftime('%Y-%m-%dT%H:%M')
+
+      response_waiting = Queue.new
+      release_response = Queue.new
+      original_delivery = EmailDelivery.method(:deliver_later)
+      delayed_delivery = lambda do |delivery, **options|
+        response_waiting << true
+        release_response.pop
+        original_delivery.call(delivery, **options)
+      end
+      EmailDelivery.stub(:deliver_later, delayed_delivery) do
+        page.execute_script(<<~JS)
+          window.evaluationSubmitCount = 0;
+          document.getElementById('complete-evaluation-form').addEventListener('submit', () => {
+            window.evaluationSubmitCount += 1;
+          });
+          document.querySelector('#complete-evaluation-form input[type=submit]').click();
+        JS
+        begin
+          wait_until(time: 10) { !response_waiting.empty? }
+          assert_selector '#complete-evaluation-form[aria-busy=true] input[type=submit][disabled][value="Submitting report..."]'
+          assert_equal 'completed', @evaluation.reload.status
+          assert_equal 1, Event.where(action: 'evaluation_completed', auditable: @evaluation).count
+          page.execute_script("document.querySelector('#complete-evaluation-form input[type=submit]').click()")
+          assert_equal 1, page.evaluate_script('window.evaluationSubmitCount')
+          take_screenshot('report-submission-pending', html: true, full: true)
+        ensure
+          release_response << true
+        end
+        assert_text 'Evaluation submitted successfully.'
+        assert_no_selector '#complete-evaluation-form'
+        assert_equal 1, Event.where(action: 'evaluation_completed', auditable: @evaluation).count
+        take_screenshot('report-submission-completed', html: true, full: true)
+      end
+    end
+
     test 'an external outcome survives rejection and can become no suitable product with no catalog products' do
       visit evaluators_evaluation_path(@evaluation)
       fill_report(appointment_time: 1.day.from_now.strftime('%Y-%m-%dT%H:%M'))
@@ -57,11 +141,12 @@ module Evaluators
       browser = page.driver.browser
       browser.disable_javascript
       %w[outside_catalog no_suitable_product].each do |outcome|
-        @evaluation.update!(recommendation_outcome: outcome)
         visit evaluators_evaluation_path(@evaluation)
+        assert_no_selector '#complete-evaluation-form input[type=radio]:checked'
         assert_server_catalog_disabled
         fill_report(appointment_time: 1.day.from_now.strftime('%Y-%m-%dT%H:%M'))
         within '#complete-evaluation-form' do
+          choose I18n.t("evaluations.recommendation_outcomes.#{outcome}")
           fill_in 'Recommendation details', with: 'Preserved noncatalog recommendation.'
           click_button 'Mark as Completed'
         end
@@ -234,6 +319,7 @@ module Evaluators
       visit evaluators_evaluation_path(@evaluation)
       fill_report
       within '#complete-evaluation-form' do
+        choose 'Catalog products'
         replace_product_selection('products_tried_field', @product)
         replace_product_selection('recommended_product_ids')
       end

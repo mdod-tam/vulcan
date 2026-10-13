@@ -44,6 +44,7 @@ module Evaluations
     private
 
     def prepare_evaluation
+      @evaluation.errors.clear
       validate_status!
       @evaluation.assign_attributes(submission_params)
       @evaluation.status = :completed
@@ -85,6 +86,10 @@ module Evaluations
 
     def submission_params
       attributes = self.class.report_params(@params)
+      if attributes[:recommendation_outcome].blank?
+        @evaluation.errors.add(:recommendation_outcome, 'must be selected')
+        raise ActiveRecord::RecordInvalid, @evaluation
+      end
       if %w[outside_catalog no_suitable_product].include?(attributes[:recommendation_outcome]) &&
          !attributes.key?(:recommended_product_ids)
         attributes[:recommended_product_ids] = []

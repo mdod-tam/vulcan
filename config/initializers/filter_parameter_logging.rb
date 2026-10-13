@@ -24,8 +24,8 @@ Rails.application.config.filter_parameters += [
   # Autosave wraps income, disability, and provider details in a generic value parameter.
   :autosave_context, :field_value,
 
-  # Evaluation working notes and recommendation rationale may contain personal information.
-  :working_notes, :recommendation_notes,
+  # Evaluation free text may contain personal information.
+  :notes, :post_completion_notes, :working_notes, :recommendation_notes,
 
   # SMS contact
   :phone_number,

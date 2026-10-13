@@ -122,7 +122,8 @@ module Admin
 
       visit admin_application_path(@application)
 
-      select @evaluator.full_name, from: 'evaluator_id'
+      select "#{@evaluator.full_name} (#{@evaluator.email})", from: 'evaluator_id'
+      take_screenshot('admin-evaluator-assignment-selected', html: true, full: true)
       click_button 'Assign Evaluator'
       assert_text I18n.t('admin.applications.assign_evaluator.eval_assign_pass')
 

@@ -29,6 +29,41 @@ class EvaluationsControllerTest < ActionDispatch::IntegrationTest
     assert_select '#working_evaluation_working_notes[aria-describedby~="working-notes-help"]'
   end
 
+  test 'a new report requires an outcome choice even when the stored outcome has a default' do
+    assert_equal 'catalog_products', @evaluation.recommendation_outcome
+
+    get evaluators_evaluation_path(@evaluation)
+
+    assert_response :success
+    assert_select '#complete-evaluation-form input[name="evaluation[recommendation_outcome]"][required]', count: 3
+    assert_select '#complete-evaluation-form input[name="evaluation[recommendation_outcome]"][checked]', count: 0
+    assert_select '#catalog-recommendations-group[hidden][disabled]'
+    assert_select '#complete-evaluation-form input[type="submit"][data-turbo-submits-with="Submitting report..."]'
+  end
+
+  test 'missing outcome is rejected and stays unselected while other report inputs survive' do
+    submitted = {
+      appointment_completed_at: 1.hour.ago.strftime('%Y-%m-%dT%H:%M'),
+      notes: 'Preserved report notes', location: 'Library', attendees_field: 'Interpreter',
+      products_tried_field: [@product.id.to_s], recommended_product_ids: [@product.id.to_s]
+    }
+
+    assert_no_difference('Event.where(action: "evaluation_completed").count') do
+      post submit_report_evaluators_evaluation_path(@evaluation), params: { evaluation: submitted }
+    end
+
+    assert_response :unprocessable_content
+    assert_select '#submit-report-errors a[href="#recommendation-outcome-group"]', text: 'Recommendation outcome must be selected'
+    assert_select '#recommendation-outcome-group[aria-invalid="true"]'
+    assert_select '#complete-evaluation-form input[name="evaluation[recommendation_outcome]"][checked]', count: 0
+    assert_select '#complete_evaluation_notes', text: 'Preserved report notes'
+    assert_select '#complete_evaluation_location[value="Library"]'
+    assert_select '#complete_evaluation_attendees_field[value="Interpreter"]'
+    assert_select '#complete-evaluation-form input[type="submit"]:not([disabled])'
+    assert_equal 'scheduled', @evaluation.reload.status
+    assert_nil @evaluation.report_submitted_at
+  end
+
   test 'administrator completed route applies the selected assignment scope' do
     assigned = create(:evaluation, :completed, evaluator: @admin)
     other = create(:evaluation, :completed, evaluator: @evaluator)
@@ -144,6 +179,7 @@ class EvaluationsControllerTest < ActionDispatch::IntegrationTest
       assert_changes '@evaluation.reload.status', from: 'scheduled', to: 'completed' do
         post submit_report_evaluators_evaluation_path(@evaluation), params: {
           evaluation: {
+            recommendation_outcome: 'catalog_products',
             notes: 'Final evaluation notes',
             location: 'Final location',
             appointment_completed_at: 1.hour.ago,
@@ -394,6 +430,7 @@ class EvaluationsControllerTest < ActionDispatch::IntegrationTest
     assert_difference('Event.where(action: "evaluation_completed").count', 1) do
       post submit_report_evaluators_evaluation_path(@evaluation), params: {
         evaluation: {
+          recommendation_outcome: 'catalog_products',
           appointment_completed_at: 1.hour.ago,
           notes: 'Final evaluation notes',
           location: 'Final location',
@@ -416,6 +453,7 @@ class EvaluationsControllerTest < ActionDispatch::IntegrationTest
     assert_no_difference('Event.where(action: "evaluation_completed").count') do
       post submit_report_evaluators_evaluation_path(@evaluation), params: {
         evaluation: {
+          recommendation_outcome: 'catalog_products',
           notes: '',
           appointment_completed_at: 1.hour.ago,
           location: 'Final location',

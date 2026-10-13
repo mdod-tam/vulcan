@@ -48,6 +48,28 @@ module Evaluations
       assert_equal 'completed', @evaluation.reload.status
     end
 
+    test 'missing or blank outcome cannot use the stored catalog default to complete a report' do
+      [:omitted, nil, '', ' '].each do |outcome|
+        parameters = submission_params
+        if outcome == :omitted
+          parameters[:evaluation].delete(:recommendation_outcome)
+        else
+          parameters[:evaluation][:recommendation_outcome] = outcome
+        end
+        original = @evaluation.reload.attributes
+
+        assert_no_enqueued_jobs do
+          assert_no_difference('Event.where(action: "evaluation_completed").count') do
+            result = SubmissionService.new(@evaluation, parameters, actor: @evaluator).call
+
+            assert result.failure?
+            assert_equal ['must be selected'], @evaluation.errors[:recommendation_outcome]
+          end
+        end
+        assert_equal original, @evaluation.reload.attributes
+      end
+    end
+
     test 'email configuration refusal at enqueue keeps the completed evaluation' do
       ensure_system_audit_actor!
       FeatureFlag.find_by!(name: EmailDelivery.category_control('evaluation')).destroy!

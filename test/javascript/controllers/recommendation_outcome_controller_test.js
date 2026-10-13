@@ -42,6 +42,21 @@ describe("RecommendationOutcomeController", () => {
     document.body.innerHTML = ""
   })
 
+  test("a new report remains unselected and invalid until the evaluator chooses an outcome", async () => {
+    await restore(null)
+
+    expect(form.querySelector('input[type="radio"]:checked')).toBeNull()
+    expect(form.checkValidity()).toBe(false)
+    expect(new FormData(form).has("evaluation[recommended_product_ids][]")).toBe(false)
+    expect(notes.required).toBe(false)
+
+    form.querySelector('input[value="catalog_products"]').click()
+
+    expect(form.checkValidity()).toBe(true)
+    expect(new FormData(form).getAll("evaluation[recommended_product_ids][]")).toEqual(["", "31"])
+    expect(form.querySelector('[role="status"]')).toHaveTextContent("Feedback for catalog_products")
+  })
+
   test("a restored external outcome omits catalog selections without losing tried products or details", async () => {
     await restore("outside_catalog")
     const data = new FormData(form)

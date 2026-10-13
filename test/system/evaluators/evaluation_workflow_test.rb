@@ -20,6 +20,7 @@ module Evaluators
       visit evaluators_evaluation_path(@evaluation)
 
       within '#complete-evaluation-form' do
+        choose 'Catalog products'
         fill_in 'Appointment Date/Time', with: appointment_time
         fill_in 'Location', with: 'Retry Library'
         fill_in 'Other Attendees', with: 'Interpreter, Family friend'
@@ -329,19 +330,68 @@ module Evaluators
       original_notes = evaluation.notes
       click_button 'Sign Out'
       system_test_sign_in(admin)
+      browser = page.driver.browser
+      browser.disable_javascript
       visit admin_application_path(application)
-
-      within "[data-testid='evaluator-assignment-section']" do
-        select replacement.full_name, from: 'New evaluator'
-      end
-      take_screenshot('admin-evaluator-reassignment', html: true, full: true)
+      assert_text 'Enable JavaScript to confirm evaluator reassignment.'
       within "[data-testid='evaluator-assignment-section']" do
         click_button 'Reassign Evaluator'
       end
+      assert_current_path admin_application_path(application)
+      assert_no_selector '#evaluator-reassign-confirm-dialog[open]'
+      assert_equal @evaluator.id, evaluation.reload.evaluator_id
+      assert_equal 0, Event.where(action: 'evaluator_reassigned', auditable: evaluation).count
+      browser.page.command('Emulation.setScriptExecutionDisabled', value: false)
+      page.refresh
+
+      within "[data-testid='evaluator-assignment-section']" do
+        click_button 'Reassign Evaluator'
+      end
+      assert_selector '#evaluator-reassign-confirm-dialog[open]'
+      assert_equal 'Cancel', page.evaluate_script('document.activeElement.textContent.trim()')
+      within '#evaluator-reassign-confirm-dialog' do
+        select "#{replacement.full_name} (#{replacement.email})", from: 'New evaluator (required)'
+        click_button 'Cancel'
+      end
+      assert_no_selector '#evaluator-reassign-confirm-dialog[open]'
+      assert_equal 'Reassign Evaluator', page.evaluate_script('document.activeElement.textContent.trim()')
+      assert_equal @evaluator.id, evaluation.reload.evaluator_id
+      assert_equal 0, Event.where(action: 'evaluator_reassigned', auditable: evaluation).count
+      within "[data-testid='evaluator-assignment-section']" do
+        click_button 'Reassign Evaluator'
+      end
+      page.driver.browser.keyboard.type(:escape)
+      assert_no_selector '#evaluator-reassign-confirm-dialog[open]'
+      assert_equal 'Reassign Evaluator', page.evaluate_script('document.activeElement.textContent.trim()')
+      assert_equal @evaluator.id, evaluation.reload.evaluator_id
+      within "[data-testid='evaluator-assignment-section']" do
+        click_button 'Reassign Evaluator'
+      end
+      within '#evaluator-reassign-confirm-dialog' do
+        select "#{replacement.full_name} (#{replacement.email})", from: 'New evaluator (required)'
+      end
+      page.current_window.resize_to(375, 812)
+      dialog_geometry = page.evaluate_script(<<~JS)
+        (() => {
+          const dialog = document.getElementById('evaluator-reassign-confirm-dialog');
+          const bounds = dialog.getBoundingClientRect();
+          return { left: bounds.left, right: bounds.right,
+                   clientWidth: dialog.clientWidth, scrollWidth: dialog.scrollWidth };
+        })()
+      JS
+      assert_operator dialog_geometry['left'], :>=, 0
+      assert_operator dialog_geometry['right'], :<=, 375
+      assert_operator dialog_geometry['scrollWidth'], :<=, dialog_geometry['clientWidth']
+      take_screenshot('admin-evaluator-reassignment', html: true, full: true)
+      within '#evaluator-reassign-confirm-dialog' do
+        click_button 'Confirm reassignment'
+      end
+      page.current_window.resize_to(1200, 900)
       assert_text 'Evaluator reassigned. Existing appointment details have been preserved.'
       assert_equal replacement.id, evaluation.reload.evaluator_id
       assert_equal original_date, evaluation.evaluation_date
       assert_equal original_notes, evaluation.notes
+      assert_equal 1, Event.where(action: 'evaluator_reassigned', auditable: evaluation).count
       take_screenshot('admin-evaluator-reassigned', html: true, full: true)
 
       click_button 'Sign Out'
@@ -358,6 +408,9 @@ module Evaluators
       assert_selector 'h1', text: I18n.t('evaluator_context.title')
       assert_text application.user.full_name
       take_screenshot('replacement-evaluator-assessment', html: true, full: true)
+    ensure
+      browser&.page&.command('Emulation.setScriptExecutionDisabled', value: false)
+      page.current_window.resize_to(1200, 900)
     end
   end
 end

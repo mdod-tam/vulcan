@@ -37,8 +37,8 @@ module Admin
 
       get admin_application_path(@application)
 
-      assert_select 'select[name=trainer_id] option', text: trainer.full_name
-      assert_select 'select[name=trainer_id] option', text: admin.full_name
+      assert_select "select[name=trainer_id] option[value='#{trainer.id}']", text: "#{trainer.full_name} (#{trainer.email})"
+      assert_select "select[name=trainer_id] option[value='#{admin.id}']", text: "#{admin.full_name} (#{admin.email})"
     end
 
     test 'trainer dropdown excludes inactive admins' do
@@ -46,7 +46,7 @@ module Admin
 
       get admin_application_path(@application)
 
-      assert_select 'select[name=trainer_id] option', text: inactive_admin.full_name, count: 0
+      assert_select "select[name=trainer_id] option[value='#{inactive_admin.id}']", count: 0
     end
 
     test 'evaluator dropdown includes active admins through inherent can_evaluate capability' do
@@ -54,8 +54,8 @@ module Admin
       admin = create(:admin, first_name: 'Evaluation', last_name: 'Admin')
 
       get admin_application_path(@application)
-      assert_select 'select[name=evaluator_id] option', text: evaluator.full_name
-      assert_select 'select[name=evaluator_id] option', text: admin.full_name
+      assert_select "select[name=evaluator_id] option[value='#{evaluator.id}']", text: "#{evaluator.full_name} (#{evaluator.email})"
+      assert_select "select[name=evaluator_id] option[value='#{admin.id}']", text: "#{admin.full_name} (#{admin.email})"
     end
 
     test 'evaluator dropdown excludes suspended admins' do
@@ -63,7 +63,7 @@ module Admin
 
       get admin_application_path(@application)
 
-      assert_select 'select[name=evaluator_id] option', text: suspended_admin.full_name, count: 0
+      assert_select "select[name=evaluator_id] option[value='#{suspended_admin.id}']", count: 0
     end
 
     test 'evaluator dropdown excludes trainers with explicit can_evaluate capability' do
@@ -72,7 +72,36 @@ module Admin
 
       get admin_application_path(@application)
 
-      assert_select 'select[name=evaluator_id] option', text: trainer.full_name, count: 0
+      assert_select "select[name=evaluator_id] option[value='#{trainer.id}']", count: 0
+    end
+
+    test 'assignment dropdowns distinguish practitioners with the same full name by account email' do
+      @application.update!(fulfillment_type: :equipment, application_date: Date.current)
+      evaluators = create_list(:evaluator, 2, first_name: 'Same', last_name: 'Name')
+      trainers = create_list(:trainer, 2, first_name: 'Same', last_name: 'Name')
+
+      get admin_application_path(@application)
+      assert_response :success
+
+      { evaluator_id: evaluators, trainer_id: trainers }.each do |field, people|
+        assert_select "select[name=#{field}]" do
+          people.each do |person|
+            assert_select "option[value='#{person.id}']", text: "#{person.full_name} (#{person.email})"
+          end
+        end
+      end
+    end
+
+    test 'assignment dropdowns identify a legacy staff account without email by record id' do
+      @application.update!(fulfillment_type: :equipment, application_date: Date.current)
+      @admin.update_column(:email, nil)
+
+      get admin_application_path(@application)
+      assert_response :success
+
+      %w[evaluator_id trainer_id].each do |field|
+        assert_select "select[name=#{field}] option[value='#{@admin.id}']", text: "#{@admin.full_name} (ID ##{@admin.id})"
+      end
     end
 
     test 'assigned training detail link exits the application turbo frame' do

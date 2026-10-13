@@ -67,6 +67,24 @@ class ApplicationContactRoutingTest < ActionMailer::TestCase
     assert_equal application.user.email, mailer.send(:recipient_email_for, application.user, own_email: true)
   end
 
+  test 'positional training mail resolves the application manager contacts and locale' do
+    template_name = 'training_session_notifications_training_scheduled'
+    EmailTemplate.where(name: template_name, format: :text).destroy_all
+    [template_name, "#{template_name}_es"].each do |name|
+      load Rails.root.join("db/seeds/email_templates/#{name}.rb")
+    end
+    application, manager, first_guardian = dependent_application
+    training_session = create(:training_session, :scheduled, application: application)
+
+    mail = TrainingSessionNotificationsMailer.training_scheduled(training_session).deliver_now
+
+    assert_equal [manager.email], mail.to
+    assert_equal EmailTemplate.find_by!(name: template_name, format: :text, locale: 'es').render_subject, mail.subject
+    assert_includes mail.body.decoded, "Hola #{application.user.full_name}"
+    assert_not_includes Array(mail.to), first_guardian.email
+    assert_not_includes Array(mail.to), application.user.email
+  end
+
   private
 
   def dependent_application(preference: 'email', own_email: false)

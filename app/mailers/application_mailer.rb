@@ -244,7 +244,7 @@ class ApplicationMailer < ActionMailer::Base
   def application_delivery_subject
     mailer_params = params || {}
     mailer_params[:application] || @application || @delivery_subject ||
-      mailer_params[:evaluation] || mailer_params[:training_session] || mailer_params[:voucher]
+      mailer_params[:evaluation] || mailer_params[:voucher]
   end
 
   def find_text_template(template_name, locale: nil)

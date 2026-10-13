@@ -30,7 +30,7 @@ en:
           supplemental_notes: "Failed to update evaluation: correct the following supplemental notes before saving."
       recommendations:
         outcome: "Recommendation outcome"
-        outcome_help: "Choose the result of this evaluation."
+        outcome_help: "Choose an outcome before submitting the report. No option is selected for you."
         tried_help: "Record any catalog products tried during the appointment. At least one is required when recommending catalog products; otherwise this may be left empty."
         details: "Recommendation details"
         details_help: "Describe recommendations outside the catalog, or explain why no suitable product was found and any next steps. Details are optional when recommending catalog products. These details are shared verbatim in the confirmation email or letter to the applicant or managing guardian. Use Working Notes for internal information."

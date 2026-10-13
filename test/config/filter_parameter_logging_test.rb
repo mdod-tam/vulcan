@@ -59,20 +59,42 @@ class FilterParameterLoggingTest < ActiveSupport::TestCase
     assert_equal 'create', filtered['action']
   end
 
-  test 'evaluation working notes and recommendation rationale are filtered without hiding the outcome' do
+  test 'evaluation free text is filtered in nested hashes and arrays without hiding ordinary fields' do
     filtered = ActiveSupport::ParameterFilter.new(Rails.application.config.filter_parameters).filter(
+      'notes' => 'Private report context',
+      'post_completion_notes' => 'Private supplemental context',
       'working_notes' => 'Private scheduling context',
       'evaluation' => {
+        'notes' => 'Private appointment findings',
+        'post_completion_notes' => 'Private follow-up findings',
         'working_notes' => 'Private appointment context',
         'recommendation_notes' => 'Personal assessment rationale',
-        'recommendation_outcome' => 'no_suitable_product'
-      }
+        'recommendation_outcome' => 'no_suitable_product',
+        'location' => 'Main Office'
+      },
+      'evaluations' => [
+        { 'notes' => 'Private report in an array',
+          'post_completion_notes' => 'Private supplemental note in an array',
+          'working_notes' => 'Private contact attempts in an array',
+          'recommendation_notes' => 'Private rationale in an array',
+          'id' => '17', 'status' => 'completed' }
+      ],
+      'controller' => 'evaluators/evaluations', 'action' => 'supplemental_notes'
     )
 
+    assert_equal '[FILTERED]', filtered['notes']
+    assert_equal '[FILTERED]', filtered['post_completion_notes']
     assert_equal '[FILTERED]', filtered['working_notes']
-    assert_equal '[FILTERED]', filtered.dig('evaluation', 'working_notes')
-    assert_equal '[FILTERED]', filtered.dig('evaluation', 'recommendation_notes')
+    %w[notes post_completion_notes working_notes recommendation_notes].each do |field|
+      assert_equal '[FILTERED]', filtered.dig('evaluation', field)
+      assert_equal '[FILTERED]', filtered['evaluations'].first[field]
+    end
     assert_equal 'no_suitable_product', filtered.dig('evaluation', 'recommendation_outcome')
+    assert_equal 'Main Office', filtered.dig('evaluation', 'location')
+    assert_equal '17', filtered['evaluations'].first['id']
+    assert_equal 'completed', filtered['evaluations'].first['status']
+    assert_equal 'evaluators/evaluations', filtered['controller']
+    assert_equal 'supplemental_notes', filtered['action']
   end
 
   # Paper identity review posts the applicant's identifying facts and receives a short-lived
