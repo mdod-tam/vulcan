@@ -3,6 +3,23 @@
 require 'test_helper'
 
 class ApplicationMailerTest < ActionMailer::TestCase
+  test 'a required email without a recipient raises a recorded delivery skip before rendering' do
+    ensure_system_audit_actor!
+    mailer = ApplicationMailer.new
+    template = mock
+    template.expects(:render).never
+
+    error = assert_raises(ApplicationMailer::DeliverySkipped) do
+      mailer.send(:send_email, nil, template, {}, required_delivery: true)
+    end
+
+    assert_equal 'missing_recipient', error.reason
+    assert_equal 'missing_recipient', EmailDelivery::Current.denial_reason
+    assert_empty ActionMailer::Base.deliveries
+  ensure
+    EmailDelivery::Current.reset
+  end
+
   test 'normalize_locale normalizes explicit locale value' do
     mailer = ApplicationMailer.new
 

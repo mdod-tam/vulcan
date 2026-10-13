@@ -47,5 +47,35 @@ module Evaluations
         assert_equal 'Only requested evaluations can be scheduled.', result.message
       end
     end
+
+    test 'rejects past and malformed initial appointment times without scheduling or auditing' do
+      [1.day.ago, 'not-a-date'].each do |appointment_time|
+        assert_no_difference('Event.where(action: "evaluation_scheduled").count') do
+          result = ScheduleService.new(@evaluation, @evaluator, { evaluation_date: appointment_time }).call
+
+          assert result.failure?
+        end
+
+        assert_equal 'requested', @evaluation.reload.status
+        assert_nil @evaluation.evaluation_date
+      end
+    end
+
+    test 'stale assigned evaluator cannot schedule after assignment changes' do
+      stale_evaluation = Evaluation.find(@evaluation.id)
+      replacement = create(:evaluator)
+      @evaluation.update!(evaluator: replacement)
+
+      assert_no_difference('Event.where(action: "evaluation_scheduled").count') do
+        result = ScheduleService.new(stale_evaluation, @evaluator, { evaluation_date: 1.day.from_now }).call
+
+        assert result.failure?
+        assert_equal 'Only the assigned evaluator can update this evaluation.', result.message
+      end
+
+      assert_equal 'requested', @evaluation.reload.status
+      assert_nil @evaluation.evaluation_date
+      assert_equal replacement.id, @evaluation.evaluator_id
+    end
   end
 end

@@ -13,7 +13,7 @@ template.update!(
 
     Le escribimos para confirmar que el Programa de Telecomunicaciones Accesibles de Maryland ha recibido su informe de evaluación.
 
-    Según la evaluación, el evaluador recomendó los siguientes productos de telecomunicaciones accesibles como útiles para sus necesidades de comunicación:
+    El resultado de la evaluación y las recomendaciones de productos, si las hay, son:
     %<recommended_products_text_list>s
 
     Esta información se proporciona para sus registros. Tenga en cuenta que la recomendación se basa en la evaluación del evaluador.

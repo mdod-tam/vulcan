@@ -56,6 +56,10 @@ The service checks durable state when handling transaction errors rather than tr
 - `AuditEventService` writes events; [`EventDeduplicationService`](../../app/services/applications/event_deduplication_service.rb) only chooses what a timeline displays. Display deduplication does not make a write idempotent.
 - Secure requests record their logical recipient, delivery owner, and source at issuance, through the recipient resolver and [issuance integrity service](../../app/services/applications/secure_request_issuance_integrity.rb). Historical forms missing that ownership cannot have it reconstructed from today's contact data.
 
+### Evaluation report state
+
+[`Evaluations::SubmissionService`](../../app/services/evaluations/submission_service.rb) completes the report and records its audit event in the same transaction. Report lifecycle uses completed status, and `report_submitted_at` records when it was submitted, with unknown historical times left nullable.
+
 ## Merge-integrity lock boundary
 
 A merge can retire a user while another request is editing or creating related work, so participating writers lock the users involved, reload, and recheck eligibility before writing. [`User.lock_for_merge_integrity!`](../../app/models/concerns/user_merge_integrity.rb) locks base `User` rows in ascending ID order within an existing transaction; decisions come from the reloaded objects it returns, and users are locked before their dependent records. The retired-record validation behind this is a backstop, not a substitute.

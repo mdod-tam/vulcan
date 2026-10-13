@@ -204,7 +204,7 @@ module UserGuardianship
 
   def contact_from_snapshot(field, dependent_value, primary_value, contact_guardian, guardians)
     matching_guardian = guardian_matching(field, dependent_value, guardians)
-    contact_guardian_owns_snapshot = matching_guardian&.id == contact_guardian&.id
+    contact_guardian_owns_snapshot = matching_guardian.present? && matching_guardian.id == contact_guardian&.id
     if contact_guardian_owns_snapshot
       guardian_value = guardian_contact_value(field, contact_guardian)
       return owned_contact(guardian_value, contact_guardian, :guardian)

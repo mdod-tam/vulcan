@@ -47,11 +47,21 @@ The dependent owns the application; its managing guardian has responsibility for
 | Vouchers | When enabled, approval of a voucher application queues issuance after commit. Issuance rechecks eligibility and existing vouchers. Vendors verify the applicant and redeem value; see [voucher controls](security/voucher_security_controls.md). |
 | Vendor invoices | The biweekly [invoice job](../app/services/invoices/generation_service.rb) claims every completed, uninvoiced voucher redemption from before the run day (Eastern), except ones staff hold from billing; failed vendors stay on a retry list. Staff approve, record payment, or withdraw through [Invoices::Workflow](../app/services/invoices/workflow.rb); paid invoices take only [correction notes](finance/payment_corrections.md). |
 | Training | Staff assign trainers within the service window and session quota. Trainers schedule, complete, cancel, or arrange follow-up through [training services](../app/services/training_sessions). |
-| Evaluation | Staff assign evaluators within the service window; evaluators schedule visits and submit reports through [evaluation services](../app/services/evaluations). |
+| Evaluation | Staff assign and reassign evaluators within the service window; evaluators agree on visits directly, record appointments, and submit reports. See the [evaluator workflow](features/application_workflow_guide.md#evaluator-workflow) and [evaluation services](../app/services/evaluations). |
 
 [TrainingManagement](../app/models/concerns/training_management.rb) and [EvaluationManagement](../app/models/concerns/evaluation_management.rb) own assignment rules. Equipment applications do not automatically receive vouchers.
 
 Training sessions and evaluations share the [status vocabulary](../app/models/concerns/status_management.rb): `requested`, `scheduled`, `confirmed`, `completed`, `cancelled`, and `no_show`. `rescheduled` remains for legacy/display compatibility; current rescheduling services set `scheduled` and record a reschedule event.
+
+An evaluator assignment sends a notice to the evaluator. Missing constituent email or phone is shown as unavailable; it does not prevent that assignment notice. The evaluator contacts the applicant or the application's managing guardian, agrees on an appointment, and records its future date, time, and location in the portal. Scheduling and rescheduling require the evaluator to share the arrangements directly.
+
+Assigned evaluators can view an assessment summary with contact details, address, alternate contact, disabilities, and communication preferences. Financial information and proof documents remain on the full admin application view. Administrators retain that view, including administrators who also perform evaluations; report and appointment actions remain restricted to the assigned evaluator.
+
+Assigned evaluators can save internal working notes before submitting a report, without changing the appointment or status. Reports support catalog recommendations, written recommendations outside the catalog, or a no-suitable-product outcome with an explanation. Working notes remain internal; confirmation messages describe the submitted recommendation outcome. Program staff review noncatalog outcomes before deciding equipment fulfillment.
+
+The evaluator submits the actual appointment time, location, attendees, any catalog products tried, the recommendation outcome, recommendation details, and report notes. Appointment completion and server-recorded report submission are separate from the scheduled time. Historical submission times are recovered from matching completion audit events when available; unknown times show that explicitly. Validation errors preserve the submitted fields so the evaluator can correct and retry; completed reports accept supplemental notes. Recommendation details are shared verbatim in family confirmations; working notes remain internal.
+
+Cancelled and no-show evaluations appear in the follow-up queue and can be rescheduled. Within the service window, staff can reassign an unfinished evaluation to another active evaluator while retaining its appointment, notes, products, and history. Reassignment records both evaluator identities, notifies the replacement, and transfers portal access to the replacement.
 
 ## Communication and history
 

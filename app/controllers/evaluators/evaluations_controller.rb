@@ -2,12 +2,24 @@
 
 module Evaluators
   class EvaluationsController < ApplicationController
+    FORM_ERROR_FIELDS = {
+      schedule: %i[evaluation_date location notes],
+      reschedule: %i[evaluation_date location reschedule_reason],
+      submit_report: ::Evaluations::SubmissionService::REPORT_FIELDS,
+      cancel: %i[notes], no_show: %i[notes], save_working_notes: %i[working_notes],
+      supplemental_notes: %i[post_completion_notes]
+    }.transform_values(&:freeze).freeze
+    FORM_ERROR_FIELD_ALIASES = {
+      products_tried: :products_tried_field, recommended_products: :recommended_product_ids,
+      attendees: :attendees_field
+    }.freeze
+
     before_action :authenticate_user!
     before_action :require_evaluator!
     before_action :set_evaluation,
-                  except: %i[index new create pending completed requested scheduled needs_followup filter]
+                  except: %i[index pending completed requested scheduled needs_followup filter]
     before_action :authorize_evaluation_mutation!,
-                  only: %i[edit update schedule reschedule submit_report cancel no_show request_additional_info]
+                  only: %i[update schedule reschedule submit_report cancel no_show save_working_notes]
 
     def index
       # Unfiltered visits enter through the dashboard.
@@ -47,35 +59,24 @@ module Evaluators
       prepare_show_context
     end
 
-    def new
-      @evaluation = current_user.evaluations.build
-    end
-
-    def edit
-      # set_evaluation supplies the scoped record before implicit rendering.
-    end
-
-    def create
-      @evaluation = current_user.evaluations.build(evaluation_params)
-      @evaluation.status ||= :pending
-      @evaluation.evaluation_type ||= :initial
-      @evaluation.attendees ||= []
-      @evaluation.products_tried ||= []
-      @evaluation.recommended_product_ids ||= []
-
-      if @evaluation.save
-        redirect_to evaluators_evaluation_path(@evaluation),
-                    notice: 'Evaluation created successfully.'
+    def application_details
+      if current_user.admin?
+        redirect_to admin_application_path(@evaluation.application)
       else
-        render :new, status: :unprocessable_content
+        @contact_context = ::Applications::ContactContext.new(application: @evaluation.application)
       end
     end
 
     def update
-      unless supplemental_notes_update?
-        prepare_show_context
-        flash.now[:alert] = 'This evaluation action must use the appropriate lifecycle control.'
-        render :show, status: :unprocessable_content
+      unless @evaluation.status_completed? && supplemental_notes_update?
+        action = if @evaluation.status_completed?
+                   :supplemental_notes
+                 elsif @evaluation.can_complete?
+                   :submit_report
+                 else
+                   :save_working_notes
+                 end
+        render_lifecycle_failure(action, {}, 'This evaluation action must use the appropriate lifecycle control.')
         return
       end
 
@@ -83,8 +84,9 @@ module Evaluators
         redirect_to evaluators_evaluation_path(@evaluation), notice: 'Evaluation updated successfully.'
       else
         # Supplemental notes come from the show page. Return validation errors there.
+        @evaluation_form_values = { supplemental_notes: supplemental_notes_params.to_h.with_indifferent_access }
+        @evaluation_form_errors = { supplemental_notes: evaluation_form_errors(@evaluation.errors, :supplemental_notes) }
         prepare_show_context
-        flash.now[:alert] = "Failed to update evaluation: #{@evaluation.errors.full_messages.to_sentence}"
         render :show, status: :unprocessable_content
       end
     end
@@ -95,10 +97,7 @@ module Evaluators
       if result.success?
         redirect_to evaluators_evaluation_path(@evaluation), notice: result.message
       else
-        @evaluation.reload
-        prepare_show_context
-        flash.now[:alert] = "Failed to schedule evaluation: #{result.message}"
-        render :show, status: :unprocessable_content
+        render_lifecycle_failure(:schedule, schedule_params, "Failed to schedule evaluation: #{result.message}")
       end
     end
 
@@ -108,10 +107,7 @@ module Evaluators
       if result.success?
         redirect_to evaluators_evaluation_path(@evaluation), notice: result.message
       else
-        @evaluation.reload
-        prepare_show_context
-        flash.now[:alert] = "Failed to reschedule evaluation: #{result.message}"
-        render :show, status: :unprocessable_content
+        render_lifecycle_failure(:reschedule, reschedule_params, "Failed to reschedule evaluation: #{result.message}")
       end
     end
 
@@ -121,50 +117,72 @@ module Evaluators
       if result.success?
         redirect_to evaluators_evaluation_path(@evaluation), notice: result.message
       else
-        @evaluation.reload
-        prepare_show_context
-        flash.now[:alert] = "Failed to submit evaluation: #{result.message}"
-        render :show, status: :unprocessable_content
+        render_lifecycle_failure(:submit_report, report_form_params, "Failed to submit evaluation: #{result.message}")
       end
     end
 
     def cancel
-      result = ::Evaluations::CancelService.new(@evaluation, current_user, evaluation_params).call
+      result = ::Evaluations::CancelService.new(@evaluation, current_user, outcome_notes_params).call
 
       if result.success?
         redirect_to evaluators_evaluation_path(@evaluation), notice: result.message
       else
-        @evaluation.reload
-        prepare_show_context
-        flash.now[:alert] = "Failed to cancel evaluation: #{result.message}"
-        render :show, status: :unprocessable_content
+        render_lifecycle_failure(:cancel, outcome_notes_params, "Failed to cancel evaluation: #{result.message}")
       end
     end
 
     def no_show
-      result = ::Evaluations::NoShowService.new(@evaluation, current_user, evaluation_params).call
+      result = ::Evaluations::NoShowService.new(@evaluation, current_user, outcome_notes_params).call
 
       if result.success?
         redirect_to evaluators_evaluation_path(@evaluation), notice: result.message
       else
-        @evaluation.reload
-        prepare_show_context
-        flash.now[:alert] = "Failed to mark evaluation as no-show: #{result.message}"
-        render :show, status: :unprocessable_content
+        render_lifecycle_failure(:no_show, outcome_notes_params, "Failed to mark evaluation as no-show: #{result.message}")
       end
     end
 
-    def request_additional_info
-      @evaluation.request_additional_info!
-      redirect_to evaluators_evaluation_path(@evaluation), notice: 'Requested additional information.'
+    def save_working_notes
+      result = ::Evaluations::WorkingNotesService.new(@evaluation, current_user, working_notes_params).call
+
+      if result.success?
+        redirect_to evaluators_evaluation_path(@evaluation), notice: result.message
+      else
+        render_lifecycle_failure(:save_working_notes, working_notes_params, "Failed to save working notes: #{result.message}")
+      end
     end
 
     private
 
     def prepare_show_context
+      @evaluation_form_values ||= {}
+      @evaluation_form_errors ||= {}
       @can_manage_evaluation = assigned_evaluator?
+      @contact_context = ::Applications::ContactContext.new(application: @evaluation.application)
       @activity_logs = ::Evaluations::AuditLogBuilder.new(@evaluation).build
       @available_products = Product.order(:name)
+    end
+
+    def render_lifecycle_failure(action, form_values, message)
+      form_errors = evaluation_form_errors(@evaluation.errors, action)
+      form_errors[:base] = [message] if form_errors.empty?
+      @evaluation.reload
+      unless current_user.admin? || assigned_evaluator?
+        redirect_to evaluators_evaluations_path, alert: 'Evaluation not found.'
+        return
+      end
+
+      @evaluation_form_values = { action => form_values.to_h.with_indifferent_access }
+      @evaluation_form_errors = { action => form_errors }
+      prepare_show_context
+      render :show, status: :unprocessable_content
+    end
+
+    def evaluation_form_errors(errors, action)
+      errors.each_with_object({}) do |error, form_errors|
+        field = FORM_ERROR_FIELD_ALIASES.fetch(error.attribute, error.attribute)
+        field = :base unless FORM_ERROR_FIELDS.fetch(action).include?(field)
+        (form_errors[field] ||= []) << error.full_message
+      end
     end
 
     def set_evaluation
@@ -177,27 +195,20 @@ module Evaluators
       redirect_to evaluators_evaluations_path, alert: 'Evaluation not found.'
     end
 
-    def evaluation_params
-      params.expect(
-        evaluation: [:constituent_id,
-                     :application_id,
-                     :evaluation_date,
-                     :evaluation_type,
-                     :status,
-                     :notes,
-                     :post_completion_notes,
-                     :location,
-                     :reschedule_reason,
-                     :attendees_field,
-                     { attendees: %i[name relationship],
-                       products_tried: %i[product_id reaction],
-                       products_tried_field: [],
-                       recommended_product_ids: [] }]
-      )
-    end
-
     def supplemental_notes_params
       params.expect(evaluation: [:post_completion_notes])
+    end
+
+    def outcome_notes_params
+      params.expect(evaluation: [:notes])
+    end
+
+    def working_notes_params
+      params.expect(evaluation: [:working_notes])
+    end
+
+    def report_form_params
+      ::Evaluations::SubmissionService.report_params(params)
     end
 
     def supplemental_notes_update?
@@ -205,19 +216,11 @@ module Evaluators
     end
 
     def schedule_params
-      if params[:evaluation].present?
-        params.expect(evaluation: %i[evaluation_date location notes])
-      else
-        params.permit(:evaluation_date, :location, :notes)
-      end
+      params.expect(evaluation: %i[evaluation_date location notes])
     end
 
     def reschedule_params
-      if params[:evaluation].present?
-        params.expect(evaluation: %i[evaluation_date location reschedule_reason])
-      else
-        params.permit(:evaluation_date, :location, :reschedule_reason)
-      end
+      params.expect(evaluation: %i[evaluation_date location reschedule_reason])
     end
 
     def require_evaluator!
@@ -257,9 +260,9 @@ module Evaluators
                          status.present? ? base_query.where(status: status) : base_query
                        end
 
+      return filtered_query.by_report_submission.includes(:constituent) if status == 'completed'
+
       ordering = case status
-                 when 'completed'
-                   { evaluation_date: :desc }
                  when 'scheduled', 'confirmed'
                    { evaluation_date: :asc }
                  when 'requested'

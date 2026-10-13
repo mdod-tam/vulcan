@@ -199,7 +199,8 @@ class VoucherNotificationsMailer < ApplicationMailer
   def voucher_redeemed
     transaction = params[:transaction]
     voucher = transaction.voucher
-    user = voucher.application.user
+    @application = voucher.application
+    user = @application.user
     vendor = transaction.vendor
     locale = resolve_template_locale(recipient: user)
     template_name = 'voucher_notifications_voucher_redeemed'

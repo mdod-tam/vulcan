@@ -97,6 +97,36 @@ module Applications
       assert_equal constituent.email, candidate.email
     end
 
+    test 'shared application contacts preserve independent email preference and explicit sms with a second guardian manager' do
+      first_guardian = create(:constituent, communication_preference: 'email', phone_type: 'voice')
+      manager = create(:constituent, communication_preference: 'letter', phone_type: 'text')
+      applicant = create(:constituent, communication_preference: 'email', phone: '000-123-4567',
+                                       dependent_phone: manager.phone)
+      applicant.update!(dependent_email: applicant.email)
+      create(:guardian_relationship, guardian_user: first_guardian, dependent_user: applicant)
+      create(:guardian_relationship, guardian_user: manager, dependent_user: applicant)
+      application = create(:application, user: applicant, managing_guardian: manager)
+
+      default_candidate = SecureRequestRecipientResolver.new(application: application).resolve.first
+      sms_candidate = SecureRequestRecipientResolver
+                      .new(application: application, channel_overrides: { applicant.id => 'sms' })
+                      .resolve.first
+
+      assert_equal applicant, default_candidate.recipient
+      assert_equal :email, default_candidate.channel
+      assert_equal applicant.email, default_candidate.email
+      assert_equal applicant, default_candidate.email_owner
+      assert_equal :dependent_contact, default_candidate.delivery_source
+      assert_equal manager.phone, default_candidate.phone
+      assert_equal manager, default_candidate.phone_owner
+      assert_equal manager, default_candidate.address_owner
+      assert_equal applicant, sms_candidate.recipient
+      assert_equal :sms, sms_candidate.channel
+      assert_equal manager, sms_candidate.delivery_owner
+      assert_equal :managing_guardian, sms_candidate.delivery_source
+      assert_not_equal first_guardian.phone, sms_candidate.phone
+    end
+
     test 'does not allow arbitrary recipient ids' do
       application = create(:application)
       stranger = create(:constituent)

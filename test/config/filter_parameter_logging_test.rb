@@ -59,6 +59,64 @@ class FilterParameterLoggingTest < ActiveSupport::TestCase
     assert_equal 'create', filtered['action']
   end
 
+  test 'evaluation free text is filtered in nested hashes and arrays without hiding ordinary fields' do
+    filtered = ActiveSupport::ParameterFilter.new(Rails.application.config.filter_parameters).filter(
+      'notes' => 'Private report context',
+      'post_completion_notes' => 'Private supplemental context',
+      'working_notes' => 'Private scheduling context',
+      'reschedule_reason' => 'Private reason for postponing the appointment',
+      'attendees_field' => ['Private attendee name'],
+      'evaluation' => {
+        'notes' => 'Private appointment findings',
+        'post_completion_notes' => 'Private follow-up findings',
+        'working_notes' => 'Private appointment context',
+        'recommendation_notes' => 'Personal assessment rationale',
+        'reschedule_reason' => 'Private family circumstances',
+        'attendees_field' => 'Private interpreter and family names',
+        'recommendation_outcome' => 'no_suitable_product',
+        'location' => 'Main Office'
+      },
+      'evaluations' => [
+        { 'notes' => 'Private report in an array',
+          'post_completion_notes' => 'Private supplemental note in an array',
+          'working_notes' => 'Private contact attempts in an array',
+          'recommendation_notes' => 'Private rationale in an array',
+          'reschedule_reason' => 'Private rescheduling reason in an array',
+          'attendees_field' => ['Private support person in an array'],
+          'id' => '17', 'status' => 'completed' }
+      ],
+      'controller' => 'evaluators/evaluations', 'action' => 'supplemental_notes'
+    )
+
+    assert_equal '[FILTERED]', filtered['notes']
+    assert_equal '[FILTERED]', filtered['post_completion_notes']
+    assert_equal '[FILTERED]', filtered['working_notes']
+    assert_equal '[FILTERED]', filtered['reschedule_reason']
+    assert_equal '[FILTERED]', filtered['attendees_field']
+    %w[notes post_completion_notes working_notes recommendation_notes reschedule_reason attendees_field].each do |field|
+      assert_equal '[FILTERED]', filtered.dig('evaluation', field)
+      assert_equal '[FILTERED]', filtered['evaluations'].first[field]
+    end
+    assert_equal 'no_suitable_product', filtered.dig('evaluation', 'recommendation_outcome')
+    assert_equal 'Main Office', filtered.dig('evaluation', 'location')
+    assert_equal '17', filtered['evaluations'].first['id']
+    assert_equal 'completed', filtered['evaluations'].first['status']
+    assert_equal 'evaluators/evaluations', filtered['controller']
+    assert_equal 'supplemental_notes', filtered['action']
+  end
+
+  test 'evaluation attendee names are filtered at their stored SQL attribute as well as the form field' do
+    evaluation = create(:evaluation)
+
+    log = capture_active_record_log do
+      evaluation.update!(attendees_field: 'SqlAttendeeProbeName')
+    end
+
+    assert_no_match(/SqlAttendeeProbeName/, log)
+    assert_match(/\["attendees", "\[FILTERED\]"\]/, log)
+    assert_equal [{ 'name' => 'SqlAttendeeProbeName' }], evaluation.reload.attendees
+  end
+
   # Paper identity review posts the applicant's identifying facts and receives a short-lived
   # decision token, which the form then submits back. POST keeps those out of the URL; this keeps
   # them out of the log. The names matter here specifically because they travel alongside a date of

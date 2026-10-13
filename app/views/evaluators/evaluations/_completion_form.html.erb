@@ -1,32 +1,98 @@
+<%# locals: (evaluation:, available_products:) -%>
+<% form_values = @evaluation_form_values.fetch(:submit_report, {}) # rubocop:disable Lint/UselessAssignment -- Used by later ERB fragments. %>
+<% recommendation_outcome = form_values[:recommendation_outcome] # rubocop:disable Lint/UselessAssignment -- ERB local. %>
 <div class="bg-white shadow rounded-lg">
   <div class="px-4 py-5 sm:p-6">
     <h3 class="text-lg leading-6 font-medium text-gray-900 mb-4">
       Mark Evaluation as Completed
     </h3>
     <p class="text-sm text-gray-600 mb-4">
-      You can complete this evaluation before its scheduled time if the evaluation has already happened and you have the required notes, tried products, and recommendations.
+      <%= t('evaluators.evaluations.forms.report_help') %>
     </p>
 
-    <%= form_with(model: evaluation, url: submit_report_evaluators_evaluation_path(evaluation), method: :post, local: true, id: "complete-evaluation-form", class: "space-y-4") do |f| %>
+    <%= form_with(
+          model: evaluation,
+          namespace: 'complete',
+          url: submit_report_evaluators_evaluation_path(evaluation),
+          method: :post,
+          local: true,
+          id: 'complete-evaluation-form',
+          class: 'space-y-4',
+          data: { controller: 'recommendation-outcome' }
+        ) do |f| %>
+      <%= render 'action_errors', action: :submit_report, form: f, form_errors: @evaluation_form_errors,
+                                  field_targets: evaluation_report_error_targets(recommendation_outcome) %>
+      <div>
+        <%= f.label :appointment_completed_at, class: 'block text-sm font-medium text-gray-700' do %>
+          <%= t('evaluators.evaluations.forms.appointment_date_time') %> <span class="text-red-600">*</span><span class="sr-only"> (required)</span>
+        <% end %>
+        <%= f.datetime_local_field(
+              :appointment_completed_at,
+              value: form_values.fetch(
+                :appointment_completed_at,
+                evaluation.evaluation_date&.past? ? evaluation.evaluation_date.strftime('%Y-%m-%dT%H:%M') : nil
+              ),
+              class: 'mt-1 block w-full border border-gray-300 rounded-md shadow-sm py-2 px-3 ' \
+                     'focus:outline-none focus:ring-indigo-500 focus:border-indigo-500 sm:text-sm',
+              required: true,
+              aria: evaluation_field_aria(:submit_report, :appointment_completed_at, describedby: 'complete-time-help', form_errors: @evaluation_form_errors)
+            ) %>
+        <p id="complete-time-help" class="mt-1 text-sm text-gray-500"><%= t('evaluators.evaluations.forms.appointment_time_help') %></p>
+        <%= render 'field_errors', action: :submit_report, attribute: :appointment_completed_at, form_errors: @evaluation_form_errors %>
+      </div>
       <div>
         <%= f.label :location, class: "block text-sm font-medium text-gray-700" do %>
           Location <span class="text-red-600">*</span><span class="sr-only"> (required)</span>
         <% end %>
-        <%= f.text_field :location, value: evaluation.location, class: "mt-1 block w-full border border-gray-300 rounded-md shadow-sm py-2 px-3 focus:outline-none focus:ring-indigo-500 focus:border-indigo-500 sm:text-sm", required: true %>
+        <%= f.text_field(
+              :location,
+              value: form_values.fetch(:location, evaluation.location),
+              class: 'mt-1 block w-full border border-gray-300 rounded-md shadow-sm py-2 px-3 ' \
+                     'focus:outline-none focus:ring-indigo-500 focus:border-indigo-500 sm:text-sm',
+              required: true,
+              aria: evaluation_field_aria(:submit_report, :location, form_errors: @evaluation_form_errors)
+            ) %>
+        <%= render 'field_errors', action: :submit_report, attribute: :location, form_errors: @evaluation_form_errors %>
       </div>
 
       <div>
         <%= f.label :attendees_field, class: "block text-sm font-medium text-gray-700" do %>
           Other Attendees <span class="text-gray-500 font-normal">(optional)</span>
         <% end %>
-        <%= f.text_field :attendees_field, value: evaluation.attendees_field, class: "mt-1 block w-full border border-gray-300 rounded-md shadow-sm py-2 px-3 focus:outline-none focus:ring-indigo-500 focus:border-indigo-500 sm:text-sm", placeholder: "e.g., family friend, interpreter, Jane Doe" %>
-        <p class="mt-1 text-sm text-gray-500">If anyone else attended the session, include them here. Separate multiple attendees with commas.</p>
+        <%= f.text_field(
+              :attendees_field,
+              value: form_values.fetch(:attendees_field, evaluation.attendees_field),
+              class: 'mt-1 block w-full border border-gray-300 rounded-md shadow-sm py-2 px-3 ' \
+                     'focus:outline-none focus:ring-indigo-500 focus:border-indigo-500 sm:text-sm',
+              placeholder: 'e.g., family friend, interpreter, Jane Doe',
+              aria: evaluation_field_aria(:submit_report, :attendees_field, describedby: 'complete-attendees-help', form_errors: @evaluation_form_errors)
+            ) %>
+        <p id="complete-attendees-help" class="mt-1 text-sm text-gray-500">If anyone else attended the session, include them here. Separate multiple attendees with commas.</p>
+        <%= render 'field_errors', action: :submit_report, attribute: :attendees_field, form_errors: @evaluation_form_errors %>
       </div>
 
-      <fieldset>
-        <legend class="block text-sm font-medium text-gray-700">Products Tried <span class="text-red-600">*</span><span class="sr-only"> (required)</span></legend>
+      <fieldset id="products-tried-group" tabindex="-1" class="rounded-md focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-indigo-500"
+                <%= tag.attributes(aria: evaluation_field_aria(
+                      :submit_report, :products_tried_field,
+                      describedby: 'products-tried-help',
+                      form_errors: @evaluation_form_errors
+                    )) %>>
+        <legend class="block text-sm font-medium text-gray-700">
+          Products Tried
+          <span data-recommendation-outcome-target="triedRequired" class="<%= 'hidden' unless recommendation_outcome == 'catalog_products' %>">
+            <span class="text-red-600">*</span><span class="sr-only"> (required)</span>
+          </span>
+        </legend>
+        <p id="products-tried-help" class="mt-1 text-sm text-gray-500"><%= t('evaluators.evaluations.recommendations.tried_help') %></p>
+        <%= render 'field_errors', action: :submit_report, attribute: :products_tried_field, form_errors: @evaluation_form_errors %>
         <div class="mt-2 space-y-2 max-h-48 overflow-y-auto border border-gray-300 rounded-md p-3 bg-white">
-          <%= f.collection_check_boxes :products_tried_field, available_products, :id, :name, checked: evaluation.products_tried_field do |b| %>
+          <%= f.collection_check_boxes(
+                :products_tried_field,
+                available_products,
+                :id,
+                :name,
+                checked: form_values.fetch(:products_tried_field, evaluation.products_tried_field)
+              ) do |b| %>
             <div class="flex items-start">
               <div class="flex items-center h-5">
                 <%= b.check_box class: "focus:ring-indigo-500 h-4 w-4 text-indigo-600 border-gray-300 rounded" %>
@@ -39,10 +105,64 @@
         </div>
       </fieldset>
 
-      <fieldset>
+      <fieldset id="recommendation-outcome-group" tabindex="-1" class="rounded-md focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-indigo-500"
+                <%= tag.attributes(aria: evaluation_field_aria(
+                      :submit_report, %i[recommendation_outcome recommended_product_ids],
+                      describedby: 'recommendation-outcome-help', form_errors: @evaluation_form_errors
+                    )) %>>
+        <legend class="block text-sm font-medium text-gray-700">
+          <%= t('evaluators.evaluations.recommendations.outcome') %>
+          <span class="text-red-600">*</span><span class="sr-only"> (required)</span>
+        </legend>
+        <p id="recommendation-outcome-help" class="mt-1 text-sm text-gray-500"><%= t('evaluators.evaluations.recommendations.outcome_help') %></p>
+        <div class="mt-2 space-y-3">
+          <% Evaluation.recommendation_outcomes.each_key do |outcome| %>
+            <div>
+              <div class="flex items-start gap-3">
+                <%= f.radio_button(
+                      :recommendation_outcome, outcome,
+                      checked: recommendation_outcome == outcome,
+                      required: true,
+                      class: 'mt-1 h-4 w-4 border-gray-300 text-indigo-600 focus:ring-indigo-500',
+                      aria: evaluation_field_aria(
+                        :submit_report, :recommendation_outcome,
+                        describedby: "recommendation-#{outcome}-help", form_errors: @evaluation_form_errors
+                      ),
+                      data: {
+                        recommendation_outcome_target: 'choice', action: 'recommendation-outcome#update',
+                        recommendation_outcome_feedback: t("evaluators.evaluations.recommendations.feedback.#{outcome}", locale: :en)
+                      }
+                    ) %>
+                <%= f.label :recommendation_outcome, t("evaluations.recommendation_outcomes.#{outcome}"),
+                            value: outcome, class: 'text-sm font-medium text-gray-700' %>
+              </div>
+              <p id="recommendation-<%= outcome %>-help" class="ml-7 mt-1 text-sm text-gray-500">
+                <%= t("evaluators.evaluations.recommendations.help.#{outcome}") %>
+              </p>
+            </div>
+          <% end %>
+        </div>
+        <%= render 'field_errors', action: :submit_report, attribute: :recommendation_outcome, form_errors: @evaluation_form_errors %>
+        <%= render 'field_errors', action: :submit_report, attribute: :recommended_product_ids, form_errors: @evaluation_form_errors %>
+        <p role="status" aria-live="polite" aria-atomic="true" class="sr-only" data-recommendation-outcome-target="status"></p>
+      </fieldset>
+
+      <fieldset id="catalog-recommendations-group" tabindex="-1" data-recommendation-outcome-target="catalog"
+                class="rounded-md focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-indigo-500"
+                <%= tag.attributes(
+                      hidden: recommendation_outcome != 'catalog_products',
+                      disabled: recommendation_outcome != 'catalog_products',
+                      aria: evaluation_field_aria(:submit_report, :recommended_product_ids, form_errors: @evaluation_form_errors)
+                    ) %>>
         <legend class="block text-sm font-medium text-gray-700">Recommended Products <span class="text-red-600">*</span><span class="sr-only"> (required)</span></legend>
         <div class="mt-2 space-y-2 max-h-48 overflow-y-auto border border-gray-300 rounded-md p-3 bg-white">
-          <%= f.collection_check_boxes :recommended_product_ids, available_products, :id, :name, checked: evaluation.recommended_product_ids do |b| %>
+          <%= f.collection_check_boxes(
+                :recommended_product_ids,
+                available_products,
+                :id,
+                :name,
+                checked: form_values.fetch(:recommended_product_ids, evaluation.recommended_product_ids)
+              ) do |b| %>
             <div class="flex items-start">
               <div class="flex items-center h-5">
                 <%= b.check_box class: "focus:ring-indigo-500 h-4 w-4 text-indigo-600 border-gray-300 rounded" %>
@@ -56,13 +176,50 @@
       </fieldset>
 
       <div>
+        <%= f.label :recommendation_notes, class: 'block text-sm font-medium text-gray-700' do %>
+          <%= t('evaluators.evaluations.recommendations.details') %>
+          <span data-recommendation-outcome-target="notesRequired" class="<%= 'hidden' unless recommendation_outcome.in?(%w[outside_catalog no_suitable_product]) %>">
+            <span class="text-red-600">*</span><span class="sr-only"> (required)</span>
+          </span>
+        <% end %>
+        <p id="recommendation-notes-help" class="mt-1 text-sm text-gray-500"><%= t('evaluators.evaluations.recommendations.details_help') %></p>
+        <%= f.text_area :recommendation_notes,
+                        value: form_values.fetch(:recommendation_notes, evaluation.recommendation_notes),
+                        rows: 3,
+                        required: recommendation_outcome.in?(%w[outside_catalog no_suitable_product]),
+                        class: 'mt-1 block w-full border border-gray-300 rounded-md shadow-sm py-2 px-3 ' \
+                               'focus:outline-none focus:ring-indigo-500 focus:border-indigo-500 sm:text-sm',
+                        aria: evaluation_field_aria(
+                          :submit_report, :recommendation_notes,
+                          describedby: 'recommendation-notes-help',
+                          form_errors: @evaluation_form_errors
+                        ),
+                        data: { recommendation_outcome_target: 'notes' } %>
+        <%= render 'field_errors', action: :submit_report, attribute: :recommendation_notes, form_errors: @evaluation_form_errors %>
+      </div>
+
+      <div>
         <%= f.label :notes, class: "block text-sm font-medium text-gray-700" do %>
           Evaluation Report Notes <span class="text-red-600">*</span><span class="sr-only"> (required)</span>
         <% end %>
-        <%= f.text_area :notes, value: "", rows: 3, class: "mt-1 block w-full border border-gray-300 rounded-md shadow-sm py-2 px-3 focus:outline-none focus:ring-indigo-500 focus:border-indigo-500 sm:text-sm", placeholder: "Evaluation notes, including specific needs...", required: true %>
+        <%= f.text_area(
+              :notes,
+              value: form_values.fetch(:notes, ''),
+              rows: 3,
+              class: 'mt-1 block w-full border border-gray-300 rounded-md shadow-sm py-2 px-3 ' \
+                     'focus:outline-none focus:ring-indigo-500 focus:border-indigo-500 sm:text-sm',
+              placeholder: 'Evaluation notes, including specific needs...',
+              required: true,
+              aria: evaluation_field_aria(:submit_report, :notes, form_errors: @evaluation_form_errors)
+            ) %>
+        <%= render 'field_errors', action: :submit_report, attribute: :notes, form_errors: @evaluation_form_errors %>
       </div>
 
-      <%= f.submit "Mark as Completed", class: "w-full inline-flex justify-center py-2 px-4 border border-transparent shadow-sm text-sm font-medium rounded-md text-white bg-green-600 hover:bg-green-700 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-green-500" %>
+      <%= f.submit 'Mark as Completed',
+                   data: { turbo_submits_with: 'Submitting report...' },
+                   class: 'w-full inline-flex justify-center py-2 px-4 border border-transparent shadow-sm text-sm ' \
+                          'font-medium rounded-md text-white bg-green-700 hover:bg-green-800 focus:outline-none ' \
+                          'focus:ring-2 focus:ring-offset-2 focus:ring-green-700' %>
     <% end %>
   </div>
 </div>

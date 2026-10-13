@@ -4,6 +4,11 @@ module Admin
   module ApplicationsHelper
     include RejectionReasonsHelper
 
+    def practitioner_assignment_option_label(practitioner)
+      identifier = practitioner.email.presence || "ID ##{practitioner.id}"
+      "#{practitioner.full_name} (#{identifier})"
+    end
+
     MedicalCertificationActionState = Struct.new(
       :latest_certification_request,
       :latest_certification_reject,

@@ -23,7 +23,8 @@ class AssignTrainerTest < ApplicationSystemTestCase
     assert_text 'Approved'
     assert_text 'Assign Trainer'
     within '[data-testid="trainer-assignment-form"]' do
-      find('select[name="trainer_id"]').find('option', text: @trainer.full_name).select_option
+      select "#{@trainer.full_name} (#{@trainer.email})", from: 'trainer_id'
+      take_screenshot('admin-trainer-assignment-selected', html: true, full: true)
       click_button 'Assign Trainer'
     end
 

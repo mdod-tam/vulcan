@@ -28,6 +28,7 @@
           scheduled_time: false,
           view_path: latest_evaluation.present? ? evaluators_evaluation_path(latest_evaluation) : nil,
           assign_form_path: assign_evaluator_admin_application_path(@application),
+          reassign_form_path: @application.service_window_active? ? reassign_evaluator_admin_application_path(@application) : nil,
           assign_param: :evaluator_id,
           available_assignees: Users::Evaluator.available
         %>
@@ -64,6 +65,7 @@
             scheduled_time: false,
             view_path: nil,
             assign_form_path: assign_evaluator_admin_application_path(@application),
+            reassign_form_path: @application.service_window_active? ? reassign_evaluator_admin_application_path(@application) : nil,
             assign_param: :evaluator_id,
             available_assignees: Users::Evaluator.available
           %>
@@ -77,6 +79,7 @@
             scheduled_time: false,
             view_path: latest_evaluation.present? ? evaluators_evaluation_path(latest_evaluation) : nil,
             assign_form_path: assign_evaluator_admin_application_path(@application),
+            reassign_form_path: @application.service_window_active? ? reassign_evaluator_admin_application_path(@application) : nil,
             assign_param: :evaluator_id,
             available_assignees: Users::Evaluator.available
           %>
@@ -188,7 +191,7 @@
       </p>
     <% end %>
   </div>
-  <% latest_completed_evaluation = @application.evaluations.where(status: :completed).order(evaluation_date: :desc).first %>
+  <% latest_completed_evaluation = @application.evaluations.completed_sessions.by_report_submission.first # rubocop:disable Lint/UselessAssignment -- Used below. %>
   <% if latest_completed_evaluation.present? %>
     <div class="mb-6 border-t border-gray-200 pt-4" data-testid="evaluation-report-summary">
       <h3 class="text-lg font-semibold text-gray-900 mb-2">Evaluation Report / Recommendations</h3>
@@ -198,27 +201,42 @@
           <dd class="mt-1 text-sm text-gray-900"><%= latest_completed_evaluation.evaluator&.full_name || 'Unknown' %></dd>
         </div>
         <div>
-          <dt class="text-sm font-medium text-gray-500">Completed</dt>
+          <dt class="text-sm font-medium text-gray-500">Appointment Completed</dt>
           <dd class="mt-1 text-sm text-gray-900">
-            <%= latest_completed_evaluation.evaluation_date&.strftime("%B %d, %Y") || 'Date not recorded' %>
+            <%= latest_completed_evaluation.appointment_completed_at&.strftime('%B %d, %Y') || 'Date not recorded' %>
           </dd>
         </div>
+        <div>
+          <dt class="text-sm font-medium text-gray-500">Report Submitted</dt>
+          <dd class="mt-1 text-sm text-gray-900"><%= latest_completed_evaluation.report_submitted_at&.strftime('%B %d, %Y') || 'Date not recorded' %></dd>
+        </div>
       </dl>
-      <% recommended = latest_completed_evaluation.recommended_products %>
-      <div class="mb-3">
-        <dt class="text-sm font-medium text-gray-500">Recommended Products</dt>
+      <dl class="mb-3">
+        <dt class="text-sm font-medium text-gray-500">
+          <%= latest_completed_evaluation.recommendation_outcome_catalog_products? ? 'Recommended Products' : 'Recommendation Outcome' %>
+        </dt>
         <dd class="mt-1 text-sm text-gray-900">
-          <% if recommended.any? %>
-            <ul class="list-disc list-inside">
-              <% recommended.each do |product| %>
-                <li><%= product.name %></li>
-              <% end %>
-            </ul>
+          <% if latest_completed_evaluation.recommendation_outcome_catalog_products? %>
+            <% recommended = latest_completed_evaluation.recommended_products # rubocop:disable Lint/UselessAssignment -- Used by later ERB fragments. %>
+            <% if recommended.any? %>
+              <ul class="list-disc list-inside">
+                <% recommended.each do |product| %>
+                  <li><%= product.name %></li>
+                <% end %>
+              </ul>
+            <% else %>
+              <span class="text-gray-500">No specific products recommended.</span>
+            <% end %>
+            <% if latest_completed_evaluation.recommendation_notes.present? %>
+              <%= simple_format(latest_completed_evaluation.recommendation_notes) %>
+            <% end %>
           <% else %>
-            <span class="text-gray-500">No specific products recommended.</span>
+            <p class="font-medium"><%= t("evaluations.recommendation_outcomes.#{latest_completed_evaluation.recommendation_outcome}", locale: :en) %></p>
+            <%= simple_format(latest_completed_evaluation.recommendation_notes) %>
+            <p class="text-gray-600">Program staff must review this outcome before deciding any equipment fulfillment.</p>
           <% end %>
         </dd>
-      </div>
+      </dl>
       <% if latest_completed_evaluation.needs.present? %>
         <div class="mb-3">
           <dt class="text-sm font-medium text-gray-500">Needs Summary</dt>

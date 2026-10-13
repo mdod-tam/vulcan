@@ -10,13 +10,13 @@ module Evaluations
     end
 
     def call
-      validate_params!
-
-      old_evaluation_date = @evaluation.evaluation_date
-
-      ActiveRecord::Base.transaction do
-        reschedule_evaluation!
-        create_event!(old_evaluation_date)
+      @evaluation.application.with_lock do
+        @evaluation.with_lock do
+          validate_params!
+          old_evaluation_date = @evaluation.evaluation_date
+          reschedule_evaluation!
+          create_event!(old_evaluation_date)
+        end
       end
 
       success('Evaluation rescheduled successfully.', { evaluation: @evaluation })
@@ -37,10 +37,24 @@ module Evaluations
     private
 
     def validate_params!
+      raise ArgumentError, 'Only the assigned evaluator can update this evaluation.' unless @evaluation.evaluator_id == @actor&.id
       raise ArgumentError, 'Only scheduled, confirmed, cancelled, or no-show evaluations can be rescheduled.' unless @evaluation.can_reschedule?
 
-      raise ArgumentError, 'evaluation_date and reschedule_reason are required' if required_fields_missing?
-      raise ArgumentError, 'evaluation_date must be in the future' if evaluation_date <= Time.current
+      if required_fields_missing?
+        @evaluation.errors.add(:evaluation_date, 'is required') if @params[:evaluation_date].blank?
+        @evaluation.errors.add(:reschedule_reason, 'is required') if @params[:reschedule_reason].blank?
+        raise ArgumentError, 'evaluation_date and reschedule_reason are required'
+      end
+
+      date_error = if evaluation_date.nil?
+                     'must be a valid date/time'
+                   elsif evaluation_date <= Time.current
+                     'must be in the future'
+                   end
+      return if date_error.nil?
+
+      @evaluation.errors.add(:evaluation_date, date_error)
+      raise ArgumentError, "evaluation_date #{date_error}"
     end
 
     def required_fields_missing?
@@ -82,6 +96,8 @@ module Evaluations
         value = @params[:evaluation_date]
         value.respond_to?(:in_time_zone) ? value.in_time_zone : Time.zone.parse(value.to_s)
       end
+    rescue ArgumentError, TypeError
+      nil
     end
   end
 end

@@ -17,6 +17,17 @@ module Applications
       assert_equal events.map(&:id).sort, EventDeduplicationService.new.deduplicate(events).map(&:id).sort
     end
 
+    test 'retains evaluator transfer events without operation ids as separate history entries' do
+      evaluation = create(:evaluation, application: @application, constituent: @application.user)
+      events = Array.new(2) do
+        Event.create!(user: @admin, auditable: evaluation, action: 'evaluator_reassigned',
+                      metadata: { application_id: @application.id, evaluation_id: evaluation.id },
+                      created_at: Time.current.beginning_of_minute)
+      end
+
+      assert_equal events.map(&:id).sort, EventDeduplicationService.new.deduplicate(events).map(&:id).sort
+    end
+
     test 'correctly deduplicates events with different priorities' do
       service = EventDeduplicationService.new
       time = Time.current

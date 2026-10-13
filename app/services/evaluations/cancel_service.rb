@@ -10,14 +10,15 @@ module Evaluations
     end
 
     def call
-      validate_params!
-
-      ApplicationRecord.transaction do
-        @evaluation.update!(
-          status: :cancelled,
-          notes: cancellation_reason
-        )
-        create_event!
+      @evaluation.application.with_lock do
+        @evaluation.with_lock do
+          validate_params!
+          @evaluation.update!(
+            status: :cancelled,
+            notes: cancellation_reason
+          )
+          create_event!
+        end
       end
 
       success('Evaluation cancelled successfully.', { evaluation: @evaluation })
@@ -32,12 +33,16 @@ module Evaluations
     private
 
     def validate_params!
+      raise ArgumentError, 'Only the assigned evaluator can update this evaluation.' unless @evaluation.evaluator_id == @actor&.id
       raise ArgumentError, 'Only requested, scheduled, or confirmed evaluations can be cancelled.' unless @evaluation.can_cancel?
-      raise ArgumentError, 'cancellation reason is required' if cancellation_reason.blank?
+      return if cancellation_reason.present?
+
+      @evaluation.errors.add(:notes, 'must include a cancellation reason')
+      raise ArgumentError, 'cancellation reason is required'
     end
 
     def cancellation_reason
-      @params[:notes].presence || @params[:cancellation_reason].presence
+      @params[:notes].presence
     end
 
     def create_event!

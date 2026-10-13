@@ -24,6 +24,9 @@ Rails.application.config.filter_parameters += [
   # Autosave wraps income, disability, and provider details in a generic value parameter.
   :autosave_context, :field_value,
 
+  # Evaluation free text may contain personal information.
+  :notes, :post_completion_notes, :working_notes, :recommendation_notes, :reschedule_reason, :attendees,
+
   # SMS contact
   :phone_number,
 

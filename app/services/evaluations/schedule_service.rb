@@ -10,11 +10,12 @@ module Evaluations
     end
 
     def call
-      validate_params!
-
-      ActiveRecord::Base.transaction do
-        schedule_evaluation!
-        create_event!
+      @evaluation.application.with_lock do
+        @evaluation.with_lock do
+          validate_params!
+          schedule_evaluation!
+          create_event!
+        end
       end
 
       success('Evaluation scheduled successfully.', { evaluation: @evaluation })
@@ -32,13 +33,25 @@ module Evaluations
     private
 
     def validate_params!
+      raise ArgumentError, 'Only the assigned evaluator can update this evaluation.' unless @evaluation.evaluator_id == @actor&.id
       raise ArgumentError, 'Only requested evaluations can be scheduled.' unless @evaluation.status_requested?
-      raise ArgumentError, 'evaluation_date is required' if @params[:evaluation_date].blank?
+
+      date_error = if @params[:evaluation_date].blank?
+                     'is required'
+                   elsif evaluation_date.nil?
+                     'must be a valid date/time'
+                   elsif evaluation_date <= Time.current
+                     'must be in the future'
+                   end
+      return if date_error.nil?
+
+      @evaluation.errors.add(:evaluation_date, date_error)
+      raise ArgumentError, "evaluation_date #{date_error}"
     end
 
     def schedule_evaluation!
       @evaluation.update!(
-        evaluation_date: @params[:evaluation_date],
+        evaluation_date: evaluation_date,
         location: @params[:location],
         notes: @params[:notes],
         status: :scheduled
@@ -63,6 +76,15 @@ module Evaluations
 
     def log_validation_failure(error)
       Rails.logger.warn("Evaluations::ScheduleService validation failed: #{error.message}")
+    end
+
+    def evaluation_date
+      @evaluation_date ||= begin
+        value = @params[:evaluation_date]
+        value.respond_to?(:in_time_zone) ? value.in_time_zone : Time.zone.parse(value.to_s)
+      end
+    rescue ArgumentError, TypeError
+      nil
     end
   end
 end

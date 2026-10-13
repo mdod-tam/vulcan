@@ -82,6 +82,12 @@
         </div>
       <% end %>
     </div>
+    <% if local_assigns[:reassign_form_path].present? && !entity.status_completed? %>
+      <%= render 'evaluator_reassignment_form',
+                 reassign_form_path: reassign_form_path,
+                 assigned_person: assigned_person,
+                 available_assignees: available_assignees.where.not(id: assigned_person&.id) %>
+    <% end %>
   <% else %>
     <!-- Dropdown assignment: one select, one submit -->
     <h3 class="text-sm font-semibold text-gray-900 mb-3"><%= local_assigns[:assignment_heading].presence || "Assign #{type.titleize}" %></h3>
@@ -92,10 +98,10 @@
         <div class="w-full sm:max-w-md">
           <%= label_tag assign_param, local_assigns[:assignment_select_label].presence || "Select #{type.titleize.downcase}", class: "sr-only" %>
           <%= select_tag assign_param,
-              options_from_collection_for_select(available_assignees, :id, :full_name),
-              include_blank: "Select a #{type}…",
-              class: "block h-10 w-full rounded-md border-gray-300 text-sm shadow-sm focus:border-indigo-500 focus:ring-indigo-500",
-              required: true %>
+                         options_from_collection_for_select(available_assignees, :id, ->(person) { practitioner_assignment_option_label(person) }),
+                         include_blank: "Select a #{type}…",
+                         class: 'block h-10 w-full rounded-md border-gray-300 text-sm shadow-sm focus:border-indigo-500 focus:ring-indigo-500',
+                         required: true %>
         </div>
         <%= submit_tag local_assigns[:assignment_submit_label].presence || "Assign #{type.titleize}",
             class: "inline-flex h-10 items-center justify-center rounded-md border border-transparent bg-indigo-600 px-4 py-2 text-sm font-medium text-white shadow-sm hover:bg-indigo-700 focus:outline-none focus:ring-2 focus:ring-indigo-500 focus:ring-offset-2" %>

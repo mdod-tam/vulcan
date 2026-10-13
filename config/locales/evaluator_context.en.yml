@@ -1,0 +1,18 @@
+en:
+  evaluator_context:
+    title: "Applicant Information for Evaluation"
+    back: "Back to Evaluation"
+    help: "Use this information to contact the applicant and prepare for the evaluation. Arrange the appointment directly with the applicant or their managing guardian."
+    link: "View Applicant Information"
+    applicant: "Applicant"
+    guardian: "Managing Guardian"
+    email: "Contact Email"
+    phone: "Contact Phone"
+    address: "Contact Address"
+    communication: "Communication Preferences"
+    language: "Preferred Language"
+    modality: "Communication Modality"
+    delivery: "Delivery Preference"
+    disabilities: "Disabilities"
+    alternate_contact: "Alternate Contact"
+    not_provided: "Not provided"

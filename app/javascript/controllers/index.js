@@ -1,4 +1,5 @@
 import { application } from "./application"
+import RecommendationOutcomeController from "./evaluators/recommendation_outcome_controller"
 
 // Admin Controllers
 import RoleSelectController from "./admin/role_select_controller"
@@ -32,7 +33,6 @@ import TrainingDurationConfirmationController from "./forms/training_duration_co
 import VoucherRedemptionController from "./forms/voucher_redemption_controller"
 
 // Review Controllers
-import EvaluationManagementController from "./reviews/evaluation_management_controller"
 import W9ReviewController from "./reviews/w9_review_controller"
 
 // UI Controllers
@@ -85,7 +85,7 @@ application.register("training-duration-confirmation", TrainingDurationConfirmat
 application.register("voucher-redemption", VoucherRedemptionController)
 
 // Review Controllers
-application.register("evaluation-management", EvaluationManagementController)
+application.register("recommendation-outcome", RecommendationOutcomeController)
 application.register("w9-review", W9ReviewController)
 
 // UI Controllers

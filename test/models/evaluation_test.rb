@@ -13,7 +13,6 @@ class EvaluationTest < ActiveSupport::TestCase
     evaluation = create(:evaluation, :completed)
     assert evaluation.valid?
     assert_equal 'completed', evaluation.status
-    assert evaluation.report_submitted
   end
 
   test 'creates an evaluation with custom attendees' do
@@ -68,5 +67,184 @@ class EvaluationTest < ActiveSupport::TestCase
 
     assert_not evaluation.valid?
     assert_includes evaluation.errors[:evaluator], 'must be an Evaluator or an administrator with evaluation capability'
+  end
+
+  test 'new completion requires separately recorded actual appointment and submission times' do
+    evaluation = create(:evaluation)
+
+    assert_not evaluation.update(status: :completed)
+    assert_includes evaluation.errors[:appointment_completed_at], "can't be blank"
+    assert_includes evaluation.errors[:report_submitted_at], "can't be blank"
+    assert_equal 'scheduled', evaluation.reload.status
+  end
+
+  test 'completion with blank notes yields one presence error' do
+    evaluation = create(:evaluation)
+
+    updated = evaluation.update(
+      status: :completed, notes: ' ',
+      appointment_completed_at: 1.hour.ago, report_submitted_at: Time.current
+    )
+
+    assert_not updated
+    assert_equal ["can't be blank"], evaluation.errors[:notes]
+    assert_equal 'scheduled', evaluation.reload.status
+  end
+
+  test 'actual appointment cannot be recorded in the future' do
+    evaluation = create(:evaluation)
+
+    assert_not evaluation.update(status: :completed, appointment_completed_at: 1.day.from_now, report_submitted_at: Time.current)
+    assert_includes evaluation.errors[:appointment_completed_at], 'cannot be in the future'
+    assert_equal 'scheduled', evaluation.reload.status
+  end
+
+  test 'legacy completed record can receive supplemental notes without inventing timestamps' do
+    evaluation = create(:evaluation, :completed)
+    evaluation.update!(appointment_completed_at: nil, report_submitted_at: nil)
+
+    assert_nil evaluation.appointment_completed_at
+    assert_nil evaluation.report_submitted_at
+    evaluation.update!(post_completion_notes: 'Supplemental observation')
+
+    assert_equal 'completed', evaluation.reload.status
+    assert_equal 'Supplemental observation', evaluation.post_completion_notes
+    assert_nil evaluation.appointment_completed_at
+    assert_nil evaluation.report_submitted_at
+  end
+
+  test 'completed reports sort by submission time with legacy unknowns last' do
+    earlier_report = create(
+      :evaluation, :completed,
+      evaluation_date: 7.days.from_now,
+      appointment_completed_at: 2.days.ago,
+      report_submitted_at: 1.day.ago
+    )
+    latest_report = create(
+      :evaluation, :completed,
+      evaluation_date: 1.day.from_now,
+      appointment_completed_at: 3.days.ago,
+      report_submitted_at: 1.hour.ago
+    )
+    legacy_report = create(:evaluation, :completed, evaluation_date: 14.days.from_now)
+    legacy_report.update!(appointment_completed_at: nil, report_submitted_at: nil)
+
+    report_ids = [earlier_report.id, latest_report.id, legacy_report.id]
+    ordered_ids = Evaluation.completed_sessions.where(id: report_ids).by_report_submission.ids
+
+    assert_equal [latest_report.id, earlier_report.id, legacy_report.id], ordered_ids
+  end
+
+  test 'catalog outcome still requires both products tried and catalog recommendations' do
+    evaluation = create(:evaluation)
+
+    assert evaluation.recommendation_outcome_catalog_products?
+    assert_not evaluation.update(
+      status: :completed,
+      appointment_completed_at: 1.hour.ago,
+      report_submitted_at: Time.current,
+      recommended_product_ids: [],
+      products_tried: []
+    )
+
+    assert_includes evaluation.errors[:recommended_products], "can't be blank"
+    assert_includes evaluation.errors[:products_tried], "can't be blank"
+    assert_equal 'scheduled', evaluation.reload.status
+  end
+
+  test 'outside catalog and no suitable product outcomes can complete without inventing products' do
+    %w[outside_catalog no_suitable_product].each do |outcome|
+      evaluation = create(:evaluation)
+      scheduled_date = evaluation.evaluation_date
+
+      evaluation.update!(
+        status: :completed,
+        appointment_completed_at: 1.hour.ago,
+        report_submitted_at: Time.current,
+        recommendation_outcome: outcome,
+        recommendation_notes: 'Assessment findings and the reason for this outcome',
+        recommended_product_ids: [],
+        products_tried: [],
+        attendees: []
+      )
+
+      evaluation.reload
+      assert_equal 'completed', evaluation.status
+      assert_equal outcome, evaluation.recommendation_outcome
+      assert_equal 'Assessment findings and the reason for this outcome', evaluation.recommendation_notes
+      assert_empty evaluation.recommended_products
+      assert_empty evaluation.products_tried
+      assert_empty evaluation.attendees
+      assert_equal scheduled_date, evaluation.evaluation_date
+    end
+  end
+
+  test 'noncatalog recommendations may retain catalog products tried during the assessment' do
+    evaluation = create(:evaluation)
+    tried_products = evaluation.products_tried
+
+    evaluation.update!(
+      status: :completed,
+      appointment_completed_at: 1.hour.ago,
+      report_submitted_at: Time.current,
+      recommendation_outcome: :no_suitable_product,
+      recommendation_notes: 'The catalog products tried did not meet the applicant needs',
+      recommended_product_ids: []
+    )
+
+    assert_equal 'completed', evaluation.reload.status
+    assert_equal tried_products, evaluation.products_tried
+    assert_empty evaluation.recommended_products
+  end
+
+  test 'noncatalog outcomes require an explanation and reject contradictory catalog recommendations' do
+    %w[outside_catalog no_suitable_product].each do |outcome|
+      evaluation = create(:evaluation)
+      completion = {
+        status: :completed,
+        appointment_completed_at: 1.hour.ago,
+        report_submitted_at: Time.current,
+        recommendation_outcome: outcome
+      }
+
+      assert_not evaluation.update(completion.merge(recommended_product_ids: [], recommendation_notes: ''))
+      assert_includes evaluation.errors[:recommendation_notes], "can't be blank"
+      assert_equal 'scheduled', evaluation.reload.status
+
+      assert_not evaluation.update(completion.merge(recommendation_notes: 'Reason for the noncatalog outcome'))
+      assert_includes evaluation.errors[:recommended_products], 'must be empty when the outcome does not recommend catalog products'
+      assert_equal 'scheduled', evaluation.reload.status
+    end
+  end
+
+  test 'outcome rejects unknown or missing values without replacing the stored catalog default' do
+    evaluation = create(:evaluation)
+
+    ['unknown', nil].each do |outcome|
+      assert_not evaluation.update(recommendation_outcome: outcome)
+      assert_includes evaluation.errors[:recommendation_outcome], 'is not included in the list'
+      assert_equal 'catalog_products', evaluation.reload.recommendation_outcome
+    end
+  end
+
+  test 'working notes can be stored without changing appointment report or product fields' do
+    evaluation = create(:evaluation)
+    original_record = evaluation.attributes.except('working_notes', 'updated_at')
+    original_recommendations = evaluation.recommended_product_ids
+
+    evaluation.update!(working_notes: 'Left a voicemail; call again next week')
+
+    assert_equal 'Left a voicemail; call again next week', evaluation.reload.working_notes
+    assert_equal original_record, evaluation.attributes.except('working_notes', 'updated_at')
+    assert_equal original_recommendations, evaluation.recommended_product_ids
+  end
+
+  test 'working notes are editable for unfinished assignments and locked after completion' do
+    %w[requested scheduled confirmed cancelled no_show rescheduled].each do |status|
+      assert Evaluation.new(status: status).working_notes_editable?, status
+    end
+
+    assert_not Evaluation.new(status: :completed).working_notes_editable?
+    assert_not Evaluation.new(status: nil).working_notes_editable?
   end
 end

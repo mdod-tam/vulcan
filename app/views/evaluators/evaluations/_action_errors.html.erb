@@ -1,0 +1,24 @@
+<%# locals: (action:, form:, form_errors:, field_targets: {}) -%>
+<% if evaluation_action_errors(action, form_errors: form_errors).any? %>
+  <div id="<%= action.to_s.dasherize %>-errors" role="alert" tabindex="-1" data-controller="error-summary"
+       class="rounded-md bg-red-50 p-4 focus:outline-none focus:ring-2 focus:ring-red-500">
+    <h3 class="text-sm font-medium text-red-800">
+      <%= t(
+            "evaluators.evaluations.forms.error_headings.#{action}",
+            locale: :en,
+            default: t('evaluators.evaluations.forms.errors_heading', locale: :en)
+          ) %>
+    </h3>
+    <ul class="mt-2 list-disc list-inside text-sm text-red-700">
+      <% evaluation_action_error_items(action, form, field_targets, form_errors: form_errors).each do |error| %>
+        <li>
+          <% if error[:target].present? %>
+            <a href="#<%= error[:target] %>" data-action="error-summary#focus" class="underline"><%= error[:message] %></a>
+          <% else %>
+            <%= error[:message] %>
+          <% end %>
+        </li>
+      <% end %>
+    </ul>
+  </div>
+<% end %>

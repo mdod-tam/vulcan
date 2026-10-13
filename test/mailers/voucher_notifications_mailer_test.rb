@@ -185,4 +185,58 @@ class VoucherNotificationsMailerTest < ActionMailer::TestCase
     assert_equal 'Voucher redeemed', email.subject
     assert_includes email.body.to_s, redeemed_text
   end
+
+  test 'voucher redemption follows the second guardians letter preference despite applicant owned email' do
+    manager, first_guardian = redemption_guardians(manager_preference: 'letter', first_preference: 'email')
+    letter_options = nil
+    Letters::TextTemplateToPdfService.expects(:new).with do |**options|
+      letter_options = options
+      true
+    end.returns(mock(queue_for_printing: true))
+
+    assert_no_emails do
+      VoucherNotificationsMailer.with(transaction: @transaction).voucher_redeemed.deliver_now
+    end
+
+    assert_equal manager, letter_options[:recipient]
+    assert_not_equal first_guardian, letter_options[:recipient]
+    assert_equal 'es', letter_options[:locale]
+    assert_equal @application, letter_options[:variables][:application]
+    assert_equal @user.first_name, letter_options[:variables][:user_first_name]
+  end
+
+  test 'voucher redemption uses the applicant owned email and language when the manager chooses email' do
+    manager, first_guardian = redemption_guardians(manager_preference: 'email', first_preference: 'letter')
+    email = nil
+
+    assert_no_difference 'PrintQueueItem.count' do
+      email = VoucherNotificationsMailer.with(transaction: @transaction).voucher_redeemed.deliver_now
+    end
+
+    assert_equal [@user.email], email.to
+    assert_not_includes email.to, manager.email
+    assert_not_includes email.to, first_guardian.email
+    assert_equal 'Redemption confirmation', email.subject
+    assert_includes email.body.decoded, @transaction.reference_number
+  end
+
+  private
+
+  def redemption_guardians(manager_preference:, first_preference:)
+    first_guardian = create(:constituent, locale: 'es', communication_preference: first_preference)
+    manager = create(:constituent, locale: 'es', communication_preference: manager_preference)
+    @user.update!(locale: 'en', communication_preference: 'email', dependent_email: @user.email)
+    create(:guardian_relationship, guardian_user: first_guardian, dependent_user: @user)
+    create(:guardian_relationship, guardian_user: manager, dependent_user: @user)
+    @application.update!(managing_guardian: manager)
+    EmailTemplate.unstub(:find_by!)
+    { 'en' => 'Redemption confirmation', 'es' => 'Confirmación del canje' }.each do |locale, subject|
+      create_real_text_email_template(
+        name: 'voucher_notifications_voucher_redeemed', locale: locale, subject: subject,
+        body: '{{ user_first_name }}: {{ transaction_reference_number }}',
+        required: %w[user_first_name transaction_reference_number]
+      )
+    end
+    [manager, first_guardian]
+  end
 end

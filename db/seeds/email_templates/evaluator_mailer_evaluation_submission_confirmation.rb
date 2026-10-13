@@ -13,7 +13,7 @@ template.update!(
 
     We are writing to confirm that the Maryland Accessible Telecommunications Program has received your evaluation report.
 
-    Based on the evaluation, the evaluator recommended the following accessible telecommunications product(s) as being useful for your communication needs:
+    The evaluation outcome and any product recommendations are:
     %<recommended_products_text_list>s
 
     This information is being provided for your records. Please note that the recommendation is based on the evaluator’s assessment.

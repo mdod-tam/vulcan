@@ -122,6 +122,59 @@ class TrainingSessionNotificationsMailerTest < ActionMailer::TestCase
     assert_includes email.body.to_s, expected_text
   end
 
+  test 'the stock trainer assignment uses application manager contacts and preferences rather than the first guardian' do
+    EmailTemplate.unstub(:find_by!)
+    EmailTemplate.where(name: 'training_session_notifications_trainer_assigned', format: :text, locale: 'en').destroy_all
+    load Rails.root.join('db/seeds/email_templates/training_session_notifications_trainer_assigned.rb')
+    first_guardian = create(:constituent, locale: 'en', phone_type: 'voice', physical_address_1: 'Other Guardian Lane')
+    manager = create(:constituent, locale: 'es', phone_type: 'text', preferred_means_of_communication: 'asl',
+                                   physical_address_1: 'Managing Guardian Avenue')
+    applicant = create(:constituent, email: "dependent-#{SecureRandom.uuid}@system.matvulcan.local",
+                                     dependent_email: manager.email, phone: '000-123-4567', dependent_phone: manager.phone,
+                                     physical_address_1: 'Applicant Street')
+    create(:guardian_relationship, guardian_user: first_guardian, dependent_user: applicant)
+    create(:guardian_relationship, guardian_user: manager, dependent_user: applicant)
+    application = create(:application, user: applicant, managing_guardian: manager)
+    training_session = create(:training_session, application: application, trainer: @trainer)
+
+    email = TrainingSessionNotificationsMailer.trainer_assigned(training_session).deliver_now
+    body = email.body.decoded
+
+    assert_equal [@trainer.email], email.to
+    assert_includes body, applicant.full_name
+    assert_includes body, "- Email: #{manager.email}"
+    assert_includes body, "- Phone: #{manager.phone}"
+    assert_includes body, "- Address: #{manager.physical_address_1}"
+    assert_includes body, '- Preferred language: Spanish'
+    assert_includes body, '- Preferred contact method: Text/SMS'
+    assert_includes body, '- Communication modality: American Sign Language (ASL)'
+    assert_not_includes body, applicant.email
+    assert_not_includes body, applicant.phone
+    assert_not_includes body, first_guardian.email
+    assert_not_includes body, first_guardian.phone
+    assert_not_includes body, first_guardian.physical_address_1
+    assert_not_includes body, applicant.physical_address_1
+  end
+
+  test 'the stock trainer assignment supplies missing contact labels for an address-only applicant' do
+    EmailTemplate.unstub(:find_by!)
+    EmailTemplate.where(name: 'training_session_notifications_trainer_assigned', format: :text, locale: 'en').destroy_all
+    load Rails.root.join('db/seeds/email_templates/training_session_notifications_trainer_assigned.rb')
+    applicant = Current.instance.set(paper_context: true) do
+      create(:constituent, email: nil, phone: nil, phone_type: 'letter', communication_preference: 'letter')
+    end
+    application = create(:application, user: applicant)
+    training_session = create(:training_session, application: application, trainer: @trainer)
+
+    email = TrainingSessionNotificationsMailer.trainer_assigned(training_session).deliver_now
+    body = email.body.decoded
+
+    assert_equal [@trainer.email], email.to
+    assert_includes body, '- Email: Not specified'
+    assert_includes body, '- Phone: Not specified'
+    assert_includes body, applicant.physical_address_1
+  end
+
   test 'trainer_assigned footer uses program name fallback' do
     EmailTemplate.unstub(:find_by!)
     EmailTemplate.where(name: 'training_session_notifications_trainer_assigned', format: :text, locale: 'en').destroy_all
