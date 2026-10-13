@@ -25,7 +25,7 @@ Rails.application.config.filter_parameters += [
   :autosave_context, :field_value,
 
   # Evaluation free text may contain personal information.
-  :notes, :post_completion_notes, :working_notes, :recommendation_notes,
+  :notes, :post_completion_notes, :working_notes, :recommendation_notes, :reschedule_reason, :attendees,
 
   # SMS contact
   :phone_number,

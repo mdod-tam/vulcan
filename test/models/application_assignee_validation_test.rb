@@ -46,18 +46,23 @@ class ApplicationAssigneeValidationTest < ActiveSupport::TestCase
   end
 
   test 'invalid trainer objects cannot create sessions through the canonical writer' do
+    Policy.find_or_create_by!(key: 'waiting_period_years').update!(value: 3)
+    Policy.find_or_create_by!(key: 'max_training_sessions').update!(value: 3)
     wrong_role = create(:evaluator)
     create(:role_capability, user: wrong_role, capability: 'can_train')
     candidates = [nil, build(:trainer), create(:trainer, status: :suspended), wrong_role]
+    application_attributes = @application.reload.attributes
 
     candidates.each do |candidate|
-      assert_no_difference ['TrainingSession.count', 'Notification.count', "Event.where(action: 'trainer_assigned').count"] do
-        assert_no_enqueued_emails do
-          assert_not @application.assign_trainer!(candidate)
+      assert_no_difference ['TrainingSession.count', 'Notification.count', 'Event.count'] do
+        assert_no_enqueued_jobs do
+          assert_equal false, @application.assign_trainer!(candidate)
         end
       end
 
-      assert_includes @application.errors[:base], 'Select an active trainer.'
+      assert_equal ['Select an active trainer.'], @application.errors[:base]
     end
+
+    assert_equal application_attributes, @application.reload.attributes
   end
 end

@@ -283,14 +283,77 @@ class ApplicationTest < ActiveSupport::TestCase
     Policy.find_or_create_by(key: 'max_training_sessions').update!(value: 3)
     application = create(:application, status: :approved, application_date: 2.years.ago.to_date)
     trainer = create(:trainer)
-    create(:training_session, application: application, trainer: trainer, status: :requested)
+    training_session = create(:training_session, application: application, trainer: trainer, status: :requested)
+    application_attributes = application.reload.attributes
+    session_attributes = training_session.reload.attributes
 
-    assert_no_difference -> { TrainingSession.count } do
-      assert_not application.assign_trainer!(trainer)
+    assert_no_difference ['TrainingSession.count', 'Notification.count', 'Event.count'] do
+      assert_no_enqueued_jobs do
+        assert_equal false, application.assign_trainer!(nil)
+        assert_equal ['Select an active trainer.'], application.errors[:base]
+
+        2.times do
+          assert_equal false, application.assign_trainer!(trainer)
+          assert_equal [I18n.t('activerecord.errors.models.application.attributes.base.training_session_active')], application.errors[:base]
+        end
+      end
     end
 
-    assert_includes application.errors[:base],
-                    I18n.t('activerecord.errors.models.application.attributes.base.training_session_active')
+    assert_equal application_attributes, application.reload.attributes
+    assert_equal session_attributes, training_session.reload.attributes
+  end
+
+  test 'assign_trainer! can recover from an eligibility rejection and create the requested session audit and notification once' do
+    Policy.find_or_create_by!(key: 'waiting_period_years').update!(value: 3)
+    Policy.find_or_create_by!(key: 'max_training_sessions').update!(value: 3)
+    application = create(:application, status: :approved, application_date: 2.years.ago.to_date)
+    trainer = create(:trainer)
+    application_attributes = application.reload.attributes
+
+    assert_equal false, application.assign_trainer!(nil)
+    assert_equal ['Select an active trainer.'], application.errors[:base]
+
+    Current.user = @admin
+    assert_difference ['TrainingSession.count', 'Notification.count', "Event.where(action: 'trainer_assigned').count"], 1 do
+      assert_equal true, application.assign_trainer!(trainer)
+    end
+
+    assert_empty application.errors
+    assert_equal application_attributes, application.reload.attributes
+    training_session = application.training_sessions.sole
+    assert_equal trainer.id, training_session.trainer_id
+    assert training_session.status_requested?
+    assert_nil training_session.scheduled_for
+    event = Event.find_by!(action: 'trainer_assigned', auditable: application)
+    assert_equal @admin.id, event.user_id
+    assert_equal trainer.id, event.metadata['trainer_id']
+    notification = Notification.find_by!(action: 'trainer_assigned', notifiable: training_session)
+    assert_equal trainer.id, notification.recipient_id
+    assert_equal @admin.id, notification.actor_id
+    assert_equal application.id, notification.metadata['application_id']
+  end
+
+  test 'assign_trainer! audit failure rolls back the requested session without a notification or job' do
+    Policy.find_or_create_by!(key: 'waiting_period_years').update!(value: 3)
+    Policy.find_or_create_by!(key: 'max_training_sessions').update!(value: 3)
+    application = create(:application, status: :approved, application_date: 2.years.ago.to_date)
+    trainer = create(:trainer)
+    application_attributes = application.reload.attributes
+    invalid_event = Event.new
+    invalid_event.errors.add(:base, 'Audit record unavailable')
+    audit_failure = ActiveRecord::RecordInvalid.new(invalid_event)
+    AuditEventService.stubs(:log).raises(audit_failure)
+
+    Current.user = @admin
+    assert_no_difference ['TrainingSession.count', 'Notification.count', 'Event.count'] do
+      assert_no_enqueued_jobs do
+        assert_equal false, application.assign_trainer!(trainer)
+      end
+    end
+
+    assert_equal [audit_failure.message], application.errors[:base]
+    assert_equal application_attributes, application.reload.attributes
+    assert_empty application.training_sessions
   end
 
   test 'unassign_trainer! cancels open training sessions with admin initiator' do

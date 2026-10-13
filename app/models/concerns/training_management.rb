@@ -55,16 +55,17 @@ module TrainingManagement
     end
 
     with_lock do
+      errors.clear
       unless trainer&.persisted? && trainer.assignable_trainer? && trainer.public_login_active?
         errors.add(:base, 'Select an active trainer.')
-        return false
+        raise ActiveRecord::RecordInvalid, self
       end
 
       # Admin assignment creates the initial requested session. Additional dated
       # sessions are scheduled by the assigned trainer from an existing session.
       if active_training_session_present?
         errors.add(:base, :training_session_active)
-        return false
+        raise ActiveRecord::RecordInvalid, self
       end
 
       training_session = training_sessions.create!(
@@ -101,7 +102,7 @@ module TrainingManagement
     true
   rescue ::ActiveRecord::RecordInvalid => e
     Rails.logger.error "Failed to assign trainer: #{e.message}"
-    errors.add(:base, e.message)
+    errors.add(:base, e.message) unless e.record.equal?(self)
     false
   end
 

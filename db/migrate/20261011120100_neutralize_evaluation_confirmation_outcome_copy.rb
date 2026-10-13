@@ -1,10 +1,6 @@
 # frozen_string_literal: true
 
 class NeutralizeEvaluationConfirmationOutcomeCopy < ActiveRecord::Migration[8.0]
-  class Template < ActiveRecord::Base
-    self.table_name = 'email_templates'
-  end
-
   TEMPLATE_NAME = 'evaluator_mailer_evaluation_submission_confirmation'
   TEXT_FORMAT = 1
 
@@ -70,10 +66,18 @@ class NeutralizeEvaluationConfirmationOutcomeCopy < ActiveRecord::Migration[8.0]
 
   def replace_stock_bodies(expected_bodies, replacement_bodies)
     expected_bodies.each do |locale, body|
-      Template.where(name: TEMPLATE_NAME, format: TEXT_FORMAT, locale: locale, body: body).update_all(
-        body: replacement_bodies.fetch(locale), previous_body: body, previous_subject: Arel.sql('subject'),
-        version: Arel.sql('COALESCE(version, 0) + 1'), updated_at: Time.current
-      )
+      connection.execute(<<~SQL) # rubocop:disable Rails/SquishedSQLHeredocs -- Quoted template bodies require exact whitespace.
+        UPDATE #{connection.quote_table_name('email_templates')}
+        SET body = #{connection.quote(replacement_bodies.fetch(locale))},
+            previous_body = #{connection.quote(body)},
+            previous_subject = subject,
+            version = COALESCE(version, 0) + 1,
+            updated_at = #{connection.quote(Time.current)}
+        WHERE name = #{connection.quote(TEMPLATE_NAME)}
+          AND format = #{connection.quote(TEXT_FORMAT)}
+          AND locale = #{connection.quote(locale)}
+          AND body = #{connection.quote(body)}
+      SQL
     end
   end
 end

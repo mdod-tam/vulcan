@@ -28,25 +28,56 @@ class NeutralizeEvaluationConfirmationOutcomeCopyTest < ActiveSupport::TestCase
       assert_equal 5, template.version
       assert_includes template.required_variables, 'recommended_products_text_list'
       assert_equal NeutralizeEvaluationConfirmationOutcomeCopy::OLD_BODIES.fetch(template.locale), template.previous_body
+      assert_equal "Staff subject #{template.locale}", template.previous_subject
     end
   end
 
   test 'admin edited bodies and other template formats are not changed' do
     edited = confirmation_template('en')
-    edited.update_columns(body: "Staff introduction\n%<recommended_products_text_list>s", version: 8)
-    other_format = NeutralizeEvaluationConfirmationOutcomeCopy::Template.find_or_initialize_by(
+    edited.update_columns(body: "Staff's introduction\n%<recommended_products_text_list>s", version: 8)
+    empty = confirmation_template('es')
+    empty.update_columns(body: '', version: 6)
+    other_format = EmailTemplate.find_or_initialize_by(
       name: NeutralizeEvaluationConfirmationOutcomeCopy::TEMPLATE_NAME, format: 0, locale: 'en'
     )
     other_format.update!(
       body: NeutralizeEvaluationConfirmationOutcomeCopy::OLD_BODIES.fetch('en'), subject: 'HTML confirmation',
-      description: 'Unrelated format', version: 3, created_at: Time.current, updated_at: Time.current
+      description: 'Unrelated format', variables: edited.variables, version: 3, created_at: Time.current, updated_at: Time.current
     )
-    original_attributes = [edited, other_format].map(&:attributes)
+    templates = [edited.reload, empty, other_format]
+    original_attributes = templates.map(&:attributes)
 
     @migration.up
 
-    current_attributes = [edited, other_format].map { |template| template.reload.attributes }
+    current_attributes = templates.map { |template| template.reload.attributes }
     assert_equal original_attributes, current_attributes
+  end
+
+  test 'replayed up and down do not advance revision metadata after the guarded replacement' do
+    templates = %w[en es].map do |locale|
+      template = confirmation_template(locale)
+      template.update_columns(body: NeutralizeEvaluationConfirmationOutcomeCopy::OLD_BODIES.fetch(locale),
+                              subject: "Staff's #{locale} confirmation", version: 4)
+      template
+    end
+
+    @migration.up
+    migrated_attributes = templates.map { |template| template.reload.attributes }
+    @migration.up
+    assert_equal(migrated_attributes, templates.map { |template| template.reload.attributes })
+
+    @migration.down
+    templates.each do |template|
+      template.reload
+      assert_equal NeutralizeEvaluationConfirmationOutcomeCopy::OLD_BODIES.fetch(template.locale), template.body
+      assert_equal NeutralizeEvaluationConfirmationOutcomeCopy::NEW_BODIES.fetch(template.locale), template.previous_body
+      assert_equal "Staff's #{template.locale} confirmation", template.previous_subject
+      assert_equal "Staff's #{template.locale} confirmation", template.subject
+      assert_equal 6, template.version
+    end
+    restored_attributes = templates.map(&:attributes)
+    @migration.down
+    assert_equal(restored_attributes, templates.map { |template| template.reload.attributes })
   end
 
   test 'down restores untouched replacement bodies and preserves edits made after migration' do
