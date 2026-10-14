@@ -424,6 +424,77 @@ class EvaluationsControllerTest < ActionDispatch::IntegrationTest
     assert_equal 'Constituent no longer wants evaluator support', @evaluation.notes
   end
 
+  test 'requested report exposes outside consultation only to its assigned administrator and preserves retry inputs' do
+    @requested_evaluation.update!(evaluator: @admin)
+    sign_in_for_controller_test(@admin)
+    get evaluators_evaluation_path(@requested_evaluation)
+
+    assert_response :success
+    assert_select '#complete-evaluation-form', count: 1
+    assert_select '#complete_evaluation_assessment_source[required] option[value="outside_specialist"]'
+    assert_select '#complete_evaluation_assessment_source option[value="direct_assessment"]', count: 0
+    assert_select '#complete_evaluation_location[required]', count: 0
+    submitted = {
+      assessment_source: 'outside_specialist', appointment_completed_at: 1.day.from_now.strftime('%Y-%m-%dT%H:%M'),
+      notes: 'Written recommendations from outside specialist consultation.', location: '', attendees_field: '',
+      recommendation_outcome: 'catalog_products', recommended_product_ids: [@product.id.to_s], products_tried_field: []
+    }
+
+    assert_no_difference('Event.where(action: "evaluation_completed").count') do
+      post submit_report_evaluators_evaluation_path(@requested_evaluation), params: { evaluation: submitted }
+    end
+    assert_response :unprocessable_content
+    assert_select '#complete_evaluation_assessment_source option[value="outside_specialist"][selected]'
+    assert_select '#complete_evaluation_appointment_completed_at[value=?]', submitted[:appointment_completed_at]
+    assert_select '#complete_evaluation_notes', text: submitted[:notes]
+    assert_select '#complete-evaluation-form input[name="evaluation[recommended_product_ids][]"][value=?][checked]', @product.id.to_s
+    assert_select '#complete-evaluation-form input[name="evaluation[products_tried_field][]"][type="checkbox"][checked]', count: 0
+    assert_equal 'requested', @requested_evaluation.reload.status
+
+    submitted[:appointment_completed_at] = 2.days.ago.strftime('%Y-%m-%dT%H:%M')
+    post submit_report_evaluators_evaluation_path(@requested_evaluation), params: { evaluation: submitted }
+
+    assert_redirected_to evaluators_evaluation_path(@requested_evaluation)
+    assert_equal 'completed', @requested_evaluation.reload.status
+    assert_equal 'outside_specialist', @requested_evaluation.assessment_source
+    assert_nil @requested_evaluation.evaluation_date
+    assert_empty @requested_evaluation.products_tried
+  end
+
+  test 'administrator oversight cannot expose or submit another evaluators outside consultation action' do
+    sign_in_for_controller_test(@admin)
+    get evaluators_evaluation_path(@requested_evaluation)
+
+    assert_select '#complete-evaluation-form', count: 0
+    assert_no_difference('Event.where(action: "evaluation_completed").count') do
+      post submit_report_evaluators_evaluation_path(@requested_evaluation), params: {
+        evaluation: { assessment_source: 'outside_specialist', recommendation_outcome: 'catalog_products' }
+      }
+    end
+    assert_redirected_to evaluators_evaluation_path(@requested_evaluation)
+    assert_equal 'requested', @requested_evaluation.reload.status
+  end
+
+  test 'historical outside consultation remains readable and accepts supplemental notes after archival' do
+    evaluation = create(
+      :evaluation, :completed,
+      evaluator: @admin, assessment_source: 'outside_specialist',
+      evaluation_date: nil, location: nil, products_tried: []
+    )
+    evaluation.application.transition_status!(:archived, actor: @admin)
+    sign_in_for_controller_test(@admin)
+
+    get evaluators_evaluation_path(evaluation)
+    assert_response :success
+    assert_includes response.body, 'Outside-specialist consultation'
+    original = evaluation.attributes.except('post_completion_notes', 'updated_at')
+    patch evaluators_evaluation_path(evaluation), params: { evaluation: { post_completion_notes: 'Additional consultation context' } }
+
+    assert_redirected_to evaluators_evaluation_path(evaluation)
+    assert_equal 'Additional consultation context', evaluation.reload.post_completion_notes
+    assert_equal original, evaluation.attributes.except('post_completion_notes', 'updated_at')
+  end
+
   test 'assigned evaluator can complete evaluation before scheduled time' do
     @evaluation.update!(evaluation_date: 2.days.from_now)
 

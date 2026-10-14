@@ -8,9 +8,13 @@ class Evaluation < ApplicationRecord
   belongs_to :constituent, class_name: 'Users::Constituent'
   belongs_to :application
   has_many :notifications, as: :notifiable, dependent: :destroy
+  has_many :equipment_needs, foreign_key: :source_evaluation_id, inverse_of: :source_evaluation, dependent: :restrict_with_error
+  has_many :equipment_items, foreign_key: :source_evaluation_id, inverse_of: :source_evaluation, dependent: :restrict_with_error
   has_and_belongs_to_many :recommended_products, class_name: 'Product', join_table: 'evaluations_products'
 
   enum :evaluation_type, { initial: 0, renewal: 1, special: 2 }
+  enum :assessment_source, { direct_assessment: 'direct_assessment', outside_specialist: 'outside_specialist' },
+       prefix: true, validate: true
   enum :recommendation_outcome,
        { catalog_products: 'catalog_products', outside_catalog: 'outside_catalog', no_suitable_product: 'no_suitable_product' },
        prefix: true, validate: true
@@ -23,16 +27,15 @@ class Evaluation < ApplicationRecord
   validate :scheduled_time_must_be_future, on: :create
 
   # Conditional validations for completed status
-  validates :evaluation_date,
-            :location,
-            :notes,
-            presence: true,
-            if: :status_completed?
+  validates :notes, presence: true, if: :status_completed?
+  validates :evaluation_date, :location, presence: true, if: -> { status_completed? && assessment_source_direct_assessment? }
   validates :recommended_products, presence: true, if: -> { status_completed? && recommendation_outcome_catalog_products? }
   validates :recommendation_notes, presence: true,
                                    if: -> { status_completed? && (recommendation_outcome_outside_catalog? || recommendation_outcome_no_suitable_product?) }
 
-  validate :validate_products_tried_presence, if: -> { status_completed? && recommendation_outcome_catalog_products? }
+  validate :validate_products_tried_presence,
+           if: -> { status_completed? && assessment_source_direct_assessment? && recommendation_outcome_catalog_products? }
+  validate :outside_specialist_requires_admin, if: :assessment_source_outside_specialist?
   validate :recommendations_match_outcome, if: :status_completed?
   validate :validate_attendees_structure, if: :status_completed?
   validate :validate_products_tried_structure, if: :status_completed?
@@ -100,7 +103,23 @@ class Evaluation < ApplicationRecord
     %w[requested scheduled confirmed cancelled no_show rescheduled].include?(status)
   end
 
+  def outside_specialist_report_allowed?(actor)
+    actor&.admin? && evaluator_id == actor.id
+  end
+
+  def report_completion_allowed?(actor:, source:)
+    can_complete? || (status_requested? && source == 'outside_specialist' && outside_specialist_report_allowed?(actor))
+  end
+
+  def require_approved_application!
+    raise ArgumentError, 'Only approved applications can start or complete an evaluation.' unless application.status_approved?
+  end
+
   private
+
+  def outside_specialist_requires_admin
+    errors.add(:assessment_source, 'is only available to an assigned administrator') unless evaluator&.admin?
+  end
 
   def recommendations_match_outcome
     return if recommendation_outcome_catalog_products? || recommended_products.empty?

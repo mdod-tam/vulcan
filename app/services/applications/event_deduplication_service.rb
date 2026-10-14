@@ -81,6 +81,7 @@ module Applications
 
     def fingerprint_for_event(event)
       metadata = event.metadata.is_a?(Hash) ? event.metadata.stringify_keys : {}
+      return metadata['operation_id'].presence || event.id.to_s if event.action.start_with?('equipment_')
 
       case event.action
       when 'duplicate_review_case_opened', 'duplicate_review_case_resolved', 'duplicate_review_case_resumed'

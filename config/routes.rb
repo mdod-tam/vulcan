@@ -164,7 +164,7 @@ Rails.application.routes.draw do
     end
 
     resources :applications do
-      resource :equipment_fulfillment, only: [:update]
+      resource :equipment_needs, only: %i[edit update]
 
       collection do
         post :batch_approve
@@ -218,6 +218,12 @@ Rails.application.routes.draw do
                  only: [:create],
                  controller: 'application_medical_provider_secure_request_form_revocations'
       end
+    end
+
+    resources :equipment, only: [:index]
+    resources :equipment_items, only: %i[edit update]
+    resources :purchase_orders, only: %i[index show new create] do
+      resource :correction, only: %i[edit update], controller: 'purchase_order_corrections'
     end
 
     get 'application_analytics/pain_points', to: 'application_analytics#pain_points'

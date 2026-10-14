@@ -62,6 +62,9 @@ module Admin
 
     def show
       load_application_show_associations(@application)
+      ActiveRecord::Associations::Preloader.new(records: [@application],
+                                                associations: [{ equipment_needs: %i[product source_evaluation] },
+                                                               { equipment_items: [:product, { purchase_order: :vendor }] }]).call
       load_attachment_data
 
       certification_service = Applications::CertificationEventsService.new(@application)

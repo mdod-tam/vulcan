@@ -173,9 +173,9 @@
     <!-- Evaluation and Training Status Section -->
     <% if @application.status_approved? %>
       <%= render "evaluation_training_status" %>
-      <% if @application.equipment_fulfillment? %>
-        <%= render "equipment_fulfillment", application: @application %>
-      <% end %>
+    <% end %>
+    <% if @application.equipment_fulfillment? %>
+      <%= render 'equipment_purchasing', application: @application %>
     <% end %>
 
     <!-- Admin Notes Section -->

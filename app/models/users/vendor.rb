@@ -7,6 +7,7 @@ module Users
     has_many :processed_vouchers, -> { where.not(status: :pending) }, class_name: 'Voucher', foreign_key: :vendor_id
     has_many :voucher_transactions
     has_many :invoices
+    has_many :purchase_orders, dependent: :restrict_with_error
     has_many :w9_reviews
     has_many :vendor_secure_request_forms, foreign_key: :vendor_id, dependent: :destroy
 

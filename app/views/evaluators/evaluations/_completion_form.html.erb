@@ -1,6 +1,7 @@
 <%# locals: (evaluation:, available_products:) -%>
 <% form_values = @evaluation_form_values.fetch(:submit_report, {}) # rubocop:disable Lint/UselessAssignment -- Used by later ERB fragments. %>
 <% recommendation_outcome = form_values[:recommendation_outcome] # rubocop:disable Lint/UselessAssignment -- ERB local. %>
+<% outside_specialist = evaluation.status_requested? || form_values[:assessment_source] == 'outside_specialist' # rubocop:disable Lint/UselessAssignment -- ERB local. %>
 <div class="bg-white shadow rounded-lg">
   <div class="px-4 py-5 sm:p-6">
     <h3 class="text-lg leading-6 font-medium text-gray-900 mb-4">
@@ -22,9 +23,25 @@
         ) do |f| %>
       <%= render 'action_errors', action: :submit_report, form: f, form_errors: @evaluation_form_errors,
                                   field_targets: evaluation_report_error_targets(recommendation_outcome) %>
+      <% if evaluation.outside_specialist_report_allowed?(current_user) %>
+        <div>
+          <%= f.label :assessment_source, 'Assessment source', class: 'block text-sm font-medium text-gray-700' %>
+          <%= f.select :assessment_source, evaluation_assessment_source_options(evaluation),
+                       { include_blank: 'Select assessment source',
+                         selected: form_values.fetch(:assessment_source, evaluation.status_requested? ? nil : 'direct_assessment') },
+                       required: true,
+                       class: 'mt-1 block w-full border border-gray-300 rounded-md shadow-sm py-2 px-3',
+                       aria: evaluation_field_aria(:submit_report, :assessment_source, describedby: 'assessment-source-help', form_errors: @evaluation_form_errors),
+                       data: { recommendation_outcome_target: 'source', action: 'recommendation-outcome#update' } %>
+          <p id="assessment-source-help" class="mt-1 text-sm text-gray-500">
+            Outside-specialist reports require the actual consultation date and written source/context in the report notes. Record trials only when known. Use scheduling for a direct assessment.
+          </p>
+          <%= render 'field_errors', action: :submit_report, attribute: :assessment_source, form_errors: @evaluation_form_errors %>
+        </div>
+      <% end %>
       <div>
         <%= f.label :appointment_completed_at, class: 'block text-sm font-medium text-gray-700' do %>
-          <%= t('evaluators.evaluations.forms.appointment_date_time') %> <span class="text-red-600">*</span><span class="sr-only"> (required)</span>
+          <%= evaluation.outside_specialist_report_allowed?(current_user) ? 'Assessment/Consultation Date/Time' : t('evaluators.evaluations.forms.appointment_date_time') %> <span class="text-red-600">*</span><span class="sr-only"> (required)</span>
         <% end %>
         <%= f.datetime_local_field(
               :appointment_completed_at,
@@ -42,15 +59,16 @@
       </div>
       <div>
         <%= f.label :location, class: "block text-sm font-medium text-gray-700" do %>
-          Location <span class="text-red-600">*</span><span class="sr-only"> (required)</span>
+          Location <span data-recommendation-outcome-target="locationRequired" class="<%= 'hidden' if outside_specialist %>"><span class="text-red-600">*</span><span class="sr-only"> (required)</span></span>
         <% end %>
         <%= f.text_field(
               :location,
               value: form_values.fetch(:location, evaluation.location),
               class: 'mt-1 block w-full border border-gray-300 rounded-md shadow-sm py-2 px-3 ' \
                      'focus:outline-none focus:ring-indigo-500 focus:border-indigo-500 sm:text-sm',
-              required: true,
-              aria: evaluation_field_aria(:submit_report, :location, form_errors: @evaluation_form_errors)
+              required: !outside_specialist,
+              aria: evaluation_field_aria(:submit_report, :location, form_errors: @evaluation_form_errors).merge(required: !outside_specialist),
+              data: { recommendation_outcome_target: 'location' }
             ) %>
         <%= render 'field_errors', action: :submit_report, attribute: :location, form_errors: @evaluation_form_errors %>
       </div>
@@ -79,7 +97,7 @@
                     )) %>>
         <legend class="block text-sm font-medium text-gray-700">
           Products Tried
-          <span data-recommendation-outcome-target="triedRequired" class="<%= 'hidden' unless recommendation_outcome == 'catalog_products' %>">
+          <span data-recommendation-outcome-target="triedRequired" class="<%= 'hidden' unless recommendation_outcome == 'catalog_products' && !outside_specialist %>">
             <span class="text-red-600">*</span><span class="sr-only"> (required)</span>
           </span>
         </legend>

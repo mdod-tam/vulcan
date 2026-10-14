@@ -8,13 +8,15 @@
       <h2 id="equipment-by-type-heading" class="text-xl font-bold">Equipment by Type</h2>
       <p class="text-sm text-gray-500 mt-1">
         <% if vouchers_enabled %>
-          Equipment-fulfillment counts use applications with purchase orders sent.
+          Equipment counts use current ordered device units and actual catalog products, by Date PO sent.
           Voucher counts use completed voucher redemption products.
         <% else %>
-          Equipment-fulfillment counts use applications with purchase orders sent.
+          Equipment counts use current ordered device units and actual catalog products, by Date PO sent.
         <% end %>
       </p>
     </div>
+    <p class="text-sm text-gray-500">Unmapped earlier fulfillment facts are excluded; review them on
+      <%= link_to 'Equipment', admin_equipment_index_path, class: 'text-indigo-700 underline' %>.</p>
     <%= form_with url: admin_reports_path, method: :get, class: "flex items-center gap-2" do |f| %>
       <%= f.label :equipment_period, "Period:", class: "text-sm font-medium text-gray-700" %>
       <%= f.select :equipment_period,

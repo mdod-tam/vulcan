@@ -31,6 +31,12 @@
     <div class="border-t border-gray-200">
       <dl>
         <% if @evaluation.status_completed? %>
+          <div class="bg-white px-4 py-5 sm:grid sm:grid-cols-3 sm:gap-4 sm:px-6">
+            <dt class="text-sm font-medium text-gray-500">Assessment source</dt>
+            <dd class="mt-1 text-sm text-gray-900 sm:mt-0 sm:col-span-2">
+              <%= @evaluation.assessment_source_outside_specialist? ? 'Outside-specialist consultation' : 'Direct assessment' %>
+            </dd>
+          </div>
           <% [
                [t('evaluators.evaluations.dates.scheduled_for'), @evaluation.evaluation_date],
                [t('evaluators.evaluations.dates.appointment_completed_at'), @evaluation.appointment_completed_at],
@@ -203,6 +209,9 @@
       <div class="space-y-6 mb-6">
         <%= render "schedule_form", evaluation: @evaluation %>
         <%= render "cancel_form", evaluation: @evaluation %>
+        <% if visible_form_actions.include?(:submit_report) %>
+          <%= render 'completion_form', evaluation: @evaluation, available_products: @available_products %>
+        <% end %>
       </div>
     <% elsif visible_form_actions.include?(:no_show) %>
       <div class="bg-blue-50 border border-blue-200 rounded-lg p-4 text-sm text-blue-900 mb-6">

@@ -108,6 +108,8 @@ class Application < ApplicationRecord
   has_many :status_changes, class_name: 'ApplicationStatusChange', dependent: :destroy
   has_many :events, as: :auditable, dependent: :destroy
   has_many :vouchers, dependent: :restrict_with_error
+  has_many :equipment_needs, dependent: :restrict_with_error
+  has_many :equipment_items, dependent: :restrict_with_error
   has_many :application_notes, dependent: :destroy
   has_many :medical_provider_secure_request_forms, dependent: :destroy
   has_and_belongs_to_many :products
@@ -515,40 +517,15 @@ class Application < ApplicationRecord
   def admin_fulfillment_responsibility_state
     return :voucher_no_equipment if voucher_fulfillment?
 
-    return :pending_evaluation unless evaluations.completed_sessions.any?
+    return :legacy_review if equipment_legacy_unmapped?
+    return :needs_action if equipment_needs.any? { |need| need.remaining_quantity.positive? } || equipment_items.any? { |item| item.queue_status == 'needs_ordering' }
 
-    if equipment_po_sent_at.present?
-      :po_sent
-    elsif equipment_bids_sent_at.present?
-      :bids_sent
-    else
-      :needs_action
-    end
-  end
+    active_items = equipment_items.reject(&:withdrawn_at?)
+    return :po_sent if active_items.any? { |item| item.shipped_at.nil? }
+    return :shipped if active_items.any?
+    return :no_equipment if equipment_needs_initialized_at
 
-  # Equipment fulfillment, recorded by staff. Each writer skips a value that has not changed, so
-  # saving the fulfillment form audits only what was edited. Dates go through DateInputNormalizer.
-  def mark_equipment_bids_sent!(date:, actor:)
-    record_equipment_fulfillment_date!(:equipment_bids_sent_at, 'equipment_bids_sent', date, actor)
-  end
-
-  def mark_equipment_po_sent!(date:, actor:)
-    record_equipment_fulfillment_date!(:equipment_po_sent_at, 'equipment_po_sent', date, actor)
-  end
-
-  # The carrier's tracking number for the equipment order, as staff entered it. Shown to staff only.
-  def record_equipment_tracking_number!(number:, actor:)
-    number = number.to_s.strip
-    return false if number.blank? || number == equipment_tracking_number
-
-    previous = equipment_tracking_number
-    update!(equipment_tracking_number: number)
-    AuditEventService.log(
-      action: 'equipment_tracking_number_recorded',
-      actor: actor,
-      auditable: self,
-      metadata: { changes: { 'equipment_tracking_number' => { 'old' => previous, 'new' => number } } }
-    )
+    :pending_evaluation
   end
 
   # Workflow predicates
@@ -567,6 +544,14 @@ class Application < ApplicationRecord
 
   def equipment_fulfillment?
     fulfillment_type_equipment?
+  end
+
+  def equipment_procurement_eligible?
+    status_approved? && equipment_fulfillment?
+  end
+
+  def equipment_legacy_unmapped?
+    (equipment_po_sent_at.present? || equipment_tracking_number.present?) && equipment_items.empty?
   end
 
   def required_proofs_approved?
@@ -653,15 +638,6 @@ class Application < ApplicationRecord
   end
 
   private
-
-  def record_equipment_fulfillment_date!(attribute, action, value, actor)
-    date = DateInputNormalizer.normalize(value)
-    raise ArgumentError, "#{attribute} is not a readable date" unless date
-    return false if self[attribute]&.to_date == date
-
-    update!(attribute => date)
-    AuditEventService.log(action: action, actor: actor, auditable: self, metadata: { date: date.iso8601 })
-  end
 
   def reconcile_pending_letters_after_owner_change
     return unless saved_changes.keys.intersect?(PrintQueueItem::APPLICATION_IDENTITY_FIELDS)

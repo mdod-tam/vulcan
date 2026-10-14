@@ -95,32 +95,12 @@ module ApplicationHelper
   end
 
   def admin_fulfillment_badge(application)
-    state = application.admin_fulfillment_responsibility_state
+    labels = { voucher_no_equipment: 'Voucher - No Equipment Order', legacy_review: 'Earlier fulfillment needs review',
+               needs_action: 'Needs Ordering', po_sent: 'Ordered', shipped: 'Shipped', no_equipment: 'No equipment needed' }
+    label = labels[application.admin_fulfillment_responsibility_state]
+    return unless label
 
-    case state
-    when :voucher_no_equipment
-      content_tag(:span, class: 'px-2 inline-flex text-xs leading-5 font-semibold rounded-full bg-gray-100 text-gray-800') do
-        concat content_tag(:span, 'Fulfillment Status: ', class: 'sr-only')
-        concat 'Voucher - No Equipment Order'
-      end
-    when :pending_evaluation
-      nil
-    when :po_sent
-      content_tag(:span, class: 'px-2 inline-flex text-xs leading-5 font-semibold rounded-full bg-green-100 text-green-800') do
-        concat content_tag(:span, 'Fulfillment Status: ', class: 'sr-only')
-        concat "PO Sent on #{application.equipment_po_sent_at.strftime('%m/%d/%Y')}"
-      end
-    when :bids_sent
-      content_tag(:span, class: 'px-2 inline-flex text-xs leading-5 font-semibold rounded-full bg-yellow-100 text-yellow-900') do
-        concat content_tag(:span, 'Fulfillment Status: ', class: 'sr-only')
-        concat "Sent for bid on #{application.equipment_bids_sent_at.strftime('%m/%d/%Y')}"
-      end
-    when :needs_action
-      content_tag(:span, class: 'px-2 inline-flex text-xs leading-5 font-semibold rounded-full bg-red-100 text-red-800') do
-        concat content_tag(:span, 'Fulfillment Status: ', class: 'sr-only')
-        concat 'Needs Action'
-      end
-    end
+    content_tag(:span, label, class: 'rounded-full bg-gray-100 px-2 py-1 text-xs font-semibold text-gray-800')
   end
 
   def proof_review_button_text(application, proof_type)

@@ -1,0 +1,43 @@
+<div class="max-w-4xl mx-auto px-4 py-6">
+  <h1 class="text-2xl font-bold mb-4">Record Winning Bid & PO</h1>
+  <p class="mb-4">Staff issue the PO externally; this records the purchasing decision.</p>
+  <% if @error %><div role="alert" class="rounded border border-red-300 bg-red-50 p-4 mb-4"><%= @error %></div><% end %>
+  <%= form_with model: @purchase_order, url: admin_purchase_orders_path, class: 'space-y-4',
+                data: { controller: 'equipment-selection', equipment_selection_existing_units_value: @item_rows.size } do |form| %>
+    <p role="status" aria-live="polite"><span data-equipment-selection-target="unitCount"><%= @unit_count %></span> physical units across <%= @application_count %> applications.</p>
+    <% @return_context.each do |key, value| %><%= hidden_field_tag "return_context[#{key}]", value %><% end %>
+    <h2 class="text-lg font-semibold">New devices to materialize</h2>
+    <% @need_rows.each do |row| %>
+      <% need = @needs[row[:id].to_i] # rubocop:disable Lint/UselessAssignment -- Used by later ERB fragments. %>
+      <div class="rounded border border-gray-200 p-3">
+        <%= hidden_field_tag 'purchase_order[needs][][id]', row[:id], id: nil %><%= hidden_field_tag 'purchase_order[needs][][lock_version]', row[:lock_version], id: nil %>
+        <% if need %><p><%= equipment_catalog_label(need.product) %> · Application #<%= need.application_id %> · <%= need.remaining_quantity %> currently remaining</p><% else %><p>Selected need is unavailable. Return to Equipment to refresh.</p><% end %>
+        <%= label_tag "quantity_#{row[:id]}", 'New quantity to order', class: 'block font-medium' %>
+        <%= number_field_tag 'purchase_order[needs][][quantity]', row[:quantity],
+                             id: "quantity_#{row[:id]}", min: 1, max: need&.remaining_quantity,
+                             required: true, autocomplete: 'off', class: 'rounded border-gray-300',
+                             data: { equipment_selection_target: 'quantity', action: 'input->equipment-selection#updateQuantities' } %>
+      </div>
+    <% end %>
+    <h2 class="text-lg font-semibold">Previously ordered devices to relink</h2>
+    <% if @item_rows.empty? %><p class="text-sm text-gray-600">No detached devices selected.</p><% end %>
+    <% @item_rows.each do |row| %>
+      <% item = @items[row[:id].to_i] # rubocop:disable Lint/UselessAssignment -- Used by later ERB fragments. %>
+      <%= hidden_field_tag 'purchase_order[items][][id]', row[:id], id: nil %><%= hidden_field_tag 'purchase_order[items][][lock_version]', row[:lock_version], id: nil %>
+      <p>Device #<%= row[:id] %><% if item %> · <%= equipment_catalog_label(item.product) %> · Application #<%= item.application_id %><% end %></p>
+    <% end %>
+    <fieldset class="rounded border border-gray-200 p-4 space-y-4">
+      <legend class="font-semibold">Purchase order</legend>
+      <div>
+        <%= form.label :existing, 'Link to an existing PO (leave blank to create one)', class: 'block font-medium' %>
+        <%= form.select :existing, options_for_select(@existing_options, @existing),
+                        { include_blank: 'Create a new PO' }, class: 'rounded border-gray-300 w-full' %>
+      </div>
+      <p class="text-sm text-gray-600">New PO fields apply when no existing PO is selected. Duplicate vendor/PO numbers must be linked explicitly to the existing order.</p>
+      <%= render 'admin/purchase_orders/fields', form: form, purchase_order: @purchase_order, vendors: @vendors %>
+    </fieldset>
+    <label class="flex items-start gap-2"><%= form.check_box :legacy_mapping, checked: ActiveModel::Type::Boolean.new.cast(@legacy_mapping) %><span>I am explicitly mapping reviewed earlier fulfillment facts, where present. This does not infer shipment dates or device identities.</span></label>
+    <%= form.submit 'Record purchase order', class: 'rounded bg-indigo-700 px-4 py-2 text-white' %>
+    <%= link_to 'Back to Equipment', equipment_return_path(@return_context), class: 'text-indigo-700 underline' %>
+  <% end %>
+</div>

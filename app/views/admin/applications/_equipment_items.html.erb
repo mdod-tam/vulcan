@@ -1,0 +1,38 @@
+<%# locals: (application: nil, items: equipment_items_for(application)) -%>
+<section aria-labelledby="equipment-items-title" class="space-y-4">
+  <h3 id="equipment-items-title" class="text-lg font-semibold">Actual equipment devices</h3>
+  <% items.each do |item| %>
+    <article id="equipment-item-<%= item.id %>" class="rounded border border-gray-300 p-4 space-y-3">
+      <h4 class="font-semibold">Device #<%= item.id %> — <%= equipment_catalog_label(item.product) %></h4>
+      <p><%= equipment_queue_badge(item) %></p>
+      <dl class="grid gap-3 sm:grid-cols-2 text-sm">
+        <div>
+          <dt class="font-medium">Application</dt>
+          <dd><%= link_to "##{item.application_id}",
+                          admin_application_path(item.application_id, anchor: "equipment-item-#{item.id}", return_context: equipment_return_context(params)),
+                          class: 'text-indigo-700 underline' %></dd>
+        </div>
+        <div>
+          <dt class="font-medium">Purchase order</dt>
+          <dd>
+            <% if item.purchase_order %>
+              <%= link_to "#{item.purchase_order.vendor.business_name} / #{item.purchase_order.number}",
+                          admin_purchase_order_path(item.purchase_order, return_context: equipment_return_context(params)), class: 'text-indigo-700 underline' %>
+              — sent <%= accessible_date_value(item.purchase_order.sent_at) %>
+            <% else %>No current purchase order<% end %>
+          </dd>
+        </div>
+        <div><dt class="font-medium">Date shipped</dt><dd><%= accessible_date_value(item.shipped_at) || 'Not recorded' %></dd></div>
+        <div><dt class="font-medium">Tracking number</dt><dd class="break-all"><%= item.tracking_number.presence || 'Not recorded' %> <%= equipment_tracking_link(item) %></dd></div>
+        <div><dt class="font-medium">Serial number</dt><dd class="break-all"><%= item.serial_number.presence || 'Not recorded' %></dd></div>
+        <div><dt class="font-medium">IMEI</dt><dd class="break-all"><%= item.imei.presence || 'Not recorded' %></dd></div>
+      </dl>
+      <% unless item.withdrawn_at? %>
+        <p><%= link_to 'Correct device / record shipment',
+                       edit_admin_equipment_item_path(item, return_context: equipment_return_context(params)), class: 'text-indigo-700 underline' %></p>
+      <% end %>
+      <%= render 'admin/equipment_items/history', events: item.events.sort_by(&:created_at).reverse %>
+    </article>
+  <% end %>
+  <% if items.empty? %><p class="text-sm text-gray-600">No physical device records are currently linked.</p><% end %>
+</section>

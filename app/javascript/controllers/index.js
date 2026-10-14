@@ -6,6 +6,7 @@ import RoleSelectController from "./admin/role_select_controller"
 import AdminUserSearchController from "./admin/user_search_controller"
 import ProtectedVariablesController from "./admin/protected_variables_controller"
 import AutosubmitController from "./admin/autosubmit_controller"
+import EquipmentSelectionController from "./admin/equipment_selection_controller"
 
 // Auth Controllers
 import AddCredentialController from "./auth/add_credential_controller"
@@ -58,6 +59,7 @@ application.register("role-select", RoleSelectController)
 application.register("admin-user-search", AdminUserSearchController)
 application.register("protected-variables", ProtectedVariablesController)
 application.register("autosubmit", AutosubmitController)
+application.register("equipment-selection", EquipmentSelectionController)
 
 // Auth Controllers
 application.register("add-credential", AddCredentialController)

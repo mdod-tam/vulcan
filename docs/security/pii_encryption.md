@@ -18,9 +18,12 @@ Encryption covers the declarations below, not every piece of personal informatio
 | [VendorSecureRequestForm](../../app/models/vendor_secure_request_form.rb) | `recipient_email` | — |
 | [Application](../../app/models/application.rb) | — | `document_signing_audit_url`, `document_signing_document_url` |
 | [EmailDeliveryAttempt](../../app/models/email_delivery_attempt.rb) | — | `destination` |
+| [EquipmentItem](../../app/models/equipment_item.rb) | `normalized_imei`, `normalized_serial_number` | `imei`, `serial_number`, `tracking_number` |
 | [Event](../../app/models/event.rb) | — | `change_values` (see [audit events](#audit-events)) |
 
 Deterministic encryption produces matching ciphertext for matching values under the same encryption configuration. This supports equality queries and unique indexes, but reveals equality patterns. Use it only when lookup or uniqueness requires it.
+
+Equipment identifiers use normalized encrypted equality for duplicate checks. Partial database indexes enforce one active IMEI and one active serial within the recorded normalized manufacturer/model identity, including duplicate catalog entries. Shipped and detached devices retain those assignments; withdrawn historical devices release them. Device identifier corrections use the encrypted audit values described below, and identifiers are excluded from bid exports.
 
 ### Audit events
 
@@ -56,6 +59,8 @@ Fixtures are encrypted and key references are stored. These settings do not esta
 ## Keep personal data out of logs
 
 [Parameter filtering](../../config/initializers/filter_parameter_logging.rb) covers contact details, names, addresses, DOB, password fields, provider contacts, and tokens. Paper identity receipts, rationales, and upload `*_signed_id` parameters are filtered. The filter also covers `identity_decision` as defense in depth. Autosave filters `field_value`, which can contain personal data, and its `autosave_context` page identifier. Encrypted attributes are also added to filtering. Review storage and filtering together when adding a sensitive field.
+
+Equipment request filtering covers serial, IMEI, tracking, correction reasons, and the signed `impact_token` confirmation payload. That signature binds reviewed values; it does not encrypt the payload, so it needs explicit log filtering even when the individual identifier fields are filtered.
 
 SQL binds need names for filtering to work. A hash condition carries its column name; a positional value in `where('LOWER(first_name) = ?', value)` does not. [Constituent duplicate matching](../../app/models/users/constituent.rb) uses named query attributes for this reason.
 

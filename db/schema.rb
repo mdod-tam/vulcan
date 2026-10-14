@@ -10,7 +10,7 @@
 #
 # It's strongly recommended that you check this file into your version control system.
 
-ActiveRecord::Schema[8.1].define(version: 2026_10_12_120200) do
+ActiveRecord::Schema[8.1].define(version: 2026_10_13_120000) do
   # These are extensions that must be enabled in order to support this database
   enable_extension "pg_catalog.plpgsql"
 
@@ -149,6 +149,7 @@ ActiveRecord::Schema[8.1].define(version: 2026_10_12_120200) do
     t.datetime "updated_at", null: false
     t.bigint "user_id", null: false
     t.jsonb "autosave_revisions", default: {}, null: false
+    t.datetime "equipment_needs_initialized_at"
     t.index ["document_signing_service"], name: "index_applications_on_document_signing_service"
     t.index ["document_signing_status"], name: "index_applications_on_document_signing_status"
     t.index ["document_signing_submission_id"], name: "index_applications_on_document_signing_submission_id"
@@ -295,6 +296,49 @@ ActiveRecord::Schema[8.1].define(version: 2026_10_12_120200) do
     t.index ["updated_by_id"], name: "index_email_templates_on_updated_by_id"
   end
 
+  create_table "equipment_items", force: :cascade do |t|
+    t.bigint "application_id", null: false
+    t.bigint "product_id", null: false
+    t.bigint "purchase_order_id"
+    t.bigint "source_evaluation_id"
+    t.date "shipped_at"
+    t.string "carrier"
+    t.text "tracking_number"
+    t.text "serial_number"
+    t.text "imei"
+    t.text "normalized_imei"
+    t.text "normalized_serial_number"
+    t.string "manufacturer_model_identity", null: false
+    t.string "normalized_manufacturer", null: false
+    t.datetime "withdrawn_at"
+    t.integer "lock_version", default: 0, null: false
+    t.datetime "created_at", null: false
+    t.datetime "updated_at", null: false
+    t.index ["application_id"], name: "index_equipment_items_on_application_id"
+    t.index ["manufacturer_model_identity", "normalized_serial_number"], name: "active_equipment_model_serial", unique: true, where: "((withdrawn_at IS NULL) AND (normalized_serial_number IS NOT NULL))"
+    t.index ["normalized_imei"], name: "active_equipment_imei", unique: true, where: "((withdrawn_at IS NULL) AND (normalized_imei IS NOT NULL))"
+    t.index ["product_id"], name: "index_equipment_items_on_product_id"
+    t.index ["purchase_order_id"], name: "index_equipment_items_on_purchase_order_id"
+    t.index ["source_evaluation_id"], name: "index_equipment_items_on_source_evaluation_id"
+    t.check_constraint "shipped_at IS NULL OR purchase_order_id IS NOT NULL", name: "shipped_equipment_has_po"
+    t.check_constraint "withdrawn_at IS NULL OR purchase_order_id IS NULL AND shipped_at IS NULL", name: "withdrawn_equipment_detached"
+  end
+
+  create_table "equipment_needs", force: :cascade do |t|
+    t.bigint "application_id", null: false
+    t.bigint "product_id", null: false
+    t.bigint "source_evaluation_id"
+    t.integer "remaining_quantity", null: false
+    t.integer "lock_version", default: 0, null: false
+    t.datetime "created_at", null: false
+    t.datetime "updated_at", null: false
+    t.index ["application_id", "product_id"], name: "index_equipment_needs_on_application_id_and_product_id", unique: true
+    t.index ["application_id"], name: "index_equipment_needs_on_application_id"
+    t.index ["product_id"], name: "index_equipment_needs_on_product_id"
+    t.index ["source_evaluation_id"], name: "index_equipment_needs_on_source_evaluation_id"
+    t.check_constraint "remaining_quantity >= 0", name: "equipment_need_quantity"
+  end
+
   create_table "evaluations", force: :cascade do |t|
     t.bigint "application_id", null: false
     t.jsonb "attendees", default: []
@@ -316,9 +360,11 @@ ActiveRecord::Schema[8.1].define(version: 2026_10_12_120200) do
     t.string "recommendation_outcome", default: "catalog_products", null: false
     t.text "recommendation_notes"
     t.text "working_notes"
+    t.string "assessment_source", default: "direct_assessment", null: false
     t.index ["application_id"], name: "index_evaluations_on_application_id"
     t.index ["constituent_id"], name: "index_evaluations_on_constituent_id"
     t.index ["evaluator_id"], name: "index_evaluations_on_evaluator_id"
+    t.check_constraint "assessment_source::text = ANY (ARRAY['direct_assessment'::character varying, 'outside_specialist'::character varying]::text[])", name: "evaluation_assessment_source"
   end
 
   create_table "evaluations_products", id: false, force: :cascade do |t|
@@ -554,6 +600,18 @@ ActiveRecord::Schema[8.1].define(version: 2026_10_12_120200) do
     t.index ["reviewed_at"], name: "index_proof_reviews_on_reviewed_at"
     t.index ["status"], name: "index_proof_reviews_on_status"
     t.check_constraint "submission_method IS NULL OR (submission_method = ANY (ARRAY[0, 1, 2, 3, 4]))", name: "proof_reviews_submission_method_check"
+  end
+
+  create_table "purchase_orders", force: :cascade do |t|
+    t.bigint "vendor_id", null: false
+    t.string "number", null: false
+    t.string "normalized_number", null: false
+    t.date "sent_at", null: false
+    t.integer "lock_version", default: 0, null: false
+    t.datetime "created_at", null: false
+    t.datetime "updated_at", null: false
+    t.index ["vendor_id", "normalized_number"], name: "index_purchase_orders_on_vendor_id_and_normalized_number", unique: true
+    t.index ["vendor_id"], name: "index_purchase_orders_on_vendor_id"
   end
 
   create_table "recovery_requests", force: :cascade do |t|
@@ -1097,6 +1155,13 @@ ActiveRecord::Schema[8.1].define(version: 2026_10_12_120200) do
   add_foreign_key "email_delivery_attempts", "users", column: "recipient_id", on_delete: :nullify
   add_foreign_key "email_delivery_receipts", "email_delivery_attempts", on_delete: :cascade
   add_foreign_key "email_templates", "users", column: "updated_by_id"
+  add_foreign_key "equipment_items", "applications"
+  add_foreign_key "equipment_items", "evaluations", column: "source_evaluation_id"
+  add_foreign_key "equipment_items", "products"
+  add_foreign_key "equipment_items", "purchase_orders"
+  add_foreign_key "equipment_needs", "applications"
+  add_foreign_key "equipment_needs", "evaluations", column: "source_evaluation_id"
+  add_foreign_key "equipment_needs", "products"
   add_foreign_key "evaluations", "applications"
   add_foreign_key "evaluations", "users", column: "constituent_id"
   add_foreign_key "evaluations", "users", column: "evaluator_id"
@@ -1118,6 +1183,7 @@ ActiveRecord::Schema[8.1].define(version: 2026_10_12_120200) do
   add_foreign_key "print_queue_items", "users", column: "constituent_id"
   add_foreign_key "proof_reviews", "applications"
   add_foreign_key "proof_reviews", "users", column: "admin_id"
+  add_foreign_key "purchase_orders", "users", column: "vendor_id"
   add_foreign_key "recovery_requests", "users"
   add_foreign_key "role_capabilities", "users"
   add_foreign_key "secure_request_forms", "applications"

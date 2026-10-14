@@ -373,6 +373,128 @@ module Evaluations
       assert_equal 'catalog_products', @evaluation.recommendation_outcome
     end
 
+    test 'assigned administrator records outside consultation from requested without an invented appointment or trials' do
+      admin = create(:admin)
+      @evaluation.update!(evaluator: admin, status: :requested, evaluation_date: nil, location: nil)
+      parameters = submission_params
+      parameters[:evaluation][:assessment_source] = 'outside_specialist'
+      parameters[:evaluation][:location] = ''
+      parameters[:evaluation][:products_tried_field] = []
+      parameters[:evaluation][:notes] = 'Recommendations from the outside specialist consultation and written assessment.'
+
+      travel_to(Time.current.change(usec: 0)) do
+        parameters[:evaluation][:appointment_completed_at] = 2.days.ago
+        assert_difference('EquipmentNeed.count', 1) do
+          result = SubmissionService.new(@evaluation, parameters, actor: admin).call
+
+          assert result.success?, result.message
+        end
+
+        @evaluation.reload
+        assert_equal 'completed', @evaluation.status
+        assert_equal 'outside_specialist', @evaluation.assessment_source
+        assert_nil @evaluation.evaluation_date
+        assert_empty @evaluation.products_tried
+        assert_equal 2.days.ago, @evaluation.appointment_completed_at
+        assert_equal Time.current, @evaluation.report_submitted_at
+        assert_equal Time.current, @evaluation.application.reload.equipment_needs_initialized_at
+        need = @evaluation.application.equipment_needs.sole
+        assert_equal @product.id, need.product_id
+        assert_equal 1, need.remaining_quantity
+        assert_equal @evaluation.id, need.source_evaluation_id
+        event = Event.find_by!(action: 'evaluation_completed', auditable: @evaluation)
+        assert_equal 'outside_specialist', event.metadata['assessment_source']
+        assert_equal admin.id, event.user_id
+      end
+    end
+
+    test 'ordinary evaluator cannot forge outside specialist source even for a scheduled evaluation' do
+      parameters = submission_params
+      parameters[:evaluation][:assessment_source] = 'outside_specialist'
+      parameters[:evaluation][:products_tried_field] = []
+
+      assert_no_difference(['EquipmentNeed.count', 'Event.where(action: "evaluation_completed").count']) do
+        result = SubmissionService.new(@evaluation, parameters, actor: @evaluator).call
+
+        assert result.failure?
+        assert_includes result.message, 'assigned administrator'
+      end
+
+      assert_equal 'direct_assessment', @evaluation.reload.assessment_source
+      assert_equal 'scheduled', @evaluation.status
+    end
+
+    test 'outside consultation still needs written context and an actual completion time' do
+      admin = create(:admin)
+      @evaluation.update!(evaluator: admin, status: :requested, evaluation_date: nil)
+      parameters = submission_params
+      parameters[:evaluation][:assessment_source] = 'outside_specialist'
+      parameters[:evaluation][:notes] = ''
+      parameters[:evaluation][:appointment_completed_at] = nil
+      parameters[:evaluation][:products_tried_field] = []
+
+      assert_no_difference(['EquipmentNeed.count', 'Event.where(action: "evaluation_completed").count']) do
+        result = SubmissionService.new(@evaluation, parameters, actor: admin).call
+
+        assert result.failure?
+        assert_includes @evaluation.errors[:notes], "can't be blank"
+        assert_includes @evaluation.errors[:appointment_completed_at], "can't be blank"
+      end
+      assert_equal 'requested', @evaluation.reload.status
+      assert_nil @evaluation.application.reload.equipment_needs_initialized_at
+    end
+
+    test 'reassigned away administrator cannot complete a stale outside consultation' do
+      admin = create(:admin)
+      @evaluation.update!(evaluator: admin, status: :requested, evaluation_date: nil)
+      stale_evaluation = Evaluation.find(@evaluation.id)
+      @evaluation.update!(evaluator: create(:admin))
+      parameters = submission_params
+      parameters[:evaluation][:assessment_source] = 'outside_specialist'
+
+      assert_no_difference(['EquipmentNeed.count', 'Event.where(action: "evaluation_completed").count']) do
+        result = SubmissionService.new(stale_evaluation, parameters, actor: admin).call
+
+        assert result.failure?
+        assert_equal 'Only the assigned evaluator can update this evaluation.', result.message
+      end
+      assert_equal 'requested', @evaluation.reload.status
+    end
+
+    test 'report completion rechecks approval on a previously loaded application' do
+      application = @evaluation.application
+      stale_evaluation = Evaluation.find(@evaluation.id)
+      assert stale_evaluation.application.status_approved?
+      application.transition_status!(:archived, actor: create(:admin))
+
+      assert_no_difference(['EquipmentNeed.count', 'Event.where(action: "evaluation_completed").count']) do
+        result = SubmissionService.new(stale_evaluation, submission_params, actor: @evaluator).call
+
+        assert result.failure?
+        assert_includes result.message, 'Only approved applications'
+      end
+      assert_equal 'scheduled', @evaluation.reload.status
+      assert_nil @evaluation.report_submitted_at
+    end
+
+    test 'needs initialization failure rolls back the report audit and review state' do
+      @evaluation.application.update!(needs_review_since: Time.current)
+      original_review_time = @evaluation.application.reload.needs_review_since
+      failing_initialization = ->(*) { raise ActiveRecord::RecordInvalid, EquipmentNeed.new }
+
+      assert_no_difference(['EquipmentNeed.count', 'Event.where(action: "evaluation_completed").count']) do
+        EquipmentNeeds::Writer.stub(:initialize_from!, failing_initialization) do
+          result = SubmissionService.new(@evaluation, submission_params, actor: @evaluator).call
+
+          assert result.failure?
+        end
+      end
+      assert_equal 'scheduled', @evaluation.reload.status
+      assert_nil @evaluation.report_submitted_at
+      assert_nil @evaluation.application.reload.equipment_needs_initialized_at
+      assert_equal original_review_time, @evaluation.application.needs_review_since
+    end
+
     private
 
     def submission_params

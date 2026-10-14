@@ -7,7 +7,11 @@ module Evaluators
 
       case evaluation.status
       when 'requested'
-        evaluation.evaluation_date.blank? ? %i[schedule cancel] : []
+        return [] if evaluation.evaluation_date.present?
+
+        actions = %i[schedule cancel]
+        actions << :submit_report if evaluation.outside_specialist_report_allowed?(current_user)
+        actions
       when 'scheduled', 'confirmed'
         actions = %i[submit_report cancel reschedule]
         actions.insert(1, :no_show) if evaluation.evaluation_date.present? && evaluation.evaluation_date < Time.current
@@ -23,6 +27,12 @@ module Evaluators
 
     def evaluation_action_errors(action, form_errors:)
       form_errors.fetch(action, {}).with_indifferent_access
+    end
+
+    def evaluation_assessment_source_options(evaluation)
+      options = [['Outside-specialist consultation', 'outside_specialist']]
+      options.unshift(['Direct assessment', 'direct_assessment']) unless evaluation.status_requested?
+      options
     end
 
     def evaluation_field_errors(action, attribute, form_errors:)

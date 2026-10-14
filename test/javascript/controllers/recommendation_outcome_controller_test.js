@@ -6,9 +6,17 @@ describe("RecommendationOutcomeController", () => {
   let form
   let notes
 
-  async function restore(outcome) {
+  async function restore(outcome, source) {
     document.body.innerHTML = `
       <form data-controller="recommendation-outcome">
+        ${source ? `
+          <select data-recommendation-outcome-target="source" data-action="recommendation-outcome#update">
+            <option value="direct_assessment" ${source === "direct_assessment" ? "selected" : ""}>Direct assessment</option>
+            <option value="outside_specialist" ${source === "outside_specialist" ? "selected" : ""}>Outside specialist</option>
+          </select>
+          <input name="evaluation[location]" value="Restored location" data-recommendation-outcome-target="location">
+          <span data-recommendation-outcome-target="locationRequired">Required location</span>
+        ` : ""}
         <fieldset>
           ${["catalog_products", "outside_catalog", "no_suitable_product"].map(value => `
             <input type="radio" name="evaluation[recommendation_outcome]" value="${value}"
@@ -112,6 +120,32 @@ describe("RecommendationOutcomeController", () => {
     form.querySelector('input[value="catalog_products"]').click()
     notes.value = ""
     expect(new FormData(form).get("evaluation[recommendation_notes]")).toBe("")
+    expect(form.checkValidity()).toBe(true)
+  })
+
+  test("restored outside consultation keeps catalog recommendations while location and trials stay optional", async () => {
+    await restore("catalog_products", "outside_specialist")
+    const location = form.querySelector('[name="evaluation[location]"]')
+    const source = form.querySelector("select")
+
+    expect(location.required).toBe(false)
+    expect(location.getAttribute("aria-required")).toBe("false")
+    expect(form.querySelector('[data-recommendation-outcome-target="triedRequired"]')).toHaveClass("hidden")
+    expect(new FormData(form).getAll("evaluation[recommended_product_ids][]")).toEqual(["", "31"])
+
+    source.value = "direct_assessment"
+    source.dispatchEvent(new Event("change", { bubbles: true }))
+    expect(location.required).toBe(true)
+    expect(location.getAttribute("aria-required")).toBe("true")
+    expect(location.value).toBe("Restored location")
+    expect(form.querySelector('[data-recommendation-outcome-target="locationRequired"]')).not.toHaveClass("hidden")
+    expect(form.querySelector('[data-recommendation-outcome-target="triedRequired"]')).not.toHaveClass("hidden")
+
+    source.value = "outside_specialist"
+    source.dispatchEvent(new Event("change", { bubbles: true }))
+    location.value = ""
+    expect(location.required).toBe(false)
+    expect(new FormData(form).get("evaluation[location]")).toBe("")
     expect(form.checkValidity()).toBe(true)
   })
 })

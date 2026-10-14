@@ -46,13 +46,9 @@ module Reports
 
     def non_voucher_equipment_counts
       counts = Hash.new(0)
-      Application.includes(evaluations: :recommended_products)
-                 .where(fulfillment_type: :equipment, equipment_po_sent_at: report_range)
-                 .find_each do |application|
-        latest_completed_evaluation(application)&.recommended_products&.each do |product|
-          add_device_type_counts(counts, product, 1)
-        end
-      end
+      EquipmentItem.active.joins(:purchase_order).includes(:product)
+                   .where(purchase_orders: { sent_at: report_range.begin.to_date..report_range.end.to_date })
+                   .find_each { |item| add_device_type_counts(counts, item.product, 1) }
       counts
     end
 
@@ -68,12 +64,6 @@ module Reports
         end
       end
       counts
-    end
-
-    def latest_completed_evaluation(application)
-      application.evaluations.select(&:status_completed?).max_by do |evaluation|
-        evaluation.evaluation_date || evaluation.updated_at
-      end
     end
 
     def add_device_type_counts(counts, product, quantity)
