@@ -28,6 +28,34 @@ module Equipment
       assert_equal 2, @item.events.count
     end
 
+    test 'a normal correction cannot detach a linked device through a blank PO selection' do
+      original_order_id = @item.purchase_order_id
+      assert_no_difference ['PurchaseOrder.count', 'EquipmentItem.count', 'Event.count'] do
+        error = assert_raises(Conflict) do
+          @service.update_item!(item: @item, attributes: { purchase_order_id: '' }, expected_version: 0, reason: 'Remove this order')
+        end
+        assert_includes error.message, 'detach action'
+      end
+      assert_equal original_order_id, @item.reload.purchase_order_id
+      assert_equal 0, @item.lock_version
+      assert_equal 'ordered', @item.queue_status
+    end
+
+    test 'serial acknowledgment text is encrypted with the device change audit' do
+      other_model = create(:product, manufacturer: @item.product.manufacturer, model_number: 'Another model')
+      create(:equipment_item, product: other_model, serial_number: 'PRIVATE-SERIAL')
+      acknowledgment = 'Reviewed PRIVATE-SERIAL and IMEI 123456789012345; separate manufacturer models.'
+      @service.update_item!(item: @item, attributes: { serial_number: 'PRIVATE-SERIAL' }, expected_version: 0,
+                            reason: 'Identity reviewed', serial_duplicate_reason: acknowledgment)
+
+      event = @item.events.sole
+      assert_nil event.metadata['serial_duplicate_reason']
+      assert_equal({}, event.metadata.dig('changes', 'serial_duplicate_reason'))
+      assert_equal [nil, acknowledgment], event.field_changes['serial_duplicate_reason']
+      raw = Event.connection.select_one("SELECT metadata, change_values FROM events WHERE id = #{event.id}")
+      assert(raw.values.none? { |value| value.to_s.include?(acknowledgment) || value.to_s.include?('PRIVATE-SERIAL') || value.to_s.include?('123456789012345') })
+    end
+
     test 'withdrawal keeps the detached device and history but cannot withdraw an ordered device' do
       assert_raises(Conflict) { @service.update_item!(item: @item, attributes: {}, expected_version: 0, reason: 'Not needed', operation: 'withdraw') }
       @service.update_item!(item: @item, attributes: {}, expected_version: 0, reason: 'Wrong order', operation: 'detach')
@@ -42,7 +70,8 @@ module Equipment
       new_order = { vendor_id: old_order.vendor_id, number: 'Corrected Header', sent_at: old_order.sent_at.iso8601 }
       assert_difference 'PurchaseOrder.count', 1 do
         assert_no_difference 'EquipmentItem.count' do
-          @service.update_item!(item: @item, attributes: {}, expected_version: 0, new_purchase_order: new_order, reason: 'One device belongs to another order')
+          @service.update_item!(item: @item, attributes: { purchase_order_id: '' }, expected_version: 0, new_purchase_order: new_order,
+                                reason: 'One device belongs to another order')
         end
       end
       assert_equal old_order.id, sibling.reload.purchase_order_id

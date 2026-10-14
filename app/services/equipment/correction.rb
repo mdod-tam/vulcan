@@ -2,8 +2,8 @@
 
 module Equipment
   class Correction
-    ITEM_FIELDS = %w[product_id purchase_order_id shipped_at tracking_number carrier serial_number imei withdrawn_at
-                     manufacturer_model_identity normalized_manufacturer normalized_imei normalized_serial_number].freeze
+    EDITABLE_ITEM_FIELDS = %w[product_id purchase_order_id shipped_at tracking_number carrier serial_number imei].freeze
+    ITEM_FIELDS = (EDITABLE_ITEM_FIELDS + %w[withdrawn_at manufacturer_model_identity normalized_manufacturer normalized_imei normalized_serial_number]).freeze
     PO_FIELDS = %w[vendor_id number sent_at].freeze
 
     def self.impact_token(record:, attributes:, extra: {})
@@ -35,13 +35,13 @@ module Equipment
     def update_item!(item:, attributes:, expected_version:, reason:, operation: 'update', confirmed_impact: false, # rubocop:disable Metrics/ParameterLists
                      purchase_order_versions: {}, new_purchase_order: nil, serial_duplicate_reason: nil, impact_token: nil)
       require_reason!(reason)
-      attributes = attributes.to_h.stringify_keys.slice(*ITEM_FIELDS.first(7))
+      attributes = attributes.to_h.stringify_keys.slice(*EDITABLE_ITEM_FIELDS)
       raise Conflict, 'Unknown equipment correction.' unless %w[update detach withdraw].include?(operation)
 
       EquipmentItem.transaction do
         application, orders, created_order = lock_item!(item, attributes, expected_version, operation == 'update' ? new_purchase_order : nil)
         previous = item.attributes.slice(*ITEM_FIELDS)
-        apply_item_operation!(item, operation, attributes)
+        apply_item_operation!(item, operation, attributes, new_purchase_order: created_order)
         new_assignment = previous['purchase_order_id'].nil? && (item.purchase_order_id.present? || new_purchase_order.present?)
         Mutation.eligible!(application) if new_assignment && operation == 'update'
         if item.shipped_at_in_database.present?
@@ -121,10 +121,11 @@ module Equipment
       changes = changed_values(previous, item.attributes.slice(*ITEM_FIELDS))
       return if changes.empty?
 
+      changes['serial_duplicate_reason'] = [nil, item.serial_duplicate_reason] if item.serial_duplicate_reason.present?
       Mutation.audit!(item, actor: @actor, action: 'equipment_item_corrected', changes: changes,
                             reason: reason, application_ids: [item.application_id], application_id: item.application_id,
                             purchase_order_ids: [previous['purchase_order_id'], item.purchase_order_id].compact.uniq,
-                            correction: operation, serial_duplicate_reason: item.serial_duplicate_reason)
+                            correction: operation)
     end
 
     def require_membership!(items, membership, expected_versions)
@@ -140,8 +141,12 @@ module Equipment
       raise Conflict, 'Review the current correction values and confirm their impact before saving.' unless confirmed && observed == expected
     end
 
-    def apply_item_operation!(item, operation, attributes)
+    def apply_item_operation!(item, operation, attributes, new_purchase_order:)
       if operation == 'update'
+        if item.purchase_order_id? && attributes.key?('purchase_order_id') && attributes['purchase_order_id'].blank? && new_purchase_order.nil?
+          raise Conflict, 'Use the detach action to remove an unshipped device from its purchase order.'
+        end
+
         item.assign_attributes(attributes)
       else
         raise Conflict, 'Shipped equipment cannot be detached or withdrawn. Correct the ship date first with impact confirmation.' if item.shipped_at?

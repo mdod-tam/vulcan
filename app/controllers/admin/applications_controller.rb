@@ -21,7 +21,6 @@ module Admin
       upload_medical_certification send_document_signing_request
       queue_medical_certification_form
     ]
-    before_action :load_audit_logs_with_service, only: %i[show approve reject]
 
     def index
       # The default view includes drafts and rejected applications. Archived records require an explicit filter.
@@ -61,21 +60,7 @@ module Admin
     end
 
     def show
-      load_application_show_associations(@application)
-      ActiveRecord::Associations::Preloader.new(records: [@application],
-                                                associations: [{ equipment_needs: %i[product source_evaluation] },
-                                                               { equipment_items: [:product, { purchase_order: :vendor }] }]).call
-      load_attachment_data
-
-      certification_service = Applications::CertificationEventsService.new(@application)
-      @certification_events = certification_service.certification_events
-      @certification_requests = certification_service.request_events
-      @max_training_sessions = Policy.max_training_sessions
-      @completed_training_sessions_count = @application.completed_training_sessions_count
-      @reserved_training_sessions_count = @application.reserved_training_sessions_count
-      @remaining_training_sessions = @application.remaining_training_sessions
-      load_provider_info_request_data(@application)
-      load_certification_delivery_data
+      prepare_application_show
     end
 
     def edit; end
@@ -147,7 +132,7 @@ module Admin
       elsif result.data&.dig(:commit_state) == :unknown
         redirect_to admin_application_path(@application), alert: result.message, status: :see_other
       else
-        load_certification_delivery_data
+        prepare_application_show if request.format.html?
         handle_error_response(
           error_message: result.message,
           html_render_action: :show
@@ -558,6 +543,27 @@ module Admin
 
     private
 
+    def prepare_application_show
+      load_application_show_associations(@application)
+      load_audit_logs_with_service
+      Application.preload_equipment_fulfillment([@application])
+      @return_context = Equipment::RequestParameters.return_context(params)
+      @equipment_items = @application.equipment_items.sort_by(&:id)
+      ActiveRecord::Associations::Preloader.new(records: @equipment_items, associations: { events: :user }).call
+      @equipment_audit_records = Equipment::AuditRecords.for(@audit_logs + @equipment_items.flat_map { |item| item.events.to_a })
+      load_attachment_data
+
+      certification_service = Applications::CertificationEventsService.new(@application)
+      @certification_events = certification_service.certification_events
+      @certification_requests = certification_service.request_events
+      @max_training_sessions = Policy.max_training_sessions
+      @completed_training_sessions_count = @application.completed_training_sessions_count
+      @reserved_training_sessions_count = @application.reserved_training_sessions_count
+      @remaining_training_sessions = @application.remaining_training_sessions
+      load_provider_info_request_data(@application)
+      load_certification_delivery_data
+    end
+
     def load_attachment_data
       @application.proof_reviews.load
       load_secure_request_recipient_data(@application)
@@ -570,6 +576,7 @@ module Admin
       audit_log_builder = Applications::AuditLogBuilder.new(@application)
       @audit_logs = audit_log_builder.build_audit_logs
       @secure_request_delivery_owners_by_id = audit_log_builder.delivery_owners_by_id
+      @equipment_audit_records = Equipment::AuditRecords.for(@audit_logs)
     end
 
     def load_notifications

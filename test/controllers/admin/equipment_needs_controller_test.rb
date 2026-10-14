@@ -18,8 +18,12 @@ module Admin
 
       assert_response :success
       assert_select 'h2', text: 'Original assessment recommendation'
+      assert_select 'main', count: 1
+      assert_select 'main main', count: 0
       assert_select 'input[name="equipment_needs[rows][][remaining_quantity]"][value="1"]', count: @application.equipment_needs.count + 1
       assert_select 'input[name="equipment_needs[expected_initialized_at]"]', value: @application.reload.equipment_needs_initialized_at.iso8601(6)
+      assert_select '#equipment_needs_reason[aria-describedby=equipment-needs-reason-help]'
+      assert_select '#equipment-needs-reason-help', text: /decision that no new devices are needed/
     end
 
     test 'saving returns to the same equipment tab and filters' do
@@ -43,12 +47,28 @@ module Admin
       assert_no_difference('Event.count') { patch admin_application_equipment_needs_path(@application), params: parameters }
 
       assert_response :unprocessable_entity
+      assert_select '#equipment-needs-errors[role=alert][tabindex="-1"][data-controller=error-summary]'
+      assert_select '#equipment-needs-errors li', text: /at least one device/
+      assert_select '#equipment-needs-errors a[href=?]', edit_admin_application_equipment_needs_path(@application, return_context: parameters[:return_context]),
+                    text: 'Review latest purchasing needs'
+      assert_select '#equipment-needs-errors p', text: /replaces this draft/
       assert_select '[role="alert"]', text: /at least one device/
       assert_select 'input[name="equipment_needs[rows][][remaining_quantity]"][value="2"]'
       assert_select 'select option[selected][value=?]', product.id.to_s
       assert_select 'input[name="equipment_needs[reason]"][value="Changed purchasing needs"]'
       assert_select 'input[name="return_context[product_id]"][value=?]', product.id.to_s
       assert_equal [1], @application.equipment_needs.distinct.pluck(:remaining_quantity)
+    end
+
+    test 'an unreviewed historical order explains the first needs decision' do
+      application = create(:application, :approved, :with_all_proofs, equipment_po_sent_at: 1.month.ago)
+
+      get edit_admin_application_equipment_needs_path(application)
+
+      assert_response :success
+      assert_select 'p', text: 'Earlier fulfillment recorded: confirm what still needs ordering.'
+      assert_select '#equipment-needs-reason-help', text: /decision that no new devices are needed/
+      assert_select 'input[name="equipment_needs[expected_initialized_at]"][value=""]'
     end
 
     test 'constituents cannot view or update purchasing needs' do
@@ -79,7 +99,7 @@ module Admin
       get admin_application_path(@application)
 
       assert_response :success
-      assert_select '#equipment h2', text: 'Original assessment recommendation'
+      assert_select '#equipment h3', text: 'Original assessment recommendation'
       assert_select '#equipment h3', text: 'Earlier fulfillment details'
       assert_select '#equipment', text: /Historical tracking/
       assert_select 'a', text: 'Edit equipment needs', count: 0

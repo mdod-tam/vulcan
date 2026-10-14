@@ -1,0 +1,25 @@
+en:
+  activerecord:
+    attributes:
+      equipment_item:
+        product: Actual catalog product
+        product_id: Actual catalog product
+        purchase_order: Current purchase order
+        purchase_order_id: Current purchase order
+        shipped_at: Date shipped
+        imei: IMEI (15 digits)
+        normalized_imei: IMEI (15 digits)
+        serial_duplicate_reason: Serial warning acknowledgment
+        withdrawn_at: Date withdrawn
+      purchase_order:
+        vendor: Vendor
+        vendor_id: Vendor
+        number: PO number
+        normalized_number: PO number
+        sent_at: Date PO sent
+      equipment_need:
+        remaining_quantity: Remaining quantity
+      application:
+        equipment_needs: Purchasing needs
+        equipment_bids_sent_at: Date bids sent
+        equipment_po_sent_at: Date PO sent

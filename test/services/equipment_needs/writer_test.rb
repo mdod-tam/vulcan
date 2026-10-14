@@ -27,6 +27,30 @@ module EquipmentNeeds
       assert_equal @evaluation.id, event.metadata['source_evaluation_id']
     end
 
+    test 'initialization and first staff edit only stamp bookkeeping for an invalid historical intake' do
+      # Model a persisted risk state; this does not assert that such production records exist.
+      @application.update_column(:maryland_resident, false)
+      original = @application.reload.attributes.except('equipment_needs_initialized_at', 'updated_at')
+      assert_not @application.valid?
+      assert_includes @application.errors[:maryland_resident].join, 'Maryland resident'
+
+      assert_raises(ActiveRecord::RecordInvalid) { @application.update!(equipment_needs_initialized_at: Time.current) }
+      assert_nil @application.reload.equipment_needs_initialized_at
+      assert_difference 'Event.where(action: "equipment_needs_initialized").count', 1 do
+        assert Writer.initialize_from!(@evaluation, actor: @evaluation.evaluator)
+      end
+      assert @application.reload.equipment_needs_initialized_at
+      assert_equal original, @application.attributes.except('equipment_needs_initialized_at', 'updated_at')
+
+      staff_application = create(:application, :approved, :with_all_proofs)
+      staff_application.update_column(:maryland_resident, false)
+      Writer.update!(staff_application, rows: [], expected_initialized_at: '', actor: @admin, reason: 'Reviewed an empty purchasing list')
+      assert staff_application.reload.equipment_needs_initialized_at
+      assert_equal false, staff_application.maryland_resident
+      assert_equal 'approved', staff_application.status
+      assert_equal 'equipment_needs_updated', staff_application.events.order(:id).last.action
+    end
+
     test 'catalog replacement and quantity changes leave the submitted report intact' do
       Writer.initialize_from!(@evaluation, actor: @admin)
       original = @evaluation.reload.attributes
@@ -73,6 +97,45 @@ module EquipmentNeeds
           assert Writer.initialize_from!(report, actor: @admin)
         end
         assert application.reload.equipment_needs_initialized_at
+      end
+    end
+
+    test 'an empty draft becomes stale when a report initializes an empty purchasing list' do
+      stale_rows = submitted_rows
+      stale_marker = @application.equipment_needs_initialized_at&.iso8601(6).to_s
+      assert_empty stale_rows
+      assert_nil @application.equipment_needs_initialized_at
+      report = build(:evaluation, :completed, application: @application, recommendation_outcome: :outside_catalog,
+                                              recommendation_notes: 'Outside catalog specialist recommendation')
+      report.recommended_products = []
+      report.products_tried = []
+      report.save!
+      original_report = report.reload.attributes
+      assert Writer.initialize_from!(report, actor: @admin)
+      marker = @application.reload.equipment_needs_initialized_at
+      reason = 'Reviewed the recommendation; no new catalog device is needed'
+
+      assert_no_difference(['EquipmentNeed.count', 'EquipmentItem.count', 'Event.count']) do
+        assert_raises(Equipment::Conflict) do
+          Writer.update!(@application, rows: stale_rows, expected_initialized_at: stale_marker, actor: @admin, reason: reason)
+        end
+      end
+      assert_equal marker, @application.reload.equipment_needs_initialized_at
+      assert_equal original_report, report.reload.attributes
+      assert_empty @application.equipment_needs
+      assert_not @application.equipment_needs_decided?
+      assert_equal :needs_catalog_product, @application.admin_fulfillment_responsibility_state
+
+      assert_difference -> { @application.events.where(action: 'equipment_needs_updated').count }, 1 do
+        Writer.update!(@application, rows: [], expected_initialized_at: marker.iso8601(6), actor: @admin, reason: reason)
+      end
+      assert_equal :no_equipment, @application.reload.admin_fulfillment_responsibility_state
+      assert_equal reason, @application.events.find_by!(action: 'equipment_needs_updated').metadata['reason']
+      assert_equal marker, @application.equipment_needs_initialized_at
+      assert_equal original_report, report.reload.attributes
+      assert_empty @application.equipment_needs
+      assert_no_difference(['EquipmentNeed.count', 'EquipmentItem.count', 'Event.count']) do
+        Writer.update!(@application, rows: [], expected_initialized_at: marker.iso8601(6), actor: @admin, reason: reason)
       end
     end
 
@@ -170,6 +233,77 @@ module EquipmentNeeds
       assert_equal original_report, @evaluation.reload.attributes
       assert_nil @evaluation.report_submitted_at
       assert_no_difference(['EquipmentNeed.count', 'Event.count', 'EquipmentItem.count']) { run_rollout }
+    end
+
+    test 'rollout continues through historical intake validation differences without altering intake fields' do
+      @application.update_column(:maryland_resident, false)
+      other_application = create(:application, :approved, :with_all_proofs)
+      other_report = create(:evaluation, :completed, application: other_application)
+      assert_difference 'Event.where(action: "equipment_needs_initialized").count', 2 do
+        run_rollout
+      end
+      assert @application.reload.equipment_needs_initialized_at
+      assert_equal false, @application.maryland_resident
+      assert other_application.reload.equipment_needs_initialized_at
+      assert_equal other_report.recommended_product_ids.sort, other_application.equipment_needs.pluck(:product_id).sort
+    end
+
+    test 'bids-only catalog rollout permits an ordinary first PO and preserves the historical date' do
+      @application.update!(equipment_bids_sent_at: 2.days.ago)
+      bids_date = @application.reload.equipment_bids_sent_at
+      run_rollout
+      assert @application.reload.equipment_needs_initialized_at
+      assert_equal @evaluation.recommended_product_ids.sort, @application.equipment_needs.pluck(:product_id).sort
+      assert_equal :needs_action, @application.admin_fulfillment_responsibility_state
+
+      rows = submitted_rows.map { |row| row.slice('id', 'lock_version').merge('quantity' => 1) }
+      order = Equipment::Ordering.new(actor: @admin).call(
+        needs: rows, items: [], purchase_order_attributes: { vendor_id: create(:vendor).id, number: 'FIRST-AWARD', sent_at: Date.current }
+      )
+      assert_equal rows.size, order.equipment_items.count
+      assert_equal :po_sent, @application.reload.admin_fulfillment_responsibility_state
+      assert_equal bids_date, @application.equipment_bids_sent_at
+      assert_no_difference(['EquipmentNeed.count', 'EquipmentItem.count', 'Event.count']) { run_rollout }
+    end
+
+    test 'first staff confirmation of automatic empty outside catalog needs records the decision once' do
+      report = build(:evaluation, :completed, application: @application, recommendation_outcome: :outside_catalog,
+                                              recommendation_notes: 'Outside catalog recommendation')
+      report.recommended_products = []
+      report.products_tried = []
+      report.save!
+      Writer.initialize_from!(report, actor: @admin)
+      original = report.reload.attributes
+      marker = @application.reload.equipment_needs_initialized_at
+      assert_equal :needs_catalog_product, @application.admin_fulfillment_responsibility_state
+
+      assert_difference -> { @application.events.where(action: 'equipment_needs_updated').count }, 1 do
+        edit_needs([], reason: 'Nothing further is required')
+      end
+      assert_equal :no_equipment, @application.reload.admin_fulfillment_responsibility_state
+      assert_equal marker, @application.equipment_needs_initialized_at
+      assert_equal 'Nothing further is required', @application.events.find_by!(action: 'equipment_needs_updated').metadata['reason']
+      assert_empty @application.equipment_needs
+      assert_equal original, report.reload.attributes
+      assert_no_difference('Event.count') { edit_needs([], reason: 'Confirm the same decision') }
+    end
+
+    test 'failed first empty confirmation retains pending catalog choice and no decision event' do
+      report = build(:evaluation, :completed, application: @application, recommendation_outcome: :outside_catalog,
+                                              recommendation_notes: 'Outside catalog recommendation')
+      report.recommended_products = []
+      report.products_tried = []
+      report.save!
+      Writer.initialize_from!(report, actor: @admin)
+      marker = @application.reload.equipment_needs_initialized_at
+      AuditEventService.stubs(:log).raises(ActiveRecord::RecordInvalid.new(Event.new))
+
+      assert_no_difference(['EquipmentNeed.count', 'Event.count']) do
+        assert_raises(ActiveRecord::RecordInvalid) { edit_needs([], reason: 'Nothing further is required') }
+      end
+      assert_equal marker, @application.reload.equipment_needs_initialized_at
+      assert_not @application.equipment_needs_decided?
+      assert_equal :needs_catalog_product, @application.admin_fulfillment_responsibility_state
     end
 
     private

@@ -34,6 +34,26 @@ module Admin
       assert_select 'input[name="purchase_order[needs][][id]"][value=?]', @other_need.id.to_s, count: 0
     end
 
+    test 'all equipment vendor pickers use account eligibility including legacy accounts' do
+      legacy = create(:vendor, status: nil)
+      excluded = [create(:vendor, status: :inactive), create(:vendor, status: :suspended),
+                  create(:vendor, merged_into_user: @vendor, merged_at: Time.current)]
+      item = create(:equipment_item, purchase_order: create(:purchase_order, vendor: @vendor))
+      forms = {
+        new_admin_purchase_order_path(need_ids: [@phone_need.id]) => '#purchase_order_vendor_id',
+        edit_admin_purchase_order_correction_path(item.purchase_order) => '#purchase_order_vendor_id',
+        edit_admin_equipment_item_path(item) => '#new_purchase_order_vendor_id'
+      }
+
+      forms.each do |path, picker|
+        get path
+
+        assert_response :success
+        [@vendor, legacy].each { |vendor| assert_select "#{picker} option[value=?]", vendor.id.to_s }
+        excluded.each { |vendor| assert_select "#{picker} option[value=?]", vendor.id.to_s, count: 0 }
+      end
+    end
+
     test 'one create records the four unit example on a shared PO through the request boundary' do
       assert_difference('PurchaseOrder.count', 1) do
         assert_difference('EquipmentItem.count', 4) { post admin_purchase_orders_path, params: submission }
@@ -49,6 +69,10 @@ module Admin
       assert_response :success
       assert_includes response.body, 'Awaiting Shipment'
       order.equipment_items.each { |item| assert_select "#equipment-item-#{item.id}" }
+      get admin_purchase_orders_path(return_context: @context)
+      assert_select 'a[href=?]', admin_equipment_index_path(@context), text: 'Back to Equipment'
+      assert_select 'a[href=?]', admin_purchase_order_path(order, return_context: @context)
+      assert_select 'li', text: /4 units across 2 applications/
     end
 
     test 'invalid PO retry retains reduced quantities header values versions and filter context' do
@@ -61,11 +85,14 @@ module Admin
           post admin_purchase_orders_path, params: parameters
         end
         assert_response :unprocessable_entity
-        assert_select '[role="alert"]', text: /Sent at/
+        assert_select '#purchase-order-errors[role=alert][tabindex="-1"][data-controller=error-summary]'
+        assert_select '[role="alert"]', text: /Date PO sent/
         assert_select "#quantity_#{@two_phones.id}[value='1']"
         assert_select '#purchase_order_vendor_id option[selected][value=?]', @vendor.id.to_s
         assert_select '#purchase_order_number[value="00042"]'
         assert_select '#purchase_order_sent_at[value="13/45/2026"]'
+        assert_select '#purchase_order_sent_at[aria-invalid=true][aria-describedby="purchase_order_sent_at-help purchase_order_sent_at-error"]'
+        assert_select '#purchase_order_sent_at-error', text: /Date PO sent is invalid/
         assert_select 'input[name="purchase_order[needs][][lock_version]"][value="0"]', count: 3
         assert_select 'input[name="return_context[vendor_id]"][value=?]', @vendor.id.to_s
         assert_select 'a[href=?]', admin_equipment_index_path(@context), text: 'Back to Equipment'

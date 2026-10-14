@@ -4,20 +4,15 @@ require 'csv'
 
 module Admin
   class EquipmentController < BaseController
-    include EquipmentHelper
-
     def index
-      @context = equipment_return_context(params).reverse_merge(tab: 'needs_ordering')
+      @context = Equipment::RequestParameters.return_context(params).reverse_merge(tab: 'needs_ordering')
       queue = Equipment::Queue.new(**@context.symbolize_keys)
       respond_to do |format|
         format.html do
           @groups = queue.groups
           @products = Product.ordered_by_name
-          @vendors = Users::Vendor.where(status: :active).order(:business_name)
-          @legacy_applications = Application.where(fulfillment_type: :equipment)
-                                            .where.not(equipment_po_sent_at: nil)
-                                            .or(Application.where(fulfillment_type: :equipment).where.not(equipment_tracking_number: [nil, '']))
-                                            .where.missing(:equipment_items).order(:id)
+          @vendors = Users::Vendor.equipment_procurement_eligible.order(:business_name)
+          @legacy_applications = Application.equipment_legacy_review.order(:id)
         end
         format.csv { export(queue) }
       end
@@ -44,7 +39,7 @@ module Admin
       end
       send_data csv, type: 'text/csv; charset=utf-8', filename: "equipment-bids-#{Date.current.iso8601}.csv", disposition: 'attachment'
     rescue Equipment::Conflict => e
-      redirect_to equipment_return_path(@context), alert: e.message
+      redirect_to admin_equipment_index_path(@context), alert: e.message
     end
   end
 end

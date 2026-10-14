@@ -10,7 +10,7 @@ module Equipment
       Mutation.authorize!(@actor)
       need_rows = Array(needs).map(&:symbolize_keys)
       item_rows = Array(items).map(&:symbolize_keys)
-      validate_selection!(need_rows, item_rows)
+      needs_by_id, items_by_id = validate_selection!(need_rows, item_rows)
       order = nil
       ApplicationRecord.transaction do
         selected_needs = EquipmentNeed.where(id: need_rows.pluck(:id))
@@ -28,10 +28,10 @@ module Equipment
         locked_items = selected_items.order(:id).lock.to_a
         raise Conflict, 'Equipment selection changed. Refresh and select again.' unless locked_needs.size == need_rows.size && locked_items.size == item_rows.size
 
-        consume_needs!(locked_needs, need_rows, order)
-        relink_items!(locked_items, item_rows, order)
+        ordered_item_ids = consume_needs!(locked_needs, needs_by_id, order)
+        ordered_item_ids.concat(relink_items!(locked_items, items_by_id, order))
         Mutation.audit!(order, actor: @actor, action: 'equipment_order_recorded', changes: order.previous_changes.except('updated_at', 'created_at'),
-                               application_ids: application_ids, equipment_item_ids: @ordered_item_ids,
+                               application_ids: application_ids, equipment_item_ids: ordered_item_ids,
                                legacy_mapping: legacy_mapping)
       end
       order
@@ -43,7 +43,12 @@ module Equipment
 
     def validate_selection!(needs, items)
       raise Conflict, 'Select at least one equipment need or detached device.' if needs.empty? && items.empty?
-      raise Conflict, 'Select each row only once.' unless needs.pluck(:id).map(&:to_s).uniq.size == needs.size && items.pluck(:id).map(&:to_s).uniq.size == items.size
+
+      needs_by_id = needs.index_by { |row| row[:id].to_s }
+      items_by_id = items.index_by { |row| row[:id].to_s }
+      raise Conflict, 'Select each row only once.' unless needs_by_id.size == needs.size && items_by_id.size == items.size
+
+      [needs_by_id, items_by_id]
     end
 
     def obtain_order!(id, version, attributes)
@@ -53,15 +58,15 @@ module Equipment
         order
       else
         values = attributes.symbolize_keys.slice(:vendor_id, :number, :sent_at)
-        values[:vendor] = Users::Vendor.where(status: :active).find(values.delete(:vendor_id))
+        values[:vendor] = Users::Vendor.find(values.delete(:vendor_id))
         PurchaseOrder.create!(values)
       end
     end
 
     def consume_needs!(needs, rows, order)
-      @ordered_item_ids = []
+      ordered_item_ids = []
       needs.each do |need|
-        row = rows.find { |selection| selection[:id].to_s == need.id.to_s }
+        row = rows[need.id.to_s]
         Mutation.version!(need, row[:lock_version])
         quantity = Integer(row[:quantity].to_s, 10)
         raise Conflict, 'Order quantities must be positive and no greater than the remaining need.' unless quantity.positive? && quantity <= need.remaining_quantity
@@ -71,29 +76,32 @@ module Equipment
         quantity.times do
           item = EquipmentItem.create!(application: need.application, product: need.product,
                                        source_evaluation: need.source_evaluation, purchase_order: order)
-          @ordered_item_ids << item.id
+          ordered_item_ids << item.id
           Mutation.audit!(item, actor: @actor, action: 'equipment_item_ordered', changes: { purchase_order_id: [nil, order.id], product_id: [nil, item.product_id] },
                                 application_ids: [item.application_id], purchase_order_id: order.id, purchase_order_ids: [order.id])
         end
         Mutation.audit!(need, actor: @actor, action: 'equipment_need_consumed', changes: need.previous_changes.slice('remaining_quantity'),
                               application_ids: [need.application_id], purchase_order_id: order.id, purchase_order_ids: [order.id])
       end
+      ordered_item_ids
     rescue ArgumentError
       raise Conflict, 'Enter whole positive order quantities.'
     end
 
     def relink_items!(items, rows, order)
+      ordered_item_ids = []
       items.each do |item|
-        row = rows.find { |selection| selection[:id].to_s == item.id.to_s }
+        row = rows[item.id.to_s]
         Mutation.version!(item, row[:lock_version])
         raise Conflict, 'A selected device is no longer awaiting reorder.' unless item.purchase_order_id.nil? && item.shipped_at.nil? && item.withdrawn_at.nil?
         raise Conflict, 'A selected catalog product is no longer available.' if item.product.archived?
 
         item.update!(purchase_order: order)
-        @ordered_item_ids << item.id
+        ordered_item_ids << item.id
         Mutation.audit!(item, actor: @actor, action: 'equipment_item_reordered', changes: item.previous_changes.slice('purchase_order_id'),
                               application_ids: [item.application_id], purchase_order_id: order.id, purchase_order_ids: [order.id])
       end
+      ordered_item_ids
     end
   end
 end

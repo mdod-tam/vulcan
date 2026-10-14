@@ -34,13 +34,23 @@ describe("equipment selection", () => {
   test("review count reflects restored and reduced new quantities plus existing detached units", async () => {
     await start(`<form data-controller="equipment-selection" data-equipment-selection-existing-units-value="1">
       <span data-equipment-selection-target="unitCount"></span>
+      <span data-equipment-selection-target="unitLabel"></span>
       <input type="number" value="2" data-equipment-selection-target="quantity" data-action="input->equipment-selection#updateQuantities">
     </form>`)
     const count = document.querySelector("span")
     expect(count.textContent).toBe("3")
+    const label = document.querySelector('[data-equipment-selection-target="unitLabel"]')
+    expect(label.textContent).toBe("physical units")
     const quantity = document.querySelector("input")
     quantity.value = "1"
     quantity.dispatchEvent(new Event("input", { bubbles: true }))
     expect(count.textContent).toBe("2")
+    quantity.value = "0"
+    quantity.dispatchEvent(new Event("input", { bubbles: true }))
+    expect(count.textContent).toBe("1")
+    expect(label.textContent).toBe("physical unit")
+    quantity.value = "2"
+    quantity.dispatchEvent(new Event("input", { bubbles: true }))
+    expect(label.textContent).toBe("physical units")
   })
 })

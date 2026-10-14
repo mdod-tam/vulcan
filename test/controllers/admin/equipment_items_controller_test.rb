@@ -27,7 +27,11 @@ module Admin
         expected_version: 0, reason: 'Record shipment', return_context: { tab: 'ordered', product_id: @item.product_id, vendor_id: @item.purchase_order.vendor_id }
       }
       assert_response :unprocessable_entity
+      assert_select '#equipment-item-errors[role=alert][tabindex="-1"][data-controller=error-summary]'
+      assert_select '#equipment-item-errors li', text: /Date shipped is invalid/
       assert_select 'input[name="equipment_item[shipped_at]"][value="13/45/2026"]'
+      assert_select '#equipment_item_shipped_at[aria-invalid=true][aria-describedby="equipment-ship-date-help equipment-ship-date-error"]'
+      assert_select '#equipment-ship-date-error', text: /Date shipped is invalid/
       assert_select 'input[name="equipment_item[tracking_number]"][value="RetryPackage"]'
       assert_select 'input[name="equipment_item[serial_number]"][value="RetrySerial"]'
       assert_select 'input[name="equipment_item[imei]"][value="123456789012345"]'
@@ -37,19 +41,38 @@ module Admin
       assert_nil @item.reload.shipped_at
       assert_nil @item.tracking_number
       replacement = create(:product)
-      patch admin_equipment_item_path(@item), params: { review: '1', equipment_item: { product_id: replacement.id }, expected_version: 0, reason: 'Review replacement model' }
+      patch admin_equipment_item_path(@item), params: { review: '1', equipment_item: { product_id: replacement.id, shipped_at: Date.current, carrier: 'usps',
+                                                                                       imei: '123456789012345' }, expected_version: 0, reason: 'Review replacement model' }
       original_label = "#{@item.product.manufacturer} / #{@item.product.name} / #{@item.product.model_number}"
       replacement_label = "#{replacement.manufacturer} / #{replacement.name} / #{replacement.model_number}"
       assert_select 'form[data-turbo=false] input[name=impact_token]'
       assert_select 'dd', text: /#{Regexp.escape(original_label)}\s*→\s*#{Regexp.escape(replacement_label)}/
+      assert_select 'dt', text: 'Actual catalog product:'
+      assert_select 'dt', text: 'Date shipped:'
+      assert_select 'dt', text: 'IMEI (15 digits):'
+      assert_select 'dd', text: "Not recorded → #{Date.current.strftime('%m/%d/%Y')}"
+      assert_select 'dd', text: 'Not recorded → USPS'
+      assert_select 'dt', count: 4
     end
 
     test 'identity conflict links are available only in the authorized correction form' do
       conflict = create(:equipment_item, imei: '123456789012345')
-      patch admin_equipment_item_path(@item), params: { equipment_item: { imei: '123456789012345' }, expected_version: 0, reason: 'Identify device' }
+      context = { tab: 'ordered', product_id: @item.product_id.to_s, vendor_id: @item.purchase_order.vendor_id.to_s }
+      patch admin_equipment_item_path(@item), params: { equipment_item: { imei: '123456789012345' }, expected_version: 0, reason: 'Identify device', return_context: context }
       assert_response :unprocessable_entity
-      assert_select "a[href='#{edit_admin_equipment_item_path(conflict)}']", text: "Review equipment item ##{conflict.id}"
+      assert_select 'a[href=?]', edit_admin_equipment_item_path(conflict, return_context: context), text: "Review equipment item ##{conflict.id}"
+      assert_select '[role=alert]', text: /IMEI/
       assert_nil @item.reload.imei
+    end
+
+    test 'a linked device can be detached only through the explicit correction action' do
+      get edit_admin_equipment_item_path(@item)
+      assert_select '#equipment_item_purchase_order_id option[value=""]', count: 0
+      assert_select '#operation option[value=detach]', text: 'Detach an unshipped device for reorder'
+
+      Equipment::Correction.new(actor: @admin).update_item!(item: @item, attributes: {}, expected_version: 0, reason: 'Await a replacement order', operation: 'detach')
+      get edit_admin_equipment_item_path(@item)
+      assert_select '#equipment_item_purchase_order_id option[value=""]', text: 'No current purchase order'
     end
 
     test 'shipment save preserves allowlisted equipment tab and filters' do

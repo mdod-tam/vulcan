@@ -1,7 +1,7 @@
-<%# locals: (application:) -%>
-<% report = equipment_source_report(application) # rubocop:disable Lint/UselessAssignment -- Used by later ERB fragments. %>
+<%# locals: (application:, heading_level: 3) -%>
+<% report = application.equipment_source_report # rubocop:disable Lint/UselessAssignment -- Used by later ERB fragments. %>
 <section class="mb-6" aria-labelledby="original-recommendation-title">
-  <h2 id="original-recommendation-title" class="text-lg font-semibold text-gray-900 mb-2">Original assessment recommendation</h2>
+  <%= content_tag "h#{heading_level}", 'Original assessment recommendation', id: 'original-recommendation-title', class: 'text-lg font-semibold text-gray-900 mb-2' %>
   <% if report %>
     <p class="text-sm text-gray-600">
       <%= report.assessment_source.humanize %> · <%= report.evaluator.full_name %> · Report submitted

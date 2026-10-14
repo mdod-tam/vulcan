@@ -31,6 +31,7 @@ class Application < ApplicationRecord
   include VoucherManagement
   include TrainingManagement
   include EvaluationManagement
+  include Applications::EquipmentFulfillment
   include ContactChangeAudit
 
   # The nested provider form uses this virtual attribute.
@@ -512,22 +513,6 @@ class Application < ApplicationRecord
     managing_guardian_id.present?
   end
 
-  # Admin fulfillment responsibility
-
-  def admin_fulfillment_responsibility_state
-    return :voucher_no_equipment if voucher_fulfillment?
-
-    return :legacy_review if equipment_legacy_unmapped?
-    return :needs_action if equipment_needs.any? { |need| need.remaining_quantity.positive? } || equipment_items.any? { |item| item.queue_status == 'needs_ordering' }
-
-    active_items = equipment_items.reject(&:withdrawn_at?)
-    return :po_sent if active_items.any? { |item| item.shipped_at.nil? }
-    return :shipped if active_items.any?
-    return :no_equipment if equipment_needs_initialized_at
-
-    :pending_evaluation
-  end
-
   # Workflow predicates
 
   def income_collection_enabled?
@@ -544,14 +529,6 @@ class Application < ApplicationRecord
 
   def equipment_fulfillment?
     fulfillment_type_equipment?
-  end
-
-  def equipment_procurement_eligible?
-    status_approved? && equipment_fulfillment?
-  end
-
-  def equipment_legacy_unmapped?
-    (equipment_po_sent_at.present? || equipment_tracking_number.present?) && equipment_items.empty?
   end
 
   def required_proofs_approved?

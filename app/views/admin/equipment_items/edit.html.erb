@@ -4,15 +4,8 @@
                  admin_application_path(@item.application, anchor: "equipment-item-#{@item.id}", return_context: @return_context),
                  class: 'text-indigo-700 underline' %></p>
   <p><%= equipment_queue_badge(@item) %></p>
-  <% if @form_errors.present? %>
-    <div role="alert" tabindex="-1" class="rounded border border-red-300 bg-red-50 p-4 text-red-900">
-      <h2 class="font-semibold">Review the equipment correction</h2>
-      <ul class="list-disc pl-5"><% @form_errors.each do |error| %><li><%= error %></li><% end %></ul>
-      <% Array(@item.identity_conflicts).uniq.each do |conflict| %>
-        <p><%= link_to "Review equipment item ##{conflict.id}", edit_admin_equipment_item_path(conflict), class: 'underline' %></p>
-      <% end %>
-    </div>
-  <% end %>
+  <%= render 'admin/equipment/form_errors', errors: @form_errors, id: 'equipment-item-errors', title: 'Review the equipment correction',
+                                            conflicts: Array(@item.identity_conflicts), return_context: @return_context %>
   <%= form_with model: @item, url: admin_equipment_item_path(@item), method: :patch, local: true, data: { turbo: false }, class: 'space-y-4' do |form| %>
     <%= hidden_field_tag :expected_version, @expected_version %>
     <% @return_context.each do |key, value| %><%= hidden_field_tag "return_context[#{key}]", value %><% end %>
@@ -26,7 +19,7 @@
       <%= form.label :purchase_order_id, 'Current purchase order', class: 'block font-medium' %>
       <%= form.select :purchase_order_id,
                       @purchase_orders.map { |order| ["#{order.vendor.business_name} / #{order.number}", order.id] },
-                      { include_blank: 'No current purchase order' }, class: 'mt-1 w-full rounded border-gray-300' %>
+                      { include_blank: (@item.purchase_order_id_in_database.blank? ? 'No current purchase order' : false) }, class: 'mt-1 w-full rounded border-gray-300' %>
     </div>
     <details class="rounded border border-gray-300 p-3" <%= 'open' if params[:create_purchase_order] == '1' %>>
       <summary class="font-medium cursor-pointer">Move to a new purchase order</summary>
@@ -43,8 +36,11 @@
         <%= form.label :shipped_at, 'Date shipped', class: 'block font-medium' %>
         <%= form.text_field :shipped_at,
                             typed_date_field_options(value: typed_date_input_value(@item, :shipped_at), class: 'mt-1 w-full rounded border-gray-300',
-                                                     'aria-describedby': 'equipment-ship-date-help') %>
+                                                     'aria-invalid': @item.errors[:shipped_at].any?,
+                                                     'aria-describedby': ['equipment-ship-date-help',
+                                                                          ('equipment-ship-date-error' if @item.errors[:shipped_at].any?)].compact.join(' ')) %>
         <p id="equipment-ship-date-help" class="text-sm text-gray-600">MM/DD/YYYY, on or after the PO date and no later than today. Tracking alone leaves the device Ordered.</p>
+        <% if @item.errors[:shipped_at].any? %><p id="equipment-ship-date-error" class="text-sm text-red-700"><%= @item.errors.full_messages_for(:shipped_at).to_sentence %></p><% end %>
       </div>
       <div>
         <%= form.label :tracking_number, class: 'block font-medium' %>
@@ -81,30 +77,13 @@
       <%= text_area_tag :reason, params[:reason], required: true, rows: 2, class: 'mt-1 w-full rounded border-gray-300' %>
     </div>
     <% if @reviewing %>
-      <%= hidden_field_tag :reviewing, '1' %>
-      <%= hidden_field_tag :impact_token, @impact_token %>
-      <div class="rounded border border-amber-300 bg-amber-50 p-4">
-        <h2 class="font-semibold">Correction impact: 1 device across 1 application</h2>
-        <p>Shipped devices affected: <%= @item.shipped_at_in_database.present? ? 1 : 0 %>.</p>
-        <dl class="mt-2 space-y-1">
-          <% Equipment::Correction::ITEM_FIELDS.first(7).each do |field| %>
-            <div>
-              <dt class="inline font-medium"><%= field.delete_suffix('_id').humanize %>:</dt>
-              <dd class="inline">
-                <%= equipment_impact_value(field, @previous_values[field], products: @products, purchase_orders: @purchase_orders) %> →
-                <%= equipment_impact_value(field, @item.public_send(field), products: @products, purchase_orders: @purchase_orders,
-                                                                            vendors: @vendors, new_purchase_order: (if params[:create_purchase_order] == '1'
-                                                                                                                      @new_purchase_order
-                                                                                                                    end)) %>
-              </dd>
-            </div>
-          <% end %>
-        </dl>
-        <p class="mt-3">
-          <%= check_box_tag :confirmed_impact, '1', false, required: true %>
-          <%= label_tag :confirmed_impact, 'I confirm this correction and its impact on shipment history.' %>
-        </p>
-      </div>
+      <%= render 'admin/equipment/correction_impact', record: @item, previous_values: @previous_values,
+                                                      fields: Equipment::Correction::EDITABLE_ITEM_FIELDS, impact_token: @impact_token,
+                                                      title: 'Correction impact: 1 device across 1 application',
+                                                      body: "Shipped devices affected: #{@item.shipped_at_in_database.present? ? 1 : 0}.",
+                                                      confirmation: 'I confirm this correction and its impact on shipment history.',
+                                                      products: @products, purchase_orders: @purchase_orders, vendors: @vendors,
+                                                      new_purchase_order: (@new_purchase_order if params[:create_purchase_order] == '1') %>
     <% end %>
     <% if @item.shipped_at_in_database.present? && !@reviewing %>
       <%= button_tag 'Review correction', name: :review, value: '1', formnovalidate: true, class: 'rounded bg-indigo-700 px-4 py-2 text-white' %>
@@ -118,5 +97,5 @@
   <p><%= link_to 'Refresh equipment item and discard this draft',
                  edit_admin_equipment_item_path(@item, return_context: @return_context), class: 'text-indigo-700 underline' %></p>
   <% if @return_context.any? %><%= link_to 'Back to Equipment', equipment_return_path(@return_context), class: 'text-indigo-700 underline' %><% end %>
-  <%= render 'admin/equipment_items/history', events: @history %>
+  <%= render 'admin/equipment_items/history', events: @history, audit_records: @equipment_audit_records %>
 </div>

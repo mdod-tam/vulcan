@@ -7,7 +7,7 @@ namespace :equipment_needs do
     Equipment::Mutation.authorize!(actor)
     initialized = 0
     skipped = 0
-    Application.where(status: :approved, fulfillment_type: :equipment, equipment_needs_initialized_at: nil).find_each do |application|
+    Application.equipment_procurement_eligible.where(equipment_needs_initialized_at: nil).find_each do |application|
       application.with_lock do
         evaluation = application.evaluations.completed_sessions.by_report_submission.first
         if application.equipment_procurement_eligible? && evaluation && EquipmentNeeds::Writer.initialize_from!(evaluation, actor: actor)

@@ -48,6 +48,25 @@ module Evaluations
       assert_equal 'completed', @evaluation.reload.status
     end
 
+    test 'report completion clears review bookkeeping and initializes needs without resubmitting historical intake' do
+      application = @evaluation.application
+      application.update_columns(maryland_resident: false, needs_review_since: 1.day.ago)
+      original = application.reload.attributes.except('needs_review_since', 'equipment_needs_initialized_at', 'updated_at')
+      assert_not application.valid?
+
+      assert_difference 'Event.where(action: "evaluation_completed").count', 1 do
+        result = SubmissionService.new(@evaluation, submission_params, actor: @evaluator).call
+        assert result.success?, result.message
+      end
+
+      assert_equal 'completed', @evaluation.reload.status
+      assert_nil application.reload.needs_review_since
+      assert application.equipment_needs_initialized_at
+      assert_equal original, application.attributes.except('needs_review_since', 'equipment_needs_initialized_at', 'updated_at')
+      assert_equal [@product.id], application.equipment_needs.pluck(:product_id)
+      assert_equal 1, application.events.where(action: 'equipment_needs_initialized').count
+    end
+
     test 'missing or blank outcome cannot use the stored catalog default to complete a report' do
       [:omitted, nil, '', ' '].each do |outcome|
         parameters = submission_params

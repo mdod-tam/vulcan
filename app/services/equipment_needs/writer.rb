@@ -14,7 +14,7 @@ module EquipmentNeeds
               application.equipment_needs.create!(product: product, remaining_quantity: 1, source_evaluation: evaluation)
             end
           end
-          application.update!(equipment_needs_initialized_at: Time.current)
+          stamp_initialization!(application)
           Equipment::Mutation.audit!(application, actor: actor, action: 'equipment_needs_initialized',
                                                   changes: { equipment_needs: { old: [], new: snapshot(application.equipment_needs.order(:id)) } },
                                                   source_evaluation_id: evaluation.id)
@@ -41,8 +41,9 @@ module EquipmentNeeds
         save_rows!(application, needs, submitted)
         after = snapshot(application.equipment_needs.order(:id))
         first_edit = application.equipment_needs_initialized_at.nil?
-        application.update!(equipment_needs_initialized_at: Time.current) if first_edit
-        if before != after || first_edit
+        stamp_initialization!(application) if first_edit
+        first_decision = !application.equipment_needs_events.exists?(action: 'equipment_needs_updated')
+        if before != after || first_edit || first_decision
           Equipment::Mutation.audit!(application, actor: actor, action: 'equipment_needs_updated',
                                                   changes: { equipment_needs: { old: before, new: after } }, reason: reason.to_s.strip)
         end
@@ -59,6 +60,14 @@ module EquipmentNeeds
       raise Equipment::Conflict, 'Purchasing needs require a completed evaluation report.'
     end
     private_class_method :validate_report!
+
+    def self.stamp_initialization!(application)
+      # This marker is bookkeeping; intake validations and lifecycle callbacks do not apply.
+      return if application.touch(:equipment_needs_initialized_at) # rubocop:disable Rails/SkipsModelValidations -- Initialization bookkeeping only.
+
+      raise ActiveRecord::RecordNotSaved.new('Purchasing needs initialization was not recorded.', application)
+    end
+    private_class_method :stamp_initialization!
 
     def self.normalize_rows(rows)
       Array(rows).filter_map do |attributes|

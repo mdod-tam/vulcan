@@ -10,7 +10,7 @@
 #
 # It's strongly recommended that you check this file into your version control system.
 
-ActiveRecord::Schema[8.1].define(version: 2026_10_13_120000) do
+ActiveRecord::Schema[8.1].define(version: 2026_10_14_120000) do
   # These are extensions that must be enabled in order to support this database
   enable_extension "pg_catalog.plpgsql"
 
@@ -258,7 +258,7 @@ ActiveRecord::Schema[8.1].define(version: 2026_10_13_120000) do
     t.index ["server_id", "last_checked_at", "id"], name: "index_email_delivery_attempts_on_pollable", order: { last_checked_at: "NULLS FIRST" }, where: "((delivered_at IS NULL) AND (bounced_at IS NULL) AND (complained_at IS NULL) AND ((state)::text <> 'failed'::text) AND (provider_message_id IS NOT NULL) AND (check_count < 8))"
     t.index ["server_id", "provider_message_id", "recipient_key"], name: "email_attempt_provider_recipient", unique: true
     t.check_constraint "check_count >= 0", name: "email_attempt_check_count"
-    t.check_constraint "state::text = ANY (ARRAY['unknown'::character varying, 'accepted'::character varying, 'failed'::character varying]::text[])", name: "email_attempt_state"
+    t.check_constraint "state::text = ANY (ARRAY['unknown'::character varying::text, 'accepted'::character varying::text, 'failed'::character varying::text])", name: "email_attempt_state"
   end
 
   create_table "email_delivery_receipts", force: :cascade do |t|
@@ -270,7 +270,7 @@ ActiveRecord::Schema[8.1].define(version: 2026_10_13_120000) do
     t.datetime "updated_at", null: false
     t.index ["email_delivery_attempt_id", "event_key"], name: "email_receipt_event", unique: true
     t.index ["email_delivery_attempt_id"], name: "index_email_delivery_receipts_on_email_delivery_attempt_id"
-    t.check_constraint "kind::text = ANY (ARRAY['delivered'::character varying, 'bounced'::character varying, 'complained'::character varying, 'opened'::character varying, 'delayed'::character varying]::text[])", name: "email_receipt_kind"
+    t.check_constraint "kind::text = ANY (ARRAY['delivered'::character varying::text, 'bounced'::character varying::text, 'complained'::character varying::text, 'opened'::character varying::text, 'delayed'::character varying::text])", name: "email_receipt_kind"
   end
 
   create_table "email_templates", force: :cascade do |t|
@@ -364,7 +364,7 @@ ActiveRecord::Schema[8.1].define(version: 2026_10_13_120000) do
     t.index ["application_id"], name: "index_evaluations_on_application_id"
     t.index ["constituent_id"], name: "index_evaluations_on_constituent_id"
     t.index ["evaluator_id"], name: "index_evaluations_on_evaluator_id"
-    t.check_constraint "assessment_source::text = ANY (ARRAY['direct_assessment'::character varying, 'outside_specialist'::character varying]::text[])", name: "evaluation_assessment_source"
+    t.check_constraint "assessment_source::text = ANY (ARRAY['direct_assessment'::character varying::text, 'outside_specialist'::character varying::text])", name: "evaluation_assessment_source"
   end
 
   create_table "evaluations_products", id: false, force: :cascade do |t|

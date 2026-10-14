@@ -1,13 +1,12 @@
-<main class="container mx-auto max-w-4xl px-4 py-8" aria-labelledby="equipment-needs-title">
+<div class="container mx-auto max-w-4xl px-4 py-8">
   <h1 id="equipment-needs-title" class="text-2xl font-semibold text-gray-900 mb-4">Purchasing needs for application #<%= @application.id %></h1>
   <p id="equipment-needs-help" class="text-sm text-gray-600 mb-4">These quantities describe new devices still needed. Set a quantity to zero to remove it. To replace a model, set its quantity to zero and add the new model. Previously ordered devices awaiting reorder are edited individually.</p>
-  <% if @error %>
-    <div role="alert" class="rounded-md bg-red-50 p-4 mb-4 text-red-800">
-      <p><%= @error %></p>
-      <%= link_to 'Refresh purchasing needs', edit_admin_application_equipment_needs_path(@application, return_context: @return_context), class: 'underline' %>
-    </div>
+  <% if @application.equipment_legacy_review? %>
+    <p class="rounded border border-amber-300 bg-amber-50 p-4 mb-4">Earlier fulfillment recorded: confirm what still needs ordering.</p>
   <% end %>
-  <%= render 'admin/applications/equipment_recommendations', application: @application %>
+  <%= render 'admin/equipment/form_errors', errors: @form_errors, id: 'equipment-needs-errors',
+                                            review_path: edit_admin_application_equipment_needs_path(@application, return_context: @return_context) %>
+  <%= render 'admin/applications/equipment_recommendations', application: @application, heading_level: 2 %>
   <% if @application.equipment_procurement_eligible? %>
     <%= form_with url: admin_application_equipment_needs_path(@application), method: :patch, scope: :equipment_needs,
                   class: 'space-y-6', aria: { describedby: 'equipment-needs-help' } do |form| %>
@@ -41,7 +40,8 @@
       <% end %>
       <div>
         <%= form.label :reason, 'Reason for adjustment', class: 'block text-sm font-medium text-gray-700' %>
-        <%= form.text_field :reason, value: @reason, required: true, class: 'mt-1 w-full rounded-md border-gray-300' %>
+        <%= form.text_field :reason, value: @reason, required: true, aria: { describedby: 'equipment-needs-reason-help' }, class: 'mt-1 w-full rounded-md border-gray-300' %>
+        <p id="equipment-needs-reason-help" class="text-sm text-gray-600">Explain the purchasing decision, including a decision that no new devices are needed.</p>
       </div>
       <div class="flex flex-wrap gap-4 items-center">
         <%= form.submit 'Save purchasing needs', class: 'rounded-md bg-indigo-600 px-4 py-2 text-white hover:bg-indigo-700 focus:ring-2 focus:ring-indigo-500' %>
@@ -53,4 +53,4 @@
     <p class="text-gray-600">Purchasing needs can be changed only for approved equipment applications.</p>
     <%= link_to 'Return to application equipment', admin_application_path(@application, anchor: 'equipment'), class: 'text-indigo-600 underline' %>
   <% end %>
-</main>
+</div>

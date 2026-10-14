@@ -61,7 +61,8 @@ module Evaluators
       @upcoming_evaluations = (current_user.admin? ? Evaluation.active : current_user.evaluations.active)
                               .includes(:constituent).order(evaluation_date: :asc).limit(5)
       @recent_evaluations = (current_user.admin? ? Evaluation.completed_sessions : current_user.evaluations.completed_sessions)
-                            .includes(:constituent, application: %i[equipment_needs equipment_items]).by_report_submission.limit(5)
+                            .includes(:constituent, :application).by_report_submission.limit(5).to_a
+      Application.preload_equipment_fulfillment(@recent_evaluations.map(&:application))
 
       load_admin_display_data if current_user.admin?
     end

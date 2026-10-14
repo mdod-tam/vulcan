@@ -2,14 +2,16 @@
   <div class="flex flex-wrap items-center justify-between gap-4 mb-6">
     <h1 class="text-2xl font-bold">Equipment</h1>
     <div class="flex gap-4">
-      <%= link_to 'Purchase Orders', admin_purchase_orders_path, class: 'text-indigo-700 underline' %>
+      <%= link_to 'Purchase Orders', admin_purchase_orders_path(return_context: @context), class: 'text-indigo-700 underline' %>
       <%= link_to 'Applications', admin_applications_path, class: 'text-indigo-700 underline' %>
     </div>
   </div>
   <nav aria-label="Equipment queues" class="flex flex-wrap gap-4 mb-6">
-    <% EquipmentHelper::EQUIPMENT_TABS.each do |tab| %>
+    <% Equipment::RequestParameters::TABS.each do |tab| %>
       <%= link_to tab.titleize, admin_equipment_index_path(@context.merge(tab: tab)), aria: { current: @context[:tab] == tab ? 'page' : nil },
-                                                                                      class: 'text-indigo-700 underline' %>
+                                                                                      class: class_names('rounded px-3 py-2',
+                                                                                                         'bg-indigo-700 font-semibold text-white': @context[:tab] == tab,
+                                                                                                         'text-indigo-700 underline': @context[:tab] != tab) %>
     <% end %>
   </nav>
   <%= form_with url: admin_equipment_index_path, method: :get, class: 'flex flex-wrap items-end gap-4 mb-6' do |form| %>
@@ -39,14 +41,14 @@
     <% @groups.each do |product, rows| %>
       <section class="rounded border border-gray-200 bg-white p-4 mb-4" data-equipment-selection-target="group">
         <h2 class="text-lg font-semibold"><%= equipment_catalog_label(product) %></h2>
-        <p class="text-sm text-gray-600"><%= rows.sum { |row| row.is_a?(EquipmentNeed) ? row.remaining_quantity : 1 } %> units across
+        <p class="text-sm text-gray-600"><%= pluralize(rows.sum { |row| row.is_a?(EquipmentNeed) ? row.remaining_quantity : 1 }, 'unit') %> across
            <%= pluralize(rows.map(&:application_id).uniq.size, 'application') %>
         </p>
         <% if @context[:tab] == 'needs_ordering' %>
           <label class="inline-flex items-center gap-2 my-3">
             <%= check_box_tag 'group_product_ids[]', product.id, false, id: "equipment-group-#{product.id}",
                                                                         data: { action: 'equipment-selection#selectGroup', equipment_selection_target: 'groupCheckbox' } %>
-            Select group
+            Select group<span class="sr-only">: <%= equipment_catalog_label(product) %></span>
           </label>
         <% end %>
         <ul class="divide-y divide-gray-100">
@@ -89,11 +91,13 @@
     <% end %>
   <% end %>
   <% if @legacy_applications.any? %>
-    <section class="rounded border border-amber-300 bg-amber-50 p-4">
-      <h2 class="font-semibold">Earlier fulfillment details need review</h2>
-      <p class="text-sm">These applications have historical PO or tracking facts without mapped device records. Review and explicitly map them before recording an order.</p>
-      <% @legacy_applications.each do |application| %><%= link_to "Application ##{application.id}", admin_application_path(application, anchor: 'equipment'),
-                                                                  class: 'inline-block mr-4 text-indigo-700 underline' %><% end %>
+    <section id="equipment-legacy-review" aria-labelledby="equipment-legacy-review-title" class="rounded border border-amber-300 bg-amber-50 p-4">
+      <h2 id="equipment-legacy-review-title" class="font-semibold">Earlier fulfillment details need review</h2>
+      <p class="text-sm">These approved applications have earlier PO or tracking facts without device records and no purchasing decision yet. Confirm what still needs ordering in the needs editor, including an empty list when nothing remains. A later order requires explicit mapping confirmation.</p>
+      <% @legacy_applications.each do |application| %>
+        <%= link_to "Application ##{application.id}", admin_application_path(application, anchor: 'equipment', return_context: @context),
+                    class: 'inline-block mr-4 text-indigo-700 underline' %>
+      <% end %>
     </section>
   <% end %>
 </div>

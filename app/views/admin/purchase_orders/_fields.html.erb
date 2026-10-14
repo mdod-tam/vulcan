@@ -14,7 +14,12 @@
     <%= form.text_field :sent_at,
                         typed_date_field_options(value: typed_date_input_value(purchase_order, :sent_at),
                                                  class: 'mt-1 w-full rounded border-gray-300',
-                                                 'aria-describedby': "#{form.field_id(:sent_at)}-help") %>
+                                                 'aria-invalid': purchase_order.errors[:sent_at].any?,
+                                                 'aria-describedby': ["#{form.field_id(:sent_at)}-help",
+                                                                      ("#{form.field_id(:sent_at)}-error" if purchase_order.errors[:sent_at].any?)].compact.join(' ')) %>
     <p id="<%= form.field_id(:sent_at) %>-help" class="text-sm text-gray-600">MM/DD/YYYY, no later than today.</p>
+    <% if purchase_order.errors[:sent_at].any? %>
+      <p id="<%= form.field_id(:sent_at) %>-error" class="text-sm text-red-700"><%= purchase_order.errors.full_messages_for(:sent_at).to_sentence %></p>
+    <% end %>
   </div>
 </div>

@@ -49,7 +49,7 @@ module Equipment
                                                  reason: 'Serial reviewed', serial_duplicate_reason: acknowledgment)
       assert_equal 2, EquipmentItem.active.where(normalized_manufacturer: @first.normalized_manufacturer,
                                                  normalized_serial_number: 'MODEL-SERIAL').count
-      assert_equal acknowledgment, @second.events.last.metadata['serial_duplicate_reason']
+      assert_equal acknowledgment, @second.events.last.field_changes['serial_duplicate_reason'].last
       assert_equal 2, Event.where(action: 'equipment_item_corrected', user: @admin).count
     end
 

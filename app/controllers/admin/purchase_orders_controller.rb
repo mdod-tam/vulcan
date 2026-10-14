@@ -2,20 +2,22 @@
 
 module Admin
   class PurchaseOrdersController < BaseController
-    include EquipmentHelper
+    include EquipmentFormHandling
 
     def index
+      @return_context = Equipment::RequestParameters.return_context(params)
       @purchase_orders = PurchaseOrder.includes(:vendor, equipment_items: :application).recent_first
     end
 
     def show
       @purchase_order = PurchaseOrder.includes(:vendor, equipment_items: [:application, :product, { events: :user }]).find(params.expect(:id))
-      @return_context = equipment_return_context(params)
-      @history = equipment_history_for(@purchase_order).includes(:user)
+      @return_context = Equipment::RequestParameters.return_context(params)
+      @history = @purchase_order.equipment_history
+      @equipment_audit_records = Equipment::AuditRecords.for(@history.to_a + @purchase_order.equipment_items.flat_map { |item| item.events.to_a })
     end
 
     def new
-      @return_context = equipment_return_context(params)
+      @return_context = Equipment::RequestParameters.return_context(params)
       selection = Equipment::Queue.new(**@return_context.reverse_merge(tab: 'needs_ordering').symbolize_keys)
                                   .selection(**params.permit(need_ids: [], item_ids: [], group_product_ids: []).to_h.symbolize_keys)
       raise Equipment::Conflict, 'Select equipment in Needs Ordering first.' if selection.values.all?(&:empty?)
@@ -25,11 +27,11 @@ module Admin
       @purchase_order = PurchaseOrder.new(sent_at: Date.current)
       load_review
     rescue Equipment::Conflict => e
-      redirect_to equipment_return_path(@return_context), alert: e.message
+      redirect_to admin_equipment_index_path(@return_context), alert: e.message
     end
 
     def create
-      @return_context = equipment_return_context(params)
+      @return_context = Equipment::RequestParameters.return_context(params)
       permitted = params.expect(purchase_order: [:vendor_id, :number, :sent_at, :existing, :legacy_mapping,
                                                  { needs: [%i[id quantity lock_version]], items: [%i[id lock_version]] }])
       @need_rows = Array(permitted[:needs]).map { |row| row.to_h.symbolize_keys }
@@ -46,7 +48,7 @@ module Admin
       )
       redirect_to admin_purchase_order_path(order, return_context: @return_context), notice: 'Purchase order recorded.'
     rescue Equipment::Conflict, ActiveRecord::RecordInvalid, ActiveRecord::RecordNotFound => e
-      @error = e.is_a?(ActiveRecord::RecordInvalid) ? e.record.errors.full_messages.to_sentence : e.message
+      @form_errors = equipment_form_errors(e)
       load_review
       render :new, status: :unprocessable_content
     end
@@ -54,9 +56,10 @@ module Admin
     private
 
     def load_review
+      @purchase_order.valid? if @form_errors.present? && @existing.blank?
       @needs = EquipmentNeed.includes(:product, :application).where(id: @need_rows.pluck(:id)).index_by(&:id)
       @items = EquipmentItem.includes(:product, :application).where(id: @item_rows.pluck(:id)).index_by(&:id)
-      @vendors = Users::Vendor.where(status: :active).order(:business_name)
+      @vendors = Users::Vendor.equipment_procurement_eligible.order(:business_name)
       @existing_orders = PurchaseOrder.includes(:vendor).recent_first
       @existing_options = @existing_orders.map do |order|
         ["#{order.vendor.business_name} · #{order.number} · #{helpers.accessible_date_value(order.sent_at)}", "#{order.id}:#{order.lock_version}"]

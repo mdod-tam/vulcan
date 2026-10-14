@@ -3,6 +3,24 @@
 require 'test_helper'
 
 class EquipmentItemTest < ActiveSupport::TestCase
+  test 'queue scopes agree with persisted device states including tracking-only and withdrawn records' do
+    application = create(:application, :approved, :with_all_proofs)
+    product = create(:product)
+    order = create(:purchase_order)
+    attributes = { application: application, product: product, purchase_order: order }
+    items = [create(:equipment_item, **attributes, purchase_order: nil), create(:equipment_item, **attributes),
+             create(:equipment_item, **attributes, tracking_number: 'Label only'),
+             create(:equipment_item, **attributes, shipped_at: Date.current, tracking_number: 'Sent package'),
+             create(:equipment_item, **attributes, purchase_order: nil, withdrawn_at: Time.current)]
+    item_ids = items.map(&:id)
+
+    assert_equal %w[needs_ordering ordered ordered shipped withdrawn], items.map(&:queue_status)
+    %w[needs_ordering ordered shipped].each do |state|
+      expected_ids = items.select { |item| item.queue_status == state }.map(&:id).sort
+      assert_equal expected_ids, EquipmentItem.public_send(state).where(id: item_ids).order(:id).pluck(:id)
+    end
+  end
+
   test 'tracking alone stays ordered and shipment requires a truthful date and tracking' do
     item = create(:equipment_item, tracking_number: 'Package-1')
     assert_equal 'ordered', item.queue_status

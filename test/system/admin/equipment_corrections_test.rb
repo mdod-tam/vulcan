@@ -18,7 +18,9 @@ module Admin
       select 'UPS', from: 'Carrier'
       fill_in 'Correction reason', with: 'Record individual device shipment'
       click_button 'Save equipment correction'
-      assert_text 'Shipped at is invalid'
+      assert_text 'Date shipped is invalid'
+      assert_selector '#equipment-item-errors:focus'
+      assert_selector '#equipment_item_shipped_at[aria-invalid=true][aria-describedby="equipment-ship-date-help equipment-ship-date-error"]'
       assert_field 'Date shipped', with: '13/45/2026'
       assert_field 'Tracking number', with: 'OriginalPackage'
       assert_field 'Serial number', with: 'ShipmentSerial'
@@ -27,7 +29,8 @@ module Admin
       take_screenshot('equipment-shipment-invalid-retry', html: true, full: true)
       assert_no_difference -> { item.events.count } do
         click_button 'Save equipment correction'
-        assert_text 'Shipped at is invalid'
+        assert_text 'Date shipped is invalid'
+        assert_selector '#equipment-item-errors:focus'
       end
       fill_in 'Date shipped', with: ''
       fill_in 'Tracking number', with: 'ReplacementPackage'
@@ -104,6 +107,8 @@ module Admin
       click_button 'Review correction'
       assert_text '2 equipment items across 1 application, including 1 shipped device'
       assert_text 'Review old and new header values'
+      assert_selector '.bg-amber-50 dt', text: 'PO number:', count: 1
+      assert_selector '.bg-amber-50 dt', count: 1
       check 'I confirm the impact on all linked equipment and applications.'
       take_screenshot('equipment-shared-po-impact', html: true, full: true)
       click_button 'Save purchase order correction'
@@ -115,13 +120,24 @@ module Admin
       fill_in 'Correction reason', with: 'Correct the individual parcel reference'
       click_button 'Review correction'
       assert_text 'OriginalPackage → CorrectedPackage'
+      assert_selector '.bg-amber-50 dt', text: 'Tracking number:', count: 1
+      assert_selector '.bg-amber-50 dt', count: 1
+      reviewed_token = find('input[name=impact_token]', visible: false).value
       fill_in 'Tracking number', with: 'ReviewedAgainPackage'
       check 'I confirm this correction and its impact on shipment history.'
       click_button 'Save equipment correction'
       assert_text 'Review the current correction values and confirm their impact before saving.'
       assert_field 'Tracking number', with: 'ReviewedAgainPackage'
+      assert_equal reviewed_token, find('input[name=impact_token]', visible: false).value
+      assert_unchecked_field 'I confirm this correction and its impact on shipment history.'
       select "#{replacement.manufacturer} / #{replacement.name} / #{replacement.model_number}", from: 'Actual catalog product'
+      select 'FedEx', from: 'Carrier'
+      fill_in 'IMEI (15 digits)', with: '123456789012345'
       click_button 'Review changed values'
+      assert_not_equal reviewed_token, find('input[name=impact_token]', visible: false).value
+      assert_selector '.bg-amber-50 dt', text: 'IMEI (15 digits):'
+      assert_selector '.bg-amber-50 dd', text: 'USPS → FedEx'
+      assert_selector '.bg-amber-50 dt', count: 4
       check 'I confirm this correction and its impact on shipment history.'
       take_screenshot('equipment-shipped-correction-review', html: true, full: true)
       click_button 'Save equipment correction'
@@ -130,11 +146,15 @@ module Admin
       assert_equal Date.current, item.reload.shipped_at
       assert_equal replacement.id, item.product_id
       assert_equal 'ReviewedAgainPackage', item.tracking_number
+      assert_equal 'fedex', item.carrier
+      assert_equal '123456789012345', item.imei
       assert_nil sibling.reload.shipped_at
       visit edit_admin_equipment_item_path(item)
       fill_in 'Date shipped', with: ''
       fill_in 'Correction reason', with: 'Shipment date was entered in error'
       click_button 'Review correction'
+      assert_selector '.bg-amber-50 dt', text: 'Date shipped:'
+      assert_selector '.bg-amber-50 dd', text: "#{Date.current.strftime('%m/%d/%Y')} → Not recorded"
       check 'I confirm this correction and its impact on shipment history.'
       click_button 'Save equipment correction'
       assert_text 'Equipment item updated.'
@@ -202,6 +222,8 @@ module Admin
       assert_select 'New Vendor', selected: target_order.vendor.business_name
       assert_field 'New PO number', with: 'Inline Retry Header'
       assert_field 'New Date PO sent', with: '13/45/2026'
+      assert_selector '#new_purchase_order_sent_at[aria-invalid=true][aria-describedby="new_purchase_order_sent_at-help new_purchase_order_sent_at-error"]'
+      assert_selector '#new_purchase_order_sent_at-error', text: /Date PO sent is invalid/
       assert_field 'Tracking number', with: 'InlineRetryPackage'
       take_screenshot('equipment-inline-order-invalid-retry', html: true, full: true)
       select item.purchase_order.vendor.business_name, from: 'New Vendor'
@@ -227,14 +249,15 @@ module Admin
       assert_equal 'InlineRetryPackage', item.tracking_number
       other_model = create(:product, manufacturer: item.product.manufacturer, model_number: 'Other serial model')
       conflict = create(:equipment_item, product: other_model, serial_number: 'SharedModelSerial')
-      visit edit_admin_equipment_item_path(item)
+      context = { tab: 'ordered', product_id: item.product_id.to_s, vendor_id: target_order.vendor_id.to_s }
+      visit edit_admin_equipment_item_path(item, return_context: context)
       fill_in 'Serial number', with: 'SharedModelSerial'
       fill_in 'Correction reason', with: 'Review manufacturer serial reuse'
       click_button 'Save equipment correction'
       assert_text 'matches another model from this manufacturer'
       take_screenshot('equipment-potential-serial-warning', html: true, full: true)
       click_link "Review equipment item ##{conflict.id}"
-      assert_current_path edit_admin_equipment_item_path(conflict)
+      assert_current_path edit_admin_equipment_item_path(conflict, return_context: context)
       assert_field 'Serial number', with: 'SharedModelSerial'
       visit edit_admin_equipment_item_path(item)
       fill_in 'Serial number', with: 'SharedModelSerial'
@@ -268,9 +291,18 @@ module Admin
       check 'I confirm the impact on all linked equipment and applications.'
       click_button 'Save purchase order correction'
       assert_text 'is invalid'
+      assert_selector '#purchase-order-correction-errors:focus'
       assert_select 'Vendor', selected: first_vendor.business_name
       assert_field 'Date PO sent', with: '13/45/2026'
       assert_field 'PO number', with: 'Header Retry Number'
+      assert_selector '#purchase_order_sent_at[aria-invalid=true][aria-describedby="purchase_order_sent_at-help purchase_order_sent_at-error"]'
+      assert_selector '#purchase_order_sent_at-error', text: /Date PO sent is invalid/
+      assert_no_difference -> { order.events.count } do
+        check 'I confirm the impact on all linked equipment and applications.'
+        click_button 'Save purchase order correction'
+        assert_text 'is invalid'
+        assert_selector '#purchase-order-correction-errors:focus'
+      end
       take_screenshot('equipment-shared-header-invalid-retry', html: true, full: true)
       select final_vendor.business_name, from: 'Vendor'
       fill_in 'Date PO sent', with: (Date.current - 1.day).strftime('%m/%d/%Y')

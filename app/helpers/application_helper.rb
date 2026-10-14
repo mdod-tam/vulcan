@@ -96,11 +96,13 @@ module ApplicationHelper
 
   def admin_fulfillment_badge(application)
     labels = { voucher_no_equipment: 'Voucher - No Equipment Order', legacy_review: 'Earlier fulfillment needs review',
-               needs_action: 'Needs Ordering', po_sent: 'Ordered', shipped: 'Shipped', no_equipment: 'No equipment needed' }
+               needs_action: 'Needs Ordering', po_sent: 'Ordered', shipped: 'Shipped', no_equipment: 'No equipment needed',
+               needs_catalog_product: 'Needs a catalog product', outside_catalog: 'Outside-catalog recommendation' }
     label = labels[application.admin_fulfillment_responsibility_state]
     return unless label
 
-    content_tag(:span, label, class: 'rounded-full bg-gray-100 px-2 py-1 text-xs font-semibold text-gray-800')
+    content_tag(:span, safe_join([tag.span('Fulfillment Status: ', class: 'sr-only'), label]),
+                class: 'rounded-full bg-gray-100 px-2 py-1 text-xs font-semibold text-gray-800')
   end
 
   def proof_review_button_text(application, proof_type)

@@ -156,12 +156,12 @@ class Evaluation < ApplicationRecord
   end
 
   def update_application_record
-    return unless status_completed?
+    return unless status_completed? && application.needs_review_since.present?
 
-    application.update!(
-      needs_review_since: nil
-    )
-    # Additional logic to handle post-evaluation actions
+    # Clear only this review marker; completion does not resubmit the application's intake fields.
+    return if application.update_column(:needs_review_since, nil, touch: true) # rubocop:disable Rails/SkipsModelValidations -- Review bookkeeping only.
+
+    raise ActiveRecord::RecordNotSaved.new('Evaluation review clearance was not recorded.', application)
   end
 
   def evaluator_must_be_assignable

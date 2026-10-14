@@ -1,7 +1,7 @@
 import { Controller } from "@hotwired/stimulus"
 
 export default class extends Controller {
-  static targets = ["group", "groupCheckbox", "rowCheckbox", "quantity", "unitCount"]
+  static targets = ["group", "groupCheckbox", "rowCheckbox", "quantity", "unitCount", "unitLabel"]
   static values = { existingUnits: Number }
 
   connect() {
@@ -11,7 +11,9 @@ export default class extends Controller {
   updateQuantities() {
     if (!this.hasUnitCountTarget) return
     const newUnits = this.quantityTargets.reduce((total, input) => total + Math.max(0, Number.parseInt(input.value, 10) || 0), 0)
-    this.unitCountTarget.textContent = newUnits + this.existingUnitsValue
+    const units = newUnits + this.existingUnitsValue
+    this.unitCountTarget.textContent = units
+    if (this.hasUnitLabelTarget) this.unitLabelTarget.textContent = units === 1 ? "physical unit" : "physical units"
   }
 
   selectGroup(event) {

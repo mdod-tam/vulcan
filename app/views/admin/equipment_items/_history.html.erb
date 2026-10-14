@@ -1,12 +1,11 @@
-<%# locals: (events:, title: 'Equipment correction history') -%>
+<%# locals: (events:, audit_records:, title: 'Equipment correction history') -%>
 <details class="rounded border border-gray-200 p-3">
   <summary class="cursor-pointer font-medium"><%= title %></summary>
   <ul class="mt-3 space-y-3">
     <% events.each do |event| %>
       <li class="text-sm break-words">
         <p class="font-medium"><%= event.action.humanize %> — <%= event.user&.full_name %> — <%= event.created_at.strftime('%m/%d/%Y %H:%M') %></p>
-        <p><%= event.metadata['reason'] %></p><p><%= equipment_audit_changes(event) %></p>
-        <% if event.metadata['serial_duplicate_reason'].present? %><p>Serial warning acknowledgment: <%= event.metadata['serial_duplicate_reason'] %></p><% end %>
+        <p><%= equipment_audit_details(event, records: audit_records) %></p>
       </li>
     <% end %>
     <% if events.empty? %><li class="text-sm text-gray-600">No corrections recorded.</li><% end %>

@@ -4,6 +4,6 @@
   <p class="my-4"><%= link_to 'Correct shared purchase order', edit_admin_purchase_order_correction_path(@purchase_order, return_context: @return_context),
                               class: 'text-indigo-700 underline' %> · <%= link_to 'Back to Equipment',
                                                                                   equipment_return_path(@return_context), class: 'text-indigo-700 underline' %></p>
-  <%= render 'admin/applications/equipment_items', items: @purchase_order.equipment_items %>
-  <%= render 'admin/equipment_items/history', events: @history, title: 'Order and device history' %>
+  <%= render 'admin/applications/equipment_items', items: @purchase_order.equipment_items, audit_records: @equipment_audit_records, return_context: @return_context %>
+  <%= render 'admin/equipment_items/history', events: @history, title: 'Order and device history', audit_records: @equipment_audit_records %>
 </div>

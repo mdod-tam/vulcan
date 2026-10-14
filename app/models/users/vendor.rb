@@ -45,6 +45,7 @@ module Users
     enum :w9_status, { not_submitted: 0, pending_review: 1, approved: 2, rejected: 3 }, prefix: :w9_status
 
     scope :active, -> { where(vendor_authorization_status: :approved) }
+    scope :equipment_procurement_eligible, -> { where(status: [:active, nil], merged_into_user_id: nil) }
     scope :with_pending_invoices, lambda {
       joins(:voucher_transactions)
         .where(voucher_transactions: { invoice_id: nil, status: :completed })

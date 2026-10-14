@@ -4,7 +4,8 @@ class AddEquipmentProcurement < ActiveRecord::Migration[8.1]
   def change
     add_column :applications, :equipment_needs_initialized_at, :datetime
     add_column :evaluations, :assessment_source, :string, null: false, default: 'direct_assessment'
-    add_check_constraint :evaluations, "assessment_source IN ('direct_assessment', 'outside_specialist')", name: 'evaluation_assessment_source'
+    add_check_constraint :evaluations, "assessment_source IN ('direct_assessment', 'outside_specialist')",
+                         name: 'evaluation_assessment_source', validate: false
 
     create_table :equipment_needs do |t|
       t.references :application, null: false, foreign_key: true

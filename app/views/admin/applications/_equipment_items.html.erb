@@ -1,4 +1,4 @@
-<%# locals: (application: nil, items: equipment_items_for(application)) -%>
+<%# locals: (items:, audit_records:, return_context:) -%>
 <section aria-labelledby="equipment-items-title" class="space-y-4">
   <h3 id="equipment-items-title" class="text-lg font-semibold">Actual equipment devices</h3>
   <% items.each do |item| %>
@@ -9,7 +9,7 @@
         <div>
           <dt class="font-medium">Application</dt>
           <dd><%= link_to "##{item.application_id}",
-                          admin_application_path(item.application_id, anchor: "equipment-item-#{item.id}", return_context: equipment_return_context(params)),
+                          admin_application_path(item.application_id, anchor: "equipment-item-#{item.id}", return_context: return_context),
                           class: 'text-indigo-700 underline' %></dd>
         </div>
         <div>
@@ -17,7 +17,7 @@
           <dd>
             <% if item.purchase_order %>
               <%= link_to "#{item.purchase_order.vendor.business_name} / #{item.purchase_order.number}",
-                          admin_purchase_order_path(item.purchase_order, return_context: equipment_return_context(params)), class: 'text-indigo-700 underline' %>
+                          admin_purchase_order_path(item.purchase_order, return_context: return_context), class: 'text-indigo-700 underline' %>
               — sent <%= accessible_date_value(item.purchase_order.sent_at) %>
             <% else %>No current purchase order<% end %>
           </dd>
@@ -29,9 +29,9 @@
       </dl>
       <% unless item.withdrawn_at? %>
         <p><%= link_to 'Correct device / record shipment',
-                       edit_admin_equipment_item_path(item, return_context: equipment_return_context(params)), class: 'text-indigo-700 underline' %></p>
+                       edit_admin_equipment_item_path(item, return_context: return_context), class: 'text-indigo-700 underline' %></p>
       <% end %>
-      <%= render 'admin/equipment_items/history', events: item.events.sort_by(&:created_at).reverse %>
+      <%= render 'admin/equipment_items/history', events: item.events.sort_by(&:created_at).reverse, audit_records: audit_records %>
     </article>
   <% end %>
   <% if items.empty? %><p class="text-sm text-gray-600">No physical device records are currently linked.</p><% end %>

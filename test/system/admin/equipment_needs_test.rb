@@ -20,6 +20,9 @@ module Admin
       take_screenshot('equipment-needs-original-queue', html: true, full: true)
       click_link 'Edit equipment needs', match: :first
       assert_text 'Original assessment recommendation'
+      assert_selector 'main', count: 1
+      assert_no_selector 'main main'
+      assert_selector 'h2#original-recommendation-title'
       assert_text original_product.name
       fill_in 'equipment-need-quantity-0', with: 0
       replacement_label = page.find('select option', text: replacement.name).text
@@ -31,10 +34,17 @@ module Admin
       click_button 'Save purchasing needs'
 
       assert_selector '[role="alert"]', text: /greater than or equal to 0/
+      assert_selector '#equipment-needs-errors:focus'
       assert_field 'equipment-need-quantity-0', with: '-1'
       assert_field 'equipment-need-quantity-1', with: '2'
       assert_selector :select, 'Catalog model', selected: replacement_label
       assert_field 'Reason for adjustment', with: 'The family needs the replacement model.'
+      assert_no_difference('Event.count') do
+        page.execute_script("document.querySelector('form[action$=\"/equipment_needs\"]').noValidate = true")
+        click_button 'Save purchasing needs'
+        assert_selector '[role="alert"]', text: /greater than or equal to 0/
+        assert_selector '#equipment-needs-errors:focus'
+      end
       take_screenshot('equipment-needs-invalid-retry', html: true, full: true)
       fill_in 'equipment-need-quantity-0', with: 0
       alternate_label = page.find('select option', text: alternate.name).text
@@ -108,7 +118,7 @@ module Admin
       assert_equal 3, application.equipment_needs.sole.remaining_quantity
       take_screenshot('equipment-needs-stale-marker-retry', html: true, full: true)
 
-      click_link 'Refresh purchasing needs'
+      click_link 'Review latest purchasing needs'
       assert_no_selector '[role="alert"]'
       assert_field 'equipment-need-quantity-0', with: '3'
       marker = application.reload.equipment_needs_initialized_at.iso8601(6)
@@ -131,7 +141,7 @@ module Admin
       assert_equal 5, need.reload.remaining_quantity
       take_screenshot('equipment-needs-stale-version-retry', html: true, full: true)
 
-      click_link 'Refresh purchasing needs'
+      click_link 'Review latest purchasing needs'
       assert_no_selector '[role="alert"]'
       assert_field 'equipment-need-quantity-0', with: '5'
       assert_selector 'input[name="equipment_needs[rows][][lock_version]"][value="1"]', visible: :all
@@ -144,6 +154,69 @@ module Admin
       assert_equal successful_edits + 1, application.events.where(action: 'equipment_needs_updated').count
       assert_empty application.equipment_items
       take_screenshot('equipment-needs-refreshed-save', html: true, full: true)
+    end
+
+    test 'staff confirm an outside catalog empty list once without changing the report or return context' do
+      FeatureFlag.disable!(:vouchers_enabled)
+      admin = create(:admin)
+      vendor = create(:vendor)
+      product = create(:product, name: 'Model for a later catalog decision')
+      product.vendors << vendor
+      application = create(:application, :approved, :with_all_proofs, equipment_bids_sent_at: Date.new(2026, 9, 9))
+      report = build(:evaluation, :completed, application: application, recommendation_outcome: :outside_catalog,
+                                              recommendation_notes: 'The specialist recommended a model outside the catalog.')
+      report.recommended_products = []
+      report.products_tried = []
+      report.save!
+      EquipmentNeeds::Writer.initialize_from!(report, actor: admin)
+      original_report = report.reload.attributes
+      marker = application.reload.equipment_needs_initialized_at
+      context = { tab: 'needs_ordering', product_id: product.id.to_s, vendor_id: vendor.id.to_s }
+      system_test_sign_in(admin)
+      visit admin_equipment_index_path(context)
+      assert_no_selector '#equipment-legacy-review a', text: "Application ##{application.id}"
+      visit admin_application_path(application, anchor: 'equipment', return_context: context)
+      within '#equipment' do
+        assert_text 'Needs a catalog product'
+        assert_text report.recommendation_notes
+        assert_text 'September 09, 2026'
+        assert_no_text 'Earlier fulfillment needs review'
+        take_screenshot('equipment-needs-outside-catalog-pending', html: true, full: true)
+        click_link 'Edit equipment needs'
+      end
+
+      assert_field 'Catalog model', with: ''
+      reason = 'Reviewed the outside recommendation; no new catalog device is needed.'
+      fill_in 'Reason for adjustment', with: reason
+      edits = -> { application.events.where(action: 'equipment_needs_updated').count }
+      assert_difference edits, 1 do
+        click_button 'Save purchasing needs'
+        assert_text 'Purchasing needs updated.'
+      end
+      assert_current_path admin_equipment_index_path(context)
+      visit admin_application_path(application, anchor: 'equipment', return_context: context)
+      within '#equipment' do
+        assert_text 'No equipment needed'
+        assert_text 'No new devices are currently needed.'
+        assert_no_text 'Needs a catalog product'
+        assert_text report.recommendation_notes
+        take_screenshot('equipment-needs-outside-catalog-confirmed-empty', html: true, full: true)
+        click_link 'Edit equipment needs'
+      end
+
+      fill_in 'Reason for adjustment', with: reason
+      assert_no_difference edits do
+        click_button 'Save purchasing needs'
+        assert_text 'Purchasing needs updated.'
+      end
+      assert_current_path admin_equipment_index_path(context)
+      assert_equal 1, edits.call
+      assert_equal reason, application.events.find_by!(action: 'equipment_needs_updated').metadata['reason']
+      assert_equal marker, application.reload.equipment_needs_initialized_at
+      assert_equal original_report, report.reload.attributes
+      assert_empty report.recommended_product_ids
+      assert_empty application.equipment_needs
+      assert_empty application.equipment_items
     end
   end
 end

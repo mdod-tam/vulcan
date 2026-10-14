@@ -5,8 +5,8 @@
       <h2 id="equipment-title" class="text-xl font-semibold text-gray-900">Equipment</h2>
       <%= admin_fulfillment_badge(application) %>
     </div>
-    <%= link_to 'Back to Equipment', equipment_return_path(equipment_return_context(params[:return_context])), class: 'text-sm text-indigo-600 underline',
-                                                                                                               data: { turbo_frame: '_top' } %>
+    <%= link_to 'Back to Equipment', equipment_return_path(@return_context), class: 'text-sm text-indigo-600 underline',
+                                                                             data: { turbo_frame: '_top' } %>
   </div>
   <%= render 'equipment_recommendations', application: application %>
   <h3 class="text-lg font-semibold text-gray-900 mb-2">New devices still needed</h3>
@@ -19,23 +19,25 @@
           <% end %>
         <% end %>
       </ul>
+    <% elsif application.equipment_catalog_product_pending? %>
+      <p class="text-sm text-gray-600 mb-4">An available catalog model has not been selected for this outside-catalog recommendation.</p>
     <% else %>
       <p class="text-sm text-gray-600 mb-4">No new devices are currently needed.</p>
     <% end %>
   <% else %>
     <p class="text-sm text-gray-600 mb-4">
-      <% if application.equipment_legacy_unmapped? %>
-        Earlier fulfillment needs explicit mapping before this application is ordered again.
+      <% if application.equipment_legacy_review? %>
+        Earlier fulfillment recorded: confirm what still needs ordering. A later order requires explicit mapping confirmation.
       <% else %>
         Purchasing needs have not been initialized.
       <% end %>
     </p>
   <% end %>
   <% if application.equipment_procurement_eligible? %>
-    <%= link_to 'Edit equipment needs', edit_admin_application_equipment_needs_path(application, return_context: equipment_return_context(params[:return_context])),
+    <%= link_to 'Edit equipment needs', edit_admin_application_equipment_needs_path(application, return_context: @return_context),
                 class: 'text-sm text-indigo-600 underline', data: { turbo_frame: '_top' } %>
   <% end %>
-  <%= render 'equipment_items', application: application %>
+  <%= render 'equipment_items', items: @equipment_items, audit_records: @equipment_audit_records, return_context: @return_context %>
   <% if application.equipment_bids_sent_at || application.equipment_po_sent_at || application.equipment_tracking_number.present? %>
     <section class="mt-6 border-t border-gray-200 pt-4" aria-labelledby="earlier-fulfillment-title">
       <h3 id="earlier-fulfillment-title" class="text-lg font-semibold text-gray-900 mb-2">Earlier fulfillment details</h3>

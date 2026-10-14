@@ -27,9 +27,11 @@ module Admin
       click_button 'Filter'
       assert_current_path admin_equipment_index_path, ignore_query: true
       assert_equal context, Rack::Utils.parse_nested_query(URI.parse(page.current_url).query).slice(*context.keys.map(&:to_s)).symbolize_keys
+      assert_selector 'nav[aria-label="Equipment queues"] a[aria-current=page].bg-indigo-700', text: 'Needs Ordering'
       assert_text '4 units across 2 applications'
       assert_no_selector 'section[data-equipment-selection-target="group"]', text: excluded.product.name
       group = find('section[data-equipment-selection-target="group"]', text: phone.name)
+      assert_selector :checkbox, "Select group: #{phone.manufacturer} / #{phone.name} / #{phone.model_number}"
       toggle_selection_by_keyboard(group.find('input[name="group_product_ids[]"]'))
       assert_selector 'input[name="need_ids[]"]:checked', count: 2
       assert_selector 'input[name="item_ids[]"]:checked', count: 1
@@ -59,11 +61,13 @@ module Admin
       fill_in 'Date PO sent', with: '13/45/2026'
       submit_purchase_order_by_keyboard
       2.times do |attempt|
-        assert_selector '[role="alert"]', text: /Sent at/
+        assert_selector '[role="alert"]', text: /Date PO sent/
+        assert_selector '#purchase-order-errors:focus'
         assert_field "quantity_#{second.id}", with: '1'
         assert_selector :select, 'Vendor', selected: vendor.business_name
         assert_field 'PO number', with: '00042-RETRY'
         assert_field 'Date PO sent', with: '13/45/2026'
+        assert_selector '#purchase_order_sent_at[aria-invalid=true][aria-describedby="purchase_order_sent_at-help purchase_order_sent_at-error"]'
         assert_selector "input[name='purchase_order[items][][id]'][value='#{detached.id}']", visible: :all
         submit_purchase_order_by_keyboard if attempt.zero?
       end
@@ -107,6 +111,12 @@ module Admin
       end
       assert_current_path admin_equipment_index_path(context)
       assert_text '1 new device still needed'
+      assert_text '1 unit across 1 application'
+      click_link 'Purchase Orders'
+      assert_current_path admin_purchase_orders_path(return_context: context)
+      assert_link "#{existing.vendor.business_name} · PO #{existing.number}", href: admin_purchase_order_path(existing, return_context: context)
+      click_link 'Back to Equipment'
+      assert_current_path admin_equipment_index_path(context)
       take_screenshot('equipment-ordering-back-context', html: true, full: true)
     ensure
       page.current_window.resize_to(1200, 800)
@@ -121,6 +131,11 @@ module Admin
       context = { tab: 'needs_ordering', product_id: need.product_id.to_s, vendor_id: vendor.id.to_s }
       system_test_sign_in(admin)
       visit new_admin_purchase_order_path(need_ids: [need.id], return_context: context)
+      assert_text '1 physical unit across 1 application'
+      fill_in "quantity_#{need.id}", with: 2
+      assert_text '2 physical units across 1 application'
+      fill_in "quantity_#{need.id}", with: 1
+      assert_text '1 physical unit across 1 application'
       select_existing_order(order)
       submitted_order_version = order.lock_version
       Equipment::Correction.new(actor: admin).update_purchase_order!(
@@ -195,6 +210,86 @@ module Admin
       assert_operator geometry['pageWidth'], :<=, geometry['viewport']
       assert geometry['textLines'].all? { |left, right| left >= 0 && right <= geometry['viewport'] }, 'Queue identifiers must wrap within the viewport'
       assert geometry['filters'].all? { |left, right| left >= 0 && right <= geometry['viewport'] }, 'Queue filters must fit within the viewport'
+    ensure
+      page.current_window.resize_to(1200, 800)
+    end
+
+    test 'staff confirm an empty legacy purchasing list and retain readonly history after archival' do
+      FeatureFlag.disable!(:vouchers_enabled)
+      admin = create(:admin)
+      vendor = create(:vendor)
+      product = create(:product, name: 'Current catalog need')
+      product.vendors << vendor
+      create(:equipment_need, product: product)
+      application = create(:application, :approved, :with_all_proofs, equipment_bids_sent_at: Date.new(2026, 9, 9),
+                                                                      equipment_po_sent_at: Date.new(2026, 9, 10),
+                                                                      equipment_tracking_number: 'EARLIER-PACKAGE')
+      report = build(:evaluation, :completed, application: application, recommendation_outcome: :outside_catalog,
+                                              recommendation_notes: 'The earlier order needs staff review')
+      report.recommended_products = []
+      report.products_tried = []
+      report.save!
+      assert_not EquipmentNeeds::Writer.initialize_from!(report, actor: admin)
+      original_report = report.reload.attributes
+      context = { tab: 'needs_ordering', product_id: product.id.to_s, vendor_id: vendor.id.to_s }
+      system_test_sign_in(admin)
+      visit admin_equipment_index_path(context)
+      within '#equipment-legacy-review' do
+        assert_link "Application ##{application.id}", href: admin_application_path(application, anchor: 'equipment', return_context: context)
+      end
+      page.current_window.resize_to(390, 844)
+      assert_operator page.evaluate_script('document.documentElement.scrollWidth'), :<=, 390
+      take_screenshot('equipment-legacy-pending-review-mobile', html: true, full: true)
+      within '#equipment-legacy-review' do
+        click_link "Application ##{application.id}"
+      end
+      assert_current_path admin_application_path(application, return_context: context)
+      assert_equal 'equipment', URI.parse(page.current_url).fragment
+      within '#equipment' do
+        assert_text 'Earlier fulfillment needs review'
+        assert_text 'September 09, 2026'
+        assert_text 'September 10, 2026'
+        assert_text 'EARLIER-PACKAGE'
+        assert_no_text 'No equipment needed'
+      end
+      page.current_window.resize_to(1200, 800)
+      take_screenshot('equipment-legacy-pending-application', html: true, full: true)
+      within '#equipment' do
+        click_link 'Edit equipment needs'
+      end
+      fill_in 'Reason for adjustment', with: 'Reviewed the earlier order; no new catalog device is needed.'
+      assert_difference -> { application.events.where(action: 'equipment_needs_updated').count }, 1 do
+        click_button 'Save purchasing needs'
+        assert_text 'Purchasing needs updated.'
+      end
+      assert_current_path admin_equipment_index_path(context)
+      assert_no_selector '#equipment-legacy-review a', text: "Application ##{application.id}"
+      assert application.reload.equipment_needs_initialized_at
+      assert application.equipment_legacy_unmapped?
+      visit admin_application_path(application, anchor: 'equipment', return_context: context)
+      within '#equipment' do
+        assert_text 'No equipment needed'
+        assert_no_text 'Earlier fulfillment needs review'
+        assert_text 'September 10, 2026'
+        assert_text 'EARLIER-PACKAGE'
+      end
+      take_screenshot('equipment-legacy-confirmed-empty-application', html: true, full: true)
+      application.transition_status!(:archived, actor: admin)
+      visit admin_equipment_index_path(context)
+      assert_no_selector '#equipment-legacy-review a', text: "Application ##{application.id}"
+      visit admin_application_path(application, anchor: 'equipment', return_context: context)
+      within '#equipment' do
+        assert_text report.recommendation_notes
+        assert_text 'September 09, 2026'
+        assert_text 'September 10, 2026'
+        assert_text 'EARLIER-PACKAGE'
+        assert_no_link 'Edit equipment needs'
+        assert_no_selector 'form'
+      end
+      take_screenshot('equipment-legacy-archived-history', html: true, full: true)
+      assert_equal original_report, report.reload.attributes
+      assert_empty application.equipment_items
+      assert_empty application.equipment_needs
     ensure
       page.current_window.resize_to(1200, 800)
     end

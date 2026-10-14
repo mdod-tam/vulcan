@@ -1,10 +1,11 @@
 <div class="max-w-4xl mx-auto px-4 py-6">
   <h1 class="text-2xl font-bold mb-4">Record Winning Bid & PO</h1>
   <p class="mb-4">Staff issue the PO externally; this records the purchasing decision.</p>
-  <% if @error %><div role="alert" class="rounded border border-red-300 bg-red-50 p-4 mb-4"><%= @error %></div><% end %>
+  <%= render 'admin/equipment/form_errors', errors: @form_errors, id: 'purchase-order-errors' %>
   <%= form_with model: @purchase_order, url: admin_purchase_orders_path, class: 'space-y-4',
                 data: { controller: 'equipment-selection', equipment_selection_existing_units_value: @item_rows.size } do |form| %>
-    <p role="status" aria-live="polite"><span data-equipment-selection-target="unitCount"><%= @unit_count %></span> physical units across <%= @application_count %> applications.</p>
+    <p role="status" aria-live="polite"><span data-equipment-selection-target="unitCount"><%= @unit_count %></span>
+      <span data-equipment-selection-target="unitLabel"><%= 'physical unit'.pluralize(@unit_count) %></span> across <%= pluralize(@application_count, 'application') %>.</p>
     <% @return_context.each do |key, value| %><%= hidden_field_tag "return_context[#{key}]", value %><% end %>
     <h2 class="text-lg font-semibold">New devices to materialize</h2>
     <% @need_rows.each do |row| %>

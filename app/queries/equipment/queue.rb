@@ -6,12 +6,11 @@ module Equipment
 
     def initialize(tab: 'needs_ordering', product_id: nil, vendor_id: nil)
       @tab = tab
-      @needs = EquipmentNeed.remaining.joins(:application).where(applications: { status: :approved, fulfillment_type: :equipment })
-      @items = EquipmentItem.active
+      @needs = EquipmentNeed.remaining.joins(:application).merge(Application.equipment_procurement_eligible)
       @items = case tab
                when 'ordered' then EquipmentItem.ordered
                when 'shipped' then EquipmentItem.shipped
-               else EquipmentItem.needs_ordering.joins(:application).where(applications: { status: :approved, fulfillment_type: :equipment })
+               else EquipmentItem.needs_ordering.joins(:application).merge(Application.equipment_procurement_eligible)
                end
       @needs = @needs.none unless tab == 'needs_ordering'
       filter_product!(product_id) if product_id.present?

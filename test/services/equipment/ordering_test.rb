@@ -34,9 +34,12 @@ module Equipment
       @need.update!(remaining_quantity: 2)
       detached = create(:equipment_item, application: @need.application, product: @phone, purchase_order: nil)
       assert_difference 'EquipmentItem.count', 1 do
-        order = @writer.call(needs: [row(@need, 1)], items: [{ id: detached.id, lock_version: detached.lock_version }], purchase_order_attributes: @attributes)
+        order = @writer.call(needs: [row(@need, 1).merge(id: @need.id.to_s)],
+                             items: [{ id: detached.id.to_s, lock_version: detached.lock_version }], purchase_order_attributes: @attributes)
         assert_equal order.id, detached.reload.purchase_order_id
         assert_equal 2, order.equipment_items.count
+        event = Event.find_by!(auditable: order, action: 'equipment_order_recorded')
+        assert_equal [order.equipment_items.where.not(id: detached.id).sole.id, detached.id], event.metadata['equipment_item_ids']
       end
       assert_equal 1, @need.reload.remaining_quantity
     end
@@ -63,9 +66,10 @@ module Equipment
     test 'explicit PO reuse creates no header while duplicate normalized vendor numbers require reuse' do
       order = create(:purchase_order, vendor: @vendor, number: ' 00 017 ')
       assert_no_difference 'PurchaseOrder.count' do
-        assert_raises ActiveRecord::RecordInvalid do
+        error = assert_raises ActiveRecord::RecordInvalid do
           @writer.call(needs: [row(@need)], items: [], purchase_order_attributes: @attributes)
         end
+        assert_includes error.record.errors.full_messages.join, 'PO number is already recorded for this vendor; choose the existing purchase order'
         @writer.call(needs: [row(@need)], items: [], purchase_order_id: order.id, expected_po_version: order.lock_version)
       end
       assert_equal order.id, @need.application.equipment_items.sole.purchase_order_id
@@ -100,6 +104,41 @@ module Equipment
 
     test 'non-administrators cannot place orders' do
       assert_raises(Conflict) { Ordering.new(actor: create(:evaluator)).call(needs: [row(@need)], items: [], purchase_order_attributes: @attributes) }
+    end
+
+    test 'a saved legacy purchasing decision retains deliberate mapping on a later order' do
+      application = create(:application, :approved, :with_all_proofs, equipment_po_sent_at: 1.day.ago)
+      EquipmentNeeds::Writer.update!(application, rows: [], expected_initialized_at: '', actor: @admin, reason: 'Delivered before this system')
+      assert_not application.reload.equipment_legacy_review?
+      assert application.equipment_legacy_unmapped?
+      EquipmentNeeds::Writer.update!(application,
+                                     rows: [{ product_id: @phone.id, remaining_quantity: 1 }],
+                                     expected_initialized_at: application.equipment_needs_initialized_at.iso8601(6),
+                                     actor: @admin, reason: 'A new catalog device is now required')
+      need = application.equipment_needs.sole
+      assert_no_difference ['PurchaseOrder.count', 'EquipmentItem.count', 'Event.count'] do
+        assert_raises(Conflict) { @writer.call(needs: [row(need)], items: [], purchase_order_attributes: @attributes) }
+      end
+      order = @writer.call(needs: [row(need)], items: [], purchase_order_attributes: @attributes, legacy_mapping: true)
+      assert_equal order.id, application.equipment_items.sole.purchase_order_id
+      assert_equal :po_sent, application.reload.admin_fulfillment_responsibility_state
+    end
+
+    test 'new purchase orders use the existing vendor eligibility rule including legacy active status' do
+      vendor = create(:vendor, status: nil)
+      order = @writer.call(needs: [row(@need)], items: [], purchase_order_attributes: @attributes.merge(vendor_id: vendor.id))
+      assert_equal vendor.id, order.vendor_id
+      assert_equal 0, @need.reload.remaining_quantity
+
+      another_need = create(:equipment_need)
+      vendor.update!(status: :suspended)
+      assert_no_difference ['PurchaseOrder.count', 'EquipmentItem.count', 'Event.count'] do
+        error = assert_raises(ActiveRecord::RecordInvalid) do
+          @writer.call(needs: [row(another_need)], items: [], purchase_order_attributes: @attributes.merge(vendor_id: vendor.id, number: 'INACTIVE-RETRY'))
+        end
+        assert_includes error.record.errors[:vendor].join, 'active vendor'
+      end
+      assert_equal 1, another_need.reload.remaining_quantity
     end
 
     private

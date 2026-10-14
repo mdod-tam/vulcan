@@ -2,6 +2,8 @@
 
 module Admin
   class EquipmentNeedsController < BaseController
+    include EquipmentFormHandling
+
     before_action :set_application
 
     def edit
@@ -19,11 +21,11 @@ module Admin
       @reason = submitted[:reason]
       EquipmentNeeds::Writer.update!(@application, rows: @rows, expected_initialized_at: @expected_initialized_at,
                                                    actor: current_user, reason: @reason)
-      context = helpers.equipment_return_context(params[:return_context])
-      redirect_to context.present? ? helpers.equipment_return_path(context) : admin_application_path(@application, anchor: 'equipment'),
+      context = Equipment::RequestParameters.return_context(params[:return_context])
+      redirect_to context.present? ? admin_equipment_index_path(context) : admin_application_path(@application, anchor: 'equipment'),
                   notice: 'Purchasing needs updated.'
     rescue Equipment::Conflict, ActiveRecord::RecordInvalid => e
-      @error = e.is_a?(ActiveRecord::RecordInvalid) ? e.record.errors.full_messages.to_sentence : e.message
+      @form_errors = equipment_form_errors(e)
       prepare_form
       render :edit, status: :unprocessable_content
     end
@@ -35,7 +37,7 @@ module Admin
     end
 
     def prepare_form
-      @return_context = helpers.equipment_return_context(params[:return_context])
+      @return_context = Equipment::RequestParameters.return_context(params[:return_context])
       @products = Product.where(id: @rows.filter_map { |row| row['product_id'].presence }).index_by { |product| product.id.to_s }
       @rows << { 'id' => '', 'product_id' => '', 'remaining_quantity' => 1, 'lock_version' => '' } unless @rows.any? { |row| row['id'].blank? }
       existing_product_ids = @rows.filter_map { |row| row['product_id'] if row['id'].present? }

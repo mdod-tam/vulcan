@@ -2,6 +2,8 @@
 
 module Admin
   class EquipmentItemsController < BaseController
+    include EquipmentFormHandling
+
     before_action :load_item
 
     def edit
@@ -10,11 +12,7 @@ module Admin
 
     def update
       if params[:review] == '1'
-        @previous_values = @item.attributes.slice(*Equipment::Correction::ITEM_FIELDS)
-        @item.assign_attributes(item_params)
-        @reviewing = true
-        extra = { operation: params[:operation].presence || 'update', new_purchase_order: (params[:create_purchase_order] == '1' ? new_order_params : {}) }
-        @impact_token = Equipment::Correction.impact_token(record: @item, attributes: item_params, extra: extra)
+        preview_equipment_correction(@item, attributes: item_params, fields: Equipment::Correction::ITEM_FIELDS)
         load_form
         return render :edit
       end
@@ -28,14 +26,10 @@ module Admin
       )
       redirect_to success_path, notice: 'Equipment item updated.'
     rescue Equipment::Conflict, ActiveRecord::RecordInvalid => e
-      @form_errors = e.is_a?(ActiveRecord::RecordInvalid) ? e.record.errors.full_messages : [e.message]
-      @item.reload
-      @item.assign_attributes(item_params)
-      @item.serial_duplicate_reason = params[:serial_duplicate_reason]
-      @item.valid?
-      @reviewing = params[:reviewing] == '1'
-      @previous_values = EquipmentItem.find(@item.id).attributes.slice(*Equipment::Correction::ITEM_FIELDS) if @reviewing
-      @impact_token = params[:impact_token]
+      @form_errors = equipment_form_errors(e)
+      restore_equipment_correction(@item, attributes: item_params, fields: Equipment::Correction::ITEM_FIELDS) do |item|
+        item.serial_duplicate_reason = params[:serial_duplicate_reason]
+      end
       load_form
       render :edit, status: :unprocessable_content
     end
@@ -45,8 +39,8 @@ module Admin
     def load_item
       @item = EquipmentItem.includes(:application, :product, purchase_order: :vendor).find(params.expect(:id))
       @recorded_product = @item.product
-      @return_context = helpers.equipment_return_context(params)
-      @submitted_versions = helpers.equipment_record_versions(params[:purchase_order_versions])
+      @return_context = Equipment::RequestParameters.return_context(params)
+      @submitted_versions = Equipment::RequestParameters.record_versions(params[:purchase_order_versions])
     end
 
     def load_form
@@ -55,10 +49,16 @@ module Admin
       [@item.product, @recorded_product].compact.each { |product| @products.unshift(product) if @products.exclude?(product) }
       @purchase_orders = PurchaseOrder.includes(:vendor).recent_first.to_a
       @purchase_order_versions = action_name == 'edit' ? @purchase_orders.to_h { |order| [order.id.to_s, order.lock_version.to_s] } : @submitted_versions
-      @vendors = Users::Vendor.where(status: :active).order(:business_name, :id)
+      @vendors = Users::Vendor.equipment_procurement_eligible.order(:business_name, :id)
       @new_purchase_order = PurchaseOrder.new(params[:new_purchase_order].present? ? new_order_params : {})
+      @new_purchase_order.valid? if @form_errors.present? && params[:create_purchase_order] == '1'
       @history = @item.events.includes(:user).order(created_at: :desc, id: :desc)
-      @previous_values = @item.attributes.slice(*Equipment::Correction::ITEM_FIELDS) if @previous_values.nil?
+      @equipment_audit_records = Equipment::AuditRecords.for(@history.to_a)
+      @previous_values = equipment_snapshot(@item, Equipment::Correction::ITEM_FIELDS) if @previous_values.nil?
+    end
+
+    def equipment_impact_extra
+      { operation: params[:operation].presence || 'update', new_purchase_order: (params[:create_purchase_order] == '1' ? new_order_params : {}) }
     end
 
     def item_params
@@ -70,7 +70,7 @@ module Admin
     end
 
     def success_path
-      return helpers.equipment_return_path(@return_context) if @return_context.any?
+      return admin_equipment_index_path(@return_context) if @return_context.any?
 
       admin_application_path(@item.application, anchor: "equipment-item-#{@item.id}")
     end

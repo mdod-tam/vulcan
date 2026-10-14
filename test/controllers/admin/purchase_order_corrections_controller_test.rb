@@ -22,18 +22,32 @@ module Admin
       assert_select 'form[data-turbo=false] input[name=impact_token]'
       assert_select 'input[name=confirmed_impact][required]'
       assert_select 'textarea[name=reason]', text: 'Wrong PO reference'
-      assert_select 'dd', text: /#{Regexp.escape(@order.vendor.business_name)}\s*→\s*#{Regexp.escape(@order.vendor.business_name)}/
+      assert_select 'dt', text: 'PO number:', count: 1
+      assert_select 'dt', count: 1
+      assert_select 'dd', text: "#{@order.number} → Reviewed Number"
       assert_not_equal 'Reviewed Number', @order.reload.number
     end
 
     test 'forged impact confirmation cannot change a shared header' do
       assert_no_difference 'Event.count' do
-        patch admin_purchase_order_correction_path(@order), params: { confirmed_impact: '1', purchase_order: { number: 'Forged Number' }, reason: 'Wrong PO reference',
+        patch admin_purchase_order_correction_path(@order), params: { confirmed_impact: '1', purchase_order: { number: 'Forged Number', sent_at: '13/45/2026' }, reason: 'Wrong PO reference',
                                                                       expected_version: 0, item_versions: versions }
       end
       assert_response :unprocessable_entity
+      assert_select '#purchase-order-correction-errors[role=alert][tabindex="-1"][data-controller=error-summary]'
       assert_not_equal 'Forged Number', @order.reload.number
       assert_select 'input[name="purchase_order[number]"][value="Forged Number"]'
+      assert_select '#purchase_order_sent_at[aria-invalid=true][aria-describedby="purchase_order_sent_at-help purchase_order_sent_at-error"][value="13/45/2026"]'
+      assert_select '#purchase_order_sent_at-error', text: /Date PO sent is invalid/
+    end
+
+    test 'an inactive recorded vendor remains visible for historical header correction' do
+      @order.vendor.update!(status: :inactive)
+
+      get edit_admin_purchase_order_correction_path(@order)
+
+      assert_response :success
+      assert_select '#purchase_order_vendor_id option[selected][value=?]', @order.vendor_id.to_s
     end
 
     test 'stale header form retains original versions and unchanged retries cannot overwrite a newer correction' do

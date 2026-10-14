@@ -6,7 +6,8 @@ module EquipmentHelper
     'fedex' => ['https://www.fedex.com/apps/fedextrack/', 'tracknumbers', {}],
     'usps' => ['https://tools.usps.com/go/TrackConfirmAction', 'tLabels', {}]
   }.freeze
-  EQUIPMENT_TABS = %w[needs_ordering ordered shipped].freeze
+  EQUIPMENT_AUDIT_FIELDS = (Equipment::Correction::EDITABLE_ITEM_FIELDS + Equipment::Correction::PO_FIELDS +
+    %w[equipment_needs remaining_quantity withdrawn_at equipment_bids_sent_at equipment_po_sent_at equipment_tracking_number]).freeze
 
   def equipment_catalog_label(product)
     [product&.manufacturer, product&.name, product&.model_number].compact_blank.uniq.join(' / ')
@@ -33,34 +34,8 @@ module EquipmentHelper
                                   class: 'text-indigo-700 underline'
   end
 
-  def equipment_return_context(source)
-    source ||= {}
-    source = source.with_indifferent_access if source.is_a?(Hash)
-    context = source[:return_context] || source
-    if source[:return_to].present?
-      uri = URI.parse(source[:return_to].to_s)
-      return {} unless uri.path == '/admin/equipment' && uri.host.nil? && uri.scheme.nil?
-
-      context = Rack::Utils.parse_nested_query(uri.query.to_s).with_indifferent_access
-    end
-    result = {}
-    result[:tab] = context[:tab] if EQUIPMENT_TABS.include?(context[:tab])
-    %i[product_id vendor_id].each do |key|
-      result[key] = context[key].to_s if context[key].to_s.match?(/\A[1-9]\d*\z/)
-    end
-    result
-  rescue URI::InvalidURIError, TypeError
-    {}
-  end
-
   def equipment_return_path(context)
-    admin_equipment_index_path(equipment_return_context(context))
-  end
-
-  def equipment_record_versions(source)
-    return {} unless source.respond_to?(:each_pair)
-
-    source.each_pair.filter_map { |id, version| [id.to_s, version.to_s] if id.to_s.match?(/\A\d+\z/) && version.is_a?(String) }.to_h
+    admin_equipment_index_path(Equipment::RequestParameters.return_context(context))
   end
 
   def equipment_queue_badge(item)
@@ -70,43 +45,82 @@ module EquipmentHelper
   end
 
   def equipment_impact_value(field, value, products: [], purchase_orders: [], vendors: [], new_purchase_order: nil)
-    if field == 'purchase_order_id' && new_purchase_order
-      vendor = vendors.find { |candidate| candidate.id == new_purchase_order.vendor_id }
-      return "#{vendor&.business_name || 'Vendor not selected'} / #{new_purchase_order.number.presence || 'PO number not entered'} (new purchase order)"
-    end
+    return equipment_needs_value(value, products: products) if field == 'equipment_needs'
+    return equipment_new_order_value(new_purchase_order, vendors) if field == 'purchase_order_id' && new_purchase_order
+    return 'Not recorded' if value.blank?
+
+    return EquipmentItem::CARRIERS.fetch(value, value) if field == 'carrier'
+    return equipment_date_value(field, value) if field.in?(%w[shipped_at sent_at withdrawn_at equipment_bids_sent_at equipment_po_sent_at])
+
     records = { 'product_id' => products, 'purchase_order_id' => purchase_orders, 'vendor_id' => vendors }
-    record = records.fetch(field, []).find { |candidate| candidate.id.to_s == value.to_s }
-    return value.presence || 'Not recorded' unless record
+    return value unless records.key?(field)
 
-    case field
-    when 'product_id' then equipment_catalog_label(record)
-    when 'purchase_order_id' then "#{record.vendor.business_name} / #{record.number}"
-    when 'vendor_id' then record.business_name
+    equipment_record_value(field, records[field].find { |candidate| candidate.id.to_s == value.to_s })
+  end
+
+  def equipment_field_label(field)
+    model = if field.in?(Equipment::Correction::PO_FIELDS)
+              PurchaseOrder
+            elsif field == 'remaining_quantity'
+              EquipmentNeed
+            elsif field.start_with?('equipment_')
+              Application
+            else
+              EquipmentItem
+            end
+    model.human_attribute_name(field)
+  end
+
+  def equipment_impact_fields(record, previous_values, fields:, new_purchase_order: nil)
+    fields.select do |field|
+      (field == 'purchase_order_id' && new_purchase_order) || previous_values[field] != record.public_send(field) ||
+        record.try(:"rejected_#{field}_input").present?
     end
   end
 
-  def equipment_audit_changes(event)
-    event.field_changes.filter_map do |field, change|
-      next if field.start_with?('normalized_') || field == 'manufacturer_model_identity'
+  def equipment_audit_changes(event, records:)
+    changes = event.field_change_pairs.filter_map do |field, (before, after)|
+      next unless EQUIPMENT_AUDIT_FIELDS.include?(field)
 
-      values = if change.is_a?(Array)
-                 change
-               elsif change.is_a?(Hash)
-                 [change['old'], change['new']]
-               else
-                 [nil, change]
-               end
-      "#{field.humanize}: #{values.first.presence || 'Not recorded'} → #{values.last.presence || 'Not recorded'}"
-    end.join('; ')
+      safe_join(["#{equipment_field_label(field)}: ", equipment_impact_value(field, before, **records), ' → ',
+                 equipment_impact_value(field, after, **records)])
+    end
+    safe_join(changes, tag.br)
   end
 
-  def equipment_items_for(application)
-    application.equipment_items.includes(:product, events: :user, purchase_order: :vendor).order(:id)
+  def equipment_audit_details(event, records:)
+    details = [equipment_audit_changes(event, records: records), event.metadata['reason']]
+    details.unshift(activity_detail(event)) if ActivityHistoryHelper::APPLICATION_FULFILLMENT_ACTIONS.include?(event.action)
+    acknowledgment = event.field_change_pairs.fetch('serial_duplicate_reason', []).last.presence || event.metadata['serial_duplicate_reason']
+    details << "Serial warning acknowledgment: #{acknowledgment}" if acknowledgment.present?
+    safe_join(details.compact_blank, tag.br)
   end
 
-  def equipment_history_for(purchase_order)
-    Event.where(auditable: purchase_order)
-         .or(Event.where("metadata->'purchase_order_ids' @> ?::jsonb", [purchase_order.id].to_json))
-         .includes(:user).order(created_at: :desc, id: :desc)
+  private
+
+  def equipment_date_value(field, value)
+    value = parse_activity_time(value) || value if field.in?(%w[withdrawn_at equipment_bids_sent_at equipment_po_sent_at])
+    accessible_date_value(value) || 'Not recorded'
+  end
+
+  def equipment_new_order_value(order, vendors)
+    vendor = vendors.find { |candidate| candidate.id == order.vendor_id }
+    "#{vendor&.business_name || 'Vendor not selected'} / #{order.number.presence || 'PO number not entered'} (new purchase order)"
+  end
+
+  def equipment_record_value(field, record)
+    case field
+    when 'product_id' then record ? equipment_catalog_label(record) : 'Catalog product no longer available'
+    when 'purchase_order_id' then record ? "#{record.vendor.business_name} / #{record.number}" : 'Purchase order no longer available'
+    when 'vendor_id' then record ? record.business_name : 'Vendor no longer available'
+    end
+  end
+
+  def equipment_needs_value(rows, products:)
+    return 'No new devices needed' if rows.blank?
+
+    safe_join(rows.map do |row|
+      "#{equipment_impact_value('product_id', row['product_id'], products: products)} — #{pluralize(row['remaining_quantity'], 'device')}"
+    end, tag.br)
   end
 end
