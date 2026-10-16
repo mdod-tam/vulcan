@@ -27,6 +27,16 @@ class Event < ApplicationRecord
     (metadata['changes'] || {}).to_h { |field, change| [field, stored_change_values.fetch(field, change)] }
   end
 
+  def field_change_pairs
+    field_changes.transform_values do |change|
+      case change
+      when Array then change
+      when Hash then change.values_at('old', 'new')
+      else [nil, change]
+      end
+    end
+  end
+
   # Scope for finding events by metadata key/value
   scope :with_metadata, lambda { |key, value|
     where('metadata @> ?', { key => value }.to_json)

@@ -5,7 +5,7 @@
   <div class="flex items-start gap-4">
     <div class="flex-shrink-0 mt-0.5">
       <svg class="h-7 w-7 text-green-500" fill="currentColor" viewBox="0 0 20 20" aria-hidden="true">
-        <path fill-rule="evenodd" d="M10 18a8 8 0 100-16 8 8 0 000 16zm3.707-9.293a1 1 0 00-1.414-1.414L9 10.586 7.707 9.293a1 1 0 00-1.414 1.414l2 2a1 1 0 001.414 0l4-4z" clip-rule="evenodd"/>
+        <path fill-rule="evenodd" d="M10 18a8 8 0 100-16 8 8 0 000 16zm3.707-9.293a1 1 0 00-1.414-1.414L9 10.586 7.707 9.293a1 1 0 00-1.414 1.414l2 2a1 1 0 001.414 0l4-4z" clip-rule="evenodd" />
       </svg>
     </div>
     <div>
@@ -20,8 +20,9 @@
 <%# Post-completion notes %>
 <div class="mt-6 bg-white shadow rounded-lg border border-gray-200">
   <div class="px-4 py-4 sm:px-6 border-b border-gray-200">
-    <h3 class="text-base font-semibold text-gray-900">Add a Note</h3>
-    <p class="mt-1 text-sm text-gray-500">
+    <h3 class="text-base font-semibold text-gray-900"><%= t('evaluators.evaluations.working_notes.title') %></h3>
+    <p id="supplemental-notes-help" class="mt-1 text-sm text-gray-500">
+      <strong><%= t('evaluators.evaluations.forms.internal_notes_only') %></strong>
       Add supplemental notes to this completed evaluation record. This does not modify the previously submitted report.
     </p>
   </div>
@@ -29,7 +30,7 @@
   <div class="px-4 py-5 sm:p-6">
     <% if evaluation.post_completion_notes.present? %>
       <div class="mb-4 bg-gray-50 rounded-md border border-gray-200 px-4 py-3">
-        <p class="text-xs font-medium text-gray-500 uppercase tracking-wide mb-2">Existing Notes</p>
+        <p class="text-xs font-medium text-gray-500 uppercase tracking-wide mb-2">Existing Working Notes</p>
         <p class="text-sm text-gray-800 whitespace-pre-wrap"><%= evaluation.post_completion_notes %></p>
       </div>
     <% end %>
@@ -38,20 +39,20 @@
                   method: :patch, local: true, id: 'supplemental-notes-form', class: 'space-y-4') do |f| %>
       <%= render 'action_errors', action: :supplemental_notes, form: f, form_errors: @evaluation_form_errors %>
       <div>
-        <%= f.label :post_completion_notes,
-                    evaluation.post_completion_notes.present? ? "Update Note" : "New Note",
-                    class: "block text-sm font-medium text-gray-700" %>
+        <%= f.label :post_completion_notes, t('evaluators.evaluations.working_notes.label'),
+                    class: 'block text-sm font-medium text-gray-700' %>
         <%= f.text_area :post_completion_notes,
                         value: form_values.fetch(:post_completion_notes, evaluation.post_completion_notes),
                         rows: 5,
-                        placeholder: "Add follow-up observations, next steps, or supplemental information...",
+                        placeholder: 'Add follow-up observations, next steps, or supplemental information...',
                         class: 'mt-1 block w-full border border-gray-300 rounded-md shadow-sm py-2 px-3 ' \
                                'focus:outline-none focus:ring-indigo-500 focus:border-indigo-500 sm:text-sm',
-                        aria: evaluation_field_aria(:supplemental_notes, :post_completion_notes, form_errors: @evaluation_form_errors) %>
+                        aria: evaluation_field_aria(:supplemental_notes, :post_completion_notes,
+                                                    describedby: 'supplemental-notes-help', form_errors: @evaluation_form_errors) %>
         <%= render 'field_errors', action: :supplemental_notes, attribute: :post_completion_notes, form_errors: @evaluation_form_errors %>
       </div>
 
-      <%= f.submit evaluation.post_completion_notes.present? ? "Update Note" : "Add Note",
+      <%= f.submit evaluation.post_completion_notes.present? ? 'Update Note' : 'Add Note',
                    data: { turbo_submits_with: 'Saving supplemental notes...' },
                    class: 'inline-flex justify-center py-2 px-4 border border-transparent shadow-sm text-sm font-medium ' \
                           'rounded-md text-white bg-indigo-600 hover:bg-indigo-700 focus:outline-none focus:ring-2 ' \

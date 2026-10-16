@@ -6,11 +6,8 @@ class ChartLifecycleTest < ApplicationSystemTestCase
   test 'all report charts and the lazy applications chart survive resizing and Turbo navigation' do
     FeatureFlag.enable!(:vouchers_enabled)
     product = create(:product, device_types: ['Tablet'])
-    application = create(:application, skip_proofs: true, status: :in_progress)
-    evaluation = create(:evaluation, :completed, application: application, constituent: application.user)
-    evaluation.update!(recommended_product_ids: [product.id],
-                       products_tried: [{ 'product_id' => product.id.to_s, 'reaction' => 'Recorded during evaluation' }])
-    application.update!(fulfillment_type: :equipment, equipment_po_sent_at: Time.current)
+    application = create(:application, skip_proofs: true, status: :in_progress, fulfillment_type: :equipment)
+    create(:equipment_item, application: application, product: product, purchase_order: create(:purchase_order, sent_at: Date.current))
     system_test_sign_in(create(:admin))
     visit admin_reports_path
     assert_selector 'canvas', count: 15

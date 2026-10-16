@@ -3,6 +3,7 @@
 class AuditEventService < BaseService
   # This window suppresses matching stored events. EventDeduplicationService deduplicates events for display.
   DEDUP_WINDOW = 5.seconds
+  SENSITIVE_CHANGE_FIELDS = %w[serial_duplicate_reason].freeze
 
   # Logs an event, or returns nil when deduplication suppresses a matching event within DEDUP_WINDOW.
   #
@@ -67,14 +68,13 @@ class AuditEventService < BaseService
     event.metadata.merge('changes' => event.field_changes)
   end
 
-  # A field the audited record encrypts keeps only its name in metadata (which is plain JSON); its
-  # old and new values go to Event#change_values, which is encrypted. Every writer that records
-  # metadata[:changes] gets this, whatever shape its values take.
+  # Encrypted record fields and sensitive audit text keep only their names in plain metadata.
+  # Their old and new values go to the existing encrypted Event#change_values cell.
   def self.split_encrypted_change_values(auditable, metadata)
     key = metadata.key?(:changes) ? :changes : 'changes'
     changes = metadata[key]
-    encrypted = auditable.class.try(:encrypted_attributes)&.map(&:to_s)
-    return [metadata, nil] unless changes.is_a?(Hash) && encrypted.present?
+    encrypted = Array(auditable.class.try(:encrypted_attributes)).map(&:to_s) + SENSITIVE_CHANGE_FIELDS
+    return [metadata, nil] unless changes.is_a?(Hash)
 
     values = changes.select { |field, _change| encrypted.include?(field.to_s) }
     return [metadata, nil] if values.empty?

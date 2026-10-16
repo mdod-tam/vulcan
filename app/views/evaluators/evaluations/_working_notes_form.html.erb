@@ -2,7 +2,10 @@
 <% form_values = @evaluation_form_values.fetch(:save_working_notes, {}) # rubocop:disable Lint/UselessAssignment -- Used by later ERB fragments. %>
 <section class="mt-8 bg-white shadow rounded-lg p-6" aria-labelledby="working-notes-heading">
   <h2 id="working-notes-heading" class="text-lg font-semibold text-gray-900"><%= t('evaluators.evaluations.working_notes.title') %></h2>
-  <p id="working-notes-help" class="mt-2 text-sm text-gray-600"><%= t('evaluators.evaluations.working_notes.help') %></p>
+  <p id="working-notes-help" class="mt-2 text-sm text-gray-600">
+    <strong><%= t('evaluators.evaluations.forms.internal_notes_only') %></strong>
+    <%= t('evaluators.evaluations.working_notes.help') %>
+  </p>
   <% if can_edit %>
     <%= form_with model: evaluation, namespace: 'working',
                   url: save_working_notes_evaluators_evaluation_path(evaluation), method: :post,

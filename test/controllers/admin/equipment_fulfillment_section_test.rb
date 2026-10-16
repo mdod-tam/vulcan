@@ -3,94 +3,262 @@
 require 'test_helper'
 
 module Admin
-  # Equipment fulfillment lives on the admin application page, not the evaluation page.
   class EquipmentFulfillmentSectionTest < ActionDispatch::IntegrationTest
     setup do
+      FeatureFlag.disable!(:vouchers_enabled)
       @admin = create(:admin)
       sign_in_for_integration_test(@admin)
-      @application = create(:application, :completed, :with_all_proofs, status: :approved,
-                                                                        user: create(:constituent, speech_disability: true))
-      assert @application.equipment_fulfillment?, 'precondition: an equipment application'
+      @application = create(:application, :approved, :with_all_proofs)
     end
 
-    test 'after a completed evaluation, the application page offers the dates and tracking number' do
-      evaluation = create(:evaluation, :completed, application: @application, constituent: @application.user)
-      @application.mark_equipment_bids_sent!(date: '9/9/2026', actor: @admin)
-      @application.record_equipment_tracking_number!(number: '1Z999AA1', actor: @admin)
+    test 'the application separates original recommendations, purchasing needs, and readonly legacy facts' do
+      evaluation = create(:evaluation, :completed, application: @application)
+      EquipmentNeeds::Writer.initialize_from!(evaluation, actor: @admin)
+      @application.update!(equipment_bids_sent_at: Date.new(2026, 9, 9), equipment_po_sent_at: Date.new(2026, 9, 10),
+                           equipment_tracking_number: '1Z999AA1')
 
       get admin_application_path(@application)
 
-      assert_select 'section[aria-labelledby=equipment-fulfillment-title]' do
-        assert_select 'h2', 'Equipment Fulfillment'
-        assert_select "form[action='#{admin_application_equipment_fulfillment_path(@application)}']"
-        assert_select 'input[name="application[equipment_bids_sent_at]"][value="09/09/2026"][inputmode=numeric]'
-        assert_select 'input[name="application[equipment_po_sent_at]"]:not([value])'
-        assert_select 'input[name="application[equipment_tracking_number]"][value="1Z999AA1"]'
-        assert_select 'span', text: %r{Sent for bid on 09/09/2026}
+      assert_response :success
+      assert_select '#equipment' do
+        assert_select 'h3', text: 'Original assessment recommendation'
+        assert_select 'li', text: /#{Regexp.escape(evaluation.recommended_products.first.name)}/
+        assert_select 'h3', text: 'New devices still needed'
+        assert_select 'h3', text: 'Actual equipment devices'
+        assert_select 'h3', text: 'Earlier fulfillment details'
+        assert_select 'dd', text: '1Z999AA1'
+        assert_select 'input', count: 0
+        assert_select 'form', count: 0
+        assert_select 'a[href=?]', edit_admin_application_equipment_needs_path(@application), text: 'Edit equipment needs'
+        assert_select '.sr-only', text: 'Fulfillment Status:'
+        assert_select 'span.bg-amber-100.text-amber-800', text: /Fulfillment Status:\s*Needs Ordering/
       end
 
-      sign_in_for_integration_test(create(:admin))
       get evaluators_evaluation_path(evaluation)
-      assert_select "form[action='#{admin_application_equipment_fulfillment_path(@application)}']", count: 0
+      assert_response :success
+      assert_select 'input[name^="application[equipment_"]', count: 0
+      assert_select 'a', text: 'Edit equipment needs', count: 0
     end
 
-    test 'before the evaluation is completed, the section explains when it opens' do
-      get admin_application_path(@application)
-
-      assert_select 'section[aria-labelledby=equipment-fulfillment-title]', text: /once the evaluation is completed/
-      assert_select "form[action='#{admin_application_equipment_fulfillment_path(@application)}']", count: 0
-    end
-
-    test 'voucher applications have no equipment fulfillment section' do
-      @application.update_columns(fulfillment_type: Application.fulfillment_types[:voucher])
-
-      get admin_application_path(@application)
-
-      assert_select 'section[aria-labelledby=equipment-fulfillment-title]', count: 0
-    end
-
-    test 'a no suitable product report shows its rationale and leaves fulfillment to staff' do
-      evaluation = noncatalog_evaluation('no_suitable_product', 'No tested device met the applicant communication need.')
-
-      get admin_application_path(@application)
-
-      assert_select '[data-testid=evaluation-report-summary]' do
-        assert_select 'p', text: 'No suitable product'
-        assert_select 'p', text: evaluation.recommendation_notes
+    test 'reading an application without a report or marker does not seed purchasing needs' do
+      assert_no_difference(['EquipmentNeed.count', 'EquipmentItem.count', 'Event.count']) do
+        get admin_application_path(@application)
       end
-      assert_select 'section[aria-labelledby=equipment-fulfillment-title]' do
-        assert_select 'div', text: /Review the report and decide the next program action/
-        assert_select "form[action='#{admin_application_equipment_fulfillment_path(@application)}']"
-      end
-      assert_not_includes response.body, evaluation.working_notes
-      assert_nil @application.reload.equipment_po_sent_at
-      assert_equal 'approved', @application.status
+
+      assert_response :success
+      assert_select '#equipment', text: /No completed evaluation report is available/
+      assert_select '#equipment', text: /Purchasing needs have not been initialized/
+      assert_nil @application.reload.equipment_needs_initialized_at
     end
 
-    test 'an outside catalog recommendation is visible and requires a staff procurement decision' do
-      evaluation = noncatalog_evaluation('outside_catalog', 'Recommend model Z, which is not in the catalog.')
+    test 'failed HTML proof review still renders current equipment devices' do
+      item = create(:equipment_item, application: @application)
+      ProofReviewService.any_instance.stubs(:call).returns(BaseService::Result.new(success: false, message: 'Proof review failed.'))
+
+      patch update_proof_status_admin_application_path(@application), params: { proof_type: 'income', status: 'rejected' }
+
+      assert_response :unprocessable_content
+      assert_select "#equipment-item-#{item.id} h4", text: /#{Regexp.escape(item.product.name)}/
+      assert_select '#equipment span.bg-blue-100.text-blue-800', text: /Fulfillment Status:\s*Ordered/
+      assert_select "#equipment-item-#{item.id} span.bg-blue-100.text-blue-800", text: 'Ordered'
+    end
+
+    test 'failed application approval still renders current equipment devices' do
+      item = create(:equipment_item, application: @application)
+      Application.any_instance.stubs(:approve!).returns(false)
+
+      patch approve_admin_application_path(@application)
+
+      assert_response :unprocessable_content
+      assert_select "#equipment-item-#{item.id} h4", text: /#{Regexp.escape(item.product.name)}/
+      assert_select "#equipment-item-#{item.id} span.bg-blue-100.text-blue-800", text: 'Ordered'
+    end
+
+    test 'voucher applications have no equipment purchasing section' do
+      @application.update!(fulfillment_type: :voucher)
 
       get admin_application_path(@application)
 
-      assert_select '[data-testid=evaluation-report-summary]' do
-        assert_select 'p', text: 'Outside the catalog'
-        assert_select 'p', text: evaluation.recommendation_notes
+      assert_response :success
+      assert_select '#equipment', count: 0
+    end
+
+    test 'noncatalog outcomes display rationale with an intentional empty initialized needs list' do
+      %w[outside_catalog no_suitable_product].each do |outcome|
+        application = create(:application, :approved, :with_all_proofs)
+        report = build(:evaluation, :completed, application: application, recommendation_outcome: outcome,
+                                                recommendation_notes: 'Written specialist recommendation.',
+                                                working_notes: 'Internal outreach not part of the submitted report.')
+        report.recommended_products = []
+        report.products_tried = []
+        report.save!
+        EquipmentNeeds::Writer.initialize_from!(report, actor: @admin)
+
+        get admin_application_path(application)
+
+        assert_response :success
+        assert_select '#equipment', text: /Written specialist recommendation/
+        if outcome == 'outside_catalog'
+          assert_select '#equipment', text: /An available catalog model has not been selected/
+          assert_select '#equipment span.bg-amber-100.text-amber-800', text: /Needs a catalog product/
+          assert_select '#equipment', text: /No equipment needed/, count: 0
+        else
+          assert_select '#equipment', text: /No new devices are currently needed/
+          assert_select '#equipment span.bg-gray-100.text-gray-800', text: /No equipment needed/
+        end
+        assert_select '#equipment', text: /No physical device records are currently linked/
+        assert_not_includes response.body, report.working_notes
+        assert_empty application.equipment_needs
+        assert_empty application.equipment_items
+        assert application.reload.equipment_needs_initialized_at
       end
-      assert_select 'section[aria-labelledby=equipment-fulfillment-title]', text: /confirm any procurement separately/
-      assert_not_includes response.body, 'No specific products recommended.'
-      assert_not_includes response.body, evaluation.working_notes
-      assert_nil @application.reload.equipment_po_sent_at
+    end
+
+    test 'archived applications retain original recommendations, devices, and earlier fulfillment history' do
+      evaluation = create(:evaluation, :completed, application: @application)
+      EquipmentNeeds::Writer.initialize_from!(evaluation, actor: @admin)
+      item = create(:equipment_item, application: @application, product: evaluation.recommended_products.first,
+                                     source_evaluation: evaluation, tracking_number: 'Saved device tracking')
+      @application.update!(status: :archived, equipment_tracking_number: 'Earlier application tracking')
+
+      get admin_application_path(@application)
+
+      assert_response :success
+      assert_select '#equipment', text: /Original assessment recommendation/
+      assert_select "#equipment-item-#{item.id}", text: /Saved device tracking/
+      assert_select '#equipment', text: /Earlier application tracking/
+      assert_select '#equipment a', text: 'Edit equipment needs', count: 0
+      assert_select "#equipment-item-#{item.id} a", text: 'Correct device / record shipment'
+    end
+
+    test 'application and shared order histories show named purchasing changes without internal fields' do
+      phone = create(:product, manufacturer: 'Audit Maker', name: 'Audit Phone', model_number: 'PHONE-1')
+      tablet = create(:product, manufacturer: 'Audit Maker', name: 'Audit Tablet', model_number: 'TABLET-1')
+      replacement = create(:product, manufacturer: 'Audit Maker', name: 'Replacement Phone', model_number: 'PHONE-2')
+      report = build(:evaluation, :completed, application: @application)
+      report.recommended_products = [phone, tablet]
+      report.products_tried = [{ 'product_id' => phone.id.to_s, 'reaction' => 'Recorded trial' }]
+      report.save!
+      EquipmentNeeds::Writer.initialize_from!(report, actor: @admin)
+      need = @application.equipment_needs.find_by!(product: phone)
+      order = Equipment::Ordering.new(actor: @admin).call(
+        needs: [{ id: need.id, lock_version: need.lock_version, quantity: 1 }], items: [],
+        purchase_order_attributes: { vendor_id: create(:vendor, business_name: 'Original Supplies').id, number: 'AUDIT-42', sent_at: '09/10/2026' }
+      )
+      item = order.equipment_items.sole
+      acknowledgment = 'Manufacturer confirmed serial reuse.'
+      create(:equipment_item, product: create(:product, manufacturer: 'Audit Maker', model_number: 'PHONE-3'), serial_number: 'AUDIT-SERIAL')
+      Equipment::Correction.new(actor: @admin).update_item!(
+        item: item, attributes: { product_id: replacement.id, carrier: 'fedex', shipped_at: '09/12/2026', tracking_number: 'AUDIT-PACKAGE',
+                                  serial_number: 'AUDIT-SERIAL', imei: '123456789012345' },
+        expected_version: item.lock_version, reason: 'Correct actual delivered model', serial_duplicate_reason: acknowledgment
+      )
+      header_attributes = { vendor_id: create(:vendor, business_name: 'Corrected Supplies').id, number: 'UPDATED-42', sent_at: '09/09/2026' }
+      item_versions = { item.id.to_s => item.lock_version.to_s }
+      Equipment::Correction.new(actor: @admin).update_purchase_order!(
+        purchase_order: order, attributes: header_attributes,
+        expected_version: order.lock_version, expected_item_versions: item_versions,
+        reason: 'Correct vendor reference', confirmed_impact: true,
+        impact_token: Equipment::Correction.impact_token(record: order, attributes: header_attributes, extra: { item_versions: item_versions })
+      )
+
+      get admin_application_path(@application)
+      assert_response :success
+      assert_select '#audit-logs' do
+        assert_select 'td', text: %r{Purchasing needs: No new devices needed → Audit Maker / Audit Phone / PHONE-1 — 1 device}
+        assert_select 'td', text: %r{Audit Maker / Audit Tablet / TABLET-1 — 1 device}
+        assert_named_equipment_history(acknowledgment)
+        assert_select 'td', text: /Vendor: Original Supplies → Corrected Supplies/
+        assert_select 'td', text: /PO number: AUDIT-42 → UPDATED-42/
+        assert_select 'td', text: %r{Date PO sent: 09/10/2026 → 09/09/2026}
+      end
+      assert_select "#equipment-item-#{item.id} details", text: /#{Regexp.escape(acknowledgment)}/
+      assert_no_internal_history_fields(css_select('#audit-logs').first.text)
+
+      get admin_purchase_order_path(order)
+      assert_response :success
+      assert_select 'details', text: /Order and device history/ do
+        assert_named_equipment_history(acknowledgment)
+      end
+      assert_no_internal_history_fields(css_select('details').map(&:text).join)
+    end
+
+    test 'captured bids and PO date events retain readable descriptions in application history' do
+      %w[equipment_bids_sent equipment_po_sent].each do |action|
+        AuditEventService.log(action: action, actor: @admin, auditable: @application, metadata: { date: '2026-09-09' })
+      end
+
+      get admin_application_path(@application)
+
+      assert_response :success
+      assert_select '#audit-logs td', text: 'Bids sent on September 09, 2026'
+      assert_select '#audit-logs td', text: 'PO sent on September 09, 2026'
+    end
+
+    test 'bids-only noncatalog history does not create legacy review and each outcome has a truthful badge' do
+      %w[outside_catalog no_suitable_product].each do |outcome|
+        application = create(:application, :approved, :with_all_proofs, equipment_bids_sent_at: Date.new(2026, 9, 9))
+        report = build(:evaluation, :completed, application: application, recommendation_outcome: outcome,
+                                                recommendation_notes: 'Specialist findings still need staff review')
+        report.recommended_products = []
+        report.products_tried = []
+        report.save!
+        assert EquipmentNeeds::Writer.initialize_from!(report, actor: @admin)
+        assert_empty application.equipment_needs
+        assert_empty application.equipment_items
+        assert_not application.equipment_legacy_unmapped?
+
+        get admin_application_path(application)
+        assert_response :success
+        label = outcome == 'outside_catalog' ? 'Needs a catalog product' : 'No equipment needed'
+        assert_select '#equipment span', text: /Fulfillment Status:\s*#{label}/
+        assert_select '#equipment span', text: /Earlier fulfillment needs review/, count: 0
+        assert_select '#equipment dd', text: 'September 09, 2026'
+        get admin_equipment_index_path
+        assert_select '#equipment-legacy-review a', text: "Application ##{application.id}", count: 0
+      end
+    end
+
+    test 'first empty needs decision clears actionable legacy review while preserving earlier history' do
+      @application.update!(equipment_po_sent_at: Date.new(2026, 9, 10), equipment_tracking_number: 'EarlierDeliveredPackage')
+      get edit_admin_application_equipment_needs_path(@application)
+      assert_response :success
+      assert_select 'p', text: /Earlier fulfillment recorded: confirm what still needs ordering/
+      assert_difference -> { @application.events.where(action: 'equipment_needs_updated').count }, 1 do
+        patch admin_application_equipment_needs_path(@application),
+              params: { equipment_needs: { rows: [], expected_initialized_at: '', reason: 'Delivered before this system' } }
+      end
+      assert_redirected_to admin_application_path(@application, anchor: 'equipment')
+      get admin_application_path(@application)
+      assert_select '#equipment span', text: /No equipment needed/
+      assert_select '#equipment span', text: /Earlier fulfillment needs review/, count: 0
+      assert_select '#equipment dd', text: 'EarlierDeliveredPackage'
+      assert_select '#equipment dd', text: 'September 10, 2026'
+      get admin_equipment_index_path
+      assert_select '#equipment-legacy-review a', text: "Application ##{@application.id}", count: 0
+      assert @application.reload.equipment_legacy_unmapped?
     end
 
     private
 
-    def noncatalog_evaluation(outcome, recommendation_notes)
-      evaluation = build(:evaluation, :completed, application: @application, constituent: @application.user,
-                                                  recommendation_outcome: outcome, recommendation_notes: recommendation_notes,
-                                                  working_notes: 'Internal scheduling note not part of the submitted report.')
-      evaluation.recommended_products = []
-      evaluation.save!
-      evaluation
+    def assert_named_equipment_history(acknowledgment)
+      assert_select 'p, td', text: %r{Actual catalog product: Audit Maker / Audit Phone / PHONE-1 → Audit Maker / Replacement Phone / PHONE-2}
+      assert_select 'p, td', text: %r{Current purchase order: Not recorded → Corrected Supplies / UPDATED-42}
+      assert_select 'p, td', text: /Carrier: Not recorded → FedEx/
+      assert_select 'p, td', text: %r{Date shipped: Not recorded → 09/12/2026}
+      assert_select 'p, td', text: /Serial warning acknowledgment: #{Regexp.escape(acknowledgment)}/
+    end
+
+    def assert_no_internal_history_fields(text)
+      %w[product_id purchase_order_id lock_version normalized_ manufacturer_model_identity created_at updated_at].each do |field|
+        assert_not_includes text, field
+      end
+      assert_not_includes text, '{'
+      assert_not_includes text, '=>'
+      assert_not_includes text, 'Id:'
+      assert_not_includes text, 'Lock version:'
+      assert_not_includes text, 'Created at:'
+      assert_not_includes text, 'Updated at:'
     end
   end
 end

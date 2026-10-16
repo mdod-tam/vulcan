@@ -38,6 +38,8 @@ module Evaluations
 
     def validate_params!
       raise ArgumentError, 'Only the assigned evaluator can update this evaluation.' unless @evaluation.evaluator_id == @actor&.id
+
+      @evaluation.require_approved_application!
       raise ArgumentError, 'Only scheduled, confirmed, cancelled, or no-show evaluations can be rescheduled.' unless @evaluation.can_reschedule?
 
       if required_fields_missing?

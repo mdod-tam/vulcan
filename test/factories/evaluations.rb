@@ -4,7 +4,7 @@
 FactoryBot.define do
   factory :evaluation do
     evaluator
-    application
+    application factory: %i[application approved with_all_proofs]
     constituent { application.user }
     evaluation_date { 1.day.from_now }
     evaluation_type { :initial }

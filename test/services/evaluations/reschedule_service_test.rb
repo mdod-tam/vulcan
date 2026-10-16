@@ -136,5 +136,25 @@ module Evaluations
       assert_equal original_date, @evaluation.evaluation_date
       assert_equal original_location, @evaluation.location
     end
+
+    test 'reschedule and followup appointments recheck current application approval' do
+      @evaluation.application.transition_status!(:archived, actor: create(:admin))
+      original_date = @evaluation.evaluation_date
+
+      %i[scheduled cancelled no_show].each do |status|
+        @evaluation.update!(status: status)
+        assert_no_difference('Event.where(action: "evaluation_rescheduled").count') do
+          result = RescheduleService.new(
+            @evaluation, @evaluator,
+            { evaluation_date: 3.days.from_now, reschedule_reason: 'Arrange another assessment' }
+          ).call
+
+          assert result.failure?
+          assert_includes result.message, 'Only approved applications'
+        end
+        assert_equal status.to_s, @evaluation.reload.status
+        assert_equal original_date, @evaluation.evaluation_date
+      end
+    end
   end
 end

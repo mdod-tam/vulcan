@@ -34,6 +34,8 @@ module Evaluations
 
     def validate_params!
       raise ArgumentError, 'Only the assigned evaluator can update this evaluation.' unless @evaluation.evaluator_id == @actor&.id
+
+      @evaluation.require_approved_application!
       raise ArgumentError, 'Only requested evaluations can be scheduled.' unless @evaluation.status_requested?
 
       date_error = if @params[:evaluation_date].blank?

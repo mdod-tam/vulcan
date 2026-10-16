@@ -48,13 +48,73 @@ module Evaluations
       assert_equal 'completed', @evaluation.reload.status
     end
 
-    test 'missing or blank outcome cannot use the stored catalog default to complete a report' do
-      [:omitted, nil, '', ' '].each do |outcome|
+    test 'mixed recommendations preserve catalog IDs and other details while initializing only catalog needs' do
+      parameters = submission_params
+      parameters[:evaluation][:recommendation_notes] = 'Also consult an external communication specialist.'
+      parameters[:evaluation][:products_tried_inputs][@product.id.to_s][:reaction] = 'Neutral'
+
+      result = SubmissionService.new(@evaluation, parameters, actor: @evaluator).call
+
+      assert result.success?, result.message
+      assert_equal 'catalog_products', @evaluation.reload.recommendation_outcome
+      assert_equal [@product.id], @evaluation.recommended_product_ids
+      assert_equal 'Also consult an external communication specialist.', @evaluation.recommendation_notes
+      assert_equal [{ 'product_id' => @product.id.to_s, 'reaction' => 'Neutral' }], @evaluation.products_tried
+      assert_equal [@product.id], @evaluation.application.equipment_needs.pluck(:product_id)
+    end
+
+    test 'missing and invalid checked trial ratings roll back reports needs and audits' do
+      original = @evaluation.attributes
+      [nil, '', 'Not recorded', 'Unexpected'].each do |reaction|
         parameters = submission_params
-        if outcome == :omitted
-          parameters[:evaluation].delete(:recommendation_outcome)
+        parameters[:evaluation][:products_tried_inputs][@product.id.to_s][:reaction] = reaction
+        assert_no_enqueued_jobs do
+          assert_no_difference ['EquipmentNeed.count', 'Event.count'] do
+            result = SubmissionService.new(@evaluation, parameters, actor: @evaluator).call
+            assert result.failure?
+            assert_includes @evaluation.errors[:products_tried].join, reaction.blank? ? 'requires a satisfaction rating' : 'must use Satisfied'
+          end
+        end
+        assert_equal original, @evaluation.reload.attributes
+        assert_nil @evaluation.application.reload.equipment_needs_initialized_at
+      end
+    end
+
+    test 'trial parameters permit only selected and reaction within numeric product rows' do
+      parameters = submission_params
+      parameters[:evaluation][:products_tried_inputs][@product.id.to_s][:internal] = 'untrusted'
+      permitted = SubmissionService.report_params(parameters).to_h
+
+      assert_equal({ @product.id.to_s => { 'selected' => '1', 'reaction' => 'Satisfied' } }, permitted['products_tried_inputs'])
+    end
+
+    test 'report completion clears review bookkeeping and initializes needs without resubmitting historical intake' do
+      application = @evaluation.application
+      application.update_columns(maryland_resident: false, needs_review_since: 1.day.ago)
+      original = application.reload.attributes.except('needs_review_since', 'equipment_needs_initialized_at', 'updated_at')
+      assert_not application.valid?
+
+      assert_difference 'Event.where(action: "evaluation_completed").count', 1 do
+        result = SubmissionService.new(@evaluation, submission_params, actor: @evaluator).call
+        assert result.success?, result.message
+      end
+
+      assert_equal 'completed', @evaluation.reload.status
+      assert_nil application.reload.needs_review_since
+      assert application.equipment_needs_initialized_at
+      assert_equal original, application.attributes.except('needs_review_since', 'equipment_needs_initialized_at', 'updated_at')
+      assert_equal [@product.id], application.equipment_needs.pluck(:product_id)
+      assert_equal 1, application.events.where(action: 'equipment_needs_initialized').count
+    end
+
+    test 'empty recommendation controls cannot use the stored catalog default to complete a report' do
+      [:omitted, nil, '', ' '].each do |choice|
+        parameters = submission_params
+        parameters[:evaluation].delete(:recommended_product_ids)
+        if choice == :omitted
+          parameters[:evaluation].delete(:no_suitable_product)
         else
-          parameters[:evaluation][:recommendation_outcome] = outcome
+          parameters[:evaluation][:no_suitable_product] = choice
         end
         original = @evaluation.reload.attributes
 
@@ -63,7 +123,7 @@ module Evaluations
             result = SubmissionService.new(@evaluation, parameters, actor: @evaluator).call
 
             assert result.failure?
-            assert_equal ['must be selected'], @evaluation.errors[:recommendation_outcome]
+            assert_includes @evaluation.errors[:recommended_products].join, 'must be selected'
           end
         end
         assert_equal original, @evaluation.reload.attributes
@@ -256,10 +316,10 @@ module Evaluations
         )
         scheduled_time = evaluation.evaluation_date
         parameters = submission_params
-        parameters[:evaluation][:recommendation_outcome] = outcome
+        parameters[:evaluation][:no_suitable_product] = outcome == 'no_suitable_product' ? '1' : '0'
         parameters[:evaluation][:recommendation_notes] = 'Assessment reason and any external product details'
         parameters[:evaluation].delete(:recommended_product_ids)
-        parameters[:evaluation][:products_tried_field] = []
+        parameters[:evaluation][:products_tried_inputs] = {}
 
         assert_difference('Event.where(action: "evaluation_completed").count', 1) do
           result = SubmissionService.new(evaluation, parameters, actor: @evaluator).call
@@ -289,16 +349,17 @@ module Evaluations
       end
     end
 
-    test 'explicit catalog recommendations contradict a noncatalog outcome and roll back the report' do
+    test 'no suitable product contradicts catalog recommendations and rolls back the report' do
       original_recommendations = @evaluation.recommended_product_ids
       parameters = submission_params
-      parameters[:evaluation][:recommendation_outcome] = 'outside_catalog'
+      parameters[:evaluation][:no_suitable_product] = '1'
       parameters[:evaluation][:recommendation_notes] = 'External device recommendation'
 
       assert_no_difference('Event.where(action: "evaluation_completed").count') do
         result = SubmissionService.new(@evaluation, parameters, actor: @evaluator).call
 
         assert result.failure?
+        assert_includes @evaluation.errors[:no_suitable_product], 'cannot be combined with catalog recommendations'
       end
 
       @evaluation.reload
@@ -317,10 +378,10 @@ module Evaluations
       original_recommendations = @evaluation.recommended_product_ids
       original_tried = @evaluation.products_tried
       parameters = submission_params
-      parameters[:evaluation][:recommendation_outcome] = 'no_suitable_product'
+      parameters[:evaluation][:no_suitable_product] = '1'
       parameters[:evaluation][:recommendation_notes] = ''
       parameters[:evaluation].delete(:recommended_product_ids)
-      parameters[:evaluation][:products_tried_field] = []
+      parameters[:evaluation][:products_tried_inputs] = {}
 
       assert_no_difference('Event.where(action: "evaluation_completed").count') do
         result = SubmissionService.new(@evaluation, parameters, actor: @evaluator).call
@@ -340,26 +401,25 @@ module Evaluations
       assert_equal review_time, application.reload.needs_review_since
     end
 
-    test 'unknown outcome cannot complete the report' do
+    test 'a submitted outcome cannot override the recommendation controls' do
       parameters = submission_params
       parameters[:evaluation][:recommendation_outcome] = 'unrecognized_outcome'
 
-      assert_no_difference('Event.where(action: "evaluation_completed").count') do
+      assert_difference('Event.where(action: "evaluation_completed").count', 1) do
         result = SubmissionService.new(@evaluation, parameters, actor: @evaluator).call
 
-        assert result.failure?
-        assert_includes result.message, 'Recommendation outcome'
+        assert result.success?, result.message
       end
 
-      assert_equal 'scheduled', @evaluation.reload.status
+      assert_equal 'completed', @evaluation.reload.status
       assert_equal 'catalog_products', @evaluation.recommendation_outcome
-      assert_nil @evaluation.report_submitted_at
+      assert @evaluation.report_submitted_at
     end
 
     test 'noncatalog report still rechecks current assignment before saving its outcome' do
       replacement = create(:evaluator)
       parameters = submission_params
-      parameters[:evaluation][:recommendation_outcome] = 'no_suitable_product'
+      parameters[:evaluation][:no_suitable_product] = '1'
       parameters[:evaluation][:recommendation_notes] = 'No suitable device'
       parameters[:evaluation].delete(:recommended_product_ids)
 
@@ -373,17 +433,139 @@ module Evaluations
       assert_equal 'catalog_products', @evaluation.recommendation_outcome
     end
 
+    test 'assigned administrator records outside consultation from requested without an invented appointment or trials' do
+      admin = create(:admin)
+      @evaluation.update!(evaluator: admin, status: :requested, evaluation_date: nil, location: nil)
+      parameters = submission_params
+      parameters[:evaluation][:assessment_source] = 'outside_specialist'
+      parameters[:evaluation][:location] = ''
+      parameters[:evaluation][:products_tried_inputs] = {}
+      parameters[:evaluation][:notes] = 'Recommendations from the outside specialist consultation and written assessment.'
+
+      travel_to(Time.current.change(usec: 0)) do
+        parameters[:evaluation][:appointment_completed_at] = 2.days.ago
+        assert_difference('EquipmentNeed.count', 1) do
+          result = SubmissionService.new(@evaluation, parameters, actor: admin).call
+
+          assert result.success?, result.message
+        end
+
+        @evaluation.reload
+        assert_equal 'completed', @evaluation.status
+        assert_equal 'outside_specialist', @evaluation.assessment_source
+        assert_nil @evaluation.evaluation_date
+        assert_empty @evaluation.products_tried
+        assert_equal 2.days.ago, @evaluation.appointment_completed_at
+        assert_equal Time.current, @evaluation.report_submitted_at
+        assert_equal Time.current, @evaluation.application.reload.equipment_needs_initialized_at
+        need = @evaluation.application.equipment_needs.sole
+        assert_equal @product.id, need.product_id
+        assert_equal 1, need.remaining_quantity
+        assert_equal @evaluation.id, need.source_evaluation_id
+        event = Event.find_by!(action: 'evaluation_completed', auditable: @evaluation)
+        assert_equal 'outside_specialist', event.metadata['assessment_source']
+        assert_equal admin.id, event.user_id
+      end
+    end
+
+    test 'ordinary evaluator cannot forge outside specialist source even for a scheduled evaluation' do
+      parameters = submission_params
+      parameters[:evaluation][:assessment_source] = 'outside_specialist'
+      parameters[:evaluation][:products_tried_inputs] = {}
+
+      assert_no_difference(['EquipmentNeed.count', 'Event.where(action: "evaluation_completed").count']) do
+        result = SubmissionService.new(@evaluation, parameters, actor: @evaluator).call
+
+        assert result.failure?
+        assert_includes result.message, 'assigned administrator'
+      end
+
+      assert_equal 'direct_assessment', @evaluation.reload.assessment_source
+      assert_equal 'scheduled', @evaluation.status
+    end
+
+    test 'outside consultation still needs written context and an actual completion time' do
+      admin = create(:admin)
+      @evaluation.update!(evaluator: admin, status: :requested, evaluation_date: nil)
+      parameters = submission_params
+      parameters[:evaluation][:assessment_source] = 'outside_specialist'
+      parameters[:evaluation][:notes] = ''
+      parameters[:evaluation][:appointment_completed_at] = nil
+      parameters[:evaluation][:products_tried_inputs] = {}
+
+      assert_no_difference(['EquipmentNeed.count', 'Event.where(action: "evaluation_completed").count']) do
+        result = SubmissionService.new(@evaluation, parameters, actor: admin).call
+
+        assert result.failure?
+        assert_includes @evaluation.errors[:notes], "can't be blank"
+        assert_includes @evaluation.errors[:appointment_completed_at], "can't be blank"
+      end
+      assert_equal 'requested', @evaluation.reload.status
+      assert_nil @evaluation.application.reload.equipment_needs_initialized_at
+    end
+
+    test 'reassigned away administrator cannot complete a stale outside consultation' do
+      admin = create(:admin)
+      @evaluation.update!(evaluator: admin, status: :requested, evaluation_date: nil)
+      stale_evaluation = Evaluation.find(@evaluation.id)
+      @evaluation.update!(evaluator: create(:admin))
+      parameters = submission_params
+      parameters[:evaluation][:assessment_source] = 'outside_specialist'
+
+      assert_no_difference(['EquipmentNeed.count', 'Event.where(action: "evaluation_completed").count']) do
+        result = SubmissionService.new(stale_evaluation, parameters, actor: admin).call
+
+        assert result.failure?
+        assert_equal 'Only the assigned evaluator can update this evaluation.', result.message
+      end
+      assert_equal 'requested', @evaluation.reload.status
+    end
+
+    test 'report completion rechecks approval on a previously loaded application' do
+      application = @evaluation.application
+      stale_evaluation = Evaluation.find(@evaluation.id)
+      assert stale_evaluation.application.status_approved?
+      application.transition_status!(:archived, actor: create(:admin))
+
+      assert_no_difference(['EquipmentNeed.count', 'Event.where(action: "evaluation_completed").count']) do
+        result = SubmissionService.new(stale_evaluation, submission_params, actor: @evaluator).call
+
+        assert result.failure?
+        assert_includes result.message, 'Only approved applications'
+      end
+      assert_equal 'scheduled', @evaluation.reload.status
+      assert_nil @evaluation.report_submitted_at
+    end
+
+    test 'needs initialization failure rolls back the report audit and review state' do
+      @evaluation.application.update!(needs_review_since: Time.current)
+      original_review_time = @evaluation.application.reload.needs_review_since
+      failing_initialization = ->(*) { raise ActiveRecord::RecordInvalid, EquipmentNeed.new }
+
+      assert_no_difference(['EquipmentNeed.count', 'Event.where(action: "evaluation_completed").count']) do
+        EquipmentNeeds::Writer.stub(:initialize_from!, failing_initialization) do
+          result = SubmissionService.new(@evaluation, submission_params, actor: @evaluator).call
+
+          assert result.failure?
+        end
+      end
+      assert_equal 'scheduled', @evaluation.reload.status
+      assert_nil @evaluation.report_submitted_at
+      assert_nil @evaluation.application.reload.equipment_needs_initialized_at
+      assert_equal original_review_time, @evaluation.application.needs_review_since
+    end
+
     private
 
     def submission_params
       ActionController::Parameters.new(
         evaluation: {
-          recommendation_outcome: 'catalog_products',
+          no_suitable_product: '0',
           notes: 'Completed evaluation',
           location: 'Main Office',
           appointment_completed_at: Time.current,
           recommended_product_ids: [@product.id],
-          products_tried_field: [@product.id],
+          products_tried_inputs: { @product.id.to_s => { selected: '1', reaction: 'Satisfied' } },
           attendees_field: 'Test Constituent'
         }
       )

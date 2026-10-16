@@ -1,0 +1,14 @@
+<div class="max-w-7xl mx-auto px-4 py-6">
+  <h1 class="text-2xl font-bold mb-4">Purchase Orders</h1>
+  <%= link_to 'Back to Equipment', equipment_return_path(@return_context), class: 'text-indigo-700 underline' %>
+  <% if @purchase_orders.empty? %><p class="mt-4">No purchase orders recorded.</p><% end %>
+  <ul class="divide-y divide-gray-200 mt-4">
+    <% @purchase_orders.each do |order| %>
+      <li class="py-4"><%= link_to "#{order.vendor.business_name} · PO #{order.number}",
+                                   admin_purchase_order_path(order, return_context: @return_context),
+                                   class: 'text-indigo-700 underline font-semibold' %> · <%= accessible_date_value(order.sent_at) %>
+        · <%= pluralize(order.equipment_items.size, 'unit') %> across <%= pluralize(order.equipment_items.map(&:application_id).uniq.size, 'application') %>
+        · <%= order.shipment_status %></li>
+    <% end %>
+  </ul>
+</div>

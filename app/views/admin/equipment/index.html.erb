@@ -1,0 +1,103 @@
+<div class="max-w-7xl mx-auto px-4 py-6 [overflow-wrap:anywhere]">
+  <div class="flex flex-wrap items-center justify-between gap-4 mb-6">
+    <h1 class="text-2xl font-bold">Equipment</h1>
+    <div class="flex gap-4">
+      <%= link_to 'Purchase Orders', admin_purchase_orders_path(return_context: @context), class: 'text-indigo-700 underline' %>
+      <%= link_to 'Applications', admin_applications_path, class: 'text-indigo-700 underline' %>
+    </div>
+  </div>
+  <nav aria-label="Equipment queues" class="flex flex-wrap gap-4 mb-6">
+    <% Equipment::RequestParameters::TABS.each do |tab| %>
+      <%= link_to tab.titleize, admin_equipment_index_path(@context.merge(tab: tab)), aria: { current: @context[:tab] == tab ? 'page' : nil },
+                                                                                      class: class_names('rounded px-3 py-2',
+                                                                                                         'bg-indigo-700 font-semibold text-white': @context[:tab] == tab,
+                                                                                                         'text-indigo-700 underline': @context[:tab] != tab) %>
+    <% end %>
+  </nav>
+  <%= form_with url: admin_equipment_index_path, method: :get, class: 'flex flex-wrap items-end gap-4 mb-6' do |form| %>
+    <%= form.hidden_field :tab, value: @context[:tab] %>
+    <div class="w-full min-w-0 sm:flex-1">
+      <%= form.label :product_id, 'Catalog Model', class: 'block font-medium' %>
+      <%= form.select :product_id, options_for_select(equipment_catalog_options(@products), @context[:product_id]),
+                      { include_blank: 'All models' }, class: 'w-full rounded border-gray-300' %>
+    </div>
+    <div class="w-full min-w-0 sm:flex-1">
+      <%= form.label :vendor_id, 'Vendor', class: 'block font-medium' %>
+      <%= form.select :vendor_id, options_from_collection_for_select(@vendors, :id, :business_name, @context[:vendor_id]),
+                      { include_blank: 'All vendors' }, class: 'w-full rounded border-gray-300' %>
+    </div>
+    <%= form.submit 'Filter', class: 'rounded bg-indigo-700 px-4 py-2 text-white' %>
+  <% end %>
+  <p class="text-sm text-gray-600 mb-4">
+    <% if @context[:tab] == 'needs_ordering' %>
+      Vendor filter: vendors carrying the catalog model. Export uses selected rows, or the current filtered set when nothing is selected.
+    <% else %>
+      Vendor filter: the awarded purchase order vendor.
+    <% end %>
+  </p>
+  <%= form_with url: new_admin_purchase_order_path, method: :get, data: { controller: 'equipment-selection' } do |form| %>
+    <% @context.each do |key, value| %><%= hidden_field_tag "return_context[#{key}]", value %><% end %>
+    <% if @groups.empty? %><p class="rounded bg-gray-50 p-4">No matching equipment exists.</p><% end %>
+    <% @groups.each do |product, rows| %>
+      <section class="rounded border border-gray-200 bg-white p-4 mb-4" data-equipment-selection-target="group">
+        <h2 class="text-lg font-semibold"><%= equipment_catalog_label(product) %></h2>
+        <p class="text-sm text-gray-600"><%= pluralize(rows.sum { |row| row.is_a?(EquipmentNeed) ? row.remaining_quantity : 1 }, 'unit') %> across
+           <%= pluralize(rows.map(&:application_id).uniq.size, 'application') %>
+        </p>
+        <% if @context[:tab] == 'needs_ordering' %>
+          <label class="inline-flex items-center gap-2 my-3">
+            <%= check_box_tag 'group_product_ids[]', product.id, false, id: "equipment-group-#{product.id}",
+                                                                        data: { action: 'equipment-selection#selectGroup', equipment_selection_target: 'groupCheckbox' } %>
+            Select group<span class="sr-only">: <%= equipment_catalog_label(product) %></span>
+          </label>
+        <% end %>
+        <ul class="divide-y divide-gray-100">
+          <% rows.each do |row| %>
+            <li class="flex flex-wrap items-center gap-3 py-3">
+              <% if @context[:tab] == 'needs_ordering' %>
+                <label class="inline-flex items-center gap-2">
+                  <%= check_box_tag(row.is_a?(EquipmentNeed) ? 'need_ids[]' : 'item_ids[]', row.id, false, id: "#{row.class.model_name.singular}-#{row.id}",
+                                                                                                           data: { action: 'equipment-selection#selectRow',
+                                                                                                                   equipment_selection_target: 'rowCheckbox' }) %>
+                  <span class="sr-only">
+                    Select <%= row.is_a?(EquipmentNeed) ? 'new devices' : "device ##{row.id}" %> for application #<%= row.application_id %>
+                  </span>
+                </label>
+              <% end %>
+              <%= link_to "Application ##{row.application_id}", admin_application_path(row.application_id, anchor: 'equipment', return_context: @context),
+                          class: 'text-indigo-700 underline' %>
+              <% if row.is_a?(EquipmentNeed) %>
+                <span><%= pluralize(row.remaining_quantity, 'new device') %> still needed</span>
+                <%= link_to 'Edit equipment needs', edit_admin_application_equipment_needs_path(row.application_id, return_context: @context),
+                            class: 'text-indigo-700 underline' %>
+              <% else %>
+                <%= link_to "Device ##{row.id}", edit_admin_equipment_item_path(row, return_context: @context), class: 'text-indigo-700 underline' %>
+                <%= equipment_queue_badge(row) %>
+                <% if row.purchase_order %><%= link_to "PO #{row.purchase_order.number}", admin_purchase_order_path(row.purchase_order, return_context: @context),
+                                                       class: 'text-indigo-700 underline' %><% end %>
+                <span><%= row.tracking_number %></span><%= equipment_tracking_link(row) %>
+              <% end %>
+            </li>
+          <% end %>
+        </ul>
+      </section>
+    <% end %>
+    <% if @context[:tab] == 'needs_ordering' %>
+      <div class="flex flex-wrap gap-4 mb-6">
+        <%= form.submit 'Record Winning Bid & PO', class: 'rounded bg-indigo-700 px-4 py-2 text-white' %>
+        <%= button_tag 'Export for bids', type: 'submit', formaction: admin_equipment_index_path(@context.merge(format: :csv)),
+                                          class: 'rounded border border-gray-300 px-4 py-2' %>
+      </div>
+    <% end %>
+  <% end %>
+  <% if @legacy_applications.any? %>
+    <section id="equipment-legacy-review" aria-labelledby="equipment-legacy-review-title" class="rounded border border-amber-300 bg-amber-50 p-4">
+      <h2 id="equipment-legacy-review-title" class="font-semibold">Earlier fulfillment details need review</h2>
+      <p class="text-sm">These approved applications have earlier PO or tracking facts without device records and no purchasing decision yet. Confirm what still needs ordering in the needs editor, including an empty list when nothing remains. A later order requires explicit mapping confirmation.</p>
+      <% @legacy_applications.each do |application| %>
+        <%= link_to "Application ##{application.id}", admin_application_path(application, anchor: 'equipment', return_context: @context),
+                    class: 'inline-block mr-4 text-indigo-700 underline' %>
+      <% end %>
+    </section>
+  <% end %>
+</div>

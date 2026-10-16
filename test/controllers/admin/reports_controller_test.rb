@@ -93,7 +93,7 @@ module Admin
       assert_match(/Vouchers issued during FY/, response.body)
     end
 
-    test 'equipment by type defaults to current fiscal year and counts PO-sent recommendations' do
+    test 'equipment by type defaults to current fiscal year and counts actual ordered device units' do
       travel_to Time.zone.local(2026, 6, 15, 12, 0, 0) do
         tablet = create(:product, name: 'FY Tablet', device_types: ['Tablet'])
         phone = create(:product, name: 'FY Phone', device_types: ['Smartphone'])
@@ -276,12 +276,10 @@ module Admin
 
     def create_po_sent_equipment_application(product:, po_sent_at:)
       application = create_reviewed_application(user: create(:constituent))
-      application.update!(fulfillment_type: :equipment, equipment_po_sent_at: po_sent_at)
-      evaluation = create(:evaluation, :completed, application: application, constituent: application.user)
-      evaluation.update!(
-        recommended_product_ids: [product.id],
-        products_tried: [{ 'product_id' => product.id.to_s, 'reaction' => 'Recorded during evaluation' }]
-      )
+      application.update!(fulfillment_type: :equipment)
+      vendor = create(:vendor)
+      order = PurchaseOrder.create!(vendor: vendor, number: "REPORT-#{application.id}", sent_at: po_sent_at.to_date)
+      EquipmentItem.create!(application: application, product: product, purchase_order: order)
       application
     end
 

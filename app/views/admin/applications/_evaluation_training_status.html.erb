@@ -213,7 +213,11 @@
       </dl>
       <dl class="mb-3">
         <dt class="text-sm font-medium text-gray-500">
-          <%= latest_completed_evaluation.recommendation_outcome_catalog_products? ? 'Recommended Products' : 'Recommendation Outcome' %>
+          <% if latest_completed_evaluation.recommendation_outcome_catalog_products? %>
+            <%= t('evaluators.evaluations.recommendations.catalog_heading') %>
+          <% else %>
+            Recommendation Outcome
+          <% end %>
         </dt>
         <dd class="mt-1 text-sm text-gray-900">
           <% if latest_completed_evaluation.recommendation_outcome_catalog_products? %>
@@ -245,7 +249,8 @@
       <% end %>
       <% if latest_completed_evaluation.notes.present? %>
         <div class="mb-3">
-          <dt class="text-sm font-medium text-gray-500">Notes</dt>
+          <dt class="text-sm font-medium text-gray-500"><%= t('evaluators.evaluations.working_notes.title') %></dt>
+          <p class="text-sm text-gray-700"><strong><%= t('evaluators.evaluations.forms.internal_notes_only') %></strong></p>
           <dd class="mt-1 text-sm text-gray-900"><%= truncate(latest_completed_evaluation.notes, length: 400) %></dd>
         </div>
       <% end %>

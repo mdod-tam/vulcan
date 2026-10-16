@@ -173,6 +173,18 @@ class FilterParameterLoggingTest < ActiveSupport::TestCase
                         existing.id
   end
 
+  test 'equipment identifiers and correction context are redacted from nested requests' do
+    filtered = ActiveSupport::ParameterFilter.new(Rails.application.config.filter_parameters).filter(
+      'equipment_item' => { 'imei' => '123456789012345', 'normalized_imei' => '123456789012345',
+                            'serial_number' => 'DeviceSerial', 'tracking_number' => 'Package', 'carrier' => 'ups' },
+      'reason' => 'Private correction context', 'serial_duplicate_reason' => 'Private acknowledgment',
+      'impact_token' => 'Signed confirmation'
+    )
+    %w[imei normalized_imei serial_number tracking_number].each { |field| assert_equal '[FILTERED]', filtered.dig('equipment_item', field) }
+    %w[reason serial_duplicate_reason impact_token].each { |field| assert_equal '[FILTERED]', filtered[field] }
+    assert_equal 'ups', filtered.dig('equipment_item', 'carrier')
+  end
+
   private
 
   def capture_active_record_log

@@ -56,19 +56,20 @@ module Evaluators
       @my_scheduled_evaluations_display = []
 
       # Data for dashboard tables - limit to 5 items for each section
-      @requested_evaluations_display = @requested_evaluations.includes(:constituent).order(created_at: :desc).limit(5)
-      @followup_evaluations_display = @followup_evaluations.includes(:constituent).order(updated_at: :desc).limit(5)
+      @requested_evaluations_display = @requested_evaluations.includes(:constituent, :evaluator).order(created_at: :desc).limit(5)
+      @followup_evaluations_display = @followup_evaluations.includes(:constituent, :evaluator).order(updated_at: :desc).limit(5)
       @upcoming_evaluations = (current_user.admin? ? Evaluation.active : current_user.evaluations.active)
-                              .includes(:constituent).order(evaluation_date: :asc).limit(5)
+                              .includes(:constituent, :evaluator).order(evaluation_date: :asc).limit(5)
       @recent_evaluations = (current_user.admin? ? Evaluation.completed_sessions : current_user.evaluations.completed_sessions)
-                            .includes(:constituent, :application).by_report_submission.limit(5)
+                            .includes(:constituent, :evaluator, :application).by_report_submission.limit(5).to_a
+      Application.preload_equipment_fulfillment(@recent_evaluations.map(&:application))
 
       load_admin_display_data if current_user.admin?
     end
 
     def load_admin_display_data
       my_scheduled_evaluations = Evaluation.where(evaluator_id: current_user.id).active
-      @my_scheduled_evaluations_display = my_scheduled_evaluations.includes(:constituent)
+      @my_scheduled_evaluations_display = my_scheduled_evaluations.includes(:constituent, :evaluator)
                                                                   .order(evaluation_date: :asc)
                                                                   .limit(5)
     end

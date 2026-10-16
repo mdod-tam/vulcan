@@ -34,6 +34,9 @@ module Admin
 
     test 'reject income proof responds with turbo streams: update modals container and replace attachments' do
       attach_income_proof!
+      product = create(:product, name: 'Historical purchasing model')
+      AuditEventService.log(action: 'equipment_needs_updated', actor: @admin, auditable: @application,
+                            metadata: { changes: { equipment_needs: { old: [], new: [{ product_id: product.id, remaining_quantity: 2 }] } } })
 
       patch update_proof_status_admin_application_path(@application),
             params: { proof_type: 'income', status: 'rejected', rejection_reason: 'invalid_document', notes: 'Please upload a valid PDF.' },
@@ -45,6 +48,9 @@ module Admin
       # The controller replaces the modals container (closes all modals and regenerates them)
       assert_turbo_stream action: 'update', target: 'modals'
       assert_turbo_stream action: 'update', target: 'attachments-section'
+      assert_turbo_stream action: 'update', target: 'audit-logs'
+      assert_includes response.body, 'Historical purchasing model'
+      assert_includes response.body, '2 devices'
       assert_equal 'rejected', @application.reload.income_proof_status
       review = @application.proof_reviews.find_by!(proof_type: :income, status: :rejected)
       assert_equal @admin, review.admin

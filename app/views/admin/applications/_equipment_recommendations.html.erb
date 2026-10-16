@@ -1,0 +1,30 @@
+<%# locals: (application:, heading_level: 3) -%>
+<% report = application.equipment_source_report # rubocop:disable Lint/UselessAssignment -- Used by later ERB fragments. %>
+<section class="mb-6" aria-labelledby="original-recommendation-title">
+  <%= content_tag "h#{heading_level}", 'Original assessment recommendation', id: 'original-recommendation-title', class: 'text-lg font-semibold text-gray-900 mb-2' %>
+  <% if report %>
+    <p class="text-sm text-gray-600">
+      <%= report.assessment_source.humanize %> · <%= report.evaluator.full_name %> · Report submitted
+      <% if report.report_submitted_at %>
+        <%= l(report.report_submitted_at, format: :long) %>
+      <% else %>
+        at an unknown time
+      <% end %>
+    </p>
+    <% if report.recommendation_outcome_catalog_products? %>
+      <ul class="list-disc pl-5 text-sm text-gray-700 mt-2">
+        <% report.recommended_products.each do |product| %>
+          <li><%= equipment_catalog_label(product) %></li>
+        <% end %>
+      </ul>
+    <% else %>
+      <p class="mt-2 text-sm text-gray-700"><%= report.recommendation_outcome.humanize %></p>
+    <% end %>
+    <% if report.recommendation_notes.present? %>
+      <div class="mt-2 text-sm text-gray-700"><%= simple_format(report.recommendation_notes) %></div>
+    <% end %>
+    <%= link_to 'View original evaluation report', evaluators_evaluation_path(report), class: 'text-sm text-indigo-600 underline', data: { turbo_frame: '_top' } %>
+  <% else %>
+    <p class="text-sm text-gray-600">No completed evaluation report is available.</p>
+  <% end %>
+</section>
