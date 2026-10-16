@@ -5,8 +5,8 @@ require 'test_helper'
 module Evaluators
   class DashboardsControllerTest < ActionDispatch::IntegrationTest
     def setup
-      @evaluator = create(:evaluator) # Using factory
-      @other_evaluator = create(:evaluator)
+      @evaluator = create(:evaluator, first_name: 'Jordan', last_name: 'Evaluator')
+      @other_evaluator = create(:evaluator, first_name: 'Morgan', last_name: 'Evaluator')
       @admin = create(:admin)
       @constituent = create(:constituent, first_name: 'Scoped', last_name: 'Constituent')
       @other_constituent = create(:constituent, first_name: 'Unrelated', last_name: 'Constituent')
@@ -39,6 +39,10 @@ module Evaluators
       assert_includes @response.body, 'Constituent'
       assert_includes @response.body, @evaluation.constituent.full_name
       assert_not_includes @response.body, @other_evaluation.constituent.full_name
+      assert_select '#upcoming-evaluations-section tbody tr', text: /#{Regexp.escape(@constituent.full_name)}/ do
+        assert_select 'p', text: "Evaluator: #{@evaluator.full_name}"
+      end
+      assert_not_includes @response.body, @other_evaluator.full_name
     end
 
     test 'admin sees broader recent evaluation activity' do
@@ -51,6 +55,39 @@ module Evaluators
       assert_response :success
       assert_includes assigns(:activity_logs), own_event
       assert_includes assigns(:activity_logs), other_event
+    end
+
+    test 'dashboard pairs every displayed evaluation with its preloaded evaluator' do
+      sign_in_for_integration_test(@admin)
+      requested = create(:evaluation, evaluator: @other_evaluator, status: :requested, evaluation_date: nil)
+      followup = create(:evaluation, evaluator: @evaluator, status: :cancelled)
+      completed = create(:evaluation, :completed, evaluator: @other_evaluator)
+      mine = create(:evaluation, evaluator: @admin, status: :scheduled)
+
+      get evaluators_dashboard_path
+
+      assert_response :success
+      {
+        'needs-scheduling-section' => [requested],
+        'upcoming-evaluations-section' => [@evaluation, @other_evaluation, mine],
+        'my-upcoming-evaluations-section' => [mine],
+        'followup-evaluations-section' => [followup]
+      }.each do |section, evaluations|
+        evaluations.each do |evaluation|
+          assert_select "##{section} tbody tr", text: /#{Regexp.escape(evaluation.constituent.full_name)}/ do
+            assert_select 'p', text: "Evaluator: #{evaluation.evaluator.full_name}"
+            assert_select 'a[href=?]', evaluators_evaluation_path(evaluation)
+          end
+        end
+      end
+      assert_select '.space-y-4 > div', text: /#{Regexp.escape(completed.constituent.full_name)}/ do
+        assert_select 'p', text: "Evaluator: #{completed.evaluator.full_name}"
+        assert_select 'a[href=?]', evaluators_evaluation_path(completed)
+      end
+      %i[requested_evaluations_display upcoming_evaluations my_scheduled_evaluations_display
+         followup_evaluations_display recent_evaluations].each do |collection|
+        assigns(collection).each { |evaluation| assert_predicate evaluation.association(:evaluator), :loaded? }
+      end
     end
 
     test 'recent activity feed is limited' do

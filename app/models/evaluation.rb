@@ -1,6 +1,8 @@
 # frozen_string_literal: true
 
 class Evaluation < ApplicationRecord
+  TRIAL_REACTIONS = %w[Satisfied Neutral Dissatisfied].freeze
+
   has_many :email_delivery_attempts, as: :origin, dependent: :nullify
   include StatusManagement
 
@@ -88,14 +90,24 @@ class Evaluation < ApplicationRecord
     products_tried.map { |p| p['product_id'].to_i }
   end
 
-  def products_tried_field=(array_of_ids)
-    if array_of_ids.blank? || (array_of_ids.is_a?(Array) && array_of_ids.compact_blank.empty?)
-      self.products_tried = []
+  def products_tried_inputs
+    Array(products_tried).to_h do |trial|
+      [trial['product_id'].to_s, { 'selected' => '1', 'reaction' => trial['reaction'] }]
+    end
+  end
+
+  def products_tried_inputs=(inputs)
+    @products_tried_inputs_assigned = true
+    unless inputs.respond_to?(:each_pair)
+      self.products_tried = nil
       return
     end
 
-    self.products_tried = Array(array_of_ids).compact_blank.map do |id|
-      { 'product_id' => id.to_s, 'reaction' => 'Recorded during evaluation' }
+    self.products_tried = inputs.to_h.filter_map do |id, values|
+      values = values.with_indifferent_access
+      next unless ActiveModel::Type::Boolean.new.cast(values[:selected])
+
+      { 'product_id' => id.to_s, 'reaction' => values[:reaction].to_s.strip.presence }
     end
   end
 
@@ -147,12 +159,32 @@ class Evaluation < ApplicationRecord
   def validate_products_tried_structure
     return true unless status_completed?
 
-    unless products_tried.is_a?(Array) && products_tried.all? do |product|
-      product.with_indifferent_access['product_id'].present? && product.with_indifferent_access['reaction'].present?
+    valid = products_tried.is_a?(Array) && products_tried.all? do |product|
+      product.is_a?(Hash) && product['product_id'].present? && (@products_tried_inputs_assigned || product['reaction'].present?)
     end
+    unless valid
       errors.add(:products_tried,
                  'must be an array of products tried with product_id and reaction when evaluation is completed')
+      return
     end
+    return unless @products_tried_inputs_assigned
+
+    validate_trial_reactions
+    validate_trial_products
+  end
+
+  def validate_trial_reactions
+    errors.add(:products_tried, 'requires a satisfaction rating for each selected product') if products_tried.any? { |trial| trial['reaction'].blank? }
+    return unless products_tried.any? { |trial| trial['reaction'].present? && TRIAL_REACTIONS.exclude?(trial['reaction']) }
+
+    errors.add(:products_tried, 'must use Satisfied, Neutral, or Dissatisfied for each selected product')
+  end
+
+  def validate_trial_products
+    ids = products_tried.pluck('product_id')
+    return if ids.all? { |id| id.match?(/\A[1-9]\d*\z/) } && Product.where(id: ids).count == ids.uniq.size
+
+    errors.add(:products_tried, 'must reference catalog products')
   end
 
   def update_application_record

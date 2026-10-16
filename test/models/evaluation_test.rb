@@ -54,6 +54,45 @@ class EvaluationTest < ActiveSupport::TestCase
     assert_equal pixel.id, evaluation.products_tried.second['product_id']
   end
 
+  test 'selected trial inputs retain actual satisfaction and exclude unchecked products' do
+    evaluation = build(:evaluation, :completed)
+    products = create_list(:product, 3)
+    inputs = products.zip(Evaluation::TRIAL_REACTIONS).to_h do |product, reaction|
+      [product.id.to_s, { selected: '1', reaction: " #{reaction} " }]
+    end
+    evaluation.products_tried_inputs = inputs.merge('0' => { selected: '0', reaction: 'Not a rating' })
+
+    assert evaluation.valid?, -> { evaluation.errors.full_messages.join(', ') }
+    assert_equal products.map { |product| product.id.to_s }, evaluation.products_tried.pluck('product_id')
+    assert_equal Evaluation::TRIAL_REACTIONS, evaluation.products_tried.pluck('reaction')
+    assert_equal({ 'selected' => '1', 'reaction' => 'Satisfied' }, evaluation.products_tried_inputs.fetch(products.first.id.to_s))
+  end
+
+  test 'checked trials require a recognized rating and catalog product' do
+    evaluation = build(:evaluation, :completed)
+    product = evaluation.recommended_products.first
+    [nil, '', 'Not recorded', 'Unknown'].each do |reaction|
+      evaluation.products_tried_inputs = { product.id.to_s => { selected: '1', reaction: reaction } }
+
+      assert_not evaluation.valid?
+      assert_includes evaluation.errors[:products_tried].join, reaction.blank? ? 'requires a satisfaction rating' : 'must use Satisfied'
+    end
+
+    evaluation.products_tried_inputs = { '0' => { selected: '1', reaction: 'Neutral' } }
+    assert_not evaluation.valid?
+    assert_includes evaluation.errors[:products_tried], 'must reference catalog products'
+  end
+
+  test 'historical actual trial reactions survive supplemental notes without reclassification' do
+    evaluation = create(:evaluation, :completed, :with_single_product)
+    original = evaluation.products_tried
+
+    evaluation.update!(post_completion_notes: 'Later observation')
+
+    assert_equal original, evaluation.reload.products_tried
+    assert_equal 'Very Satisfied', evaluation.products_tried_inputs.values.sole['reaction']
+  end
+
   test 'allows administrators as evaluators through inherent capability' do
     evaluation = build(:evaluation, evaluator: create(:admin))
 

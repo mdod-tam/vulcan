@@ -4,13 +4,16 @@ module Evaluations
   class SubmissionService < BaseService
     REPORT_PARAMETERS = [
       :assessment_source, :appointment_completed_at, :location, :notes, :attendees_field,
-      :recommendation_outcome, :recommendation_notes,
-      { recommended_product_ids: [].freeze, products_tried_field: [].freeze }.freeze
+      :no_suitable_product, :recommendation_notes,
+      { recommended_product_ids: [].freeze, products_tried_inputs: [%i[selected reaction].freeze].freeze }.freeze
     ].freeze
     REPORT_FIELDS = REPORT_PARAMETERS.flat_map { |parameter| parameter.is_a?(Hash) ? parameter.keys : parameter }.freeze
 
     def self.report_params(params)
-      params.expect(evaluation: REPORT_PARAMETERS)
+      attributes = params.expect(evaluation: REPORT_PARAMETERS)
+      raise ActionController::BadRequest, 'Product trials must be keyed by catalog product ID.' if attributes[:products_tried_inputs].is_a?(Array)
+
+      attributes
     end
 
     def initialize(evaluation, params, actor: nil)
@@ -101,14 +104,24 @@ module Evaluations
         @evaluation.errors.add(:assessment_source, 'must be selected')
         raise ActiveRecord::RecordInvalid, @evaluation
       end
-      if attributes[:recommendation_outcome].blank?
-        @evaluation.errors.add(:recommendation_outcome, 'must be selected')
+      attributes[:recommended_product_ids] = Array(attributes[:recommended_product_ids]).compact_blank
+      attributes[:products_tried_inputs] ||= {}
+      no_suitable_product = ActiveModel::Type::Boolean.new.cast(attributes.delete(:no_suitable_product).presence)
+      if no_suitable_product && attributes[:recommended_product_ids].any?
+        @evaluation.errors.add(:no_suitable_product, 'cannot be combined with catalog recommendations')
         raise ActiveRecord::RecordInvalid, @evaluation
       end
-      if %w[outside_catalog no_suitable_product].include?(attributes[:recommendation_outcome]) &&
-         !attributes.key?(:recommended_product_ids)
-        attributes[:recommended_product_ids] = []
+      if !no_suitable_product && attributes[:recommended_product_ids].empty? && attributes[:recommendation_notes].blank?
+        @evaluation.errors.add(:recommended_products, 'must be selected, or enter another recommendation or choose no suitable product')
+        raise ActiveRecord::RecordInvalid, @evaluation
       end
+      attributes[:recommendation_outcome] = if no_suitable_product
+                                              'no_suitable_product'
+                                            elsif attributes[:recommended_product_ids].any?
+                                              'catalog_products'
+                                            else
+                                              'outside_catalog'
+                                            end
       attributes
     end
 

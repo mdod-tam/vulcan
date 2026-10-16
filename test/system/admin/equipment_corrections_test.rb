@@ -166,16 +166,32 @@ module Admin
     end
 
     test 'detached devices reorder with the same identity and withdrawal retains history' do
-      item = create(:equipment_item)
+      item = create(:equipment_item, tracking_number: 'RecordedPackage')
       replacement_order = create(:purchase_order)
       system_test_sign_in(create(:admin))
       install_stimulus_error_reporting
       visit edit_admin_equipment_item_path(item)
       select 'Detach an unshipped device for reorder', from: 'Correction action'
+      fill_in 'Tracking number', with: 'CorrectedPackage'
+      fill_in 'Correction reason', with: 'Ordered with the wrong vendor'
+      assert_rejected_device_action(item, field: 'Tracking number', draft: 'CorrectedPackage')
+      assert_select 'Correction action', selected: 'Detach an unshipped device for reorder'
+      assert_field 'Correction reason', with: 'Ordered with the wrong vendor'
+      take_screenshot('equipment-detach-edited-draft-rejected', html: true, full: true)
+      select 'Save device details or move purchase order', from: 'Correction action'
+      fill_in 'Correction reason', with: 'Correct package details before detaching'
+      original_order_id = item.purchase_order_id
+      click_button 'Save equipment correction'
+      assert_text 'Equipment item updated.'
+      assert_equal 'CorrectedPackage', item.reload.tracking_number
+      assert_equal original_order_id, item.purchase_order_id
+      within("#equipment-item-#{item.id}") { click_link 'Correct device / record shipment' }
+      select 'Detach an unshipped device for reorder', from: 'Correction action'
       fill_in 'Correction reason', with: 'Ordered with the wrong vendor'
       click_button 'Save equipment correction'
       assert_text 'Previously ordered device awaiting reorder'
       assert_nil item.reload.purchase_order_id
+      assert_equal 'CorrectedPackage', item.tracking_number
       within("#equipment-item-#{item.id}") { click_link 'Correct device / record shipment' }
       select "#{replacement_order.vendor.business_name} / #{replacement_order.number}", from: 'Current purchase order'
       fill_in 'Correction reason', with: 'Reorder the same device'
@@ -187,6 +203,21 @@ module Admin
       click_button 'Save equipment correction'
       within("#equipment-item-#{item.id}") { click_link 'Correct device / record shipment' }
       select 'Withdraw a detached unshipped device', from: 'Correction action'
+      fill_in 'Serial number', with: 'CorrectedDetachedSerial'
+      fill_in 'Correction reason', with: 'Staff confirmed the device is no longer needed'
+      assert_rejected_device_action(item, field: 'Serial number', draft: 'CorrectedDetachedSerial')
+      assert_select 'Correction action', selected: 'Withdraw a detached unshipped device'
+      assert_field 'Correction reason', with: 'Staff confirmed the device is no longer needed'
+      take_screenshot('equipment-withdraw-edited-draft-rejected', html: true, full: true)
+      select 'Save device details or move purchase order', from: 'Correction action'
+      fill_in 'Correction reason', with: 'Correct serial details before withdrawing'
+      click_button 'Save equipment correction'
+      assert_text 'Equipment item updated.'
+      assert_equal 'CorrectedDetachedSerial', item.reload.serial_number
+      assert_nil item.purchase_order_id
+      assert_nil item.withdrawn_at
+      within("#equipment-item-#{item.id}") { click_link 'Correct device / record shipment' }
+      select 'Withdraw a detached unshipped device', from: 'Correction action'
       fill_in 'Correction reason', with: 'Staff confirmed the device is no longer needed'
       click_button 'Save equipment correction'
       within("#equipment-item-#{item.id}") do
@@ -195,7 +226,9 @@ module Admin
         find('summary', text: 'Equipment correction history').click
       end
       assert item.reload.withdrawn_at?
-      assert_equal 4, item.events.count
+      assert_equal 6, item.events.count
+      assert_equal 'CorrectedPackage', item.tracking_number
+      assert_equal 'CorrectedDetachedSerial', item.serial_number
       assert_text 'Reorder the same device'
       take_screenshot('equipment-withdrawn-device-history', html: true, full: true)
     end
@@ -412,6 +445,20 @@ module Admin
       assert_equal target_order.id, item.reload.purchase_order_id
       assert_equal 'Other administrator package', item.tracking_number
       take_screenshot('equipment-stale-fences-refreshed', html: true, full: true)
+    end
+
+    private
+
+    def assert_rejected_device_action(item, field:, draft:)
+      recorded = item.reload.attributes
+      2.times do
+        assert_no_difference('Event.count') do
+          click_button 'Save equipment correction'
+          assert_selector '#equipment-item-errors:focus', text: 'Detach and withdraw do not change device details. Save device details separately.'
+        end
+        assert_field field, with: draft
+        assert_equal recorded, item.reload.attributes
+      end
     end
   end
 end

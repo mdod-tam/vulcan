@@ -83,6 +83,36 @@ module Admin
       assert_equal Date.current, @item.reload.shipped_at
     end
 
+    test 'mixed detach edits retain the rejected draft until details are saved separately' do
+      original = @item.attributes
+      context = { tab: 'ordered', product_id: @item.product_id.to_s, vendor_id: @item.purchase_order.vendor_id.to_s }
+      submitted = {
+        equipment_item: { product_id: @item.product_id.to_s, purchase_order_id: @item.purchase_order_id.to_s,
+                          shipped_at: '', tracking_number: '', carrier: '', serial_number: 'CorrectedSerial', imei: '' },
+        operation: 'detach', expected_version: '0', reason: 'Correct identity before reorder', return_context: context
+      }
+      2.times do
+        assert_no_difference ['PurchaseOrder.count', 'EquipmentItem.count', 'Event.count'] do
+          patch admin_equipment_item_path(@item), params: submitted
+        end
+        assert_response :unprocessable_entity
+        assert_select '#equipment-item-errors[role=alert][tabindex="-1"][data-controller=error-summary]', text: /Save device details separately/
+        assert_select '#equipment_item_serial_number[value=CorrectedSerial]'
+        assert_select '#operation option[value=detach][selected]'
+        assert_select '#reason', text: 'Correct identity before reorder'
+        assert_select '#expected_version[value="0"]'
+        assert_select 'input[name="return_context[tab]"][value=ordered]'
+        assert_equal original, @item.reload.attributes
+      end
+
+      assert_difference 'Event.count', 1 do
+        patch admin_equipment_item_path(@item), params: submitted.merge(operation: 'update')
+      end
+      assert_redirected_to admin_equipment_index_path(context)
+      assert_equal 'CorrectedSerial', @item.reload.serial_number
+      assert_equal original['purchase_order_id'], @item.purchase_order_id
+    end
+
     test 'stale form retains its submitted fences and an unchanged retry cannot overwrite another administrator' do
       @item.update!(tracking_number: 'OtherAdministratorPackage')
       params = { equipment_item: { tracking_number: 'StaleDraft' }, expected_version: '0', reason: 'Old browser tab',

@@ -41,7 +41,8 @@ module EquipmentHelper
   def equipment_queue_badge(item)
     labels = { 'needs_ordering' => 'Previously ordered device awaiting reorder', 'ordered' => 'Ordered',
                'shipped' => 'Shipped', 'withdrawn' => 'Withdrawn' }
-    tag.span(labels.fetch(item.queue_status), class: 'rounded bg-gray-100 px-2 py-1 text-sm font-medium text-gray-800')
+    state = item.queue_status
+    tag.span(labels.fetch(state), class: "rounded px-2 py-1 text-sm font-medium #{badge_class_for(:equipment, state)}")
   end
 
   def equipment_impact_value(field, value, products: [], purchase_orders: [], vendors: [], new_purchase_order: nil)

@@ -2,40 +2,37 @@ import { Controller } from "@hotwired/stimulus"
 import { setVisible } from "../../utils/visibility"
 
 export default class extends Controller {
-  static targets = ["choice", "catalog", "notes", "triedRequired", "notesRequired", "status", "source", "location", "locationRequired"]
+  static targets = ["catalog", "noSuitable", "notes", "trialRow", "triedRequired", "notesRequired", "source", "location", "locationRequired"]
+  static values = { conflict: String }
 
   connect() {
     this.update()
   }
 
-  update(event) {
-    const choice = this.choiceTargets.find(choice => choice.checked)
-    const selected = choice?.value
-    const catalog = selected === "catalog_products"
+  update() {
+    const catalog = this.catalogTargets.some(input => input.checked)
     const outsideSpecialist = this.hasSourceTarget && this.sourceTarget.value !== "direct_assessment"
-    const needsDetails = selected === "outside_catalog" || selected === "no_suitable_product"
+    const needsDetails = this.noSuitableTarget.checked || !catalog
 
-    setVisible(this.catalogTarget, catalog)
-    this.catalogTarget.hidden = !catalog
-    this.catalogTarget.disabled = !catalog
-    this.catalogTarget.querySelectorAll("input").forEach(input => {
-      input.disabled = !catalog
-    })
-
+    this.noSuitableTarget.setCustomValidity(this.noSuitableTarget.checked && catalog ? this.conflictValue : "")
     this.notesTarget.required = needsDetails
     this.notesTarget.setAttribute("aria-required", String(needsDetails))
-
     setVisible(this.triedRequiredTarget, catalog && !outsideSpecialist)
     setVisible(this.notesRequiredTarget, needsDetails)
+
+    this.trialRowTargets.forEach(row => {
+      const selected = row.querySelector("[data-trial-choice]").checked
+      const rating = row.querySelector("[data-trial-reaction]")
+      row.querySelector("[data-trial-rating]").hidden = !selected
+      rating.disabled = !selected
+      rating.required = selected
+      rating.setAttribute("aria-required", String(selected))
+    })
 
     if (this.hasLocationTarget) {
       this.locationTarget.required = !outsideSpecialist
       this.locationTarget.setAttribute("aria-required", String(!outsideSpecialist))
       setVisible(this.locationRequiredTarget, !outsideSpecialist)
-    }
-
-    if (event) {
-      this.statusTarget.textContent = choice?.dataset.recommendationOutcomeFeedback || ""
     }
   }
 }

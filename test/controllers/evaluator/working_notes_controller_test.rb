@@ -28,6 +28,64 @@ class EvaluatorWorkingNotesControllerTest < ActionDispatch::IntegrationTest
     assert_select '#working-notes-form textarea', text: @evaluation.working_notes
   end
 
+  test 'internal note fields use Working Notes labels and bold linked privacy hints' do
+    get evaluators_evaluation_path(@evaluation)
+
+    assert_select '#working-notes-heading', text: 'Working Notes'
+    assert_select '#working-notes-form label', text: 'Working Notes'
+    assert_select '#schedule-evaluation-form label[for="schedule_evaluation_notes"]', text: 'Working Notes'
+    assert_select 'dt', text: 'Working Notes'
+    %w[working-notes-help schedule-notes-help cancel-notes-help].each do |id|
+      assert_select "##{id} strong", text: 'Internal notes only.'
+      assert_select "textarea[aria-describedby~='#{id}']"
+    end
+    assert_select 'dd strong', text: 'Internal notes only.'
+  end
+
+  test 'reschedule precedes cancel after the available outcome actions' do
+    expected = %w[complete-evaluation-form reschedule-evaluation-form cancel-evaluation-form]
+    %i[scheduled confirmed].each do |status|
+      @evaluation.update!(status: status, evaluation_date: 1.day.from_now)
+      get evaluators_evaluation_path(@evaluation)
+
+      form_ids = response.parsed_body.css('section[aria-label="Evaluation Actions"] form[id]').pluck('id')
+      assert_equal expected, form_ids
+    end
+    @evaluation.update!(status: :scheduled, evaluation_date: 1.hour.ago)
+    get evaluators_evaluation_path(@evaluation)
+
+    form_ids = response.parsed_body.css('section[aria-label="Evaluation Actions"] form[id]').pluck('id')
+    assert_equal expected.dup.insert(1, 'no-show-evaluation-form'), form_ids
+    assert_select '#reschedule-reason-help strong', text: 'Internal notes only.'
+    assert_select '#cancel-notes-help strong', text: 'Internal notes only.'
+    assert_select '#no-show-notes-help strong', text: 'Internal notes only.'
+    assert_select '#no-show-evaluation-form textarea[aria-describedby~="no-show-notes-help"]'
+  end
+
+  test 'completed report shows internal notes and exposes only the supplemental form' do
+    @evaluation.update!(status: :completed, evaluation_date: 1.day.ago, appointment_completed_at: 1.hour.ago,
+                        report_submitted_at: Time.current, working_notes: 'Prior coordination', post_completion_notes: 'Follow-up observation')
+    legacy_trials = @evaluation.products_tried
+    legacy_trials.first['reaction'] = 'Recorded during evaluation'
+    # Historical reports predate explicit satisfaction choices.
+    @evaluation.update_column(:products_tried, legacy_trials)
+    get evaluators_evaluation_path(@evaluation)
+
+    form_ids = response.parsed_body.css('section[aria-label="Evaluation Actions"] form[id]').pluck('id')
+    assert_equal ['supplemental-notes-form'], form_ids
+    assert_select '#working-notes-form', count: 0
+    assert_select 'dt', text: 'Working Notes'
+    assert_select 'dd strong', text: 'Internal notes only.'
+    assert_select '#working-notes-help strong', text: 'Internal notes only.'
+    assert_select '#supplemental-notes-help strong', text: 'Internal notes only.'
+    assert_select '#supplemental-notes-form label', text: 'Working Notes'
+    assert_select '#supplemental-notes-form textarea[aria-describedby="supplemental-notes-help"]', text: 'Follow-up observation'
+    assert_select 'dt', text: 'Recommended products from catalog'
+    assert_select 'li', text: /Satisfaction not recorded/
+    assert_select 'li', text: /Neutral/
+    assert_equal legacy_trials, @evaluation.reload.products_tried
+  end
+
   test 'working note failure preserves entered text and renders a focusable error summary' do
     invalid_event = Event.new
     invalid_event.errors.add(:base, 'Audit unavailable')
@@ -66,20 +124,21 @@ class EvaluatorWorkingNotesControllerTest < ActionDispatch::IntegrationTest
     @evaluation.update!(status: :scheduled, evaluation_date: 1.day.from_now)
     values = {
       appointment_completed_at: 1.hour.ago, location: 'Home', notes: 'Assessment observations',
-      recommendation_outcome: 'outside_catalog', recommendation_notes: ' ', products_tried_field: [''],
+      no_suitable_product: '1', recommendation_notes: ' ', products_tried_inputs: {},
       recommended_product_ids: ['']
     }
     post submit_report_evaluators_evaluation_path(@evaluation), params: { evaluation: values }
 
     assert_response :unprocessable_content
     assert_equal 'scheduled', @evaluation.reload.status
-    assert_select 'input[name="evaluation[recommendation_outcome]"][value="outside_catalog"][checked]'
+    assert_select '#complete_evaluation_no_suitable_product[checked]'
     assert_select 'textarea[name="evaluation[recommendation_notes]"]', text: ' '
     assert_select '#complete-evaluation-form [data-controller="error-summary"] a[href="#complete_evaluation_recommendation_notes"]'
     assert_select '#complete_evaluation_recommendation_notes[aria-invalid="true"]'
     assert_select '[role="alert"]', count: 1
     assert_nil flash[:alert]
 
+    values[:no_suitable_product] = '0'
     values[:recommendation_notes] = 'Consider a switch-access device outside the program catalog.'
     post submit_report_evaluators_evaluation_path(@evaluation), params: { evaluation: values }
     assert_redirected_to evaluators_evaluation_path(@evaluation)

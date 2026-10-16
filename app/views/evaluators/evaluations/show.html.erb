@@ -102,8 +102,9 @@
 
         <% if @evaluation.notes.present? && @evaluation.status_completed? %>
           <div class="bg-white px-4 py-5 sm:grid sm:grid-cols-3 sm:gap-4 sm:px-6">
-            <dt class="text-sm font-medium text-gray-500">Evaluator Notes</dt>
+            <dt class="text-sm font-medium text-gray-500"><%= t('evaluators.evaluations.working_notes.label') %></dt>
             <dd class="mt-1 text-sm text-gray-900 sm:mt-0 sm:col-span-2">
+              <p><strong><%= t('evaluators.evaluations.forms.internal_notes_only') %></strong></p>
               <%= simple_format(@evaluation.notes) %>
             </dd>
           </div>
@@ -111,6 +112,7 @@
           <div class="bg-white px-4 py-5 sm:grid sm:grid-cols-3 sm:gap-4 sm:px-6">
             <dt class="text-sm font-medium text-gray-500">Current Cancellation Reason</dt>
             <dd class="mt-1 text-sm text-gray-900 sm:mt-0 sm:col-span-2">
+              <p><strong><%= t('evaluators.evaluations.forms.internal_notes_only') %></strong></p>
               <%= simple_format(@evaluation.notes) %>
             </dd>
           </div>
@@ -118,13 +120,15 @@
           <div class="bg-white px-4 py-5 sm:grid sm:grid-cols-3 sm:gap-4 sm:px-6">
             <dt class="text-sm font-medium text-gray-500">Current No-Show Notes</dt>
             <dd class="mt-1 text-sm text-gray-900 sm:mt-0 sm:col-span-2">
+              <p><strong><%= t('evaluators.evaluations.forms.internal_notes_only') %></strong></p>
               <%= simple_format(@evaluation.notes) %>
             </dd>
           </div>
         <% elsif @evaluation.notes.present? %>
           <div class="bg-white px-4 py-5 sm:grid sm:grid-cols-3 sm:gap-4 sm:px-6">
-            <dt class="text-sm font-medium text-gray-500">Current Evaluator Notes</dt>
+            <dt class="text-sm font-medium text-gray-500"><%= t('evaluators.evaluations.working_notes.label') %></dt>
             <dd class="mt-1 text-sm text-gray-900 sm:mt-0 sm:col-span-2">
+              <p><strong><%= t('evaluators.evaluations.forms.internal_notes_only') %></strong></p>
               <%= simple_format(@evaluation.notes) %>
             </dd>
           </div>
@@ -134,6 +138,7 @@
           <div class="bg-gray-50 px-4 py-5 sm:grid sm:grid-cols-3 sm:gap-4 sm:px-6">
             <dt class="text-sm font-medium text-gray-500">Current Rescheduling Reason</dt>
             <dd class="mt-1 text-sm text-gray-900 sm:mt-0 sm:col-span-2">
+              <p><strong><%= t('evaluators.evaluations.forms.internal_notes_only') %></strong></p>
               <%= simple_format(@evaluation.reschedule_reason) %>
             </dd>
           </div>
@@ -157,7 +162,14 @@
               <ul class="list-disc pl-5">
                 <% @evaluation.products_tried.each do |product| %>
                   <% product_name = Product.find_by(id: product['product_id'])&.name || "Unknown Product" %>
-                  <li><%= "#{product_name} — #{product['reaction']}" %></li>
+                  <li>
+                    <%= product_name %> —
+                    <% if product['reaction'] == 'Recorded during evaluation' %>
+                      <%= t('evaluators.evaluations.forms.satisfaction_not_recorded') %>
+                    <% else %>
+                      <%= product['reaction'] %>
+                    <% end %>
+                  </li>
                 <% end %>
               </ul>
             </dd>
@@ -166,7 +178,7 @@
 
         <% if @evaluation.recommended_products.any? %>
           <div class="bg-white px-4 py-5 sm:grid sm:grid-cols-3 sm:gap-4 sm:px-6">
-            <dt class="text-sm font-medium text-gray-500">Recommended Products</dt>
+            <dt class="text-sm font-medium text-gray-500"><%= t('evaluators.evaluations.recommendations.catalog_heading') %></dt>
             <dd class="mt-1 text-sm text-gray-900 sm:mt-0 sm:col-span-2">
               <ul class="list-disc pl-5">
                 <% @evaluation.recommended_products.each do |product| %>
@@ -208,7 +220,7 @@
     <% elsif visible_form_actions.include?(:schedule) %>
       <div class="space-y-6 mb-6">
         <%= render "schedule_form", evaluation: @evaluation %>
-        <%= render "cancel_form", evaluation: @evaluation %>
+        <%= render 'cancel_form', evaluation: @evaluation %>
         <% if visible_form_actions.include?(:submit_report) %>
           <%= render 'completion_form', evaluation: @evaluation, available_products: @available_products %>
         <% end %>
@@ -221,21 +233,21 @@
       <div class="space-y-6 mb-6">
         <%= render "completion_form", evaluation: @evaluation, available_products: @available_products %>
         <%= render "no_show_form", evaluation: @evaluation %>
-        <%= render "cancel_form", evaluation: @evaluation %>
-        <%= render "reschedule_form",
+        <%= render 'reschedule_form',
             evaluation: @evaluation,
             suggested_date: @evaluation.evaluation_date %>
+        <%= render 'cancel_form', evaluation: @evaluation %>
       </div>
     <% elsif visible_form_actions.include?(:submit_report) %>
       <div class="space-y-6 mb-6">
         <%= render "completion_form", evaluation: @evaluation, available_products: @available_products %>
-        <%= render "cancel_form", evaluation: @evaluation %>
-        <%= render "reschedule_form",
+        <%= render 'reschedule_form',
             evaluation: @evaluation,
             suggested_date: @evaluation.evaluation_date %>
+        <%= render 'cancel_form', evaluation: @evaluation %>
       </div>
     <% elsif visible_form_actions.include?(:reschedule) %>
-      <%= render "reschedule_form",
+      <%= render 'reschedule_form',
           evaluation: @evaluation,
           suggested_date: 1.week.from_now %>
     <% elsif visible_form_actions.include?(:supplemental_notes) %>

@@ -13,7 +13,7 @@ module Evaluators
         actions << :submit_report if evaluation.outside_specialist_report_allowed?(current_user)
         actions
       when 'scheduled', 'confirmed'
-        actions = %i[submit_report cancel reschedule]
+        actions = %i[submit_report reschedule cancel]
         actions.insert(1, :no_show) if evaluation.evaluation_date.present? && evaluation.evaluation_date < Time.current
         actions
       when 'cancelled', 'no_show', 'rescheduled'
@@ -59,11 +59,11 @@ module Evaluators
       end
     end
 
-    def evaluation_report_error_targets(outcome)
+    def evaluation_report_error_targets
       {
-        products_tried_field: 'products-tried-group',
-        recommended_product_ids: outcome == 'catalog_products' ? 'catalog-recommendations-group' : 'recommendation-outcome-group',
-        recommendation_outcome: 'recommendation-outcome-group'
+        products_tried_inputs: 'products-tried-group',
+        recommended_product_ids: 'catalog-recommendations-group',
+        no_suitable_product: 'recommendation-outcome-group'
       }
     end
   end

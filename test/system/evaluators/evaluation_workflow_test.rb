@@ -16,17 +16,17 @@ module Evaluators
 
     test 'report rejection preserves inputs through unchanged retry and corrected submission' do
       original_date = @evaluation.evaluation_date
-      appointment_time = 1.hour.ago.strftime('%Y-%m-%dT%H:%M')
+      appointment_time = 1.day.from_now.strftime('%Y-%m-%dT%H:%M')
       visit evaluators_evaluation_path(@evaluation)
 
       within '#complete-evaluation-form' do
-        choose 'Catalog products'
         fill_in 'Appointment Date/Time', with: appointment_time
         fill_in 'Location', with: 'Retry Library'
         fill_in 'Other Attendees', with: 'Interpreter, Family friend'
-        fill_in 'Evaluation Report Notes', with: 'Detailed report observations'
-        replace_product_selection('products_tried_field', @product)
+        fill_in 'Working Notes', with: 'Detailed report observations'
+        replace_product_selection('products_tried_inputs', @product)
         replace_product_selection('recommended_product_ids')
+        fill_in 'Non-catalog products and recommendation details', with: 'Non-catalog recommendation retained during retry.'
         click_button 'Mark as Completed'
       end
 
@@ -37,8 +37,8 @@ module Evaluators
           assert_field 'Appointment Date/Time', with: appointment_time
           assert_field 'Location', with: 'Retry Library'
           assert_field 'Other Attendees', with: 'Interpreter, Family friend'
-          assert_field 'Evaluation Report Notes', with: 'Detailed report observations'
-          assert_selector "input[name='evaluation[products_tried_field][]'][value='#{@product.id}']:checked"
+          assert_field 'Working Notes', with: 'Detailed report observations'
+          assert_selector "input#trial-#{@product.id}:checked"
           assert_no_selector "input[name='evaluation[recommended_product_ids][]']:checked"
           click_button 'Mark as Completed' if attempt.zero?
         end
@@ -51,8 +51,8 @@ module Evaluators
         fill_in 'Appointment Date/Time', with: corrected_time
         fill_in 'Location', with: 'Corrected Library'
         fill_in 'Other Attendees', with: ''
-        fill_in 'Evaluation Report Notes', with: 'Corrected report observations'
-        replace_product_selection('products_tried_field', @replacement_product)
+        fill_in 'Working Notes', with: 'Corrected report observations'
+        replace_product_selection('products_tried_inputs', @replacement_product)
         replace_product_selection('recommended_product_ids', @replacement_product)
       end
       take_screenshot('evaluator-report-corrected', html: true, full: true)
@@ -63,7 +63,7 @@ module Evaluators
       assert_text 'Evaluation submitted successfully.'
       assert_text 'Appointment Completed At'
       assert_text 'Report Submitted At'
-      assert_text 'Add a Note'
+      assert_text 'Working Notes'
       assert_no_selector '#complete-evaluation-form'
       assert_equal 'completed', @evaluation.reload.status
       assert_equal original_date, @evaluation.evaluation_date
@@ -86,7 +86,7 @@ module Evaluators
       within '#schedule-evaluation-form' do
         fill_in 'Evaluation Date/Time', with: past_time
         fill_in 'Location', with: ''
-        fill_in 'Notes', with: 'Call the contact person before arrival'
+        fill_in 'Working Notes', with: 'Call the contact person before arrival'
         click_button 'Schedule Evaluation'
       end
 
@@ -95,7 +95,7 @@ module Evaluators
       within '#schedule-evaluation-form' do
         assert_field 'Evaluation Date/Time', with: past_time
         assert_field 'Location', with: ''
-        assert_field 'Notes', with: 'Call the contact person before arrival'
+        assert_field 'Working Notes', with: 'Call the contact person before arrival'
       end
       take_screenshot('evaluator-schedule-restored', html: true, full: true)
 
@@ -103,7 +103,7 @@ module Evaluators
       within '#schedule-evaluation-form' do
         fill_in 'Evaluation Date/Time', with: future_time
         fill_in 'Location', with: 'Library'
-        fill_in 'Notes', with: 'Confirmed directly with the contact person'
+        fill_in 'Working Notes', with: 'Confirmed directly with the contact person'
         click_button 'Schedule Evaluation'
       end
 
@@ -171,8 +171,26 @@ module Evaluators
     end
 
     test 'dashboard shortcuts use matching labels and focus their own section headings' do
+      @evaluator.update!(first_name: 'Jordan', last_name: 'Evaluator')
       requested = create(:evaluation, evaluator: @evaluator, status: :requested, evaluation_date: nil)
+      followup = create(:evaluation, evaluator: @evaluator, status: :cancelled)
+      completed = create(:evaluation, :completed, evaluator: @evaluator)
+      { @evaluation => 'Scheduled', requested => 'Requested', followup => 'Followup', completed => 'Completed' }.each do |evaluation, name|
+        evaluation.constituent.update!(first_name: name, last_name: 'Applicant')
+      end
       visit evaluators_dashboard_path
+      {
+        'needs-scheduling-section' => requested,
+        'upcoming-evaluations-section' => @evaluation,
+        'followup-evaluations-section' => followup
+      }.each do |section, evaluation|
+        within("##{section} tbody tr", text: evaluation.constituent.full_name) do
+          assert_text "Evaluator: #{@evaluator.full_name}"
+        end
+      end
+      within('.space-y-4 > div', text: completed.constituent.full_name) do
+        assert_text "Evaluator: #{@evaluator.full_name}"
+      end
       within('#needs-scheduling-section tbody tr', text: requested.constituent.full_name) do
         assert_selector 'span', text: 'Needs Scheduling'
         assert_selector "span.#{ApplicationController.helpers.badge_class_for(:evaluation, requested.status).split.join('.')}"
@@ -189,18 +207,31 @@ module Evaluators
       end
       take_screenshot('evaluator-dashboard-shortcut-focused', html: true, full: true)
 
-      admin = create(:admin)
+      admin = create(:admin, first_name: 'Avery', last_name: 'Administrator')
       assigned = create(:evaluation, evaluator: admin, status: :scheduled)
+      assigned.constituent.update!(first_name: 'Admin', last_name: 'Applicant')
       click_button 'Sign Out'
       system_test_sign_in(admin)
+      install_stimulus_error_reporting
       visit evaluators_dashboard_path
       link = find("a[href='#my-upcoming-evaluations-table-heading']")
       assert link['aria-label'].start_with?(link.text)
       assert_selector '#my-upcoming-evaluations-section', text: assigned.constituent.full_name
+      within('#my-upcoming-evaluations-section tbody tr', text: assigned.constituent.full_name) do
+        assert_text "Evaluator: #{admin.full_name}"
+      end
+      within('#upcoming-evaluations-section tbody tr', text: @evaluation.constituent.full_name) do
+        assert_text "Evaluator: #{@evaluator.full_name}"
+        assert_no_text "Evaluator: #{admin.full_name}"
+      end
       page.execute_script('document.querySelector("a[href=\"#my-upcoming-evaluations-table-heading\"]").focus()')
       page.driver.browser.keyboard.type(:enter)
       assert_equal 'my-upcoming-evaluations-table-heading', page.evaluate_script('document.activeElement.id')
       take_screenshot('admin-my-scheduled-shortcut-focused', html: true, full: true)
+      page.current_window.resize_to(375, 812)
+      take_screenshot('admin-dashboard-evaluator-names-narrow', html: true, full: true)
+    ensure
+      page.current_window.resize_to(1200, 900)
     end
 
     test 'stale cancellation and rescheduling forms retain one focused rejection after report completion' do

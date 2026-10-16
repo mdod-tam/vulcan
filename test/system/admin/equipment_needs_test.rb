@@ -177,7 +177,8 @@ module Admin
       assert_no_selector '#equipment-legacy-review a', text: "Application ##{application.id}"
       visit admin_application_path(application, anchor: 'equipment', return_context: context)
       within '#equipment' do
-        assert_text 'Needs a catalog product'
+        assert_selector 'span.bg-amber-100.text-amber-800', text: 'Needs a catalog product'
+        assert_selector '.sr-only', text: 'Fulfillment Status:', visible: :all
         assert_text report.recommendation_notes
         assert_text 'September 09, 2026'
         assert_no_text 'Earlier fulfillment needs review'
@@ -196,7 +197,8 @@ module Admin
       assert_current_path admin_equipment_index_path(context)
       visit admin_application_path(application, anchor: 'equipment', return_context: context)
       within '#equipment' do
-        assert_text 'No equipment needed'
+        assert_selector 'span.bg-gray-100.text-gray-800', text: 'No equipment needed'
+        assert_selector '.sr-only', text: 'Fulfillment Status:', visible: :all
         assert_text 'No new devices are currently needed.'
         assert_no_text 'Needs a catalog product'
         assert_text report.recommendation_notes

@@ -4,45 +4,43 @@ import RecommendationOutcomeController from "controllers/evaluators/recommendati
 describe("RecommendationOutcomeController", () => {
   let application
   let form
-  let notes
 
-  async function restore(outcome, source) {
+  async function restore({ catalog = false, noSuitable = false, tried = false, reaction = "", source = "direct_assessment" } = {}) {
     document.body.innerHTML = `
-      <form data-controller="recommendation-outcome">
-        ${source ? `
-          <select data-recommendation-outcome-target="source" data-action="recommendation-outcome#update">
-            <option value="direct_assessment" ${source === "direct_assessment" ? "selected" : ""}>Direct assessment</option>
-            <option value="outside_specialist" ${source === "outside_specialist" ? "selected" : ""}>Outside specialist</option>
-          </select>
-          <input name="evaluation[location]" value="Restored location" data-recommendation-outcome-target="location">
-          <span data-recommendation-outcome-target="locationRequired">Required location</span>
-        ` : ""}
-        <fieldset>
-          ${["catalog_products", "outside_catalog", "no_suitable_product"].map(value => `
-            <input type="radio" name="evaluation[recommendation_outcome]" value="${value}"
-                   ${value === outcome ? "checked" : ""} required
-                   data-recommendation-outcome-target="choice"
-                   data-recommendation-outcome-feedback="Feedback for ${value}"
-                   data-action="recommendation-outcome#update">
-          `).join("")}
-        </fieldset>
-        <span data-recommendation-outcome-target="triedRequired">Required tried products</span>
-        <input type="hidden" name="evaluation[products_tried_field][]" value="">
-        <input type="checkbox" name="evaluation[products_tried_field][]" value="12" checked>
-        <fieldset data-recommendation-outcome-target="catalog" ${outcome === "catalog_products" ? "" : "hidden disabled"}>
-          <input type="hidden" name="evaluation[recommended_product_ids][]" value="">
-          <input type="checkbox" name="evaluation[recommended_product_ids][]" value="31" checked>
-        </fieldset>
+      <form data-controller="recommendation-outcome" data-action="change->recommendation-outcome#update"
+            data-recommendation-outcome-conflict-value="Clear catalog selections first.">
+        <select data-recommendation-outcome-target="source">
+          <option value="direct_assessment" ${source === "direct_assessment" ? "selected" : ""}>Direct assessment</option>
+          <option value="outside_specialist" ${source === "outside_specialist" ? "selected" : ""}>Outside specialist</option>
+        </select>
+        <input name="evaluation[location]" value="Restored location" data-recommendation-outcome-target="location">
+        <span data-recommendation-outcome-target="locationRequired">Required location</span>
+        <span data-recommendation-outcome-target="triedRequired">Required trial</span>
+        <div data-recommendation-outcome-target="trialRow">
+          <input id="tried" type="checkbox" name="evaluation[products_tried_inputs][12][selected]" value="1" ${tried ? "checked" : ""} data-trial-choice>
+          <div data-trial-rating>
+            <select name="evaluation[products_tried_inputs][12][reaction]" data-trial-reaction>
+              <option value="">Select satisfaction</option>
+              ${["Satisfied", "Neutral", "Dissatisfied"].map(value => `<option ${value === reaction ? "selected" : ""}>${value}</option>`).join("")}
+            </select>
+          </div>
+        </div>
+        <input id="catalog" type="checkbox" name="evaluation[recommended_product_ids][]" value="31" ${catalog ? "checked" : ""} data-recommendation-outcome-target="catalog">
         <span data-recommendation-outcome-target="notesRequired">Required details</span>
-        <textarea name="evaluation[recommendation_notes]" data-recommendation-outcome-target="notes">Restored details</textarea>
-        <p role="status" aria-live="polite" data-recommendation-outcome-target="status"></p>
+        <textarea name="evaluation[recommendation_notes]" data-recommendation-outcome-target="notes">Restored non-catalog details</textarea>
+        <input id="none" type="checkbox" name="evaluation[no_suitable_product]" value="1" ${noSuitable ? "checked" : ""} data-recommendation-outcome-target="noSuitable">
       </form>
     `
     application = Application.start()
     application.register("recommendation-outcome", RecommendationOutcomeController)
     form = document.querySelector("form")
-    notes = form.querySelector("textarea")
     await new Promise(resolve => setTimeout(resolve, 0))
+  }
+
+  function change(element, value) {
+    if (element.type === "checkbox") element.checked = value
+    else element.value = value
+    element.dispatchEvent(new Event("change", { bubbles: true }))
   }
 
   afterEach(() => {
@@ -50,102 +48,70 @@ describe("RecommendationOutcomeController", () => {
     document.body.innerHTML = ""
   })
 
-  test("a new report remains unselected and invalid until the evaluator chooses an outcome", async () => {
-    await restore(null)
-
-    expect(form.querySelector('input[type="radio"]:checked')).toBeNull()
-    expect(form.checkValidity()).toBe(false)
-    expect(new FormData(form).has("evaluation[recommended_product_ids][]")).toBe(false)
-    expect(notes.required).toBe(false)
-
-    form.querySelector('input[value="catalog_products"]').click()
-
-    expect(form.checkValidity()).toBe(true)
-    expect(new FormData(form).getAll("evaluation[recommended_product_ids][]")).toEqual(["", "31"])
-    expect(form.querySelector('[role="status"]')).toHaveTextContent("Feedback for catalog_products")
-  })
-
-  test("a restored external outcome omits catalog selections without losing tried products or details", async () => {
-    await restore("outside_catalog")
-    const data = new FormData(form)
-
-    expect(data.has("evaluation[recommended_product_ids][]")).toBe(false)
-    expect(data.getAll("evaluation[products_tried_field][]")).toEqual(["", "12"])
-    expect(data.get("evaluation[recommendation_notes]")).toBe("Restored details")
+  test("catalog and non-catalog recommendations remain enabled together through selection and clearing", async () => {
+    await restore()
+    const notes = form.querySelector("textarea")
+    const catalog = form.querySelector("#catalog")
     expect(notes.required).toBe(true)
-    expect(notes.getAttribute("aria-required")).toBe("true")
-    expect(form.querySelector('[data-recommendation-outcome-target="triedRequired"]')).toHaveClass("hidden")
-    expect(form.querySelector('[data-recommendation-outcome-target="catalog"]').hidden).toBe(true)
-    expect(form.querySelector('[data-recommendation-outcome-target="catalog"]').disabled).toBe(true)
-    expect(form.querySelector('[role="status"]')).toHaveTextContent("")
-  })
-
-  test("switching a restored external outcome to catalog restores submitted selections and optional details", async () => {
-    await restore("outside_catalog")
-    form.querySelector('input[value="catalog_products"]').click()
-    const data = new FormData(form)
-
-    expect(data.getAll("evaluation[recommended_product_ids][]")).toEqual(["", "31"])
-    expect(data.get("evaluation[recommendation_notes]")).toBe("Restored details")
+    expect(catalog.disabled).toBe(false)
+    change(catalog, true)
     expect(notes.required).toBe(false)
     expect(notes.getAttribute("aria-required")).toBe("false")
-    expect(form.querySelector('[data-recommendation-outcome-target="catalog"]')).not.toHaveClass("hidden")
-    expect(form.querySelector('[data-recommendation-outcome-target="triedRequired"]')).not.toHaveClass("hidden")
-    expect(form.querySelector('[data-recommendation-outcome-target="catalog"]').hidden).toBe(false)
-    expect(form.querySelector('[data-recommendation-outcome-target="catalog"]').disabled).toBe(false)
-    expect(form.querySelector('[role="status"]')).toHaveTextContent("Feedback for catalog_products")
-  })
-
-  test("no suitable product allows zero tried products while requiring the reason", async () => {
-    await restore("catalog_products")
-    form.querySelector('input[name="evaluation[products_tried_field][]"][type="checkbox"]').checked = false
-    form.querySelector('input[value="no_suitable_product"]').click()
-    notes.value = ""
-
-    expect(new FormData(form).getAll("evaluation[products_tried_field][]")).toEqual([""])
-    expect(new FormData(form).has("evaluation[recommended_product_ids][]")).toBe(false)
+    expect(new FormData(form).get("evaluation[recommendation_notes]")).toBe("Restored non-catalog details")
+    expect(new FormData(form).getAll("evaluation[recommended_product_ids][]")).toEqual(["31"])
+    change(catalog, false)
     expect(notes.required).toBe(true)
-    expect(form.querySelector('[role="status"]')).toHaveTextContent("Feedback for no_suitable_product")
+    expect(notes.value).toBe("Restored non-catalog details")
+  })
+
+  test("no-suitable conflicts are visible to native validation without silently clearing selections", async () => {
+    await restore({ catalog: true })
+    change(form.querySelector("#none"), true)
     expect(form.checkValidity()).toBe(false)
-    notes.value = "No suitable equipment; arrange a specialist assessment."
+    expect(form.querySelector("#none").validationMessage).toBe("Clear catalog selections first.")
+    expect(form.querySelector("#catalog").checked).toBe(true)
+    expect(form.querySelector("textarea").required).toBe(true)
+    change(form.querySelector("#catalog"), false)
+    expect(form.checkValidity()).toBe(true)
+    change(form.querySelector("#none"), false)
+    expect(form.querySelector("textarea").value).toBe("Restored non-catalog details")
+  })
+
+  test("only tried products require a rating and toggling a product retains its draft rating", async () => {
+    await restore()
+    const tried = form.querySelector("#tried")
+    const rating = form.querySelector("[data-trial-reaction]")
+    expect(rating.disabled).toBe(true)
+    expect(rating.parentElement.hidden).toBe(true)
+    change(tried, true)
+    expect(rating.disabled).toBe(false)
+    expect(rating.parentElement.hidden).toBe(false)
+    expect(rating.required).toBe(true)
+    expect(rating.getAttribute("aria-required")).toBe("true")
+    expect(form.checkValidity()).toBe(false)
+    change(rating, "Neutral")
+    expect(form.checkValidity()).toBe(true)
+    change(tried, false)
+    expect(new FormData(form).has("evaluation[products_tried_inputs][12][reaction]")).toBe(false)
+    change(tried, true)
+    expect(rating.value).toBe("Neutral")
     expect(form.checkValidity()).toBe(true)
   })
 
-  test("changing outcome preserves edits and clearing optional catalog details remains possible", async () => {
-    await restore("outside_catalog")
-    notes.value = "Edited recommendation"
-    form.querySelector('input[value="no_suitable_product"]').click()
-    expect(notes.value).toBe("Edited recommendation")
-
-    form.querySelector('input[value="catalog_products"]').click()
-    notes.value = ""
-    expect(new FormData(form).get("evaluation[recommendation_notes]")).toBe("")
-    expect(form.checkValidity()).toBe(true)
-  })
-
-  test("restored outside consultation keeps catalog recommendations while location and trials stay optional", async () => {
-    await restore("catalog_products", "outside_specialist")
-    const location = form.querySelector('[name="evaluation[location]"]')
+  test("restored reactions and recommendation selections survive source changes", async () => {
+    await restore({ catalog: true, tried: true, reaction: "Dissatisfied", source: "outside_specialist" })
     const source = form.querySelector("select")
-
+    const location = form.querySelector("[name='evaluation[location]']")
     expect(location.required).toBe(false)
-    expect(location.getAttribute("aria-required")).toBe("false")
-    expect(form.querySelector('[data-recommendation-outcome-target="triedRequired"]')).toHaveClass("hidden")
-    expect(new FormData(form).getAll("evaluation[recommended_product_ids][]")).toEqual(["", "31"])
-
-    source.value = "direct_assessment"
-    source.dispatchEvent(new Event("change", { bubbles: true }))
+    expect(form.querySelector("[data-trial-reaction]").value).toBe("Dissatisfied")
+    change(source, "direct_assessment")
     expect(location.required).toBe(true)
     expect(location.getAttribute("aria-required")).toBe("true")
-    expect(location.value).toBe("Restored location")
-    expect(form.querySelector('[data-recommendation-outcome-target="locationRequired"]')).not.toHaveClass("hidden")
     expect(form.querySelector('[data-recommendation-outcome-target="triedRequired"]')).not.toHaveClass("hidden")
-
-    source.value = "outside_specialist"
-    source.dispatchEvent(new Event("change", { bubbles: true }))
-    location.value = ""
+    change(source, "outside_specialist")
+    change(location, "")
     expect(location.required).toBe(false)
-    expect(new FormData(form).get("evaluation[location]")).toBe("")
-    expect(form.checkValidity()).toBe(true)
+    expect(form.querySelector("#tried").checked).toBe(true)
+    expect(new FormData(form).get("evaluation[products_tried_inputs][12][reaction]")).toBe("Dissatisfied")
   })
 })

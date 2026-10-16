@@ -41,6 +41,65 @@ module Equipment
       assert_equal 'ordered', @item.queue_status
     end
 
+    test 'detach and withdrawal reject changed details without changing the device or audit history' do
+      replacement = create(:product)
+      another_order = create(:purchase_order)
+      changes = [
+        { product_id: replacement.id.to_s }, { purchase_order_id: another_order.id.to_s },
+        { shipped_at: Date.current.iso8601 }, { shipped_at: '13/45/2026' },
+        { tracking_number: 'CorrectedPackage' }, { carrier: 'usps' },
+        { serial_number: 'CorrectedSerial' }, { imei: '123456789012345' }
+      ]
+
+      %w[detach withdraw].each do |operation|
+        if operation == 'withdraw'
+          @service.update_item!(item: @item, attributes: {}, expected_version: @item.lock_version,
+                                reason: 'Await a replacement order', operation: 'detach')
+        end
+        original = @item.reload.attributes
+        changes.each do |attributes|
+          assert_no_difference ['PurchaseOrder.count', 'EquipmentItem.count', 'Event.count'] do
+            error = assert_raises(Conflict) do
+              @service.update_item!(item: @item, attributes: attributes, expected_version: @item.lock_version,
+                                    reason: 'Correct details while changing disposition', operation: operation)
+            end
+            assert_includes error.message, 'Save device details separately.'
+          end
+          assert_equal original, @item.reload.attributes
+        end
+
+        [{ vendor_id: another_order.vendor_id, number: 'Unrecorded header', sent_at: Date.current.iso8601 },
+         { vendor_id: '', number: '', sent_at: '' }].each do |new_order|
+          assert_no_difference ['PurchaseOrder.count', 'EquipmentItem.count', 'Event.count'] do
+            assert_raises(Conflict) do
+              @service.update_item!(item: @item, attributes: {}, expected_version: @item.lock_version,
+                                    reason: 'New header while changing disposition', operation: operation, new_purchase_order: new_order)
+            end
+          end
+          assert_equal original, @item.reload.attributes
+        end
+      end
+    end
+
+    test 'detach and withdrawal accept unchanged typed and normalized full form values' do
+      @item.update!(tracking_number: 'RecordedPackage', serial_number: 'RecordedSerial')
+      details = @item.attributes.slice(*Correction::EDITABLE_ITEM_FIELDS).except('purchase_order_id')
+      attributes = { product_id: @item.product_id.to_s, purchase_order_id: @item.purchase_order_id.to_s,
+                     shipped_at: '', tracking_number: ' RecordedPackage ', carrier: '', serial_number: ' RecordedSerial ', imei: '' }
+
+      %w[detach withdraw].each do |operation|
+        assert_difference 'Event.count', 1 do
+          @service.update_item!(item: @item, attributes: attributes, expected_version: @item.lock_version,
+                                reason: 'Disposition reviewed', operation: operation)
+        end
+        assert_equal details, @item.reload.attributes.slice(*details.keys)
+        assert_nil @item.purchase_order_id
+        assert_equal [operation == 'detach' ? 'purchase_order_id' : 'withdrawn_at'], @item.events.order(:id).last.field_changes.keys
+        attributes[:purchase_order_id] = ''
+      end
+      assert @item.withdrawn_at?
+    end
+
     test 'serial acknowledgment text is encrypted with the device change audit' do
       other_model = create(:product, manufacturer: @item.product.manufacturer, model_number: 'Another model')
       create(:equipment_item, product: other_model, serial_number: 'PRIVATE-SERIAL')

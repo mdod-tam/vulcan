@@ -11,8 +11,16 @@ module EvaluatorSystemAssertions
     assert_selector "##{id} h3", text: I18n.t("evaluators.evaluations.forms.error_headings.#{action}")
   end
 
-  def replace_product_selection(attribute, product = nil)
-    all("input[name='evaluation[#{attribute}][]'][type='checkbox']").each(&:uncheck)
-    find("input[name='evaluation[#{attribute}][]'][value='#{product.id}']").check if product
+  def replace_product_selection(attribute, product = nil, reaction: 'Satisfied')
+    if attribute == 'products_tried_inputs'
+      all("input[name^='evaluation[products_tried_inputs]'][type='checkbox']").each(&:uncheck)
+      if product
+        find("#trial-#{product.id}").check
+        select reaction, from: "trial-#{product.id}-reaction"
+      end
+    else
+      all("input[name='evaluation[#{attribute}][]'][type='checkbox']").each(&:uncheck)
+      find("input[name='evaluation[#{attribute}][]'][value='#{product.id}']").check if product
+    end
   end
 end

@@ -48,6 +48,46 @@ module Evaluations
       assert_equal 'completed', @evaluation.reload.status
     end
 
+    test 'mixed recommendations preserve catalog IDs and other details while initializing only catalog needs' do
+      parameters = submission_params
+      parameters[:evaluation][:recommendation_notes] = 'Also consult an external communication specialist.'
+      parameters[:evaluation][:products_tried_inputs][@product.id.to_s][:reaction] = 'Neutral'
+
+      result = SubmissionService.new(@evaluation, parameters, actor: @evaluator).call
+
+      assert result.success?, result.message
+      assert_equal 'catalog_products', @evaluation.reload.recommendation_outcome
+      assert_equal [@product.id], @evaluation.recommended_product_ids
+      assert_equal 'Also consult an external communication specialist.', @evaluation.recommendation_notes
+      assert_equal [{ 'product_id' => @product.id.to_s, 'reaction' => 'Neutral' }], @evaluation.products_tried
+      assert_equal [@product.id], @evaluation.application.equipment_needs.pluck(:product_id)
+    end
+
+    test 'missing and invalid checked trial ratings roll back reports needs and audits' do
+      original = @evaluation.attributes
+      [nil, '', 'Not recorded', 'Unexpected'].each do |reaction|
+        parameters = submission_params
+        parameters[:evaluation][:products_tried_inputs][@product.id.to_s][:reaction] = reaction
+        assert_no_enqueued_jobs do
+          assert_no_difference ['EquipmentNeed.count', 'Event.count'] do
+            result = SubmissionService.new(@evaluation, parameters, actor: @evaluator).call
+            assert result.failure?
+            assert_includes @evaluation.errors[:products_tried].join, reaction.blank? ? 'requires a satisfaction rating' : 'must use Satisfied'
+          end
+        end
+        assert_equal original, @evaluation.reload.attributes
+        assert_nil @evaluation.application.reload.equipment_needs_initialized_at
+      end
+    end
+
+    test 'trial parameters permit only selected and reaction within numeric product rows' do
+      parameters = submission_params
+      parameters[:evaluation][:products_tried_inputs][@product.id.to_s][:internal] = 'untrusted'
+      permitted = SubmissionService.report_params(parameters).to_h
+
+      assert_equal({ @product.id.to_s => { 'selected' => '1', 'reaction' => 'Satisfied' } }, permitted['products_tried_inputs'])
+    end
+
     test 'report completion clears review bookkeeping and initializes needs without resubmitting historical intake' do
       application = @evaluation.application
       application.update_columns(maryland_resident: false, needs_review_since: 1.day.ago)
@@ -67,13 +107,14 @@ module Evaluations
       assert_equal 1, application.events.where(action: 'equipment_needs_initialized').count
     end
 
-    test 'missing or blank outcome cannot use the stored catalog default to complete a report' do
-      [:omitted, nil, '', ' '].each do |outcome|
+    test 'empty recommendation controls cannot use the stored catalog default to complete a report' do
+      [:omitted, nil, '', ' '].each do |choice|
         parameters = submission_params
-        if outcome == :omitted
-          parameters[:evaluation].delete(:recommendation_outcome)
+        parameters[:evaluation].delete(:recommended_product_ids)
+        if choice == :omitted
+          parameters[:evaluation].delete(:no_suitable_product)
         else
-          parameters[:evaluation][:recommendation_outcome] = outcome
+          parameters[:evaluation][:no_suitable_product] = choice
         end
         original = @evaluation.reload.attributes
 
@@ -82,7 +123,7 @@ module Evaluations
             result = SubmissionService.new(@evaluation, parameters, actor: @evaluator).call
 
             assert result.failure?
-            assert_equal ['must be selected'], @evaluation.errors[:recommendation_outcome]
+            assert_includes @evaluation.errors[:recommended_products].join, 'must be selected'
           end
         end
         assert_equal original, @evaluation.reload.attributes
@@ -275,10 +316,10 @@ module Evaluations
         )
         scheduled_time = evaluation.evaluation_date
         parameters = submission_params
-        parameters[:evaluation][:recommendation_outcome] = outcome
+        parameters[:evaluation][:no_suitable_product] = outcome == 'no_suitable_product' ? '1' : '0'
         parameters[:evaluation][:recommendation_notes] = 'Assessment reason and any external product details'
         parameters[:evaluation].delete(:recommended_product_ids)
-        parameters[:evaluation][:products_tried_field] = []
+        parameters[:evaluation][:products_tried_inputs] = {}
 
         assert_difference('Event.where(action: "evaluation_completed").count', 1) do
           result = SubmissionService.new(evaluation, parameters, actor: @evaluator).call
@@ -308,16 +349,17 @@ module Evaluations
       end
     end
 
-    test 'explicit catalog recommendations contradict a noncatalog outcome and roll back the report' do
+    test 'no suitable product contradicts catalog recommendations and rolls back the report' do
       original_recommendations = @evaluation.recommended_product_ids
       parameters = submission_params
-      parameters[:evaluation][:recommendation_outcome] = 'outside_catalog'
+      parameters[:evaluation][:no_suitable_product] = '1'
       parameters[:evaluation][:recommendation_notes] = 'External device recommendation'
 
       assert_no_difference('Event.where(action: "evaluation_completed").count') do
         result = SubmissionService.new(@evaluation, parameters, actor: @evaluator).call
 
         assert result.failure?
+        assert_includes @evaluation.errors[:no_suitable_product], 'cannot be combined with catalog recommendations'
       end
 
       @evaluation.reload
@@ -336,10 +378,10 @@ module Evaluations
       original_recommendations = @evaluation.recommended_product_ids
       original_tried = @evaluation.products_tried
       parameters = submission_params
-      parameters[:evaluation][:recommendation_outcome] = 'no_suitable_product'
+      parameters[:evaluation][:no_suitable_product] = '1'
       parameters[:evaluation][:recommendation_notes] = ''
       parameters[:evaluation].delete(:recommended_product_ids)
-      parameters[:evaluation][:products_tried_field] = []
+      parameters[:evaluation][:products_tried_inputs] = {}
 
       assert_no_difference('Event.where(action: "evaluation_completed").count') do
         result = SubmissionService.new(@evaluation, parameters, actor: @evaluator).call
@@ -359,26 +401,25 @@ module Evaluations
       assert_equal review_time, application.reload.needs_review_since
     end
 
-    test 'unknown outcome cannot complete the report' do
+    test 'a submitted outcome cannot override the recommendation controls' do
       parameters = submission_params
       parameters[:evaluation][:recommendation_outcome] = 'unrecognized_outcome'
 
-      assert_no_difference('Event.where(action: "evaluation_completed").count') do
+      assert_difference('Event.where(action: "evaluation_completed").count', 1) do
         result = SubmissionService.new(@evaluation, parameters, actor: @evaluator).call
 
-        assert result.failure?
-        assert_includes result.message, 'Recommendation outcome'
+        assert result.success?, result.message
       end
 
-      assert_equal 'scheduled', @evaluation.reload.status
+      assert_equal 'completed', @evaluation.reload.status
       assert_equal 'catalog_products', @evaluation.recommendation_outcome
-      assert_nil @evaluation.report_submitted_at
+      assert @evaluation.report_submitted_at
     end
 
     test 'noncatalog report still rechecks current assignment before saving its outcome' do
       replacement = create(:evaluator)
       parameters = submission_params
-      parameters[:evaluation][:recommendation_outcome] = 'no_suitable_product'
+      parameters[:evaluation][:no_suitable_product] = '1'
       parameters[:evaluation][:recommendation_notes] = 'No suitable device'
       parameters[:evaluation].delete(:recommended_product_ids)
 
@@ -398,7 +439,7 @@ module Evaluations
       parameters = submission_params
       parameters[:evaluation][:assessment_source] = 'outside_specialist'
       parameters[:evaluation][:location] = ''
-      parameters[:evaluation][:products_tried_field] = []
+      parameters[:evaluation][:products_tried_inputs] = {}
       parameters[:evaluation][:notes] = 'Recommendations from the outside specialist consultation and written assessment.'
 
       travel_to(Time.current.change(usec: 0)) do
@@ -430,7 +471,7 @@ module Evaluations
     test 'ordinary evaluator cannot forge outside specialist source even for a scheduled evaluation' do
       parameters = submission_params
       parameters[:evaluation][:assessment_source] = 'outside_specialist'
-      parameters[:evaluation][:products_tried_field] = []
+      parameters[:evaluation][:products_tried_inputs] = {}
 
       assert_no_difference(['EquipmentNeed.count', 'Event.where(action: "evaluation_completed").count']) do
         result = SubmissionService.new(@evaluation, parameters, actor: @evaluator).call
@@ -450,7 +491,7 @@ module Evaluations
       parameters[:evaluation][:assessment_source] = 'outside_specialist'
       parameters[:evaluation][:notes] = ''
       parameters[:evaluation][:appointment_completed_at] = nil
-      parameters[:evaluation][:products_tried_field] = []
+      parameters[:evaluation][:products_tried_inputs] = {}
 
       assert_no_difference(['EquipmentNeed.count', 'Event.where(action: "evaluation_completed").count']) do
         result = SubmissionService.new(@evaluation, parameters, actor: admin).call
@@ -519,12 +560,12 @@ module Evaluations
     def submission_params
       ActionController::Parameters.new(
         evaluation: {
-          recommendation_outcome: 'catalog_products',
+          no_suitable_product: '0',
           notes: 'Completed evaluation',
           location: 'Main Office',
           appointment_completed_at: Time.current,
           recommended_product_ids: [@product.id],
-          products_tried_field: [@product.id],
+          products_tried_inputs: { @product.id.to_s => { selected: '1', reaction: 'Satisfied' } },
           attendees_field: 'Test Constituent'
         }
       )

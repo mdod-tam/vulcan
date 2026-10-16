@@ -31,6 +31,7 @@ module Admin
         assert_select 'form', count: 0
         assert_select 'a[href=?]', edit_admin_application_equipment_needs_path(@application), text: 'Edit equipment needs'
         assert_select '.sr-only', text: 'Fulfillment Status:'
+        assert_select 'span.bg-amber-100.text-amber-800', text: /Fulfillment Status:\s*Needs Ordering/
       end
 
       get evaluators_evaluation_path(evaluation)
@@ -58,6 +59,8 @@ module Admin
 
       assert_response :unprocessable_content
       assert_select "#equipment-item-#{item.id} h4", text: /#{Regexp.escape(item.product.name)}/
+      assert_select '#equipment span.bg-blue-100.text-blue-800', text: /Fulfillment Status:\s*Ordered/
+      assert_select "#equipment-item-#{item.id} span.bg-blue-100.text-blue-800", text: 'Ordered'
     end
 
     test 'failed application approval still renders current equipment devices' do
@@ -68,6 +71,7 @@ module Admin
 
       assert_response :unprocessable_content
       assert_select "#equipment-item-#{item.id} h4", text: /#{Regexp.escape(item.product.name)}/
+      assert_select "#equipment-item-#{item.id} span.bg-blue-100.text-blue-800", text: 'Ordered'
     end
 
     test 'voucher applications have no equipment purchasing section' do
@@ -96,11 +100,11 @@ module Admin
         assert_select '#equipment', text: /Written specialist recommendation/
         if outcome == 'outside_catalog'
           assert_select '#equipment', text: /An available catalog model has not been selected/
-          assert_select '#equipment span', text: /Needs a catalog product/
+          assert_select '#equipment span.bg-amber-100.text-amber-800', text: /Needs a catalog product/
           assert_select '#equipment', text: /No equipment needed/, count: 0
         else
           assert_select '#equipment', text: /No new devices are currently needed/
-          assert_select '#equipment span', text: /No equipment needed/
+          assert_select '#equipment span.bg-gray-100.text-gray-800', text: /No equipment needed/
         end
         assert_select '#equipment', text: /No physical device records are currently linked/
         assert_not_includes response.body, report.working_notes

@@ -10,7 +10,7 @@ module Evaluators
       supplemental_notes: %i[post_completion_notes]
     }.transform_values(&:freeze).freeze
     FORM_ERROR_FIELD_ALIASES = {
-      products_tried: :products_tried_field, recommended_products: :recommended_product_ids,
+      products_tried: :products_tried_inputs, recommended_products: :recommended_product_ids,
       attendees: :attendees_field
     }.freeze
 

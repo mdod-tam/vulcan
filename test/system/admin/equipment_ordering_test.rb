@@ -115,11 +115,102 @@ module Admin
       click_link 'Purchase Orders'
       assert_current_path admin_purchase_orders_path(return_context: context)
       assert_link "#{existing.vendor.business_name} · PO #{existing.number}", href: admin_purchase_order_path(existing, return_context: context)
+      take_screenshot('equipment-ordering-po-index', html: true, full: true)
       click_link 'Back to Equipment'
       assert_current_path admin_equipment_index_path(context)
       take_screenshot('equipment-ordering-back-context', html: true, full: true)
+      within('nav[aria-label="Equipment queues"]') { click_link 'Ordered', exact: true }
+      ordered_context = context.merge(tab: 'ordered')
+      assert_current_path admin_equipment_index_path(ordered_context)
+      assert_text '3 units across 2 applications'
+      existing.equipment_items.each do |item|
+        assert_link "Device ##{item.id}", href: edit_admin_equipment_item_path(item, return_context: ordered_context)
+      end
+      take_screenshot('equipment-ordering-ordered-queue', html: true, full: true)
     ensure
       page.current_window.resize_to(1200, 800)
+    end
+
+    test 'equipment state frames follow individual shipments across staff and evaluator readers' do
+      FeatureFlag.disable!(:vouchers_enabled)
+      admin = create(:admin)
+      evaluator = create(:evaluator)
+      application = create(:application, :approved, :with_all_proofs, equipment_needs_initialized_at: Time.current)
+      report = create(:evaluation, :completed, :with_single_product, application: application, evaluator: evaluator)
+      product = report.recommended_products.sole
+      need = create(:equipment_need, application: application, product: product, source_evaluation: report, remaining_quantity: 2)
+      system_test_sign_in(admin)
+      visit admin_purchase_orders_path
+      assert_text 'No purchase orders recorded.'
+      take_screenshot('equipment-empty-po-index', html: true, full: true)
+
+      order = create(:purchase_order, number: 'SHIPMENT-STATES')
+      visit admin_purchase_order_path(order)
+      assert_text 'No equipment currently linked'
+      assert_text 'No physical device records are currently linked.'
+      take_screenshot('equipment-empty-po-detail', html: true, full: true)
+      visit admin_application_path(application, anchor: 'equipment')
+      within '#equipment' do
+        assert_selector 'span.bg-amber-100.text-amber-800', text: 'Needs Ordering'
+        assert_selector '.sr-only', text: 'Fulfillment Status:', visible: :all
+      end
+      take_screenshot('equipment-application-needs-ordering-badge', html: true, full: true)
+      Equipment::Ordering.new(actor: admin).call(
+        needs: [{ id: need.id, lock_version: need.lock_version, quantity: 2 }], items: [],
+        purchase_order_id: order.id, expected_po_version: order.lock_version
+      )
+      items = order.equipment_items.order(:id).to_a
+      assert_equal 2, items.size
+      assert_equal 0, need.reload.remaining_quantity
+      page.refresh
+      within '#equipment' do
+        assert_selector 'span.rounded-full.bg-blue-100.text-blue-800', text: 'Ordered'
+        assert_selector '.sr-only', text: 'Fulfillment Status:', visible: :all
+        items.each { |item| assert_selector "#equipment-item-#{item.id} span.bg-blue-100.text-blue-800", text: 'Ordered' }
+      end
+      take_screenshot('equipment-application-ordered-badge', html: true, full: true)
+      visit admin_equipment_index_path(tab: 'needs_ordering', product_id: product.id)
+      assert_text 'No matching equipment exists.'
+      assert_no_selector 'section[data-equipment-selection-target="group"]'
+      take_screenshot('equipment-empty-needs-queue', html: true, full: true)
+
+      items.each_with_index do |item, index|
+        visit edit_admin_equipment_item_path(item)
+        fill_in 'Date shipped', with: Date.current.strftime('%m/%d/%Y')
+        fill_in 'Tracking number', with: "ShipmentPackage#{item.id}"
+        fill_in 'Correction reason', with: "Record shipment for device ##{item.id}"
+        click_button 'Save equipment correction'
+        assert_text 'Equipment item updated.'
+        assert_equal Date.current, item.reload.shipped_at
+        visit admin_purchase_order_path(order)
+        status = index.zero? ? 'Partially Shipped' : 'Shipped'
+        assert_selector 'p', text: /Date PO sent:.* · #{status}\z/
+        assert_equal index + 1, order.equipment_items.shipped.count
+        items.each_with_index do |device, device_index|
+          color, label = device_index <= index ? %w[green Shipped] : %w[blue Ordered]
+          assert_selector "#equipment-item-#{device.id} span.bg-#{color}-100.text-#{color}-800", text: label
+        end
+        take_screenshot("equipment-po-#{index.zero? ? 'partially-shipped' : 'shipped'}", html: true, full: true)
+      end
+      visit admin_application_path(application, anchor: 'equipment')
+      within '#equipment' do
+        assert_selector 'span.rounded-full.bg-green-100.text-green-800', text: 'Shipped'
+        assert_selector '.sr-only', text: 'Fulfillment Status:', visible: :all
+        items.each { |item| assert_selector "#equipment-item-#{item.id} span.bg-green-100.text-green-800", text: 'Shipped' }
+      end
+      take_screenshot('equipment-application-shipped-badge', html: true, full: true)
+
+      system_test_sign_out
+      system_test_sign_in(evaluator)
+      install_stimulus_error_reporting
+      visit evaluators_dashboard_path
+      within find_by_id('recent-completed-heading').find(:xpath, '../..') do
+        assert_text application.user.full_name
+        assert_link 'View', href: evaluators_evaluation_path(report)
+        assert_selector 'span.rounded-full.bg-green-100.text-green-800', text: 'Shipped'
+        assert_selector '.sr-only', text: 'Fulfillment Status:', visible: :all
+      end
+      take_screenshot('equipment-evaluator-shipped-badge', html: true, full: true)
     end
 
     test 'stale PO and need versions refuse unchanged retries until staff reopen the current review' do

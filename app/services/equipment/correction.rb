@@ -41,6 +41,7 @@ module Equipment
       EquipmentItem.transaction do
         application, orders, created_order = lock_item!(item, attributes, expected_version, operation == 'update' ? new_purchase_order : nil)
         previous = item.attributes.slice(*ITEM_FIELDS)
+        require_unchanged_item_details!(item, attributes, new_purchase_order) unless operation == 'update'
         apply_item_operation!(item, operation, attributes, new_purchase_order: created_order)
         new_assignment = previous['purchase_order_id'].nil? && (item.purchase_order_id.present? || new_purchase_order.present?)
         Mutation.eligible!(application) if new_assignment && operation == 'update'
@@ -90,6 +91,14 @@ module Equipment
 
     def require_reason!(reason)
       raise Conflict, 'Provide a brief reason for this correction.' if reason.to_s.strip.blank?
+    end
+
+    def require_unchanged_item_details!(item, attributes, new_purchase_order)
+      draft = EquipmentItem.new(attributes)
+      changed = attributes.keys.any? { |field| draft.public_send(field) != item.public_send(field) }
+      return unless changed || draft.rejected_shipped_at_input.present? || new_purchase_order.present?
+
+      raise Conflict, 'Detach and withdraw do not change device details. Save device details separately.'
     end
 
     def lock_item!(item, attributes, expected_version, new_order_attributes)
