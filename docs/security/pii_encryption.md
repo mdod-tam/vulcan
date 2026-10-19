@@ -45,7 +45,9 @@ SQL `LOWER`, `LIKE`, and substring matching operate on ciphertext and silently r
 
 [The initializer](../../config/initializers/active_record_encryption.rb) reads `primary_key`, `deterministic_key`, and `key_derivation_salt` from `Rails.application.credentials.active_record_encryption`.
 
-**Persistent environments need stable keys.** Production startup refuses missing or incomplete encryption credentials. Development/test can use temporary random keys when credentials are absent; these cannot protect durable data across restarts. Losing the matching keys makes encrypted records unreadable, including restored backups.
+**Retained data needs stable keys.** Normal non-test startup, including development, refuses missing, incomplete or blank encryption credentials. The error names the missing entries and the credentials-edit command for the environment. Temporary random keys are limited to disposable test runs and asset builds with `SECRET_KEY_BASE_DUMMY=1` and `assets:precompile` as the sole requested Rake task. Complete configured keys are reused in those paths too.
+
+When initializing fresh data, use `bin/rails db:encryption:init` to generate keys, then save all three entries in the matching credentials file before saving records. Preserve the original encryption keys and salt for any data you retain; temporary keys cannot reliably read records after a restart, and losing the matching keys makes encrypted records unreadable, including restored backups.
 
 `RAILS_MASTER_KEY` decrypts the credentials file, not database columns. A replacement instance can use a different master key only with credentials re-encrypted under it that preserve the original Active Record keys and salt. Preserve the effective `secret_key_base` too: besides signed cookies/links, it supplies the HMAC key for the persisted email-search index. Changing it requires rebuilding those tokens.
 

@@ -70,6 +70,8 @@ module Admin
       end
       assert_nil sibling.reload.shipped_at
       assert_equal Date.current, item.reload.shipped_at
+      visit admin_purchase_order_path(item.purchase_order)
+      assert_text 'Partially Shipped'
       original_window = page.current_window
       original_url = page.current_url
       tracking_link = within("#equipment-item-#{item.id}") { find_link('Track package') }
@@ -86,7 +88,7 @@ module Admin
         within_window(tracking_window) { assert_selector 'main' }
         assert_equal original_window, page.current_window
         assert_equal original_url, page.current_url
-        assert_text 'Equipment item updated.'
+        assert_text 'Partially Shipped'
         assert_equal Date.current, item.reload.shipped_at
       ensure
         tracking_window&.close
@@ -102,24 +104,43 @@ module Admin
       system_test_sign_in(create(:admin))
       install_stimulus_error_reporting
       visit edit_admin_purchase_order_correction_path(item.purchase_order)
+      observe_correction_submissions
+      original_number = item.purchase_order.number
       fill_in 'PO number', with: 'Corrected PO'
       fill_in 'Correction reason', with: 'Correct the shared header reference'
-      click_button 'Review correction'
+      assert_no_difference('Event.count') do
+        find_button('Review correction').double_click
+        assert_text 'Review old and new header values'
+      end
+      assert_correction_submission(0, review: true)
+      assert_equal 1, page.evaluate_script('window.equipmentCorrectionEvents.streams')
+      assert_equal original_number, item.purchase_order.reload.number
       assert_text '2 equipment items across 1 application, including 1 shipped device'
-      assert_text 'Review old and new header values'
       assert_selector '.bg-amber-50 dt', text: 'PO number:', count: 1
       assert_selector '.bg-amber-50 dt', count: 1
       check 'I confirm the impact on all linked equipment and applications.'
       take_screenshot('equipment-shared-po-impact', html: true, full: true)
-      click_button 'Save purchase order correction'
-      assert_text 'Purchase order corrected.'
+      assert_difference -> { item.purchase_order.events.count }, 1 do
+        find_button('Save purchase order correction').double_click
+        assert_text 'Purchase order corrected.'
+      end
+      assert_correction_submission(1, review: false, confirmed: true)
+      assert_current_path admin_purchase_order_path(item.purchase_order)
+      assert_no_selector '#equipment-correction'
       assert_equal 'Corrected PO', sibling.reload.purchase_order.number
+      take_screenshot('equipment-shared-po-corrected', html: true, full: true)
       return_context = { tab: 'shipped', product_id: item.product_id.to_s, vendor_id: item.purchase_order.vendor_id.to_s }
       visit edit_admin_equipment_item_path(item, return_context: return_context)
+      observe_correction_submissions
       fill_in 'Tracking number', with: 'CorrectedPackage'
       fill_in 'Correction reason', with: 'Correct the individual parcel reference'
-      click_button 'Review correction'
-      assert_text 'OriginalPackage → CorrectedPackage'
+      assert_no_difference('Event.count') do
+        find_button('Review correction').double_click
+        assert_text 'OriginalPackage → CorrectedPackage'
+      end
+      assert_correction_submission(0, review: true)
+      assert_equal 1, page.evaluate_script('window.equipmentCorrectionEvents.streams')
+      assert_equal 'OriginalPackage', item.reload.tracking_number
       assert_selector '.bg-amber-50 dt', text: 'Tracking number:', count: 1
       assert_selector '.bg-amber-50 dt', count: 1
       reviewed_token = find('input[name=impact_token]', visible: false).value
@@ -127,22 +148,31 @@ module Admin
       check 'I confirm this correction and its impact on shipment history.'
       click_button 'Save equipment correction'
       assert_text 'Review the current correction values and confirm their impact before saving.'
+      assert_correction_submission(1, review: false, confirmed: true)
+      assert_selector '#equipment-item-errors:focus'
       assert_field 'Tracking number', with: 'ReviewedAgainPackage'
+      assert_field 'Correction reason', with: 'Correct the individual parcel reference'
       assert_equal reviewed_token, find('input[name=impact_token]', visible: false).value
       assert_unchecked_field 'I confirm this correction and its impact on shipment history.'
+      assert_button 'Save equipment correction', disabled: false
+      take_screenshot('equipment-correction-token-invalid-retry', html: true, full: true)
       select "#{replacement.manufacturer} / #{replacement.name} / #{replacement.model_number}", from: 'Actual catalog product'
       select 'FedEx', from: 'Carrier'
       fill_in 'IMEI (15 digits)', with: '123456789012345'
-      click_button 'Review changed values'
+      find_button('Review changed values').double_click
+      assert_selector '.bg-amber-50 dd', text: 'USPS → FedEx'
+      assert_correction_submission(2, review: true)
+      assert_equal 2, page.evaluate_script('window.equipmentCorrectionEvents.streams')
       assert_not_equal reviewed_token, find('input[name=impact_token]', visible: false).value
       assert_selector '.bg-amber-50 dt', text: 'IMEI (15 digits):'
-      assert_selector '.bg-amber-50 dd', text: 'USPS → FedEx'
       assert_selector '.bg-amber-50 dt', count: 4
       check 'I confirm this correction and its impact on shipment history.'
       take_screenshot('equipment-shipped-correction-review', html: true, full: true)
-      click_button 'Save equipment correction'
+      find_button('Save equipment correction').double_click
       assert_text 'Equipment item updated.'
+      assert_correction_submission(3, review: false, confirmed: true)
       assert_current_path admin_equipment_index_path(return_context)
+      assert_no_selector '#equipment-correction'
       assert_equal Date.current, item.reload.shipped_at
       assert_equal replacement.id, item.product_id
       assert_equal 'ReviewedAgainPackage', item.tracking_number
@@ -341,7 +371,7 @@ module Admin
       fill_in 'Date PO sent', with: (Date.current - 1.day).strftime('%m/%d/%Y')
       fill_in 'Correction reason', with: 'Replace restored shared vendor and date'
       click_button 'Review changed values'
-      assert_text final_vendor.business_name
+      assert_selector '.bg-amber-50 dd', text: final_vendor.business_name
       check 'I confirm the impact on all linked equipment and applications.'
       click_button 'Save purchase order correction'
       assert_text 'Purchase order corrected.'
@@ -350,6 +380,7 @@ module Admin
       fill_in 'PO number', with: 'Stale scalar draft'
       fill_in 'Correction reason', with: 'Review the current shared header'
       click_button 'Review correction'
+      reviewed_header_token = find('input[name=impact_token]', visible: false).value
       item_versions = order.equipment_items.to_h { |member| [member.id.to_s, member.lock_version.to_s] }
       header_attributes = { number: 'Other administrator header' }
       token = Equipment::Correction.impact_token(record: order, attributes: header_attributes, extra: { item_versions: item_versions })
@@ -361,9 +392,13 @@ module Admin
           check 'I confirm the impact on all linked equipment and applications.'
           click_button 'Save purchase order correction'
           assert_text 'Equipment changed. Refresh and review your selection.'
+          assert_selector '#purchase-order-correction-errors:focus'
         end
         assert_field 'PO number', with: 'Stale scalar draft'
+        assert_field 'Correction reason', with: 'Review the current shared header'
         assert_equal '1', find('input[name=expected_version]', visible: false).value
+        assert_equal reviewed_header_token, find('input[name=impact_token]', visible: false).value
+        assert_button 'Save purchase order correction', disabled: false
       end
       take_screenshot('equipment-shared-header-version-stale-retry', html: true, full: true)
       click_link 'Refresh purchase order and discard this draft'
@@ -372,6 +407,7 @@ module Admin
       fill_in 'PO number', with: 'Stale scope draft'
       fill_in 'Correction reason', with: 'Review shared scope'
       click_button 'Review correction'
+      reviewed_scope_token = find('input[name=impact_token]', visible: false).value
       extra_item = create(:equipment_item, application: item.application, purchase_order: nil)
       Equipment::Correction.new(actor: admin).update_item!(item: extra_item, attributes: { purchase_order_id: order.id },
                                                            expected_version: 0, purchase_order_versions: { order.id => order.lock_version }, reason: 'Another tab links a queued device')
@@ -380,7 +416,10 @@ module Admin
           check 'I confirm the impact on all linked equipment and applications.'
           click_button 'Save purchase order correction'
           assert_text 'Purchase order membership changed. Refresh and review its impact.'
+          assert_selector '#purchase-order-correction-errors:focus'
         end
+        assert_equal reviewed_scope_token, find('input[name=impact_token]', visible: false).value
+        assert_button 'Save purchase order correction', disabled: false
       end
       assert_field 'PO number', with: 'Stale scope draft'
       take_screenshot('equipment-shared-membership-stale-retry', html: true, full: true)
@@ -448,6 +487,37 @@ module Admin
     end
 
     private
+
+    def observe_correction_submissions
+      page.execute_script(<<~JS)
+        window.equipmentCorrectionObserver?.abort();
+        window.equipmentCorrectionObserver = new AbortController();
+        const options = {signal: window.equipmentCorrectionObserver.signal};
+        window.equipmentCorrectionEvents = {submissions: [], streams: 0};
+        document.addEventListener('turbo:submit-start', event => {
+          if (!event.target.closest('#equipment-correction')) return;
+          const submission = event.detail.formSubmission, submitter = submission.submitter;
+          window.equipmentCorrectionEvents.submissions.push({
+            disabled: submitter.disabled,
+            label: submitter.matches('input') ? submitter.value : submitter.textContent.trim(),
+            review: submission.body.get('review'),
+            confirmed: submission.body.get('confirmed_impact') === '1'
+          });
+        }, options);
+        document.addEventListener('turbo:before-stream-render', event => {
+          if (event.target.getAttribute('target') === 'equipment-correction') {
+            window.equipmentCorrectionEvents.streams += 1;
+          }
+        }, options);
+      JS
+    end
+
+    def assert_correction_submission(index, review:, confirmed: false)
+      submissions = page.evaluate_script('window.equipmentCorrectionEvents.submissions')
+      assert_equal index + 1, submissions.size
+      assert_equal({ 'disabled' => true, 'label' => review ? 'Reviewing...' : 'Saving...',
+                     'review' => review ? '1' : nil, 'confirmed' => confirmed }, submissions.fetch(index))
+    end
 
     def assert_rejected_device_action(item, field:, draft:)
       recorded = item.reload.attributes

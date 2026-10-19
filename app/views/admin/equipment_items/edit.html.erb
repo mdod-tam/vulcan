@@ -1,4 +1,4 @@
-<div class="max-w-4xl mx-auto p-4 space-y-6">
+<div id="equipment-correction" class="max-w-4xl mx-auto p-4 space-y-6">
   <h1 class="text-2xl font-bold text-gray-900">Equipment item #<%= @item.id %></h1>
   <p><%= link_to "Application ##{@item.application_id}",
                  admin_application_path(@item.application, anchor: "equipment-item-#{@item.id}", return_context: @return_context),
@@ -6,7 +6,7 @@
   <p><%= equipment_queue_badge(@item) %></p>
   <%= render 'admin/equipment/form_errors', errors: @form_errors, id: 'equipment-item-errors', title: 'Review the equipment correction',
                                             conflicts: Array(@item.identity_conflicts), return_context: @return_context %>
-  <%= form_with model: @item, url: admin_equipment_item_path(@item), method: :patch, local: true, data: { turbo: false }, class: 'space-y-4' do |form| %>
+  <%= form_with model: @item, url: admin_equipment_item_path(@item), method: :patch, class: 'space-y-4' do |form| %>
     <%= hidden_field_tag :expected_version, @expected_version %>
     <% @return_context.each do |key, value| %><%= hidden_field_tag "return_context[#{key}]", value %><% end %>
     <% @purchase_order_versions.each do |id, version| %><%= hidden_field_tag "purchase_order_versions[#{id}]", version %><% end %>
@@ -86,11 +86,13 @@
                                                       new_purchase_order: (@new_purchase_order if params[:create_purchase_order] == '1') %>
     <% end %>
     <% if @item.shipped_at_in_database.present? && !@reviewing %>
-      <%= button_tag 'Review correction', name: :review, value: '1', formnovalidate: true, class: 'rounded bg-indigo-700 px-4 py-2 text-white' %>
+      <%= button_tag 'Review correction', name: :review, value: '1', formnovalidate: true,
+                                          data: { turbo_submits_with: 'Reviewing...' }, class: 'rounded bg-indigo-700 px-4 py-2 text-white' %>
     <% else %>
-      <%= form.submit 'Save equipment correction', class: 'rounded bg-indigo-700 px-4 py-2 text-white' %>
+      <%= form.submit 'Save equipment correction', data: { turbo_submits_with: 'Saving...' }, class: 'rounded bg-indigo-700 px-4 py-2 text-white' %>
       <% if @reviewing %>
-        <%= button_tag 'Review changed values', name: :review, value: '1', formnovalidate: true, class: 'ml-3 text-indigo-700 underline' %>
+        <%= button_tag 'Review changed values', name: :review, value: '1', formnovalidate: true,
+                                                data: { turbo_submits_with: 'Reviewing...' }, class: 'ml-3 text-indigo-700 underline' %>
       <% end %>
     <% end %>
   <% end %>

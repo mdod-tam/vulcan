@@ -191,6 +191,38 @@ class EvaluationTest < ActiveSupport::TestCase
     assert_equal 'scheduled', evaluation.reload.status
   end
 
+  test 'new completion rejects archived recommendations while preserving historical product trials' do
+    evaluation = create(:evaluation)
+    archived_product = evaluation.recommended_products.first
+    archived_product.archive!
+    completion = {
+      status: :completed, appointment_completed_at: 1.hour.ago, report_submitted_at: Time.current
+    }
+
+    assert_not evaluation.update(completion)
+    assert_includes evaluation.errors[:recommended_products], 'cannot include archived catalog products'
+    assert_equal 'scheduled', evaluation.reload.status
+
+    historical_trials = evaluation.products_tried
+    active_product = create(:product)
+    evaluation.update!(completion.merge(recommended_product_ids: [active_product.id]))
+
+    assert_equal 'completed', evaluation.reload.status
+    assert_equal [active_product.id], evaluation.recommended_product_ids
+    assert_equal historical_trials, evaluation.products_tried
+  end
+
+  test 'archiving a previously recommended product does not prevent supplemental report notes' do
+    evaluation = create(:evaluation, :completed)
+    original_recommendations = evaluation.recommended_product_ids.sort
+    evaluation.recommended_products.first.archive!
+
+    evaluation.update!(post_completion_notes: 'Product availability changed after this assessment')
+
+    assert_equal original_recommendations, evaluation.reload.recommended_product_ids.sort
+    assert_equal 'Product availability changed after this assessment', evaluation.post_completion_notes
+  end
+
   test 'outside catalog and no suitable product outcomes can complete without inventing products' do
     %w[outside_catalog no_suitable_product].each do |outcome|
       evaluation = create(:evaluation)

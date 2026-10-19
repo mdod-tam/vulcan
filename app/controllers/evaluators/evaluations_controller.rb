@@ -159,7 +159,8 @@ module Evaluators
       @can_manage_evaluation = assigned_evaluator?
       @contact_context = ::Applications::ContactContext.new(application: @evaluation.application)
       @activity_logs = ::Evaluations::AuditLogBuilder.new(@evaluation).build
-      @available_products = Product.order(:name)
+      @available_products = Product.order(:name).to_a
+      @recommendation_products = @available_products.reject(&:archived?)
     end
 
     def render_lifecycle_failure(action, form_values, message)

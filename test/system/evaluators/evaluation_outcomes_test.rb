@@ -91,6 +91,53 @@ module Evaluators
       page.current_window.resize_to(1200, 800)
     end
 
+    test 'a product archived after the report form opens can be replaced without losing the draft' do
+      replacement = create(:product, name: 'Available replacement device')
+      details = 'Preserve the additional recommendation context.'
+      visit evaluators_evaluation_path(@evaluation)
+      fill_report
+      within '#complete-evaluation-form' do
+        replace_product_selection('products_tried_inputs', @product, reaction: 'Neutral')
+        replace_product_selection('recommended_product_ids', @product)
+        fill_in 'Non-catalog products and recommendation details', with: details
+      end
+      @product.archive!
+
+      within '#complete-evaluation-form' do
+        click_button 'Mark as Completed'
+      end
+      assert_single_action_error('submit-report-errors')
+      assert_text 'cannot include archived catalog products'
+      assert_equal 'submit-report-errors', page.evaluate_script('document.activeElement.id')
+      within '#complete-evaluation-form' do
+        assert_no_selector "input[name='evaluation[recommended_product_ids][]'][value='#{@product.id}']"
+        assert_selector "#trial-#{@product.id}:checked"
+        assert_selector :select, 'Satisfaction with Outcome Trial Device', selected: 'Neutral'
+        assert_field 'Working Notes', with: 'Appointment observations recorded.'
+        assert_field 'Non-catalog products and recommendation details', with: details
+      end
+      assert_equal 'scheduled', @evaluation.reload.status
+      assert_nil @evaluation.report_submitted_at
+      assert_empty @evaluation.application.equipment_needs
+      assert_equal 0, Event.where(action: 'evaluation_completed', auditable: @evaluation).count
+      take_screenshot('recommendations-archived-product-rejected', html: true, full: true)
+
+      within '#complete-evaluation-form' do
+        replace_product_selection('recommended_product_ids', replacement)
+        click_button 'Mark as Completed'
+      end
+      assert_text 'Evaluation submitted successfully.'
+      assert_equal 'completed', @evaluation.reload.status
+      assert_equal [replacement.id], @evaluation.recommended_product_ids
+      assert_equal [{ 'product_id' => @product.id.to_s, 'reaction' => 'Neutral' }], @evaluation.products_tried
+      assert_equal 'Appointment observations recorded.', @evaluation.notes
+      assert_equal details, @evaluation.recommendation_notes
+      assert_equal [replacement.id], @evaluation.application.equipment_needs.pluck(:product_id)
+      assert_equal 1, Event.where(action: 'evaluation_completed', auditable: @evaluation).count
+      assert_text 'Outcome Trial Device — Neutral'
+      take_screenshot('recommendations-archived-product-replaced', html: true, full: true)
+    end
+
     test 'no suitable product conflicts preserve selections and can be corrected without losing draft details' do
       visit evaluators_evaluation_path(@evaluation)
       fill_report

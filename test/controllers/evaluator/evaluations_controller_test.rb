@@ -30,6 +30,7 @@ class EvaluationsControllerTest < ActionDispatch::IntegrationTest
   end
 
   test 'a new report shows catalog selections noncatalog details and an explicit no-suitable checkbox' do
+    archived = create(:product, name: 'Archived trial device', archived_at: Time.current)
     get evaluators_evaluation_path(@evaluation)
 
     assert_response :success
@@ -39,6 +40,10 @@ class EvaluationsControllerTest < ActionDispatch::IntegrationTest
     assert_select '#recommendation-notes-help strong', text: /shared verbatim.*Use Working Notes for internal notes/
     assert_select '#complete-internal-notes-help strong', text: 'Internal notes only.'
     assert_select '#complete-evaluation-form input[type="submit"][data-turbo-submits-with="Submitting report..."]'
+    assert_select '#catalog-recommendations-group input[type="checkbox"][value=?]', @product.id.to_s
+    assert_select '#catalog-recommendations-group input[type="checkbox"][value=?]', archived.id.to_s, count: 0
+    assert_select "#trial-#{archived.id}"
+    assert_select "#trial-#{archived.id}-reaction"
   end
 
   test 'no recommendations are rejected while the report remains editable' do
@@ -81,6 +86,65 @@ class EvaluationsControllerTest < ActionDispatch::IntegrationTest
     end
     assert_response :bad_request
     assert_equal 'scheduled', @evaluation.reload.status
+  end
+
+  test 'archived recommendations are rejected but archived trials survive replacement with an active recommendation' do
+    @product.archive!
+    replacement = create(:product, name: 'Available replacement device')
+    submitted = {
+      appointment_completed_at: 1.hour.ago.strftime('%Y-%m-%dT%H:%M'), location: 'Trial library',
+      notes: 'Archived device trial observations', recommendation_notes: 'Keep the client-facing recommendation context.',
+      recommended_product_ids: [@product.id.to_s],
+      products_tried_inputs: { @product.id.to_s => { selected: '1', reaction: 'Neutral' } }
+    }
+
+    2.times do
+      assert_no_difference(['Event.where(action: "evaluation_completed").count', 'EquipmentNeed.count']) do
+        post submit_report_evaluators_evaluation_path(@evaluation), params: { evaluation: submitted }
+      end
+
+      assert_response :unprocessable_content
+      assert_select '#submit-report-errors a[href="#catalog-recommendations-group"]'
+      assert_select '#submit-report-recommended-product-ids-error', text: /cannot include archived catalog products/
+      assert_select '#catalog-recommendations-group input[type="checkbox"][value=?]', @product.id.to_s, count: 0
+      assert_select '#catalog-recommendations-group input[type="checkbox"][value=?]', replacement.id.to_s
+      assert_select "#trial-#{@product.id}[checked]"
+      assert_select "#trial-#{@product.id}-reaction option[value=Neutral][selected]"
+      assert_select '#complete_evaluation_notes', text: submitted[:notes]
+      assert_select '#complete_evaluation_recommendation_notes', text: submitted[:recommendation_notes]
+      assert_equal 'scheduled', @evaluation.reload.status
+      assert_nil @evaluation.report_submitted_at
+    end
+
+    submitted[:recommended_product_ids] = [replacement.id.to_s]
+    assert_difference('Event.where(action: "evaluation_completed").count', 1) do
+      post submit_report_evaluators_evaluation_path(@evaluation), params: { evaluation: submitted }
+    end
+
+    assert_redirected_to evaluators_evaluation_path(@evaluation)
+    assert_equal 'completed', @evaluation.reload.status
+    assert_equal [replacement.id], @evaluation.recommended_product_ids
+    assert_equal [{ 'product_id' => @product.id.to_s, 'reaction' => 'Neutral' }], @evaluation.products_tried
+    assert_equal submitted[:notes], @evaluation.notes
+    assert_equal submitted[:recommendation_notes], @evaluation.recommendation_notes
+  end
+
+  test 'completed reports retain archived recommendations when supplemental notes are saved' do
+    evaluation = create(:evaluation, :completed, evaluator: @evaluator)
+    products = evaluation.recommended_products.to_a
+    products.each(&:archive!)
+    original = evaluation.attributes.except('post_completion_notes', 'updated_at')
+
+    get evaluators_evaluation_path(evaluation)
+    assert_response :success
+    products.each { |product| assert_includes response.body, product.name }
+
+    patch evaluators_evaluation_path(evaluation), params: { evaluation: { post_completion_notes: 'Additional follow-up context.' } }
+
+    assert_redirected_to evaluators_evaluation_path(evaluation)
+    assert_equal 'Additional follow-up context.', evaluation.reload.post_completion_notes
+    assert_equal original, evaluation.attributes.except('post_completion_notes', 'updated_at')
+    assert_equal products.map(&:id).sort, evaluation.recommended_product_ids.sort
   end
 
   test 'administrator completed route applies the selected assignment scope' do

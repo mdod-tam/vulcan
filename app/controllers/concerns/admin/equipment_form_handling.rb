@@ -21,6 +21,17 @@ module Admin
       @impact_token = Equipment::Correction.impact_token(record: record, attributes: attributes, extra: equipment_impact_extra)
     end
 
+    def render_equipment_correction_review
+      respond_to do |format|
+        format.html { render :edit }
+        format.turbo_stream do
+          render turbo_stream: turbo_stream.replace(
+            'equipment-correction', html: render_to_string(:edit, formats: [:html], layout: false)
+          )
+        end
+      end
+    end
+
     def restore_equipment_correction(record, attributes:, fields:)
       record.reload
       @previous_values = equipment_snapshot(record, fields)

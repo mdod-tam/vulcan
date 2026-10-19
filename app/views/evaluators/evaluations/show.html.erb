@@ -222,7 +222,8 @@
         <%= render "schedule_form", evaluation: @evaluation %>
         <%= render 'cancel_form', evaluation: @evaluation %>
         <% if visible_form_actions.include?(:submit_report) %>
-          <%= render 'completion_form', evaluation: @evaluation, available_products: @available_products %>
+          <%= render 'completion_form', evaluation: @evaluation, available_products: @available_products,
+                                        recommendation_products: @recommendation_products %>
         <% end %>
       </div>
     <% elsif visible_form_actions.include?(:no_show) %>
@@ -231,7 +232,8 @@
         <p class="mt-1">The scheduled time for this evaluation has passed. Record the evaluation outcome, or use a secondary action if the evaluation did not happen as planned.</p>
       </div>
       <div class="space-y-6 mb-6">
-        <%= render "completion_form", evaluation: @evaluation, available_products: @available_products %>
+        <%= render 'completion_form', evaluation: @evaluation, available_products: @available_products,
+                                      recommendation_products: @recommendation_products %>
         <%= render "no_show_form", evaluation: @evaluation %>
         <%= render 'reschedule_form',
             evaluation: @evaluation,
@@ -240,7 +242,8 @@
       </div>
     <% elsif visible_form_actions.include?(:submit_report) %>
       <div class="space-y-6 mb-6">
-        <%= render "completion_form", evaluation: @evaluation, available_products: @available_products %>
+        <%= render 'completion_form', evaluation: @evaluation, available_products: @available_products,
+                                      recommendation_products: @recommendation_products %>
         <%= render 'reschedule_form',
             evaluation: @evaluation,
             suggested_date: @evaluation.evaluation_date %>

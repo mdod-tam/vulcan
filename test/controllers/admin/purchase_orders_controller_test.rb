@@ -65,10 +65,28 @@ module Admin
       assert_equal 2, order.equipment_items.where(application: @two_phones.application, product: @phone).distinct.count(:id)
       assert_equal([0, 0, 0], needs.map { |need| need.reload.remaining_quantity })
       assert_nil @phone_need.application.reload.equipment_po_sent_at
-      get admin_purchase_order_path(order, return_context: @context)
+      selects = Hash.new { |hash, key| hash[key] = [] }
+      subscriber = lambda do |*arguments|
+        payload = arguments.last
+        next unless payload[:sql].match?(/\ASELECT\b/)
+
+        # Count cached SELECTs too, so query caching cannot conceal per-device loads.
+        selects[:purchase_orders] << payload[:sql] if payload[:sql].include?('FROM "purchase_orders"')
+        selects[:vendors] << payload[:sql] if payload[:sql].include?('FROM "users"') && payload[:name].include?('Users::Vendor')
+      end
+      ActiveSupport::Notifications.subscribed(subscriber, 'sql.active_record') do
+        get admin_purchase_order_path(order, return_context: @context)
+      end
       assert_response :success
       assert_includes response.body, 'Awaiting Shipment'
-      order.equipment_items.each { |item| assert_select "#equipment-item-#{item.id}" }
+      assert_operator selects.fetch(:purchase_orders).size, :<=, 2, selects[:purchase_orders].join("\n")
+      # The header, audit POs, and direct vendor changes each load vendors once.
+      assert_operator selects.fetch(:vendors).size, :<=, 3, selects[:vendors].join("\n")
+      order.equipment_items.each do |item|
+        assert_select "#equipment-item-#{item.id}" do
+          assert_select 'a[href=?]', admin_purchase_order_path(order, return_context: @context), text: "#{@vendor.business_name} / #{order.number}"
+        end
+      end
       get admin_purchase_orders_path(return_context: @context)
       assert_select 'a[href=?]', admin_equipment_index_path(@context), text: 'Back to Equipment'
       assert_select 'a[href=?]', admin_purchase_order_path(order, return_context: @context)

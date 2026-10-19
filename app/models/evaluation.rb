@@ -39,6 +39,7 @@ class Evaluation < ApplicationRecord
            if: -> { status_completed? && assessment_source_direct_assessment? && recommendation_outcome_catalog_products? }
   validate :outside_specialist_requires_admin, if: :assessment_source_outside_specialist?
   validate :recommendations_match_outcome, if: :status_completed?
+  validate :validate_available_recommendations, if: :status_changed_to_completed?
   validate :validate_attendees_structure, if: :status_completed?
   validate :validate_products_tried_structure, if: :status_completed?
   validates :appointment_completed_at, :report_submitted_at, presence: true, if: :status_changed_to_completed?
@@ -127,6 +128,10 @@ class Evaluation < ApplicationRecord
     raise ArgumentError, 'Only approved applications can start or complete an evaluation.' unless application.status_approved?
   end
 
+  def recommended_products_available?
+    recommended_products.none?(&:archived?)
+  end
+
   private
 
   def outside_specialist_requires_admin
@@ -137,6 +142,10 @@ class Evaluation < ApplicationRecord
     return if recommendation_outcome_catalog_products? || recommended_products.empty?
 
     errors.add(:recommended_products, 'must be empty when the outcome does not recommend catalog products')
+  end
+
+  def validate_available_recommendations
+    errors.add(:recommended_products, 'cannot include archived catalog products') unless recommended_products_available?
   end
 
   def validate_attendees_structure

@@ -15,18 +15,22 @@ module Admin
       get edit_admin_equipment_item_path(@item)
       assert_redirected_to root_path
       assert_no_difference 'Event.count' do
-        patch admin_equipment_item_path(@item), params: { equipment_item: { tracking_number: 'Blocked' }, expected_version: 0, reason: 'Unauthorized' }
+        patch admin_equipment_item_path(@item), headers: { 'Accept' => Mime[:turbo_stream].to_s },
+                                                params: { equipment_item: { tracking_number: 'Blocked' }, expected_version: 0, reason: 'Unauthorized' }
       end
+      assert_redirected_to root_path
       assert_nil @item.reload.tracking_number
     end
 
     test 'invalid shipment re-renders every entered field and validated return context' do
-      patch admin_equipment_item_path(@item), params: {
+      patch admin_equipment_item_path(@item), headers: { 'Accept' => Mime[:turbo_stream].to_s }, params: {
         equipment_item: { product_id: @item.product_id, purchase_order_id: @item.purchase_order_id, shipped_at: '13/45/2026',
                           tracking_number: 'RetryPackage', carrier: 'fedex', serial_number: 'RetrySerial', imei: '123456789012345' },
         expected_version: 0, reason: 'Record shipment', return_context: { tab: 'ordered', product_id: @item.product_id, vendor_id: @item.purchase_order.vendor_id }
       }
       assert_response :unprocessable_entity
+      assert_equal Mime[:html].to_s, response.media_type
+      assert_select '#equipment-correction form[data-turbo=false]', count: 0
       assert_select '#equipment-item-errors[role=alert][tabindex="-1"][data-controller=error-summary]'
       assert_select '#equipment-item-errors li', text: /Date shipped is invalid/
       assert_select 'input[name="equipment_item[shipped_at]"][value="13/45/2026"]'
@@ -45,7 +49,10 @@ module Admin
                                                                                        imei: '123456789012345' }, expected_version: 0, reason: 'Review replacement model' }
       original_label = "#{@item.product.manufacturer} / #{@item.product.name} / #{@item.product.model_number}"
       replacement_label = "#{replacement.manufacturer} / #{replacement.name} / #{replacement.model_number}"
-      assert_select 'form[data-turbo=false] input[name=impact_token]'
+      assert_response :success
+      assert_equal Mime[:html].to_s, response.media_type
+      assert_select '#equipment-correction form input[name=impact_token]'
+      assert_select '#equipment-correction form[data-turbo=false]', count: 0
       assert_select 'dd', text: /#{Regexp.escape(original_label)}\s*→\s*#{Regexp.escape(replacement_label)}/
       assert_select 'dt', text: 'Actual catalog product:'
       assert_select 'dt', text: 'Date shipped:'
@@ -76,11 +83,36 @@ module Admin
     end
 
     test 'shipment save preserves allowlisted equipment tab and filters' do
+      @item.update!(shipped_at: Date.current, tracking_number: 'OriginalPackage')
       context = { tab: 'shipped', product_id: @item.product_id.to_s, vendor_id: @item.purchase_order.vendor_id.to_s }
-      patch admin_equipment_item_path(@item), params: { equipment_item: { shipped_at: Date.current.iso8601, tracking_number: 'Package' },
-                                                        expected_version: 0, reason: 'Record actual shipment', return_context: context }
+      submitted = { equipment_item: { shipped_at: Date.current.iso8601, tracking_number: 'Package' }, operation: 'update',
+                    expected_version: @item.lock_version, reason: 'Record actual shipment', return_context: context,
+                    purchase_order_versions: { @item.purchase_order_id.to_s => @item.purchase_order.lock_version.to_s } }
+      headers = { 'Accept' => Mime[:turbo_stream].to_s }
+      assert_no_difference 'Event.count' do
+        patch admin_equipment_item_path(@item), headers: headers, params: submitted.merge(review: '1')
+      end
+      assert_response :success
+      assert_equal Mime[:turbo_stream].to_s, response.media_type
+      assert_select 'turbo-stream[action=replace][target=equipment-correction]', count: 1 do
+        assert_select 'template #equipment-correction form[action=?]', admin_equipment_item_path(@item)
+        assert_select 'input[name=expected_version][value=?]', submitted[:expected_version].to_s
+        assert_select 'input[name=reviewing][value="1"]'
+        assert_select 'input[name=confirmed_impact][required]:not([checked])'
+        assert_select 'button[name=review][value="1"][data-turbo-submits-with]', text: 'Review changed values'
+        assert_select 'input[type=submit][data-turbo-submits-with][value="Save equipment correction"]'
+        assert_select 'form[data-turbo=false]', count: 0
+      end
+      token = css_select('input[name=impact_token]').sole['value']
+      assert token.present?
+      assert_difference 'Event.count', 1 do
+        patch admin_equipment_item_path(@item), headers: headers,
+                                                params: submitted.merge(reviewing: '1', confirmed_impact: '1', impact_token: token)
+      end
+      assert_response :see_other
       assert_redirected_to admin_equipment_index_path(context)
       assert_equal Date.current, @item.reload.shipped_at
+      assert_equal 'Package', @item.tracking_number
     end
 
     test 'mixed detach edits retain the rejected draft until details are saved separately' do
@@ -114,15 +146,27 @@ module Admin
     end
 
     test 'stale form retains its submitted fences and an unchanged retry cannot overwrite another administrator' do
-      @item.update!(tracking_number: 'OtherAdministratorPackage')
-      params = { equipment_item: { tracking_number: 'StaleDraft' }, expected_version: '0', reason: 'Old browser tab',
+      @item.update!(shipped_at: Date.current, tracking_number: 'OriginalPackage')
+      submitted_version = @item.lock_version.to_s
+      params = { equipment_item: { tracking_number: 'StaleDraft' }, expected_version: submitted_version, reason: 'Old browser tab',
                  purchase_order_versions: { @item.purchase_order_id.to_s => '0' } }
+      headers = { 'Accept' => Mime[:turbo_stream].to_s }
+      patch admin_equipment_item_path(@item), headers: headers, params: params.merge(review: '1')
+      assert_response :success
+      assert_select 'turbo-stream[action=replace][target=equipment-correction] template #equipment-correction'
+      token = css_select('input[name=impact_token]').sole['value']
+      params.merge!(reviewing: '1', confirmed_impact: '1', impact_token: token)
+      @item.update!(tracking_number: 'OtherAdministratorPackage')
       2.times do
         assert_no_difference 'Event.count' do
-          patch admin_equipment_item_path(@item), params: params
+          patch admin_equipment_item_path(@item), headers: headers, params: params
         end
         assert_response :unprocessable_entity
-        assert_select 'input[name=expected_version][value="0"]'
+        assert_equal Mime[:html].to_s, response.media_type
+        assert_select '#equipment-correction form[data-turbo=false]', count: 0
+        assert_select 'input[name=expected_version][value=?]', submitted_version
+        assert_select 'input[name=impact_token][value=?]', token
+        assert_select 'input[name=confirmed_impact]:not([checked])'
         assert_select 'input[name="equipment_item[tracking_number]"][value=StaleDraft]'
         assert_equal 'OtherAdministratorPackage', @item.reload.tracking_number
       end

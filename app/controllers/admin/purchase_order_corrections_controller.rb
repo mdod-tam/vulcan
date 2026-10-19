@@ -11,7 +11,7 @@ module Admin
     def update
       if params[:review] == '1'
         preview_equipment_correction(@purchase_order, attributes: order_params, fields: Equipment::Correction::PO_FIELDS)
-        return render :edit
+        return render_equipment_correction_review
       end
 
       Equipment::Correction.new(actor: current_user).update_purchase_order!(
@@ -19,12 +19,12 @@ module Admin
         expected_item_versions: @submitted_versions, reason: params[:reason],
         confirmed_impact: params[:confirmed_impact] == '1', impact_token: params[:impact_token]
       )
-      redirect_to admin_purchase_order_path(@purchase_order, return_context: @return_context), notice: 'Purchase order corrected.'
+      redirect_to admin_purchase_order_path(@purchase_order, return_context: @return_context), notice: 'Purchase order corrected.', status: :see_other
     rescue Equipment::Conflict, ActiveRecord::RecordInvalid => e
       @form_errors = equipment_form_errors(e)
       restore_equipment_correction(@purchase_order, attributes: order_params, fields: Equipment::Correction::PO_FIELDS)
       @items = @purchase_order.equipment_items.includes(:product, :application).order(:id).to_a
-      render :edit, status: :unprocessable_content
+      render :edit, formats: [:html], status: :unprocessable_content
     end
 
     private

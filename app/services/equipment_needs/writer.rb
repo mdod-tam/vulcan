@@ -55,9 +55,10 @@ module EquipmentNeeds
       unless actor&.persisted? && actor.public_login_active? && (actor.admin? || evaluation.evaluator_id == actor.id)
         raise Equipment::Conflict, 'Only the assigned evaluator or an administrator can initialize purchasing needs.'
       end
-      return if evaluation.status_completed?
+      raise Equipment::Conflict, 'Purchasing needs require a completed evaluation report.' unless evaluation.status_completed?
+      return if evaluation.recommended_products_available?
 
-      raise Equipment::Conflict, 'Purchasing needs require a completed evaluation report.'
+      raise Equipment::Conflict, "The report recommends archived catalog products; review the application's purchasing needs."
     end
     private_class_method :validate_report!
 

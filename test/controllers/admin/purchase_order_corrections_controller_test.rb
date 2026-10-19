@@ -12,28 +12,60 @@ module Admin
       sign_in_for_integration_test(@admin)
     end
 
-    test 'shared header review is read-only and names its full impact before confirmation' do
+    test 'shared header review is read-only and names its full impact before confirmed Turbo save' do
+      submitted = { purchase_order: { number: 'Reviewed Number' }, reason: 'Wrong PO reference', expected_version: 0, item_versions: versions }
       assert_no_difference 'Event.count' do
-        patch admin_purchase_order_correction_path(@order), params: { review: '1', purchase_order: { number: 'Reviewed Number' }, reason: 'Wrong PO reference',
-                                                                      expected_version: 0, item_versions: versions }
+        patch admin_purchase_order_correction_path(@order), params: submitted.merge(review: '1')
       end
       assert_response :success
       assert_select 'h2', text: 'Review old and new header values'
-      assert_select 'form[data-turbo=false] input[name=impact_token]'
+      assert_equal Mime[:html].to_s, response.media_type
+      assert_select '#equipment-correction form input[name=impact_token]'
+      assert_select '#equipment-correction form[data-turbo=false]', count: 0
       assert_select 'input[name=confirmed_impact][required]'
       assert_select 'textarea[name=reason]', text: 'Wrong PO reference'
       assert_select 'dt', text: 'PO number:', count: 1
       assert_select 'dt', count: 1
       assert_select 'dd', text: "#{@order.number} → Reviewed Number"
       assert_not_equal 'Reviewed Number', @order.reload.number
+
+      headers = { 'Accept' => Mime[:turbo_stream].to_s }
+      assert_no_difference 'Event.count' do
+        patch admin_purchase_order_correction_path(@order), headers: headers, params: submitted.merge(review: '1')
+      end
+      assert_response :success
+      assert_equal Mime[:turbo_stream].to_s, response.media_type
+      assert_select 'turbo-stream[action=replace][target=equipment-correction]', count: 1 do
+        assert_select 'template #equipment-correction form[action=?]', admin_purchase_order_correction_path(@order)
+        assert_select 'input[name=expected_version][value="0"]'
+        submitted[:item_versions].each do |id, version|
+          assert_select 'input[name=?][value=?]', "item_versions[#{id}]", version
+        end
+        assert_select 'input[name=confirmed_impact][required]:not([checked])'
+        assert_select 'button[name=review][value="1"][data-turbo-submits-with]', text: 'Review changed values'
+        assert_select 'input[type=submit][data-turbo-submits-with][value="Save purchase order correction"]'
+        assert_select 'form[data-turbo=false]', count: 0
+      end
+      token = css_select('input[name=impact_token]').sole['value']
+      assert token.present?
+      assert_difference 'Event.count', 1 do
+        patch admin_purchase_order_correction_path(@order), headers: headers,
+                                                            params: submitted.merge(reviewing: '1', confirmed_impact: '1', impact_token: token)
+      end
+      assert_response :see_other
+      assert_redirected_to admin_purchase_order_path(@order)
+      assert_equal 'Reviewed Number', @order.reload.number
     end
 
     test 'forged impact confirmation cannot change a shared header' do
       assert_no_difference 'Event.count' do
-        patch admin_purchase_order_correction_path(@order), params: { confirmed_impact: '1', purchase_order: { number: 'Forged Number', sent_at: '13/45/2026' }, reason: 'Wrong PO reference',
+        patch admin_purchase_order_correction_path(@order), headers: { 'Accept' => Mime[:turbo_stream].to_s },
+                                                            params: { confirmed_impact: '1', purchase_order: { number: 'Forged Number', sent_at: '13/45/2026' }, reason: 'Wrong PO reference',
                                                                       expected_version: 0, item_versions: versions }
       end
       assert_response :unprocessable_entity
+      assert_equal Mime[:html].to_s, response.media_type
+      assert_select '#equipment-correction form[data-turbo=false]', count: 0
       assert_select '#purchase-order-correction-errors[role=alert][tabindex="-1"][data-controller=error-summary]'
       assert_not_equal 'Forged Number', @order.reload.number
       assert_select 'input[name="purchase_order[number]"][value="Forged Number"]'
@@ -51,17 +83,27 @@ module Admin
     end
 
     test 'stale header form retains original versions and unchanged retries cannot overwrite a newer correction' do
-      @sibling.destroy!
-      old_versions = { @item.id.to_s => '0' }
+      old_versions = versions
+      submitted = { purchase_order: { number: 'Stale Draft' }, reason: 'Old browser tab', expected_version: '0', item_versions: old_versions }
+      headers = { 'Accept' => Mime[:turbo_stream].to_s }
+      patch admin_purchase_order_correction_path(@order), headers: headers, params: submitted.merge(review: '1')
+      assert_response :success
+      assert_select 'turbo-stream[action=replace][target=equipment-correction] template #equipment-correction'
+      token = css_select('input[name=impact_token]').sole['value']
+      submitted.merge!(reviewing: '1', confirmed_impact: '1', impact_token: token)
       @order.update!(number: 'Newer Number')
       2.times do
         assert_no_difference 'Event.count' do
-          patch admin_purchase_order_correction_path(@order), params: { purchase_order: { number: 'Stale Draft' }, reason: 'Old browser tab',
-                                                                        expected_version: '0', item_versions: old_versions }
+          patch admin_purchase_order_correction_path(@order), headers: headers, params: submitted
         end
         assert_response :unprocessable_entity
+        assert_equal Mime[:html].to_s, response.media_type
+        assert_select '#equipment-correction form[data-turbo=false]', count: 0
         assert_select 'input[name=expected_version][value="0"]'
         assert_select "input[name='item_versions[#{@item.id}]'][value='0']"
+        assert_select 'input[name=impact_token][value=?]', token
+        assert_select 'input[name=confirmed_impact]:not([checked])'
+        assert_select 'input[name="purchase_order[number]"][value="Stale Draft"]'
         assert_equal 'Newer Number', @order.reload.number
       end
     end
