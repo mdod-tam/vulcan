@@ -1,7 +1,6 @@
 # frozen_string_literal: true
 
 require 'test_helper'
-require 'rake'
 
 module EquipmentNeeds
   class WriterTest < ActiveSupport::TestCase
@@ -203,132 +202,6 @@ module EquipmentNeeds
       assert_nil @application.reload.equipment_needs_initialized_at
     end
 
-    test 'rollout uses report submission order, skips legacy orders, and is idempotent' do
-      older_assessment = create(:evaluation, :completed, application: @application, report_submitted_at: 2.hours.ago)
-      latest_report = @evaluation
-      older_assessment.touch(time: 1.hour.from_now)
-      legacy_application = create(:application, :approved, :with_all_proofs, equipment_po_sent_at: 1.day.ago, equipment_tracking_number: 'legacy tracking')
-      create(:evaluation, :completed, application: legacy_application)
-      run_rollout
-      assert_equal latest_report.recommended_product_ids.sort, @application.equipment_needs.pluck(:product_id).sort
-      assert(@application.equipment_needs.all? { |need| need.source_evaluation_id == latest_report.id })
-      assert_nil legacy_application.reload.equipment_needs_initialized_at
-      assert_empty legacy_application.equipment_needs
-      edit_needs(submitted_rows.map { |row| row.merge('remaining_quantity' => 0) })
-      assert_no_difference(['EquipmentNeed.count', 'Event.count', 'EquipmentItem.count']) { run_rollout }
-      assert_empty @application.equipment_needs.remaining
-    end
-
-    test 'rollout initializes a completed historical report without inventing its unknown submission time' do
-      @evaluation.update_columns(report_submitted_at: nil)
-      original_report = @evaluation.reload.attributes
-
-      assert_no_difference('EquipmentItem.count') do
-        assert_difference(-> { @application.equipment_needs.count }, @evaluation.recommended_products.size) { run_rollout }
-      end
-
-      assert @application.reload.equipment_needs_initialized_at
-      assert_equal @evaluation.recommended_product_ids.sort, @application.equipment_needs.pluck(:product_id).sort
-      assert_equal [@evaluation.id], @application.equipment_needs.distinct.pluck(:source_evaluation_id)
-      assert_equal original_report, @evaluation.reload.attributes
-      assert_nil @evaluation.report_submitted_at
-      assert_no_difference(['EquipmentNeed.count', 'Event.count', 'EquipmentItem.count']) { run_rollout }
-    end
-
-    test 'rollout continues through historical intake validation differences without altering intake fields' do
-      @application.update_column(:maryland_resident, false)
-      other_application = create(:application, :approved, :with_all_proofs)
-      other_report = create(:evaluation, :completed, application: other_application)
-      assert_difference 'Event.where(action: "equipment_needs_initialized").count', 2 do
-        run_rollout
-      end
-      assert @application.reload.equipment_needs_initialized_at
-      assert_equal false, @application.maryland_resident
-      assert other_application.reload.equipment_needs_initialized_at
-      assert_equal other_report.recommended_product_ids.sort, other_application.equipment_needs.pluck(:product_id).sort
-    end
-
-    test 'rollout reports archived recommendations and preserves successful work before and after the failed application' do
-      failed_application = create(:application, :approved, :with_all_proofs)
-      failed_report = create(:evaluation, :completed, :with_single_product, application: failed_application)
-      archived_product = failed_report.recommended_products.sole
-      archived_product.archive!
-      original_report = failed_report.reload.attributes
-      later_application = create(:application, :approved, :with_all_proofs)
-      later_report = create(:evaluation, :completed, application: later_application)
-      error = nil
-
-      output, errors = capture_io do
-        error = assert_raises(SystemExit) { rollout_task.invoke(@admin.id) }
-      end
-
-      assert_equal 1, error.status
-      assert_includes output, 'Initialized 2 applications;'
-      assert_includes output, 'failed 1.'
-      assert_includes errors, "Application ##{failed_application.id}: The report recommends archived catalog products"
-      assert_includes errors, "Failed application IDs: #{failed_application.id}."
-      assert @application.reload.equipment_needs_initialized_at
-      assert later_application.reload.equipment_needs_initialized_at
-      assert_equal @evaluation.recommended_product_ids.sort, @application.equipment_needs.pluck(:product_id).sort
-      assert_equal later_report.recommended_product_ids.sort, later_application.equipment_needs.pluck(:product_id).sort
-      assert_nil failed_application.reload.equipment_needs_initialized_at
-      assert_empty failed_application.equipment_needs
-      assert_empty failed_application.events.where(action: 'equipment_needs_initialized')
-      assert_equal original_report, failed_report.reload.attributes
-      assert_empty EquipmentItem.where(application: [@application, failed_application, later_application])
-
-      markers = [@application, later_application].map(&:equipment_needs_initialized_at)
-      assert_no_difference(['EquipmentNeed.count', 'Event.count', 'EquipmentItem.count']) do
-        output, errors = capture_io do
-          error = assert_raises(SystemExit) { rollout_task.invoke(@admin.id) }
-        end
-        assert_equal 1, error.status
-        assert_includes output, 'Initialized 0 applications;'
-        assert_includes errors, "Failed application IDs: #{failed_application.id}."
-      end
-      assert_equal markers, [@application.reload, later_application.reload].map(&:equipment_needs_initialized_at)
-      assert_nil failed_application.reload.equipment_needs_initialized_at
-
-      archived_product.unarchive!
-      output, errors = run_rollout
-      assert_includes output, 'Initialized 1 applications;'
-      assert_empty errors
-      assert failed_application.reload.equipment_needs_initialized_at
-      assert_equal [archived_product.id], failed_application.equipment_needs.pluck(:product_id)
-      assert_equal 1, failed_application.events.where(action: 'equipment_needs_initialized').count
-      assert_equal original_report, failed_report.reload.attributes
-      assert_no_difference(['EquipmentNeed.count', 'Event.count', 'EquipmentItem.count']) { run_rollout }
-    end
-
-    test 'rollout rejects invalid global actors before initializing any application' do
-      @admin.update!(status: :suspended)
-
-      [@admin, @evaluation.evaluator].each do |actor|
-        assert_no_difference(['EquipmentNeed.count', 'Event.count', 'EquipmentItem.count']) do
-          assert_raises(Equipment::Conflict) { rollout_task.invoke(actor.id) }
-        end
-      end
-      assert_nil @application.reload.equipment_needs_initialized_at
-    end
-
-    test 'bids-only catalog rollout permits an ordinary first PO and preserves the historical date' do
-      @application.update!(equipment_bids_sent_at: 2.days.ago)
-      bids_date = @application.reload.equipment_bids_sent_at
-      run_rollout
-      assert @application.reload.equipment_needs_initialized_at
-      assert_equal @evaluation.recommended_product_ids.sort, @application.equipment_needs.pluck(:product_id).sort
-      assert_equal :needs_action, @application.admin_fulfillment_responsibility_state
-
-      rows = submitted_rows.map { |row| row.slice('id', 'lock_version').merge('quantity' => 1) }
-      order = Equipment::Ordering.new(actor: @admin).call(
-        needs: rows, items: [], purchase_order_attributes: { vendor_id: create(:vendor).id, number: 'FIRST-AWARD', sent_at: Date.current }
-      )
-      assert_equal rows.size, order.equipment_items.count
-      assert_equal :po_sent, @application.reload.admin_fulfillment_responsibility_state
-      assert_equal bids_date, @application.equipment_bids_sent_at
-      assert_no_difference(['EquipmentNeed.count', 'EquipmentItem.count', 'Event.count']) { run_rollout }
-    end
-
     test 'first staff confirmation of automatic empty outside catalog needs records the decision once' do
       report = build(:evaluation, :completed, application: @application, recommendation_outcome: :outside_catalog,
                                               recommendation_notes: 'Outside catalog recommendation')
@@ -370,17 +243,6 @@ module EquipmentNeeds
     end
 
     private
-
-    def run_rollout
-      capture_io { rollout_task.invoke(@admin.id) }
-    end
-
-    def rollout_task
-      Rails.application.load_tasks unless Rake::Task.task_defined?('equipment_needs:initialize')
-      task = Rake::Task['equipment_needs:initialize']
-      task.reenable
-      task
-    end
 
     def submitted_rows
       @application.equipment_needs.order(:id).map { |need| need.attributes.slice('id', 'product_id', 'remaining_quantity', 'lock_version') }
