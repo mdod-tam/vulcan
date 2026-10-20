@@ -22,7 +22,7 @@ module Admin
       redirect_to admin_purchase_order_path(@purchase_order, return_context: @return_context), notice: 'Purchase order corrected.', status: :see_other
     rescue Equipment::Conflict, ActiveRecord::RecordInvalid => e
       @form_errors = equipment_form_errors(e)
-      restore_equipment_correction(@purchase_order, attributes: order_params, fields: Equipment::Correction::PO_FIELDS)
+      restore_equipment_correction(@purchase_order, attributes: order_params, fields: Equipment::Correction::PO_FIELDS, exception: e)
       @items = @purchase_order.equipment_items.includes(:product, :application).order(:id).to_a
       render :edit, formats: [:html], status: :unprocessable_content
     end

@@ -14,7 +14,7 @@
     </div>
     <% if @reviewing %>
       <%= render 'admin/equipment/correction_impact', record: @purchase_order, previous_values: @previous_values,
-                                                      fields: Equipment::Correction::PO_FIELDS, impact_token: @impact_token,
+                                                      fields: Equipment::Correction::PO_FIELDS, impact_token: @impact_token, autofocus: @form_errors.blank?,
                                                       title: 'Review old and new header values',
                                                       confirmation: 'I confirm the impact on all linked equipment and applications.', vendors: @vendors %>
     <% end %>

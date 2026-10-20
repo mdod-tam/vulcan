@@ -24,6 +24,12 @@ module Admin
       assert_select 'input[name="equipment_needs[expected_initialized_at]"]', value: @application.reload.equipment_needs_initialized_at.iso8601(6)
       assert_select '#equipment_needs_reason[aria-describedby=equipment-needs-reason-help]'
       assert_select '#equipment-needs-reason-help', text: /decision that no new devices are needed/
+      assert_operator @application.equipment_needs.count, :>=, 2
+      %w[id lock_version product_id].each do |attribute|
+        assert_select 'input[type=hidden][name=?][id]', "equipment_needs[rows][][#{attribute}]", count: 0
+      end
+      form_ids = css_select('form[aria-describedby=equipment-needs-help] [id]').pluck('id')
+      assert_equal form_ids.uniq, form_ids
     end
 
     test 'saving returns to the same equipment tab and filters' do

@@ -85,12 +85,6 @@ class Evaluation < ApplicationRecord
     name || relationship
   end
 
-  def products_tried_field
-    return [] if products_tried.blank?
-
-    products_tried.map { |p| p['product_id'].to_i }
-  end
-
   def products_tried_inputs
     Array(products_tried).to_h do |trial|
       [trial['product_id'].to_s, { 'selected' => '1', 'reaction' => trial['reaction'] }]

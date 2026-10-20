@@ -208,7 +208,7 @@ module Evaluators
       end
       assert_text 'Evaluation submitted successfully.'
       assert_equal 'outside_catalog', @evaluation.reload.recommendation_outcome
-      assert_equal [@product.id], @evaluation.products_tried_field
+      assert_equal({ @product.id.to_s => { 'selected' => '1', 'reaction' => 'Dissatisfied' } }, @evaluation.products_tried_inputs)
       assert_empty @evaluation.recommended_product_ids
       assert_text 'Outcome Trial Device — Dissatisfied'
       take_screenshot('recommendations-external-completed', html: true, full: true)

@@ -20,7 +20,6 @@ en:
         completed_report_help: "The submitted evaluation report above is locked. Use the form below to add supplemental notes."
         report_help: "Submit the report after the assessment or consultation has happened. Record its actual completion time, notes, any products tried, and recommendation outcome."
         internal_notes_only: "Internal notes only."
-        satisfaction_not_recorded: "Satisfaction not recorded"
         errors_heading: "Please correct the following before saving:"
         error_headings:
           schedule: "Failed to schedule evaluation: correct the following before saving."

@@ -2,6 +2,8 @@
 
 module Equipment
   class Correction
+    class InvalidImpactToken < Conflict; end
+
     EDITABLE_ITEM_FIELDS = %w[product_id purchase_order_id shipped_at tracking_number carrier serial_number imei].freeze
     ITEM_FIELDS = (EDITABLE_ITEM_FIELDS + %w[withdrawn_at manufacturer_model_identity normalized_manufacturer normalized_imei normalized_serial_number]).freeze
     PO_FIELDS = %w[vendor_id number sent_at].freeze
@@ -147,6 +149,8 @@ module Equipment
     def require_confirmation!(record, attributes, token, confirmed, **extra)
       expected = self.class.impact_data(record, attributes, extra)
       observed = Rails.application.message_verifier('equipment-impact').verified(token)
+      raise InvalidImpactToken, 'This correction review is no longer valid. Review the current values again before saving.' unless observed
+
       raise Conflict, 'Review the current correction values and confirm their impact before saving.' unless confirmed && observed == expected
     end
 

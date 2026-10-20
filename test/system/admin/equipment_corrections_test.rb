@@ -113,6 +113,7 @@ module Admin
         assert_text 'Review old and new header values'
       end
       assert_correction_submission(0, review: true)
+      assert_selector '#equipment-correction-impact-heading:focus', text: 'Review old and new header values'
       assert_equal 1, page.evaluate_script('window.equipmentCorrectionEvents.streams')
       assert_equal original_number, item.purchase_order.reload.number
       assert_text '2 equipment items across 1 application, including 1 shipped device'
@@ -139,6 +140,7 @@ module Admin
         assert_text 'OriginalPackage → CorrectedPackage'
       end
       assert_correction_submission(0, review: true)
+      assert_selector '#equipment-correction-impact-heading:focus', text: 'Correction impact: 1 device across 1 application'
       assert_equal 1, page.evaluate_script('window.equipmentCorrectionEvents.streams')
       assert_equal 'OriginalPackage', item.reload.tracking_number
       assert_selector '.bg-amber-50 dt', text: 'Tracking number:', count: 1
@@ -162,6 +164,7 @@ module Admin
       find_button('Review changed values').double_click
       assert_selector '.bg-amber-50 dd', text: 'USPS → FedEx'
       assert_correction_submission(2, review: true)
+      assert_selector '#equipment-correction-impact-heading:focus'
       assert_equal 2, page.evaluate_script('window.equipmentCorrectionEvents.streams')
       assert_not_equal reviewed_token, find('input[name=impact_token]', visible: false).value
       assert_selector '.bg-amber-50 dt', text: 'IMEI (15 digits):'
@@ -486,7 +489,74 @@ module Admin
       take_screenshot('equipment-stale-fences-refreshed', html: true, full: true)
     end
 
+    test 'expired correction reviews retain drafts and recover through a fresh review' do
+      item = create(:equipment_item, shipped_at: Date.current, tracking_number: 'OriginalPackage')
+      create(:equipment_item, application: item.application, purchase_order: item.purchase_order)
+      context = { tab: 'shipped', product_id: item.product_id.to_s, vendor_id: item.purchase_order.vendor_id.to_s }
+      scenarios = [
+        { kind: 'item', record: item, path: edit_admin_equipment_item_path(item, return_context: context),
+          field: 'Tracking number', attribute: :tracking_number, value: 'RecoveredPackage',
+          confirmation: 'I confirm this correction and its impact on shipment history.', save: 'Save equipment correction', notice: 'Equipment item updated.' },
+        { kind: 'header', record: item.purchase_order, path: edit_admin_purchase_order_correction_path(item.purchase_order, return_context: context),
+          field: 'PO number', attribute: :number, value: 'RECOVERED-PO',
+          confirmation: 'I confirm the impact on all linked equipment and applications.', save: 'Save purchase order correction', notice: 'Purchase order corrected.' }
+      ]
+      system_test_sign_in(create(:admin))
+      install_stimulus_error_reporting
+
+      scenarios.each do |scenario|
+        visit scenario[:path]
+        fill_in scenario[:field], with: scenario[:value]
+        fill_in 'Correction reason', with: 'Correct the recorded reference'
+        click_button 'Review correction'
+        assert_selector '#equipment-correction-impact-heading:focus'
+        token = find('input[name=impact_token]', visible: false).value
+        fences = correction_form_versions
+        recorded = scenario[:record].reload.attributes
+
+        travel 31.minutes do
+          check scenario[:confirmation]
+          assert_no_difference 'Event.count' do
+            click_button scenario[:save]
+            assert_text 'This correction review is no longer valid. Review the current values again before saving.'
+          end
+          assert_selector '[role=alert]:focus'
+          assert_no_selector 'input[name=impact_token]', visible: :all
+          assert_no_selector 'input[name=confirmed_impact]', visible: :all
+          assert_no_button scenario[:save]
+          assert_button 'Review correction', disabled: false
+          assert_field scenario[:field], with: scenario[:value]
+          assert_field 'Correction reason', with: 'Correct the recorded reference'
+          assert_equal fences, correction_form_versions
+          context.each { |key, value| assert_selector "input[name='return_context[#{key}]'][value='#{value}']", visible: :all }
+          assert_equal recorded, scenario[:record].reload.attributes
+          take_screenshot("equipment-#{scenario[:kind]}-review-expired", html: true, full: true)
+
+          click_button 'Review correction'
+          assert_selector '#equipment-correction-impact-heading:focus'
+          assert_not_equal token, find('input[name=impact_token]', visible: false).value
+          assert_equal fences, correction_form_versions
+          assert_unchecked_field scenario[:confirmation]
+          check scenario[:confirmation]
+          take_screenshot("equipment-#{scenario[:kind]}-review-renewed", html: true, full: true)
+          assert_difference 'Event.count', 1 do
+            click_button scenario[:save]
+            assert_text scenario[:notice]
+          end
+          assert_equal scenario[:value], scenario[:record].reload.public_send(scenario[:attribute])
+          take_screenshot("equipment-#{scenario[:kind]}-review-recovered", html: true, full: true)
+        end
+      end
+    end
+
     private
+
+    def correction_form_versions
+      all('#equipment-correction input[type=hidden]', visible: :all).filter_map do |input|
+        name = input[:name]
+        [name, input.value] if name == 'expected_version' || name.start_with?('purchase_order_versions[', 'item_versions[')
+      end.to_h
+    end
 
     def observe_correction_submissions
       page.execute_script(<<~JS)

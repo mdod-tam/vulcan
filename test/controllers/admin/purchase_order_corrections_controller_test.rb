@@ -12,13 +12,18 @@ module Admin
       sign_in_for_integration_test(@admin)
     end
 
-    test 'shared header review is read-only and names its full impact before confirmed Turbo save' do
-      submitted = { purchase_order: { number: 'Reviewed Number' }, reason: 'Wrong PO reference', expected_version: 0, item_versions: versions }
+    test 'expired shared header review retains its draft until a fresh read-only review is confirmed' do
+      original = @order.attributes
+      original_items = [@item, @sibling].map(&:attributes)
+      context = { tab: 'ordered', product_id: @item.product_id.to_s, vendor_id: @order.vendor_id.to_s }
+      submitted = { purchase_order: { number: 'Reviewed Number' }, reason: 'Wrong PO reference', expected_version: 0,
+                    item_versions: versions, return_context: context }
       assert_no_difference 'Event.count' do
         patch admin_purchase_order_correction_path(@order), params: submitted.merge(review: '1')
       end
       assert_response :success
       assert_select 'h2', text: 'Review old and new header values'
+      assert_select '#equipment-correction-impact-heading[tabindex="-1"][autofocus]'
       assert_equal Mime[:html].to_s, response.media_type
       assert_select '#equipment-correction form input[name=impact_token]'
       assert_select '#equipment-correction form[data-turbo=false]', count: 0
@@ -42,18 +47,52 @@ module Admin
           assert_select 'input[name=?][value=?]', "item_versions[#{id}]", version
         end
         assert_select 'input[name=confirmed_impact][required]:not([checked])'
+        assert_select '#equipment-correction-impact-heading[tabindex="-1"][autofocus]'
         assert_select 'button[name=review][value="1"][data-turbo-submits-with]', text: 'Review changed values'
         assert_select 'input[type=submit][data-turbo-submits-with][value="Save purchase order correction"]'
         assert_select 'form[data-turbo=false]', count: 0
       end
       token = css_select('input[name=impact_token]').sole['value']
       assert token.present?
-      assert_difference 'Event.count', 1 do
-        patch admin_purchase_order_correction_path(@order), headers: headers,
-                                                            params: submitted.merge(reviewing: '1', confirmed_impact: '1', impact_token: token)
+
+      travel 31.minutes do
+        assert_no_difference ['Event.count', 'EquipmentItem.count', 'PurchaseOrder.count'] do
+          patch admin_purchase_order_correction_path(@order), headers: headers,
+                                                              params: submitted.merge(reviewing: '1', confirmed_impact: '1', impact_token: token)
+        end
+        assert_response :unprocessable_entity
+        assert_equal Mime[:html].to_s, response.media_type
+        assert_select '#purchase-order-correction-errors[role=alert][tabindex="-1"][data-controller=error-summary]',
+                      text: /This correction review is no longer valid\. Review the current values again before saving\./
+        assert_select '#purchase_order_number[value="Reviewed Number"]'
+        assert_select '#reason', text: submitted[:reason]
+        assert_select '#expected_version[value="0"]'
+        submitted[:item_versions].each { |id, version| assert_select 'input[name=?][value=?]', "item_versions[#{id}]", version }
+        context.each { |key, value| assert_select 'input[name=?][value=?]', "return_context[#{key}]", value }
+        assert_select 'input[name=impact_token], input[name=reviewing], input[name=confirmed_impact]', count: 0
+        assert_select '#equipment-correction-impact-heading', count: 0
+        assert_select 'button[name=review][value="1"]', text: 'Review correction'
+        assert_select 'input[type=submit][value="Save purchase order correction"]', count: 0
+        assert_equal original, @order.reload.attributes
+        assert_equal original_items, [@item.reload, @sibling.reload].map(&:attributes)
+
+        assert_no_difference 'Event.count' do
+          patch admin_purchase_order_correction_path(@order), headers: headers, params: submitted.merge(review: '1')
+        end
+        assert_response :success
+        assert_equal Mime[:turbo_stream].to_s, response.media_type
+        assert_select '#equipment-correction-impact-heading[tabindex="-1"][autofocus]'
+        assert_select 'input[name=confirmed_impact][required]:not([checked])'
+        fresh_token = css_select('input[name=impact_token]').sole['value']
+        assert fresh_token.present?
+        assert_not_equal token, fresh_token
+        assert_difference 'Event.count', 1 do
+          patch admin_purchase_order_correction_path(@order), headers: headers,
+                                                              params: submitted.merge(reviewing: '1', confirmed_impact: '1', impact_token: fresh_token)
+        end
+        assert_response :see_other
+        assert_redirected_to admin_purchase_order_path(@order, return_context: context)
       end
-      assert_response :see_other
-      assert_redirected_to admin_purchase_order_path(@order)
       assert_equal 'Reviewed Number', @order.reload.number
     end
 
@@ -103,6 +142,7 @@ module Admin
         assert_select "input[name='item_versions[#{@item.id}]'][value='0']"
         assert_select 'input[name=impact_token][value=?]', token
         assert_select 'input[name=confirmed_impact]:not([checked])'
+        assert_select '#equipment-correction-impact-heading[autofocus]', count: 0
         assert_select 'input[name="purchase_order[number]"][value="Stale Draft"]'
         assert_equal 'Newer Number', @order.reload.number
       end

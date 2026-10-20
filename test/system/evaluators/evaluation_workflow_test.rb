@@ -70,7 +70,7 @@ module Evaluators
       assert_equal 'Corrected report observations', @evaluation.notes
       assert_equal [], @evaluation.attendees
       assert_equal [@replacement_product.id], @evaluation.recommended_product_ids
-      assert_equal [@replacement_product.id], @evaluation.products_tried_field
+      assert_equal({ @replacement_product.id.to_s => { 'selected' => '1', 'reaction' => 'Satisfied' } }, @evaluation.products_tried_inputs)
       assert_equal Time.zone.parse(corrected_time), @evaluation.appointment_completed_at
       take_screenshot('evaluator-report-completed', html: true, full: true)
     end

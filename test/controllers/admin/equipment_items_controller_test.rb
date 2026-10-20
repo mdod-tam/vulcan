@@ -82,8 +82,9 @@ module Admin
       assert_select '#equipment_item_purchase_order_id option[value=""]', text: 'No current purchase order'
     end
 
-    test 'shipment save preserves allowlisted equipment tab and filters' do
+    test 'expired shipment review retains its draft and filters until a fresh review is confirmed' do
       @item.update!(shipped_at: Date.current, tracking_number: 'OriginalPackage')
+      original = @item.attributes
       context = { tab: 'shipped', product_id: @item.product_id.to_s, vendor_id: @item.purchase_order.vendor_id.to_s }
       submitted = { equipment_item: { shipped_at: Date.current.iso8601, tracking_number: 'Package' }, operation: 'update',
                     expected_version: @item.lock_version, reason: 'Record actual shipment', return_context: context,
@@ -99,18 +100,54 @@ module Admin
         assert_select 'input[name=expected_version][value=?]', submitted[:expected_version].to_s
         assert_select 'input[name=reviewing][value="1"]'
         assert_select 'input[name=confirmed_impact][required]:not([checked])'
+        assert_select '#equipment-correction-impact-heading[tabindex="-1"][autofocus]'
         assert_select 'button[name=review][value="1"][data-turbo-submits-with]', text: 'Review changed values'
         assert_select 'input[type=submit][data-turbo-submits-with][value="Save equipment correction"]'
         assert_select 'form[data-turbo=false]', count: 0
       end
       token = css_select('input[name=impact_token]').sole['value']
       assert token.present?
-      assert_difference 'Event.count', 1 do
-        patch admin_equipment_item_path(@item), headers: headers,
-                                                params: submitted.merge(reviewing: '1', confirmed_impact: '1', impact_token: token)
+
+      travel 31.minutes do
+        assert_no_difference ['Event.count', 'EquipmentItem.count', 'PurchaseOrder.count'] do
+          patch admin_equipment_item_path(@item), headers: headers,
+                                                  params: submitted.merge(reviewing: '1', confirmed_impact: '1', impact_token: token)
+        end
+        assert_response :unprocessable_entity
+        assert_equal Mime[:html].to_s, response.media_type
+        assert_select '#equipment-item-errors[role=alert][tabindex="-1"][data-controller=error-summary]',
+                      text: /This correction review is no longer valid\. Review the current values again before saving\./
+        assert_select '#equipment_item_tracking_number[value=Package]'
+        assert_select '#equipment_item_shipped_at[value=?]', @item.shipped_at.strftime('%m/%d/%Y')
+        assert_select '#reason', text: submitted[:reason]
+        assert_select '#expected_version[value=?]', submitted[:expected_version].to_s
+        submitted[:purchase_order_versions].each do |id, version|
+          assert_select 'input[name=?][value=?]', "purchase_order_versions[#{id}]", version
+        end
+        context.each { |key, value| assert_select 'input[name=?][value=?]', "return_context[#{key}]", value }
+        assert_select 'input[name=impact_token], input[name=reviewing], input[name=confirmed_impact]', count: 0
+        assert_select '#equipment-correction-impact-heading', count: 0
+        assert_select 'button[name=review][value="1"]', text: 'Review correction'
+        assert_select 'input[type=submit][value="Save equipment correction"]', count: 0
+        assert_equal original, @item.reload.attributes
+
+        assert_no_difference 'Event.count' do
+          patch admin_equipment_item_path(@item), headers: headers, params: submitted.merge(review: '1')
+        end
+        assert_response :success
+        assert_equal Mime[:turbo_stream].to_s, response.media_type
+        assert_select '#equipment-correction-impact-heading[tabindex="-1"][autofocus]'
+        assert_select 'input[name=confirmed_impact][required]:not([checked])'
+        fresh_token = css_select('input[name=impact_token]').sole['value']
+        assert fresh_token.present?
+        assert_not_equal token, fresh_token
+        assert_difference 'Event.count', 1 do
+          patch admin_equipment_item_path(@item), headers: headers,
+                                                  params: submitted.merge(reviewing: '1', confirmed_impact: '1', impact_token: fresh_token)
+        end
+        assert_response :see_other
+        assert_redirected_to admin_equipment_index_path(context)
       end
-      assert_response :see_other
-      assert_redirected_to admin_equipment_index_path(context)
       assert_equal Date.current, @item.reload.shipped_at
       assert_equal 'Package', @item.tracking_number
     end
@@ -167,6 +204,7 @@ module Admin
         assert_select 'input[name=expected_version][value=?]', submitted_version
         assert_select 'input[name=impact_token][value=?]', token
         assert_select 'input[name=confirmed_impact]:not([checked])'
+        assert_select '#equipment-correction-impact-heading[autofocus]', count: 0
         assert_select 'input[name="equipment_item[tracking_number]"][value=StaleDraft]'
         assert_equal 'OtherAdministratorPackage', @item.reload.tracking_number
       end

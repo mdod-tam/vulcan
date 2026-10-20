@@ -32,14 +32,14 @@ module Admin
       end
     end
 
-    def restore_equipment_correction(record, attributes:, fields:)
+    def restore_equipment_correction(record, attributes:, fields:, exception:)
       record.reload
       @previous_values = equipment_snapshot(record, fields)
       record.assign_attributes(attributes)
       yield record if block_given?
       record.valid?
-      @reviewing = params[:reviewing] == '1'
-      @impact_token = params[:impact_token]
+      @reviewing = params[:reviewing] == '1' && !exception.is_a?(Equipment::Correction::InvalidImpactToken)
+      @impact_token = params[:impact_token] if @reviewing
     end
   end
 end

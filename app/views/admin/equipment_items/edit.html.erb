@@ -78,7 +78,7 @@
     </div>
     <% if @reviewing %>
       <%= render 'admin/equipment/correction_impact', record: @item, previous_values: @previous_values,
-                                                      fields: Equipment::Correction::EDITABLE_ITEM_FIELDS, impact_token: @impact_token,
+                                                      fields: Equipment::Correction::EDITABLE_ITEM_FIELDS, impact_token: @impact_token, autofocus: @form_errors.blank?,
                                                       title: 'Correction impact: 1 device across 1 application',
                                                       body: "Shipped devices affected: #{@item.shipped_at_in_database.present? ? 1 : 0}.",
                                                       confirmation: 'I confirm this correction and its impact on shipment history.',

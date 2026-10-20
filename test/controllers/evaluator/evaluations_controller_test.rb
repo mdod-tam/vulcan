@@ -46,6 +46,23 @@ class EvaluationsControllerTest < ActionDispatch::IntegrationTest
     assert_select "#trial-#{archived.id}-reaction"
   end
 
+  test 'report location native and ARIA required state agree for evaluator and administrator sources' do
+    get evaluators_evaluation_path(@evaluation)
+
+    assert_response :success
+    assert_select '#complete_evaluation_location[required][aria-required=true]'
+
+    sign_in_for_controller_test(@admin)
+    [@evaluation, @requested_evaluation].each do |evaluation|
+      evaluation.update!(evaluator: @admin)
+      get evaluators_evaluation_path(evaluation)
+
+      assert_response :success
+      assert_select '#complete_evaluation_assessment_source'
+      assert_select '#complete_evaluation_location:not([required])[aria-required=false]'
+    end
+  end
+
   test 'no recommendations are rejected while the report remains editable' do
     submitted = {
       appointment_completed_at: 1.hour.ago.strftime('%Y-%m-%dT%H:%M'),

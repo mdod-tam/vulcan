@@ -62,13 +62,10 @@ class EvaluatorWorkingNotesControllerTest < ActionDispatch::IntegrationTest
     assert_select '#no-show-evaluation-form textarea[aria-describedby~="no-show-notes-help"]'
   end
 
-  test 'completed report shows internal notes and exposes only the supplemental form' do
+  test 'completed report preserves recorded satisfaction when supplemental notes change' do
     @evaluation.update!(status: :completed, evaluation_date: 1.day.ago, appointment_completed_at: 1.hour.ago,
                         report_submitted_at: Time.current, working_notes: 'Prior coordination', post_completion_notes: 'Follow-up observation')
-    legacy_trials = @evaluation.products_tried
-    legacy_trials.first['reaction'] = 'Recorded during evaluation'
-    # Historical reports predate explicit satisfaction choices.
-    @evaluation.update_column(:products_tried, legacy_trials)
+    original_trials = @evaluation.products_tried.deep_dup
     get evaluators_evaluation_path(@evaluation)
 
     form_ids = response.parsed_body.css('section[aria-label="Evaluation Actions"] form[id]').pluck('id')
@@ -81,9 +78,17 @@ class EvaluatorWorkingNotesControllerTest < ActionDispatch::IntegrationTest
     assert_select '#supplemental-notes-form label', text: 'Working Notes'
     assert_select '#supplemental-notes-form textarea[aria-describedby="supplemental-notes-help"]', text: 'Follow-up observation'
     assert_select 'dt', text: 'Recommended products from catalog'
-    assert_select 'li', text: /Satisfaction not recorded/
+    assert_select 'li', text: /Satisfied/
     assert_select 'li', text: /Neutral/
-    assert_equal legacy_trials, @evaluation.reload.products_tried
+
+    patch evaluators_evaluation_path(@evaluation), params: {
+      evaluation: { post_completion_notes: 'Later follow-up observation' }
+    }
+
+    assert_redirected_to evaluators_evaluation_path(@evaluation)
+    assert_equal 'Later follow-up observation', @evaluation.reload.post_completion_notes
+    assert_equal 'Prior coordination', @evaluation.working_notes
+    assert_equal original_trials, @evaluation.products_tried
   end
 
   test 'working note failure preserves entered text and renders a focusable error summary' do

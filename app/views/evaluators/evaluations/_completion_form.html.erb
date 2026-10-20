@@ -2,6 +2,7 @@
 <% form_values = @evaluation_form_values.fetch(:submit_report, {}) # rubocop:disable Lint/UselessAssignment -- Used by later ERB fragments. %>
 <% trial_inputs = (form_values.empty? ? evaluation.products_tried_inputs : form_values.fetch(:products_tried_inputs, {})).with_indifferent_access # rubocop:disable Lint/UselessAssignment -- ERB local. %>
 <% outside_specialist = evaluation.status_requested? || form_values[:assessment_source] == 'outside_specialist' # rubocop:disable Lint/UselessAssignment -- ERB local. %>
+<% location_required = !outside_specialist && !evaluation.outside_specialist_report_allowed?(current_user) # rubocop:disable Lint/UselessAssignment -- ERB local. %>
 <div class="bg-white shadow rounded-lg">
   <div class="px-4 py-5 sm:p-6">
     <h3 class="text-lg leading-6 font-medium text-gray-900 mb-4">
@@ -67,8 +68,8 @@
               value: form_values.fetch(:location, evaluation.location),
               class: 'mt-1 block w-full border border-gray-300 rounded-md shadow-sm py-2 px-3 ' \
                      'focus:outline-none focus:ring-indigo-500 focus:border-indigo-500 sm:text-sm',
-              required: !outside_specialist && !evaluation.outside_specialist_report_allowed?(current_user),
-              aria: evaluation_field_aria(:submit_report, :location, form_errors: @evaluation_form_errors).merge(required: !outside_specialist),
+              required: location_required,
+              aria: evaluation_field_aria(:submit_report, :location, form_errors: @evaluation_form_errors).merge(required: location_required),
               data: { recommendation_outcome_target: 'location' }
             ) %>
         <%= render 'field_errors', action: :submit_report, attribute: :location, form_errors: @evaluation_form_errors %>

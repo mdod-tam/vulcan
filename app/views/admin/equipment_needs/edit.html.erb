@@ -20,10 +20,10 @@
               Add a catalog model
             <% end %>
           </legend>
-          <%= hidden_field_tag 'equipment_needs[rows][][id]', row['id'] %>
-          <%= hidden_field_tag 'equipment_needs[rows][][lock_version]', row['lock_version'] %>
+          <%= hidden_field_tag 'equipment_needs[rows][][id]', row['id'], id: nil %>
+          <%= hidden_field_tag 'equipment_needs[rows][][lock_version]', row['lock_version'], id: nil %>
           <% if row['id'].present? %>
-            <%= hidden_field_tag 'equipment_needs[rows][][product_id]', row['product_id'] %>
+            <%= hidden_field_tag 'equipment_needs[rows][][product_id]', row['product_id'], id: nil %>
           <% else %>
             <%= label_tag "equipment-need-product-#{index}", 'Catalog model', class: 'block text-sm font-medium text-gray-700' %>
             <%= select_tag 'equipment_needs[rows][][product_id]', options_for_select(equipment_catalog_options(@new_products), row['product_id']),

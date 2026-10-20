@@ -27,7 +27,7 @@ module Admin
       redirect_to success_path, notice: 'Equipment item updated.', status: :see_other
     rescue Equipment::Conflict, ActiveRecord::RecordInvalid => e
       @form_errors = equipment_form_errors(e)
-      restore_equipment_correction(@item, attributes: item_params, fields: Equipment::Correction::ITEM_FIELDS) do |item|
+      restore_equipment_correction(@item, attributes: item_params, fields: Equipment::Correction::ITEM_FIELDS, exception: e) do |item|
         item.serial_duplicate_reason = params[:serial_duplicate_reason]
       end
       load_form
