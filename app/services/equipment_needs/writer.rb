@@ -6,7 +6,7 @@ module EquipmentNeeds
       application = evaluation.application
       initialized = false
       application.with_lock do
-        if application.equipment_fulfillment? && application.equipment_needs_initialized_at.nil? && !application.equipment_legacy_unmapped?
+        if application.equipment_fulfillment? && application.equipment_needs_initialized_at.nil?
           Equipment::Mutation.eligible!(application)
           validate_report!(evaluation, actor)
           if evaluation.recommendation_outcome_catalog_products?

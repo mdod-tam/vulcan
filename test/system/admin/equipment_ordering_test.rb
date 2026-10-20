@@ -79,8 +79,6 @@ module Admin
       select replacement_vendor.business_name, from: 'Vendor'
       fill_in 'PO number', with: 'CORRECTED-00043'
       fill_in 'Date PO sent', with: Date.current.strftime('%m/%d/%Y')
-      find_by_id('purchase_order_legacy_mapping').check
-      find_by_id('purchase_order_legacy_mapping').uncheck
       option = find("#purchase_order_existing option[value='#{existing.id}:#{existing.lock_version}']").text
       select option, from: 'Link to an existing PO (leave blank to create one)'
       select 'Create a new PO', from: 'Link to an existing PO (leave blank to create one)'
@@ -305,84 +303,48 @@ module Admin
       page.current_window.resize_to(1200, 800)
     end
 
-    test 'staff confirm an empty legacy purchasing list and retain readonly history after archival' do
+    test 'archived applications retain submitted recommendations and recorded device history' do
       FeatureFlag.disable!(:vouchers_enabled)
       admin = create(:admin)
       vendor = create(:vendor)
-      product = create(:product, name: 'Current catalog need')
-      product.vendors << vendor
-      create(:equipment_need, product: product)
-      application = create(:application, :approved, :with_all_proofs, equipment_bids_sent_at: Date.new(2026, 9, 9),
-                                                                      equipment_po_sent_at: Date.new(2026, 9, 10),
-                                                                      equipment_tracking_number: 'EARLIER-PACKAGE')
-      report = build(:evaluation, :completed, application: application, recommendation_outcome: :outside_catalog,
-                                              recommendation_notes: 'The earlier order needs staff review')
-      report.recommended_products = []
-      report.products_tried = []
-      report.save!
-      assert_not EquipmentNeeds::Writer.initialize_from!(report, actor: admin)
+      application = create(:application, :approved, :with_all_proofs)
+      report = create(:evaluation, :completed, :with_single_product, application: application)
+      EquipmentNeeds::Writer.initialize_from!(report, actor: admin)
       original_report = report.reload.attributes
-      context = { tab: 'needs_ordering', product_id: product.id.to_s, vendor_id: vendor.id.to_s }
-      system_test_sign_in(admin)
-      visit admin_equipment_index_path(context)
-      within '#equipment-legacy-review' do
-        assert_link "Application ##{application.id}", href: admin_application_path(application, anchor: 'equipment', return_context: context)
-      end
-      page.current_window.resize_to(390, 844)
-      assert_operator page.evaluate_script('document.documentElement.scrollWidth'), :<=, 390
-      take_screenshot('equipment-legacy-pending-review-mobile', html: true, full: true)
-      within '#equipment-legacy-review' do
-        click_link "Application ##{application.id}"
-      end
-      assert_current_path admin_application_path(application, return_context: context)
-      assert_equal 'equipment', URI.parse(page.current_url).fragment
-      within '#equipment' do
-        assert_text 'Earlier fulfillment needs review'
-        assert_text 'September 09, 2026'
-        assert_text 'September 10, 2026'
-        assert_text 'EARLIER-PACKAGE'
-        assert_no_text 'No equipment needed'
-      end
-      page.current_window.resize_to(1200, 800)
-      take_screenshot('equipment-legacy-pending-application', html: true, full: true)
-      within '#equipment' do
-        click_link 'Edit equipment needs'
-      end
-      fill_in 'Reason for adjustment', with: 'Reviewed the earlier order; no new catalog device is needed.'
-      assert_difference -> { application.events.where(action: 'equipment_needs_updated').count }, 1 do
-        click_button 'Save purchasing needs'
-        assert_text 'Purchasing needs updated.'
-      end
-      assert_current_path admin_equipment_index_path(context)
-      assert_no_selector '#equipment-legacy-review a', text: "Application ##{application.id}"
-      assert application.reload.equipment_needs_initialized_at
-      assert application.equipment_legacy_unmapped?
-      visit admin_application_path(application, anchor: 'equipment', return_context: context)
-      within '#equipment' do
-        assert_text 'No equipment needed'
-        assert_no_text 'Earlier fulfillment needs review'
-        assert_text 'September 10, 2026'
-        assert_text 'EARLIER-PACKAGE'
-      end
-      take_screenshot('equipment-legacy-confirmed-empty-application', html: true, full: true)
+      need = application.equipment_needs.sole
+      order = Equipment::Ordering.new(actor: admin).call(
+        needs: [{ id: need.id, lock_version: need.lock_version, quantity: 1 }], items: [],
+        purchase_order_attributes: { vendor_id: vendor.id, number: 'ARCHIVED-DEVICE', sent_at: Date.current }
+      )
+      item = order.equipment_items.sole
+      reason = 'Record the package reference before archiving the application.'
+      Equipment::Correction.new(actor: admin).update_item!(
+        item: item, attributes: { tracking_number: 'RecordedDevicePackage' }, expected_version: item.lock_version, reason: reason
+      )
       application.transition_status!(:archived, actor: admin)
-      visit admin_equipment_index_path(context)
-      assert_no_selector '#equipment-legacy-review a', text: "Application ##{application.id}"
+      context = { tab: 'ordered', product_id: need.product_id.to_s, vendor_id: vendor.id.to_s }
+      system_test_sign_in(admin)
       visit admin_application_path(application, anchor: 'equipment', return_context: context)
+
       within '#equipment' do
-        assert_text report.recommendation_notes
-        assert_text 'September 09, 2026'
-        assert_text 'September 10, 2026'
-        assert_text 'EARLIER-PACKAGE'
+        assert_text report.recommended_products.sole.name
+        assert_text 'No new devices are currently needed.'
+        assert_text order.number
+        assert_text item.tracking_number
+        assert_link 'Back to Equipment', href: admin_equipment_index_path(context)
         assert_no_link 'Edit equipment needs'
         assert_no_selector 'form'
+        within "#equipment-item-#{item.id}" do
+          find('summary', text: 'Equipment correction history').click
+          assert_text reason
+          assert_link 'Correct device / record shipment'
+        end
       end
-      take_screenshot('equipment-legacy-archived-history', html: true, full: true)
+      take_screenshot('equipment-archived-device-history', html: true, full: true)
       assert_equal original_report, report.reload.attributes
-      assert_empty application.equipment_items
-      assert_empty application.equipment_needs
-    ensure
-      page.current_window.resize_to(1200, 800)
+      assert_equal order.id, item.reload.purchase_order_id
+      assert_equal [item.id], application.equipment_items.pluck(:id)
+      assert_empty application.equipment_needs.remaining
     end
 
     private

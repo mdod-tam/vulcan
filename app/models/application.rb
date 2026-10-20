@@ -124,7 +124,6 @@ class Application < ApplicationRecord
   validates :medical_certification, :additional_medical_certifications, document: { purpose: :certification }
 
   validates :application_date, presence: true
-  validates :equipment_tracking_number, length: { maximum: 64 }, allow_nil: true
   validates :status, presence: true
   validates :maryland_resident, inclusion: { in: [true], message: 'You must be a Maryland resident to apply' }, unless: :status_draft?
   validates :terms_accepted, acceptance: { accept: true }, if: :submitted?

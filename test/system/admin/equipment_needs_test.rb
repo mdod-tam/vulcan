@@ -162,7 +162,7 @@ module Admin
       vendor = create(:vendor)
       product = create(:product, name: 'Model for a later catalog decision')
       product.vendors << vendor
-      application = create(:application, :approved, :with_all_proofs, equipment_bids_sent_at: Date.new(2026, 9, 9))
+      application = create(:application, :approved, :with_all_proofs)
       report = build(:evaluation, :completed, application: application, recommendation_outcome: :outside_catalog,
                                               recommendation_notes: 'The specialist recommended a model outside the catalog.')
       report.recommended_products = []
@@ -173,15 +173,11 @@ module Admin
       marker = application.reload.equipment_needs_initialized_at
       context = { tab: 'needs_ordering', product_id: product.id.to_s, vendor_id: vendor.id.to_s }
       system_test_sign_in(admin)
-      visit admin_equipment_index_path(context)
-      assert_no_selector '#equipment-legacy-review a', text: "Application ##{application.id}"
       visit admin_application_path(application, anchor: 'equipment', return_context: context)
       within '#equipment' do
         assert_selector 'span.bg-amber-100.text-amber-800', text: 'Needs a catalog product'
         assert_selector '.sr-only', text: 'Fulfillment Status:', visible: :all
         assert_text report.recommendation_notes
-        assert_text 'September 09, 2026'
-        assert_no_text 'Earlier fulfillment needs review'
         take_screenshot('equipment-needs-outside-catalog-pending', html: true, full: true)
         click_link 'Edit equipment needs'
       end

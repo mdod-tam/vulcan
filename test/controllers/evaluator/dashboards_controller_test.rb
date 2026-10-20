@@ -23,19 +23,19 @@ module Evaluators
       assert_select 'a[href=?]', admin_applications_path, text: 'Back to Dashboard', count: 0
     end
 
-    test 'evaluator sees only scoped evaluation and application fulfillment activity' do
+    test 'evaluator sees only scoped evaluation and application assignment activity' do
       own_event = create_evaluation_event(@evaluation, 'Own evaluation activity')
       other_event = create_evaluation_event(@other_evaluation, 'Other evaluation activity')
-      fulfillment_event = create_application_event(@evaluation.application, 'Scoped fulfillment activity')
-      unrelated_fulfillment_event = create_application_event(@other_evaluation.application, 'Unrelated fulfillment activity')
+      assignment_event = create_assignment_event(@evaluation.application, @evaluator)
+      unrelated_assignment_event = create_assignment_event(@other_evaluation.application, @other_evaluator)
 
       get evaluators_dashboard_path
 
       assert_response :success
       assert_includes assigns(:activity_logs), own_event
-      assert_includes assigns(:activity_logs), fulfillment_event
+      assert_includes assigns(:activity_logs), assignment_event
       assert_not_includes assigns(:activity_logs), other_event
-      assert_not_includes assigns(:activity_logs), unrelated_fulfillment_event
+      assert_not_includes assigns(:activity_logs), unrelated_assignment_event
       assert_includes @response.body, 'Constituent'
       assert_includes @response.body, @evaluation.constituent.full_name
       assert_not_includes @response.body, @other_evaluation.constituent.full_name
@@ -117,12 +117,12 @@ module Evaluators
       )
     end
 
-    def create_application_event(application, notes)
+    def create_assignment_event(application, evaluator)
       Event.create!(
         user: @admin,
-        action: 'equipment_bids_sent',
+        action: 'evaluator_assigned',
         auditable: application,
-        metadata: { date: Date.current.iso8601, notes: notes }
+        metadata: { application_id: application.id, evaluator_id: evaluator.id, evaluator_name: evaluator.full_name }
       )
     end
   end

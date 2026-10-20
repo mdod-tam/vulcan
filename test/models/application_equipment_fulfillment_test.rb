@@ -11,31 +11,18 @@ class ApplicationEquipmentFulfillmentTest < ActiveSupport::TestCase
     @admin = create(:admin)
   end
 
-  test 'procurement and pending review scopes agree with their instance predicates' do
-    approved = create(:application, :approved, :with_all_proofs, equipment_po_sent_at: 1.day.ago)
-    tracking = create(:application, :approved, :with_all_proofs, equipment_tracking_number: 'Earlier package')
-    bids = create(:application, :approved, :with_all_proofs, equipment_bids_sent_at: 1.day.ago)
-    blank = create(:application, :approved, :with_all_proofs, equipment_tracking_number: " \t\n")
-    voucher = create(:application, :approved, :with_all_proofs, :voucher_fulfillment, equipment_po_sent_at: 1.day.ago)
-    archived = create(:application, :archived, equipment_po_sent_at: 1.day.ago)
-    rejected = create(:application, :rejected, equipment_tracking_number: 'Earlier rejected package')
-    mapped = create(:application, :approved, :with_all_proofs, equipment_po_sent_at: 1.day.ago)
-    create(:equipment_item, application: mapped, purchase_order: nil, withdrawn_at: Time.current)
-    decided = create(:application, :approved, :with_all_proofs, equipment_po_sent_at: 1.day.ago)
-    EquipmentNeeds::Writer.update!(decided, rows: [], expected_initialized_at: '', actor: @admin, reason: 'Delivered before this system')
-    applications = [approved, tracking, bids, blank, voucher, archived, rejected, mapped, decided]
+  test 'procurement scope agrees with its instance predicate' do
+    approved = create(:application, :approved, :with_all_proofs)
+    voucher = create(:application, :approved, :with_all_proofs, :voucher_fulfillment)
+    archived = create(:application, :archived)
+    rejected = create(:application, :rejected)
+    applications = [approved, voucher, archived, rejected]
 
-    assert_equal [approved.id, tracking.id], Application.equipment_legacy_review.where(id: applications).order(:id).ids
     eligible_ids = Application.equipment_procurement_eligible.where(id: applications).ids
-    review_ids = Application.equipment_legacy_review.where(id: applications).ids
+    assert_equal [approved.id], eligible_ids
     applications.each do |application|
       assert_equal eligible_ids.include?(application.id), application.equipment_procurement_eligible?
-      assert_equal review_ids.include?(application.id), application.equipment_legacy_review?
     end
-    assert decided.equipment_legacy_unmapped?
-    assert_equal :no_equipment, decided.admin_fulfillment_responsibility_state
-    assert_not_equal :legacy_review, archived.admin_fulfillment_responsibility_state
-    assert_not_equal :legacy_review, rejected.admin_fulfillment_responsibility_state
   end
 
   test 'application responsibility aggregates device queue states and remaining needs' do

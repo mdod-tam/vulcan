@@ -80,13 +80,16 @@ class EquipmentHelperTest < ActionView::TestCase
     assert_not_includes rendered.first, 'Created at:'
   end
 
-  test 'captured plaintext serial acknowledgments remain readable in rendered history' do
+  test 'encrypted serial acknowledgments are escaped in rendered history' do
+    acknowledgment = 'Manufacturer review <script>alert(1)</script>'
     event = Event.new(action: 'equipment_item_corrected', user: build(:admin), created_at: Time.current,
-                      metadata: { 'serial_duplicate_reason' => 'Earlier manufacturer review.' })
+                      metadata: { 'changes' => { 'serial_duplicate_reason' => {} } },
+                      change_values: { serial_duplicate_reason: [nil, acknowledgment] }.to_json)
 
     render partial: 'admin/equipment_items/history', locals: { events: [event], audit_records: {} }
 
-    assert_select 'p', text: 'Serial warning acknowledgment: Earlier manufacturer review.'
+    assert_select 'p', text: "Serial warning acknowledgment: #{acknowledgment}"
+    assert_select 'script', count: 0
   end
 
   test 'missing historical records have truthful names rather than numeric identifiers' do

@@ -6,7 +6,7 @@ module Equipment
       @actor = actor
     end
 
-    def call(needs:, items:, purchase_order_attributes: {}, purchase_order_id: nil, expected_po_version: nil, legacy_mapping: false)
+    def call(needs:, items:, purchase_order_attributes: {}, purchase_order_id: nil, expected_po_version: nil)
       Mutation.authorize!(@actor)
       need_rows = Array(needs).map(&:symbolize_keys)
       item_rows = Array(items).map(&:symbolize_keys)
@@ -17,12 +17,7 @@ module Equipment
         selected_items = EquipmentItem.where(id: item_rows.pluck(:id))
         application_ids = (selected_needs.pluck(:application_id) + selected_items.pluck(:application_id)).uniq
         applications = Mutation.lock_applications!(application_ids)
-        applications.each do |application|
-          Mutation.eligible!(application)
-          if application.equipment_legacy_unmapped? && !legacy_mapping
-            raise Conflict, 'Confirm that earlier fulfillment details are being explicitly mapped before ordering.'
-          end
-        end
+        applications.each { |application| Mutation.eligible!(application) }
         locked_needs = selected_needs.order(:id).lock.to_a
         order = obtain_order!(purchase_order_id, expected_po_version, purchase_order_attributes)
         locked_items = selected_items.order(:id).lock.to_a
@@ -31,8 +26,7 @@ module Equipment
         ordered_item_ids = consume_needs!(locked_needs, needs_by_id, order)
         ordered_item_ids.concat(relink_items!(locked_items, items_by_id, order))
         Mutation.audit!(order, actor: @actor, action: 'equipment_order_recorded', changes: order.previous_changes.except('updated_at', 'created_at'),
-                               application_ids: application_ids, equipment_item_ids: ordered_item_ids,
-                               legacy_mapping: legacy_mapping)
+                               application_ids: application_ids, equipment_item_ids: ordered_item_ids)
       end
       order
     rescue ActiveRecord::StaleObjectError, ActiveRecord::RecordNotUnique

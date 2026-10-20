@@ -95,7 +95,7 @@ module ApplicationHelper
   end
 
   def admin_fulfillment_badge(application)
-    labels = { voucher_no_equipment: 'Voucher - No Equipment Order', legacy_review: 'Earlier fulfillment needs review',
+    labels = { voucher_no_equipment: 'Voucher - No Equipment Order',
                needs_action: 'Needs Ordering', po_sent: 'Ordered', shipped: 'Shipped', no_equipment: 'No equipment needed',
                needs_catalog_product: 'Needs a catalog product', outside_catalog: 'Outside-catalog recommendation' }
     state = application.admin_fulfillment_responsibility_state

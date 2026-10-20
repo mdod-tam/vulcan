@@ -10,7 +10,7 @@
 #
 # It's strongly recommended that you check this file into your version control system.
 
-ActiveRecord::Schema[8.1].define(version: 2026_10_14_120000) do
+ActiveRecord::Schema[8.1].define(version: 2026_10_19_180000) do
   # These are extensions that must be enabled in order to support this database
   enable_extension "pg_catalog.plpgsql"
 
@@ -107,9 +107,6 @@ ActiveRecord::Schema[8.1].define(version: 2026_10_14_120000) do
     t.integer "document_signing_status", default: 0, null: false
     t.string "document_signing_submission_id"
     t.string "document_signing_submitter_id"
-    t.datetime "equipment_bids_sent_at"
-    t.datetime "equipment_po_sent_at"
-    t.string "equipment_tracking_number"
     t.datetime "evaluation_requested_at"
     t.integer "fulfillment_type", null: false
     t.integer "household_size"

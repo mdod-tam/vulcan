@@ -32,19 +32,17 @@ module Admin
 
     def create
       @return_context = Equipment::RequestParameters.return_context(params)
-      permitted = params.expect(purchase_order: [:vendor_id, :number, :sent_at, :existing, :legacy_mapping,
+      permitted = params.expect(purchase_order: [:vendor_id, :number, :sent_at, :existing,
                                                  { needs: [%i[id quantity lock_version]], items: [%i[id lock_version]] }])
       @need_rows = Array(permitted[:needs]).map { |row| row.to_h.symbolize_keys }
       @item_rows = Array(permitted[:items]).map { |row| row.to_h.symbolize_keys }
       @existing = permitted[:existing]
-      @legacy_mapping = permitted[:legacy_mapping]
       @purchase_order = PurchaseOrder.new(permitted.slice(:vendor_id, :number, :sent_at))
       id, version = @existing.to_s.split(':', 2)
       order = Equipment::Ordering.new(actor: current_user).call(
         needs: @need_rows, items: @item_rows,
         purchase_order_attributes: permitted.slice(:vendor_id, :number, :sent_at).to_h,
-        purchase_order_id: id.presence, expected_po_version: version,
-        legacy_mapping: ActiveModel::Type::Boolean.new.cast(@legacy_mapping)
+        purchase_order_id: id.presence, expected_po_version: version
       )
       redirect_to admin_purchase_order_path(order, return_context: @return_context), notice: 'Purchase order recorded.'
     rescue Equipment::Conflict, ActiveRecord::RecordInvalid, ActiveRecord::RecordNotFound => e

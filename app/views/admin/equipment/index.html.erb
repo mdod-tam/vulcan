@@ -90,14 +90,4 @@
       </div>
     <% end %>
   <% end %>
-  <% if @legacy_applications.any? %>
-    <section id="equipment-legacy-review" aria-labelledby="equipment-legacy-review-title" class="rounded border border-amber-300 bg-amber-50 p-4">
-      <h2 id="equipment-legacy-review-title" class="font-semibold">Earlier fulfillment details need review</h2>
-      <p class="text-sm">These approved applications have earlier PO or tracking facts without device records and no purchasing decision yet. Confirm what still needs ordering in the needs editor, including an empty list when nothing remains. A later order requires explicit mapping confirmation.</p>
-      <% @legacy_applications.each do |application| %>
-        <%= link_to "Application ##{application.id}", admin_application_path(application, anchor: 'equipment', return_context: @context),
-                    class: 'inline-block mr-4 text-indigo-700 underline' %>
-      <% end %>
-    </section>
-  <% end %>
 </div>

@@ -37,7 +37,6 @@
       <p class="text-sm text-gray-600">New PO fields apply when no existing PO is selected. Duplicate vendor/PO numbers must be linked explicitly to the existing order.</p>
       <%= render 'admin/purchase_orders/fields', form: form, purchase_order: @purchase_order, vendors: @vendors %>
     </fieldset>
-    <label class="flex items-start gap-2"><%= form.check_box :legacy_mapping, checked: ActiveModel::Type::Boolean.new.cast(@legacy_mapping) %><span>I am explicitly mapping reviewed earlier fulfillment facts, where present. This does not infer shipment dates or device identities.</span></label>
     <%= form.submit 'Record purchase order', class: 'rounded bg-indigo-700 px-4 py-2 text-white' %>
     <%= link_to 'Back to Equipment', equipment_return_path(@return_context), class: 'text-indigo-700 underline' %>
   <% end %>

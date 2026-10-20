@@ -2,11 +2,7 @@
 
 module Evaluations
   class AuditLogBuilder < BaseService
-    APPLICATION_LEVEL_ACTIONS = %w[
-      evaluator_assigned
-      equipment_bids_sent
-      equipment_po_sent
-    ].freeze
+    APPLICATION_LEVEL_ACTIONS = %w[evaluator_assigned].freeze
 
     def initialize(evaluation)
       super()

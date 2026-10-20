@@ -60,17 +60,6 @@ module Admin
       assert_equal [1], @application.equipment_needs.distinct.pluck(:remaining_quantity)
     end
 
-    test 'an unreviewed historical order explains the first needs decision' do
-      application = create(:application, :approved, :with_all_proofs, equipment_po_sent_at: 1.month.ago)
-
-      get edit_admin_application_equipment_needs_path(application)
-
-      assert_response :success
-      assert_select 'p', text: 'Earlier fulfillment recorded: confirm what still needs ordering.'
-      assert_select '#equipment-needs-reason-help', text: /decision that no new devices are needed/
-      assert_select 'input[name="equipment_needs[expected_initialized_at]"][value=""]'
-    end
-
     test 'constituents cannot view or update purchasing needs' do
       sign_in_for_integration_test(@application.user)
 
@@ -94,14 +83,14 @@ module Admin
     end
 
     test 'archived application history stays readable and has no purchasing needs edit link' do
-      @application.update!(status: :archived, equipment_po_sent_at: 1.year.ago, equipment_tracking_number: 'Historical tracking')
+      item = create(:equipment_item, application: @application, source_evaluation: @evaluation, tracking_number: 'Recorded device tracking')
+      @application.transition_status!(:archived, actor: @admin)
 
       get admin_application_path(@application)
 
       assert_response :success
       assert_select '#equipment h3', text: 'Original assessment recommendation'
-      assert_select '#equipment h3', text: 'Earlier fulfillment details'
-      assert_select '#equipment', text: /Historical tracking/
+      assert_select "#equipment-item-#{item.id}", text: /Recorded device tracking/
       assert_select 'a', text: 'Edit equipment needs', count: 0
     end
 

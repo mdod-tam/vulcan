@@ -11,11 +11,10 @@ module Admin
       @application = create(:application, :approved, :with_all_proofs)
     end
 
-    test 'the application separates original recommendations, purchasing needs, and readonly legacy facts' do
+    test 'the application separates original recommendations, purchasing needs, and actual devices' do
       evaluation = create(:evaluation, :completed, application: @application)
       EquipmentNeeds::Writer.initialize_from!(evaluation, actor: @admin)
-      @application.update!(equipment_bids_sent_at: Date.new(2026, 9, 9), equipment_po_sent_at: Date.new(2026, 9, 10),
-                           equipment_tracking_number: '1Z999AA1')
+      item = create(:equipment_item, application: @application, source_evaluation: evaluation, tracking_number: '1Z999AA1')
 
       get admin_application_path(@application)
 
@@ -25,8 +24,7 @@ module Admin
         assert_select 'li', text: /#{Regexp.escape(evaluation.recommended_products.first.name)}/
         assert_select 'h3', text: 'New devices still needed'
         assert_select 'h3', text: 'Actual equipment devices'
-        assert_select 'h3', text: 'Earlier fulfillment details'
-        assert_select 'dd', text: '1Z999AA1'
+        assert_select "#equipment-item-#{item.id}", text: /1Z999AA1/
         assert_select 'input', count: 0
         assert_select 'form', count: 0
         assert_select 'a[href=?]', edit_admin_application_equipment_needs_path(@application), text: 'Edit equipment needs'
@@ -114,19 +112,18 @@ module Admin
       end
     end
 
-    test 'archived applications retain original recommendations, devices, and earlier fulfillment history' do
+    test 'archived applications retain original recommendations and device history' do
       evaluation = create(:evaluation, :completed, application: @application)
       EquipmentNeeds::Writer.initialize_from!(evaluation, actor: @admin)
       item = create(:equipment_item, application: @application, product: evaluation.recommended_products.first,
                                      source_evaluation: evaluation, tracking_number: 'Saved device tracking')
-      @application.update!(status: :archived, equipment_tracking_number: 'Earlier application tracking')
+      @application.transition_status!(:archived, actor: @admin)
 
       get admin_application_path(@application)
 
       assert_response :success
       assert_select '#equipment', text: /Original assessment recommendation/
       assert_select "#equipment-item-#{item.id}", text: /Saved device tracking/
-      assert_select '#equipment', text: /Earlier application tracking/
       assert_select '#equipment a', text: 'Edit equipment needs', count: 0
       assert_select "#equipment-item-#{item.id} a", text: 'Correct device / record shipment'
     end
@@ -181,62 +178,6 @@ module Admin
         assert_named_equipment_history(acknowledgment)
       end
       assert_no_internal_history_fields(css_select('details').map(&:text).join)
-    end
-
-    test 'captured bids and PO date events retain readable descriptions in application history' do
-      %w[equipment_bids_sent equipment_po_sent].each do |action|
-        AuditEventService.log(action: action, actor: @admin, auditable: @application, metadata: { date: '2026-09-09' })
-      end
-
-      get admin_application_path(@application)
-
-      assert_response :success
-      assert_select '#audit-logs td', text: 'Bids sent on September 09, 2026'
-      assert_select '#audit-logs td', text: 'PO sent on September 09, 2026'
-    end
-
-    test 'bids-only noncatalog history does not create legacy review and each outcome has a truthful badge' do
-      %w[outside_catalog no_suitable_product].each do |outcome|
-        application = create(:application, :approved, :with_all_proofs, equipment_bids_sent_at: Date.new(2026, 9, 9))
-        report = build(:evaluation, :completed, application: application, recommendation_outcome: outcome,
-                                                recommendation_notes: 'Specialist findings still need staff review')
-        report.recommended_products = []
-        report.products_tried = []
-        report.save!
-        assert EquipmentNeeds::Writer.initialize_from!(report, actor: @admin)
-        assert_empty application.equipment_needs
-        assert_empty application.equipment_items
-        assert_not application.equipment_legacy_unmapped?
-
-        get admin_application_path(application)
-        assert_response :success
-        label = outcome == 'outside_catalog' ? 'Needs a catalog product' : 'No equipment needed'
-        assert_select '#equipment span', text: /Fulfillment Status:\s*#{label}/
-        assert_select '#equipment span', text: /Earlier fulfillment needs review/, count: 0
-        assert_select '#equipment dd', text: 'September 09, 2026'
-        get admin_equipment_index_path
-        assert_select '#equipment-legacy-review a', text: "Application ##{application.id}", count: 0
-      end
-    end
-
-    test 'first empty needs decision clears actionable legacy review while preserving earlier history' do
-      @application.update!(equipment_po_sent_at: Date.new(2026, 9, 10), equipment_tracking_number: 'EarlierDeliveredPackage')
-      get edit_admin_application_equipment_needs_path(@application)
-      assert_response :success
-      assert_select 'p', text: /Earlier fulfillment recorded: confirm what still needs ordering/
-      assert_difference -> { @application.events.where(action: 'equipment_needs_updated').count }, 1 do
-        patch admin_application_equipment_needs_path(@application),
-              params: { equipment_needs: { rows: [], expected_initialized_at: '', reason: 'Delivered before this system' } }
-      end
-      assert_redirected_to admin_application_path(@application, anchor: 'equipment')
-      get admin_application_path(@application)
-      assert_select '#equipment span', text: /No equipment needed/
-      assert_select '#equipment span', text: /Earlier fulfillment needs review/, count: 0
-      assert_select '#equipment dd', text: 'EarlierDeliveredPackage'
-      assert_select '#equipment dd', text: 'September 10, 2026'
-      get admin_equipment_index_path
-      assert_select '#equipment-legacy-review a', text: "Application ##{@application.id}", count: 0
-      assert @application.reload.equipment_legacy_unmapped?
     end
 
     private

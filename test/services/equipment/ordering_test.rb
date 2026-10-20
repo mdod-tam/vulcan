@@ -26,8 +26,7 @@ module Equipment
       remaining_quantities = [@need, signaler, two_phones].map { |need| need.reload.remaining_quantity }
       assert_equal [0, 0, 0], remaining_quantities
       assert_equal '00017', @order.number
-      assert_nil @need.application.reload.equipment_po_sent_at
-      assert_equal 'approved', @need.application.status
+      assert_equal 'approved', @need.application.reload.status
     end
 
     test 'mixed new and detached sources consume one unit and reuse the detached ID' do
@@ -93,35 +92,8 @@ module Equipment
       assert item.reload.purchase_order_id
     end
 
-    test 'legacy facts require explicit mapping without inferred shipments' do
-      @need.application.update!(equipment_po_sent_at: 1.day.ago, equipment_tracking_number: 'EARLIER')
-      assert_raises(Conflict) { @writer.call(needs: [row(@need)], items: [], purchase_order_attributes: @attributes) }
-      order = @writer.call(needs: [row(@need)], items: [], purchase_order_attributes: @attributes, legacy_mapping: true)
-      assert_nil order.equipment_items.sole.shipped_at
-      assert_nil order.equipment_items.sole.tracking_number
-      assert_equal 'EARLIER', @need.application.reload.equipment_tracking_number
-    end
-
     test 'non-administrators cannot place orders' do
       assert_raises(Conflict) { Ordering.new(actor: create(:evaluator)).call(needs: [row(@need)], items: [], purchase_order_attributes: @attributes) }
-    end
-
-    test 'a saved legacy purchasing decision retains deliberate mapping on a later order' do
-      application = create(:application, :approved, :with_all_proofs, equipment_po_sent_at: 1.day.ago)
-      EquipmentNeeds::Writer.update!(application, rows: [], expected_initialized_at: '', actor: @admin, reason: 'Delivered before this system')
-      assert_not application.reload.equipment_legacy_review?
-      assert application.equipment_legacy_unmapped?
-      EquipmentNeeds::Writer.update!(application,
-                                     rows: [{ product_id: @phone.id, remaining_quantity: 1 }],
-                                     expected_initialized_at: application.equipment_needs_initialized_at.iso8601(6),
-                                     actor: @admin, reason: 'A new catalog device is now required')
-      need = application.equipment_needs.sole
-      assert_no_difference ['PurchaseOrder.count', 'EquipmentItem.count', 'Event.count'] do
-        assert_raises(Conflict) { @writer.call(needs: [row(need)], items: [], purchase_order_attributes: @attributes) }
-      end
-      order = @writer.call(needs: [row(need)], items: [], purchase_order_attributes: @attributes, legacy_mapping: true)
-      assert_equal order.id, application.equipment_items.sole.purchase_order_id
-      assert_equal :po_sent, application.reload.admin_fulfillment_responsibility_state
     end
 
     test 'new purchase orders use the existing vendor eligibility rule including legacy active status' do

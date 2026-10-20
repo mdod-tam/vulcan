@@ -6,6 +6,7 @@ module Evaluations
   class AuditLogBuilderTest < ActiveSupport::TestCase
     setup do
       @evaluator = create(:evaluator)
+      @admin = create(:admin)
       @application = create(:application, :old_enough_for_new_application)
       @evaluation = create(:evaluation, evaluator: @evaluator, application: @application, constituent: @application.user)
       @other_application = create(:application, :old_enough_for_new_application)
@@ -36,32 +37,25 @@ module Evaluations
       assert_includes AuditLogBuilder.new(@evaluation).build, event
     end
 
-    test 'includes scoped application fulfillment events' do
-      bids_event = Event.create!(
-        user: @evaluator,
-        action: 'equipment_bids_sent',
+    test 'includes scoped application assignment events' do
+      assignment_event = Event.create!(
+        user: @admin,
+        action: 'evaluator_assigned',
         auditable: @application,
-        metadata: { date: Date.current }
-      )
-      po_event = Event.create!(
-        user: @evaluator,
-        action: 'equipment_po_sent',
-        auditable: @application,
-        metadata: { date: Date.current }
+        metadata: { application_id: @application.id, evaluator_id: @evaluator.id, evaluator_name: @evaluator.full_name }
       )
 
       logs = AuditLogBuilder.new(@evaluation).build
 
-      assert_includes logs, bids_event
-      assert_includes logs, po_event
+      assert_includes logs, assignment_event
     end
 
     test 'excludes unrelated application events' do
       unrelated_app_event = Event.create!(
-        user: @evaluator,
-        action: 'equipment_bids_sent',
+        user: @admin,
+        action: 'evaluator_assigned',
         auditable: @other_application,
-        metadata: { date: Date.current }
+        metadata: { application_id: @other_application.id, evaluator_id: @evaluator.id, evaluator_name: @evaluator.full_name }
       )
       unrelated_action = Event.create!(
         user: @evaluator,
@@ -85,10 +79,10 @@ module Evaluations
         created_at: 2.hours.ago
       )
       newer = Event.create!(
-        user: @evaluator,
-        action: 'equipment_po_sent',
+        user: @admin,
+        action: 'evaluator_assigned',
         auditable: @application,
-        metadata: { date: Date.current },
+        metadata: { application_id: @application.id, evaluator_id: @evaluator.id, evaluator_name: @evaluator.full_name },
         created_at: 1.hour.ago
       )
 

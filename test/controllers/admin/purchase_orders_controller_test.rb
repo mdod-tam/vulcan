@@ -64,7 +64,6 @@ module Admin
       assert_equal 4, order.equipment_items.count
       assert_equal 2, order.equipment_items.where(application: @two_phones.application, product: @phone).distinct.count(:id)
       assert_equal([0, 0, 0], needs.map { |need| need.reload.remaining_quantity })
-      assert_nil @phone_need.application.reload.equipment_po_sent_at
       selects = Hash.new { |hash, key| hash[key] = [] }
       subscriber = lambda do |*arguments|
         payload = arguments.last

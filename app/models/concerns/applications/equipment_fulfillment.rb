@@ -4,8 +4,6 @@ module Applications
   module EquipmentFulfillment
     extend ActiveSupport::Concern
 
-    EARLIER_EQUIPMENT_ORDER_FIELDS = %i[equipment_po_sent_at equipment_tracking_number].freeze
-
     included do
       # The unfiltered events and evaluations associations own destruction.
       has_many :equipment_needs_events, -> { where(action: %w[equipment_needs_initialized equipment_needs_updated]).order(:created_at, :id) },
@@ -14,14 +12,6 @@ module Applications
                class_name: 'Evaluation', foreign_key: :application_id, inverse_of: :application, dependent: nil
 
       scope :equipment_procurement_eligible, -> { status_approved.fulfillment_type_equipment }
-      scope :equipment_legacy_review, lambda {
-        facts = EARLIER_EQUIPMENT_ORDER_FIELDS.map do |field|
-          column = arel_table[field]
-          field == :equipment_tracking_number ? column.matches_regexp('[^[:space:]]') : column.not_eq(nil)
-        end
-        equipment_procurement_eligible.where(equipment_needs_initialized_at: nil)
-                                      .where(facts.reduce(:or)).where.missing(:equipment_items)
-      }
     end
 
     class_methods do
@@ -37,14 +27,6 @@ module Applications
 
     def equipment_procurement_eligible?
       status_approved? && equipment_fulfillment?
-    end
-
-    def equipment_legacy_unmapped?
-      EARLIER_EQUIPMENT_ORDER_FIELDS.any? { |field| public_send(field).present? } && equipment_items.empty?
-    end
-
-    def equipment_legacy_review?
-      equipment_procurement_eligible? && equipment_needs_initialized_at.nil? && equipment_legacy_unmapped?
     end
 
     def equipment_needs_decided?
@@ -68,7 +50,6 @@ module Applications
 
     def admin_fulfillment_responsibility_state
       return :voucher_no_equipment if voucher_fulfillment?
-      return :legacy_review if equipment_legacy_review?
       return :needs_action if equipment_needs.any? { |need| need.remaining_quantity.positive? } || equipment_items.any? { |item| item.queue_status == 'needs_ordering' }
 
       recorded_state = recorded_equipment_fulfillment_state

@@ -185,8 +185,6 @@ en:
       evaluation_rescheduled: "Evaluation Rescheduled"
       requested_additional_info: "Additional Info Requested"
       evaluator_assigned: "Evaluator Assigned"
-      equipment_bids_sent: "Equipment Bids Sent"
-      equipment_po_sent: "PO Sent to Vendor"
     details:
       followup_scheduled_for: "Follow-up scheduled for"
       reason: "Reason: %{reason}"

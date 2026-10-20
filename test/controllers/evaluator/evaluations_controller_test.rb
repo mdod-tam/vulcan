@@ -276,7 +276,7 @@ class EvaluationsControllerTest < ActionDispatch::IntegrationTest
     assert_redirected_to evaluators_evaluation_path(@evaluation)
   end
 
-  test 'show renders evaluation activity and application fulfillment labels' do
+  test 'show renders evaluation activity and application assignment labels' do
     Event.create!(
       user: @evaluator,
       action: 'evaluation_scheduled',
@@ -297,9 +297,9 @@ class EvaluationsControllerTest < ActionDispatch::IntegrationTest
     )
     Event.create!(
       user: @admin,
-      action: 'equipment_bids_sent',
+      action: 'evaluator_assigned',
       auditable: @evaluation.application,
-      metadata: { date: Date.current }
+      metadata: { application_id: @evaluation.application_id, evaluator_id: @evaluator.id, evaluator_name: @evaluator.full_name }
     )
 
     get evaluators_evaluation_path(@evaluation)
@@ -311,8 +311,9 @@ class EvaluationsControllerTest < ActionDispatch::IntegrationTest
     assert_includes @response.body, 'Constituent requested cancellation'
     assert_includes @response.body, 'Evaluation No-Show'
     assert_includes @response.body, 'Constituent missed evaluation'
-    assert_includes @response.body, 'Equipment Bids Sent'
-    assert_includes @response.body, 'Application Fulfillment'
+    assert_includes @response.body, 'Evaluator Assigned'
+    assert_includes @response.body, "Evaluator #{@evaluator.full_name} assigned"
+    assert_select 'section[aria-labelledby="activity-history-heading"] span', text: 'Application'
   end
 
   test 'show renders free text attendees without inferred relationship fallback' do

@@ -7,7 +7,7 @@ module EquipmentHelper
     'usps' => ['https://tools.usps.com/go/TrackConfirmAction', 'tLabels', {}]
   }.freeze
   EQUIPMENT_AUDIT_FIELDS = (Equipment::Correction::EDITABLE_ITEM_FIELDS + Equipment::Correction::PO_FIELDS +
-    %w[equipment_needs remaining_quantity withdrawn_at equipment_bids_sent_at equipment_po_sent_at equipment_tracking_number]).freeze
+    %w[equipment_needs remaining_quantity withdrawn_at]).freeze
 
   def equipment_catalog_label(product)
     [product&.manufacturer, product&.name, product&.model_number].compact_blank.uniq.join(' / ')
@@ -51,7 +51,7 @@ module EquipmentHelper
     return 'Not recorded' if value.blank?
 
     return EquipmentItem::CARRIERS.fetch(value, value) if field == 'carrier'
-    return equipment_date_value(field, value) if field.in?(%w[shipped_at sent_at withdrawn_at equipment_bids_sent_at equipment_po_sent_at])
+    return equipment_date_value(field, value) if field.in?(%w[shipped_at sent_at withdrawn_at])
 
     records = { 'product_id' => products, 'purchase_order_id' => purchase_orders, 'vendor_id' => vendors }
     return value unless records.key?(field)
@@ -64,7 +64,7 @@ module EquipmentHelper
               PurchaseOrder
             elsif field == 'remaining_quantity'
               EquipmentNeed
-            elsif field.start_with?('equipment_')
+            elsif field == 'equipment_needs'
               Application
             else
               EquipmentItem
@@ -91,8 +91,7 @@ module EquipmentHelper
 
   def equipment_audit_details(event, records:)
     details = [equipment_audit_changes(event, records: records), event.metadata['reason']]
-    details.unshift(activity_detail(event)) if ActivityHistoryHelper::APPLICATION_FULFILLMENT_ACTIONS.include?(event.action)
-    acknowledgment = event.field_change_pairs.fetch('serial_duplicate_reason', []).last.presence || event.metadata['serial_duplicate_reason']
+    acknowledgment = event.field_change_pairs.fetch('serial_duplicate_reason', []).last
     details << "Serial warning acknowledgment: #{acknowledgment}" if acknowledgment.present?
     safe_join(details.compact_blank, tag.br)
   end
@@ -100,7 +99,7 @@ module EquipmentHelper
   private
 
   def equipment_date_value(field, value)
-    value = parse_activity_time(value) || value if field.in?(%w[withdrawn_at equipment_bids_sent_at equipment_po_sent_at])
+    value = parse_activity_time(value) || value if field == 'withdrawn_at'
     accessible_date_value(value) || 'Not recorded'
   end
 

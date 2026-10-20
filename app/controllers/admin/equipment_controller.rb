@@ -12,7 +12,6 @@ module Admin
           @groups = queue.groups
           @products = Product.ordered_by_name
           @vendors = Users::Vendor.equipment_procurement_eligible.order(:business_name)
-          @legacy_applications = Application.equipment_legacy_review.order(:id)
         end
         format.csv { export(queue) }
       end

@@ -39,7 +39,6 @@ module BadgeHelper
     },
     equipment: {
       needs_catalog_product: 'bg-amber-100 text-amber-800',
-      legacy_review: 'bg-amber-100 text-amber-800',
       needs_action: 'bg-amber-100 text-amber-800',
       needs_ordering: 'bg-amber-100 text-amber-800',
       po_sent: 'bg-blue-100 text-blue-800',

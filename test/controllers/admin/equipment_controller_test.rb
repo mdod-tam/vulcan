@@ -74,37 +74,5 @@ module Admin
       get admin_equipment_index_path(format: :csv)
       assert_redirected_to root_path
     end
-
-    test 'earlier review lists only eligible undecided PO and tracking facts and preserves return context' do
-      bids = create(:application, :approved, :with_all_proofs, equipment_bids_sent_at: 2.days.ago)
-      po = create(:application, :approved, :with_all_proofs, equipment_po_sent_at: 2.days.ago)
-      tracking = create(:application, :approved, :with_all_proofs, equipment_tracking_number: 'EarlierPackage')
-      archived = create(:application, :approved, :with_all_proofs, equipment_po_sent_at: 2.days.ago)
-      archived.transition_status!(:archived, actor: @admin)
-      rejected = create(:application, :rejected, equipment_po_sent_at: 2.days.ago)
-      decided = create(:application, :approved, :with_all_proofs, equipment_po_sent_at: 2.days.ago)
-      EquipmentNeeds::Writer.update!(decided, rows: [], expected_initialized_at: '', actor: @admin, reason: 'Delivered before this system')
-      voucher = create(:application, :approved, :with_all_proofs, :voucher_fulfillment, equipment_bids_sent_at: 2.days.ago)
-      blank = create(:application, :approved, :with_all_proofs, equipment_tracking_number: " \t\n")
-      mapped = create(:application, :approved, :with_all_proofs, equipment_po_sent_at: 2.days.ago)
-      create(:equipment_item, application: mapped, purchase_order: nil, withdrawn_at: Time.current)
-      context = { tab: 'ordered', product_id: @product.id.to_s, vendor_id: @vendor.id.to_s }
-
-      get admin_equipment_index_path(context)
-
-      assert_response :success
-      assert_select '#equipment-legacy-review' do
-        assert_select 'h2', text: 'Earlier fulfillment details need review'
-        assert_select 'p', text: /Confirm what still needs ordering in the needs editor/
-        [po, tracking].each do |application|
-          assert application.equipment_legacy_review?
-          assert_select 'a[href=?]', admin_application_path(application, anchor: 'equipment', return_context: context)
-        end
-        [bids, archived, rejected, decided, voucher, blank, mapped].each do |application|
-          assert_not application.equipment_legacy_review?
-          assert_select 'a', text: "Application ##{application.id}", count: 0
-        end
-      end
-    end
   end
 end
