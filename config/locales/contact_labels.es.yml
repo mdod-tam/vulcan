@@ -1,0 +1,29 @@
+es:
+  application_contact:
+    languages:
+      en: "inglés"
+      es: "español"
+    phone_methods:
+      voice: "Llámeme por teléfono"
+      text: "Envíeme un mensaje de texto"
+      videophone: "Llámeme en ASL por videoteléfono"
+      contact_email: "Envíeme un correo electrónico"
+      contact_letter: "Envíeme una carta por correo"
+    modalities:
+      asl: "Lengua de señas americana (ASL)"
+      typed: "Comunicación escrita"
+      voice: "Voz"
+    deliveries:
+      email: "Correo electrónico"
+      letter: "Carta postal"
+    relationships:
+      parent: "Padre o madre"
+      spouse: "Cónyuge"
+      child: "Hijo o hija"
+      sibling: "Hermano o hermana"
+      neighbor: "Vecino o vecina"
+      friend: "Amigo o amiga"
+      other: "Otro"
+  training_feedback:
+    activity: "Historial de actividad"
+    manual_contact: "Si un aviso falló o se suprimió, coordine el contacto manual con el personal del programa. Un aviso en cola no confirma su entrega."

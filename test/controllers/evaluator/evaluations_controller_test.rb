@@ -354,7 +354,7 @@ class EvaluationsControllerTest < ActionDispatch::IntegrationTest
     get evaluators_evaluation_path(@evaluation)
 
     assert_response :success
-    assert_select "a[href='#{application_details_evaluators_evaluation_path(@evaluation)}']", text: I18n.t('evaluator_context.link')
+    assert_select "a[href='#{application_details_evaluators_evaluation_path(@evaluation)}']", text: I18n.t('application_contact.link')
     assert_includes @response.body, 'Assigned Evaluator'
     assert_includes @response.body, 'Working Notes'
     assert_includes @response.body, 'Call constituent before arrival'

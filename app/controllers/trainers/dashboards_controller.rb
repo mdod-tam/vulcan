@@ -29,6 +29,7 @@ module Trainers
                                              .includes(application: :user)
                                              .order(created_at: :desc)
       @scheduled_sessions = training_sessions.where(status: %i[scheduled confirmed])
+      @overdue_sessions = @scheduled_sessions.where(scheduled_for: ..Time.current).includes(application: :user).order(:scheduled_for, :id).limit(10)
       @completed_sessions = training_sessions.where(status: :completed)
       @followup_sessions = ordered_followup_sessions
       load_admin_training_sessions
@@ -38,14 +39,15 @@ module Trainers
                                                 .order(training_requested_at: :asc)
                                                 .limit(10)
                                    else
-                                     Application.none
+                                     Application.with_pending_training_request.where(assigned_trainer_id: current_user.id)
+                                                .includes(:user).order(:training_requested_at).limit(10)
                                    end
       @needs_scheduling_count = @requested_sessions.count + @pending_training_requests.count
       @followup_sessions_count = @followup_sessions.count
       @my_scheduled_sessions_count = current_user.admin? ? @my_scheduled_sessions.count : 0
 
       # Get all scheduled training sessions for the upcoming section
-      @upcoming_sessions = @scheduled_sessions.order(scheduled_for: :asc)
+      @upcoming_sessions = @scheduled_sessions.where(scheduled_for: Time.current..).order(scheduled_for: :asc)
                                               .includes(application: :user)
 
       # Get count for any training sessions assigned to this user
@@ -85,7 +87,7 @@ module Trainers
 
     def ordered_followup_sessions
       scope = TrainingSession.ordered_followup_per_application
-      current_user.admin? ? scope : scope.where(trainer_id: current_user.id)
+      current_user.admin? ? scope : scope.joins(:application).where(trainer_id: current_user.id, applications: { assigned_trainer_id: current_user.id })
     end
 
     def load_recent_activity
@@ -135,7 +137,9 @@ module Trainers
                                TrainingSession.includes(application: :user)
                              else
                                # Show only the trainer's own sessions for trainers
-                               TrainingSession.where(trainer_id: current_user.id)
+                               TrainingSession.where(trainer_id: current_user.id).joins(:application)
+                                              .where('applications.assigned_trainer_id = :trainer OR training_sessions.status = :completed',
+                                                     trainer: current_user.id, completed: TrainingSession.statuses.fetch('completed'))
                                               .includes(application: :user)
                              end
     end

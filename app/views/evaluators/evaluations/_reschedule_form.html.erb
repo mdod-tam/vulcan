@@ -16,7 +16,11 @@
           id: 'reschedule-evaluation-form',
           class: 'space-y-4'
         ) do |f| %>
-      <%= render 'action_errors', action: :reschedule, form: f, form_errors: @evaluation_form_errors %>
+      <%= render(
+            'shared/action_errors',
+            action: :reschedule, form: f, form_errors: @evaluation_form_errors,
+            heading: evaluation_action_error_heading(:reschedule)
+          ) %>
       <div>
         <%= f.label :evaluation_date, "New Date/Time", class: "block text-sm font-medium text-gray-700" do %>
           New Date/Time <span class="text-red-600">*</span><span class="sr-only"> (required)</span>
@@ -27,10 +31,10 @@
               class: 'mt-1 block w-full border border-gray-300 rounded-md shadow-sm py-2 px-3 ' \
                      'focus:outline-none focus:ring-indigo-500 focus:border-indigo-500 sm:text-sm',
               required: true,
-              aria: evaluation_field_aria(:reschedule, :evaluation_date, describedby: 'reschedule-time-help', form_errors: @evaluation_form_errors)
+              aria: action_form_field_aria(:reschedule, :evaluation_date, describedby: 'reschedule-time-help', form_errors: @evaluation_form_errors)
             ) %>
         <p id="reschedule-time-help" class="mt-1 text-sm text-gray-500"><%= t('evaluators.evaluations.forms.time_zone_help') %></p>
-        <%= render 'field_errors', action: :reschedule, attribute: :evaluation_date, form_errors: @evaluation_form_errors %>
+        <%= render 'shared/field_errors', action: :reschedule, attribute: :evaluation_date, form_errors: @evaluation_form_errors %>
       </div>
 
       <div>
@@ -40,9 +44,9 @@
               value: form_values.fetch(:location, evaluation.location),
               class: 'mt-1 block w-full border border-gray-300 rounded-md shadow-sm py-2 px-3 ' \
                      'focus:outline-none focus:ring-indigo-500 focus:border-indigo-500 sm:text-sm',
-              aria: evaluation_field_aria(:reschedule, :location, form_errors: @evaluation_form_errors)
+              aria: action_form_field_aria(:reschedule, :location, form_errors: @evaluation_form_errors)
             ) %>
-        <%= render 'field_errors', action: :reschedule, attribute: :location, form_errors: @evaluation_form_errors %>
+        <%= render 'shared/field_errors', action: :reschedule, attribute: :location, form_errors: @evaluation_form_errors %>
       </div>
 
       <div>
@@ -57,12 +61,12 @@
                      'focus:outline-none focus:ring-indigo-500 focus:border-indigo-500 sm:text-sm',
               required: true,
               placeholder: 'Please provide a reason for rescheduling this evaluation session...',
-              aria: evaluation_field_aria(:reschedule, :reschedule_reason, describedby: 'reschedule-reason-help', form_errors: @evaluation_form_errors)
+              aria: action_form_field_aria(:reschedule, :reschedule_reason, describedby: 'reschedule-reason-help', form_errors: @evaluation_form_errors)
             ) %>
         <p id="reschedule-reason-help" class="mt-1 text-sm text-gray-500">
           <strong><%= t('evaluators.evaluations.forms.internal_notes_only') %></strong>
         </p>
-        <%= render 'field_errors', action: :reschedule, attribute: :reschedule_reason, form_errors: @evaluation_form_errors %>
+        <%= render 'shared/field_errors', action: :reschedule, attribute: :reschedule_reason, form_errors: @evaluation_form_errors %>
       </div>
 
       <%= f.submit 'Reschedule Evaluation',

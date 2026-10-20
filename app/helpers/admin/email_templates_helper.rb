@@ -264,6 +264,17 @@ module Admin
     end
 
     # Base sample data shared across all templates
+    def training_completion_sample_data(locale:)
+      is_es = locale.to_s == 'es'
+      {
+        'recipient_full_name' => is_es ? 'María García' : 'Jamie Doe',
+        'completed_date_formatted' => I18n.l(1.day.ago.to_date, format: :long, locale: locale),
+        'completed_time_formatted' => 1.day.ago.strftime('%H:%M %Z'),
+        'report_url' => 'https://example.com/constituent_portal/training_sessions/123',
+        'scheduled_location' => is_es ? 'Biblioteca, sala 2' : 'Library, room 2'
+      }
+    end
+
     def base_sample_data(locale: 'en', subject: nil) # rubocop:disable Metrics/CyclomaticComplexity,Metrics/PerceivedComplexity
       is_es = locale.to_s == 'es'
       {
@@ -294,7 +305,7 @@ module Admin
         'admin_full_name' => 'Admin User',
         'admin_first_name' => 'Admin User',
         'evaluator_full_name' => 'Dr. Evaluation Expert',
-        'trainer_full_name' => 'Training Specialist',
+        'trainer_full_name' => is_es ? 'Especialista de capacitación' : 'Training Specialist',
         'vendor_business_name' => 'Example Vendor Inc.',
         'timestamp_formatted' => Time.current.strftime('%B %d, %Y at %I:%M %p %Z'),
         'submission_date_formatted' => Date.current.strftime('%B %d, %Y'),
@@ -343,7 +354,7 @@ module Admin
         'threshold_formatted' => '$55,000.00',
         'proof_type_formatted' => is_es ? 'Verificación de Ingresos' : 'Income Verification',
         'additional_notes' => is_es ? 'Estas son algunas notas adicionales.' : 'These are some additional notes.'
-      }
+      }.merge(training_completion_sample_data(locale: locale))
     end
   end
 end

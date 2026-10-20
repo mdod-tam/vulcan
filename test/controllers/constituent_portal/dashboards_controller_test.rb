@@ -168,15 +168,16 @@ module ConstituentPortal
       assert_select 'form[action=?]', request_training_constituent_portal_application_path(application), count: 0
     end
 
-    test 'dashboard shows completed training session notes as a constituent refresher' do
+    test 'dashboard shows only the deliberately shared completed training summary' do
       application = create_reviewed_application(user: @user)
       product = create(:product, name: 'Clarity Alto')
-      create(:training_session,
-             :completed,
-             application: application,
-             trainer: create(:trainer, first_name: 'Trainer', last_name: 'Person'),
-             product_trained_on: product,
-             notes: 'Reviewed volume controls and saving frequent contacts.')
+      session = create(:training_session,
+                       :completed,
+                       application: application,
+                       trainer: create(:trainer, first_name: 'Trainer', last_name: 'Person'),
+                       product_trained_on: product,
+                       internal_notes: 'PRIVATE STAFF OBSERVATIONS 9137',
+                       constituent_summary: 'Reviewed volume controls and saving frequent contacts.', summary_locale: 'es')
 
       get constituent_portal_dashboard_path
 
@@ -186,7 +187,35 @@ module ConstituentPortal
         assert_select 'p', text: 'What we covered'
         assert_select 'p', text: 'Reviewed volume controls and saving frequent contacts.'
         assert_select 'span', text: 'Clarity Alto'
+        assert_select 'p[lang=es]', text: 'Reviewed volume controls and saving frequent contacts.'
+        assert_select 'a', text: 'Read summary and product resources'
       end
+      assert_not_includes response.body, 'PRIVATE STAFF OBSERVATIONS 9137'
+
+      get constituent_portal_training_session_path(session)
+      assert_response :success
+      assert_includes response.body, session.constituent_summary
+    end
+
+    test 'dashboard and completed report both exclude a managed applicant from the shared summary' do
+      guardian = create(:constituent)
+      create(:guardian_relationship, guardian_user: guardian, dependent_user: @user)
+      application = create(:application, :approved, :with_all_proofs, user: @user, managing_guardian: guardian)
+      session = create(:training_session, :completed, application: application,
+                                                      constituent_summary: 'MANAGED REPORT SUMMARY 6273')
+
+      get constituent_portal_training_session_path(session)
+      assert_response :not_found
+
+      get constituent_portal_dashboard_path
+      assert_response :success
+      assert_not_includes response.body, session.constituent_summary
+      assert_select 'a[href=?]', constituent_portal_training_session_path(session), count: 0
+
+      sign_in_for_integration_test(guardian)
+      get constituent_portal_training_session_path(session)
+      assert_response :success
+      assert_includes response.body, session.constituent_summary
     end
 
     private

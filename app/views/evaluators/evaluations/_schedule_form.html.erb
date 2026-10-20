@@ -16,7 +16,11 @@
           id: 'schedule-evaluation-form',
           class: 'space-y-4'
         ) do |f| %>
-      <%= render 'action_errors', action: :schedule, form: f, form_errors: @evaluation_form_errors %>
+      <%= render(
+            'shared/action_errors',
+            action: :schedule, form: f, form_errors: @evaluation_form_errors,
+            heading: evaluation_action_error_heading(:schedule)
+          ) %>
       <div>
         <%= f.label :evaluation_date, class: 'block text-sm font-medium text-gray-700' do %>
           Evaluation Date/Time <span class="text-red-600">*</span><span class="sr-only"> (required)</span>
@@ -27,10 +31,10 @@
               class: 'mt-1 block w-full border border-gray-300 rounded-md shadow-sm py-2 px-3 ' \
                      'focus:outline-none focus:ring-indigo-500 focus:border-indigo-500 sm:text-sm',
               required: true,
-              aria: evaluation_field_aria(:schedule, :evaluation_date, describedby: 'schedule-time-help', form_errors: @evaluation_form_errors)
+              aria: action_form_field_aria(:schedule, :evaluation_date, describedby: 'schedule-time-help', form_errors: @evaluation_form_errors)
             ) %>
         <p id="schedule-time-help" class="mt-1 text-sm text-gray-500"><%= t('evaluators.evaluations.forms.time_zone_help') %></p>
-        <%= render 'field_errors', action: :schedule, attribute: :evaluation_date, form_errors: @evaluation_form_errors %>
+        <%= render 'shared/field_errors', action: :schedule, attribute: :evaluation_date, form_errors: @evaluation_form_errors %>
       </div>
 
       <div>
@@ -40,9 +44,9 @@
               value: form_values.fetch(:location, evaluation.location),
               class: 'mt-1 block w-full border border-gray-300 rounded-md shadow-sm py-2 px-3 ' \
                      'focus:outline-none focus:ring-indigo-500 focus:border-indigo-500 sm:text-sm',
-              aria: evaluation_field_aria(:schedule, :location, form_errors: @evaluation_form_errors)
+              aria: action_form_field_aria(:schedule, :location, form_errors: @evaluation_form_errors)
             ) %>
-        <%= render 'field_errors', action: :schedule, attribute: :location, form_errors: @evaluation_form_errors %>
+        <%= render 'shared/field_errors', action: :schedule, attribute: :location, form_errors: @evaluation_form_errors %>
       </div>
 
       <div>
@@ -54,12 +58,12 @@
               class: 'mt-1 block w-full border border-gray-300 rounded-md shadow-sm py-2 px-3 ' \
                      'focus:outline-none focus:ring-indigo-500 focus:border-indigo-500 sm:text-sm',
               placeholder: 'Optional scheduling notes...',
-              aria: evaluation_field_aria(:schedule, :notes, describedby: 'schedule-notes-help', form_errors: @evaluation_form_errors)
+              aria: action_form_field_aria(:schedule, :notes, describedby: 'schedule-notes-help', form_errors: @evaluation_form_errors)
             ) %>
         <p id="schedule-notes-help" class="mt-1 text-sm text-gray-500">
           <strong><%= t('evaluators.evaluations.forms.internal_notes_only') %></strong>
         </p>
-        <%= render 'field_errors', action: :schedule, attribute: :notes, form_errors: @evaluation_form_errors %>
+        <%= render 'shared/field_errors', action: :schedule, attribute: :notes, form_errors: @evaluation_form_errors %>
       </div>
 
       <%= f.submit 'Schedule Evaluation',

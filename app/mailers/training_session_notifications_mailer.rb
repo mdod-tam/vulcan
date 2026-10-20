@@ -9,9 +9,15 @@ class TrainingSessionNotificationsMailer < ApplicationMailer
   end
 
   def trainer_assigned(training_session)
+    @application = training_session.application
     trainer = training_session.trainer
-    # This trainer template has English seed content only.
-    locale = 'en'
+    unless @application.current_trainer?(trainer)
+      EmailDelivery::Outcome.record_not_sent(EmailDelivery::Decision.suppressed(:trainer_coverage_changed),
+                                             context: @delivery_context, mail_action: 'TrainingSessionNotificationsMailer#trainer_assigned')
+      return noop_delivery(channel: :email, reason: 'trainer_coverage_changed')
+    end
+    locale = resolve_template_locale(recipient: trainer)
+    @notification_locale = locale
     template_name = 'training_session_notifications_trainer_assigned'
     begin
       text_template = find_text_template(template_name, locale: locale)
@@ -69,9 +75,11 @@ class TrainingSessionNotificationsMailer < ApplicationMailer
     raise
   end
 
-  def training_scheduled(training_session)
+  def training_scheduled(training_session, notification = nil)
+    @application = training_session.application
     constituent = training_session.constituent
     locale = resolve_template_locale(recipient: constituent)
+    @notification_locale = locale
     template_name = 'training_session_notifications_training_scheduled'
     begin
       text_template = find_text_template(template_name, locale: locale)
@@ -105,10 +113,11 @@ class TrainingSessionNotificationsMailer < ApplicationMailer
       trainer_full_name: trainer.full_name || 'Your Trainer',
       trainer_email: trainer.email,
       trainer_phone_formatted: trainer.phone,
-      scheduled_date: formatted_training_date(training_session.scheduled_for),
-      scheduled_time: formatted_training_time(training_session.scheduled_for),
-      scheduled_date_formatted: formatted_training_date(training_session.scheduled_for),
-      scheduled_time_formatted: formatted_training_time(training_session.scheduled_for),
+      scheduled_date: formatted_training_date(notification_scheduled_for(training_session, notification)),
+      scheduled_time: formatted_training_time(notification_scheduled_for(training_session, notification)),
+      scheduled_date_formatted: formatted_training_date(notification_scheduled_for(training_session, notification)),
+      scheduled_time_formatted: formatted_training_time(notification_scheduled_for(training_session, notification)),
+      scheduled_location: notification_location(training_session, notification, locale),
       application_id: application.id,
       header_text: header_text(title: header_title, logo_url: header_logo_url, locale: locale),
       footer_text: footer_text(contact_email: footer_contact_email, website_url: footer_website_url,
@@ -127,10 +136,11 @@ class TrainingSessionNotificationsMailer < ApplicationMailer
     raise
   end
 
-  # rubocop:disable Metrics/PerceivedComplexity
   def training_rescheduled(training_session, notification = nil)
+    @application = training_session.application
     constituent = training_session.constituent
     locale = resolve_template_locale(recipient: constituent)
+    @notification_locale = locale
     template_name = 'training_session_notifications_training_rescheduled'
     begin
       text_template = find_text_template(template_name, locale: locale)
@@ -141,10 +151,7 @@ class TrainingSessionNotificationsMailer < ApplicationMailer
 
     trainer = training_session.trainer
     application = training_session.application
-    old_scheduled_for = notification_time(notification, 'old_scheduled_for') ||
-                        training_session.saved_change_to_scheduled_for&.first
-    reschedule_reason = notification&.metadata&.dig('reschedule_reason').presence ||
-                        training_session.reschedule_reason
+    old_scheduled_for = notification_time(notification, 'old_scheduled_for')
 
     header_title = header_title_from_template_subject(
       template: text_template,
@@ -172,12 +179,14 @@ class TrainingSessionNotificationsMailer < ApplicationMailer
       old_scheduled_time: formatted_training_time(old_scheduled_for),
       old_scheduled_date_formatted: formatted_training_date(old_scheduled_for),
       old_scheduled_time_formatted: formatted_training_time(old_scheduled_for),
-      scheduled_date: formatted_training_date(training_session.scheduled_for),
-      scheduled_time: formatted_training_time(training_session.scheduled_for),
-      scheduled_date_formatted: formatted_training_date(training_session.scheduled_for),
-      scheduled_time_formatted: formatted_training_time(training_session.scheduled_for),
-      scheduled_date_time_formatted: training_session_schedule_text(training_session),
-      reschedule_reason: reschedule_reason,
+      scheduled_date: formatted_training_date(notification_scheduled_for(training_session, notification)),
+      scheduled_time: formatted_training_time(notification_scheduled_for(training_session, notification)),
+      scheduled_date_formatted: formatted_training_date(notification_scheduled_for(training_session, notification)),
+      scheduled_time_formatted: formatted_training_time(notification_scheduled_for(training_session, notification)),
+      scheduled_date_time_formatted: training_session_schedule_text(training_session, notification),
+      scheduled_location: notification_location(training_session, notification, locale),
+      # Existing stored templates use this placeholder. Supply the public scheduling fact, never the private rationale.
+      reschedule_reason: I18n.t('training_session_notifications.rescheduled_at_constituent_request', locale: locale),
       application_id: application.id,
       header_text: header_text(title: header_title, logo_url: header_logo_url, locale: locale),
       footer_text: footer_text(contact_email: footer_contact_email, website_url: footer_website_url,
@@ -195,11 +204,12 @@ class TrainingSessionNotificationsMailer < ApplicationMailer
     log_mail_error(e, trainer, template_name)
     raise
   end
-  # rubocop:enable Metrics/PerceivedComplexity
 
-  def training_cancelled(training_session)
+  def training_cancelled(training_session, notification = nil)
+    @application = training_session.application
     constituent = training_session.constituent
     locale = resolve_template_locale(recipient: constituent)
+    @notification_locale = locale
     template_name = 'training_session_notifications_training_cancelled'
     begin
       text_template = find_text_template(template_name, locale: locale)
@@ -230,10 +240,11 @@ class TrainingSessionNotificationsMailer < ApplicationMailer
       constituent_name: constituent.full_name || 'Valued Constituent',
       constituent_full_name: constituent.full_name || 'Valued Constituent',
       trainer_name: trainer.full_name || 'Your Trainer',
-      scheduled_date: formatted_training_date(training_session.scheduled_for),
-      scheduled_time: formatted_training_time(training_session.scheduled_for),
-      scheduled_date_time_formatted: training_session_schedule_text(training_session),
-      cancellation_message: cancellation_message(training_session, locale),
+      scheduled_date: formatted_training_date(notification_scheduled_for(training_session, notification)),
+      scheduled_time: formatted_training_time(notification_scheduled_for(training_session, notification)),
+      scheduled_date_time_formatted: training_session_schedule_text(training_session, notification),
+      cancellation_message: cancellation_message(training_session, locale, notification),
+      scheduled_location: notification_location(training_session, notification, locale),
       application_id: application.id,
       header_text: header_text(title: header_title, logo_url: header_logo_url, locale: locale),
       footer_text: footer_text(contact_email: footer_contact_email, website_url: footer_website_url,
@@ -252,9 +263,11 @@ class TrainingSessionNotificationsMailer < ApplicationMailer
     raise
   end
 
-  def no_show_notification(training_session)
+  def no_show_notification(training_session, notification = nil)
+    @application = training_session.application
     constituent = training_session.constituent
     locale = resolve_template_locale(recipient: constituent)
+    @notification_locale = locale
     template_name = 'training_session_notifications_training_no_show'
     begin
       text_template = find_text_template(template_name, locale: locale)
@@ -286,9 +299,10 @@ class TrainingSessionNotificationsMailer < ApplicationMailer
       constituent_full_name: constituent.full_name || 'Valued Constituent',
       trainer_name: trainer.full_name || 'Your Trainer',
       trainer_email: trainer.email,
-      missed_date: formatted_training_date(training_session.scheduled_for),
-      missed_time: formatted_training_time(training_session.scheduled_for),
-      scheduled_date_time_formatted: training_session_schedule_text(training_session),
+      missed_date: formatted_training_date(notification_scheduled_for(training_session, notification)),
+      missed_time: formatted_training_time(notification_scheduled_for(training_session, notification)),
+      scheduled_date_time_formatted: training_session_schedule_text(training_session, notification),
+      scheduled_location: notification_location(training_session, notification, locale),
       application_id: application.id,
       header_text: header_text(title: header_title, logo_url: header_logo_url, locale: locale),
       footer_text: footer_text(contact_email: footer_contact_email, website_url: footer_website_url,
@@ -307,31 +321,75 @@ class TrainingSessionNotificationsMailer < ApplicationMailer
     raise
   end
 
-  private
+  def training_completed(training_session, notification = nil)
+    @application = training_session.application
+    constituent = training_session.constituent
+    trainer = training_session.trainer
+    locale = resolve_template_locale(recipient: constituent)
+    @notification_locale = locale
+    template_name = 'training_session_notifications_training_completed'
+    text_template = find_text_template(template_name, locale: locale)
+    actual_completion = notification_time(notification, 'completed_at') || training_session.completed_at
+    recipient = Applications::ContactContext.new(application: @application).preference_owner
+    variables = {
+      recipient_full_name: recipient.full_name,
+      constituent_full_name: constituent.full_name,
+      trainer_full_name: trainer.full_name,
+      completed_date_formatted: formatted_training_date(actual_completion),
+      completed_time_formatted: formatted_training_time(actual_completion),
+      report_url: constituent_portal_training_session_url(training_session),
+      footer_text: footer_text(contact_email: ProgramContact.support_email, website_url: ProgramContact.website_url,
+                               organization_name: Policy.get('organization_name') || 'Maryland Accessible Telecommunications Program',
+                               show_automated_message: true, locale: locale)
+    }
+    title = header_title_from_template_subject(template: text_template, subject_variables: variables,
+                                               fallback: I18n.t("letters.pdf.titles.#{template_name}", locale: locale))
+    variables[:header_text] = header_text(title: title, locale: locale)
+    return noop_letter_delivery if queue_letter_if_preferred(constituent, template_name, variables, locale: locale, application: @application)
 
-  def training_session_schedule_text(training_session)
-    return 'Not scheduled yet' if training_session.scheduled_for.blank?
-
-    training_session.scheduled_for.strftime('%B %d, %Y at %I:%M %p')
+    send_email(recipient_email_for(constituent), text_template, variables)
+  rescue StandardError => e
+    log_mail_error(e, trainer, template_name)
+    raise
   end
 
-  def cancellation_message(training_session, locale)
+  private
+
+  def training_session_schedule_text(training_session, notification = nil)
+    scheduled_for = notification_scheduled_for(training_session, notification)
+    return I18n.t('training_session_notifications.not_scheduled_yet', locale: @notification_locale || I18n.locale) if scheduled_for.blank?
+
+    I18n.l(scheduled_for, format: :long, locale: @notification_locale || I18n.locale) + scheduled_for.strftime(' %Z')
+  end
+
+  def cancellation_message(training_session, locale, notification)
     I18n.with_locale(locale) do
-      if training_session.scheduled_for.present?
+      if notification_scheduled_for(training_session, notification).present?
         I18n.t('training_session_notifications.training_cancelled.scheduled_message',
-               scheduled_for: training_session_schedule_text(training_session))
+               scheduled_for: training_session_schedule_text(training_session, notification))
       else
-        I18n.t('training_session_notifications.training_cancelled.assignment_removed_message')
+        I18n.t('training_session_notifications.training_cancelled.unscheduled_message')
       end
     end
   end
 
   def formatted_training_date(value)
-    value&.strftime('%B %d, %Y') || 'not scheduled'
+    value ? I18n.l(value.to_date, format: :long, locale: @notification_locale || I18n.locale) : localized_not_specified(@notification_locale || I18n.locale)
   end
 
   def formatted_training_time(value)
-    value&.strftime('%I:%M %p') || 'not scheduled'
+    value ? I18n.l(value, format: '%H:%M %Z', locale: @notification_locale || I18n.locale) : localized_not_specified(@notification_locale || I18n.locale)
+  end
+
+  def notification_scheduled_for(training_session, notification)
+    return notification_time(notification, 'scheduled_for') if notification&.metadata&.key?('scheduled_for')
+
+    training_session.scheduled_for
+  end
+
+  def notification_location(training_session, notification, locale)
+    location = notification ? notification.metadata['location'] : training_session.location
+    location.presence || localized_not_specified(locale)
   end
 
   def notification_time(notification, metadata_key)

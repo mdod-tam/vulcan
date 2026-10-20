@@ -55,9 +55,9 @@ module ApplicationHelper
                 )}")
   end
 
-  def training_session_status_badge(session)
+  def training_session_status_badge(session, label: nil)
     content_tag(:span,
-                badge_label_for(:training_session, session.status),
+                label || badge_label_for(:training_session, session.status),
                 class: "px-3 py-2 text-sm font-medium rounded-full whitespace-nowrap inline-flex items-center justify-center #{badge_class_for(
                   :training_session, session.status
                 )}")

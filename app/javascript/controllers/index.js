@@ -107,3 +107,6 @@ application.register("adult-picker", AdultPickerController)
 application.register("applicant-type", ApplicantTypeController)
 application.register("document-proof-handler", DocumentProofHandlerController)
 application.register("guardian-picker", GuardianPickerController)
+
+import TrainingOutcomeController from "./forms/training_outcome_controller"
+application.register("training-outcome", TrainingOutcomeController)

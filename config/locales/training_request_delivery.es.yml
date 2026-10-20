@@ -1,0 +1,5 @@
+es:
+  applications:
+    training_requests:
+      messages:
+        submitted_covered: "Se envió la solicitud de capacitación. Su capacitador asignado se comunicará con usted para acordar la próxima cita."

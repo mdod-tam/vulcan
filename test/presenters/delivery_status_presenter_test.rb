@@ -44,6 +44,32 @@ class DeliveryStatusPresenterTest < ActiveSupport::TestCase
     assert_equal 'Todas las comunicaciones están desactivadas.', presenter.description
   end
 
+  test 'notification letter handoffs show a local queue without claiming printing or sending' do
+    %i[queued submitted].each do |state|
+      notification = create(:notification)
+      notification.record_delivery_handoff!(channel: :letter, state: state)
+
+      presenter = DeliveryStatusPresenter.new(notification)
+      assert_equal 'letter', presenter.channel
+      assert_equal 'queued', presenter.status
+      assert_equal 'Waiting to send', presenter.label
+      assert_nil presenter.sent_at
+    end
+
+    untracked = create(:notification, delivery_status: :submitted, metadata: { 'actual_delivery_channel' => 'letter' })
+    assert_equal 'unknown', DeliveryStatusPresenter.new(untracked).status
+  end
+
+  test 'coverage refusal explains the changed authority in each supported locale' do
+    notification = create(:notification)
+    notification.mark_delivery_suppressed!('trainer_coverage_changed', channel: :email)
+
+    assert_equal 'This message was not sent because the recipient is no longer the assigned trainer.',
+                 DeliveryStatusPresenter.new(notification, locale: :en).description
+    assert_equal 'Este mensaje no se envió porque la persona destinataria ya no es el capacitador asignado.',
+                 DeliveryStatusPresenter.new(notification, locale: :es).description
+  end
+
   test 'batch-preloaded history renders without row queries and without diagnostics or false sent dates' do
     forms = create_list(:secure_request_form, 3)
     forms.each do |form|

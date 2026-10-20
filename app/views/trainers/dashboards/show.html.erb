@@ -6,6 +6,15 @@
     <h1 id="trainer-dashboard-title" class="text-2xl font-bold">Training Dashboard</h1>
   </div>
 
+  <% if @overdue_sessions.any? %>
+    <section class="mb-6 rounded-lg border border-amber-300 bg-amber-50 p-6" aria-labelledby="overdue-training-heading">
+      <h2 id="overdue-training-heading" class="text-lg font-semibold"><%= t('trainer_workflow.dashboard.overdue_heading') %></h2>
+      <% @overdue_sessions.each do |session| %>
+        <p class="mt-2"><%= session.application.user.full_name %> —
+          <%= link_to t('trainer_workflow.dashboard.record_outcome'), trainers_training_session_path(session), class: 'text-indigo-700 underline' %></p>
+      <% end %>
+    </section>
+  <% end %>
   <section aria-labelledby="trainer-summary-heading" class="mb-8">
     <h2 id="trainer-summary-heading" class="sr-only">Session summary</h2>
     <ul class="grid grid-cols-1 md:grid-cols-4 gap-6" role="list">
@@ -109,11 +118,20 @@
                   </td>
                   <td class="px-6 py-4 whitespace-nowrap">
                     <span class="px-2 inline-flex text-xs leading-5 font-semibold rounded-full bg-yellow-100 text-yellow-800">
-                      Awaiting Assignment
+                      <%= application.assigned_trainer_id.present? ? t('trainer_workflow.dashboard.awaiting_scheduling') : 'Awaiting Assignment' %>
                     </span>
                   </td>
                   <td class="px-6 py-4 whitespace-nowrap text-sm font-medium">
-                    <%= link_to "Visit App And Assign Trainer", admin_application_path(application), class: "bg-indigo-600 hover:bg-indigo-700 text-white py-1 px-3 rounded-md inline-block transition-colors duration-200" %>
+                    <% if application.current_trainer?(current_user) %>
+                      <%= link_to t('trainer_workflow.dashboard.review_request'), trainers_training_session_path(application.latest_training_session),
+                                  class: 'bg-indigo-600 hover:bg-indigo-700 text-white py-1 px-3 rounded-md inline-block transition-colors duration-200' %>
+                    <% elsif application.assigned_trainer_id.present? %>
+                      <%= link_to 'Review trainer coverage', admin_application_path(application),
+                                  class: 'bg-indigo-600 hover:bg-indigo-700 text-white py-1 px-3 rounded-md inline-block transition-colors duration-200' %>
+                    <% else %>
+                      <%= link_to 'Visit App And Assign Trainer', admin_application_path(application),
+                                  class: 'bg-indigo-600 hover:bg-indigo-700 text-white py-1 px-3 rounded-md inline-block transition-colors duration-200' %>
+                    <% end %>
                   </td>
                 </tr>
               <% end %>

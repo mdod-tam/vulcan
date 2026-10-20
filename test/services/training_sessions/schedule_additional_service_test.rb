@@ -5,96 +5,72 @@ require 'test_helper'
 module TrainingSessions
   class ScheduleAdditionalServiceTest < ActiveSupport::TestCase
     setup do
+      Policy.stubs(:max_training_sessions).returns(3)
       @trainer = create(:trainer)
-      @application = create(:application, :approved, user: create(:constituent), application_date: 1.year.ago)
-      @source_session = create(:training_session, :scheduled, trainer: @trainer, application: @application)
-      update_max_training_sessions(3)
+      @application = create(:application, :approved, :with_all_proofs, application_date: Date.current, assigned_trainer: @trainer)
+      @source = create(:training_session, :completed, application: @application, trainer: @trainer)
     end
 
-    test 'schedules another session and logs audit event' do
-      scheduled_time = 2.weeks.from_now
-
-      assert_difference('TrainingSession.count', 1) do
-        assert_difference('Event.where(action: "training_scheduled").count', 1) do
-          result = ScheduleAdditionalService.new(
-            @source_session,
-            @trainer,
-            scheduled_for: scheduled_time,
-            location: 'Library',
-            notes: 'Second session'
-          ).call
-
-          assert result.success?
-          @additional_session = result.data[:training_session]
-        end
+    test 'the current trainer can create one appointment from the latest completed report' do
+      result = nil
+      assert_difference ['TrainingSession.count', "Event.where(action: 'training_scheduled').count"], 1 do
+        result = ScheduleAdditionalService.new(@source, @trainer, scheduled_for: 2.days.from_now,
+                                                                  location: 'Library', internal_notes: 'Private preparation').call
+        assert result.success?, result.message
       end
+      session = result.data[:training_session]
+      assert_equal @trainer, session.trainer
+      assert_equal 'Private preparation', session.internal_notes
+      assert_equal 'Library', session.location
+      assert_equal 'scheduled', session.status
+      event = Event.find_by!(action: 'training_scheduled', auditable: session)
+      assert_equal @source.id, event.metadata['source_training_session_id']
+      assert_not_includes event.metadata.to_json, 'Private preparation'
 
-      assert_equal 'scheduled', @additional_session.status
-      assert_equal @application, @additional_session.application
-      assert_equal @trainer, @additional_session.trainer
-      assert_in_delta scheduled_time, @additional_session.scheduled_for, 1.second
-      assert_equal 'Library', @additional_session.location
-      assert_equal 'Second session', @additional_session.notes
-
-      event = Event.where(action: 'training_scheduled').last
-      assert_equal @additional_session.id, event.metadata['training_session_id']
-      assert_equal @application.id, event.metadata['application_id']
-      assert_equal @source_session.id, event.metadata['source_training_session_id']
-      assert_equal 'additional', event.metadata['scheduled_via']
-    end
-
-    test 'schedules another session from a completed source session' do
-      source_session = create(:training_session, :completed, trainer: @trainer, application: @application)
-      scheduled_time = 2.weeks.from_now
-
-      assert_difference('TrainingSession.count', 1) do
-        result = ScheduleAdditionalService.new(
-          source_session,
-          @trainer,
-          scheduled_for: scheduled_time,
-          notes: 'Post-completion follow-up'
-        ).call
-
-        assert result.success?
-        @additional_session = result.data[:training_session]
-      end
-
-      assert_equal 'scheduled', @additional_session.status
-      assert_equal @application, @additional_session.application
-      assert_equal @trainer, @additional_session.trainer
-      assert_equal source_session.id, Event.where(action: 'training_scheduled').last.metadata['source_training_session_id']
-    end
-
-    test 'fails when training slots are exhausted' do
-      update_max_training_sessions(1)
-
-      assert_no_difference('TrainingSession.count') do
-        assert_no_difference('Event.count') do
-          result = ScheduleAdditionalService.new(@source_session, @trainer, scheduled_for: 2.weeks.from_now).call
-
-          assert_not result.success?
-          assert_equal I18n.t('training_sessions.schedule_additional.quota_exhausted'), result.message
-        end
+      assert_no_difference ['TrainingSession.count', 'Event.count'] do
+        retry_result = ScheduleAdditionalService.new(@source, @trainer, scheduled_for: 3.days.from_now).call
+        assert_not retry_result.success?
       end
     end
 
-    test 'fails when scheduled time is in the past' do
-      assert_no_difference('TrainingSession.count') do
-        assert_no_difference('Event.count') do
-          result = ScheduleAdditionalService.new(@source_session, @trainer, scheduled_for: 1.day.ago).call
-
-          assert_not result.success?
-          assert_equal I18n.t('training_sessions.schedule_additional.scheduled_for_in_future'), result.message
-        end
+    test 'an open appointment cannot be used as an additional-session source' do
+      @source = create(:training_session, :scheduled, application: @application, trainer: @trainer)
+      assert_no_difference ['TrainingSession.count', 'Event.count'] do
+        result = ScheduleAdditionalService.new(@source, @trainer, scheduled_for: 2.days.from_now).call
+        assert_not result.success?
       end
     end
 
-    private
+    test 'removal between appointments revokes old completed report creation authority' do
+      assert @application.unassign_trainer!(actor: create(:admin))
+      assert_nil @application.reload.assigned_trainer_id
+      assert @source.reload.status_completed?
 
-    def update_max_training_sessions(value)
-      policy = Policy.find_or_create_by(key: 'max_training_sessions')
-      policy.updated_by = create(:admin)
-      policy.update!(value: value)
+      assert_no_difference ['TrainingSession.count', 'Event.count'] do
+        result = ScheduleAdditionalService.new(@source, @trainer, scheduled_for: 2.days.from_now).call
+        assert_not result.success?
+      end
+    end
+
+    test 'an older completed report cannot create work after a newer outcome' do
+      create(:training_session, :cancelled, application: @application, trainer: @trainer)
+      assert_no_difference ['TrainingSession.count', 'Event.count'] do
+        result = ScheduleAdditionalService.new(@source, @trainer, scheduled_for: 2.days.from_now).call
+        assert_not result.success?
+      end
+    end
+
+    test 'quota and service window are rechecked for new appointments' do
+      Policy.stubs(:max_training_sessions).returns(1)
+      result = ScheduleAdditionalService.new(@source, @trainer, scheduled_for: 2.days.from_now).call
+      assert_not result.success?
+      assert_includes result.message, 'quota'
+
+      Policy.stubs(:max_training_sessions).returns(3)
+      @application.update!(application_date: 5.years.ago.to_date)
+      result = ScheduleAdditionalService.new(@source, @trainer, scheduled_for: 2.days.from_now).call
+      assert_not result.success?
+      assert_includes result.message, 'service window'
     end
   end
 end

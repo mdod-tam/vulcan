@@ -1,0 +1,18 @@
+es:
+  application_contact:
+    title: "Información de la persona para la evaluación"
+    back: "Volver a la evaluación"
+    help: "Use estos datos para contactar a la persona y preparar la evaluación. Acuerde la cita directamente con la persona o su tutor responsable."
+    link: "Ver información de la persona"
+    applicant: "Solicitante"
+    guardian: "Tutor responsable"
+    email: "Correo electrónico de contacto"
+    phone: "Teléfono de contacto"
+    address: "Dirección de contacto"
+    communication: "Preferencias de comunicación"
+    language: "Idioma preferido"
+    modality: "Modalidad de comunicación"
+    delivery: "Preferencia de entrega"
+    disabilities: "Discapacidades"
+    alternate_contact: "Contacto alternativo"
+    not_provided: "No proporcionado"

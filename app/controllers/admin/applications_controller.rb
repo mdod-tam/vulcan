@@ -254,7 +254,8 @@ module Admin
     def assign_trainer
       trainer = Users::Trainer.available.find_by(id: assignment_selection_id(:trainer_id))
 
-      if @application.assign_trainer!(trainer)
+      if @application.assign_trainer!(trainer, actor: current_user)
+        flash[:alert] = 'Saved. A training notice could not be queued. Do not repeat the assignment.' if @application.training_notification_outcomes.any?(&:warning?)
         redirect_to admin_application_path(@application),
                     notice: t('.trainer_assign_pass')
       else
@@ -267,6 +268,9 @@ module Admin
       @application = Application.find(params[:id])
 
       if @application.unassign_trainer!(actor: current_user, reason: params[:unassign_reason])
+        if @application.training_notification_outcomes.any?(&:warning?)
+          flash[:alert] = 'Coverage removed. A cancellation notice could not be queued. Do not repeat the removal.'
+        end
         redirect_to admin_application_path(@application),
                     notice: t('.trainer_unassign_pass')
       else
@@ -556,6 +560,7 @@ module Admin
       certification_service = Applications::CertificationEventsService.new(@application)
       @certification_events = certification_service.certification_events
       @certification_requests = certification_service.request_events
+      @training_history = @application.training_sessions.includes(:trainer, :product_trained_on).order(:created_at, :id)
       @max_training_sessions = Policy.max_training_sessions
       @completed_training_sessions_count = @application.completed_training_sessions_count
       @reserved_training_sessions_count = @application.reserved_training_sessions_count

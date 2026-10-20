@@ -1,0 +1,19 @@
+en:
+  training_activity:
+    scheduled_for: "Scheduled for %{time}"
+    followup_scheduled_for: "Follow-up scheduled for %{time}"
+    rescheduled_from: "From %{time}"
+    rescheduled_to: "To %{time}"
+    cancelled: "Training cancelled"
+    cancelled_by: "Cancelled by %{initiator}"
+    actual_completion: "Actual completion: %{time}"
+    report_submitted: "Report submitted: %{time}"
+    duration: "Duration: %{hours} hours"
+    product: "Product ID: %{id}"
+    no_show: "Marked as no show"
+    time_unavailable: "Time unavailable"
+    initiators:
+      constituent: "constituent"
+      trainer: "trainer"
+      admin: "administrator"
+      program: "program"

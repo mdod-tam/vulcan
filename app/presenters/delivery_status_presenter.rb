@@ -121,9 +121,15 @@ class DeliveryStatusPresenter
 
   def channel_status
     return letter_status if channel == 'letter' && record.respond_to?(:print_queue_items)
+    return 'queued' if queued_letter_handoff?
     return 'sms_submitted' if channel == 'sms' && notification&.submitted_delivery_status?
     return 'docuseal' if channel == 'docuseal'
 
     local_status || 'unknown'
+  end
+
+  def queued_letter_handoff?
+    channel == 'letter' && metadata['delivery_route_reason'] == 'queued_for_printing' &&
+      (notification&.queued_delivery_status? || notification&.submitted_delivery_status?)
   end
 end

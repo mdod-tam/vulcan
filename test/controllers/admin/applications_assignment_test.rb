@@ -12,7 +12,7 @@ module Admin
       @admin = create(:admin)
       sign_in_for_integration_test(@admin)
       @application = create(:application, :completed, :with_all_proofs,
-                            user: create(:constituent, speech_disability: true))
+                            user: create(:constituent, speech_disability: true), application_date: Date.current)
     end
 
     # --- dropdown rendering ---
@@ -104,51 +104,54 @@ module Admin
       end
     end
 
-    test 'assigned training detail link exits the application turbo frame' do
-      training_session = create(:training_session, :requested, application: @application, trainer: create(:trainer))
-
-      get admin_application_path(@application)
-
-      assert_response :success
-      assert_select "a[href='#{trainers_training_session_path(training_session)}'][data-turbo-frame='_top']",
-                    text: 'View Details'
-      assert_select "form[action='#{unassign_trainer_admin_application_path(@application)}']"
-      assert_select 'dialog#trainer-unassign-confirm-dialog' do
-        assert_select 'p', text: I18n.t('admin.applications.unassign_trainer.confirm', count: 1)
-        assert_select 'button', text: I18n.t('admin.applications.unassign_trainer.confirm_no')
-        assert_select 'button', text: I18n.t('admin.applications.unassign_trainer.confirm_yes')
-      end
-    end
-
-    test 'unassign trainer confirmation includes all open training sessions' do
-      trainer = create(:trainer)
-      create(:training_session, :requested, application: @application, trainer: trainer)
-      create(:training_session, :scheduled, application: @application, trainer: trainer)
-
-      get admin_application_path(@application)
-
-      assert_response :success
-      assert_select 'dialog#trainer-unassign-confirm-dialog p',
-                    text: I18n.t('admin.applications.unassign_trainer.confirm', count: 2)
-    end
-
-    test 'admin can unassign active trainer and cancel all open training sessions' do
-      trainer = create(:trainer)
+    test 'assigned training details exit the turbo frame and removal uses native Turbo confirmation' do
+      trainer = current_coverage
       training_session = create(:training_session, :requested, application: @application, trainer: trainer)
-      scheduled_session = create(:training_session, :scheduled, application: @application, trainer: trainer)
+
+      get admin_application_path(@application)
+
+      assert_response :success
+      assert_select "a[href='#{trainers_training_session_path(training_session)}'][data-turbo-frame='_top']", text: 'View Details'
+      assert_coverage_removal_form
+      assert_select 'dialog#trainer-unassign-confirm-dialog', count: 0
+    end
+
+    test 'coverage removal remains available between appointments without claiming another unresolved appointment' do
+      trainer = current_coverage
+      report = create(:training_session, :completed, application: @application, trainer: trainer)
+
+      get admin_application_path(@application)
+
+      assert_response :success
+      assert_select '[data-testid="trainer-assignment-section"] a[href=?]', trainers_training_session_path(report), text: 'View Details'
+      assert_coverage_removal_form
+      assert_select 'form[data-testid="trainer-assignment-form"]', count: 0
+      assert_equal 0, @application.open_training_sessions_count
+    end
+
+    test 'admin removal clears coverage and cancels its one open appointment without changing completed history or another application' do
+      trainer = current_coverage
+      report = create(:training_session, :completed, application: @application, trainer: trainer, internal_notes: 'Retained completed observations')
+      training_session = create(:training_session, :requested, application: @application, trainer: trainer, internal_notes: 'Retained preparation')
+      other_application = create(:application, :approved, :with_all_proofs, application_date: Date.current, assigned_trainer: trainer)
+      unrelated = create(:training_session, :scheduled, application: other_application, trainer: trainer)
+      original_report = report.attributes
 
       assert_difference -> { Event.where(action: 'trainer_unassigned', auditable: @application).count }, 1 do
-        post unassign_trainer_admin_application_path(@application)
+        assert_difference -> { Event.where(action: 'training_cancelled', auditable: training_session).count }, 1 do
+          post unassign_trainer_admin_application_path(@application)
+        end
       end
 
       assert_redirected_to admin_application_path(@application)
       assert_equal 'Trainer assignment removed.', flash[:notice]
-      training_session.reload
-      assert training_session.status_cancelled?
+      assert_nil @application.reload.assigned_trainer_id
+      assert training_session.reload.status_cancelled?
       assert training_session.cancellation_initiator_admin?
-      scheduled_session.reload
-      assert scheduled_session.status_cancelled?
-      assert scheduled_session.cancellation_initiator_admin?
+      assert_equal 'Retained preparation', training_session.internal_notes
+      assert_equal original_report, report.reload.attributes
+      assert unrelated.reload.status_scheduled?
+      assert_equal trainer.id, other_application.reload.assigned_trainer_id
     end
 
     test 'trainer assignment post is blocked when completed training quota is exhausted' do
@@ -253,7 +256,7 @@ module Admin
       end
     end
 
-    test 'trainer assignment form is hidden when completed training quota is exhausted' do
+    test 'an uncovered application at completed quota has no assignment form and explains unavailable new work' do
       Policy.find_or_create_by(key: 'max_training_sessions').update!(value: 3)
       trainer = create(:trainer)
       create_list(:training_session, 3, :completed, application: @application, trainer: trainer)
@@ -262,52 +265,77 @@ module Admin
 
       assert_response :success
       assert_select 'form[data-testid="trainer-assignment-form"]', count: 0
-      assert_select 'strong', text: 'Maximum Reached'
+      assert_select 'section[aria-labelledby="admin-training-heading"] p', text: /3 completed,\s+0 reserved,\s+0 remaining of 3\./
+      assert_select 'p', text: 'New training assignment is unavailable because capacity or the service window has ended.'
     end
 
-    test 'trainer assignment form is hidden when reserved training quota is exhausted' do
+    test 'admin can inspect and remove coverage at the final reserved quota slot' do
       Policy.find_or_create_by(key: 'max_training_sessions').update!(value: 3)
-      trainer = create(:trainer)
+      trainer = current_coverage
       create_list(:training_session, 2, :completed, application: @application, trainer: trainer)
-      create(:training_session, :scheduled, application: @application, trainer: trainer)
+      scheduled = create(:training_session, :scheduled, application: @application, trainer: trainer)
 
       get admin_application_path(@application)
 
       assert_response :success
       assert_select 'form[data-testid="trainer-assignment-form"]', count: 0
-      assert_select 'p', text: %r{3 / 3 sessions reserved, 0 remaining}
-      assert_select 'strong', text: 'Maximum Reached'
+      assert_select 'section[aria-labelledby="admin-training-heading"] p', text: /2 completed,\s+1 reserved,\s+0 remaining of 3\./
+      assert_select '[data-testid="trainer-assignment-section"] a[href=?]', trainers_training_session_path(scheduled), text: 'View Details'
+      assert_coverage_removal_form
+
+      post unassign_trainer_admin_application_path(@application)
+
+      assert_redirected_to admin_application_path(@application)
+      assert_nil @application.reload.assigned_trainer_id
+      assert scheduled.reload.status_cancelled?
+      assert_equal 2, @application.completed_training_sessions_count
     end
 
-    test 'admin application show calls out latest cancelled training session that needs follow-up' do
-      trainer = create(:trainer)
+    test 'admin removal between appointments clears coverage even at completed quota and preserves reports' do
+      Policy.find_or_create_by(key: 'max_training_sessions').update!(value: 3)
+      trainer = current_coverage
+      reports = create_list(:training_session, 3, :completed, application: @application, trainer: trainer)
+      original_reports = reports.index_with(&:attributes)
+      get admin_application_path(@application)
+      assert_response :success
+      assert_coverage_removal_form
+
+      assert_no_difference "Event.where(action: 'training_cancelled').count" do
+        post unassign_trainer_admin_application_path(@application)
+      end
+
+      assert_redirected_to admin_application_path(@application)
+      assert_nil @application.reload.assigned_trainer_id
+      assert_equal 3, @application.completed_training_sessions_count
+      original_reports.each { |report, attributes| assert_equal attributes, report.reload.attributes }
+    end
+
+    test 'ordinary cancellation retains trainer coverage and administrative oversight of the latest outcome' do
+      trainer = current_coverage
       cancelled_session = create(:training_session, :cancelled, application: @application, trainer: trainer)
 
       get admin_application_path(@application)
 
       assert_response :success
-      assert_select '[data-testid="training-follow-up-needed"]' do
-        assert_select 'p', text: 'Training needs follow-up'
-        assert_select 'a[href=?]', trainers_training_session_path(cancelled_session), text: 'View historical session'
-      end
-      assert_select 'h3', text: 'Assign trainer for follow-up'
-      assert_select 'form[data-testid="trainer-assignment-form"] input[type=submit][value=?]',
-                    'Assign trainer for follow-up'
+      assert_select '[data-testid="trainer-assignment-section"] p', text: /Current Trainer: #{Regexp.escape(trainer.full_name)}/
+      assert_select '[data-testid="trainer-assignment-section"] a[href=?]', trainers_training_session_path(cancelled_session), text: 'View Details'
+      assert_select 'form[data-testid="trainer-assignment-form"]', count: 0
+      assert_coverage_removal_form
+      assert_equal trainer.id, @application.reload.assigned_trainer_id
     end
 
-    test 'admin application show hides follow-up callout when newer active training exists' do
-      trainer = create(:trainer)
-      create(:training_session, :cancelled, application: @application, trainer: trainer, created_at: 2.days.ago)
-      create(:training_session, :scheduled, application: @application, trainer: trainer, created_at: 1.day.ago)
+    test 'administrative coverage details point at the latest appointment while retaining older cancelled history' do
+      trainer = current_coverage
+      old_outcome = create(:training_session, :cancelled, application: @application, trainer: trainer, created_at: 2.days.ago)
+      current_appointment = create(:training_session, :scheduled, application: @application, trainer: trainer, created_at: 1.day.ago)
 
       get admin_application_path(@application)
 
       assert_response :success
-      assert_select '[data-testid="training-follow-up-needed"]', count: 0
-      assert_select 'h3', text: 'Current Trainer'
+      assert_select '[data-testid="trainer-assignment-section"] a[href=?]', trainers_training_session_path(current_appointment), text: 'View Details'
+      assert_select '[data-testid="trainer-assignment-section"] a[href=?]', trainers_training_session_path(old_outcome), count: 0
+      assert old_outcome.reload.status_cancelled?
     end
-
-    # --- request_evaluation action ---
 
     test 'admin can mark an approved application as needing evaluation' do
       assert_nil @application.evaluation_requested_at
@@ -344,6 +372,21 @@ module Admin
 
       assert_redirected_to admin_application_path(draft_app)
       assert_nil draft_app.reload.evaluation_requested_at
+    end
+
+    private
+
+    def current_coverage
+      trainer = create(:trainer)
+      @application.update!(assigned_trainer: trainer)
+      trainer
+    end
+
+    def assert_coverage_removal_form
+      confirmation = 'Remove trainer coverage and cancel any open appointment? Completed reports remain available.'
+      assert_select "form[action='#{unassign_trainer_admin_application_path(@application)}'][data-turbo-confirm=?]", confirmation do
+        assert_select 'button', text: 'Unassign Trainer'
+      end
     end
   end
 end

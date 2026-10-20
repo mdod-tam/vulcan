@@ -18,7 +18,11 @@
           id: 'no-show-evaluation-form',
           class: 'space-y-4'
         ) do |f| %>
-      <%= render 'action_errors', action: :no_show, form: f, form_errors: @evaluation_form_errors %>
+      <%= render(
+            'shared/action_errors',
+            action: :no_show, form: f, form_errors: @evaluation_form_errors,
+            heading: evaluation_action_error_heading(:no_show)
+          ) %>
       <div>
         <%= f.label :notes, "No-Show Notes (optional)", class: "block text-sm font-medium text-gray-700" %>
         <%= f.text_area(
@@ -28,12 +32,12 @@
               class: 'mt-1 block w-full border border-gray-300 rounded-md shadow-sm py-2 px-3 ' \
                      'focus:outline-none focus:ring-indigo-500 focus:border-indigo-500 sm:text-sm',
               placeholder: 'Optional notes about the no-show...',
-              aria: evaluation_field_aria(:no_show, :notes, describedby: 'no-show-notes-help', form_errors: @evaluation_form_errors)
+              aria: action_form_field_aria(:no_show, :notes, describedby: 'no-show-notes-help', form_errors: @evaluation_form_errors)
             ) %>
         <p id="no-show-notes-help" class="mt-1 text-sm text-gray-500">
           <strong><%= t('evaluators.evaluations.forms.internal_notes_only') %></strong>
         </p>
-        <%= render 'field_errors', action: :no_show, attribute: :notes, form_errors: @evaluation_form_errors %>
+        <%= render 'shared/field_errors', action: :no_show, attribute: :notes, form_errors: @evaluation_form_errors %>
       </div>
       <%= f.submit 'Mark as No-Show',
                    data: { turbo_submits_with: 'Recording no-show...' },

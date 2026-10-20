@@ -1,4 +1,4 @@
-<%# locals: (form:, field:, model:, blob: nil, described_by: nil, input_id: field.to_s, input_data: {}, retained_reference: nil, upload_url: nil) %>
+<%# locals: (form:, field:, model:, blob: nil, described_by: nil, input_id: field.to_s, input_data: {}, input_aria: {}, retained_reference: nil, upload_url: nil, accept: proof_upload_accept_attribute) %>
 <%# Rails uploads the file to storage before form submission.
     The retained upload uses "#{field}_signed_id". A new upload in field takes precedence.
     See UploadedDocument.submitted. %>
@@ -8,8 +8,8 @@
     ) do %>
   <%= form.file_field(
         field,
-        id: input_id, direct_upload: true, accept: proof_upload_accept_attribute,
-        aria: { describedby: [described_by, "#{input_id}_status"].compact.join(' ') },
+        id: input_id, direct_upload: true, accept: accept,
+        aria: { describedby: [described_by, "#{input_id}_status"].compact.join(' ') }.merge(input_aria),
         class: 'block w-full text-sm text-gray-700',
         data: {
           document_upload_target: 'input',

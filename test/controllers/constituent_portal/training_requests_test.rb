@@ -1,88 +1,72 @@
 # frozen_string_literal: true
 
 require 'test_helper'
-require_relative '../../support/notification_delivery_stub'
 
 module ConstituentPortal
   class TrainingRequestsTest < ActionDispatch::IntegrationTest
     setup do
       @constituent = create(:constituent)
-      @admin = create(:admin)
-
-      @application = create(:application, user: @constituent, application_date: 2.years.ago.to_date)
-
-      Current.user = @admin
-      @application.update!(status: :approved)
-      Current.reset
-
-      Policy.find_or_create_by(key: 'max_training_sessions').update(value: 3)
-
+      @application = create(:application, :approved, :with_all_proofs, user: @constituent, application_date: Date.current)
+      Policy.find_or_create_by!(key: 'max_training_sessions').update!(value: 3)
       sign_in_for_integration_test(@constituent)
-
-      Current.user = @constituent
     end
 
-    teardown do
-      Current.reset
-    end
-
-    test 'should create training request notification' do
-      ConstituentPortal::ApplicationsController.any_instance.stubs(:log_training_request).returns(nil)
-
-      admin_count = User.where(type: ['Administrator', 'Users::Administrator']).count
-
-      # These mocks verify calls to NotificationService. They do not prove notification persistence.
-      NotificationService.expects(:create_and_deliver!).with(
-        type: 'training_requested',
-        recipient: anything,
-        actor: anything,
-        notifiable: anything,
-        metadata: anything,
-        channel: :email
-      ).times(admin_count).returns(nil)
-
-      post request_training_constituent_portal_application_path(@application)
-
+    test 'own training request persists once with an actor-specific audit' do
+      assert_difference -> { Event.where(auditable: @application, action: 'training_session_requested').count }, 1 do
+        post request_training_constituent_portal_application_path(@application)
+      end
       assert_redirected_to constituent_portal_dashboard_path
-      assert_equal 'Training request submitted. An administrator will contact you to schedule your session.',
-                   flash[:notice]
+      assert_not_nil @application.reload.training_requested_at
+      assert_equal I18n.t('applications.training_requests.messages.submitted'), flash[:notice]
+      assert_equal @constituent.id, Event.find_by!(auditable: @application, action: 'training_session_requested').user_id
+
+      assert_no_difference -> { Event.where(auditable: @application, action: 'training_session_requested').count } do
+        post request_training_constituent_portal_application_path(@application)
+      end
+      assert_equal I18n.t('applications.training_requests.messages.duplicate_pending'), flash[:alert]
     end
 
-    test 'should not create training request if application not approved' do
-      Current.user = @admin
+    test 'unapproved applications and exhausted quota cannot start another request' do
       @application.update!(status: :in_progress)
-      Current.reset
-
-      assert_no_difference 'Notification.count' do
+      assert_no_changes -> { @application.reload.training_requested_at } do
         post request_training_constituent_portal_application_path(@application)
       end
+      assert_equal I18n.t('applications.training_requests.messages.ineligible'), flash[:alert]
 
-      assert_redirected_to constituent_portal_dashboard_path
-      assert_equal 'Only approved applications are eligible for training.', flash[:alert]
+      @application.update!(status: :approved)
+      create_list(:training_session, 3, :completed, application: @application)
+      assert_no_changes -> { @application.reload.training_requested_at } do
+        post request_training_constituent_portal_application_path(@application)
+      end
+      assert_equal I18n.t('applications.training_requests.messages.quota_exhausted'), flash[:alert]
     end
 
-    test 'should not create training request if max sessions reached' do
+    test 'current managing guardian requests covered training while another related guardian and a former manager cannot' do
+      manager = create(:constituent, locale: 'es')
+      other_guardian = create(:constituent)
+      [manager, other_guardian].each do |guardian|
+        create(:guardian_relationship, guardian_user: guardian, dependent_user: @constituent)
+      end
       trainer = create(:trainer)
+      @application.update!(managing_guardian: manager, assigned_trainer: trainer)
+      create(:training_session, :completed, application: @application, trainer: trainer)
 
-      3.times do |i|
-        TrainingSession.create!(
-          application: @application,
-          trainer: trainer,
-          scheduled_for: 1.day.from_now,
-          status: :completed,
-          notes: "Training session #{i + 1} completed successfully",
-          completed_at: Time.current
-        )
-      end
+      sign_in_for_integration_test(other_guardian)
+      post request_training_constituent_portal_application_path(@application)
+      assert_response :not_found
+      assert_nil @application.reload.training_requested_at
 
-      ConstituentPortal::ApplicationsController.any_instance.stubs(:log_training_request).returns(nil)
-
-      assert_no_difference 'Notification.count' do
-        post request_training_constituent_portal_application_path(@application)
-      end
-
+      sign_in_for_integration_test(manager)
+      post request_training_constituent_portal_application_path(@application, locale: 'es')
       assert_redirected_to constituent_portal_dashboard_path
-      assert_equal 'You have used all of your available training sessions.', flash[:alert]
+      assert_not_nil @application.reload.training_requested_at
+      assert_equal I18n.t('applications.training_requests.messages.submitted_covered', locale: 'es'), flash[:notice]
+
+      @application.update!(managing_guardian: other_guardian)
+      requested_at = @application.reload.training_requested_at
+      post request_training_constituent_portal_application_path(@application)
+      assert_response :not_found
+      assert_equal requested_at, @application.reload.training_requested_at
     end
   end
 end

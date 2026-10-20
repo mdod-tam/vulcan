@@ -5,97 +5,51 @@ require 'test_helper'
 module TrainingSessions
   class ScheduleFollowUpServiceTest < ActiveSupport::TestCase
     setup do
+      Policy.stubs(:max_training_sessions).returns(3)
       @trainer = create(:trainer)
-      @application = create(:application, :approved, user: create(:constituent), application_date: 1.year.ago)
-      @source_session = create(:training_session, :cancelled, trainer: @trainer, application: @application)
-      update_max_training_sessions(3)
+      @application = create(:application, :approved, :with_all_proofs, application_date: Date.current, assigned_trainer: @trainer)
+      @source = create(:training_session, :cancelled, application: @application, trainer: @trainer)
     end
 
-    test 'allows follow-up when another active session exists and quota remains' do
+    test 'follow-up uses the canonical latest unresolved-outcome reader and preserves history' do
+      assert_equal @source.id, @application.latest_training_follow_up_session.id
+      result = nil
+      assert_difference ['TrainingSession.count', "Event.where(action: 'training_followup_scheduled').count"], 1 do
+        result = ScheduleFollowUpService.new(@source, @trainer, scheduled_for: 3.days.from_now,
+                                                                reschedule_reason: 'Constituent requested a new appointment').call
+        assert result.success?, result.message
+      end
+      assert @source.reload.status_cancelled?
+      assert_equal @trainer.id, result.data[:training_session].trainer_id
+      assert_nil @application.latest_training_follow_up_session
+    end
+
+    test 'an open appointment prevents follow-up even when quota remains' do
       create(:training_session, :scheduled, application: @application, trainer: @trainer)
-      scheduled_time = 3.days.from_now
-
-      assert_difference('TrainingSession.count', 1) do
-        assert_difference('Event.where(action: "training_followup_scheduled").count', 1) do
-          result = ScheduleFollowUpService.new(
-            @source_session,
-            @trainer,
-            scheduled_for: scheduled_time,
-            reschedule_reason: 'Makeup training',
-            location: 'Library'
-          ).call
-
-          assert result.success?
-          @follow_up_session = result.data[:training_session]
-        end
-      end
-
-      assert_equal 'scheduled', @follow_up_session.status
-      assert_equal @application, @follow_up_session.application
-      assert_equal @trainer, @follow_up_session.trainer
-      assert_in_delta scheduled_time, @follow_up_session.scheduled_for, 1.second
-      assert_equal 'Makeup training', @follow_up_session.reschedule_reason
-
-      event = Event.where(action: 'training_followup_scheduled').last
-      assert_equal @follow_up_session.id, event.metadata['training_session_id']
-      assert_equal @source_session.id, event.metadata['previous_training_session_id']
-    end
-
-    test 'follow-up scheduled session uses constituent scheduled training notification path' do
-      scheduled_time = 3.days.from_now
-      result = ScheduleFollowUpService.new(
-        @source_session,
-        @trainer,
-        scheduled_for: scheduled_time,
-        reschedule_reason: 'Makeup training',
-        location: 'Library'
-      ).call
-
-      assert result.success?
-      follow_up_session = result.data[:training_session]
-      assert follow_up_session.saved_change_to_status?
-
-      Current.user = @trainer
-      NotificationService.expects(:create_and_deliver!).once.with do |params|
-        params[:type] == 'training_scheduled' &&
-          params[:recipient] == @application.user &&
-          params[:actor] == @trainer &&
-          params[:notifiable] == follow_up_session &&
-          params[:metadata][:scheduled_for].present? &&
-          params[:channel] == :email
-      end
-
-      TrainingSessionNotifier.new(follow_up_session).deliver_all
-    ensure
-      Current.reset
-    end
-
-    test 'fails when reserved training slots are exhausted' do
-      update_max_training_sessions(2)
-      create(:training_session, :completed, application: @application, trainer: @trainer)
-      create(:training_session, :scheduled, application: @application, trainer: @trainer)
-
-      assert_no_difference('TrainingSession.count') do
-        assert_no_difference('Event.count') do
-          result = ScheduleFollowUpService.new(
-            @source_session,
-            @trainer,
-            scheduled_for: 3.days.from_now,
-            reschedule_reason: 'Try after quota'
-          ).call
-
-          assert_not result.success?
-          assert_equal I18n.t('training_sessions.schedule_follow_up.quota_exhausted'), result.message
-        end
+      assert_no_difference ['TrainingSession.count', 'Event.count'] do
+        result = ScheduleFollowUpService.new(@source, @trainer, scheduled_for: 3.days.from_now, reschedule_reason: 'Makeup').call
+        assert_not result.success?
       end
     end
 
-    private
+    test 'a completed source belongs to additional appointment policy' do
+      source = create(:training_session, :completed, application: @application, trainer: @trainer)
+      assert_nil @application.latest_training_follow_up_session
+      assert_no_difference ['TrainingSession.count', 'Event.count'] do
+        result = ScheduleFollowUpService.new(source, @trainer, scheduled_for: 3.days.from_now, reschedule_reason: 'Makeup').call
+        assert_not result.success?
+      end
+    end
 
-    def update_max_training_sessions(value)
-      policy = Policy.find_or_create_by(key: 'max_training_sessions')
-      policy.updated_by = create(:admin)
-      policy.update!(value: value)
+    test 'removed and reassigned trainers cannot create from historical cancellation' do
+      admin = create(:admin)
+      assert @application.unassign_trainer!(actor: admin)
+      assert @application.assign_trainer!(create(:trainer), actor: admin)
+
+      assert_no_difference ['TrainingSession.count', 'Event.count'] do
+        result = ScheduleFollowUpService.new(@source, @trainer, scheduled_for: 3.days.from_now, reschedule_reason: 'Makeup').call
+        assert_not result.success?
+      end
     end
   end
 end

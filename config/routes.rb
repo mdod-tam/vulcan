@@ -302,6 +302,7 @@ Rails.application.routes.draw do
     end
 
     resources :products do
+      resources :product_resources, only: %i[new create edit update destroy]
       member do
         post :archive
         post :unarchive
@@ -385,7 +386,7 @@ Rails.application.routes.draw do
         get 'filter(/:scope)(/:status)', to: 'training_sessions#filter', as: :filtered
       end
       member do
-        patch :update_status
+        post :no_show
         post :complete
         post :schedule
         post :schedule_additional
@@ -436,10 +437,11 @@ Rails.application.routes.draw do
     end
 
     resources :evaluations, only: %i[index show]
+    resources :training_sessions, only: %i[index show]
     resources :products, only: %i[index show]
 
     get '/devices', to: redirect('/constituent_portal/products')
-    get '/devices/:id', to: redirect('/constituent_portal/products/%<id>s')
+    get '/devices/:id', to: redirect('/constituent_portal/products/%{id}')
   end
 
   namespace :webhooks do

@@ -2,6 +2,10 @@
 
 module Evaluators
   class EvaluationsController < ApplicationController
+    include ViewerLocale
+
+    around_action :with_viewer_locale
+
     FORM_ERROR_FIELDS = {
       schedule: %i[evaluation_date location notes],
       reschedule: %i[evaluation_date location reschedule_reason],

@@ -4,33 +4,23 @@ require 'test_helper'
 
 module TrainingSessions
   class TrainingSessionNotifierTest < ActiveSupport::TestCase
-    setup do
-      @trainer = create(:trainer)
-      @application = create(:application, :approved, user: create(:constituent), application_date: 1.year.ago)
-    end
-
-    test 'delivers scheduled notifications to constituents' do
-      training_session = create(:training_session, :requested, application: @application, trainer: @trainer)
-      training_session.update!(status: :scheduled, scheduled_for: 1.week.from_now)
-
-      NotificationService.expects(:create_and_deliver!).once.with do |params|
-        params[:type] == 'training_scheduled' &&
-          params[:recipient] == @application.user &&
-          params[:actor] == @trainer &&
-          params[:notifiable] == training_session &&
-          params[:channel] == :email
-      end
-
-      TrainingSessionNotifier.new(training_session).deliver_all
-    end
-
-    test 'does not deliver completed notifications to constituents' do
-      training_session = create(:training_session, :scheduled, application: @application, trainer: @trainer)
-      training_session.update!(status: :completed, notes: 'Training completed')
-
+    test 'defers an explicit intent until the surrounding transaction commits' do
+      session = create(:training_session)
       NotificationService.expects(:create_and_deliver!).never
+      ActiveRecord::Base.transaction(requires_new: true) do
+        outcome = TrainingSessionNotifier.new(session, actor: session.trainer, action: 'training_scheduled').deliver_after_commit
+        assert_equal :deferred, outcome.status
+        assert_nil outcome.notification_id
+        assert_not outcome.warning?
+        raise ActiveRecord::Rollback
+      end
+    end
 
-      TrainingSessionNotifier.new(training_session).deliver_all
+    test 'rejects arbitrary notification actions' do
+      session = create(:training_session)
+      assert_raises(ArgumentError) do
+        TrainingSessionNotifier.new(session, actor: session.trainer, action: 'private_notes')
+      end
     end
   end
 end

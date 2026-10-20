@@ -3,7 +3,6 @@
 class TrainingSession < ApplicationRecord
   has_many :email_delivery_attempts, as: :origin, dependent: :nullify
   include StatusManagement
-  include NotificationDelivery
 
   # `rescheduled` is a legacy display status. Current reschedules keep sessions scheduled.
   OPEN_STATUSES = %i[requested scheduled confirmed].freeze
@@ -13,8 +12,6 @@ class TrainingSession < ApplicationRecord
   belongs_to :trainer, class_name: 'User'
   has_one :constituent, through: :application, source: :user
   belongs_to :product_trained_on, class_name: 'Product', optional: true
-
-  attribute :cancellation_initiator, :integer
 
   enum :cancellation_initiator, {
     constituent: 0,
@@ -48,18 +45,19 @@ class TrainingSession < ApplicationRecord
   validates :reschedule_reason, presence: true, if: :rescheduling?
   validate :trainer_must_be_trainer_type
   validate :scheduled_time_must_be_future
-  validate :historical_session_cannot_reopen, if: :reopening_historical_session?
+  validate :recorded_outcome_cannot_change
   validate :training_session_capacity_available, if: :entering_open_status?
 
   validates :cancellation_reason, presence: true, if: :status_cancelled?
   validates :no_show_notes, presence: true, if: :status_no_show?
-  validates :notes, presence: true, if: :status_completed?
+  validates :constituent_summary, :summary_locale, :completed_at, :report_submitted_at, :product_trained_on, presence: true, if: :status_completed?
+  validates :summary_locale, inclusion: { in: ->(_session) { I18n.available_locales.map(&:to_s) } }, if: :status_completed?
+  validate :actual_completion_not_in_future, if: :status_completed?
+  validate :one_open_appointment, if: :entering_open_status?
   validates :duration_hours, presence: true, numericality: { greater_than: 0 }, if: :status_completed?
 
-  before_save :set_completed_at, if: :status_changed_to_completed?
   before_save :set_cancelled_at, if: :status_changed_to_cancelled?
   before_save :ensure_status_schedule_consistency
-  after_update_commit :deliver_notifications, if: :should_deliver_notifications?
 
   def status_changed_to_cancelled?
     status_cancelled? && status_changed?
@@ -70,7 +68,8 @@ class TrainingSession < ApplicationRecord
   end
 
   def rescheduling?
-    persisted? && status_was == 'scheduled' && scheduled_for_changed?
+    persisted? && %w[scheduled confirmed].include?(status_was) &&
+      (status_scheduled? || status_confirmed?) && scheduled_for_changed?
   end
 
   def will_be_scheduled?
@@ -85,9 +84,9 @@ class TrainingSession < ApplicationRecord
     application.training_sessions
                .completed_sessions
                .where.not(id: id)
-               .where(training_sessions: { created_at: ...created_at })
+               .where('training_sessions.created_at < :time OR (training_sessions.created_at = :time AND training_sessions.id < :id)', time: created_at, id: id)
                .includes(:trainer, :product_trained_on)
-               .order(completed_at: :desc, created_at: :desc)
+               .order(completed_at: :desc, created_at: :desc, id: :desc)
   end
 
   def follow_up_reason
@@ -98,10 +97,23 @@ class TrainingSession < ApplicationRecord
     scheduled_for || cancelled_at || updated_at
   end
 
-  def self.cancellation_initiator_column?
-    connection.schema_cache.columns_hash(table_name).key?('cancellation_initiator')
-  rescue ActiveRecord::ActiveRecordError
-    false
+  def appointment_number
+    return unless persisted?
+
+    application.training_sessions
+               .where('created_at < :time OR (created_at = :time AND id <= :id)', time: created_at, id: id)
+               .count
+  end
+
+  def with_current_trainer_lock(actor)
+    application.with_lock do
+      with_lock do
+        errors.clear
+        raise ArgumentError, I18n.t('training_rules.current_trainer_change') unless application.current_trainer?(actor) && trainer_id == actor&.id
+
+        yield
+      end
+    end
   end
 
   def open_status?
@@ -135,8 +147,14 @@ class TrainingSession < ApplicationRecord
     HISTORICAL_STATUSES.include?(status_was&.to_sym)
   end
 
-  def historical_session_cannot_reopen
-    errors.add(:base, :historical_session_reopen)
+  def recorded_outcome_cannot_change
+    return unless persisted? && will_save_change_to_status? && HISTORICAL_STATUSES.include?(status_was&.to_sym)
+
+    if OPEN_STATUSES.include?(status&.to_sym)
+      errors.add(:base, :historical_session_reopen)
+    else
+      errors.add(:base, I18n.t('training_rules.outcome_recorded'))
+    end
   end
 
   def trainer_must_be_trainer_type
@@ -155,24 +173,14 @@ class TrainingSession < ApplicationRecord
     errors.add(:scheduled_for, 'must be in the future')
   end
 
-  def cannot_complete_without_notes
-    return if notes.present?
-
-    errors.add(:notes, 'must be provided when completing training')
+  def actual_completion_not_in_future
+    errors.add(:completed_at, I18n.t('training_rules.future_actual_completion')) if completed_at&.future?
   end
 
-  def set_completed_at
-    self.completed_at = Time.current if status_completed? && completed_at.nil?
-  end
+  def one_open_appointment
+    return unless application.training_sessions.assigned_or_scheduled.where.not(id: id).exists?
 
-  def status_changed_to_completed?
-    status_completed? && status_changed?
-  end
-
-  def should_deliver_notifications?
-    return false if Rails.env.test? && !Thread.current[:force_notifications]
-
-    saved_change_to_status? || saved_change_to_scheduled_for? || saved_change_to_completed_at?
+    errors.add(:base, I18n.t('training_rules.close_open_first'))
   end
 
   def ensure_status_schedule_consistency

@@ -20,7 +20,7 @@ module ProofUploadFormatsHelper
     {
       controller: 'document-upload',
       action: 'document-upload:clear->document-upload#remove',
-      document_upload_allowed_types_value: ProofUploadFormats.allowed_content_types_json,
+      document_upload_allowed_types_value: ProofUploadFormats.allowed_content_types_json(purpose),
       document_upload_max_bytes_value: ProofUploadFormats.max_bytes(purpose),
       document_upload_max_inclusive_value: ProofUploadFormats.max_inclusive?(purpose),
       document_upload_invalid_type_message_value: UploadedDocument.refusal_message(:invalid_type, purpose: purpose),

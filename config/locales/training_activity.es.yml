@@ -1,0 +1,19 @@
+es:
+  training_activity:
+    scheduled_for: "Programada para %{time}"
+    followup_scheduled_for: "Seguimiento programado para %{time}"
+    rescheduled_from: "De %{time}"
+    rescheduled_to: "A %{time}"
+    cancelled: "Capacitación cancelada"
+    cancelled_by: "Cancelada por %{initiator}"
+    actual_completion: "Finalización real: %{time}"
+    report_submitted: "Informe presentado: %{time}"
+    duration: "Duración: %{hours} horas"
+    product: "ID del producto: %{id}"
+    no_show: "Marcada como ausencia"
+    time_unavailable: "Hora no disponible"
+    initiators:
+      constituent: "la persona participante"
+      trainer: "el instructor"
+      admin: "el administrador"
+      program: "el programa"

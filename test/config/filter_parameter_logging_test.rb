@@ -105,6 +105,43 @@ class FilterParameterLoggingTest < ActiveSupport::TestCase
     assert_equal 'supplemental_notes', filtered['action']
   end
 
+  test 'training text is redacted at top level and in nested hashes and arrays before request logs render' do
+    private_text = 'TrainingPrivateLogSentinel7284'
+    fields = %w[internal_notes constituent_summary cancellation_reason no_show_notes reschedule_reason]
+    values = fields.index_with { |field| "#{private_text}:#{field}" }
+    filtered = ActiveSupport::ParameterFilter.new(Rails.application.config.filter_parameters).filter(
+      values.merge('training_session' => values.merge('summary_locale' => 'es', 'duration_hours' => '1.5'),
+                   'training_sessions' => [values.merge('id' => '7', 'status' => 'completed')],
+                   'controller' => 'trainers/training_sessions', 'action' => 'complete')
+    )
+
+    fields.each do |field|
+      assert_equal '[FILTERED]', filtered[field]
+      assert_equal '[FILTERED]', filtered.dig('training_session', field)
+      assert_equal '[FILTERED]', filtered['training_sessions'].first[field]
+    end
+    assert_equal 'es', filtered.dig('training_session', 'summary_locale')
+    assert_equal '1.5', filtered.dig('training_session', 'duration_hours')
+    assert_equal '7', filtered['training_sessions'].first['id']
+    assert_equal 'completed', filtered['training_sessions'].first['status']
+    assert_equal 'trainers/training_sessions', filtered['controller']
+    assert_equal 'complete', filtered['action']
+    assert_not_includes "Parameters: #{filtered.inspect}", private_text
+  end
+
+  test 'training stored free text does not appear in SQL bind debug logs' do
+    session = create(:training_session)
+    fields = %w[internal_notes constituent_summary cancellation_reason no_show_notes reschedule_reason]
+    values = fields.index_with { |field| "TrainingSqlPrivateProbe:#{field}" }
+    log = capture_active_record_log { session.update!(values) }
+
+    assert_not_includes log, 'TrainingSqlPrivateProbe'
+    fields.each do |field|
+      assert_includes log, "[\"#{field}\", \"[FILTERED]\"]"
+      assert_equal values.fetch(field), session.reload.public_send(field)
+    end
+  end
+
   test 'evaluation attendee names are filtered at their stored SQL attribute as well as the form field' do
     evaluation = create(:evaluation)
 

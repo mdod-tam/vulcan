@@ -87,6 +87,7 @@ es:
       letter_blocked: Los controles de entrega bloquean la carta y aún no se ha cancelado
         en la cola de impresión.
     reasons:
+      trainer_coverage_changed: Este mensaje no se envió porque la persona destinataria ya no es el capacitador asignado.
       all_disabled: Todas las comunicaciones están desactivadas.
       global_disabled: El correo electrónico está desactivado.
       letters_disabled: Las cartas están desactivadas.

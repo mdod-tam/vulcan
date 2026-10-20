@@ -31,6 +31,12 @@ Equipment identifiers use normalized encrypted equality for duplicate checks. Pa
 
 The password digest is a BCrypt hash that is also encrypted at rest. A WebAuthn public key is not a cryptographic secret, though this application encrypts its stored value.
 
+## Training content and public product guidance
+
+Training report `internal_notes`, `constituent_summary`, and private cancellation/no-show reasons are not encrypted attributes. Their audience is controlled by application/session authorization: current staff/trainer views can resolve preparation and private notes; former trainers retain only their own completed-report access; the applicant/current managing guardian receives the deliberately authored shared summary. Shared text is not inferred from private notes, and completion notifications link to the authenticated report instead of copying private report content into delivery metadata. Adding note encryption would require a separate design for both training and evaluation content.
+
+Product resources have a different audience: they are public program guidance with an explicit language and exact catalog-product target. Resource PDFs use signed Active Storage proxy links without a resource-specific login guard. Editors must not include personal, application, or session information in a resource URL or file. Device associations and shared training history remain authorized even though their linked guidance is public. A demo model's guidance can appear on its authorized training summary without adding that model to Devices.
+
 ## Looking up encrypted contacts
 
 `User.find_by_email`, `find_by_phone`, `exists_with_email?`, and `exists_with_phone?` are the contact lookup and uniqueness path. They share one normalization — lowercased email, and `XXX-XXX-XXXX` formatting for valid US numbers — which is what makes a deterministic match possible at all, since the ciphertext of an unnormalized value differs. Database unique indexes back the same two columns.
@@ -61,6 +67,8 @@ Fixtures are encrypted and key references are stored. These settings do not esta
 ## Keep personal data out of logs
 
 [Parameter filtering](../../config/initializers/filter_parameter_logging.rb) covers contact details, names, addresses, DOB, password fields, provider contacts, and tokens. Paper identity receipts, rationales, and upload `*_signed_id` parameters are filtered. The filter also covers `identity_decision` as defense in depth. Autosave filters `field_value`, which can contain personal data, and its `autosave_context` page identifier. Encrypted attributes are also added to filtering. Review storage and filtering together when adding a sensitive field.
+
+Training request filters cover exact `internal_notes`, `constituent_summary`, cancellation/no-show reason keys, and reschedule reasons. Audit/notification metadata contains structural training facts instead of those text bodies. [Product resource filtering](../../config/initializers/product_resource_parameter_filter.rb) hides uploaded document parameters, signed upload references, resource URLs, and manufacturer-documentation URLs. Model filtering also hides resource/manufacturer URLs from SQL/inspection output because an external URL can carry query credentials even when its guidance is public.
 
 Equipment request filtering covers serial, IMEI, tracking, correction reasons, and the signed `impact_token` confirmation payload. That signature binds reviewed values; it does not encrypt the payload, so it needs explicit log filtering even when the individual identifier fields are filtered.
 

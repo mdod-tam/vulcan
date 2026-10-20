@@ -10,8 +10,8 @@ module Trainers
       @admin = create(:admin)
       @constituent = create(:constituent, first_name: 'Training', last_name: 'Participant')
       @other_constituent = create(:constituent, first_name: 'Other', last_name: 'Participant')
-      @application = create(:application, :old_enough_for_new_application, user: @constituent)
-      @other_application = create(:application, :old_enough_for_new_application, user: @other_constituent)
+      @application = create(:application, :approved, :with_all_proofs, user: @constituent, application_date: Date.current, assigned_trainer: @trainer)
+      @other_application = create(:application, :approved, :with_all_proofs, user: @other_constituent, application_date: Date.current, assigned_trainer: @other_trainer)
       @session = create(:training_session, :scheduled, trainer: @trainer, application: @application)
       @other_session = create(:training_session, :scheduled, trainer: @other_trainer, application: @other_application)
     end
@@ -26,7 +26,8 @@ module Trainers
       assert_response :success
       assert_includes assigns(:activity_logs), own_event
       assert_not_includes assigns(:activity_logs), other_event
-      assert_includes @response.body, 'Own session activity'
+      assert_includes @response.body, 'Training Scheduled'
+      assert_not_includes @response.body, 'Own session activity'
       assert_not_includes @response.body, 'Other session activity'
       assert_includes @response.body, 'Constituent'
       assert_includes @response.body, @constituent.full_name
@@ -60,7 +61,7 @@ module Trainers
 
     test 'follow-up sessions exclude cancelled sessions superseded by a newer scheduled session' do
       sign_in_for_integration_test(@trainer)
-      application = create(:application, :old_enough_for_new_application, user: create(:constituent))
+      application = covered_application
       cancelled_session = create(:training_session, :cancelled, trainer: @trainer, application: application, created_at: 1.day.ago)
       create(:training_session, :scheduled, trainer: @trainer, application: application, created_at: Time.current)
 
@@ -73,8 +74,8 @@ module Trainers
 
     test 'recent follow-up sessions are ordered by newest updated_at first' do
       sign_in_for_integration_test(@trainer)
-      older_application = create(:application, :old_enough_for_new_application, user: create(:constituent))
-      newer_application = create(:application, :old_enough_for_new_application, user: create(:constituent))
+      older_application = covered_application
+      newer_application = covered_application
       older_session = create(:training_session, :cancelled, trainer: @trainer, application: older_application, updated_at: 2.days.ago)
       newer_session = create(:training_session, :no_show, trainer: @trainer, application: newer_application, updated_at: 1.hour.ago)
 
@@ -87,8 +88,8 @@ module Trainers
 
     test 'requested and scheduled sessions render in their own open-session buckets' do
       sign_in_for_integration_test(@trainer)
-      requested_application = create(:application, :old_enough_for_new_application, user: create(:constituent))
-      scheduled_application = create(:application, :old_enough_for_new_application, user: create(:constituent))
+      requested_application = covered_application
+      scheduled_application = covered_application
       requested_session = create(:training_session, :requested, trainer: @trainer, application: requested_application, created_at: 1.day.ago)
       scheduled_session = create(:training_session, :scheduled, trainer: @trainer, application: scheduled_application, created_at: Time.current)
 
@@ -100,23 +101,104 @@ module Trainers
       assert_includes assigns(:upcoming_sessions), scheduled_session
     end
 
-    test 'scheduled sessions include multiple future sessions for the same application' do
+    test 'scheduled sessions keep legitimate appointments on separate applications isolated by current trainer' do
       sign_in_for_integration_test(@trainer)
-      additional_session = create(:training_session, :scheduled, trainer: @trainer, application: @application, scheduled_for: 2.days.from_now)
+      additional_application = covered_application
+      additional_session = create(:training_session, :scheduled, trainer: @trainer, application: additional_application, scheduled_for: 2.days.from_now)
 
       get trainers_dashboard_path
 
       assert_response :success
-      assert_includes assigns(:scheduled_sessions), @session
-      assert_includes assigns(:scheduled_sessions), additional_session
+      assert_equal [@session.id, additional_session.id].sort, assigns(:scheduled_sessions).pluck(:id).sort
       assert_includes assigns(:upcoming_sessions), @session
       assert_includes assigns(:upcoming_sessions), additional_session
+      assert_not_includes assigns(:scheduled_sessions), @other_session
+      assert_equal 1, @application.training_sessions.assigned_or_scheduled.count
+      assert_equal 1, additional_application.training_sessions.assigned_or_scheduled.count
+    end
+
+    test 'past outcomes are separated from upcoming scheduled and confirmed appointments' do
+      sign_in_for_integration_test(@trainer)
+      later = create(:training_session, :scheduled, trainer: @trainer, application: covered_application, scheduled_for: 3.days.from_now)
+      confirmed = create(:training_session, :scheduled, status: :confirmed, trainer: @trainer, application: covered_application, scheduled_for: 4.days.from_now)
+
+      travel_to 2.days.from_now do
+        get trainers_dashboard_path
+
+        assert_response :success
+        assert_includes assigns(:overdue_sessions), @session
+        assert_not_includes assigns(:upcoming_sessions), @session
+        assert_equal [later.id, confirmed.id], assigns(:upcoming_sessions).pluck(:id)
+        assert_includes assigns(:scheduled_sessions), confirmed
+        assert_select 'h2', text: 'Past appointments needing an outcome'
+        assert_select 'section[aria-labelledby="overdue-training-heading"] a[href=?]', trainers_training_session_path(@session)
+        assert_select 'section[aria-labelledby="overdue-training-heading"] a[href=?]', trainers_training_session_path(@other_session), count: 0
+      end
+    end
+
+    test 'removed and reassigned trainers keep completed authorship without current open or follow-up work' do
+      report = create(:training_session, :completed, trainer: @trainer, application: @application, created_at: 2.days.ago)
+      assert @application.unassign_trainer!(actor: @admin)
+      assert @application.assign_trainer!(@other_trainer, actor: @admin)
+      replacement = @application.latest_training_session
+      sign_in_for_integration_test(@trainer)
+
+      get trainers_dashboard_path
+
+      assert_response :success
+      assert_includes assigns(:completed_sessions), report
+      assert_not_includes assigns(:requested_sessions), replacement
+      assert_not_includes assigns(:followup_sessions), @session
+      assert_empty assigns(:scheduled_sessions)
+      assert_select 'a[href=?]', trainers_training_session_path(report)
+      assert_select 'a[href=?]', trainers_training_session_path(replacement), count: 0
+    end
+
+    test 'covered requests hand off to the current trainer without exposing administrative application links' do
+      application, report = requested_covered_application(@trainer)
+      other_application, = requested_covered_application(@other_trainer)
+      sign_in_for_integration_test(@trainer)
+
+      get trainers_dashboard_path
+
+      assert_response :success
+      assert_includes assigns(:pending_training_requests), application
+      assert_not_includes assigns(:pending_training_requests), other_application
+      assert_select '#needs-scheduling-section tr', text: /#{Regexp.escape(application.user.full_name)}/ do
+        assert_select 'span', text: 'Awaiting Scheduling'
+        assert_select 'a[href=?]', trainers_training_session_path(report), text: 'Review request and arrange next appointment'
+        assert_select 'a[href=?]', admin_application_path(application), count: 0
+      end
+      assert_select 'a[href=?]', admin_application_path(application), count: 0
+      assert_select '#covered-requests-heading', count: 0
+    end
+
+    test 'administrator requests distinguish own trainer handoff covered oversight and uncovered assignment' do
+      own_application, own_report = requested_covered_application(@admin)
+      covered_application, = requested_covered_application(@trainer)
+      uncovered = create(:application, :approved, :with_all_proofs, user: create(:constituent, first_name: 'Uncovered', last_name: 'Participant'),
+                                                                    application_date: Date.current, training_requested_at: Time.current)
+      sign_in_for_integration_test(@admin)
+
+      get trainers_dashboard_path
+
+      assert_select '#needs-scheduling-section tr', text: /#{Regexp.escape(own_application.user.full_name)}/ do
+        assert_select 'a[href=?]', trainers_training_session_path(own_report), text: 'Review request and arrange next appointment'
+      end
+      assert_select '#needs-scheduling-section tr', text: /#{Regexp.escape(covered_application.user.full_name)}/ do
+        assert_select 'span', text: 'Awaiting Scheduling'
+        assert_select 'a[href=?]', admin_application_path(covered_application), text: 'Review trainer coverage'
+      end
+      assert_select '#needs-scheduling-section tr', text: /#{Regexp.escape(uncovered.user.full_name)}/ do
+        assert_select 'span', text: 'Awaiting Assignment'
+        assert_select 'a[href=?]', admin_application_path(uncovered), text: 'Visit App And Assign Trainer'
+      end
     end
 
     test 'admin dashboard surfaces scheduled sessions assigned to the admin separately' do
       sign_in_for_integration_test(@admin)
       admin_constituent = create(:constituent, first_name: 'Admin', last_name: 'Training')
-      admin_application = create(:application, :old_enough_for_new_application, user: admin_constituent)
+      admin_application = covered_application(trainer: @admin, user: admin_constituent)
       admin_session = create(:training_session, :scheduled, trainer: @admin, application: admin_application)
 
       get trainers_dashboard_path
@@ -131,6 +213,20 @@ module Trainers
     end
 
     private
+
+    def covered_application(trainer: @trainer, user: nil)
+      @covered_application_count = @covered_application_count.to_i + 1
+      user ||= create(:constituent, first_name: "Covered #{@covered_application_count}", last_name: 'Participant')
+      create(:application, :approved, :with_all_proofs, user: user, application_date: Date.current, assigned_trainer: trainer)
+    end
+
+    def requested_covered_application(trainer)
+      application = covered_application(trainer: trainer)
+      report = create(:training_session, :completed, application: application, trainer: trainer, created_at: 1.day.ago)
+      result = Applications::TrainingRequestService.new(application: application, current_user: application.user).call
+      assert result.success?, result.message
+      [application, report]
+    end
 
     def create_training_event(training_session, notes, created_at: Time.current)
       Event.create!(

@@ -1,72 +1,36 @@
 # frozen_string_literal: true
 
 module TrainingSessions
-  # Service object to handle scheduling a training session.
-  # This service encapsulates the logic for updating the training session's
-  # status to scheduled, validating required parameters, and creating the associated event.
   class ScheduleService < BaseService
     def initialize(training_session, current_user, params)
       super()
       @training_session = training_session
-      @current_user = current_user
+      @actor = current_user
       @params = params
     end
 
     def call
-      validate_params!
+      @training_session.with_current_trainer_lock(@actor) do
+        raise ArgumentError, I18n.t('training_rules.requested_schedule_only') unless @training_session.status_requested?
+        raise ArgumentError, I18n.t('training_rules.schedule_service_window') unless @training_session.application.service_window_active?
 
-      ActiveRecord::Base.transaction do
-        update_training_session!
-        create_event!
+        attributes = { status: :scheduled, scheduled_for: @params[:scheduled_for], location: @params[:location] }
+        attributes[:internal_notes] = @params[:internal_notes] if @params.key?(:internal_notes)
+        @training_session.update!(attributes)
+        AuditEventService.log(
+          actor: @actor, action: 'training_scheduled', auditable: @training_session,
+          metadata: { application_id: @training_session.application_id, training_session_id: @training_session.id,
+                      scheduled_for: @training_session.scheduled_for.iso8601 }
+        )
+        @notification_outcome = TrainingSessionNotifier.new(
+          @training_session, actor: @actor, action: 'training_scheduled'
+        ).deliver_after_commit
       end
-
-      success('Training session scheduled successfully.', { training_session: @training_session })
+      success(I18n.t('training_rules.scheduled'), { training_session: @training_session, notification_outcome: @notification_outcome })
     rescue ActiveRecord::RecordInvalid => e
-      Rails.logger.error("Error scheduling training session: #{e.message}")
-      failure(e.message)
+      failure(e.record.errors.full_messages.to_sentence, { training_session: @training_session })
     rescue ArgumentError => e
-      log_validation_failure(e)
-      failure(e.message)
-    rescue StandardError => e
-      Rails.logger.error("Unexpected error scheduling training session: #{e.message}")
-      failure("An unexpected error occurred: #{e.message}")
-    end
-
-    private
-
-    def validate_params!
-      raise ArgumentError, 'scheduled_for is required' if @params[:scheduled_for].blank?
-    end
-
-    def log_validation_failure(error)
-      Rails.logger.warn("TrainingSessions::ScheduleService validation failed: #{error.message}")
-    end
-
-    def update_training_session!
-      @training_session.update!(
-        status: :scheduled,
-        scheduled_for: @params[:scheduled_for],
-        notes: @params[:notes],
-        location: @params[:location],
-        cancellation_reason: nil,
-        no_show_notes: nil
-      )
-    end
-
-    def create_event!
-      AuditEventService.log(
-        actor: @current_user,
-        action: 'training_scheduled',
-        auditable: @training_session,
-        metadata: {
-          application_id: @training_session.application_id,
-          training_session_id: @training_session.id,
-          scheduled_for: @training_session.scheduled_for&.iso8601,
-          notes: @training_session.notes,
-          location: @training_session.location,
-          timestamp: Time.current.iso8601
-        }
-      )
+      failure(e.message, { training_session: @training_session })
     end
   end
 end

@@ -489,7 +489,6 @@ es:
     training_sessions:
       flash:
         assigned_trainer_only: "Solo el capacitador asignado puede actualizar esta sesión de capacitación."
-        update_status_failed: "No se pudo actualizar el estado de la sesión de capacitación: %{message}"
         complete_failed: "No se pudo completar la sesión de capacitación: %{message}"
         schedule_failed: "No se pudo programar la sesión de capacitación: %{message}"
         schedule_additional_failed: "No se pudo programar la sesión de capacitación adicional: %{message}"
@@ -514,6 +513,8 @@ es:
         title: "Evaluación enviada"
         message: "El programa MAT recibió el informe de evaluación."
   training_session_notifications:
+    rescheduled_at_constituent_request: "Usted solicitó un cambio en su cita."
+    not_scheduled_yet: "Aún sin programar"
     trainer_assigned:
       labels:
         english: "Inglés"
@@ -527,6 +528,7 @@ es:
         typed: "Comunicación escrita"
         not_specified: "No especificado"
     training_cancelled:
+      unscheduled_message: "Se cerró su solicitud de capacitación sin programar. No se canceló ninguna fecha de cita."
       scheduled_message: "Su sesión de capacitación programada para %{scheduled_for} ha sido cancelada. Lamentamos cualquier inconveniente."
       assignment_removed_message: "Su asignación de capacitador se eliminó antes de que se programara una fecha de sesión. Estamos trabajando para asignarle un nuevo capacitador."
   training_sessions:
@@ -538,7 +540,7 @@ es:
       duration_hours_required: "duration_hours es obligatorio"
     cancel:
       success: "La sesión de capacitación se canceló correctamente."
-      invalid_status: "Solo las sesiones de capacitación programadas o confirmadas se pueden cancelar."
+      invalid_status: "Solo las sesiones solicitadas, programadas o confirmadas se pueden cancelar."
       reason_required: "cancellation_reason es obligatorio"
     reschedule:
       wrong_status: "Solo las sesiones de capacitación programadas o confirmadas se pueden reprogramar."
@@ -553,7 +555,7 @@ es:
       unexpected_error: "Ocurrió un error inesperado: %{message}"
     schedule_additional:
       success: "La sesión de capacitación adicional se programó correctamente."
-      invalid_source: "Las sesiones adicionales solo se pueden programar desde una sesión de capacitación programada, confirmada o completada."
+      invalid_source: "Las citas adicionales requieren la última sesión de capacitación completada."
       missing_scheduled_for: "scheduled_for es obligatorio"
       service_window_closed: "La capacitación ya no está disponible para esta solicitud."
       quota_exhausted: "Esta persona ya usó todas las sesiones de capacitación disponibles."
@@ -794,6 +796,7 @@ es:
         contact_line: "Teléfono: %{support_phone} | Correo electrónico: %{support_email} | Sitio web: %{program_website_url}"
       page_number: "Página %{page} de %{total}"
       titles:
+        training_session_notifications_training_completed: "Su informe de capacitación está listo"
         application_notifications_account_created: "Recibimos su solicitud de Telecomunicaciones Accesibles de Maryland"
         application_notifications_registration_confirmation: "Bienvenido al Programa de Telecomunicaciones Accesibles de Maryland"
         application_notifications_proof_rejected: "Se requiere seguimiento para la verificación de documentos"

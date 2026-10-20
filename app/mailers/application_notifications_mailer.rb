@@ -39,9 +39,14 @@ class ApplicationNotificationsMailer < ApplicationMailer # rubocop:disable Metri
   def training_requested(application, notification)
     with_mailer_error_handling("training_requested application=#{application&.id} notification=#{notification&.id}") do
       admin = notification.recipient
+      trainer_audience = notification.metadata['recipient_audience'] == 'assigned_trainer'
+      if trainer_audience && !application.current_trainer?(admin)
+        EmailDelivery::Outcome.record_not_sent(EmailDelivery::Decision.suppressed(:trainer_coverage_changed),
+                                               context: @delivery_context, mail_action: 'ApplicationNotificationsMailer#training_requested')
+        return noop_delivery(channel: :email, reason: 'trainer_coverage_changed')
+      end
       template_name = 'application_notifications_training_requested'
-      # Staff-only seed content is maintained only in English.
-      locale        = 'en'
+      locale = trainer_audience ? resolve_template_locale(recipient: admin) : 'en'
       text_template = find_text_template(template_name, locale: locale)
       variables     = build_training_requested_variables(
         application,
@@ -836,7 +841,7 @@ class ApplicationNotificationsMailer < ApplicationMailer # rubocop:disable Metri
 
   def build_training_requested_variables(application, notification, template:, locale: nil)
     admin = notification.recipient
-    constituent = notification.actor || application.user
+    constituent = application.user
     request_date = application.training_requested_at || Time.current
     base_variables = build_base_email_variables(
       template: template,
@@ -852,10 +857,18 @@ class ApplicationNotificationsMailer < ApplicationMailer # rubocop:disable Metri
       constituent_full_name: constituent.full_name,
       application_id: application.id,
       request_date_formatted: I18n.l(request_date.to_date, format: :long, locale: locale),
-      admin_application_url: admin_application_url(application, host: default_url_options[:host])
+      admin_application_url: training_request_destination(application, notification)
     }
 
     base_variables.merge(variables).compact
+  end
+
+  def training_request_destination(application, notification)
+    if notification.metadata['recipient_audience'] == 'assigned_trainer'
+      trainers_training_session_url(application.latest_training_session, host: default_url_options[:host])
+    else
+      admin_application_url(application, host: default_url_options[:host])
+    end
   end
 
   # --- Proof received ---

@@ -1,6 +1,7 @@
 import { Controller } from "@hotwired/stimulus"
 
 export default class extends Controller {
+  static values = { message: String }
   static targets = ["dialog", "duration", "message", "yesButton", "noButton"]
 
   connect() {
@@ -18,7 +19,7 @@ export default class extends Controller {
     }
 
     event.preventDefault()
-    this.messageTarget.textContent = `You entered more than the typical number of training hours. Confirm ${this.formatDuration(duration)} hours?`
+    this.messageTarget.textContent = this.messageValue.replace("__HOURS__", this.formatDuration(duration))
     this.openDialog()
   }
 

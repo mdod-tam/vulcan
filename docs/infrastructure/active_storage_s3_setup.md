@@ -1,6 +1,6 @@
 # Active Storage and S3
 
-Uploaded files — proofs, disability certifications, vendor W-9s — are Active Storage attachments.
+Uploaded files — proofs, disability certifications, vendor W-9s, and public product-guidance PDFs — are Active Storage attachments.
 
 Tests and development default to disk storage. Development can opt into S3; other environments use S3.
 
@@ -43,9 +43,17 @@ USE_S3=true S3_BUCKET=… S3_ACCESS_KEY_ID=… S3_SECRET_ACCESS_KEY=… bin/dev
 
 ## Direct uploads need bucket CORS
 
-Paper intake, portal proof submission, vendor profile W-9 upload, and admin certification upload all use Active Storage direct upload: the browser `PUT`s the file to the bucket itself and submits a server-issued reference to Rails. Ordinary uploads obtain blob references from `/rails/active_storage/direct_uploads`; vendor profile W9 uploads use the authenticated `/vendor_portal/w9_uploads` endpoint and vendor-bound signed references. The bucket needs a CORS rule allowing `PUT` from the application's origin, which nothing in this repository can set — it is bucket-side configuration. A browser-only failure after either upload-metadata endpoint succeeds is a reason to check that CORS rule and the application origin.
+Paper intake, portal proof submission, vendor profile W-9 upload, admin certification upload, and admin product-resource upload use Active Storage direct upload: the browser `PUT`s the file to the bucket itself and submits a server-issued reference to Rails. Ordinary uploads obtain blob references from `/rails/active_storage/direct_uploads`; vendor profile W9 uploads use the authenticated `/vendor_portal/w9_uploads` endpoint and vendor-bound signed references. The bucket needs a CORS rule allowing `PUT` from the application's origin, which nothing in this repository can set — it is bucket-side configuration. A browser-only failure after either upload-metadata endpoint succeeds is a reason to check that CORS rule and the application origin.
 
-These documents contain personal information, so keep the bucket private. Ordinary proof/certification attachments use the configured [Rails proxy URLs](../../config/initializers/active_storage.rb), whose signed blob IDs have no default expiry; S3 service URL expiry does not expire those Rails links. **W9s use authenticated application streaming routes instead**, with vendor/document authorization at retrieval and private, non-cacheable responses. Ordinary blob, proxy, preview, variant and disk routes deny protected current, retained and staged W9s. Public resubmission links permit submission only. Follow the [vendor tax-record cutover](vendor_tax_records_cutover.md) for existing objects, service-key rotation, old upload references and cache invalidation; private-bucket settings alone do not revoke a previously issued service URL.
+Proof, certification, and tax documents can contain personal information, so keep the bucket private. Public product PDFs are a separate guidance audience described below. Ordinary proof/certification attachments use the configured [Rails proxy URLs](../../config/initializers/active_storage.rb), whose signed blob IDs have no default expiry; S3 service URL expiry does not expire those Rails links. **W9s use authenticated application streaming routes instead**, with vendor/document authorization at retrieval and private, non-cacheable responses. Ordinary blob, proxy, preview, variant and disk routes deny protected current, retained and staged W9s. Public resubmission links permit submission only. Follow the [vendor tax-record cutover](vendor_tax_records_cutover.md) for existing objects, service-key rotation, old upload references and cache invalidation; private-bucket settings alone do not revoke a previously issued service URL.
+
+## Public product guidance PDFs
+
+`ProductResource#document` holds public, product-specific program guidance rather than a constituent/session upload. Admin product management explains that saving publishes the resource and prohibits personal, application, or session information. Guidance requires exactly one safe absolute HTTP(S) URL or PDF, a title, and a supported authored language. PDFs have a 10 MB inclusive limit and must identify as PDF from content; existing proof, certification, and W9 acceptance rules are unchanged. Use searchable/tagged PDFs, and captions/transcripts for externally hosted videos. The application does not convert PDFs or certify accessibility.
+
+These PDFs use ordinary signed Active Storage proxy downloads with attachment disposition. There is no resource-specific login-only download route, and the W9/print-queue storage guards do not protect them. Signed resource URLs carry no personalized application/device relationship. Devices and shared training reports authorize those relationships separately before linking to the same public guidance. Manufacturer documentation remains separate catalog metadata.
+
+The existing manual-upload gate validates size, inspects content, and checks blob reuse. Resource publication, attachment change, and structural audit share a transaction. A failed replacement/source switch retains the prior saved resource and PDF; an accepted staged upload can be retained for a corrected submission. Replaced content is purged after successful commit. Resource audits omit URLs/file bodies/signed references, and request/SQL filters hide URL and upload values. Content inspection is not a malware-scanning service.
 
 ## Verify upload and retrieval
 

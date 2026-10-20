@@ -1,0 +1,27 @@
+es:
+  product_resources:
+    heading: Guías del producto
+    empty: Aún no se han agregado guías para este producto.
+    preferred_unavailable: "No hay guías en %{language}. A continuación se muestran recursos en otros idiomas."
+    other_language: Otro idioma
+    external_link: "(enlace externo, se abre en una pestaña nueva)"
+    pdf_download: "(descargar PDF, %{size}, %{language})"
+    manufacturer_documentation: Documentación general del fabricante
+    invalid_pdf: debe ser un documento PDF
+    languages:
+      en: inglés
+      es: español
+    devices:
+      heading: Dispositivos
+      description: Dispositivos comprados con vales del programa o enviados por el programa, agrupados por beneficiario.
+      shipment_notice: El programa registra el envío; esto no confirma la recepción.
+      beneficiary: "Dispositivos de %{name}"
+      model: "Modelo: %{number}"
+      empty_heading: Aún no hay dispositivos registrados
+      empty: Las compras completadas con vales y los envíos del programa aparecerán aquí. La capacitación con un dispositivo de demostración no lo agrega a esta lista.
+      dashboard: Volver al panel
+      back: Volver a Dispositivos
+      access_denied: Esta página está disponible para los constituyentes.
+      sources:
+        voucher_purchase: Comprado con vale
+        program_shipment: Enviado por el programa

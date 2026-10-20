@@ -34,6 +34,8 @@ class UploadedDocument
 
   # Shared refusal wording for server responses and browser validation.
   def self.refusal_message(reason, purpose:, locale: I18n.locale)
+    return I18n.t('product_resources.invalid_pdf', locale: locale) if purpose == :product_resource && reason == :invalid_type
+
     key = reason == :too_large && !ProofUploadFormats.max_inclusive?(purpose) ? :too_large_strict : reason
     I18n.t("documents.refused.#{key}", max_size: purpose && ProofUploadFormats.max_megabytes(purpose), locale: locale)
   end
@@ -182,7 +184,7 @@ class UploadedDocument
   end
 
   def check_content(file_or_blob)
-    ProofAttachmentValidator.check_content!(file_or_blob)
+    ProofAttachmentValidator.check_content!(file_or_blob, allowed_types: ProofUploadFormats.content_types(@purpose))
   rescue ProofAttachmentValidator::ValidationError => e
     refuse(e.error_type)
   end

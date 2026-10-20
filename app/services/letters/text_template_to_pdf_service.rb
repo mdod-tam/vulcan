@@ -28,12 +28,15 @@ module Letters
       'medical_provider_request_certification' => 'Request for Medical Certification',
       'voucher_notifications_voucher_assigned' => 'Your Accessibility Equipment Voucher',
       'voucher_notifications_voucher_redeemed' => 'Voucher Redemption Confirmation',
-      'evaluator_mailer_evaluation_submission_confirmation' => 'Evaluation Submission Confirmation'
+      'evaluator_mailer_evaluation_submission_confirmation' => 'Evaluation Submission Confirmation',
+      'training_session_notifications_training_completed' => 'Your Training Report Is Ready'
     }.freeze
 
     attr_reader :template_name, :format, :template, :variables, :recipient, :letter_type_override
 
-    def initialize(template_name:, recipient:, variables: {}, locale: nil, letter_type: nil, delivery_context: nil, secure_request_form: nil, request_key: nil) # rubocop:disable Metrics/ParameterLists
+    def initialize(template_name:, recipient:, variables: {}, application: nil, locale: nil, letter_type: nil, delivery_context: nil,
+                   secure_request_form: nil, request_key: nil) # rubocop:disable Metrics/ParameterLists
+      @application = application || variables[:application]
       @locale = locale
       @delivery_context = delivery_context
       @secure_request_form = secure_request_form
@@ -79,7 +82,7 @@ module Letters
                                      end
       raise EmailDelivery::ConfigurationError.new(reason: 'template_identity_changed') unless context.nil? || context['template_name'] == template_name
 
-      Delivery.queue!(recipient: recipient, application: variables[:application], letter_type: determine_letter_type,
+      Delivery.queue!(recipient: recipient, application: @application, letter_type: determine_letter_type,
                       context: context, secure_request_form: @secure_request_form, request_key: @request_key) { generate_pdf }
     end
 

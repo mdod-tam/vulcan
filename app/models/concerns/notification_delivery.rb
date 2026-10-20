@@ -18,13 +18,7 @@ module NotificationDelivery
     @delivering_notifications = true
 
     begin
-      # Use the appropriate mailer based on the model type
-      case self
-      when TrainingSession
-        TrainingSessionNotifier.new(self).deliver_all
-      else
-        Rails.logger.warn("No notification handler defined for #{self.class.name}")
-      end
+      Rails.logger.warn("No notification handler defined for #{self.class.name}")
     rescue StandardError => e
       log_delivery_error(e)
       # Re-raise the error to trigger Rails' retry mechanism

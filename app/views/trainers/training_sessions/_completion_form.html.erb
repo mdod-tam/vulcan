@@ -1,69 +1,129 @@
-<div class="<%= local_assigns.fetch(:card_class) %>">
-  <div class="px-4 py-5 sm:p-6">
-    <h3 class="text-lg leading-6 font-medium text-gray-900 mb-4" id="complete-training-heading">
-      Mark Training as Completed
-    </h3>
+<%# locals: (training_session:) -%>
+<div class="mt-4">
+  <h3 class="text-lg font-semibold"><%= t('trainer_workflow.forms.completion_heading') %></h3>
+  <p class="mt-2 text-sm text-gray-600"><%= t('trainer_workflow.forms.completion_help') %></p>
+  <%= form_with url: complete_trainers_training_session_path(training_session), namespace: :complete, class: 'mt-4 space-y-4',
+                data: { controller: 'training-duration-confirmation', action: 'submit->training-duration-confirmation#confirm',
+                        training_duration_confirmation_message_value: t('trainer_workflow.confirmation.message', hours: '__HOURS__') } do |f| %>
+    <%= render 'shared/action_errors', action: :complete, form: f, form_errors: @training_form_errors,
+                                       heading: t('trainer_workflow.error_heading') %>
+    <div>
+      <%= f.label :completed_at, t('trainer_workflow.fields.completed_at', zone: Time.zone.name), class: 'block font-medium' %>
+      <%= f.datetime_local_field :completed_at,
+                                 value: training_form_value(:complete,
+                                                            :completed_at,
+                                                            form_values: @training_form_values),
+                                 required: true,
 
-    <%= form_with(
-      url: complete_trainers_training_session_path(training_session),
-      method: :post,
-      local: true,
-      class: "space-y-4",
-      aria: { labelledby: "complete-training-heading" },
-      data: {
-        controller: "training-duration-confirmation",
-        action: "submit->training-duration-confirmation#confirm"
-      }
-    ) do |f| %>
-      <div>
-        <%= f.label :product_trained_on_id, class: "block text-sm font-medium text-gray-700" do %>
-          Product Trained On <span class="text-red-600">*</span><span class="sr-only"> (required)</span>
-        <% end %>
-        <%= f.collection_select :product_trained_on_id, Product.all.order(:name), :id, :name, { prompt: "Select a product" }, { class: "mt-1 block w-full pl-3 pr-10 py-2 text-base border-gray-300 focus:outline-none focus:ring-indigo-500 focus:border-indigo-500 sm:text-sm rounded-md", required: true, aria: { required: "true" } } %>
-      </div>
+                                 class: 'mt-1 w-full rounded-md border-gray-300',
+                                 aria: training_form_aria(:complete,
+                                                          :completed_at,
+                                                          form_errors: @training_form_errors) %>
+      <%= render 'shared/field_errors', action: :complete, attribute: :completed_at, form_errors: @training_form_errors %>
+    </div>
+    <div>
+      <%= f.label :product_trained_on_id, t('trainer_workflow.fields.product'), class: 'block font-medium' %>
+      <p class="text-sm text-gray-600"><%= t('trainer_workflow.forms.product_help') %></p>
+      <%= f.collection_select :product_trained_on_id,
+                              @available_products,
+                              :id,
+                              :name,
+                              { include_blank: t('trainer_workflow.forms.choose_product'),
+                                selected: training_form_value(:complete,
+                                                              :product_trained_on_id,
+                                                              form_values: @training_form_values) },
+                              { required: true,
+                                class: 'mt-1 w-full rounded-md border-gray-300',
+                                aria: training_form_aria(:complete,
+                                                         :product_trained_on_id,
+                                                         form_errors: @training_form_errors) } %>
+      <%= render 'shared/field_errors', action: :complete, attribute: :product_trained_on_id, form_errors: @training_form_errors %>
+    </div>
+    <div>
+      <%= f.label :duration_hours, t('trainer_workflow.fields.duration'), class: 'block font-medium' %>
+      <%= f.number_field :duration_hours, data: { training_duration_confirmation_target: 'duration' },
+                                          value: training_form_value(:complete,
+                                                                     :duration_hours,
+                                                                     form_values: @training_form_values),
+                                          min: 0.01,
+                                          step: 0.01,
 
-      <div>
-        <%= f.label :duration_hours, class: "block text-sm font-medium text-gray-700" do %>
-          Training Duration <span class="text-red-600">*</span><span class="sr-only"> (required)</span>
-        <% end %>
-        <%= f.number_field :duration_hours,
-                           value: training_session.duration_hours || 2.0,
-                           min: 0.25,
-                           step: 0.25,
-                           required: true,
-                           class: "mt-1 block w-full border border-gray-300 rounded-md shadow-sm py-2 px-3 focus:outline-none focus:ring-indigo-500 focus:border-indigo-500 sm:text-sm",
-                           aria: { required: "true" , describedBy: "duration_hours_hints"},
-                           data: { training_duration_confirmation_target: "duration" } %>
-        <p class="mt-1 text-sm text-gray-500" id="duration_hours_hint">Enter total time spent training, in hours.</p>
-      </div>
+                                          required: true,
+                                          class: 'mt-1 w-full rounded-md border-gray-300',
+                                          aria: training_form_aria(:complete,
+                                                                   :duration_hours,
+                                                                   describedby: 'duration_hours_hint',
+                                                                   form_errors: @training_form_errors) %>
+      <p id="duration_hours_hint" class="text-sm text-gray-600"><%= t('trainer_workflow.forms.duration_help') %></p>
+      <%= render 'shared/field_errors', action: :complete, attribute: :duration_hours, form_errors: @training_form_errors %>
+    </div>
+    <div>
+      <%= f.label :constituent_summary, t('trainer_workflow.fields.summary'), class: 'block font-medium' %>
+      <p class="text-sm text-gray-600"><%= t('trainer_workflow.forms.summary_help') %></p>
+      <%= f.text_area :constituent_summary,
+                      value: training_form_value(:complete,
+                                                 :constituent_summary,
+                                                 form_values: @training_form_values),
+                      rows: 5,
+                      required: true,
 
-      <div>
-        <%= f.label :notes, class: "block text-sm font-medium text-gray-700" do %>
-          Internal Training Notes <span class="text-red-600">*</span><span class="sr-only"> (required)</span>
-        <% end %>
-        <%= f.text_area :notes, rows: 4, class: "mt-1 block w-full border border-gray-300 rounded-md shadow-sm py-2 px-3 focus:outline-none focus:ring-indigo-500 focus:border-indigo-500 sm:text-sm", required: true, placeholder: "Enter details about what was covered...", aria: { required: "true" } %>
-      </div>
+                      class: 'mt-1 w-full rounded-md border-gray-300',
+                      aria: training_form_aria(:complete,
+                                               :constituent_summary,
+                                               form_errors: @training_form_errors) %>
+      <%= render 'shared/field_errors', action: :complete, attribute: :constituent_summary, form_errors: @training_form_errors %>
+    </div>
+    <div>
+      <%= f.label :summary_locale, t('trainer_workflow.fields.summary_locale'), class: 'block font-medium' %>
+      <%= f.select :summary_locale,
+                   I18n.available_locales.map { |locale|
+                     [t("trainer_workflow.languages.#{locale}"),
+                      locale]
+                   },
+                   { include_blank: t('trainer_workflow.forms.choose_language'),
+                     selected: training_form_value(:complete,
+                                                   :summary_locale,
+                                                   @contact_context.locale,
+                                                   form_values: @training_form_values) },
+                   { required: true,
+                     class: 'mt-1 w-full rounded-md border-gray-300',
+                     aria: training_form_aria(:complete,
+                                              :summary_locale,
+                                              form_errors: @training_form_errors) } %>
+      <%= render 'shared/field_errors', action: :complete, attribute: :summary_locale, form_errors: @training_form_errors %>
+    </div>
+    <div>
+      <%= f.label :internal_notes, t('trainer_workflow.fields.observations'), class: 'block font-medium' %>
+      <p class="text-sm text-gray-600"><%= t('trainer_workflow.forms.observations_help') %></p>
+      <%= f.text_area :internal_notes,
+                      value: training_form_value(:complete,
+                                                 :internal_notes,
+                                                 training_session.internal_notes,
+                                                 form_values: @training_form_values),
 
-      <div class="bg-green-50 border border-green-200 rounded p-3">
-        <p class="text-sm text-green-900"><span class="font-medium">An email will be sent</span> to the constituent confirming training completion.</p>
-      </div>
-
+                      rows: 4,
+                      class: 'mt-1 w-full rounded-md border-gray-300',
+                      aria: training_form_aria(:complete,
+                                               :internal_notes,
+                                               form_errors: @training_form_errors) %>
+      <%= render 'shared/field_errors', action: :complete, attribute: :internal_notes, form_errors: @training_form_errors %>
+    </div>
       <dialog class="rounded-lg bg-white p-0 shadow-xl backdrop:bg-gray-500 backdrop:bg-opacity-75" aria-labelledby="training-duration-confirmation-title" aria-describedby="training-duration-confirmation-message" data-training-duration-confirmation-target="dialog" data-action="cancel->training-duration-confirmation#cancel">
         <div class="max-w-md p-6">
-          <h4 id="training-duration-confirmation-title" class="text-lg font-semibold text-gray-900">Confirm training duration</h4>
+          <h4 id="training-duration-confirmation-title" class="text-lg font-semibold text-gray-900"><%= t('trainer_workflow.confirmation.title') %></h4>
           <p id="training-duration-confirmation-message" class="mt-3 text-sm text-gray-700" data-training-duration-confirmation-target="message"></p>
           <div class="mt-6 flex justify-end gap-3">
             <button type="button" class="inline-flex min-h-[44px] items-center justify-center rounded-md border border-gray-300 bg-white px-4 py-2 text-sm font-medium text-gray-700 shadow-sm hover:bg-gray-50 focus:outline-none focus:ring-2 focus:ring-indigo-500 focus:ring-offset-2" data-training-duration-confirmation-target="noButton" data-action="training-duration-confirmation#cancel">
-              No
+              <%= t('trainer_workflow.confirmation.no') %>
             </button>
             <button type="button" class="inline-flex min-h-[44px] items-center justify-center rounded-md border border-transparent bg-indigo-600 px-4 py-2 text-sm font-medium text-white shadow-sm hover:bg-indigo-700 focus:outline-none focus:ring-2 focus:ring-indigo-500 focus:ring-offset-2" data-training-duration-confirmation-target="yesButton" data-action="training-duration-confirmation#proceed">
-              Yes
+              <%= t('trainer_workflow.confirmation.yes') %>
             </button>
           </div>
         </div>
       </dialog>
-
-      <%= f.submit "Mark as Completed", class: "w-full inline-flex justify-center py-2 px-4 border border-transparent shadow-sm text-sm font-medium rounded-md text-white bg-green-600 hover:bg-green-700 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-green-500" %>
-    <% end %>
-  </div>
+    <%= f.submit t('trainer_workflow.forms.save_report'),
+                 class: 'rounded-md bg-green-700 px-4 py-3 font-medium text-white',
+                 data: { turbo_submits_with: t('trainer_workflow.forms.saving_report') } %>
+  <% end %>
 </div>

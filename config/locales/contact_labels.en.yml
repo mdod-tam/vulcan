@@ -1,0 +1,29 @@
+en:
+  application_contact:
+    languages:
+      en: "English"
+      es: "Spanish"
+    phone_methods:
+      voice: "Call me on the phone"
+      text: "Text me"
+      videophone: "Call me using ASL (videophone)"
+      contact_email: "Email me"
+      contact_letter: "Send me a letter in the mail"
+    modalities:
+      asl: "American Sign Language (ASL)"
+      typed: "Typed communication"
+      voice: "Voice"
+    deliveries:
+      email: "Email"
+      letter: "Letter"
+    relationships:
+      parent: "Parent"
+      spouse: "Spouse"
+      child: "Child"
+      sibling: "Sibling"
+      neighbor: "Neighbor"
+      friend: "Friend"
+      other: "Other"
+  training_feedback:
+    activity: "Activity History"
+    manual_contact: "If a notice failed or was suppressed, coordinate with program staff for manual contact. A queued notice does not confirm delivery."

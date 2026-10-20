@@ -1,528 +1,155 @@
-<a href="#main-content" class="sr-only focus:not-sr-only focus:absolute focus:top-2 focus:left-2 focus:p-2 focus:bg-indigo-600 focus:text-white focus:z-50 focus:rounded">
-  Skip to main content
-</a>
-<div id="main-content" tabindex="-1" class="container mx-auto px-4 py-8">
-  <div class="flex flex-col sm:flex-row justify-between items-start sm:items-center mb-6">
-      <h1 class="text-2xl font-bold mb-2 sm:mb-0" id="page-heading">
-        <% if @session_number.present? %>
-          Training Session #<%= @session_number %> Details
-        <% else %>
-          Training Session Details
-        <% end %>
-      </h1>
-
-    <div class="flex items-center space-x-4">
-      <%= link_to "Back to Sessions", trainers_training_sessions_path, class: "bg-gray-200 hover:bg-gray-300 text-gray-800 font-semibold py-2 px-4 rounded inline-flex items-center" %>
-    </div>
+<div class="container mx-auto max-w-5xl px-4 py-8">
+  <div class="mb-6 flex flex-wrap items-center justify-between gap-4">
+    <h1 class="text-2xl font-bold"><%= t('trainer_workflow.show.title', number: @session_number) %></h1>
+    <%= link_to t('trainer_workflow.show.back'), trainers_training_sessions_path, class: 'text-indigo-700 underline' %>
   </div>
-
-  <%# == Session Details Section == %>
-  <section aria-labelledby="session-details-heading" class="bg-white shadow overflow-hidden sm:rounded-lg">
-    <div class="px-4 py-5 sm:px-6 flex justify-between items-center">
-      <div>
-        <h2 id="session-details-heading" class="text-lg leading-6 font-medium text-gray-900">
-          Training for <%= @constituent.full_name %>
-        </h2>
-        <p class="mt-1 max-w-2xl text-sm text-gray-500">
-          Application #<%= @application.id %>
-        </p>
-        <%= link_to "View Full Application Details", admin_application_path(@application),
-            class: "mt-1 inline-block text-sm text-indigo-600 hover:text-indigo-900" %>
-          <% if @constituent_session_outcome_counts.present? %>
-            <p class="mt-1 max-w-2xl text-sm text-gray-500">
-              Constituent-impacting history:
-              <%= pluralize(@constituent_session_outcome_counts[:constituent_cancellations], 'constituent cancellation') %>,
-              <%= pluralize(@constituent_session_outcome_counts[:no_shows], 'no-show') %>.
-            </p>
-            <p class="mt-1 max-w-2xl text-sm text-gray-500">
-              Trainer/program cancellations:
-              <%= @constituent_session_outcome_counts[:trainer_or_program_cancellations] %>.
-            </p>
-          <% end %>
+  <% if @failed_training_action &&
+        !training_available_actions(@training_session, can_manage: @can_manage_training_session).include?(@failed_training_action) &&
+        training_next_action(@training_session, can_manage: @can_manage_training_session, actor: current_user) != @failed_training_action %>
+    <%= render 'shared/action_errors', action: @failed_training_action, form: nil, form_errors: @training_form_errors,
+                                       heading: t('trainer_workflow.error_heading') %>
+  <% end %>
+  <section class="mb-6 rounded-lg bg-white p-6 shadow" aria-labelledby="session-heading">
+    <h2 id="session-heading" class="text-lg font-semibold"><%= t('trainer_workflow.show.training_for', name: @constituent.full_name) %></h2>
+    <p class="mt-2"><%= training_session_status_badge(@training_session, label: t("trainer_workflow.statuses.#{@training_session.status}")) %></p>
+    <dl class="mt-4 space-y-3">
+      <div><dt class="font-medium"><%= t('trainer_workflow.show.agreed_appointment', zone: Time.zone.name) %></dt>
+        <dd><%= if @training_session.scheduled_for
+                  l(@training_session.scheduled_for,
+                    format: :long)
+                else
+                  t('trainer_workflow.show.not_scheduled')
+                end %></dd>
       </div>
-
-      <!-- Status badge with color coding and screen reader text -->
-      <% status_classes = case @training_session.status
-         when 'requested' then 'bg-gray-100 text-gray-800'
-         when 'scheduled' then 'bg-blue-100 text-blue-800'
-         when 'confirmed' then 'bg-green-100 text-green-800'
-         when 'completed' then 'bg-purple-100 text-purple-800'
-         when 'cancelled' then 'bg-yellow-100 text-yellow-800'
-         when 'rescheduled' then 'bg-orange-100 text-orange-800'
-         when 'no_show' then 'bg-red-100 text-red-800'
-         else 'bg-gray-100 text-gray-800'
-         end %>
-
-      <span class="px-3 py-1 inline-flex text-sm leading-5 font-semibold rounded-full <%= status_classes %>">
-        <span class="sr-only">Current Status: </span><%= @training_session.status.titleize %>
-      </span>
-    </div>
-
-    <div class="border-t border-gray-200">
-      <dl>
-        <%# Display current scheduled date if not completed, cancelled, or no_show %>
-        <% if @training_session.scheduled_for.present? && !@training_session.status_completed? && !@training_session.status_cancelled? && !@training_session.status_no_show? %>
-          <div class="bg-gray-50 px-4 py-5 sm:grid sm:grid-cols-3 sm:gap-4 sm:px-6">
-            <dt class="text-sm font-medium text-gray-500">Scheduled For</dt>
-            <dd class="mt-1 text-sm text-gray-900 sm:mt-0 sm:col-span-2">
-              <time datetime="<%= @training_session.scheduled_for&.iso8601 %>">
-                <%= @training_session.scheduled_for&.strftime("%B %d, %Y at %I:%M %p") %>
-              </time>
-            </dd>
-          </div>
-          <% if @training_session.location.present? %>
-            <div class="bg-white px-4 py-5 sm:grid sm:grid-cols-3 sm:gap-4 sm:px-6">
-              <dt class="text-sm font-medium text-gray-500">Location</dt>
-              <dd class="mt-1 text-sm text-gray-900 sm:mt-0 sm:col-span-2">
-                <%= @training_session.location %>
-              </dd>
-            </div>
-          <% end %>
-        <% elsif @training_session.status_requested? %>
-          <div class="bg-blue-50 px-4 py-5 sm:grid sm:grid-cols-3 sm:gap-4 sm:px-6">
-            <dt class="text-sm font-medium text-blue-900">Next Step</dt>
-            <dd class="mt-1 text-sm text-blue-900 sm:mt-0 sm:col-span-2">
-              <p class="font-semibold">This training has yet to be scheduled.</p>
-              <p class="mt-1">
-                This session has been assigned to <%= @training_session.trainer.full_name %>, but no date has been set yet.
-                <% if @can_manage_training_session %>
-                  Contact the constituent, agree on a training time, then use the scheduling form below.
-                <% else %>
-                  The assigned trainer should contact the constituent and set the training date.
-                <% end %>
-              </p>
-            </dd>
-          </div>
-        <% end %>
-
-        <div class="bg-white px-4 py-5 sm:grid sm:grid-cols-3 sm:gap-4 sm:px-6">
-          <dt class="text-sm font-medium text-gray-500">Assigned Trainer</dt>
-          <dd class="mt-1 text-sm text-gray-900 sm:mt-0 sm:col-span-2">
-            <% trainer_sessions_path = current_user.admin? ? filtered_trainers_training_sessions_path(scope: "all", trainer_id: @training_session.trainer_id) : filtered_trainers_training_sessions_path(scope: "mine") %>
-            <%= link_to @training_session.trainer.full_name, trainer_sessions_path, class: "text-indigo-600 hover:text-indigo-900" %>
-          </dd>
-        </div>
-
-        <%# Display current notes if not completed, cancelled, or no_show %>
-        <% if @training_session.notes.present? && !@training_session.status_completed? && !@training_session.status_cancelled? && !@training_session.status_no_show? %>
-          <div class="bg-white px-4 py-5 sm:grid sm:grid-cols-3 sm:gap-4 sm:px-6">
-            <dt class="text-sm font-medium text-gray-500">Current Notes</dt>
-            <dd class="mt-1 text-sm text-gray-900 sm:mt-0 sm:col-span-2">
-              <%= simple_format(@training_session.notes) %>
-            </dd>
-          </div>
-        <% end %>
-
-        <%# Display current reschedule reason only if status is rescheduled %>
-        <% if @training_session.status_rescheduled? && @training_session.reschedule_reason.present? %>
-           <div class="bg-gray-50 px-4 py-5 sm:grid sm:grid-cols-3 sm:gap-4 sm:px-6">
-            <dt class="text-sm font-medium text-gray-500">Current Rescheduling Reason</dt>
-            <dd class="mt-1 text-sm text-gray-900 sm:mt-0 sm:col-span-2">
-              <%= simple_format(@training_session.reschedule_reason) %>
-            </dd>
-          </div>
-        <% end %>
-
-        <%# Display current cancellation reason if present %>
-        <% if @training_session.cancellation_reason.present? %>
-           <div class="bg-white px-4 py-5 sm:grid sm:grid-cols-3 sm:gap-4 sm:px-6">
-            <dt class="text-sm font-medium text-gray-500">Current Cancellation Reason</dt>
-            <dd class="mt-1 text-sm text-gray-900 sm:mt-0 sm:col-span-2">
-              <%= simple_format(@training_session.cancellation_reason) %>
-            </dd>
-          </div>
-        <% end %>
-
-        <%# Display current no show notes if present %>
-        <% if @training_session.no_show_notes.present? %>
-           <div class="bg-gray-50 px-4 py-5 sm:grid sm:grid-cols-3 sm:gap-4 sm:px-6">
-            <dt class="text-sm font-medium text-gray-500">Current No Show Notes</dt>
-            <dd class="mt-1 text-sm text-gray-900 sm:mt-0 sm:col-span-2">
-              <%= simple_format(@training_session.no_show_notes) %>
-            </dd>
-          </div>
-        <% end %>
-
-        <%# Display current completed at and product if completed %>
-        <% if @training_session.completed_at.present? %>
-          <div class="bg-white px-4 py-5 sm:grid sm:grid-cols-3 sm:gap-4 sm:px-6">
-            <dt class="text-sm font-medium text-gray-500">Completed At</dt>
-            <dd class="mt-1 text-sm text-gray-900 sm:mt-0 sm:col-span-2">
-              <time datetime="<%= @training_session.completed_at.iso8601 %>">
-                 <%= @training_session.completed_at.strftime("%B %d, %Y at %I:%M %p") %>
-              </time>
-            </dd>
-          </div>
-          <% if @training_session.product_trained_on.present? %>
-            <div class="bg-gray-50 px-4 py-5 sm:grid sm:grid-cols-3 sm:gap-4 sm:px-6">
-              <dt class="text-sm font-medium text-gray-500">Product Trained On</dt>
-              <dd class="mt-1 text-sm text-gray-900 sm:mt-0 sm:col-span-2">
-                <%= @training_session.product_trained_on.name %>
-              </dd>
-            </div>
-          <% end %>
-          <div class="bg-white px-4 py-5 sm:grid sm:grid-cols-3 sm:gap-4 sm:px-6">
-            <dt class="text-sm font-medium text-gray-500">Training Duration</dt>
-            <dd class="mt-1 text-sm text-gray-900 sm:mt-0 sm:col-span-2">
-              <%= training_duration_hours_label(@training_session.duration_hours) %>
-            </dd>
-          </div>
-           <% if @training_session.notes.present? %>
-            <div class="bg-gray-50 px-4 py-5 sm:grid sm:grid-cols-3 sm:gap-4 sm:px-6">
-              <dt class="text-sm font-medium text-gray-500">Internal Training Notes</dt>
-              <dd class="mt-1 text-sm text-gray-900 sm:mt-0 sm:col-span-2">
-                <%= simple_format(@training_session.notes) %>
-              </dd>
-            </div>
-          <% end %>
-        <% end %>
-
-        <div class="bg-white px-4 py-5 sm:grid sm:grid-cols-3 sm:gap-4 sm:px-6">
-          <dt class="text-sm font-medium text-gray-500">Constituent</dt>
-          <dd class="mt-1 text-sm text-gray-900 sm:mt-0 sm:col-span-2">
-            <div>
-              <p><%= @constituent.full_name %></p>
-              <p><%= link_to @constituent.email, "mailto:#{@constituent.email}", class: "text-indigo-600 hover:text-indigo-900", aria: { label: "Email #{@constituent.email}" } %></p>
-              <p><%= link_to @constituent.phone, "tel:#{@constituent.phone}", class: "text-indigo-600 hover:text-indigo-900", aria: { label: "Call #{@constituent.phone}" } %></p>
-              <% if @constituent.physical_address_1.present? %>
-                <div class="mt-2 text-gray-600">
-                  <p><%= @constituent.physical_address_1 %></p>
-                  <% if @constituent.physical_address_2.present? %>
-                    <p><%= @constituent.physical_address_2 %></p>
-                  <% end %>
-                  <p><%= "#{@constituent.city}, #{@constituent.state} #{@constituent.zip_code}" %></p>
-                </div>
-              <% end %>
-            </div>
-          </dd>
-        </div>
-
-        <div class="bg-gray-50 px-4 py-5 sm:grid sm:grid-cols-3 sm:gap-4 sm:px-6">
-          <dt class="text-sm font-medium text-gray-500">Communication Preferences</dt>
-          <dd class="mt-1 text-sm text-gray-900 sm:mt-0 sm:col-span-2">
-            <ul class="space-y-1">
-              <li><strong>Contact Method:</strong> <%= contact_method_label(@constituent.phone_type) %></li>
-              <li><strong>Preferred Language:</strong> <%= language_label(@constituent.locale) %></li>
-              <li><strong>Communication Modality:</strong> <%= @constituent.preferred_means_of_communication.presence || "Not specified" %></li>
-            </ul>
-          </dd>
-        </div>
-
-        <div class="bg-white px-4 py-5 sm:grid sm:grid-cols-3 sm:gap-4 sm:px-6">
-          <dt class="text-sm font-medium text-gray-500">Session Capacity</dt>
-          <dd class="mt-1 text-sm text-gray-900 sm:mt-0 sm:col-span-2">
-            <%= @application.reserved_training_sessions_count %> / <%= @max_training_sessions %> sessions reserved,
-            <%= @remaining_training_session_slots %> remaining
-          </dd>
-        </div>
-
-        <% if @open_training_sessions.present? %>
-          <div class="bg-gray-50 px-4 py-5 sm:grid sm:grid-cols-3 sm:gap-4 sm:px-6">
-            <dt class="text-sm font-medium text-gray-500">Open Training Sessions</dt>
-            <dd class="mt-1 text-sm text-gray-900 sm:mt-0 sm:col-span-2">
-              <ul class="space-y-2">
-                <% @open_training_sessions.each do |session| %>
-                  <li>
-                    <% scheduled_for_label =
-                         if session.scheduled_for.present?
-                           session.scheduled_for.strftime("%B %d, %Y at %I:%M %p")
-                         else
-                           "Not scheduled"
-                         end %>
-                    <%= link_to "Session ##{session.id}",
-                        trainers_training_session_path(session),
-                        class: "font-medium text-indigo-600 hover:text-indigo-900",
-                        aria: { label: "Session ##{session.id}, #{scheduled_for_label}" } %>
-                    <span class="text-gray-600">
-                      -
-                      <% if session.scheduled_for.present? %>
-                        <time datetime="<%= session.scheduled_for.iso8601 %>">
-                          <%= scheduled_for_label %>
-                        </time>
-                      <% else %>
-                        <%= scheduled_for_label %>
-                      <% end %>
-                    </span>
-                  </li>
-                <% end %>
-              </ul>
-            </dd>
-          </div>
-        <% end %>
-      </dl>
-    </div>
+      <div><dt class="font-medium"><%= t('trainer_workflow.show.trainer') %></dt>
+        <dd><%= @training_session.trainer.full_name %></dd>
+      </div>
+      <% if @training_session.location.present? %><div><dt class="font-medium"><%= t('trainer_workflow.fields.location') %></dt>
+        <dd><%= @training_session.location %></dd>
+      </div><% end %>
+      <% if @training_session.internal_notes.present? %><div><dt class="font-medium"><%= t('trainer_workflow.fields.private_notes') %></dt>
+        <dd><%= simple_format(@training_session.internal_notes) %></dd>
+      </div><% end %>
+      <% if @training_session.status_completed? %>
+        <div><dt class="font-medium"><%= t('trainer_workflow.show.actual_completion') %></dt>
+        <dd><%= l(@training_session.completed_at, format: :long) %></dd>
+      </div>
+        <div><dt class="font-medium"><%= t('trainer_workflow.show.report_submitted') %></dt>
+        <dd><%= @training_session.report_submitted_at && l(@training_session.report_submitted_at, format: :long) %></dd>
+      </div>
+        <div><dt class="font-medium"><%= t('trainer_workflow.show.duration') %></dt>
+        <dd><%= t('trainer_workflow.duration_label', count: @training_session.duration_hours,
+                                                     hours: number_with_precision(@training_session.duration_hours, precision: 2, strip_insignificant_zeros: true)) %></dd>
+      </div>
+        <div><dt class="font-medium"><%= t('trainer_workflow.fields.product') %></dt>
+        <dd><%= @training_session.product_trained_on&.name %></dd>
+      </div>
+        <div><dt class="font-medium"><%= t('trainer_workflow.show.shared_summary_language', language: t("trainer_workflow.languages.#{@training_session.summary_locale}")) %></dt>
+        <dd><%= simple_format(@training_session.constituent_summary) %></dd>
+      </div>
+      <% end %>
+      <% if @training_session.cancellation_reason.present? %><div><dt class="font-medium"><%= t('trainer_workflow.fields.cancellation_reason') %></dt>
+        <dd><%= @training_session.cancellation_reason %></dd>
+      </div><% end %>
+      <% if @training_session.no_show_notes.present? %><div><dt class="font-medium"><%= t('trainer_workflow.fields.no_show_reason') %></dt>
+        <dd><%= @training_session.no_show_notes %></dd>
+      </div><% end %>
+    </dl>
   </section>
 
-  <% if @previous_training_sessions.present? %>
-    <section aria-labelledby="previous-training-notes-heading" class="mt-8 bg-white shadow overflow-hidden sm:rounded-lg">
-      <div class="px-4 py-5 sm:px-6">
-        <h2 id="previous-training-notes-heading" class="text-lg leading-6 font-medium text-gray-900">
-          Previous Training Notes
-        </h2>
-        <p class="mt-1 max-w-2xl text-sm text-gray-500">
-          Notes from earlier completed sessions for this application.
-        </p>
-      </div>
-
-      <ol class="border-t border-gray-200 divide-y divide-gray-200">
-        <% @previous_training_sessions.each do |session| %>
-          <li class="px-4 py-5 sm:px-6">
-            <div class="flex flex-col gap-2 sm:flex-row sm:items-start sm:justify-between">
-              <div>
-                <h3 class="text-sm font-medium text-gray-900">
-                  <%= session.product_trained_on&.name || "Product not recorded" %>
-                </h3>
-                <p class="mt-1 text-sm text-gray-500">
-                  Completed
-                  <% if session.completed_at.present? %>
-                    <time datetime="<%= session.completed_at.iso8601 %>">
-                      <%= session.completed_at.strftime("%B %d, %Y at %I:%M %p") %>
-                    </time>
-                  <% else %>
-                    on an unknown date
-                  <% end %>
-                  by <%= session.trainer.full_name %>
-                </p>
-                <p class="mt-1 text-sm text-gray-500">
-                  Duration: <%= training_duration_hours_label(session.duration_hours) %>
-                </p>
-              </div>
-            </div>
-
-            <div class="mt-3 text-sm text-gray-900">
-              <%= simple_format(session.notes) %>
-            </div>
-          </li>
+  <% if @current_training_access %>
+    <section class="mb-6 rounded-lg bg-white p-6 shadow" aria-labelledby="preparation-heading">
+      <h2 id="preparation-heading" class="text-lg font-semibold"><%= t('trainer_workflow.show.preparation') %></h2>
+      <dl><%= render 'shared/application_contacts', context: @contact_context %></dl>
+      <% if @evaluation_recommendations %>
+        <h3 class="mt-4 font-semibold"><%= t('trainer_workflow.show.evaluation_recommendations') %></h3>
+        <%= render 'shared/evaluation_recommendations', evaluation: @evaluation_recommendations, locale: I18n.locale %>
+      <% end %>
+      <h3 class="mt-4 font-semibold"><%= t('trainer_workflow.show.known_products') %></h3>
+      <p class="text-sm text-gray-600"><%= t('trainer_workflow.show.known_products_help') %></p>
+      <% if @known_products.any? %>
+        <% @known_products.each do |product| %>
+          <h4 class="mt-3 font-medium"><%= product.name %></h4>
+          <%= render 'shared/product_resources', product: product %>
         <% end %>
-      </ol>
+      <% else %><p><%= t('trainer_workflow.show.no_known_products') %></p><% end %>
+    </section>
+    <section class="mb-6 rounded-lg bg-white p-6 shadow" aria-label="<%= t('trainer_workflow.capacity.label') %>">
+      <p><strong><%= t('trainer_workflow.capacity.completed', count: @completed_training_sessions_count) %></strong>,
+        <%= t('trainer_workflow.capacity.reserved', count: @reserved_training_sessions_count - @completed_training_sessions_count) %>,
+        <%= t('trainer_workflow.capacity.remaining', count: @remaining_training_session_slots, max: @max_training_sessions) %></p>
+      <% @open_training_sessions.each do |session| %>
+        <% unless session.id == @training_session.id %>
+          <p class="mt-2">
+            <%= link_to t('training_feedback.open_appointment', number: session.appointment_number),
+                        trainers_training_session_path(session), class: 'text-indigo-700 underline' %>
+          </p>
+        <% end %>
+      <% end %>
+      <% if @application.training_request_pending? %><p class="mt-2 font-medium"><%= t('trainer_workflow.show.request_pending') %></p><% end %>
+    </section>
+    <% if @can_manage_training_session %>
+      <% if @training_session.status_requested? %>
+        <%= render 'appointment_form', action: :schedule, training_session: @training_session %>
+        <%= render 'outcome_reason_form', action: :cancel, training_session: @training_session %>
+      <% elsif @training_session.status_scheduled? || @training_session.status_confirmed? %>
+        <section class="mb-6 rounded-lg bg-white p-6 shadow" data-controller="training-outcome">
+          <h2 class="text-lg font-semibold"><%= t('trainer_workflow.show.what_happened') %></h2>
+          <label for="training-outcome" class="mt-3 block font-medium"><%= t('trainer_workflow.show.choose_outcome') %></label>
+          <%= select_tag :training_outcome,
+                         options_for_select(training_outcome_options(@training_session, can_manage: @can_manage_training_session), @failed_training_action),
+                         include_blank: t('trainer_workflow.show.choose_action'), id: 'training-outcome', class: 'mt-2 w-full rounded-md border-gray-300',
+                         data: { training_outcome_target: 'selection', action: 'training-outcome#change' } %>
+          <% training_available_actions(@training_session, can_manage: @can_manage_training_session).each do |action| %>
+            <div data-training-outcome-target="panel" data-outcome="<%= action %>">
+              <% if action == :complete %><%= render 'completion_form', training_session: @training_session %>
+              <% elsif action == :reschedule %><%= render 'appointment_form', action: action, training_session: @training_session %>
+              <% else %><%= render 'outcome_reason_form', action: action, training_session: @training_session %><% end %>
+            </div>
+          <% end %>
+        </section>
+      <% else %>
+        <% if training_next_action(@training_session, can_manage: @can_manage_training_session, actor: current_user) %>
+          <%= render 'appointment_form', action: training_next_action(@training_session, can_manage: @can_manage_training_session, actor: current_user),
+                                         training_session: @training_session %>
+        <% else %>
+          <p class="mb-6 rounded-lg bg-blue-50 p-4"><%= t('trainer_workflow.show.next_unavailable') %></p>
+        <% end %>
+      <% end %>
+    <% else %><p class="mb-6"><%= t('trainer_workflow.show.read_only') %></p><% end %>
+    <% if @previous_training_sessions.any? %>
+      <section class="mb-6 rounded-lg bg-white p-6 shadow">
+        <h2 class="text-lg font-semibold"><%= t('trainer_workflow.history.heading') %></h2>
+        <% @previous_training_sessions.each do |session| %>
+          <article class="mt-4 border-t pt-4">
+            <h3 class="font-medium"><%= t('trainer_workflow.history.session', number: session.appointment_number, trainer: session.trainer.full_name) %></h3>
+            <p><%= t('trainer_workflow.fields.private_notes') %></p><%= simple_format(session.internal_notes) %>
+            <p><%= t('trainer_workflow.history.summary_language', language: t("trainer_workflow.languages.#{session.summary_locale}")) %></p>
+            <%= simple_format(session.constituent_summary) %>
+          </article>
+        <% end %>
+      </section>
+    <% end %>
+    <div class="mt-6">
+      <%= render 'shared/activity_history', activity_logs: @activity_logs, title: t('training_feedback.activity') %>
+    </div>
+    <% if @training_notifications.any? || @unlinked_training_attempts.any? %>
+      <section class="mt-6 rounded-lg border border-gray-200 bg-white p-6" aria-label="<%= t('delivery_visibility.history') %>">
+        <h2 class="text-lg font-semibold"><%= t('delivery_visibility.history') %></h2>
+        <p class="mt-2 text-sm text-gray-600"><%= t('training_feedback.manual_contact') %></p>
+        <% @training_notifications.each do |notification| %>
+          <%= delivery_visibility(notification) %>
+        <% end %>
+        <% @unlinked_training_attempts.each do |attempt| %>
+          <%= render 'shared/delivery/status', presenter: DeliveryStatusPresenter.new(@training_session, attempt: attempt) %>
+        <% end %>
+      </section>
+    <% end %>
+  <% else %><p><%= t('trainer_workflow.show.historical_access') %></p><% end %>
+  <% if @training_session.status_completed? && @training_session.product_trained_on %>
+    <section class="rounded-lg bg-white p-6 shadow"><h2 class="text-lg font-semibold"><%= t('trainer_workflow.show.resources') %></h2>
+      <%= render 'shared/product_resources',
+                 product: @training_session.product_trained_on %>
     </section>
   <% end %>
-
-  <%# == Actions Section == %>
-  <% unless @can_manage_training_session && @training_session.status_completed? && !@remaining_training_session_slots.positive? %>
-  <section aria-label="<%= @can_manage_training_session ? 'Training Session Actions' : 'Training Session Status' %>" class="mt-8">
-    <% if !@can_manage_training_session %>
-      <div class="bg-slate-50 border border-slate-200 rounded-lg p-4 text-sm text-slate-700">
-        This is a read-only oversight view. Only the assigned trainer can update this training session.
-      </div>
-    <% elsif @training_session.status_completed? %>
-      <% if @remaining_training_session_slots.positive? %>
-        <%= render 'schedule_additional_form', training_session: @training_session %>
-      <% end %>
-    <% elsif @training_session.status_requested? && @training_session.scheduled_for.nil? %>
-      <!-- Initial Schedule Training Form -->
-      <div class="bg-white shadow rounded-lg mb-6">
-        <div class="px-4 py-5 sm:p-6">
-          <h3 class="text-lg leading-6 font-medium text-gray-900 mb-4" id="schedule-initial-heading">
-            Schedule Initial Training
-          </h3>
-
-          <%= form_with(url: schedule_trainers_training_session_path(@training_session), method: :post, local: true, class: "space-y-4", aria: { labelledby: "schedule-initial-heading" }) do |f| %>
-            <div>
-              <%= f.label :scheduled_for, class: "block text-sm font-medium text-gray-700" do %>
-                Training Date/Time <span class="text-red-600">*</span><span class="sr-only"> (required)</span>
-              <% end %>
-              <%= f.datetime_local_field :scheduled_for, value: 1.week.from_now.strftime('%Y-%m-%dT%H:%M'), class: "mt-1 block w-full border border-gray-300 rounded-md shadow-sm py-2 px-3 focus:outline-none focus:ring-indigo-500 focus:border-indigo-500 sm:text-sm", required: true, aria: { required: "true" } %>
-            </div>
-
-            <div>
-              <%= f.label :location, "Location", class: "block text-sm font-medium text-gray-700" %>
-              <%= f.text_field :location, class: "mt-1 block w-full border border-gray-300 rounded-md shadow-sm py-2 px-3 focus:outline-none focus:ring-indigo-500 focus:border-indigo-500 sm:text-sm", placeholder: "e.g., Constituent's Home, Library, Online" %>
-            </div>
-
-            <div>
-              <%= f.label :notes, "Notes", class: "block text-sm font-medium text-gray-700" %>
-              <%= f.text_area :notes, rows: 3, class: "mt-1 block w-full border border-gray-300 rounded-md shadow-sm py-2 px-3 focus:outline-none focus:ring-indigo-500 focus:border-indigo-500 sm:text-sm", placeholder: "Optional scheduling notes..." %>
-            </div>
-
-            <div class="bg-blue-50 border border-blue-200 rounded p-3">
-              <p class="text-sm text-blue-900"><span class="font-medium">An email will be sent</span> to the constituent with the training date and time.</p>
-            </div>
-
-            <%= f.submit "Schedule Training", class: "w-full inline-flex justify-center py-2 px-4 border border-transparent shadow-sm text-sm font-medium rounded-md text-white bg-blue-600 hover:bg-blue-700 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-blue-500" %>
-          <% end %>
-        </div>
-      </div>
-
-    <% elsif (@training_session.status_scheduled? || @training_session.status_confirmed?) && @training_session.scheduled_for.present? && @training_session.scheduled_for < Time.current %>
-      <!-- Actions for Scheduled/Confirmed Sessions where time has passed -->
-      <div class="space-y-6">
-        <%= render "completion_form", training_session: @training_session, card_class: "bg-white shadow rounded-lg" %>
-
-        <!-- Cancel Training Form -->
-        <div class="bg-white shadow rounded-lg">
-          <div class="px-4 py-5 sm:p-6">
-            <h3 class="text-lg leading-6 font-medium text-gray-900 mb-4" id="cancel-training-heading">
-              Cancel Training
-            </h3>
-
-            <%= form_with(url: cancel_trainers_training_session_path(@training_session), method: :post, local: true, class: "space-y-4", aria: { labelledby: "cancel-training-heading" }) do |f| %>
-              <div>
-                <%= f.label :cancellation_reason, class: "block text-sm font-medium text-gray-700" do %>
-                  Internal Reason for Cancellation <span class="text-red-600">*</span><span class="sr-only"> (required)</span>
-                <% end %>
-                <%= f.text_area :cancellation_reason, rows: 3, class: "mt-1 block w-full border border-gray-300 rounded-md shadow-sm py-2 px-3 focus:outline-none focus:ring-indigo-500 focus:border-indigo-500 sm:text-sm", required: true, placeholder: "Please provide a reason...", aria: { required: "true" } %>
-              </div>
-              <div class="bg-red-50 border border-red-200 rounded p-3">
-                <p class="text-sm text-red-900"><span class="font-medium">An email will be sent</span> to the constituent.</p>
-              </div>
-              <%= f.submit "Cancel Training", class: "w-full inline-flex justify-center py-2 px-4 border border-transparent shadow-sm text-sm font-medium rounded-md text-white bg-red-600 hover:bg-red-700 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-red-500" %>
-            <% end %>
-          </div>
-        </div>
-
-        <!-- Mark as No Show Form -->
-        <div class="bg-white shadow rounded-lg">
-          <div class="px-4 py-5 sm:p-6">
-            <h3 class="text-lg leading-6 font-medium text-gray-900 mb-4" id="no-show-heading">
-              Mark as No Show
-            </h3>
-            <p class="text-sm text-gray-600 mb-4" id="no_show_desc">
-              Use this if the constituent did not attend the scheduled training session.
-            </p>
-            <%= form_with(model: @training_session, url: update_status_trainers_training_session_path(@training_session), method: :patch, local: true, class: "space-y-4", aria: { labelledby: "no-show-heading" }) do |f| %>
-              <%= f.hidden_field :status, value: 'no_show' %>
-              <div>
-                  <%= f.label :no_show_notes, class: "block text-sm font-medium text-gray-700" do %>
-                    No Show Notes <span class="text-red-600">*</span><span class="sr-only"> (required)</span>
-                  <% end %>
-                  <%= f.text_area :no_show_notes, rows: 3, class: "mt-1 block w-full border border-gray-300 rounded-md shadow-sm py-2 px-3 focus:outline-none focus:ring-indigo-500 focus:border-indigo-500 sm:text-sm", required: true, placeholder: "Describe the no show...", aria: { required: "true" } %>
-              </div>
-              <div class="bg-red-50 border border-red-200 rounded p-3">
-                <p class="text-sm text-red-900"><span class="font-medium">An email will be sent</span> to the constituent.</p>
-              </div>
-              <%= f.submit "Mark as No Show", class: "w-full inline-flex justify-center py-2 px-4 border border-transparent shadow-sm text-sm font-medium rounded-md text-white bg-red-600 hover:bg-red-700 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-red-500" %>
-            <% end %>
-          </div>
-        </div>
-
-        <% if @remaining_training_session_slots.positive? %>
-          <%= render 'schedule_additional_form', training_session: @training_session %>
-        <% end %>
-      </div>
-
-
-    <% elsif @training_session.status_scheduled? || @training_session.status_confirmed? %>
-      <!-- Actions for Scheduled/Confirmed Sessions where time has NOT passed -->
-      <%= render "completion_form", training_session: @training_session, card_class: "bg-white shadow rounded-lg mb-6" %>
-
-      <!-- Cancel Training Form -->
-      <div class="bg-white shadow rounded-lg mb-6">
-        <div class="px-4 py-5 sm:p-6">
-          <h3 class="text-lg leading-6 font-medium text-gray-900 mb-4" id="cancel-training-heading">
-            Cancel Training
-          </h3>
-
-          <%= form_with(url: cancel_trainers_training_session_path(@training_session), method: :post, local: true, class: "space-y-4", aria: { labelledby: "cancel-training-heading" }) do |f| %>
-            <div>
-              <%= f.label :cancellation_reason, class: "block text-sm font-medium text-gray-700" do %>
-                Internal Reason for Cancellation <span class="text-red-600">*</span><span class="sr-only"> (required)</span>
-              <% end %>
-              <%= f.text_area :cancellation_reason, rows: 3, class: "mt-1 block w-full border border-gray-300 rounded-md shadow-sm py-2 px-3 focus:outline-none focus:ring-indigo-500 focus:border-indigo-500 sm:text-sm", required: true, placeholder: "Please provide a reason...", aria: { required: "true" } %>
-            </div>
-            <div class="bg-red-50 border border-red-200 rounded p-3">
-              <p class="text-sm text-red-900"><span class="font-medium">An email will be sent</span> to the constituent noting the cancellation.</p>
-            </div>
-            <%= f.submit "Cancel Training", class: "w-full inline-flex justify-center py-2 px-4 border border-transparent shadow-sm text-sm font-medium rounded-md text-white bg-red-600 hover:bg-red-700 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-red-500" %>
-          <% end %>
-        </div>
-      </div>
-
-      <!-- Reschedule Training Form -->
-      <div class="bg-white shadow rounded-lg mb-6">
-        <div class="px-4 py-5 sm:p-6">
-          <h3 class="text-lg leading-6 font-medium text-gray-900 mb-4" id="reschedule-training-heading">
-            Reschedule Training
-          </h3>
-
-          <%= form_with(url: reschedule_trainers_training_session_path(@training_session), method: :post, local: true, class: "space-y-4", aria: { labelledby: "reschedule-training-heading" }) do |f| %>
-            <div>
-              <%= f.label :scheduled_for, class: "block text-sm font-medium text-gray-700" do %>
-                New Date/Time <span class="text-red-600">*</span><span class="sr-only"> (required)</span>
-              <% end %>
-              <%= f.datetime_local_field :scheduled_for, value: 1.week.from_now.strftime('%Y-%m-%dT%H:%M'), class: "mt-1 block w-full border border-gray-300 rounded-md shadow-sm py-2 px-3 focus:outline-none focus:ring-indigo-500 focus:border-indigo-500 sm:text-sm", required: true, aria: { required: "true" } %>
-            </div>
-
-            <div>
-              <%= f.label :location, "Location", class: "block text-sm font-medium text-gray-700" %>
-              <%= f.text_field :location, value: @training_session.location, class: "mt-1 block w-full border border-gray-300 rounded-md shadow-sm py-2 px-3 focus:outline-none focus:ring-indigo-500 focus:border-indigo-500 sm:text-sm", placeholder: "e.g., Constituent's Home, Library, Online" %>
-            </div>
-
-            <div>
-              <%= f.label :reschedule_reason, class: "block text-sm font-medium text-gray-700" do %>
-                Reason for Rescheduling <span class="text-red-600">*</span><span class="sr-only"> (required)</span>
-              <% end %>
-              <%= f.text_area :reschedule_reason, rows: 3, class: "mt-1 block w-full border border-gray-300 rounded-md shadow-sm py-2 px-3 focus:outline-none focus:ring-indigo-500 focus:border-indigo-500 sm:text-sm", required: true, placeholder: "Please provide a reason...", aria: { required: "true" } %>
-            </div>
-
-            <div class="bg-blue-50 border border-blue-200 rounded p-3">
-              <p class="text-sm text-blue-900"><span class="font-medium">An email will be sent</span> to the constituent with the new date, time, and reason.</p>
-            </div>
-
-            <%= f.submit "Reschedule Training", class: "w-full inline-flex justify-center py-2 px-4 border border-transparent shadow-sm text-sm font-medium rounded-md text-white bg-blue-600 hover:bg-blue-700 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-blue-500" %>
-          <% end %>
-        </div>
-      </div>
-
-      <% if @remaining_training_session_slots.positive? %>
-        <div class="mb-6">
-          <%= render 'schedule_additional_form', training_session: @training_session %>
-        </div>
-      <% end %>
-
-    <% elsif @training_session.status_cancelled? || @training_session.status_no_show? %>
-      <!-- Follow-up scheduling creates a new session and preserves this historical record. -->
-      <div class="bg-white shadow rounded-lg mb-6">
-        <div class="px-4 py-5 sm:p-6">
-          <h3 class="text-lg leading-6 font-medium text-gray-900 mb-4" id="reschedule-cancelled-heading">
-            Schedule new training date
-          </h3>
-          <p class="mb-4 text-sm text-gray-600">
-            Use this after confirming a new date with the constituent.
-          </p>
-
-          <%= form_with(url: trainers_training_session_follow_up_path(@training_session), method: :post, local: true, class: "space-y-4", aria: { labelledby: "reschedule-cancelled-heading" }) do |f| %>
-            <div>
-              <%= f.label :scheduled_for, class: "block text-sm font-medium text-gray-700" do %>
-                New Date/Time <span class="text-red-600">*</span><span class="sr-only"> (required)</span>
-              <% end %>
-              <%= f.datetime_local_field :scheduled_for, value: 1.week.from_now.strftime('%Y-%m-%dT%H:%M'), class: "mt-1 block w-full border border-gray-300 rounded-md shadow-sm py-2 px-3 focus:outline-none focus:ring-indigo-500 focus:border-indigo-500 sm:text-sm", required: true, aria: { required: "true" } %>
-            </div>
-
-            <div>
-              <%= f.label :location, "Location", class: "block text-sm font-medium text-gray-700" %>
-              <%= f.text_field :location, value: @training_session.location, class: "mt-1 block w-full border border-gray-300 rounded-md shadow-sm py-2 px-3 focus:outline-none focus:ring-indigo-500 focus:border-indigo-500 sm:text-sm", placeholder: "e.g., Constituent's Home, Library, Online" %>
-            </div>
-
-            <div>
-              <%= f.label :reschedule_reason, class: "block text-sm font-medium text-gray-700" do %>
-                Reason for Follow-up <span class="text-red-600">*</span><span class="sr-only"> (required)</span>
-              <% end %>
-              <%= f.text_area :reschedule_reason, rows: 3, class: "mt-1 block w-full border border-gray-300 rounded-md shadow-sm py-2 px-3 focus:outline-none focus:ring-indigo-500 focus:border-indigo-500 sm:text-sm", required: true, placeholder: "Please provide a reason...", aria: { required: "true" } %>
-            </div>
-
-            <div class="bg-blue-50 border border-blue-200 rounded p-3">
-              <p class="text-sm text-blue-900"><span class="font-medium">An email will be sent</span> to the constituent with the new date and time.</p>
-            </div>
-
-            <%= f.submit "Schedule new training date", class: "w-full inline-flex justify-center py-2 px-4 border border-transparent shadow-sm text-sm font-medium rounded-md text-white bg-blue-600 hover:bg-blue-700 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-blue-500" %>
-          <% end %>
-        </div>
-      </div>
-
-    <% end %>
-  </section>
-  <% end %>
-
-  <div class="mt-8">
-    <%= render "shared/activity_history", activity_logs: @activity_logs, title: "Activity History" %>
-  </div>
-
 </div>
-
-<% if @training_session.email_delivery_attempts.any? %>
-  <section class="mt-6 rounded border border-gray-200 p-4" aria-label="<%= t('delivery_visibility.history') %>">
-    <h2 class="text-lg font-semibold"><%= t('delivery_visibility.history') %></h2>
-    <%= delivery_visibility(@training_session) %>
-  </section>
-<% end %>

@@ -46,13 +46,19 @@ The dependent owns the application; its managing guardian has responsibility for
 | Equipment or voucher fulfillment | The voucher flag selects both fulfillment type and the inverse income-proof requirement at creation; see [fulfillment settings](features/application_workflow_guide.md#fulfillment-settings). |
 | Vouchers | When enabled, approval of a voucher application queues issuance after commit. Issuance rechecks eligibility and existing vouchers. Vendors verify the applicant and redeem value; see [voucher controls](security/voucher_security_controls.md). |
 | Vendor invoices | The biweekly [invoice job](../app/services/invoices/generation_service.rb) claims every completed, uninvoiced voucher redemption from before the run day (Eastern), except ones staff hold from billing; failed vendors stay on a retry list. Staff approve, record payment, or withdraw through [Invoices::Workflow](../app/services/invoices/workflow.rb); paid invoices take only [correction notes](finance/payment_corrections.md). |
-| Training | Staff assign trainers within the service window and session quota. Trainers schedule, complete, cancel, or arrange follow-up through [training services](../app/services/training_sessions). |
+| Training | Staff assign ongoing trainer coverage; the current trainer agrees appointments and records explicit outcomes before starting another. Completed reports separate private observations from an authored shared summary. See the [trainer workflow](features/application_workflow_guide.md#trainer-workflow-and-shared-reports). |
 | Evaluation | Staff assign and reassign evaluators within the service window; evaluators agree on visits directly, record appointments, and submit reports. See the [evaluator workflow](features/application_workflow_guide.md#evaluator-workflow) and [evaluation services](../app/services/evaluations). |
 | Equipment purchasing | Staff edit persistent purchasing needs, export model quantities for bids, and record one shared PO across selected applications. Individual devices retain their ordering, shipment, and correction history; see [equipment purchasing](features/application_workflow_guide.md#equipment-purchasing-and-shipment). |
+| Devices | Constituents and managing guardians see exact products from completed voucher purchases or active program shipments, grouped by beneficiary with source/date labels. Shipment does not confirm receipt; training on a demo model does not imply ownership. |
+| Product guidance | Staff publish an exact-product, explicitly localized link or PDF from product management. Devices, shared training reports, and current trainer preparation show preferred-language guidance and labeled alternatives. PDFs are public guidance; personalized history stays authorized. |
 
 [TrainingManagement](../app/models/concerns/training_management.rb) and [EvaluationManagement](../app/models/concerns/evaluation_management.rb) own assignment rules. Equipment applications do not automatically receive vouchers.
 
 Training sessions and evaluations share the [status vocabulary](../app/models/concerns/status_management.rb): `requested`, `scheduled`, `confirmed`, `completed`, `cancelled`, and `no_show`. `rescheduled` remains for legacy/display compatibility; current rescheduling services set `scheduled` and record a reschedule event.
+
+Current training authority is `Application#assigned_trainer`; historical session authorship does not grant future scheduling or current contact access. There is at most one unresolved appointment per application. Administrators can remove coverage at quota or between appointments without rewriting completed reports. Trainers can cancel requested appointments, report an early completed visit with a nonfuture actual time, mark a no-show after the planned start, or reschedule before the start for a documented constituent-requested change. Additional/follow-up appointments require the latest eligible outcome, current coverage, service-window eligibility, and remaining capacity.
+
+Training reports store actual `completed_at` separately from server-set `report_submitted_at`. Their required shared summary and authored language are separate from optional private `internal_notes`; private text has no constituent-facing fallback. Own and currently managed application reports are accessible through **Training history**, including resources for a demo product absent from Devices. Named commands record state/audit together and request notices after commit. Queued/deferred delivery is distinct from a successful save and from confirmed delivery; a notification failure does not undo a saved report.
 
 An evaluator assignment sends a notice to the evaluator. Missing constituent email or phone is shown as unavailable; it does not prevent that assignment notice. The evaluator contacts the applicant or the application's managing guardian, agrees on an appointment, and records its future date, time, and location in the portal. Scheduling and rescheduling require the evaluator to share the arrangements directly.
 
@@ -89,6 +95,8 @@ Staff can edit localized templates and manage the print queue. [Email and letter
 | Vendors, vouchers, and invoices | `/admin/vendors`, `/admin/vouchers`, `/admin/invoices` |
 | Equipment and shared purchase orders | `/admin/equipment`, `/admin/purchase_orders` |
 | Constituent applications | `/constituent_portal/applications` |
+| Constituent Devices and shared training reports | `/constituent_portal/products`, `/constituent_portal/training_sessions` |
+| Product guidance administration | `/admin/products` → Resources |
 | Vendor redemption and invoices | `/vendor_portal/vouchers`, `/vendor_portal/invoices` |
 | Evaluator and trainer work | `/evaluators/evaluations`, `/trainers/training_sessions` |
 | Draft drop-off analysis | `/admin/application_analytics/pain_points` |

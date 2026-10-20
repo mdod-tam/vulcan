@@ -1,0 +1,367 @@
+# frozen_string_literal: true
+
+require 'test_helper'
+
+# These commands commit for real, so transaction callbacks and delivery outcomes are exercised.
+class TrainingNotificationDeliveryTest < ActiveSupport::TestCase
+  self.use_transactional_tests = false
+  include ConcurrencyTestHelper
+
+  PRIVATE_TEXT = 'PRIVATE TRAINING SENTINEL 7319'
+
+  setup do
+    @system_actor_existed = PublicAuditActor.system_audit_actor.present?
+    @system_actor = ensure_system_audit_actor!
+    @admin = create(:admin)
+    @trainer = create(:trainer)
+    @constituent = create(:constituent)
+    @application = create(:application, :approved, :with_all_proofs, user: @constituent, application_date: Date.current,
+                                                                     assigned_trainer: @trainer)
+    @product = create(:product)
+    @old_adapter = EmailDelivery::MailDeliveryJob.queue_adapter
+    EmailDelivery::MailDeliveryJob.queue_adapter = :test
+    EmailDelivery::MailDeliveryJob.queue_adapter.enqueued_jobs.clear
+    ActionMailer::Base.deliveries.clear
+    load_seeded_email_templates(*%w[training_scheduled training_rescheduled training_cancelled training_no_show training_completed].map do |action|
+      "training_session_notifications_#{action}"
+    end)
+  end
+
+  teardown do
+    EmailDelivery::MailDeliveryJob.queue_adapter.enqueued_jobs.clear
+    EmailDelivery::MailDeliveryJob.queue_adapter = @old_adapter
+    PrintQueueItem.where(application: @application).destroy_all
+    RoleCapability.where(user_id: [@trainer.id, @replacement_trainer&.id].compact).delete_all
+    cleanup_duplicate_review_test_data!(@admin, @trainer, @replacement_trainer, @constituent, @guardian, @other_guardian, (@system_actor unless @system_actor_existed))
+    @product.destroy!
+  end
+
+  test 'real scheduling and follow-up creation each queue one intended notice' do
+    session = create(:training_session, application: @application, trainer: @trainer)
+    result = schedule(session)
+    assert result.success?, result.message
+    assert_equal :queued, result.data[:notification_outcome].status
+    assert_equal 1, mail_jobs.length
+    assert_equal @trainer.id, notification(session, 'training_scheduled').actor_id
+
+    duplicate = schedule(session)
+    assert_not duplicate.success?
+    assert_equal 1, mail_jobs.length
+
+    result = TrainingSessions::CancelService.new(session, @trainer, cancellation_reason: PRIVATE_TEXT, cancellation_initiator: 'trainer').call
+    assert result.success?, result.message
+    result = TrainingSessions::ScheduleFollowUpService.new(
+      session, @trainer, scheduled_for: 3.days.from_now, location: 'Library room 2', reschedule_reason: PRIVATE_TEXT
+    ).call
+    assert result.success?, result.message
+    assert_equal :queued, result.data[:notification_outcome].status
+    assert_equal 1, Notification.where(notifiable: result.data[:training_session], action: 'training_scheduled').count
+    assert_equal 3, mail_jobs.length
+    assert_private_metadata_absent
+  end
+
+  test 'reschedule uses captured old date and actor without publishing the private reason' do
+    session = create(:training_session, :scheduled, application: @application, trainer: @trainer)
+    old_date = session.scheduled_for
+    result = nil
+    Application.transaction do
+      result = TrainingSessions::RescheduleService.new(
+        session, @trainer, scheduled_for: 3.days.from_now, location: 'Library room 2', reschedule_reason: PRIVATE_TEXT
+      ).call
+      assert result.success?, result.message
+      assert_equal :deferred, result.data[:notification_outcome].status
+      assert_empty mail_jobs
+      Current.user = @admin
+    end
+
+    notice = notification(session, 'training_rescheduled')
+    assert_equal old_date.iso8601, notice.metadata['old_scheduled_for']
+    assert_equal @trainer.id, notice.actor_id
+    assert_equal :queued, result.data[:notification_outcome].status
+    assert_equal 1, mail_jobs.length
+    assert_private_metadata_absent
+    mail = TrainingSessionNotificationsMailer.training_rescheduled(session, notice).message
+    assert_includes mail.body.decoded, 'Library room 2'
+    assert_includes mail.body.decoded, old_date.strftime('%Z')
+    assert_not_includes mail.body.decoded, PRIVATE_TEXT
+  end
+
+  test 'outer rollback queues no notification and rolls back state and audit' do
+    session = create(:training_session, application: @application, trainer: @trainer)
+    Application.transaction do
+      result = schedule(session)
+      assert result.success?, result.message
+      assert_equal :deferred, result.data[:notification_outcome].status
+      raise ActiveRecord::Rollback
+    end
+
+    assert session.reload.status_requested?
+    assert_empty mail_jobs
+    assert_not Notification.exists?(notifiable: session)
+    assert_not Event.exists?(auditable: session, action: 'training_scheduled')
+  end
+
+  test 'notification exception preserves the committed operation and exposes failed outcome' do
+    session = create(:training_session, application: @application, trainer: @trainer)
+    NotificationService.stubs(:create_and_deliver!).raises(RuntimeError, PRIVATE_TEXT)
+    result = schedule(session)
+
+    assert result.success?, result.message
+    assert session.reload.status_scheduled?
+    assert Event.exists?(auditable: session, action: 'training_scheduled')
+    assert_equal :failed, result.data[:notification_outcome].status
+    assert_equal 'RuntimeError', result.data[:notification_outcome].error_class
+    assert_empty mail_jobs
+  end
+
+  test 'completion confirms an early actual visit using public scalar variables and leaves private observations private' do
+    session = create(:training_session, :scheduled, application: @application, trainer: @trainer, internal_notes: PRIVATE_TEXT)
+    actual_time = 2.hours.ago.change(usec: 0)
+    result = TrainingSessions::CompleteService.new(session, @trainer, completion_params(actual_time)).call
+
+    assert result.success?, result.message
+    assert_equal :queued, result.data[:notification_outcome].status
+    assert_equal actual_time, session.reload.completed_at
+    assert_operator session.report_submitted_at, :>, session.completed_at
+    assert_equal PRIVATE_TEXT, session.internal_notes
+    assert_equal 1, mail_jobs.length
+    notice = notification(session, 'training_completed')
+    mail = TrainingSessionNotificationsMailer.training_completed(session, notice).message
+    assert_includes mail.body.decoded, "/constituent_portal/training_sessions/#{session.id}"
+    assert_not_includes mail.body.decoded, PRIVATE_TEXT
+    assert_not_includes mail.body.decoded, session.constituent_summary
+    assert_private_metadata_absent
+
+    additional = TrainingSessions::ScheduleAdditionalService.new(session, @trainer, scheduled_for: 4.days.from_now).call
+    assert additional.success?, additional.message
+    assert_equal 1, Notification.where(notifiable: additional.data[:training_session], action: 'training_scheduled').count
+    assert_equal 2, mail_jobs.length
+  end
+
+  test 'no-show and requested cancellation notify once and stale outcomes do not deliver' do
+    session = create(:training_session, :scheduled, application: @application, trainer: @trainer, scheduled_for: 1.hour.from_now)
+    result = travel_to(2.hours.from_now) do
+      TrainingSessions::NoShowService.new(session, @trainer, no_show_notes: PRIVATE_TEXT).call
+    end
+    assert result.success?, result.message
+    assert_equal 1, mail_jobs.length
+    result = TrainingSessions::NoShowService.new(session, @trainer, no_show_notes: PRIVATE_TEXT).call
+    assert_not result.success?
+    assert_equal 1, mail_jobs.length
+    session.destroy!
+
+    requested = create(:training_session, application: @application, trainer: @trainer)
+    result = TrainingSessions::CancelService.new(requested, @trainer, cancellation_reason: PRIVATE_TEXT, cancellation_initiator: 'trainer').call
+    assert result.success?, result.message
+    mail = TrainingSessionNotificationsMailer.training_cancelled(requested, notification(requested, 'training_cancelled')).message
+    assert_includes mail.body.decoded, 'unscheduled training request has been closed'
+    assert_not_includes mail.body.decoded, 'assignment has been removed'
+    assert_equal 2, mail_jobs.length
+    assert_private_metadata_absent
+  end
+
+  test 'administrative removal queues one cancellation while retaining report history' do
+    requested = create(:training_session, application: @application, trainer: @trainer, internal_notes: PRIVATE_TEXT)
+    assert @application.unassign_trainer!(actor: @admin, reason: PRIVATE_TEXT)
+    assert_equal 1, mail_jobs.length
+    notice = notification(requested, 'training_cancelled')
+    assert_equal @admin.id, notice.actor_id
+    assert_equal 'admin', notice.metadata['cancellation_initiator']
+    assert_equal PRIVATE_TEXT, requested.reload.internal_notes
+    assert_nil @application.reload.assigned_trainer_id
+    assert_private_metadata_absent
+  end
+
+  test 'managing guardian receives completion in their language through the chosen channel' do
+    @guardian = create(:constituent, locale: 'es', communication_preference: :letter)
+    @other_guardian = create(:constituent, locale: 'en')
+    @constituent.update!(email: "dependent-#{SecureRandom.uuid}@system.matvulcan.local", dependent_email: @guardian.email)
+    create(:guardian_relationship, guardian_user: @other_guardian, dependent_user: @constituent)
+    create(:guardian_relationship, guardian_user: @guardian, dependent_user: @constituent)
+    @application.update!(managing_guardian: @guardian)
+    session = create(:training_session, :scheduled, application: @application, trainer: @trainer, internal_notes: PRIVATE_TEXT)
+    result = TrainingSessions::CompleteService.new(session, @trainer, completion_params(2.hours.ago)).call
+
+    assert result.success?, result.message
+    assert_equal :queued, result.data[:notification_outcome].status
+    assert_equal 1, mail_jobs.length
+    assert_difference -> { PrintQueueItem.where(application: @application).count }, 1 do
+      ActiveJob::Base.execute(mail_jobs.sole)
+    end
+    assert_empty ActionMailer::Base.deliveries
+    letter = PrintQueueItem.find_by!(application: @application)
+    assert_equal @guardian.id, letter.constituent_id
+    assert_equal 'other_notification', letter.letter_type
+    assert_predicate letter.pdf_letter, :attached?
+    assert_equal 'letter', notification(session, 'training_completed').metadata['actual_delivery_channel']
+    assert_equal 'es', letter.delivery_context['template_locale'] if letter.delivery_context.key?('template_locale')
+    renderer = Letters::TextTemplateToPdfService.new(
+      template_name: 'training_session_notifications_training_completed', recipient: @guardian, locale: 'es',
+      variables: { header_text: '', recipient_full_name: @guardian.full_name, constituent_full_name: @constituent.full_name,
+                   trainer_full_name: @trainer.full_name, completed_date_formatted: '20 de octubre de 2026',
+                   completed_time_formatted: '10:00 EDT', report_url: 'https://example.com/constituent_portal/training_sessions/1', footer_text: '' }
+    )
+    _, body = renderer.template.render(**renderer.variables)
+    assert_includes body, 'Inicie sesión'
+    assert_not_includes body, PRIVATE_TEXT
+    assert_private_metadata_absent
+  end
+
+  test 'policy suppression is distinct from a saved report and creates no mail job' do
+    template = EmailTemplate.find_by!(name: 'training_session_notifications_training_completed', format: :text, locale: 'en')
+    template.email_control_write = true
+    template.update!(enabled: false)
+    session = create(:training_session, :scheduled, application: @application, trainer: @trainer)
+    result = TrainingSessions::CompleteService.new(session, @trainer, completion_params(2.hours.ago)).call
+
+    assert result.success?, result.message
+    assert session.reload.status_completed?
+    assert_equal :suppressed, result.data[:notification_outcome].status
+    assert_empty mail_jobs
+    assert notification(session, 'training_completed').suppressed_delivery_status?
+  end
+
+  test 'covered constituent request reaches the current trainer with an authorized destination' do
+    load_seeded_email_templates('application_notifications_training_requested')
+    session = create(:training_session, :completed, application: @application, trainer: @trainer, product_trained_on: @product)
+    result = Applications::TrainingRequestService.new(application: @application, current_user: @constituent).call
+
+    assert result.success?, result.message
+    notice = Notification.find_by!(notifiable: @application, action: 'training_requested')
+    assert_equal @trainer.id, notice.recipient_id
+    assert_equal @constituent.id, notice.actor_id
+    assert_equal [:queued], result.data[:notification_outcomes]
+    mail = ApplicationNotificationsMailer.training_requested(@application, notice).message
+    assert_includes mail.body.decoded, "/trainers/training_sessions/#{session.id}"
+    assert_not_includes mail.body.decoded, '/admin/applications/'
+    assert_equal 1, mail_jobs.length
+  end
+
+  test 'edited completion subjects render the same public values in the delivered subject and header' do
+    { 'legacy_percent' => '%<constituent_full_name>s', 'liquid' => '{{ constituent_full_name }}' }.each do |syntax, placeholder|
+      locale = syntax == 'liquid' ? 'es' : 'en'
+      @constituent.update!(locale: locale)
+      title = locale == 'es' ? 'Capacitación para' : 'Training for'
+      template = EmailTemplate.find_by!(name: 'training_session_notifications_training_completed', locale: locale, format: :text)
+      body = template.required_variables.map { |name| syntax == 'liquid' ? "{{ #{name} }}" : "%<#{name}>s" }.join("\n")
+      template.update!(syntax: syntax, subject: "#{title} #{placeholder}", body: body)
+      session = create(:training_session, :scheduled, application: @application, trainer: @trainer)
+      result = TrainingSessions::CompleteService.new(session, @trainer, completion_params(1.hour.ago)).call
+      assert result.success?, result.message
+
+      ActiveJob::Base.execute(mail_jobs.last)
+
+      mail = ActionMailer::Base.deliveries.last
+      assert_equal "#{title} #{@constituent.full_name}", mail.subject
+      assert_includes mail.body.decoded, "#{title} #{@constituent.full_name}"
+      assert_not_includes mail.body.decoded, placeholder
+      assert_not_includes mail.body.decoded, PRIVATE_TEXT
+    end
+  end
+
+  test 'a queued assignment is suppressed before resolving contacts after removal and reassignment' do
+    load_seeded_email_templates('training_session_notifications_trainer_assigned')
+    @application.update!(assigned_trainer: nil)
+    assert @application.assign_trainer!(@trainer, actor: @admin)
+    session = @application.latest_training_session
+    notice = notification(session, 'trainer_assigned')
+    old_assignment_job = mail_jobs.sole
+    assert @application.unassign_trainer!(actor: @admin, reason: 'Coverage changed')
+    @replacement_trainer = create(:trainer)
+    @constituent.update!(email: "new-contact-#{SecureRandom.hex(6)}@example.com", physical_address_1: 'Newly private contact address')
+    assert @application.assign_trainer!(@replacement_trainer, actor: @admin)
+
+    Applications::ContactContext.expects(:new).never
+    assert_no_difference -> { ActionMailer::Base.deliveries.count } do
+      2.times { ActiveJob::Base.execute(old_assignment_job) }
+    end
+
+    assert notice.reload.suppressed_delivery_status?
+    assert_equal 'trainer_coverage_changed', notice.metadata.dig('delivery_suppressed', 'reason')
+    assert_equal 'none', notice.metadata['actual_delivery_channel']
+    assert_equal 1, Event.where(action: EmailDelivery::Outcome::SUPPRESSED).with_metadata(:request_id, old_assignment_job.dig('email_delivery_context', 'request_id')).count
+  end
+
+  test 'a queued covered request is suppressed after transfer instead of sending the old trainer new applicant details' do
+    load_seeded_email_templates('application_notifications_training_requested')
+    create(:training_session, :completed, application: @application, trainer: @trainer, product_trained_on: @product)
+    result = Applications::TrainingRequestService.new(application: @application, current_user: @constituent).call
+    assert result.success?, result.message
+    notice = Notification.find_by!(notifiable: @application, action: 'training_requested')
+    assert_equal 'assigned_trainer', notice.metadata['recipient_audience']
+    old_request_job = mail_jobs.sole
+    assert @application.unassign_trainer!(actor: @admin, reason: 'Coverage changed')
+    @replacement_trainer = create(:trainer)
+    @constituent.update!(first_name: 'New private applicant identity')
+    assert @application.assign_trainer!(@replacement_trainer, actor: @admin)
+
+    assert_no_difference -> { ActionMailer::Base.deliveries.count } do
+      ActiveJob::Base.execute(old_request_job)
+    end
+
+    assert notice.reload.suppressed_delivery_status?
+    assert_equal 'trainer_coverage_changed', notice.metadata.dig('delivery_suppressed', 'reason')
+    assert_equal 'none', notice.metadata['actual_delivery_channel']
+  end
+
+  test 'an uncovered request keeps its administrative queue audience after a trainer is assigned' do
+    load_seeded_email_templates('application_notifications_training_requested', 'training_session_notifications_trainer_assigned')
+    @application.update!(assigned_trainer: nil)
+    result = Applications::TrainingRequestService.new(application: @application, current_user: @constituent).call
+    assert result.success?, result.message
+    notice = Notification.find_by!(notifiable: @application, action: 'training_requested', recipient: @admin)
+    assert_equal 'assignment_queue_admin', notice.metadata['recipient_audience']
+    queue_job = mail_jobs.find { |job| job.dig('email_delivery_context', 'notification_id') == notice.id }
+    assert @application.assign_trainer!(@trainer, actor: @admin)
+
+    assert_difference -> { ActionMailer::Base.deliveries.count }, 1 do
+      ActiveJob::Base.execute(queue_job)
+    end
+
+    assert_equal [@admin.email], ActionMailer::Base.deliveries.last.to
+    assert_not notice.reload.suppressed_delivery_status?
+  end
+
+  test 'trainer assignment remains an email-only staff notice for a letter-preferring trainer' do
+    load_seeded_email_templates('training_session_notifications_trainer_assigned')
+    @trainer.update!(communication_preference: :letter, physical_address_1: 'Training Office', city: 'Baltimore', state: 'MD', zip_code: '21201')
+    @application.update!(assigned_trainer: nil)
+    assert @application.assign_trainer!(@trainer, actor: @admin)
+    session = @application.latest_training_session
+    notice = notification(session, 'trainer_assigned')
+    assert_equal 'email', notice.metadata['actual_delivery_channel']
+    assert_equal 'email_only', notice.metadata['delivery_route_reason']
+
+    assert_difference -> { ActionMailer::Base.deliveries.count }, 1 do
+      ActiveJob::Base.execute(mail_jobs.sole)
+    end
+    assert_equal [@trainer.email], ActionMailer::Base.deliveries.last.to
+    assert_not PrintQueueItem.exists?(application: @application)
+  end
+
+  private
+
+  def schedule(session)
+    TrainingSessions::ScheduleService.new(session, @trainer,
+                                          scheduled_for: 2.days.from_now, location: 'Library room 2', internal_notes: PRIVATE_TEXT).call
+  end
+
+  def completion_params(actual_time)
+    { completed_at: actual_time, constituent_summary: 'We practised using captions.', summary_locale: 'en',
+      duration_hours: '1.5', product_trained_on_id: @product.id }
+  end
+
+  def notification(session, action)
+    Notification.find_by!(notifiable: session, action: action)
+  end
+
+  def mail_jobs
+    EmailDelivery::MailDeliveryJob.queue_adapter.enqueued_jobs.select { |job| job[:job] == EmailDelivery::MailDeliveryJob }
+  end
+
+  def assert_private_metadata_absent
+    notifications = Notification.where(notifiable_type: 'TrainingSession', notifiable_id: @application.training_sessions.select(:id))
+    assert_not_includes notifications.pluck(:metadata).to_json, PRIVATE_TEXT
+    assert_not_includes Event.where(auditable_type: 'TrainingSession', auditable_id: @application.training_sessions.select(:id)).pluck(:metadata).to_json, PRIVATE_TEXT
+  end
+end

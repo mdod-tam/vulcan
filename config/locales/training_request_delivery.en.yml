@@ -1,0 +1,5 @@
+en:
+  applications:
+    training_requests:
+      messages:
+        submitted_covered: "Training request submitted. Your assigned trainer will contact you to agree the next appointment."

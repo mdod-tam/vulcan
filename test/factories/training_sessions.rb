@@ -3,8 +3,8 @@
 FactoryBot.define do
   factory :training_session do
     # Required associations
-    application
-    trainer # Add default trainer association
+    trainer
+    application { association(:application, :approved, :with_all_proofs, application_date: Date.current, assigned_trainer: trainer) }
 
     # Default status
     status { :requested } # Matches schema default 0
@@ -12,13 +12,20 @@ FactoryBot.define do
     # Optional attributes (often set via traits)
     scheduled_for { nil }
     completed_at { nil }
-    notes { nil }
+    internal_notes { nil }
+    constituent_summary { nil }
+    summary_locale { nil }
+    report_submitted_at { nil }
     reschedule_reason { nil }
     cancelled_at { nil }
     cancellation_reason { nil }
     no_show_notes { nil }
 
     # Traits for different statuses
+    trait :requested do
+      status { :requested }
+    end
+
     trait :scheduled do
       status { :scheduled }
       scheduled_for { 1.day.from_now }
@@ -27,7 +34,11 @@ FactoryBot.define do
     trait :completed do
       status { :completed }
       completed_at { 1.day.ago }
-      notes { 'Training session completed notes.' }
+      internal_notes { 'Private training observations.' }
+      constituent_summary { 'We practised using the device accessibility controls.' }
+      summary_locale { 'en' }
+      report_submitted_at { Time.current }
+      duration_hours { 1 }
       product_trained_on factory: %i[product] # Explicitly create product for completed sessions
     end
 

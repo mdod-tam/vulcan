@@ -3,6 +3,10 @@
 module Trainers
   # Base controller for the trainers portal.
   class BaseController < ApplicationController
+    include ViewerLocale
+
+    around_action :with_viewer_locale
+
     include Pagy::Backend
 
     before_action :require_trainer

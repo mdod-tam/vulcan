@@ -1,0 +1,29 @@
+<%# locals: (product:, resource_groups: product_resource_groups(product)) %>
+<section class="mt-6 rounded-lg border border-gray-200 bg-white p-5" aria-label="<%= t('product_resources.heading') %>">
+  <h2 class="text-xl font-semibold text-gray-900"><%= t('product_resources.heading') %></h2>
+  <p class="mt-1 text-sm text-gray-600"><%= product.manufacturer %> <%= product.name %> · <%= product.model_number %></p>
+  <% if resource_groups.empty? %>
+    <p class="mt-3 text-gray-600"><%= t('product_resources.empty') %></p>
+  <% else %>
+    <% unless resource_groups.any? { |locale, _| locale == I18n.locale.to_s } %>
+      <p class="mt-3 text-gray-700"><%= t('product_resources.preferred_unavailable', language: product_resource_language(I18n.locale)) %></p>
+    <% end %>
+    <% resource_groups.each do |locale, resources| %>
+      <h3 class="mt-4 font-semibold"><%= product_resource_language(locale) %><%= " · #{t('product_resources.other_language')}" unless locale == I18n.locale.to_s %></h3>
+      <ul class="mt-2 space-y-3">
+        <% resources.each do |resource| %>
+          <li lang="<%= locale %>" class="break-words">
+            <% if resource.url.present? %>
+              <%= link_to resource.title, resource.url, target: '_blank', rel: 'noopener noreferrer', class: 'text-indigo-700 underline' %>
+              <span class="text-sm text-gray-600"><%= t('product_resources.external_link') %></span>
+            <% else %>
+              <%= link_to resource.title, rails_storage_proxy_path(resource.document, disposition: 'attachment'), class: 'text-indigo-700 underline' %>
+              <span class="text-sm text-gray-600"><%= t('product_resources.pdf_download', size: number_to_human_size(resource.document.blob.byte_size),
+                                                                                          language: product_resource_language(locale)) %></span>
+            <% end %>
+          </li>
+        <% end %>
+      </ul>
+    <% end %>
+  <% end %>
+</section>

@@ -10,7 +10,7 @@ describe("TrainingDurationConfirmationController", () => {
 
   beforeEach(() => {
     document.body.innerHTML = `
-      <form data-controller="training-duration-confirmation" data-action="submit->training-duration-confirmation#confirm">
+      <form data-controller="training-duration-confirmation" data-training-duration-confirmation-message-value="You entered more than the typical number of training hours. Confirm __HOURS__ hours?" data-action="submit->training-duration-confirmation#confirm">
         <input type="number" name="duration_hours" value="2.5" data-training-duration-confirmation-target="duration" />
         <dialog data-training-duration-confirmation-target="dialog">
           <p data-training-duration-confirmation-target="message"></p>
@@ -57,6 +57,14 @@ describe("TrainingDurationConfirmationController", () => {
     expect(event.defaultPrevented).toBe(true)
     expect(dialog.showModal).toHaveBeenCalled()
     expect(message.textContent).toBe("You entered more than the typical number of training hours. Confirm 2.5 hours?")
+  })
+
+  test("uses the translated message supplied by the rendered form", () => {
+    form.setAttribute("data-training-duration-confirmation-message-value", "Ingresó más horas de lo habitual. ¿Confirma __HOURS__ horas?")
+
+    form.dispatchEvent(new Event("submit", { bubbles: true, cancelable: true }))
+
+    expect(message.textContent).toBe("Ingresó más horas de lo habitual. ¿Confirma 2.5 horas?")
   })
 
   test("No closes dialog and returns focus to duration input", () => {

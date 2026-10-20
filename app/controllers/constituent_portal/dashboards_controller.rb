@@ -2,6 +2,10 @@
 
 module ConstituentPortal
   class DashboardsController < ApplicationController
+    include ViewerLocale
+
+    around_action :with_viewer_locale
+
     # The shared scope preloads users and their guardian relationships for managed applications.
     include ApplicationDataLoading
 
@@ -99,17 +103,12 @@ module ConstituentPortal
       @max_training_sessions = Policy.max_training_sessions
 
       all_sessions = @active_application.training_sessions
-      @completed_training_sessions       = all_sessions.completed_sessions
-                                                          .includes(:trainer, :product_trained_on)
-                                                          .order(completed_at: :desc)
+      @completed_training_sessions = all_sessions.completed_sessions
+                                                 .where(application: Application.accessible_by(current_user))
+                                                 .includes(:trainer, :product_trained_on)
+                                                 .order(completed_at: :desc, id: :desc)
       @completed_training_sessions_count = @completed_training_sessions.count
       @active_training_session           = @active_application.active_training_session
-
-      # Display numbers follow completion order. Open sessions reserve quota without numbers in this map.
-      @training_session_numbers = all_sessions.completed_sessions.order(completed_at: :asc, created_at: :asc)
-                                              .pluck(:id)
-                                              .each_with_index
-                                              .to_h { |id, i| [id, i + 1] }
 
       @remaining_training_sessions = @active_application.remaining_training_sessions
     end

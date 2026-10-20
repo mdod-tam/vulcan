@@ -174,10 +174,10 @@ class ApplicationMailer < ActionMailer::Base
                             secure_request_form: nil, delivery_key: nil)
     print_recipient ||= letter_recipient_for(recipient)
     letter_variables = common_template_variables.merge(variables.respond_to?(:to_h) ? variables.to_h.deep_symbolize_keys : variables.dup)
-    letter_variables[:application] = application if application.present?
 
     Letters::TextTemplateToPdfService.new(
       template_name: template_name,
+      application: application,
       recipient: print_recipient,
       locale: locale,
       variables: letter_variables,

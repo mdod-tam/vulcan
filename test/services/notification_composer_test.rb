@@ -82,17 +82,16 @@ class NotificationComposerTest < ActiveSupport::TestCase
     assert_not_includes message, "/admin/applications/#{proof_review.id}"
   end
 
-  test 'generate message for trainer_assigned' do
+  test 'trainer assignment uses the session assignee and trainer destination while retaining the administrator actor' do
     trainer = create(:trainer, first_name: 'Jane', last_name: 'Trainer')
-    create(:training_session, application: @application, trainer: trainer, status: :scheduled, scheduled_for: 1.week.from_now)
+    session = create(:training_session, application: @application, trainer: trainer)
+    message = NotificationComposer.generate('trainer_assigned', session, @admin, {}, viewer: trainer)
 
-    message = NotificationComposer.generate(
-      'trainer_assigned',
-      @application,
-      trainer
-    )
-    assert message.include?('Jane Trainer assigned to train John Doe for')
-    assert message.include?(@application.id.to_s)
+    assert_includes message, 'Jane Trainer assigned to'
+    assert_includes message, 'John Doe'
+    assert_includes message, "/trainers/training_sessions/#{session.id}"
+    assert_not_includes message, 'Admin User assigned'
+    assert_not_includes message, '/admin/applications/'
   end
 
   test 'generate message for training_requested' do
