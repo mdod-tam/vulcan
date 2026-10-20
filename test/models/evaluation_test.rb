@@ -54,6 +54,45 @@ class EvaluationTest < ActiveSupport::TestCase
     assert_equal pixel.id, evaluation.products_tried.second['product_id']
   end
 
+  test 'selected trial inputs retain actual satisfaction and exclude unchecked products' do
+    evaluation = build(:evaluation, :completed)
+    products = create_list(:product, 3)
+    inputs = products.zip(Evaluation::TRIAL_REACTIONS).to_h do |product, reaction|
+      [product.id.to_s, { selected: '1', reaction: " #{reaction} " }]
+    end
+    evaluation.products_tried_inputs = inputs.merge('0' => { selected: '0', reaction: 'Not a rating' })
+
+    assert evaluation.valid?, -> { evaluation.errors.full_messages.join(', ') }
+    assert_equal products.map { |product| product.id.to_s }, evaluation.products_tried.pluck('product_id')
+    assert_equal Evaluation::TRIAL_REACTIONS, evaluation.products_tried.pluck('reaction')
+    assert_equal({ 'selected' => '1', 'reaction' => 'Satisfied' }, evaluation.products_tried_inputs.fetch(products.first.id.to_s))
+  end
+
+  test 'checked trials require a recognized rating and catalog product' do
+    evaluation = build(:evaluation, :completed)
+    product = evaluation.recommended_products.first
+    [nil, '', 'Not recorded', 'Unknown'].each do |reaction|
+      evaluation.products_tried_inputs = { product.id.to_s => { selected: '1', reaction: reaction } }
+
+      assert_not evaluation.valid?
+      assert_includes evaluation.errors[:products_tried].join, reaction.blank? ? 'requires a satisfaction rating' : 'must use Satisfied'
+    end
+
+    evaluation.products_tried_inputs = { '0' => { selected: '1', reaction: 'Neutral' } }
+    assert_not evaluation.valid?
+    assert_includes evaluation.errors[:products_tried], 'must reference catalog products'
+  end
+
+  test 'historical actual trial reactions survive supplemental notes without reclassification' do
+    evaluation = create(:evaluation, :completed, :with_single_product)
+    original = evaluation.products_tried
+
+    evaluation.update!(post_completion_notes: 'Later observation')
+
+    assert_equal original, evaluation.reload.products_tried
+    assert_equal 'Very Satisfied', evaluation.products_tried_inputs.values.sole['reaction']
+  end
+
   test 'allows administrators as evaluators through inherent capability' do
     evaluation = build(:evaluation, evaluator: create(:admin))
 
@@ -150,6 +189,38 @@ class EvaluationTest < ActiveSupport::TestCase
     assert_includes evaluation.errors[:recommended_products], "can't be blank"
     assert_includes evaluation.errors[:products_tried], "can't be blank"
     assert_equal 'scheduled', evaluation.reload.status
+  end
+
+  test 'new completion rejects archived recommendations while preserving historical product trials' do
+    evaluation = create(:evaluation)
+    archived_product = evaluation.recommended_products.first
+    archived_product.archive!
+    completion = {
+      status: :completed, appointment_completed_at: 1.hour.ago, report_submitted_at: Time.current
+    }
+
+    assert_not evaluation.update(completion)
+    assert_includes evaluation.errors[:recommended_products], 'cannot include archived catalog products'
+    assert_equal 'scheduled', evaluation.reload.status
+
+    historical_trials = evaluation.products_tried
+    active_product = create(:product)
+    evaluation.update!(completion.merge(recommended_product_ids: [active_product.id]))
+
+    assert_equal 'completed', evaluation.reload.status
+    assert_equal [active_product.id], evaluation.recommended_product_ids
+    assert_equal historical_trials, evaluation.products_tried
+  end
+
+  test 'archiving a previously recommended product does not prevent supplemental report notes' do
+    evaluation = create(:evaluation, :completed)
+    original_recommendations = evaluation.recommended_product_ids.sort
+    evaluation.recommended_products.first.archive!
+
+    evaluation.update!(post_completion_notes: 'Product availability changed after this assessment')
+
+    assert_equal original_recommendations, evaluation.reload.recommended_product_ids.sort
+    assert_equal 'Product availability changed after this assessment', evaluation.post_completion_notes
   end
 
   test 'outside catalog and no suitable product outcomes can complete without inventing products' do

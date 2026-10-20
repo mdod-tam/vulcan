@@ -28,8 +28,11 @@
                      'focus:outline-none focus:ring-indigo-500 focus:border-indigo-500 sm:text-sm',
               required: true,
               placeholder: 'Please provide a reason...',
-              aria: evaluation_field_aria(:cancel, :notes, form_errors: @evaluation_form_errors)
+              aria: evaluation_field_aria(:cancel, :notes, describedby: 'cancel-notes-help', form_errors: @evaluation_form_errors)
             ) %>
+        <p id="cancel-notes-help" class="mt-1 text-sm text-gray-500">
+          <strong><%= t('evaluators.evaluations.forms.internal_notes_only') %></strong>
+        </p>
         <%= render 'field_errors', action: :cancel, attribute: :notes, form_errors: @evaluation_form_errors %>
       </div>
 

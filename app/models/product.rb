@@ -9,6 +9,8 @@ class Product < ApplicationRecord
 
   has_many :voucher_transaction_products, dependent: :destroy
   has_many :voucher_transactions, through: :voucher_transaction_products
+  has_many :equipment_needs, dependent: :restrict_with_error
+  has_many :equipment_items, dependent: :restrict_with_error
 
   validates :name, presence: true
   validates :manufacturer, presence: true

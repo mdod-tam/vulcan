@@ -179,8 +179,6 @@ es:
       evaluation_rescheduled: "Evaluación reprogramada"
       requested_additional_info: "Información adicional solicitada"
       evaluator_assigned: "Evaluador asignado"
-      equipment_bids_sent: "Ofertas enviadas al proveedor"
-      equipment_po_sent: "Orden de compra enviada al proveedor"
     details:
       followup_scheduled_for: "Seguimiento programado para"
       reason: "Motivo: %{reason}"

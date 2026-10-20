@@ -497,23 +497,6 @@ class ApplicationWorkflowPredicatesTest < ActiveSupport::TestCase
     assert_not_includes results, unapproved
   end
 
-  test 'equipment fulfillment date methods update dates and log one audit event each' do
-    admin = create(:admin)
-    app = create(:application, :completed)
-
-    assert_difference -> { Event.where(action: 'equipment_bids_sent', auditable: app).count }, 1 do
-      app.mark_equipment_bids_sent!(date: '2026-01-01', actor: admin)
-    end
-
-    assert_difference -> { Event.where(action: 'equipment_po_sent', auditable: app).count }, 1 do
-      app.mark_equipment_po_sent!(date: '2026-02-01', actor: admin)
-    end
-
-    app.reload
-    assert_equal Date.new(2026, 1, 1), app.equipment_bids_sent_at.to_date
-    assert_equal Date.new(2026, 2, 1), app.equipment_po_sent_at.to_date
-  end
-
   # --- service_window_end_date ---
 
   test 'service_window_end_date returns application_date + waiting_period_years' do

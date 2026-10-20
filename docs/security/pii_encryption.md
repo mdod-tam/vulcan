@@ -18,13 +18,16 @@ Encryption covers the declarations below, not every piece of personal informatio
 | [VendorSecureRequestForm](../../app/models/vendor_secure_request_form.rb) | `recipient_email` | — |
 | [Application](../../app/models/application.rb) | — | `document_signing_audit_url`, `document_signing_document_url` |
 | [EmailDeliveryAttempt](../../app/models/email_delivery_attempt.rb) | — | `destination` |
+| [EquipmentItem](../../app/models/equipment_item.rb) | `normalized_imei`, `normalized_serial_number` | `imei`, `serial_number`, `tracking_number` |
 | [Event](../../app/models/event.rb) | — | `change_values` (see [audit events](#audit-events)) |
 
 Deterministic encryption produces matching ciphertext for matching values under the same encryption configuration. This supports equality queries and unique indexes, but reveals equality patterns. Use it only when lookup or uniqueness requires it.
 
+Equipment identifiers use normalized encrypted equality for duplicate checks. Partial database indexes enforce one active IMEI and one active serial within the recorded normalized manufacturer/model identity, including duplicate catalog entries. Shipped and detached devices retain those assignments; withdrawn historical devices release them. Device identifier corrections use the encrypted audit values described below, and identifiers are excluded from bid exports.
+
 ### Audit events
 
-`Event#metadata` is plain JSON, so it must not hold values whose columns are encrypted. When `metadata[:changes]` names a field the audited record encrypts, [`AuditEventService.log`](../../app/services/audit_event_service.rb) keeps the field name in metadata, with an empty placeholder, and moves its old and new values to the encrypted `Event#change_values`. Read recorded changes with `Event#field_changes`, which restores those values; reading `metadata['changes']` directly shows only the names. Fields the record does not encrypt are stored as given.
+`Event#metadata` is plain JSON, so it must not hold values whose columns are encrypted. When `metadata[:changes]` names an encrypted record field or an explicitly sensitive audit field, [`AuditEventService.log`](../../app/services/audit_event_service.rb) keeps the field name in metadata, with an empty placeholder, and moves its old and new values to the encrypted `Event#change_values`. The sensitive-field list includes `serial_duplicate_reason`: an equipment acknowledgment may contain a device identifier even though it is not a stored EquipmentItem attribute. Read recorded changes with `Event#field_changes`, which restores those values; reading `metadata['changes']` directly shows only the names. Other change fields are stored as given.
 
 The password digest is a BCrypt hash that is also encrypted at rest. A WebAuthn public key is not a cryptographic secret, though this application encrypts its stored value.
 
@@ -40,7 +43,9 @@ SQL `LOWER`, `LIKE`, and substring matching operate on ciphertext and silently r
 
 [The initializer](../../config/initializers/active_record_encryption.rb) reads `primary_key`, `deterministic_key`, and `key_derivation_salt` from `Rails.application.credentials.active_record_encryption`.
 
-**Persistent environments need stable keys.** Production startup refuses missing or incomplete encryption credentials. Development/test can use temporary random keys when credentials are absent; these cannot protect durable data across restarts. Losing the matching keys makes encrypted records unreadable, including restored backups.
+**Retained data needs stable keys.** Normal non-test startup, including development, refuses missing, incomplete or blank encryption credentials. The error names the missing entries and the credentials-edit command for the environment. Temporary random keys are limited to disposable test runs and asset builds with `SECRET_KEY_BASE_DUMMY=1` and `assets:precompile` as the sole requested Rake task. Complete configured keys are reused in those paths too.
+
+When initializing fresh data, use `bin/rails db:encryption:init` to generate keys, then save all three entries in the matching credentials file before saving records. Preserve the original encryption keys and salt for any data you retain; temporary keys cannot reliably read records after a restart, and losing the matching keys makes encrypted records unreadable, including restored backups.
 
 `RAILS_MASTER_KEY` decrypts the credentials file, not database columns. A replacement instance can use a different master key only with credentials re-encrypted under it that preserve the original Active Record keys and salt. Preserve the effective `secret_key_base` too: besides signed cookies/links, it supplies the HMAC key for the persisted email-search index. Changing it requires rebuilding those tokens.
 
@@ -56,6 +61,8 @@ Fixtures are encrypted and key references are stored. These settings do not esta
 ## Keep personal data out of logs
 
 [Parameter filtering](../../config/initializers/filter_parameter_logging.rb) covers contact details, names, addresses, DOB, password fields, provider contacts, and tokens. Paper identity receipts, rationales, and upload `*_signed_id` parameters are filtered. The filter also covers `identity_decision` as defense in depth. Autosave filters `field_value`, which can contain personal data, and its `autosave_context` page identifier. Encrypted attributes are also added to filtering. Review storage and filtering together when adding a sensitive field.
+
+Equipment request filtering covers serial, IMEI, tracking, correction reasons, and the signed `impact_token` confirmation payload. That signature binds reviewed values; it does not encrypt the payload, so it needs explicit log filtering even when the individual identifier fields are filtered.
 
 SQL binds need names for filtering to work. A hash condition carries its column name; a positional value in `where('LOWER(first_name) = ?', value)` does not. [Constituent duplicate matching](../../app/models/users/constituent.rb) uses named query attributes for this reason.
 

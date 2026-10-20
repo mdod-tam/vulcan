@@ -1,0 +1,53 @@
+<div class="container mx-auto max-w-4xl px-4 py-8">
+  <h1 id="equipment-needs-title" class="text-2xl font-semibold text-gray-900 mb-4">Purchasing needs for application #<%= @application.id %></h1>
+  <p id="equipment-needs-help" class="text-sm text-gray-600 mb-4">These quantities describe new devices still needed. Set a quantity to zero to remove it. To replace a model, set its quantity to zero and add the new model. Previously ordered devices awaiting reorder are edited individually.</p>
+  <%= render 'admin/equipment/form_errors', errors: @form_errors, id: 'equipment-needs-errors',
+                                            review_path: edit_admin_application_equipment_needs_path(@application, return_context: @return_context) %>
+  <%= render 'admin/applications/equipment_recommendations', application: @application, heading_level: 2 %>
+  <% if @application.equipment_procurement_eligible? %>
+    <%= form_with url: admin_application_equipment_needs_path(@application), method: :patch, scope: :equipment_needs,
+                  class: 'space-y-6', aria: { describedby: 'equipment-needs-help' } do |form| %>
+      <%= form.hidden_field :expected_initialized_at, value: @expected_initialized_at %>
+      <% @return_context.each do |key, value| %>
+        <%= hidden_field_tag "return_context[#{key}]", value %>
+      <% end %>
+      <% @rows.each_with_index do |row, index| %>
+        <fieldset class="rounded-md border border-gray-200 p-4">
+          <legend class="px-1 text-sm font-semibold text-gray-900">
+            <% if row['id'].present? %>
+              <%= equipment_catalog_label(@products[row['product_id'].to_s]) %>
+            <% else %>
+              Add a catalog model
+            <% end %>
+          </legend>
+          <%= hidden_field_tag 'equipment_needs[rows][][id]', row['id'], id: nil %>
+          <%= hidden_field_tag 'equipment_needs[rows][][lock_version]', row['lock_version'], id: nil %>
+          <% if row['id'].present? %>
+            <%= hidden_field_tag 'equipment_needs[rows][][product_id]', row['product_id'], id: nil %>
+          <% else %>
+            <%= label_tag "equipment-need-product-#{index}", 'Catalog model', class: 'block text-sm font-medium text-gray-700' %>
+            <%= select_tag 'equipment_needs[rows][][product_id]', options_for_select(equipment_catalog_options(@new_products), row['product_id']),
+                           include_blank: 'Choose a model to add', id: "equipment-need-product-#{index}", class: 'mt-1 w-full rounded-md border-gray-300' %>
+          <% end %>
+          <%= label_tag "equipment-need-quantity-#{index}", 'New devices still needed', class: 'block mt-3 text-sm font-medium text-gray-700' %>
+          <%= number_field_tag 'equipment_needs[rows][][remaining_quantity]', row['remaining_quantity'],
+                               id: "equipment-need-quantity-#{index}", min: row['id'].present? ? 0 : 1,
+                               step: 1, required: true, autocomplete: 'off', class: 'mt-1 w-32 rounded-md border-gray-300' %>
+        </fieldset>
+      <% end %>
+      <div>
+        <%= form.label :reason, 'Reason for adjustment', class: 'block text-sm font-medium text-gray-700' %>
+        <%= form.text_field :reason, value: @reason, required: true, aria: { describedby: 'equipment-needs-reason-help' }, class: 'mt-1 w-full rounded-md border-gray-300' %>
+        <p id="equipment-needs-reason-help" class="text-sm text-gray-600">Explain the purchasing decision, including a decision that no new devices are needed.</p>
+      </div>
+      <div class="flex flex-wrap gap-4 items-center">
+        <%= form.submit 'Save purchasing needs', class: 'rounded-md bg-indigo-600 px-4 py-2 text-white hover:bg-indigo-700 focus:ring-2 focus:ring-indigo-500' %>
+        <%= link_to 'Cancel', @return_context.present? ? equipment_return_path(@return_context) : admin_application_path(@application, anchor: 'equipment'),
+                    class: 'text-indigo-600 underline' %>
+      </div>
+    <% end %>
+  <% else %>
+    <p class="text-gray-600">Purchasing needs can be changed only for approved equipment applications.</p>
+    <%= link_to 'Return to application equipment', admin_application_path(@application, anchor: 'equipment'), class: 'text-indigo-600 underline' %>
+  <% end %>
+</div>

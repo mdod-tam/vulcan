@@ -89,14 +89,16 @@ Use the checked-in Yarn release if your global launcher selects a different vers
 
 For shared credentials, obtain the matching key from a maintainer and place it in `config/master.key` or export `RAILS_MASTER_KEY`. Generating a new key will not decrypt the existing `config/credentials.yml.enc`.
 
-For an isolated local setup, create environment-specific credentials without replacing the shared encrypted file:
+For an isolated local setup with fresh or disposable data, create environment-specific credentials without replacing the shared encrypted file:
 
 ```bash
 EDITOR="vim" bin/rails credentials:edit --environment development
 EDITOR="vim" bin/rails credentials:edit --environment test
 ```
 
-Use `bin/rails db:encryption:init` to generate the `active_record_encryption` entries, then add stable keys to each local credentials file before saving data. Keep local keys and credentials out of your change. Missing encryption configuration falls back to temporary keys, which cannot reliably read saved records after a restart. See [PII encryption](docs/security/pii_encryption.md).
+Use `bin/rails db:encryption:init` to generate the `active_record_encryption` entries for fresh or disposable data, then add all three entries to each local credentials file before saving data. For retained data, preserve the existing encryption keys and salt; newly generated values cannot decrypt it. Keep local keys and credentials out of your change.
+
+Normal development and other non-test runtimes refuse missing, incomplete or blank encryption credentials. Temporary keys are limited to disposable tests and the explicitly marked asset-build path. See [PII encryption](docs/security/pii_encryption.md).
 
 ### Local environment
 
@@ -154,7 +156,7 @@ Open [localhost:3000](http://localhost:3000). [Procfile.dev](Procfile.dev) start
 
 ## Default Development Users
 
-After the demo seed, these accounts use `password123`:
+After the demo seed, these accounts use `password1234`:
 
 | Role | Email |
 | --- | --- |

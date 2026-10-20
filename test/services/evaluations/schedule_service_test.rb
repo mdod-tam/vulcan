@@ -77,5 +77,20 @@ module Evaluations
       assert_nil @evaluation.evaluation_date
       assert_equal replacement.id, @evaluation.evaluator_id
     end
+
+    test 'scheduling rechecks approval after the application has been archived' do
+      stale_evaluation = Evaluation.find(@evaluation.id)
+      assert stale_evaluation.application.status_approved?
+      @evaluation.application.transition_status!(:archived, actor: create(:admin))
+
+      assert_no_difference('Event.where(action: "evaluation_scheduled").count') do
+        result = ScheduleService.new(stale_evaluation, @evaluator, { evaluation_date: 1.day.from_now }).call
+
+        assert result.failure?
+        assert_includes result.message, 'Only approved applications'
+      end
+      assert_equal 'requested', @evaluation.reload.status
+      assert_nil @evaluation.evaluation_date
+    end
   end
 end

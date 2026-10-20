@@ -40,6 +40,7 @@ module Admin
       flash.now[:alert] = "#{prefix}: #{error_message}"
 
       if respond_to?(:render, true)
+        prepare_application_show
         render 'admin/applications/show', status: :unprocessable_content
       else
         Rails.logger.error(

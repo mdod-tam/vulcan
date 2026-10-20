@@ -3,6 +3,20 @@
 require 'test_helper'
 
 class VendorTest < ActiveSupport::TestCase
+  test 'equipment procurement scope matches account eligibility including legacy and merged vendors' do
+    active = create(:vendor)
+    legacy = create(:vendor, status: nil)
+    vendors = [active, legacy, create(:vendor, status: :inactive), create(:vendor, status: :suspended),
+               create(:vendor, merged_into_user: active, merged_at: Time.current),
+               create(:vendor, status: nil, merged_into_user: active, merged_at: Time.current)]
+    vendor_ids = vendors.map(&:id)
+    eligible_ids = Users::Vendor.equipment_procurement_eligible.where(id: vendor_ids).order(:id).pluck(:id)
+
+    assert_equal [active.id, legacy.id].sort, eligible_ids
+    assert_equal vendors.select(&:public_login_active?).map(&:id).sort, eligible_ids
+    assert_empty Users::Vendor.active.where(id: vendor_ids), 'Vendor approval remains distinct from equipment account eligibility'
+  end
+
   test 'valid vendor can be created with factory' do
     vendor = create(:vendor, :approved, :with_w9) # Use :with_w9 trait to attach a W9, which sets it to in_progress
 

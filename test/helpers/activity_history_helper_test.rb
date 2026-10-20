@@ -51,11 +51,12 @@ class ActivityHistoryHelperTest < ActionView::TestCase
     assert_includes activity_detail(event), 'iPad Air'
   end
 
-  test 'formats application fulfillment source labels' do
-    event = Event.new(action: 'equipment_po_sent', metadata: { date: Date.current.iso8601 })
+  test 'formats application assignment source labels' do
+    event = Event.new(action: 'evaluator_assigned', metadata: { evaluator_name: 'Ada Evaluator' })
 
-    assert_equal 'PO Sent to Vendor', activity_label(event)
-    assert_equal 'Application Fulfillment', activity_source_label(event)
+    assert_equal 'Evaluator Assigned', activity_label(event)
+    assert_equal 'Application', activity_source_label(event)
+    assert_equal 'Evaluator Ada Evaluator assigned', activity_detail(event)
   end
 
   test 'distinguishes the appointment and report timestamps from the scheduled time' do
@@ -100,10 +101,10 @@ class ActivityHistoryHelperTest < ActionView::TestCase
     assert_equal 'Alice Doe', activity_subject_name(event)
   end
 
-  test 'uses application constituent as activity subject for fulfillment events' do
+  test 'uses application constituent as activity subject for assignment events' do
     constituent = create(:constituent, first_name: 'Pat', last_name: 'Portal')
     application = create(:application, :old_enough_for_new_application, user: constituent)
-    event = Event.new(action: 'equipment_bids_sent', auditable: application, metadata: {})
+    event = Event.new(action: 'evaluator_assigned', auditable: application, metadata: {})
 
     assert_equal 'Pat Portal', activity_subject_name(event)
   end

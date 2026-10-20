@@ -1,0 +1,35 @@
+<%# locals: (application:) -%>
+<section id="equipment" class="bg-white rounded-lg shadow p-6 mb-6" aria-labelledby="equipment-title">
+  <div class="flex flex-wrap items-center justify-between gap-4 mb-4">
+    <div class="flex flex-wrap items-center gap-3">
+      <h2 id="equipment-title" class="text-xl font-semibold text-gray-900">Equipment</h2>
+      <%= admin_fulfillment_badge(application) %>
+    </div>
+    <%= link_to 'Back to Equipment', equipment_return_path(@return_context), class: 'text-sm text-indigo-600 underline',
+                                                                             data: { turbo_frame: '_top' } %>
+  </div>
+  <%= render 'equipment_recommendations', application: application %>
+  <h3 class="text-lg font-semibold text-gray-900 mb-2">New devices still needed</h3>
+  <% if application.equipment_needs_initialized_at %>
+    <% if application.equipment_needs.any? { |need| need.remaining_quantity.positive? } %>
+      <ul class="mb-4 space-y-1 text-sm text-gray-700">
+        <% application.equipment_needs.each do |need| %>
+          <% if need.remaining_quantity.positive? %>
+            <li><%= equipment_catalog_label(need.product) %> · <%= pluralize(need.remaining_quantity, 'device') %></li>
+          <% end %>
+        <% end %>
+      </ul>
+    <% elsif application.equipment_catalog_product_pending? %>
+      <p class="text-sm text-gray-600 mb-4">An available catalog model has not been selected for this outside-catalog recommendation.</p>
+    <% else %>
+      <p class="text-sm text-gray-600 mb-4">No new devices are currently needed.</p>
+    <% end %>
+  <% else %>
+    <p class="text-sm text-gray-600 mb-4">Purchasing needs have not been initialized.</p>
+  <% end %>
+  <% if application.equipment_procurement_eligible? %>
+    <%= link_to 'Edit equipment needs', edit_admin_application_equipment_needs_path(application, return_context: @return_context),
+                class: 'text-sm text-indigo-600 underline', data: { turbo_frame: '_top' } %>
+  <% end %>
+  <%= render 'equipment_items', items: @equipment_items, audit_records: @equipment_audit_records, return_context: @return_context %>
+</section>

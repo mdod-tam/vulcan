@@ -1,0 +1,15 @@
+<%# locals: (errors:, id:, title: nil, review_path: nil, conflicts: [], return_context: {}) -%>
+<% if errors.present? %>
+  <div id="<%= id %>" role="alert" tabindex="-1" data-controller="error-summary"
+       class="rounded border border-red-300 bg-red-50 p-4 mb-4 text-red-900 focus:outline-none focus:ring-2 focus:ring-red-500">
+    <% if title %><h2 class="font-semibold"><%= title %></h2><% end %>
+    <ul class="list-disc pl-5"><% errors.each do |error| %><li><%= error %></li><% end %></ul>
+    <% conflicts.uniq.each do |conflict| %>
+      <p><%= link_to "Review equipment item ##{conflict.id}", edit_admin_equipment_item_path(conflict, return_context: return_context), class: 'underline' %></p>
+    <% end %>
+    <% if review_path %>
+      <p class="mt-2">Reviewing the latest purchasing needs replaces this draft. Re-enter any changes before saving.</p>
+      <%= link_to 'Review latest purchasing needs', review_path, class: 'underline' %>
+    <% end %>
+  </div>
+<% end %>

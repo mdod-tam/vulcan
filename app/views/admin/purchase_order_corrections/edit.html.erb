@@ -1,0 +1,35 @@
+<div id="equipment-correction" class="max-w-4xl mx-auto p-4 space-y-6">
+  <h1 class="text-2xl font-bold">Correct purchase order <%= @purchase_order.number %></h1>
+  <p>This purchase order contains <%= pluralize(@items.size, 'equipment item') %> across <%= pluralize(@items.map(&:application_id).uniq.size, 'application') %>,
+     including <%= pluralize(@items.count(&:shipped_at?), 'shipped device') %>. Header changes affect every linked device.</p>
+  <%= render 'admin/equipment/form_errors', errors: @form_errors, id: 'purchase-order-correction-errors' %>
+  <%= form_with model: @purchase_order, url: admin_purchase_order_correction_path(@purchase_order), method: :patch, class: 'space-y-4' do |form| %>
+    <%= hidden_field_tag :expected_version, @expected_version %>
+    <% @return_context.each do |key, value| %><%= hidden_field_tag "return_context[#{key}]", value %><% end %>
+    <% @item_versions.each do |id, version| %><%= hidden_field_tag "item_versions[#{id}]", version %><% end %>
+    <%= render 'admin/purchase_orders/fields', form: form, purchase_order: @purchase_order, vendors: @vendors %>
+    <div>
+      <%= label_tag :reason, 'Correction reason', class: 'block font-medium' %>
+      <%= text_area_tag :reason, params[:reason], required: true, rows: 2, class: 'mt-1 w-full rounded border-gray-300' %>
+    </div>
+    <% if @reviewing %>
+      <%= render 'admin/equipment/correction_impact', record: @purchase_order, previous_values: @previous_values,
+                                                      fields: Equipment::Correction::PO_FIELDS, impact_token: @impact_token, autofocus: @form_errors.blank?,
+                                                      title: 'Review old and new header values',
+                                                      confirmation: 'I confirm the impact on all linked equipment and applications.', vendors: @vendors %>
+    <% end %>
+    <% if (@items.size > 1 || @items.any?(&:shipped_at?)) && !@reviewing %>
+      <%= button_tag 'Review correction', name: :review, value: '1', formnovalidate: true,
+                                          data: { turbo_submits_with: 'Reviewing...' }, class: 'rounded bg-indigo-700 px-4 py-2 text-white' %>
+    <% else %>
+      <%= form.submit 'Save purchase order correction', data: { turbo_submits_with: 'Saving...' }, class: 'rounded bg-indigo-700 px-4 py-2 text-white' %>
+      <% if @reviewing %>
+        <%= button_tag 'Review changed values', name: :review, value: '1', formnovalidate: true,
+                                                data: { turbo_submits_with: 'Reviewing...' }, class: 'ml-3 text-indigo-700 underline' %>
+      <% end %>
+    <% end %>
+  <% end %>
+  <p><%= link_to 'Refresh purchase order and discard this draft',
+                 edit_admin_purchase_order_correction_path(@purchase_order, return_context: @return_context), class: 'text-indigo-700 underline' %></p>
+  <%= link_to 'Back to purchase order', admin_purchase_order_path(@purchase_order, return_context: @return_context), class: 'text-indigo-700 underline' %>
+</div>

@@ -10,7 +10,7 @@ module Evaluators
       supplemental_notes: %i[post_completion_notes]
     }.transform_values(&:freeze).freeze
     FORM_ERROR_FIELD_ALIASES = {
-      products_tried: :products_tried_field, recommended_products: :recommended_product_ids,
+      products_tried: :products_tried_inputs, recommended_products: :recommended_product_ids,
       attendees: :attendees_field
     }.freeze
 
@@ -159,7 +159,8 @@ module Evaluators
       @can_manage_evaluation = assigned_evaluator?
       @contact_context = ::Applications::ContactContext.new(application: @evaluation.application)
       @activity_logs = ::Evaluations::AuditLogBuilder.new(@evaluation).build
-      @available_products = Product.order(:name)
+      @available_products = Product.order(:name).to_a
+      @recommendation_products = @available_products.reject(&:archived?)
     end
 
     def render_lifecycle_failure(action, form_values, message)

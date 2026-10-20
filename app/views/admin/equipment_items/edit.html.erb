@@ -1,0 +1,103 @@
+<div id="equipment-correction" class="max-w-4xl mx-auto p-4 space-y-6">
+  <h1 class="text-2xl font-bold text-gray-900">Equipment item #<%= @item.id %></h1>
+  <p><%= link_to "Application ##{@item.application_id}",
+                 admin_application_path(@item.application, anchor: "equipment-item-#{@item.id}", return_context: @return_context),
+                 class: 'text-indigo-700 underline' %></p>
+  <p><%= equipment_queue_badge(@item) %></p>
+  <%= render 'admin/equipment/form_errors', errors: @form_errors, id: 'equipment-item-errors', title: 'Review the equipment correction',
+                                            conflicts: Array(@item.identity_conflicts), return_context: @return_context %>
+  <%= form_with model: @item, url: admin_equipment_item_path(@item), method: :patch, class: 'space-y-4' do |form| %>
+    <%= hidden_field_tag :expected_version, @expected_version %>
+    <% @return_context.each do |key, value| %><%= hidden_field_tag "return_context[#{key}]", value %><% end %>
+    <% @purchase_order_versions.each do |id, version| %><%= hidden_field_tag "purchase_order_versions[#{id}]", version %><% end %>
+    <div>
+      <%= form.label :product_id, 'Actual catalog product', class: 'block font-medium' %>
+      <%= form.select :product_id, equipment_catalog_options(@products), {}, class: 'mt-1 w-full rounded border-gray-300' %>
+      <p class="text-sm text-gray-600">Changing this device leaves the original evaluation recommendation unchanged.</p>
+    </div>
+    <div>
+      <%= form.label :purchase_order_id, 'Current purchase order', class: 'block font-medium' %>
+      <%= form.select :purchase_order_id,
+                      @purchase_orders.map { |order| ["#{order.vendor.business_name} / #{order.number}", order.id] },
+                      { include_blank: (@item.purchase_order_id_in_database.blank? ? 'No current purchase order' : false) }, class: 'mt-1 w-full rounded border-gray-300' %>
+    </div>
+    <details class="rounded border border-gray-300 p-3" <%= 'open' if params[:create_purchase_order] == '1' %>>
+      <summary class="font-medium cursor-pointer">Move to a new purchase order</summary>
+      <p class="my-3">
+        <%= check_box_tag :create_purchase_order, '1', params[:create_purchase_order] == '1' %>
+        <%= label_tag :create_purchase_order, 'Create a purchase order for this device' %>
+      </p>
+      <%= fields_for :new_purchase_order, @new_purchase_order do |order_form| %>
+        <%= render 'admin/purchase_orders/fields', form: order_form, purchase_order: @new_purchase_order, vendors: @vendors, prefix: 'New ' %>
+      <% end %>
+    </details>
+    <div class="grid gap-4 sm:grid-cols-2">
+      <div>
+        <%= form.label :shipped_at, 'Date shipped', class: 'block font-medium' %>
+        <%= form.text_field :shipped_at,
+                            typed_date_field_options(value: typed_date_input_value(@item, :shipped_at), class: 'mt-1 w-full rounded border-gray-300',
+                                                     'aria-invalid': @item.errors[:shipped_at].any?,
+                                                     'aria-describedby': ['equipment-ship-date-help',
+                                                                          ('equipment-ship-date-error' if @item.errors[:shipped_at].any?)].compact.join(' ')) %>
+        <p id="equipment-ship-date-help" class="text-sm text-gray-600">MM/DD/YYYY, on or after the PO date and no later than today. Tracking alone leaves the device Ordered.</p>
+        <% if @item.errors[:shipped_at].any? %><p id="equipment-ship-date-error" class="text-sm text-red-700"><%= @item.errors.full_messages_for(:shipped_at).to_sentence %></p><% end %>
+      </div>
+      <div>
+        <%= form.label :tracking_number, class: 'block font-medium' %>
+        <%= form.text_field :tracking_number, maxlength: 128, autocomplete: 'off', class: 'mt-1 w-full rounded border-gray-300' %>
+      </div>
+      <div>
+        <%= form.label :carrier, class: 'block font-medium' %>
+        <%= form.select :carrier, EquipmentItem::CARRIERS.invert, { include_blank: 'Not recorded' }, class: 'mt-1 w-full rounded border-gray-300' %>
+      </div>
+      <div>
+        <%= form.label :serial_number, class: 'block font-medium' %>
+        <%= form.text_field :serial_number, maxlength: 128, autocomplete: 'off', class: 'mt-1 w-full rounded border-gray-300' %>
+      </div>
+      <div>
+        <%= form.label :imei, 'IMEI (15 digits)', class: 'block font-medium' %>
+        <%= form.text_field :imei, inputmode: 'numeric', autocomplete: 'off', class: 'mt-1 w-full rounded border-gray-300' %>
+      </div>
+    </div>
+    <div>
+      <%= label_tag :serial_duplicate_reason, 'Potential serial duplicate acknowledgment reason', class: 'block font-medium' %>
+      <%= text_field_tag :serial_duplicate_reason, params[:serial_duplicate_reason], autocomplete: 'off', class: 'mt-1 w-full rounded border-gray-300' %>
+      <p class="text-sm text-gray-600">Use only after reviewing a matching serial on a different model. Confirmed duplicates cannot be acknowledged.</p>
+    </div>
+    <div>
+      <%= label_tag :operation, 'Correction action', class: 'block font-medium' %>
+      <%= select_tag :operation,
+                     options_for_select([['Save device details or move purchase order', 'update'],
+                                         ['Detach an unshipped device for reorder', 'detach'],
+                                         ['Withdraw a detached unshipped device', 'withdraw']], params[:operation].presence || 'update'),
+                     class: 'mt-1 w-full rounded border-gray-300' %>
+    </div>
+    <div>
+      <%= label_tag :reason, 'Correction reason', class: 'block font-medium' %>
+      <%= text_area_tag :reason, params[:reason], required: true, rows: 2, class: 'mt-1 w-full rounded border-gray-300' %>
+    </div>
+    <% if @reviewing %>
+      <%= render 'admin/equipment/correction_impact', record: @item, previous_values: @previous_values,
+                                                      fields: Equipment::Correction::EDITABLE_ITEM_FIELDS, impact_token: @impact_token, autofocus: @form_errors.blank?,
+                                                      title: 'Correction impact: 1 device across 1 application',
+                                                      body: "Shipped devices affected: #{@item.shipped_at_in_database.present? ? 1 : 0}.",
+                                                      confirmation: 'I confirm this correction and its impact on shipment history.',
+                                                      products: @products, purchase_orders: @purchase_orders, vendors: @vendors,
+                                                      new_purchase_order: (@new_purchase_order if params[:create_purchase_order] == '1') %>
+    <% end %>
+    <% if @item.shipped_at_in_database.present? && !@reviewing %>
+      <%= button_tag 'Review correction', name: :review, value: '1', formnovalidate: true,
+                                          data: { turbo_submits_with: 'Reviewing...' }, class: 'rounded bg-indigo-700 px-4 py-2 text-white' %>
+    <% else %>
+      <%= form.submit 'Save equipment correction', data: { turbo_submits_with: 'Saving...' }, class: 'rounded bg-indigo-700 px-4 py-2 text-white' %>
+      <% if @reviewing %>
+        <%= button_tag 'Review changed values', name: :review, value: '1', formnovalidate: true,
+                                                data: { turbo_submits_with: 'Reviewing...' }, class: 'ml-3 text-indigo-700 underline' %>
+      <% end %>
+    <% end %>
+  <% end %>
+  <p><%= link_to 'Refresh equipment item and discard this draft',
+                 edit_admin_equipment_item_path(@item, return_context: @return_context), class: 'text-indigo-700 underline' %></p>
+  <% if @return_context.any? %><%= link_to 'Back to Equipment', equipment_return_path(@return_context), class: 'text-indigo-700 underline' %><% end %>
+  <%= render 'admin/equipment_items/history', events: @history, audit_records: @equipment_audit_records %>
+</div>

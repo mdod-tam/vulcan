@@ -17,13 +17,10 @@ module ActivityHistoryHelper
     'requested_additional_info' => 'Additional Info Requested',
     'evaluator_assigned' => 'Evaluator Assigned',
     'evaluator_reassigned' => 'Evaluator Reassigned',
-    'evaluation_working_notes_updated' => 'Working Notes Updated',
-    'equipment_bids_sent' => 'Equipment Bids Sent',
-    'equipment_po_sent' => 'PO Sent to Vendor'
+    'evaluation_working_notes_updated' => 'Working Notes Updated'
   }.freeze
 
   APPLICATION_ACTIONS = %w[evaluator_assigned].freeze
-  APPLICATION_FULFILLMENT_ACTIONS = %w[equipment_bids_sent equipment_po_sent].freeze
   STATIC_ACTIVITY_DETAILS = {
     'requested_additional_info' => 'Additional information requested from the constituent',
     'evaluator_reassigned' => 'Evaluation transferred to another evaluator',
@@ -63,10 +60,6 @@ module ActivityHistoryHelper
                 completed_evaluation_detail(metadata)
               when 'evaluator_assigned'
                 evaluator_assigned_detail(metadata)
-              when 'equipment_bids_sent'
-                date_detail(metadata, 'date', 'Bids sent')
-              when 'equipment_po_sent'
-                date_detail(metadata, 'date', 'PO sent')
               end
 
     details.presence || STATIC_ACTIVITY_DETAILS.fetch(event.action, 'No additional details recorded')
@@ -83,8 +76,6 @@ module ActivityHistoryHelper
   end
 
   def activity_source_label(event)
-    return 'Application Fulfillment' if APPLICATION_FULFILLMENT_ACTIONS.include?(event.action)
-
     'Application' if APPLICATION_ACTIONS.include?(event.action)
   end
 
@@ -170,18 +161,8 @@ module ActivityHistoryHelper
     evaluator_name.present? ? "Evaluator #{evaluator_name} assigned" : 'Evaluator assigned'
   end
 
-  def date_detail(metadata, key, prefix)
-    return prefix unless metadata_value(metadata, key)
-
-    "#{prefix} on #{format_activity_date(metadata_value(metadata, key))}"
-  end
-
   def format_activity_time(value)
     parse_activity_time(value)&.strftime('%B %d, %Y at %I:%M %p') || value.to_s
-  end
-
-  def format_activity_date(value)
-    parse_activity_time(value)&.strftime('%B %d, %Y') || value.to_s
   end
 
   def parse_activity_time(value)

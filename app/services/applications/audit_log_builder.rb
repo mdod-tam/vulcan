@@ -106,6 +106,7 @@ module Applications
         load_status_changes,
         load_notifications,
         load_application_events,
+        load_equipment_events,
         load_user_profile_changes
       ].flatten
     end
@@ -190,6 +191,14 @@ module Applications
         )
         .order(created_at: :desc)
         .to_a
+    end
+
+    def load_equipment_events
+      Event.includes(:user)
+           .where("action LIKE 'equipment\\_%' ESCAPE '\\'")
+           .where("(auditable_type = 'Application' AND auditable_id = ?) OR metadata->>'application_id' = ? OR metadata->'application_ids' @> ?::jsonb",
+                  application.id, application.id.to_s, [application.id].to_json)
+           .order(created_at: :desc, id: :desc).to_a
     end
   end
 end
