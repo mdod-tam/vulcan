@@ -152,7 +152,7 @@ module ActivityHistoryHelper
     parts << I18n.t('training_activity.report_submitted', time: format_training_activity_time(metadata['report_submitted_at'])) if metadata_value(metadata,
                                                                                                                                                   'report_submitted_at')
     parts << I18n.t('training_activity.duration', hours: metadata['duration_hours']) if metadata_value(metadata, 'duration_hours')
-    parts << I18n.t('training_activity.product', id: metadata['product_trained_on_id']) if metadata_value(metadata, 'product_trained_on_id')
+    parts << I18n.t('training_activity.product', name: metadata['product_trained_on_name']) if metadata_value(metadata, 'product_trained_on_name')
     parts.join('. ')
   end
 

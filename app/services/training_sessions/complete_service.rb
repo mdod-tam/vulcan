@@ -25,6 +25,7 @@ module TrainingSessions
           metadata: { application_id: @training_session.application_id, training_session_id: @training_session.id,
                       completed_at: @training_session.completed_at.iso8601, report_submitted_at: @training_session.report_submitted_at.iso8601,
                       duration_hours: @training_session.duration_hours.to_s('F'), product_trained_on_id: @training_session.product_trained_on_id,
+                      product_trained_on_name: @training_session.product_trained_on.name,
                       summary_locale: @training_session.summary_locale }
         )
         @notification_outcome = TrainingSessionNotifier.new(

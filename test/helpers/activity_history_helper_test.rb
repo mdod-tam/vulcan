@@ -45,7 +45,7 @@ class ActivityHistoryHelperTest < ActionView::TestCase
     submitted_time = Time.current
     event = Event.new(action: 'training_completed', metadata: {
                         completed_at: actual_time.iso8601, report_submitted_at: submitted_time.iso8601,
-                        duration_hours: '1.25', product_trained_on_id: 123,
+                        duration_hours: '1.25', product_trained_on_id: 123, product_trained_on_name: 'Braille Display',
                         product_trained_on: 'PRIVATE TRAINING SENTINEL', constituent_summary: 'PRIVATE TRAINING SENTINEL',
                         notes: 'PRIVATE TRAINING SENTINEL', internal_notes: 'PRIVATE TRAINING SENTINEL'
                       })
@@ -54,8 +54,35 @@ class ActivityHistoryHelperTest < ActionView::TestCase
     assert_includes detail, "Actual completion: #{I18n.l(actual_time, format: :long)}"
     assert_includes detail, "Report submitted: #{I18n.l(submitted_time, format: :long)}"
     assert_includes detail, 'Duration: 1.25 hours'
-    assert_includes detail, 'Product ID: 123'
+    assert_includes detail, 'Product: Braille Display'
+    assert_not_includes detail, 'Product ID:'
     assert_not_includes detail, 'PRIVATE TRAINING SENTINEL'
+  end
+
+  test 'training completion does not substitute arbitrary descriptions or IDs for a missing catalog name snapshot' do
+    event = Event.new(action: 'training_completed', metadata: {
+                        duration_hours: '1.25', product_trained_on_id: 123,
+                        product_trained_on: 'PRIVATE TRAINING SENTINEL', notes: 'PRIVATE TRAINING SENTINEL'
+                      })
+
+    assert_equal 'Duration: 1.25 hours', activity_detail(event)
+  end
+
+  test 'Spanish completion history renders the public catalog name as escaped text' do
+    event = Event.new(action: 'training_completed', created_at: Time.current, metadata: {
+                        product_trained_on_id: 123, product_trained_on_name: '<script>Catalog product</script>',
+                        product_trained_on: 'PRIVATE TRAINING SENTINEL', constituent_summary: 'PRIVATE TRAINING SENTINEL',
+                        notes: 'PRIVATE TRAINING SENTINEL', internal_notes: 'PRIVATE TRAINING SENTINEL'
+                      })
+
+    I18n.with_locale(:es) do
+      render partial: 'shared/activity_history', locals: { activity_logs: [event] }
+
+      assert_select 'td', text: 'Producto: <script>Catalog product</script>'
+      assert_select 'script', count: 0
+      assert_not_includes rendered, 'PRIVATE TRAINING SENTINEL'
+      assert_not_includes rendered, 'ID del producto:'
+    end
   end
 
   test 'training no-show and scheduling ignore note bodies and localize their structural descriptions' do

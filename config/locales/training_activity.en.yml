@@ -9,7 +9,7 @@ en:
     actual_completion: "Actual completion: %{time}"
     report_submitted: "Report submitted: %{time}"
     duration: "Duration: %{hours} hours"
-    product: "Product ID: %{id}"
+    product: "Product: %{name}"
     no_show: "Marked as no show"
     time_unavailable: "Time unavailable"
     initiators:

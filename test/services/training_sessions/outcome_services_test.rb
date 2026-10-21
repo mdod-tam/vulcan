@@ -42,6 +42,22 @@ module TrainingSessions
       assert @session.reload.status_scheduled?
     end
 
+    test 'completion records the archived catalog product name rather than submitted product text' do
+      @product.update!(name: 'Archived Braille Display', archived_at: 1.day.ago)
+      attempted = completion_params.merge(product_trained_on_name: 'PRIVATE submitted name',
+                                          product_trained_on: 'PRIVATE submitted description')
+      result = CompleteService.new(@session, @trainer, attempted).call
+
+      assert result.success?, result.message
+      event = Event.find_by!(action: 'training_completed', auditable: @session)
+      assert_equal @product.id, event.metadata['product_trained_on_id']
+      assert_equal 'Archived Braille Display', event.metadata['product_trained_on_name']
+      assert_not_includes event.metadata.to_json, 'PRIVATE'
+
+      @product.update!(name: 'Renamed Braille Display')
+      assert_equal 'Archived Braille Display', event.reload.metadata['product_trained_on_name']
+    end
+
     test 'an explicitly submitted blank clears optional private notes at completion' do
       result = CompleteService.new(@session, @trainer, completion_params.merge(internal_notes: '')).call
 

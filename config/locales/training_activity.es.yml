@@ -9,7 +9,7 @@ es:
     actual_completion: "Finalización real: %{time}"
     report_submitted: "Informe presentado: %{time}"
     duration: "Duración: %{hours} horas"
-    product: "ID del producto: %{id}"
+    product: "Producto: %{name}"
     no_show: "Marcada como ausencia"
     time_unavailable: "Hora no disponible"
     initiators:

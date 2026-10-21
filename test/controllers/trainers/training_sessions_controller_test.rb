@@ -211,6 +211,8 @@ module Trainers
       assert_not_includes event.metadata.to_json, 'Shared practice and next steps'
       follow_redirect!
       assert_select '[data-testid=flash-notice][role=status][aria-live=polite][aria-atomic=true]', text: 'Training session completed successfully.'
+      assert_select '#activity-history-heading + div td', text: /Product: #{Regexp.escape(@product.name)}/
+      assert_select '#activity-history-heading + div td', text: /Product ID:/, count: 0
     end
 
     test 'invalid completion retains all independent fields then unchanged and corrected retries remain truthful' do

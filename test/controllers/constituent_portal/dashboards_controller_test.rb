@@ -144,6 +144,75 @@ module ConstituentPortal
       assert_select 'a', text: 'Add Another Dependent'
     end
 
+    test 'dashboard keeps accessible personal and managed applications separate from an inaccessible personal application' do
+      personal_application = create(:application, user: @user, created_at: 2.days.ago)
+      guardian = create(:constituent)
+      create(:guardian_relationship, guardian_user: guardian, dependent_user: @user)
+      inaccessible_application = create(:application, user: @user, managing_guardian: guardian, created_at: 1.day.ago)
+      dependent = create(:constituent)
+      create(:guardian_relationship, guardian_user: @user, dependent_user: dependent)
+      managed_application = create(:application, user: dependent, managing_guardian: @user)
+
+      get constituent_portal_dashboard_path
+
+      assert_response :success
+      assert_select 'section[aria-labelledby="my-application-status-title"]' do
+        assert_select 'a[href=?]', constituent_portal_application_path(personal_application), text: 'View Application Details'
+        assert_select 'a[href=?]', constituent_portal_application_path(managed_application), count: 0
+      end
+      assert_select 'section[aria-labelledby="managed-applications-title"]' do
+        assert_select 'a[href=?]', constituent_portal_application_path(managed_application),
+                      text: "View #{dependent.full_name}'s Application"
+      end
+      assert_select 'a[href=?]', constituent_portal_application_path(inaccessible_application), count: 0
+      assert_select 'h3', text: 'My Guardians'
+      assert_select 'p', text: guardian.full_name
+    end
+
+    test 'dashboard omits a personal draft managed by another guardian while keeping the guardian continuation link' do
+      guardian = create(:constituent)
+      create(:guardian_relationship, guardian_user: guardian, dependent_user: @user)
+      draft = create(:application, :draft, user: @user, managing_guardian: guardian)
+
+      get constituent_portal_dashboard_path
+
+      assert_response :success
+      assert_select 'section[aria-labelledby="my-application-status-title"]' do
+        assert_select 'p', text: 'No active application found.'
+        assert_select 'a', text: 'Apply for Myself'
+        assert_select 'a', text: 'Continue Unsubmitted Application', count: 0
+      end
+      assert_select 'a[href=?]', edit_constituent_portal_application_path(draft), count: 0
+      assert_select 'h3', text: 'My Guardians'
+      assert_select 'p', text: guardian.full_name
+
+      sign_in_for_integration_test(guardian)
+      get constituent_portal_dashboard_path
+
+      assert_response :success
+      assert_select 'section[aria-labelledby="managed-applications-title"]' do
+        assert_select 'a[href=?]', edit_constituent_portal_application_path(draft), text: "Continue #{@user.full_name}'s Draft"
+      end
+    end
+
+    test 'dashboard keeps personal and managed draft continuation links on their own cards' do
+      personal_draft = create(:application, :draft, user: @user, created_at: 1.day.ago)
+      dependent = create(:constituent)
+      create(:guardian_relationship, guardian_user: @user, dependent_user: dependent)
+      managed_draft = create(:application, :draft, user: dependent, managing_guardian: @user)
+
+      get constituent_portal_dashboard_path
+
+      assert_response :success
+      assert_select 'section[aria-labelledby="my-application-status-title"]' do
+        assert_select 'a[href=?]', edit_constituent_portal_application_path(personal_draft), text: 'Continue Unsubmitted Application'
+        assert_select 'a[href=?]', edit_constituent_portal_application_path(managed_draft), count: 0
+      end
+      assert_select 'section[aria-labelledby="managed-applications-title"]' do
+        assert_select 'a[href=?]', edit_constituent_portal_application_path(managed_draft), text: "Continue #{dependent.full_name}'s Draft"
+      end
+    end
+
     test 'dashboard shows requested training state and disables duplicate request button' do
       application = create_reviewed_application(user: @user)
       application.update!(training_requested_at: 1.hour.ago)
@@ -211,8 +280,17 @@ module ConstituentPortal
       assert_response :success
       assert_not_includes response.body, session.constituent_summary
       assert_select 'a[href=?]', constituent_portal_training_session_path(session), count: 0
+      assert_select 'a[href=?]', constituent_portal_application_path(application), count: 0
+      assert_select '[data-testid="training-card"]', count: 0
+      assert_select 'section[aria-labelledby="my-application-status-title"] p', text: 'No active application found.'
+      assert_select 'h3', text: 'My Guardians'
+      assert_select 'p', text: guardian.full_name
 
       sign_in_for_integration_test(guardian)
+      get constituent_portal_dashboard_path
+      assert_response :success
+      assert_select 'a[href=?]', constituent_portal_application_path(application), text: "View #{@user.full_name}'s Application"
+
       get constituent_portal_training_session_path(session)
       assert_response :success
       assert_includes response.body, session.constituent_summary

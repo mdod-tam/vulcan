@@ -55,12 +55,8 @@ module ConstituentPortal
 
     def load_applications
       # Drafts have separate continuation links.
-      @applications = current_user.applications.where.not(status: :draft).order(created_at: :desc)
-
-      if @applications.empty?
-        Rails.logger.info "No applications found via association for user #{current_user.id}, trying direct query"
-        @applications = Application.where(user_id: current_user.id).where.not(status: :draft).order(created_at: :desc)
-      end
+      @applications = current_user.applications.accessible_by(current_user)
+                                  .where.not(status: :draft).order(created_at: :desc)
 
       # The shared scope excludes draft, rejected, and archived applications.
       @managed_applications = build_application_base_scope
@@ -78,7 +74,8 @@ module ConstituentPortal
     def set_active_and_draft_applications
       @active_application = @applications.first
 
-      @draft_application = current_user.applications.where(status: :draft).first
+      @draft_application = current_user.applications.accessible_by(current_user)
+                                       .where(status: :draft).order(:id).first
 
       @active_managed_application = @managed_applications.first
 
