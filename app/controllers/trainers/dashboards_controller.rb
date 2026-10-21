@@ -25,36 +25,36 @@ module Trainers
     private
 
     def load_training_sessions
+      now = Time.current
       @requested_sessions = training_sessions.where(status: :requested)
                                              .includes(application: :user)
-                                             .order(created_at: :desc)
+                                             .order(created_at: :desc, id: :desc)
       @scheduled_sessions = training_sessions.where(status: %i[scheduled confirmed])
-      @overdue_sessions = @scheduled_sessions.where(scheduled_for: ..Time.current).includes(application: :user).order(:scheduled_for, :id).limit(10)
+      @scheduled_sessions_count = @scheduled_sessions.count
+      @overdue_sessions = @scheduled_sessions.where(scheduled_for: ..now).includes(application: :user).order(:scheduled_for, :id)
+      @overdue_sessions_count = @overdue_sessions.count
       @completed_sessions = training_sessions.where(status: :completed)
       @followup_sessions = ordered_followup_sessions
       load_admin_training_sessions
       @pending_training_requests = if current_user.admin?
                                      Application.with_pending_training_request
                                                 .includes(:user)
-                                                .order(training_requested_at: :asc)
-                                                .limit(10)
+                                                .order(training_requested_at: :asc, id: :asc)
                                    else
                                      Application.with_pending_training_request.where(assigned_trainer_id: current_user.id)
-                                                .includes(:user).order(:training_requested_at).limit(10)
+                                                .includes(:user).order(:training_requested_at, :id)
                                    end
       @needs_scheduling_count = @requested_sessions.count + @pending_training_requests.count
+      @pending_request_sessions = TrainingSession.latest_per_application_records
+                                                 .where(application: @pending_training_requests)
+                                                 .index_by(&:application_id)
       @followup_sessions_count = @followup_sessions.count
       @my_scheduled_sessions_count = current_user.admin? ? @my_scheduled_sessions.count : 0
 
       # Get all scheduled training sessions for the upcoming section
-      @upcoming_sessions = @scheduled_sessions.where(scheduled_for: Time.current..).order(scheduled_for: :asc)
+      @upcoming_sessions = @scheduled_sessions.where('scheduled_for > ?', now).order(:scheduled_for, :id)
                                               .includes(application: :user)
-
-      # Get count for any training sessions assigned to this user
-      # For admins, always use their own trainer_id for this count to ensure consistency
-      @my_training_requests_count = TrainingSession.where(trainer_id: current_user.id)
-                                                   .assigned_or_scheduled
-                                                   .count
+      @my_upcoming_sessions = @my_scheduled_sessions.where('scheduled_for > ?', now)
     end
 
     def load_admin_training_sessions
@@ -67,17 +67,10 @@ module Trainers
     end
 
     def load_display_data
-      # Always initialize these to empty arrays to prevent nil errors
-      @requested_sessions_display = []
-      @upcoming_sessions_display = []
-      @my_scheduled_sessions_display = []
-      @recent_completed_sessions = []
-      @recent_followup_sessions = [] # Added for default display
-
-      # Data for dashboard tables - limit to 10 items for each section
+      @overdue_sessions_display = @overdue_sessions.limit(10)
       @requested_sessions_display = @requested_sessions.limit(10)
       @upcoming_sessions_display = @upcoming_sessions.limit(10)
-      @my_scheduled_sessions_display = @my_scheduled_sessions.limit(10) if current_user.admin?
+      @my_scheduled_sessions_display = @my_upcoming_sessions.limit(10)
       @recent_completed_sessions = @completed_sessions
                                    .includes(application: :user)
                                    .order(completed_at: :desc)

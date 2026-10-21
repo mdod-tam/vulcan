@@ -1,5 +1,12 @@
 en:
   application_contact:
+    no_disabilities_recorded: "No disabilities recorded"
+    disability_types:
+      hearing: "Hearing"
+      vision: "Vision"
+      speech: "Speech"
+      mobility: "Mobility"
+      cognition: "Cognition"
     languages:
       en: "English"
       es: "Spanish"

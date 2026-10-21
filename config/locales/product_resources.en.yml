@@ -25,3 +25,10 @@ en:
       sources:
         voucher_purchase: Purchased with voucher
         program_shipment: Shipped by the program
+    heading_for: "Guides for %{product}"
+    external_context: " — %{product}, %{language}, external link, opens in a new tab"
+    pdf_context: " — %{product}, %{language}, PDF download, %{size}"
+    admin:
+      edit_name: "Edit resource: %{title} — %{product}"
+      delete_name: "Delete resource: %{title} — %{product}"
+      delete_confirm: "Delete %{title} for %{product}?"

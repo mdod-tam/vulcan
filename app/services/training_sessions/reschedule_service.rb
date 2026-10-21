@@ -34,16 +34,14 @@ module TrainingSessions
       success(I18n.t('training_rules.rescheduled'), { training_session: @training_session, notification_outcome: @notification_outcome })
     rescue ActiveRecord::RecordInvalid => e
       failure(e.record.errors.full_messages.to_sentence, { training_session: @training_session })
-    rescue ArgumentError => e
+    rescue OperationError => e
       failure(e.message, { training_session: @training_session })
     end
 
     private
 
     def validate_transition!
-      unless @training_session.can_reschedule_current_session? && @training_session.scheduled_for&.future?
-        raise ArgumentError, I18n.t('training_rules.upcoming_reschedule_only')
-      end
+      raise OperationError, I18n.t('training_rules.reschedulable_session_only') unless @training_session.can_reschedule_current_session?
       return if @params[:reschedule_reason].present?
 
       @training_session.errors.add(:reschedule_reason, I18n.t('training_rules.reschedule_reason_required'))

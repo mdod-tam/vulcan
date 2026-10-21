@@ -13,6 +13,7 @@ two:
   status: completed
   scheduled_for: <%= 2.days.ago %>
   completed_at: <%= 1.day.ago %>
+  created_at: <%= 3.days.ago %>
   report_submitted_at: <%= Time.current %>
   constituent_summary: "We practised device accessibility controls."
   summary_locale: en

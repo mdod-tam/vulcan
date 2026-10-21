@@ -9,7 +9,7 @@
   <%= form.file_field(
         field,
         id: input_id, direct_upload: true, accept: accept,
-        aria: { describedby: [described_by, "#{input_id}_status"].compact.join(' ') }.merge(input_aria),
+        aria: input_aria.merge(describedby: [described_by, input_aria[:describedby], "#{input_id}_status"].compact.flat_map(&:split).uniq.join(' ')),
         class: 'block w-full text-sm text-gray-700',
         data: {
           document_upload_target: 'input',

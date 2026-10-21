@@ -1,6 +1,7 @@
 es:
   trainer_workflow:
     actions:
+      cancel_requested: "Cancelar esta cita sin programar"
       schedule: "Programar cita"
       complete: "Completar capacitación"
       cancel: "Cancelar cita"
@@ -10,6 +11,8 @@ es:
       follow_up: "Programar seguimiento"
     error_heading: "Corrija los siguientes errores"
     show:
+      jump_actions: "Ir a las acciones de la sesión"
+      actions_heading: "Acciones de la sesión"
       title: "Detalles de la sesión de capacitación n.º %{number}"
       back: "Volver a las sesiones"
       training_for: "Capacitación para %{name}"
@@ -50,14 +53,19 @@ es:
       cancellation_reason: "Motivo privado de la cancelación"
       no_show_reason: "Motivo privado de la ausencia"
     forms:
-      reschedule_help: "Use esta opción antes del inicio de la cita existente y solo para un cambio solicitado por la persona. Primero acuerden otra fecha futura."
+      required: "(obligatorio)"
+      completed_at_help: "Confirme cuándo terminó realmente la capacitación. Si la cita acordada ya pasó, se muestra como punto de partida; corríjala si es necesario."
+      summary_language_help: "Elija el idioma en el que redactó el resumen compartido."
+      requested_cancel_help: "Cancele esta cita sin programar solo si ya no es necesaria. La asignación del capacitador se conserva y el motivo es privado. Se envía un aviso después de guardar."
+      cancel_confirm: "¿Cancelar esta cita? La asignación del capacitador se conservará."
+      reschedule_help: "Úselo solo para un cambio solicitado por la persona. Acuerde primero otra fecha futura; la hora de inicio original puede haber pasado."
       appointment_help: "La fecha y la hora se ingresan en %{zone}. Después de guardar la cita, se tramita un aviso por correo electrónico o carta; esto no confirma su entrega."
       location_help: "Esta información de la reunión se incluye en el aviso para la persona."
       private_notes_help: "Solo el personal y los capacitadores autorizados pueden leer estas notas. Nunca se usan como resumen compartido de la sesión."
       saving_appointment: "Guardando cita…"
       completion_heading: "Informe de la sesión completada"
       completion_help: "Registre cuándo terminó realmente la capacitación, incluso si la visita se adelantó. El resumen compartido es para la persona o su tutor responsable; las notas del personal son privadas. Después de guardar, se tramita una confirmación por correo electrónico o carta."
-      product_help: "Los productos suministrados registrados aparecen primero. Seleccione el modelo que se usó realmente, incluido un modelo de demostración si corresponde; no se selecciona ninguno automáticamente."
+      product_help: "Los productos suministrados registrados aparecen primero. Elija el modelo usado, incluido un modelo de demostración si corresponde. Si hay un modelo registrado, se muestra; confirme el modelo que usó realmente."
       choose_product: "Seleccione un producto"
       duration_help: "Ingrese el tiempo total de capacitación, en horas."
       summary_help: "La persona y el tutor responsable autorizado actualmente pueden leer este resumen. Describa lo que se trató y los próximos pasos útiles."
@@ -69,6 +77,7 @@ es:
       choose_canceller: "Seleccione quién canceló"
       saving_outcome: "Guardando resultado…"
     capacity:
+      heading: "Límite de sesiones de capacitación"
       label: "Capacidad de capacitación"
       completed: "%{count} completadas"
       reserved: "%{count} reservadas"
@@ -84,8 +93,8 @@ es:
     confirmation:
       title: "Confirmar la duración de la capacitación"
       message: "Ingresó más horas de capacitación de lo habitual. ¿Confirma %{hours} horas?"
-      "no": "No"
-      "yes": "Sí"
+      "no": "Revisar la duración"
+      "yes": "Confirmar la duración y guardar el informe"
     statuses:
       requested: "Solicitada"
       scheduled: "Programada"

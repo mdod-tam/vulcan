@@ -53,7 +53,7 @@ class TrainingSessionNotificationsMailer < ApplicationMailer
       constituent_address_formatted: format_constituent_address(contact.address_owner).presence || localized_not_specified(locale),
       constituent_phone_formatted: contact.phone.presence || localized_not_specified(locale),
       constituent_email: contact.email.presence || localized_not_specified(locale),
-      constituent_disabilities_text_list: format_disabilities_text(constituent),
+      constituent_disabilities_text_list: format_disabilities_text(constituent, locale),
       constituent_language: format_constituent_language(contact, locale),
       constituent_contact_method: format_constituent_contact_method(contact, locale),
       constituent_communication_modality: format_constituent_communication_modality(contact, locale),
@@ -330,14 +330,18 @@ class TrainingSessionNotificationsMailer < ApplicationMailer
     template_name = 'training_session_notifications_training_completed'
     text_template = find_text_template(template_name, locale: locale)
     actual_completion = notification_time(notification, 'completed_at') || training_session.completed_at
-    recipient = Applications::ContactContext.new(application: @application).preference_owner
+    contact = application_contact_context_for(constituent)
+    recipient = prefers_letter_delivery?(constituent) ? contact.address_owner : contact.email_owner
+    report_accessible = @application.accessible_by?(recipient)
     variables = {
-      recipient_full_name: recipient.full_name,
+      recipient_full_name: recipient&.full_name,
       constituent_full_name: constituent.full_name,
       trainer_full_name: trainer.full_name,
       completed_date_formatted: formatted_training_date(actual_completion),
       completed_time_formatted: formatted_training_time(actual_completion),
-      report_url: constituent_portal_training_session_url(training_session),
+      report_access_text: I18n.t("training_session_notifications.training_completed.#{report_accessible ? 'report_accessible' : 'report_managed'}", locale: locale),
+      # Existing edited templates may require this scalar even when the contact owner cannot open the report.
+      report_url: report_accessible ? constituent_portal_training_session_url(training_session) : '',
       footer_text: footer_text(contact_email: ProgramContact.support_email, website_url: ProgramContact.website_url,
                                organization_name: Policy.get('organization_name') || 'Maryland Accessible Telecommunications Program',
                                show_automated_message: true, locale: locale)
@@ -409,12 +413,12 @@ class TrainingSessionNotificationsMailer < ApplicationMailer
     ].compact_blank.join("\n")
   end
 
-  def format_disabilities_text(constituent)
+  def format_disabilities_text(constituent, locale)
     disabilities = %i[hearing vision speech mobility cognition].filter_map do |disability|
-      disability.to_s.titleize if constituent.public_send("#{disability}_disability")
+      I18n.t("application_contact.disability_types.#{disability}", locale: locale) if constituent.public_send("#{disability}_disability")
     end
 
-    return 'No disabilities recorded' if disabilities.blank?
+    return I18n.t('application_contact.no_disabilities_recorded', locale: locale) if disabilities.blank?
 
     disabilities.map { |disability| "- #{disability}" }.join("\n")
   end

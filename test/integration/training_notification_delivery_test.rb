@@ -172,6 +172,28 @@ class TrainingNotificationDeliveryTest < ActiveSupport::TestCase
     assert_private_metadata_absent
   end
 
+  { manager_snapshot: :guardian, missing_snapshot: :guardian, own_snapshot: :constituent,
+    independent_snapshot: :constituent, other_guardian_snapshot: :constituent }.each do |strategy, owner_name|
+    test "completion email greets the actual #{strategy} contact owner and includes only an authorized report link" do
+      configure_completion_contacts(email_strategy: strategy)
+      owner = owner_name == :guardian ? @guardian : @constituent
+      contact = Applications::ContactContext.new(application: @application)
+      assert_equal owner, contact.email_owner
+      session = complete_training
+
+      assert_difference -> { ActionMailer::Base.deliveries.count }, 1 do
+        ActiveJob::Base.execute(mail_jobs.sole)
+      end
+
+      email = ActionMailer::Base.deliveries.last
+      assert_equal [contact.email], email.to
+      assert_equal 'email', notification(session, 'training_completed').reload.metadata['actual_delivery_channel']
+      assert_completion_body(email.body.decoded, recipient: owner, session: session)
+      assert_empty PrintQueueItem.where(application: @application)
+      assert_private_metadata_absent
+    end
+  end
+
   test 'managing guardian receives completion in their language through the chosen channel' do
     @guardian = create(:constituent, locale: 'es', communication_preference: :letter)
     @other_guardian = create(:constituent, locale: 'en')
@@ -185,9 +207,7 @@ class TrainingNotificationDeliveryTest < ActiveSupport::TestCase
     assert result.success?, result.message
     assert_equal :queued, result.data[:notification_outcome].status
     assert_equal 1, mail_jobs.length
-    assert_difference -> { PrintQueueItem.where(application: @application).count }, 1 do
-      ActiveJob::Base.execute(mail_jobs.sole)
-    end
+    renderer = execute_completion_letter
     assert_empty ActionMailer::Base.deliveries
     letter = PrintQueueItem.find_by!(application: @application)
     assert_equal @guardian.id, letter.constituent_id
@@ -195,16 +215,89 @@ class TrainingNotificationDeliveryTest < ActiveSupport::TestCase
     assert_predicate letter.pdf_letter, :attached?
     assert_equal 'letter', notification(session, 'training_completed').metadata['actual_delivery_channel']
     assert_equal 'es', letter.delivery_context['template_locale'] if letter.delivery_context.key?('template_locale')
-    renderer = Letters::TextTemplateToPdfService.new(
-      template_name: 'training_session_notifications_training_completed', recipient: @guardian, locale: 'es',
-      variables: { header_text: '', recipient_full_name: @guardian.full_name, constituent_full_name: @constituent.full_name,
-                   trainer_full_name: @trainer.full_name, completed_date_formatted: '20 de octubre de 2026',
-                   completed_time_formatted: '10:00 EDT', report_url: 'https://example.com/constituent_portal/training_sessions/1', footer_text: '' }
-    )
     _, body = renderer.template.render(**renderer.variables)
-    assert_includes body, 'Inicie sesión'
-    assert_not_includes body, PRIVATE_TEXT
+    assert_completion_body(body, recipient: @guardian, session: session)
     assert_private_metadata_absent
+  end
+
+  test 'completion letter greets its guardian address owner even when the applicant owns the email' do
+    configure_completion_contacts(email_strategy: :own_snapshot, channel: :letter)
+    contact = Applications::ContactContext.new(application: @application)
+    assert_equal @constituent, contact.email_owner
+    assert_equal @guardian, contact.address_owner
+    session = complete_training
+
+    renderer = execute_completion_letter
+
+    letter = PrintQueueItem.find_by!(application: @application)
+    assert_equal @guardian.id, letter.constituent_id
+    assert_equal @guardian, renderer.recipient
+    assert_predicate letter.pdf_letter, :attached?
+    assert_empty ActionMailer::Base.deliveries
+    assert_completion_body(renderer.template.render(**renderer.variables).last, recipient: @guardian, session: session)
+    assert_private_metadata_absent
+  end
+
+  test 'an unmanaged dependent receives the completion letter at their own address with their authorized report link' do
+    configure_completion_contacts(email_strategy: :own_snapshot)
+    @application.update!(managing_guardian: nil)
+    @constituent.update!(communication_preference: :letter)
+    contact = Applications::ContactContext.new(application: @application)
+    assert_equal @constituent, contact.address_owner
+    assert_equal 'letter', contact.communication_preference
+    session = complete_training
+
+    renderer = execute_completion_letter
+
+    letter = PrintQueueItem.find_by!(application: @application)
+    assert_equal @constituent.id, letter.constituent_id
+    assert_equal @constituent, renderer.recipient
+    assert_predicate letter.pdf_letter, :attached?
+    assert_empty ActionMailer::Base.deliveries
+    assert_completion_body(renderer.template.render(**renderer.variables).last, recipient: @constituent, session: session)
+    assert_private_metadata_absent
+  end
+
+  test 'a missing canonical completion email is suppressed instead of inventing a guardian or print fallback' do
+    configure_completion_contacts(email_strategy: :other_guardian_snapshot)
+    @constituent.update!(email: "dependent-#{SecureRandom.uuid}@system.matvulcan.local")
+    contact = Applications::ContactContext.new(application: @application)
+    assert_nil contact.email_owner
+    assert_equal 'email', contact.communication_preference
+    session = complete_training
+
+    assert_no_difference -> { ActionMailer::Base.deliveries.count } do
+      assert_no_difference -> { PrintQueueItem.where(application: @application).count } do
+        ActiveJob::Base.execute(mail_jobs.sole)
+      end
+    end
+
+    notice = notification(session, 'training_completed')
+    assert notice.reload.suppressed_delivery_status?
+    assert_equal 'missing_recipient', notice.metadata.dig('delivery_suppressed', 'reason')
+  end
+
+  %w[legacy_percent liquid].each do |syntax|
+    test "edited #{syntax} completion templates retain their contract and deliver an empty inaccessible report URL" do
+      configure_completion_contacts(email_strategy: :own_snapshot)
+      template = EmailTemplate.find_by!(name: 'training_session_notifications_training_completed', locale: @constituent.locale, format: :text)
+      required = template.required_variables - ['report_access_text']
+      body = required.map { |name| syntax == 'liquid' ? "{{ #{name} }}" : "%<#{name}>s" }.join("\n")
+      template.update!(syntax: syntax, subject: 'Administrator completion notice', body: body,
+                       variables: { 'required' => required, 'optional' => [] })
+      attributes = template.reload.attributes
+      session = complete_training
+
+      ActiveJob::Base.execute(mail_jobs.sole)
+
+      email = ActionMailer::Base.deliveries.last
+      assert_equal [@constituent.email], email.to
+      assert_includes email.body.decoded, @constituent.full_name
+      assert_not_includes email.body.decoded, '/constituent_portal/training_sessions/'
+      assert_equal attributes, template.reload.attributes
+      assert_equal 'email', notification(session, 'training_completed').reload.metadata['actual_delivery_channel']
+      assert_private_metadata_absent
+    end
   end
 
   test 'policy suppression is distinct from a saved report and creates no mail job' do
@@ -340,6 +433,65 @@ class TrainingNotificationDeliveryTest < ActiveSupport::TestCase
   end
 
   private
+
+  def configure_completion_contacts(email_strategy:, channel: :email)
+    @guardian = create(:constituent, first_name: 'Managing', last_name: 'Guardian', locale: 'es',
+                                     communication_preference: channel, physical_address_1: 'Managing Guardian Avenue')
+    @other_guardian = create(:constituent, first_name: 'Another', last_name: 'Guardian', locale: 'en')
+    create(:guardian_relationship, guardian_user: @other_guardian, dependent_user: @constituent)
+    create(:guardian_relationship, guardian_user: @guardian, dependent_user: @constituent)
+    @constituent.update!(first_name: 'Learning', last_name: 'Applicant', locale: 'en')
+    case email_strategy
+    when :manager_snapshot
+      @constituent.update!(email: "dependent-#{SecureRandom.uuid}@system.matvulcan.local", dependent_email: @guardian.email)
+    when :missing_snapshot
+      @constituent.update!(dependent_email: nil)
+    when :own_snapshot
+      @constituent.update!(dependent_email: @constituent.email)
+    when :independent_snapshot
+      @constituent.update!(dependent_email: "own-contact-#{SecureRandom.hex(6)}@example.com")
+    when :other_guardian_snapshot
+      @constituent.update!(dependent_email: @other_guardian.email)
+    end
+    @application.update!(managing_guardian: @guardian)
+  end
+
+  def complete_training
+    session = create(:training_session, :scheduled, application: @application, trainer: @trainer, internal_notes: PRIVATE_TEXT)
+    result = TrainingSessions::CompleteService.new(session, @trainer, completion_params(2.hours.ago)).call
+    assert result.success?, result.message
+    assert_equal :queued, result.data[:notification_outcome].status
+    assert_equal 1, mail_jobs.length
+    session.reload
+  end
+
+  def execute_completion_letter
+    renderers = []
+    constructor = Letters::TextTemplateToPdfService.method(:new)
+    observer = lambda do |**arguments|
+      constructor.call(**arguments).tap { |renderer| renderers << renderer }
+    end
+    # Observe real inputs while the production renderer generates and queues its PDF.
+    assert_difference -> { PrintQueueItem.where(application: @application).count }, 1 do
+      Letters::TextTemplateToPdfService.stub(:new, observer) { ActiveJob::Base.execute(mail_jobs.sole) }
+    end
+    renderers.sole
+  end
+
+  def assert_completion_body(body, recipient:, session:)
+    greeting = recipient.locale == 'es' ? "Hola #{recipient.full_name}:" : "Hello #{recipient.full_name},"
+    assert_includes body, greeting
+    accessible = Application.accessible_by(recipient).exists?(@application.id)
+    if accessible
+      assert_includes body, "/constituent_portal/training_sessions/#{session.id}"
+      assert_includes body, I18n.t('training_session_notifications.training_completed.report_accessible', locale: recipient.locale)
+    else
+      assert_not_includes body, '/constituent_portal/training_sessions/'
+      assert_includes body, I18n.t('training_session_notifications.training_completed.report_managed', locale: recipient.locale)
+    end
+    assert_not_includes body, PRIVATE_TEXT
+    assert_not_includes body, session.constituent_summary
+  end
 
   def schedule(session)
     TrainingSessions::ScheduleService.new(session, @trainer,

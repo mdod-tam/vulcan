@@ -201,7 +201,8 @@ class VoucherNotificationsMailerTest < ActionMailer::TestCase
     assert_equal manager, letter_options[:recipient]
     assert_not_equal first_guardian, letter_options[:recipient]
     assert_equal 'es', letter_options[:locale]
-    assert_equal @application, letter_options[:variables][:application]
+    assert_equal @application, letter_options[:application]
+    assert_not_includes letter_options[:variables], :application
     assert_equal @user.first_name, letter_options[:variables][:user_first_name]
   end
 

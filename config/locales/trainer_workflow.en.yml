@@ -1,6 +1,7 @@
 en:
   trainer_workflow:
     actions:
+      cancel_requested: "Cancel this unscheduled appointment"
       schedule: "Schedule appointment"
       complete: "Complete training"
       cancel: "Cancel appointment"
@@ -10,6 +11,8 @@ en:
       follow_up: "Schedule follow-up"
     error_heading: "Please correct the following errors"
     show:
+      jump_actions: "Go to session actions"
+      actions_heading: "Session actions"
       title: "Training Session #%{number} Details"
       back: "Back to Sessions"
       training_for: "Training for %{name}"
@@ -50,14 +53,19 @@ en:
       cancellation_reason: "Private cancellation reason"
       no_show_reason: "Private no-show reason"
     forms:
-      reschedule_help: "Use this before the existing start only for a constituent-requested change. Agree a different future date first."
+      required: "(required)"
+      completed_at_help: "Confirm when training actually finished. An elapsed agreed appointment is shown as a starting point; correct it if needed."
+      summary_language_help: "Choose the language in which you wrote the shared summary."
+      requested_cancel_help: "Cancel this unscheduled appointment only if it is no longer needed. Trainer coverage is retained; the reason stays private. A notice is routed after saving."
+      cancel_confirm: "Cancel this appointment? Trainer coverage will remain assigned."
+      reschedule_help: "Use this only for a constituent-requested change. Agree a different future date first; the original start may already have passed."
       appointment_help: "Date and time are entered in %{zone}. A notice is routed by email or letter after the appointment is saved; it does not confirm delivery."
       location_help: "This meeting information is included in the constituent notice."
       private_notes_help: "Only staff and authorized trainers can read these notes. They are never the shared session summary."
       saving_appointment: "Saving appointment…"
       completion_heading: "Completed session report"
       completion_help: "Record when training actually finished, including an early visit. The shared summary goes to the constituent or managing guardian; staff notes remain private. A confirmation is routed by email or letter after saving."
-      product_help: "Known supplied products appear first. Choose the actual model, including a demo model if used; nothing is selected automatically."
+      product_help: "Known supplied products appear first. Choose the actual model, including a demo model if used. A previously recorded model is shown when available; confirm the actual model used."
       choose_product: "Select a product"
       duration_help: "Enter total time spent training, in hours."
       summary_help: "The constituent and currently authorized managing guardian can read this summary. Describe what was covered and useful next steps."
@@ -69,6 +77,7 @@ en:
       choose_canceller: "Choose who cancelled"
       saving_outcome: "Saving outcome…"
     capacity:
+      heading: "Training session allowance"
       label: "Training capacity"
       completed: "%{count} completed"
       reserved: "%{count} reserved"
@@ -84,8 +93,8 @@ en:
     confirmation:
       title: "Confirm training duration"
       message: "You entered more than the typical number of training hours. Confirm %{hours} hours?"
-      "no": "No"
-      "yes": "Yes"
+      "no": "Review duration"
+      "yes": "Confirm duration and save report"
     statuses:
       requested: "Requested"
       scheduled: "Scheduled"

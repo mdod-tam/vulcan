@@ -3,7 +3,7 @@ es:
     attributes:
       training_session:
         scheduled_for: "Fecha y hora acordadas"
-        completed_at: "Fecha de finalización real"
+        completed_at: "Fecha y hora reales de finalización"
         duration_hours: "Duración (horas)"
         location: "Lugar de la reunión"
         internal_notes: "Notas privadas"
@@ -29,9 +29,10 @@ es:
     scheduled: "La sesión de capacitación se programó correctamente."
     rescheduled: "La sesión de capacitación se reprogramó correctamente."
     changed_date_required: "Elija otra fecha acordada para la cita."
-    upcoming_reschedule_only: "Para reprogramar, la cita debe estar programada o confirmada y aún no haber comenzado."
     reschedule_reason_required: "Registre el motivo del cambio solicitado por la persona participante."
     follow_up_reason_required: "Registre el motivo de este seguimiento."
     no_show_after_start: "Registre una ausencia solo después de la hora programada de la cita."
     no_show_recorded: "La sesión de capacitación se registró como ausencia."
     cancellation_initiator_required: "Seleccione quién canceló la cita."
+    completion_before_creation: "no puede ser anterior a la creación de esta solicitud de capacitación"
+    reschedulable_session_only: "Solo se puede reprogramar una cita programada."

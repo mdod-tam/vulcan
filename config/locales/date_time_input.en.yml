@@ -1,0 +1,3 @@
+en:
+  date_time_input:
+    hint: "Use the date and time format displayed by your browser. All times are in %{zone}."

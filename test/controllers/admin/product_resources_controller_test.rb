@@ -15,6 +15,9 @@ module Admin
       assert_response :success
       assert_includes response.body, 'Do not include personal or session information'
       assert_select 'input[type=file][accept=".pdf,application/pdf"]'
+      assert_select '#product_resource_document' do |inputs|
+        assert_equal %w[pdf-help product_resource_document_status], inputs.sole['aria-describedby'].split
+      end
       assert_difference 'ProductResource.count', 1 do
         post admin_product_product_resources_path(@product), params: { product_resource: link_attributes }
       end
@@ -23,6 +26,14 @@ module Admin
       get admin_product_path(@product)
       assert_select 'a', text: 'Add resource'
       assert_select 'p', text: /Guide · English · URL/
+      assert_select 'a[href=?]', edit_admin_product_product_resource_path(@product, resource) do |links|
+        assert_includes links.sole['aria-label'], 'Edit resource: Guide'
+        assert_includes links.sole['aria-label'], @product.name
+      end
+      assert_select 'form[action=?] button', admin_product_product_resource_path(@product, resource) do |buttons|
+        assert_includes buttons.sole['aria-label'], 'Delete resource: Guide'
+        assert_includes buttons.sole['aria-label'], @product.name
+      end
       patch admin_product_product_resource_path(@product, resource), params: { product_resource: link_attributes.merge(title: 'Updated guide') }
       assert_redirected_to admin_product_path(@product)
       assert_equal 'Updated guide', resource.reload.title
@@ -58,6 +69,21 @@ module Admin
       post admin_product_product_resources_path(@product), params: { product_resource: attributes.merge(title: 'Guía PDF') }
       assert_redirected_to admin_product_path(@product)
       assert_equal blob.id, @product.product_resources.sole.document.blob.id
+    end
+
+    test 'PDF errors retain the help error and live upload status descriptions together' do
+      assert_no_difference 'ProductResource.count' do
+        post admin_product_product_resources_path(@product),
+             params: { product_resource: { title: 'Attempted PDF', locale: 'en', source: 'pdf', document_signed_id: 'invalid-reference' } }
+      end
+
+      assert_response :unprocessable_content
+      assert_select '#product_resource_document[aria-invalid=true]' do |inputs|
+        descriptions = inputs.sole['aria-describedby'].split
+        assert_equal %w[pdf-help save-resource-document-error product_resource_document_status], descriptions
+      end
+      %w[pdf-help save-resource-document-error product_resource_document_status].each { |id| assert_select "##{id}", count: 1 }
+      assert_select '#product_resource_document_status[role=status]'
     end
 
     test 'a failed link to PDF switch preserves the active link and all attempted form state until corrected' do

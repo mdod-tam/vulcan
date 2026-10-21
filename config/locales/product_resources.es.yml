@@ -25,3 +25,10 @@ es:
       sources:
         voucher_purchase: Comprado con vale
         program_shipment: Enviado por el programa
+    heading_for: "Guías de %{product}"
+    external_context: " — %{product}, %{language}, enlace externo, se abre en una pestaña nueva"
+    pdf_context: " — %{product}, %{language}, descarga PDF, %{size}"
+    admin:
+      edit_name: "Editar recurso: %{title} — %{product}"
+      delete_name: "Eliminar recurso: %{title} — %{product}"
+      delete_confirm: "¿Eliminar %{title} de %{product}?"

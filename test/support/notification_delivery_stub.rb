@@ -22,20 +22,3 @@ class NotificationRetryJob
     # Do nothing in tests
   end
 end
-
-module NotificationDeliveryStub
-  def notify_status_change
-    # Stub implementation for testing
-    true
-  end
-
-  # Override deliver_notifications to avoid calling external services
-  def deliver_notifications
-    # Do nothing in tests
-    true
-  end
-end
-
-# Patch TrainingSession and Application for testing
-TrainingSession.include(NotificationDeliveryStub) if defined?(TrainingSession)
-Application.include(NotificationDeliveryStub) if defined?(Application)

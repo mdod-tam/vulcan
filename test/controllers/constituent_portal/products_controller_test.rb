@@ -66,7 +66,7 @@ module ConstituentPortal
       get constituent_portal_product_path(@product)
 
       assert_response :success
-      assert_includes response.body, 'Guías del producto'
+      assert_select 'h2', text: /\AGuías de .*#{Regexp.escape(@product.name)}/
       assert_select 'h3', text: 'inglés · Otro idioma'
       assert_operator response.body.index('Guía en español'), :<, response.body.index('English setup')
     end
@@ -75,12 +75,12 @@ module ConstituentPortal
       @user.update!(locale: 'es')
       get constituent_portal_product_path(@product, locale: 'unsupported')
       assert_response :success
-      assert_includes response.body, 'Guías del producto'
+      assert_select 'h2', text: /\AGuías de .*#{Regexp.escape(@product.name)}/
 
       @user.update!(locale: 'unsupported')
       get constituent_portal_product_path(@product)
       assert_response :success
-      assert_includes response.body, 'Product guidance'
+      assert_select 'h2', text: /\AGuides for .*#{Regexp.escape(@product.name)}/
     end
 
     test 'resources prefer exact language and label alternatives and external navigation' do
@@ -90,7 +90,18 @@ module ConstituentPortal
       assert_response :success
       assert_operator response.body.index('Guía en español'), :<, response.body.index('English setup')
       assert_select 'h3', text: 'inglés · Otro idioma'
-      assert_select 'a[target="_blank"][rel="noopener noreferrer"]', text: 'Guía en español'
+      assert_select 'a[target="_blank"][rel="noopener noreferrer"]', text: /Guía en español/ do |links|
+        assert_includes links.sole.text, @product.name
+        assert_includes links.sole.text, 'español'
+        assert_includes links.sole.text, 'enlace externo'
+        assert_includes links.sole.text, 'pestaña nueva'
+      end
+      assert_select 'section[aria-labelledby]' do |sections|
+        guidance = sections.find { |section| section.at_css('h2')&.text&.include?(@product.name) }
+        assert guidance, 'The guidance region must be named by its exact product heading'
+        labels = guidance['aria-labelledby'].split.map { |id| guidance.at_css("##{id}")&.text }
+        assert_includes labels.join(' '), @product.name
+      end
       assert_includes response.body, 'se abre en una pestaña nueva'
     end
 
@@ -122,9 +133,12 @@ module ConstituentPortal
         attributes: { title: 'PDF setup', locale: 'en' }, source: 'pdf', document: blob
       )
       get constituent_portal_product_path(@product)
-      assert_select 'a[href*="/rails/active_storage/blobs/proxy/"]', text: 'PDF setup' do |links|
+      assert_select 'a[href*="/rails/active_storage/blobs/proxy/"]', text: /PDF setup/ do |links|
         assert_not_includes links.first['href'], 'application'
         assert_includes links.first['href'], 'disposition=attachment'
+        assert_includes links.first.text, @product.name
+        assert_includes links.first.text, 'PDF download'
+        assert_includes links.first.text, ApplicationController.helpers.number_to_human_size(blob.byte_size)
       end
       other_product = create(:product, device_types: @product.device_types)
       create(:equipment_item, application: @application, product: other_product, shipped_at: Date.current, tracking_number: 'Other')

@@ -8,6 +8,7 @@ FactoryBot.define do
 
     # Default status
     status { :requested } # Matches schema default 0
+    created_at { 2.days.ago }
 
     # Optional attributes (often set via traits)
     scheduled_for { nil }
@@ -34,6 +35,7 @@ FactoryBot.define do
     trait :completed do
       status { :completed }
       completed_at { 1.day.ago }
+      created_at { (completed_at || Time.current) - 1.day }
       internal_notes { 'Private training observations.' }
       constituent_summary { 'We practised using the device accessibility controls.' }
       summary_locale { 'en' }

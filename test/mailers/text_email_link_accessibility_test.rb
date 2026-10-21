@@ -40,11 +40,9 @@ class TextEmailLinkAccessibilityTest < ActiveSupport::TestCase
     vendor_notifications_w9_expiring_soon
   ].freeze
 
-  STAFF_ONLY_TEMPLATE_NAMES = %w[
+  ENGLISH_ONLY_STAFF_TEMPLATE_NAMES = %w[
     application_notifications_proof_needs_review_reminder
-    application_notifications_training_requested
     evaluator_mailer_new_evaluation_assigned
-    training_session_notifications_trainer_assigned
   ].freeze
 
   CONSTITUENT_FACING_TEMPLATE_NAMES = %w[
@@ -62,6 +60,7 @@ class TextEmailLinkAccessibilityTest < ActiveSupport::TestCase
     application_notifications_security_key_recovery_approved
     evaluator_mailer_evaluation_submission_confirmation
     training_session_notifications_training_cancelled
+    training_session_notifications_training_completed
     training_session_notifications_training_no_show
     training_session_notifications_training_rescheduled
     training_session_notifications_training_scheduled
@@ -73,12 +72,14 @@ class TextEmailLinkAccessibilityTest < ActiveSupport::TestCase
     voucher_notifications_voucher_redeemed
   ].freeze
 
-  # Templates whose mailers resolve locale from the recipient (medical provider / vendor).
+  # Templates whose mailers resolve locale from non-admin recipients, including mixed admin/trainer notices.
   # When adding new recipient-localized templates, register the name here and keep _es seeds.
   RECIPIENT_LOCALIZED_EMAIL_TEMPLATE_NAMES = %w[
+    application_notifications_training_requested
     medical_provider_certification_approved
     medical_provider_certification_rejected
     medical_provider_request_certification
+    training_session_notifications_trainer_assigned
     vendor_notifications_w9_approved
     vendor_notifications_w9_expired
     vendor_notifications_w9_expiring_soon
@@ -112,8 +113,8 @@ class TextEmailLinkAccessibilityTest < ActiveSupport::TestCase
     end
   end
 
-  test 'staff-facing email templates are English only in seed data' do
-    STAFF_ONLY_TEMPLATE_NAMES.each do |template_name|
+  test 'English-only staff email templates exclude Spanish seed data' do
+    ENGLISH_ONLY_STAFF_TEMPLATE_NAMES.each do |template_name|
       assert seed_path_for(template_name, 'en').exist?, "Expected English seed for #{template_name}"
       assert_not seed_path_for(template_name, 'es').exist?, "Unexpected Spanish seed for #{template_name}"
     end

@@ -15,20 +15,21 @@ module Trainers
       assert_response :success
       assert_select 'h1', text: "Detalles de la sesión de capacitación n.º #{session.appointment_number}"
       assert_select 'h2', text: 'Preparación y contacto para la coordinación'
-      assert_select 'h2', text: '¿Qué ocurrió?'
+      assert_select 'p', text: '¿Qué ocurrió?'
+      assert_select 'h2#session-actions-heading', text: I18n.t('trainer_workflow.show.actions_heading', locale: :es)
       assert_select 'dt', text: 'Correo electrónico de contacto'
       assert_select 'p', text: 'Idioma preferido: inglés'
       assert_not_includes response.body, 'Translation missing'
       assert_not_includes response.body, '{:asl'
       assert_includes response.body, 'No proporcionado'
-      assert_select 'label', text: 'Resumen compartido de la sesión'
+      assert_select 'label[for=complete_constituent_summary]', text: /Resumen compartido de la sesión/
       assert_select 'label', text: 'Lugar o instrucciones de la reunión (compartidos)'
       assert_select 'option', text: 'Reprogramar a petición de la persona'
       assert_select 'input[type=submit][value="Guardar informe completado"]'
       assert_select 'option', text: 'español'
       assert_select 'span', text: 'Programada'
-      assert_select 'button', text: 'No'
-      assert_select 'button', text: 'Sí'
+      assert_select 'button[data-training-duration-confirmation-target=noButton]', text: I18n.t('trainer_workflow.confirmation.no', locale: :es)
+      assert_select 'button[data-training-duration-confirmation-target=yesButton]', text: I18n.t('trainer_workflow.confirmation.yes', locale: :es)
       assert_select '.translation_missing', count: 0
       assert_select 'form[data-training-duration-confirmation-message-value]', count: 1 do |forms|
         assert_includes forms.sole['data-training-duration-confirmation-message-value'], '¿Confirma __HOURS__ horas?'
@@ -48,7 +49,7 @@ module Trainers
       }
 
       assert_response :unprocessable_content
-      assert_includes response.body, 'Fecha de finalización real no puede estar en el futuro'
+      assert_includes response.body, 'Fecha y hora reales de finalización no puede estar en el futuro'
       assert_not_includes response.body, 'Completed at'
       assert_select 'textarea#complete_constituent_summary', text: 'Practicamos los subtítulos.'
     end
@@ -63,7 +64,26 @@ module Trainers
 
       assert_response :success
       assert_select 'h1', text: "Training Session ##{session.appointment_number} Details"
-      assert_select 'label', text: 'Shared session summary'
+      assert_select 'label[for=complete_constituent_summary]', text: /Shared session summary/
+    end
+
+    test 'the completed session list uses the actual Spanish viewer locale for headings statuses and durations' do
+      trainer = create(:trainer, locale: 'es')
+      application = create(:application, :approved, :with_all_proofs, assigned_trainer: trainer)
+      session = create(:training_session, :completed, trainer: trainer, application: application, duration_hours: '2.5')
+      sign_in_for_integration_test(trainer)
+
+      get completed_trainers_training_sessions_path
+
+      assert_response :success
+      assert_select 'h1', text: /Sesiones de capacitación completadas/
+      assert_match(/2[.,]5 horas/, response.body)
+      assert_includes response.body, I18n.t('trainer_workflow.statuses.completed', locale: :es)
+      assert_select "a[href='#{trainers_training_session_path(session)}'][aria-label]" do |links|
+        assert_includes links.sole['aria-label'], session.application.user.full_name
+        assert_includes links.sole['aria-label'], session.appointment_number.to_s
+      end
+      assert_select '.translation_missing', count: 0
     end
 
     test 'a completed trainer report labels stored summary language and duration in the viewer locale' do

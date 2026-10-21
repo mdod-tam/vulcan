@@ -4,7 +4,7 @@
   <% if @product.description.present? %><p class="mt-4 text-gray-700"><%= @product.description %></p><% end %>
   <%= render 'history', groups: @product_groups, link_products: false %>
   <p class="mt-3 text-sm text-gray-600"><%= t('product_resources.devices.shipment_notice') %></p>
-  <%= render 'shared/product_resources', product: @product %>
+  <%= render 'shared/product_resources', product: @product, region_id: dom_id(@product, :device_product_resources) %>
   <% if (documentation_url = safe_manufacturer_documentation_url(@product)) %>
     <p class="mt-5">
       <%= link_to t('product_resources.manufacturer_documentation'), documentation_url, target: '_blank',

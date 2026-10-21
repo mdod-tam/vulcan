@@ -52,7 +52,7 @@ class TrainingSession < ApplicationRecord
   validates :no_show_notes, presence: true, if: :status_no_show?
   validates :constituent_summary, :summary_locale, :completed_at, :report_submitted_at, :product_trained_on, presence: true, if: :status_completed?
   validates :summary_locale, inclusion: { in: ->(_session) { I18n.available_locales.map(&:to_s) } }, if: :status_completed?
-  validate :actual_completion_not_in_future, if: :status_completed?
+  validate :actual_completion_within_request_lifetime, if: :status_completed?
   validate :one_open_appointment, if: :entering_open_status?
   validates :duration_hours, presence: true, numericality: { greater_than: 0 }, if: :status_completed?
 
@@ -109,7 +109,7 @@ class TrainingSession < ApplicationRecord
     application.with_lock do
       with_lock do
         errors.clear
-        raise ArgumentError, I18n.t('training_rules.current_trainer_change') unless application.current_trainer?(actor) && trainer_id == actor&.id
+        raise TrainingSessions::OperationError, I18n.t('training_rules.current_trainer_change') unless application.current_trainer?(actor) && trainer_id == actor&.id
 
         yield
       end
@@ -173,8 +173,11 @@ class TrainingSession < ApplicationRecord
     errors.add(:scheduled_for, 'must be in the future')
   end
 
-  def actual_completion_not_in_future
-    errors.add(:completed_at, I18n.t('training_rules.future_actual_completion')) if completed_at&.future?
+  def actual_completion_within_request_lifetime
+    return unless completed_at
+
+    errors.add(:completed_at, I18n.t('training_rules.future_actual_completion')) if completed_at.future?
+    errors.add(:completed_at, I18n.t('training_rules.completion_before_creation')) if completed_at < (created_at || Time.current)
   end
 
   def one_open_appointment

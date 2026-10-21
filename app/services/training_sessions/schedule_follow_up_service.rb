@@ -14,8 +14,8 @@ module TrainingSessions
       application = source.application
       source.with_current_trainer_lock(@actor) do
         eligibility_error = application.new_training_work_eligibility_error(actor: @actor, source: source)
-        raise ArgumentError, eligibility_error if eligibility_error
-        raise ArgumentError, I18n.t('training_sessions.schedule_follow_up.invalid_source') unless application.latest_training_follow_up_session&.id == source.id
+        raise OperationError, eligibility_error if eligibility_error
+        raise OperationError, I18n.t('training_sessions.schedule_follow_up.invalid_source') unless application.latest_training_follow_up_session&.id == source.id
 
         if @params[:reschedule_reason].blank?
           source.errors.add(:reschedule_reason, I18n.t('training_rules.follow_up_reason_required'))
@@ -39,7 +39,7 @@ module TrainingSessions
       success(I18n.t('training_sessions.schedule_follow_up.success'), { training_session: @training_session, notification_outcome: @notification_outcome })
     rescue ActiveRecord::RecordInvalid => e
       failure(e.record.errors.full_messages.to_sentence, { training_session: e.record })
-    rescue ArgumentError => e
+    rescue OperationError => e
       failure(e.message)
     end
   end

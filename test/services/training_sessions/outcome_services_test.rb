@@ -6,7 +6,7 @@ module TrainingSessions
   class OutcomeServicesTest < ActiveSupport::TestCase
     setup do
       @trainer = create(:trainer)
-      @session = create(:training_session, :scheduled, trainer: @trainer, internal_notes: 'PRIVATE preparation')
+      @session = create(:training_session, :scheduled, trainer: @trainer, internal_notes: 'PRIVATE preparation', created_at: 2.days.ago)
       @application = @session.application
       @product = create(:product)
     end
@@ -47,6 +47,29 @@ module TrainingSessions
 
       assert result.success?, result.message
       assert_equal '', @session.reload.internal_notes
+    end
+
+    test 'completion before request creation fails without saving report fields or an audit' do
+      assert_no_difference 'Event.count' do
+        result = CompleteService.new(@session, @trainer, completion_params.merge(completed_at: @session.created_at - 1.minute)).call
+        assert_not result.success?
+      end
+
+      assert @session.reload.status_scheduled?
+      assert_nil @session.constituent_summary
+      assert_nil @session.report_submitted_at
+    end
+
+    test 'programming argument errors propagate and roll back the report instead of becoming form errors' do
+      AuditEventService.stubs(:log).raises(ArgumentError, 'Programming defect in audit arguments')
+
+      assert_no_difference 'Event.count' do
+        error = assert_raises(ArgumentError) { CompleteService.new(@session, @trainer, completion_params).call }
+        assert_equal 'Programming defect in audit arguments', error.message
+      end
+      assert @session.reload.status_scheduled?
+      assert_nil @session.constituent_summary
+      assert_nil @session.report_submitted_at
     end
 
     test 'a stale no-show cannot overwrite a completed report' do
@@ -122,7 +145,7 @@ module TrainingSessions
       assert @session.reload.status_completed?
     end
 
-    test 'reschedule requires a future changed date before the original start and keeps private notes' do
+    test 'reschedule requires a future changed date and remains truthful after the original start' do
       result = RescheduleService.new(@session, @trainer, scheduled_for: @session.scheduled_for,
                                                          reschedule_reason: 'Constituent requested a change').call
       assert_not result.success?
@@ -135,7 +158,9 @@ module TrainingSessions
 
       travel_to 4.days.from_now do
         result = RescheduleService.new(@session, @trainer, scheduled_for: 2.days.from_now, reschedule_reason: 'Late change').call
-        assert_not result.success?
+        assert result.success?, result.message
+        assert @session.reload.status_scheduled?
+        assert_equal 'Late change', @session.reschedule_reason
       end
     end
 

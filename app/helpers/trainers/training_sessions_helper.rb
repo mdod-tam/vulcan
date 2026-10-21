@@ -10,6 +10,15 @@ module Trainers
       action_form_field_aria(action, field, form_errors: form_errors, describedby: describedby)
     end
 
+    def training_required_label(text)
+      safe_join([text, tag.span(t('trainer_workflow.forms.required'), class: 'text-sm font-normal')], ' ')
+    end
+
+    def training_completion_time_default(session)
+      completed_at = session.completed_at || (session.scheduled_for if session.scheduled_for&.past?)
+      completed_at&.strftime('%Y-%m-%dT%H:%M')
+    end
+
     def training_action_url(action, session)
       case action
       when :schedule then schedule_trainers_training_session_path(session)
@@ -27,12 +36,8 @@ module Trainers
       return %i[schedule cancel] if session.status_requested?
       return [] unless session.status_scheduled? || session.status_confirmed?
 
-      actions = %i[complete cancel]
-      actions << if session.scheduled_for.present? && session.scheduled_for <= Time.current
-                   :no_show
-                 else
-                   :reschedule
-                 end
+      actions = %i[complete reschedule cancel]
+      actions << :no_show if session.scheduled_for.present? && session.scheduled_for <= Time.current
       actions
     end
 
@@ -48,6 +53,14 @@ module Trainers
       return :schedule_additional if session.application.additional_training_session_eligible?(session, actor: actor)
 
       nil
+    end
+
+    def training_next_action_unavailable_reason(session, can_manage:, actor:)
+      return unless can_manage && (session.status_completed? || session.needs_followup?)
+      return unless session.application.latest_training_session&.id == session.id
+      return if training_next_action(session, can_manage: can_manage, actor: actor)
+
+      session.application.new_training_work_eligibility_error(actor: actor, source: session)
     end
   end
 end

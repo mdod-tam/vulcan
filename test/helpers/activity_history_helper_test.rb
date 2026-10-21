@@ -69,6 +69,33 @@ class ActivityHistoryHelperTest < ActionView::TestCase
     end
   end
 
+  test 'Spanish activity table has localized fallback labels and a keyboard reachable scroll region' do
+    I18n.with_locale(:es) do
+      event = Event.new(action: 'training_missed', created_at: Time.current, metadata: {})
+
+      render partial: 'shared/activity_history', locals: { activity_logs: [event], show_subject: true }
+
+      assert_select 'h2', text: 'Historial de actividad'
+      assert_select 'div[role=region][tabindex="0"][aria-label="Tabla desplazable del historial de actividad"]' do
+        assert_select 'table[aria-labelledby="activity-history-heading"]'
+      end
+      assert_select 'th', text: 'Fecha'
+      assert_select 'th', text: 'Usuario'
+      assert_select 'th', text: 'Detalles'
+      assert_equal 'Ausencia', activity_label(event)
+      assert_equal 'Sistema', activity_actor_name(event)
+      assert_equal 'Persona participante desconocida', activity_subject_name(event)
+    end
+  end
+
+  test 'Spanish empty activity table does not fall back to English copy' do
+    I18n.with_locale(:es) do
+      render partial: 'shared/activity_history', locals: { activity_logs: [] }
+
+      assert_select 'td', text: 'Aún no se ha registrado actividad.'
+    end
+  end
+
   test 'formats known evaluation actions' do
     event = Event.new(
       action: 'evaluation_completed',

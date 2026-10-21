@@ -58,11 +58,9 @@
   <dt class="text-sm font-medium text-gray-500"><%= t('application_contact.disabilities') %></dt>
   <dd class="mt-1 text-sm text-gray-900 sm:col-span-2 sm:mt-0">
     <% if context.applicant.disabilities.any? %>
-      <ul class="list-disc pl-5">
-        <% context.applicant.disabilities.each do |disability| %><li><%= disability %></li><% end %>
-      </ul>
+      <%= context.applicant.disabilities.map { |disability| localized_contact_label(:disability_types, disability.downcase) }.to_sentence %>
     <% else %>
-      <%= t('application_contact.not_provided') %>
+      <%= t('application_contact.no_disabilities_recorded') %>
     <% end %>
   </dd>
 </div>

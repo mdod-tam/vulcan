@@ -1,4 +1,8 @@
 en:
+  activerecord:
+    attributes:
+      training_session:
+        completed_at: "Actual completion date and time"
   training_rules:
     current_trainer_change: "Only the currently assigned trainer can change this appointment."
     current_trainer_create: "Only the currently assigned trainer can create an appointment."
@@ -13,9 +17,10 @@ en:
     scheduled: "Training session scheduled successfully."
     rescheduled: "Training session rescheduled successfully."
     changed_date_required: "Choose a different agreed appointment date."
-    upcoming_reschedule_only: "Rescheduling requires an upcoming scheduled or confirmed appointment."
     reschedule_reason_required: "Record the constituent-requested reason for the change."
     follow_up_reason_required: "Record the reason for this follow-up."
     no_show_after_start: "Record a no-show only after the scheduled appointment time."
     no_show_recorded: "Training session marked as no-show."
     cancellation_initiator_required: "Choose who cancelled the appointment."
+    completion_before_creation: "cannot be before this training request was created"
+    reschedulable_session_only: "Only a scheduled appointment can be rescheduled."

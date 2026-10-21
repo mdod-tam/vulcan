@@ -7,8 +7,8 @@ module ActivityHistoryHelper
     'training_cancelled' => 'Training Cancelled',
     'training_rescheduled' => 'Training Rescheduled',
     'training_followup_scheduled' => 'Follow-up Training Scheduled',
-    'training_no_show' => 'No Show',
-    'training_missed' => 'No Show',
+    'training_no_show' => 'No show',
+    'training_missed' => 'No show',
     'evaluation_scheduled' => 'Evaluation Scheduled',
     'evaluation_completed' => 'Evaluation Completed',
     'evaluation_cancelled' => 'Evaluation Cancelled',
@@ -64,21 +64,21 @@ module ActivityHistoryHelper
                 evaluator_assigned_detail(metadata)
               end
 
-    details.presence || STATIC_ACTIVITY_DETAILS.fetch(event.action, 'No additional details recorded')
+    details.presence || STATIC_ACTIVITY_DETAILS.fetch(event.action, I18n.t('activity_history.table.no_details'))
   end
 
   def activity_actor_name(event)
-    event.user&.full_name.presence || 'System'
+    event.user&.full_name.presence || I18n.t('activity_history.table.system')
   end
 
   def activity_subject_name(event)
     activity_subject_record(event)&.then do |record|
       constituent_name_for(record)
-    end.presence || 'Unknown constituent'
+    end.presence || I18n.t('activity_history.table.unknown_constituent')
   end
 
   def activity_source_label(event)
-    'Application' if APPLICATION_ACTIONS.include?(event.action)
+    I18n.t('activity_history.table.application') if APPLICATION_ACTIONS.include?(event.action)
   end
 
   private

@@ -47,8 +47,8 @@ module ConstituentPortal
       assert_response :success
       assert_select 'div[lang=es]', text: /Practicamos los subtítulos/
       assert_includes response.body, 'Written in Spanish'
-      assert_select 'a[target="_blank"][rel="noopener noreferrer"]', text: 'Captions practice guide'
-      assert_select 'a', text: 'Guía de subtítulos'
+      assert_select 'a[target="_blank"][rel="noopener noreferrer"]', text: /\ACaptions practice guide/
+      assert_select 'a', text: /\AGuía de subtítulos/
       assert_includes response.body, 'does not establish ownership'
       assert_not_includes response.body, PRIVATE_TEXT
       assert_not_includes response.body, 'Private staff'

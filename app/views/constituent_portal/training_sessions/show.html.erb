@@ -9,9 +9,10 @@
   </section>
   <% if @training_session.product_trained_on %>
     <section class="mt-6 rounded-lg bg-white p-6 shadow">
-      <h2 class="text-lg font-semibold"><%= t('training_history.product', name: @training_session.product_trained_on.name) %></h2>
+      <h2 id="training-product-heading" class="text-lg font-semibold"><%= t('training_history.product', name: @training_session.product_trained_on.name) %></h2>
       <p class="mt-2 text-sm text-gray-600"><%= t('training_history.product_help') %></p>
-      <%= render 'shared/product_resources', product: @training_session.product_trained_on %>
+      <%= render 'shared/product_resources', product: @training_session.product_trained_on, heading_level: 3,
+                                             region_id: dom_id(@training_session, :completed_product_resources), context_id: 'training-product-heading' %>
     </section>
   <% end %>
 </div>

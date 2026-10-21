@@ -12,7 +12,7 @@ module TrainingSessions
     def call
       @training_session.with_current_trainer_lock(@actor) do
         unless @training_session.can_complete? && @training_session.scheduled_for.present? && @training_session.scheduled_for <= Time.current
-          raise ArgumentError, I18n.t('training_rules.no_show_after_start')
+          raise OperationError, I18n.t('training_rules.no_show_after_start')
         end
 
         @training_session.update!(status: :no_show, no_show_notes: @params[:no_show_notes])
@@ -28,7 +28,7 @@ module TrainingSessions
       success(I18n.t('training_rules.no_show_recorded'), { training_session: @training_session, notification_outcome: @notification_outcome })
     rescue ActiveRecord::RecordInvalid => e
       failure(e.record.errors.full_messages.to_sentence, { training_session: @training_session })
-    rescue ArgumentError => e
+    rescue OperationError => e
       failure(e.message, { training_session: @training_session })
     end
   end

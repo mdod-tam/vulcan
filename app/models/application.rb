@@ -23,7 +23,6 @@ class Application < ApplicationRecord
 
   include ApplicationStatusManagement
   include ApplicationSubmissionEligibility
-  include NotificationDelivery
   include ProofManageable
   include ProofConsistencyValidation
   include ApplicationProviderInfoRequests

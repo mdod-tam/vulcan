@@ -270,6 +270,7 @@ module Admin
         'recipient_full_name' => is_es ? 'María García' : 'Jamie Doe',
         'completed_date_formatted' => I18n.l(1.day.ago.to_date, format: :long, locale: locale),
         'completed_time_formatted' => 1.day.ago.strftime('%H:%M %Z'),
+        'report_access_text' => I18n.t('training_session_notifications.training_completed.report_accessible', locale: locale),
         'report_url' => 'https://example.com/constituent_portal/training_sessions/123',
         'scheduled_location' => is_es ? 'Biblioteca, sala 2' : 'Library, room 2'
       }

@@ -9,14 +9,21 @@
       <li class="rounded border border-gray-200 p-4">
         <p class="font-semibold"><%= resource.title %> · <%= product_resource_language(resource.locale) %> · <%= resource.source_type.upcase %></p>
         <div class="mt-2 flex gap-4">
-          <%= link_to 'Edit resource', edit_admin_product_product_resource_path(@product, resource), class: 'text-indigo-700 underline' %>
-          <%= button_to 'Delete resource', admin_product_product_resource_path(@product, resource), method: :delete,
-                                                                                                    data: { turbo_confirm: 'Delete this public resource?' },
-                                                                                                    class: 'text-red-700 underline' %>
+          <%= link_to 'Edit resource', edit_admin_product_product_resource_path(@product, resource),
+                      class: 'text-indigo-700 underline',
+                      aria: { label: t('product_resources.admin.edit_name',
+                                       title: resource.title, product: product_resource_product_label(@product)) } %>
+          <%= button_to 'Delete resource', admin_product_product_resource_path(@product, resource),
+                        method: :delete,
+                        data: { turbo_confirm: t('product_resources.admin.delete_confirm',
+                                                 title: resource.title, product: product_resource_product_label(@product)) },
+                        aria: { label: t('product_resources.admin.delete_name',
+                                         title: resource.title, product: product_resource_product_label(@product)) },
+                        class: 'text-red-700 underline' %>
         </div>
       </li>
     <% end %>
   </ul>
-  <%= render 'shared/product_resources', product: @product %>
+  <%= render 'shared/product_resources', product: @product, region_id: dom_id(@product, :admin_product_resources) %>
   <%= link_to 'Back to products', admin_products_path, class: 'mt-6 inline-block text-indigo-700 underline' %>
 </div>

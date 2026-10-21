@@ -17,3 +17,18 @@ es:
       trainer: "el instructor"
       admin: "el administrador"
       program: "el programa"
+
+  activity_history:
+    table:
+      title: "Historial de actividad"
+      scroll_region: "Tabla desplazable del historial de actividad"
+      date: "Fecha"
+      activity: "Actividad"
+      constituent: "Persona participante"
+      user: "Usuario"
+      details: "Detalles"
+      empty: "Aún no se ha registrado actividad."
+      no_details: "No se registraron detalles adicionales"
+      system: "Sistema"
+      unknown_constituent: "Persona participante desconocida"
+      application: "Solicitud"

@@ -2,7 +2,7 @@ import { Controller } from "@hotwired/stimulus"
 
 export default class extends Controller {
   static values = { message: String }
-  static targets = ["dialog", "duration", "message", "yesButton", "noButton"]
+  static targets = ["dialog", "duration", "message", "yesButton", "noButton", "submitButton"]
 
   connect() {
     this.confirmed = false
@@ -26,7 +26,11 @@ export default class extends Controller {
   proceed() {
     this.confirmed = true
     this.closeDialog()
-    this.element.requestSubmit()
+    try {
+      this.element.requestSubmit(this.submitButtonTarget)
+    } finally {
+      this.confirmed = false
+    }
   }
 
   cancel(event) {
@@ -42,7 +46,7 @@ export default class extends Controller {
       this.dialogTarget.setAttribute("open", "open")
     }
 
-    this.yesButtonTarget.focus()
+    this.noButtonTarget.focus()
   }
 
   closeDialog() {

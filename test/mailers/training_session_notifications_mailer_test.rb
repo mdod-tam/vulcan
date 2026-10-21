@@ -99,6 +99,8 @@ class TrainingSessionNotificationsMailerTest < ActionMailer::TestCase
 
   test 'trainer assignment uses the supported Spanish template for a Spanish trainer' do
     @trainer.update!(locale: 'es')
+    @constituent.update!(hearing_disability: true, vision_disability: true, speech_disability: true,
+                         mobility_disability: true, cognition_disability: true)
     EmailTemplate.unstub(:find_by!)
     load_seeded_email_templates('training_session_notifications_trainer_assigned')
 
@@ -108,6 +110,8 @@ class TrainingSessionNotificationsMailerTest < ActionMailer::TestCase
     assert_equal 'Nueva asignación de capacitación', email.subject
     assert_includes email.body.decoded, @trainer.full_name
     assert_includes email.body.decoded, 'Preferencias de comunicación'
+    %w[Audición Visión Habla Movilidad Cognición].each { |label| assert_includes email.body.decoded, "- #{label}" }
+    assert_not_includes email.body.decoded, '- Hearing'
   end
 
   test 'the stock trainer assignment uses application manager contacts and preferences rather than the first guardian' do

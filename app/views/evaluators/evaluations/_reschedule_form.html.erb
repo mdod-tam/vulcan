@@ -33,7 +33,10 @@
               required: true,
               aria: action_form_field_aria(:reschedule, :evaluation_date, describedby: 'reschedule-time-help', form_errors: @evaluation_form_errors)
             ) %>
-        <p id="reschedule-time-help" class="mt-1 text-sm text-gray-500"><%= t('evaluators.evaluations.forms.time_zone_help') %></p>
+        <p id="reschedule-time-help" class="mt-1 text-sm text-gray-500">
+          <%= t('evaluators.evaluations.forms.time_zone_help') %>
+          <%= t('date_time_input.hint', zone: Time.zone.name) %>
+        </p>
         <%= render 'shared/field_errors', action: :reschedule, attribute: :evaluation_date, form_errors: @evaluation_form_errors %>
       </div>
 

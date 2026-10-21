@@ -60,7 +60,10 @@
               required: true,
               aria: action_form_field_aria(:submit_report, :appointment_completed_at, describedby: 'complete-time-help', form_errors: @evaluation_form_errors)
             ) %>
-        <p id="complete-time-help" class="mt-1 text-sm text-gray-500"><%= t('evaluators.evaluations.forms.appointment_time_help') %></p>
+        <p id="complete-time-help" class="mt-1 text-sm text-gray-500">
+          <%= t('evaluators.evaluations.forms.appointment_time_help') %>
+          <%= t('date_time_input.hint', zone: Time.zone.name) %>
+        </p>
         <%= render 'shared/field_errors', action: :submit_report, attribute: :appointment_completed_at, form_errors: @evaluation_form_errors %>
       </div>
       <div>

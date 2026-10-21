@@ -366,6 +366,8 @@ module SystemTestAuthentication
     dashboard_heading = case user.type
                         when 'Users::Vendor'
                           'Vendor Dashboard'
+                        when 'Users::Trainer'
+                          I18n.t('trainer_workflow.dashboard.title', locale: user.locale.presence || I18n.default_locale)
                         else
                           'Dashboard'
                         end

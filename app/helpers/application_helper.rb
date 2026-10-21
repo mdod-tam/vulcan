@@ -66,7 +66,7 @@ module ApplicationHelper
   def training_duration_hours_label(duration_hours)
     hours = number_with_precision(duration_hours, precision: 2, strip_insignificant_zeros: true)
 
-    "#{hours} #{'hour'.pluralize(hours.to_f)}"
+    t('trainer_workflow.duration_label', count: duration_hours.to_f, hours: hours)
   end
 
   def medical_certification_status_badge(application)

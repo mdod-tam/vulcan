@@ -7,7 +7,7 @@ class InstallTrainingCompletedEmailTemplates < ActiveRecord::Migration[8.1]
 
   VARIABLES = {
     'required' => %w[header_text recipient_full_name constituent_full_name trainer_full_name
-                     completed_date_formatted completed_time_formatted report_url footer_text],
+                     completed_date_formatted completed_time_formatted report_access_text report_url footer_text],
     'optional' => []
   }.freeze
 
@@ -22,7 +22,7 @@ class InstallTrainingCompletedEmailTemplates < ActiveRecord::Migration[8.1]
 
         Your training with %<trainer_full_name>s for %<constituent_full_name>s was completed on %<completed_date_formatted>s at %<completed_time_formatted>s.
 
-        Sign in to read the written session summary and find guidance for the product used during training:
+        %<report_access_text>s
         %<report_url>s
 
         The summary keeps the language in which your trainer wrote it.
@@ -40,7 +40,7 @@ class InstallTrainingCompletedEmailTemplates < ActiveRecord::Migration[8.1]
 
         Su capacitación con %<trainer_full_name>s para %<constituent_full_name>s se completó el %<completed_date_formatted>s a las %<completed_time_formatted>s.
 
-        Inicie sesión para leer el resumen escrito de la sesión y encontrar orientación sobre el producto utilizado durante la capacitación:
+        %<report_access_text>s
         %<report_url>s
 
         El resumen conserva el idioma en el que lo escribió su capacitador.

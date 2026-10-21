@@ -17,3 +17,18 @@ en:
       trainer: "trainer"
       admin: "administrator"
       program: "program"
+
+  activity_history:
+    table:
+      title: "Activity History"
+      scroll_region: "Scrollable activity history table"
+      date: "Date"
+      activity: "Activity"
+      constituent: "Constituent"
+      user: "User"
+      details: "Details"
+      empty: "No activity has been recorded yet."
+      no_details: "No additional details recorded"
+      system: "System"
+      unknown_constituent: "Unknown constituent"
+      application: "Application"

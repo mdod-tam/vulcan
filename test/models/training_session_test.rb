@@ -67,6 +67,17 @@ class TrainingSessionTest < ActiveSupport::TestCase
     assert session.errors[:summary_locale].any?
   end
 
+  test 'completion cannot precede request creation even when it precedes the planned appointment' do
+    created_at = 2.days.ago
+    session = build(:training_session, :completed, created_at: created_at, completed_at: created_at - 1.minute)
+
+    assert_not session.valid?
+    assert_includes session.errors[:completed_at], I18n.t('training_rules.completion_before_creation')
+
+    session.completed_at = created_at
+    assert session.valid?, session.errors.full_messages.to_sentence
+  end
+
   test 'only one unresolved appointment is permitted even below quota' do
     Policy.stubs(:max_training_sessions).returns(3)
     existing = create(:training_session, :scheduled)

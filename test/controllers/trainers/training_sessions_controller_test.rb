@@ -10,7 +10,7 @@ module Trainers
       @admin = create(:admin)
       @application = create(:application, :approved, :with_all_proofs, application_date: Date.current, assigned_trainer: @trainer)
       @session = create(:training_session, :scheduled, application: @application, trainer: @trainer,
-                                                       internal_notes: 'Private preparation retained', scheduled_for: 1.day.from_now.change(sec: 0))
+                                                       created_at: 2.days.ago, internal_notes: 'Private preparation retained', scheduled_for: 1.day.from_now.change(sec: 0))
       @product = create(:product)
       @other_trainer = create(:trainer)
       @other_session = create(:training_session, :scheduled, trainer: @other_trainer)
@@ -34,6 +34,70 @@ module Trainers
       assert_select '#complete_completed_at[value]', count: 0
       assert_select '#complete_duration_hours[aria-describedby=duration_hours_hint]'
       assert_select '#duration_hours_hint', text: 'Enter total time spent training, in hours.'
+      assert_select 'h2#session-actions-heading', text: 'Session actions'
+      assert_select 'h2#training-capacity-heading', text: 'Training session allowance'
+      assert_operator response.body.index('id="session-actions"'), :<, response.body.index('id="preparation-heading"')
+      assert_select '#complete_completed_at[aria-describedby=complete-time-help]'
+      assert_select '#complete-time-help', text: /format displayed by your browser.*Eastern Time/m
+      assert_select 'label[for=complete_constituent_summary] span', text: '(required)'
+      assert_select '#complete_constituent_summary[aria-describedby=complete-summary-help]'
+      assert_select '#complete_internal_notes[aria-describedby=complete-observations-help]'
+    end
+
+    test 'completion defaults use recorded appointment details but rejected blanks still win' do
+      @session.update!(product_trained_on: @product, duration_hours: '1.5')
+      travel_to(@session.scheduled_for + 1.hour) do
+        sign_in_for_controller_test(@trainer)
+        get trainers_training_session_path(@session)
+
+        assert_response :success
+        assert_input_value '#complete_completed_at', @session.scheduled_for.strftime('%Y-%m-%dT%H:%M')
+        assert_select_value '#complete_product_trained_on_id', @product.id.to_s
+        assert_select '#complete_duration_hours' do |fields|
+          assert_equal BigDecimal('1.5'), BigDecimal(fields.sole['value'])
+        end
+
+        attempted = completion_params.merge(completed_at: '', product_trained_on_id: '', duration_hours: '')
+        post complete_trainers_training_session_path(@session), params: attempted
+        assert_response :unprocessable_content
+        assert_completion_values(attempted)
+        assert_select_value '#complete_product_trained_on_id', ''
+      end
+    end
+
+    test 'same product guidance has placement-specific unique headings and landmark names' do
+      report = new_session(:completed, product_trained_on: @product)
+      create(:product_resource, product: @product, title: 'Practice guide')
+      purchase = create(:voucher_transaction, voucher: create(:voucher, application: report.application))
+      purchase.voucher_transaction_products.create!(product: @product, quantity: 1)
+      get trainers_training_session_path(report)
+
+      assert_response :success
+      document = response.parsed_body
+      ids = document.css('[id]').pluck('id')
+      assert_equal ids.uniq, ids
+      regions = document.css('section[aria-labelledby]')
+                        .select { |node| node['aria-labelledby'].include?('known-products-heading') || node['aria-labelledby'].include?('completed-trained-product-heading') }
+      assert_equal 2, regions.length
+      names = regions.map do |region|
+        region['aria-labelledby'].split.map { |id| document.at_css("##{id}").text.strip }.join(' ')
+      end
+      assert_equal names.uniq, names
+      assert(names.all? { |name| name.include?(@product.name) })
+      assert_select 'section[aria-labelledby~="known-products-heading"] h4', text: /Practice|Guides for/
+      assert_select 'section[aria-labelledby~="completed-trained-product-heading"] h3', text: /Guides for/
+      assert_select 'dd[lang=en]', text: report.constituent_summary
+    end
+
+    test 'older reports do not claim that another appointment is unavailable' do
+      report = new_session(:completed)
+      create(:training_session, :requested, application: report.application, trainer: @trainer, created_at: Time.current)
+      get trainers_training_session_path(report)
+
+      assert_response :success
+      assert_not_includes response.body, 'Another appointment is unavailable'
+      assert_not_includes response.body, I18n.t('training_rules.close_open_first')
+      assert_select 'input[value="Schedule another session"]', count: 0
     end
 
     test 'guardian-coordinated preparation uses the applications managing guardian and proposed summary language' do
@@ -63,6 +127,9 @@ module Trainers
       assert_select "form[action='#{cancel_trainers_training_session_path(session)}']"
       assert_select '#schedule_scheduled_for[required]'
       assert_select '#schedule_scheduled_for[value]', count: 0
+      assert_select 'details:not([open]) summary', text: 'Cancel this unscheduled appointment'
+      assert_select "form[action='#{cancel_trainers_training_session_path(session)}'][data-turbo-confirm]"
+      assert_select '#schedule_scheduled_for[aria-describedby=schedule-time-help]'
       assert_select "form[action='#{complete_trainers_training_session_path(session)}']", count: 0
     end
 
@@ -287,7 +354,7 @@ module Trainers
         sign_in_for_controller_test(@trainer)
         get trainers_training_session_path(@session)
         assert_select '#training-outcome option[value=no_show]'
-        assert_select '#training-outcome option[value=reschedule]', count: 0
+        assert_select '#training-outcome option[value=reschedule]'
         post no_show_trainers_training_session_path(@session), params: { no_show_notes: '' }
         assert_response :unprocessable_content
         assert_select '#no_show_no_show_notes', text: ''

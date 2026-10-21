@@ -11,8 +11,8 @@ module TrainingSessions
 
     def call
       @training_session.with_current_trainer_lock(@actor) do
-        raise ArgumentError, I18n.t('training_rules.requested_schedule_only') unless @training_session.status_requested?
-        raise ArgumentError, I18n.t('training_rules.schedule_service_window') unless @training_session.application.service_window_active?
+        raise OperationError, I18n.t('training_rules.requested_schedule_only') unless @training_session.status_requested?
+        raise OperationError, I18n.t('training_rules.schedule_service_window') unless @training_session.application.service_window_active?
 
         attributes = { status: :scheduled, scheduled_for: @params[:scheduled_for], location: @params[:location] }
         attributes[:internal_notes] = @params[:internal_notes] if @params.key?(:internal_notes)
@@ -29,7 +29,7 @@ module TrainingSessions
       success(I18n.t('training_rules.scheduled'), { training_session: @training_session, notification_outcome: @notification_outcome })
     rescue ActiveRecord::RecordInvalid => e
       failure(e.record.errors.full_messages.to_sentence, { training_session: @training_session })
-    rescue ArgumentError => e
+    rescue OperationError => e
       failure(e.message, { training_session: @training_session })
     end
   end

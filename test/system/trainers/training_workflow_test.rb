@@ -25,14 +25,16 @@ module Trainers
       @application.update!(assigned_trainer: nil)
       admin = create(:admin)
       switch_user(admin)
-      visit admin_application_path(@application)
-      within '[data-testid="trainer-assignment-section"]' do
-        find('#trainer_id option', text: @trainer.full_name).select_option
-        click_button 'Assign Trainer'
+      travel_to(3.hours.ago.change(sec: 0)) do
+        visit admin_application_path(@application)
+        within '[data-testid="trainer-assignment-section"]' do
+          find('#trainer_id option', text: @trainer.full_name).select_option
+          click_button 'Assign Trainer'
+        end
+        assert_equal @trainer.id, @application.reload.assigned_trainer_id
+        @session = @application.latest_training_session
+        assert @session.status_requested?
       end
-      assert_equal @trainer.id, @application.reload.assigned_trainer_id
-      @session = @application.latest_training_session
-      assert @session.status_requested?
       take_screenshot('admin-assigns-current-trainer', html: true, full: true)
       switch_user(@trainer)
       visit trainers_dashboard_path
@@ -41,7 +43,7 @@ module Trainers
         assert_link 'View/Schedule', href: trainers_training_session_path(@session)
       end
       take_screenshot('trainer-dashboard-assignment-needs-scheduling', html: true, full: true)
-      within('#needs-scheduling-section') { click_link 'View All' }
+      within('#needs-scheduling-section') { click_link 'View all assigned sessions' }
       assert_link 'View/Schedule', href: trainers_training_session_path(@session)
       take_screenshot('trainer-requested-session-list-entry', html: true, full: true)
       click_link 'View/Schedule'
@@ -174,30 +176,17 @@ module Trainers
       assert_text 'Managing Guardian Avenue'
       assert_no_link 'View Application', href: admin_application_path(@application)
       assert_field 'schedule_scheduled_for', with: ''
+      find('summary', text: 'Cancel this unscheduled appointment').click
       select 'Constituent', from: 'cancel_cancellation_initiator'
       fill_in 'cancel_cancellation_reason', with: '   '
-      click_button 'Cancel appointment'
+      accept_confirm { click_button 'Cancel this unscheduled appointment' }
       assert_action_error('cancel')
       assert_selector :select, 'cancel_cancellation_initiator', selected: 'Constituent'
       assert_field 'cancel_cancellation_reason', with: '   '
       fill_in 'cancel_cancellation_reason', with: 'The managing guardian declined this unscheduled appointment.'
-      cancel_submit = find('input[type=submit][value="Cancel appointment"]')
-      cancel_submit.scroll_to(:center)
-      assert_not cancel_submit.disabled?
-      cancel_style = page.evaluate_script <<~JS
-        (() => {
-          const style = getComputedStyle(document.querySelector('input[value="Cancel appointment"]'));
-          return { color: style.color, background: style.backgroundColor, visibility: style.visibility, opacity: style.opacity };
-        })()
-      JS
-      assert_equal 'visible', cancel_style['visibility']
-      assert_equal '1', cancel_style['opacity']
-      assert_not_equal cancel_style['color'], cancel_style['background']
-      puts "Cancellation submit computed style: #{cancel_style.to_json}"
+      assert_selector 'details[open] input[type=submit][value="Cancel this unscheduled appointment"]:not([disabled])'
       take_screenshot('trainer-guardian-requested-cancel-narrow', html: true, full: true)
-      cancel_submit.scroll_to(:center)
-      take_screenshot('trainer-guardian-cancel-submit-viewport', html: true, full: false)
-      click_button 'Cancel appointment'
+      accept_confirm { click_button 'Cancel this unscheduled appointment' }
 
       assert_text 'Training session cancelled successfully.'
       assert @session.reload.status_cancelled?
@@ -212,6 +201,7 @@ module Trainers
     end
 
     test 'Spanish long-duration confirmation permits editing before validation and a corrected report' do
+      page.current_window.resize_to(375, 900)
       @trainer.update!(locale: 'es')
       @session.update!(status: :scheduled, scheduled_for: 1.day.from_now.change(sec: 0))
       visit trainers_training_session_path(@session, locale: 'es')
@@ -223,20 +213,25 @@ module Trainers
       fill_in 'complete_constituent_summary', with: 'Practicamos los subtítulos durante una visita prolongada.'
       select 'español', from: 'complete_summary_locale'
       fill_in 'complete_internal_notes', with: 'Observaciones privadas para el personal.'
+      observe_native_submission
       click_button 'Guardar informe completado'
       assert_selector 'dialog[open]', text: '¿Confirma 3 horas?'
-      assert_selector '[data-training-duration-confirmation-target=yesButton]:focus'
+      assert_selector '[data-training-duration-confirmation-target=noButton]:focus'
+      assert page.evaluate_script("document.querySelector('dialog[open]').scrollWidth <= document.querySelector('dialog[open]').clientWidth")
       take_screenshot('trainer-spanish-long-duration-confirmation', html: true, full: true)
-      within('dialog[open]') { click_button 'No' }
+      page.driver.browser.keyboard.type(:enter)
       assert_no_selector 'dialog[open]'
       assert_selector '#complete_duration_hours:focus'
       assert_field 'complete_duration_hours', with: '3'
+      assert_equal [], page.evaluate_script('window.trainingSubmissions')
+      assert_equal 0, Event.where(auditable: @session, action: 'training_completed').count
 
       fill_in 'complete_duration_hours', with: '2.75'
       click_button 'Guardar informe completado'
       assert_selector 'dialog[open]', text: '¿Confirma 2.75 horas?'
-      within('dialog[open]') { click_button 'Sí' }
+      within('dialog[open]') { find('[data-training-duration-confirmation-target=yesButton]').click }
       assert_action_error('complete', heading: 'Corrija los siguientes errores')
+      assert_native_submission(I18n.t('trainer_workflow.forms.saving_report', locale: :es), submitter_id: 'complete_submit')
       assert_field 'complete_completed_at', with: future_time
       assert_field 'complete_duration_hours', with: '2.75'
       assert_field 'complete_constituent_summary', with: 'Practicamos los subtítulos durante una visita prolongada.'
@@ -244,14 +239,19 @@ module Trainers
       take_screenshot('trainer-spanish-confirmed-report-restored-error', html: true, full: true)
 
       fill_in 'complete_completed_at', with: 1.hour.ago.strftime('%Y-%m-%dT%H:%M')
+      observe_native_submission
       click_button 'Guardar informe completado'
       assert_selector 'dialog[open]', text: '¿Confirma 2.75 horas?'
-      within('dialog[open]') { click_button 'Sí' }
+      within('dialog[open]') { find('[data-training-duration-confirmation-target=yesButton]').click }
       assert_text 'La sesión de capacitación se marcó como completada correctamente.'
       assert @session.reload.status_completed?
       assert_equal BigDecimal('2.75'), @session.duration_hours
       assert_equal 'es', @session.summary_locale
+      assert_native_submission(I18n.t('trainer_workflow.forms.saving_report', locale: :es), submitter_id: 'complete_submit')
+      assert_equal 1, Event.where(auditable: @session, action: 'training_completed').count
       take_screenshot('trainer-spanish-confirmed-long-report-completed', html: true, full: true)
+    ensure
+      page.current_window.resize_to(1200, 900)
     end
 
     test 'reschedule and no-show outcome retries retain their own editable reasons and blank next agreement' do
@@ -385,13 +385,15 @@ module Trainers
         window.trainingSubmissions = [];
         document.addEventListener('turbo:submit-start', event => {
           const submitter = event.detail.formSubmission.submitter;
-          window.trainingSubmissions.push({ disabled: submitter.disabled, label: submitter.value });
+          window.trainingSubmissions.push({ disabled: submitter.disabled, label: submitter.value, id: submitter.id });
         }, { once: true });
       JS
     end
 
-    def assert_native_submission(label)
-      assert_equal [{ 'disabled' => true, 'label' => label }], page.evaluate_script('window.trainingSubmissions')
+    def assert_native_submission(label, submitter_id: nil)
+      submissions = page.evaluate_script('window.trainingSubmissions')
+      assert_equal([{ 'disabled' => true, 'label' => label }], submissions.map { |submission| submission.slice('disabled', 'label') })
+      assert_equal([submitter_id], submissions.pluck('id')) if submitter_id
     end
 
     def assert_no_horizontal_overflow

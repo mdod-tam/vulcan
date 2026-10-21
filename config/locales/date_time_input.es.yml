@@ -1,0 +1,3 @@
+es:
+  date_time_input:
+    hint: "Use el formato de fecha y hora que muestra su navegador. Todas las horas corresponden a %{zone}."

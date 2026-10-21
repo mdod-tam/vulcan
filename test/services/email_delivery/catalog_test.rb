@@ -39,7 +39,7 @@ module EmailDelivery
       assert_includes NotificationService::NOOP_DELIVERY_ACTIONS, 'w9_rejected'
       assert_equal %w[id_proof_rejected income_proof_rejected proof_rejected residency_proof_rejected],
                    NotificationService::ORPHAN_PROOF_REJECTION_DELIVERY_ACTIONS.sort
-      assert_equal ['security_key_recovery_approved'], NotificationService::EMAIL_ONLY_ACTIONS
+      assert_equal %w[security_key_recovery_approved trainer_assigned], NotificationService::EMAIL_ONLY_ACTIONS.sort
       assert_equal Catalog.notification_template_aliases, EmailTemplates::Audit::ACTION_TEMPLATE_ALIASES
     end
 

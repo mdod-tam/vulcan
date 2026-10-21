@@ -132,6 +132,8 @@ module Trainers
         assert_includes assigns(:scheduled_sessions), confirmed
         assert_select 'h2', text: 'Past appointments needing an outcome'
         assert_select 'section[aria-labelledby="overdue-training-heading"] a[href=?]', trainers_training_session_path(@session)
+        assert_select 'section[aria-labelledby="overdue-training-heading"] a[href=?][aria-label=?]',
+                      trainers_training_session_path(@session), "Record what happened for #{@constituent.full_name}"
         assert_select 'section[aria-labelledby="overdue-training-heading"] a[href=?]', trainers_training_session_path(@other_session), count: 0
       end
     end
@@ -212,6 +214,93 @@ module Trainers
       assert_select 'a', text: 'View My Scheduled', count: 1
     end
 
+    test 'needs scheduling counts every pending application request and displays requests beyond ten' do
+      applications = Array.new(12) { requested_covered_application(@trainer).first }
+      assigned_session = create(:training_session, :requested, trainer: @trainer, application: covered_application)
+      sign_in_for_integration_test(@trainer)
+
+      get trainers_dashboard_path
+
+      assert_response :success
+      assert_equal 13, assigns(:needs_scheduling_count)
+      assert_equal applications.map(&:id).sort, assigns(:pending_training_requests).pluck(:id).sort
+      applications.each do |application|
+        assert_select '#needs-scheduling-section tr', text: /#{Regexp.escape(application.user.full_name)}/
+      end
+      assert_select '#needs-scheduling-section a[href=?]', trainers_training_session_path(assigned_session)
+      assert_select '#needs-scheduling-section a[href=?]', trainers_training_sessions_path(status: 'requested'), text: 'View all assigned sessions'
+    end
+
+    test 'scheduled count and links include all past appointments while previews show honest limits' do
+      overdue = Array.new(12) do
+        create(:training_session, :scheduled, trainer: @trainer, application: covered_application)
+      end
+      future = create(:training_session, :scheduled, trainer: @trainer, application: covered_application, scheduled_for: 4.days.from_now)
+
+      travel_to 2.days.from_now do
+        sign_in_for_integration_test(@trainer)
+        get trainers_dashboard_path
+
+        assert_response :success
+        assert_equal 14, assigns(:scheduled_sessions_count)
+        assert_equal 13, assigns(:overdue_sessions_count)
+        assert_equal 10, assigns(:overdue_sessions_display).size
+        assert_equal [future.id], assigns(:upcoming_sessions).pluck(:id)
+        assert_select 'section[aria-labelledby="overdue-training-heading"]' do
+          assert_select 'p', text: '13 past appointments need an outcome.'
+          assert_select 'p', text: /Showing 10 of 13/
+          assert_select 'a[href=?]', trainers_training_sessions_path(status: 'scheduled'), text: 'View all scheduled appointments'
+        end
+        assert_select 'h3#card-scheduled + p', text: /14 scheduled sessions/
+        assert_select 'a[href=?]', trainers_training_sessions_path(status: 'scheduled'), text: 'View scheduled'
+
+        get trainers_training_sessions_path(status: 'scheduled')
+
+        assert_response :success
+        (overdue + [@session, future]).each do |session|
+          assert_select 'a[href=?]', trainers_training_session_path(session)
+        end
+        assert_not_includes assigns(:training_sessions), @other_session
+      end
+    end
+
+    test 'administrator upcoming preview excludes past own appointments while own count links to all scheduled' do
+      own_past = create(:training_session, :scheduled, trainer: @admin, application: covered_application(trainer: @admin))
+      own_future = create(:training_session, :scheduled, trainer: @admin, application: covered_application(trainer: @admin), scheduled_for: 4.days.from_now)
+
+      travel_to 2.days.from_now do
+        sign_in_for_integration_test(@admin)
+        get trainers_dashboard_path
+
+        assert_equal 2, assigns(:my_scheduled_sessions_count)
+        assert_equal [own_future.id], assigns(:my_scheduled_sessions_display).pluck(:id)
+        assert_not_includes assigns(:my_scheduled_sessions_display), own_past
+        assert_select 'a[href=?]', trainers_training_sessions_path(scope: 'mine', status: 'scheduled'), text: 'My scheduled'
+      end
+    end
+
+    test 'Spanish viewer receives translated dashboard status activity columns and empty states' do
+      @trainer.update!(locale: 'es')
+      create_training_event(@session, 'PRIVATE SENTINEL')
+      create(:training_session, :scheduled, status: :confirmed, trainer: @trainer, application: covered_application)
+      sign_in_for_integration_test(@trainer)
+
+      get trainers_dashboard_path
+
+      assert_response :success
+      assert_select 'h1', text: 'Panel de capacitación'
+      assert_select 'h3#card-scheduled', text: 'Sesiones programadas'
+      assert_select 'h2#upcoming-sessions-table-heading', text: 'Próximas sesiones de capacitación'
+      assert_select '#upcoming-sessions-section span', text: 'Estado: Programada', count: 2
+      assert_select '#activity-history-heading', text: 'Actividad reciente'
+      assert_select 'table[aria-labelledby="activity-history-heading"] th', text: 'Detalles'
+      assert_select 'div[role=region][tabindex="0"][aria-label="Tabla desplazable del historial de actividad"]'
+      assert_includes response.body, 'Capacitación programada'
+      assert_includes response.body, 'No hay sesiones de capacitación pendientes de seguimiento.'
+      assert_not_includes response.body, 'PRIVATE SENTINEL'
+      assert_not_includes response.body, 'translation_missing'
+    end
+
     private
 
     def covered_application(trainer: @trainer, user: nil)
@@ -222,7 +311,7 @@ module Trainers
 
     def requested_covered_application(trainer)
       application = covered_application(trainer: trainer)
-      report = create(:training_session, :completed, application: application, trainer: trainer, created_at: 1.day.ago)
+      report = create(:training_session, :completed, application: application, trainer: trainer, created_at: 1.day.ago, completed_at: 12.hours.ago)
       result = Applications::TrainingRequestService.new(application: application, current_user: application.user).call
       assert result.success?, result.message
       [application, report]

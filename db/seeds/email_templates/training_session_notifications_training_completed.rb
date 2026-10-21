@@ -10,7 +10,7 @@ EmailTemplate.find_or_create_by!(name: 'training_session_notifications_training_
 
     Your training with %<trainer_full_name>s for %<constituent_full_name>s was completed on %<completed_date_formatted>s at %<completed_time_formatted>s.
 
-    Sign in to read the written session summary and find guidance for the product used during training:
+    %<report_access_text>s
     %<report_url>s
 
     The summary keeps the language in which your trainer wrote it.
@@ -19,7 +19,7 @@ EmailTemplate.find_or_create_by!(name: 'training_session_notifications_training_
   TEXT
   template.variables = {
     'required' => %w[header_text recipient_full_name constituent_full_name trainer_full_name
-                     completed_date_formatted completed_time_formatted report_url footer_text],
+                     completed_date_formatted completed_time_formatted report_access_text report_url footer_text],
     'optional' => []
   }
   template.version = 1

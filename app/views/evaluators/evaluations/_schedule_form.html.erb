@@ -33,7 +33,10 @@
               required: true,
               aria: action_form_field_aria(:schedule, :evaluation_date, describedby: 'schedule-time-help', form_errors: @evaluation_form_errors)
             ) %>
-        <p id="schedule-time-help" class="mt-1 text-sm text-gray-500"><%= t('evaluators.evaluations.forms.time_zone_help') %></p>
+        <p id="schedule-time-help" class="mt-1 text-sm text-gray-500">
+          <%= t('evaluators.evaluations.forms.time_zone_help') %>
+          <%= t('date_time_input.hint', zone: Time.zone.name) %>
+        </p>
         <%= render 'shared/field_errors', action: :schedule, attribute: :evaluation_date, form_errors: @evaluation_form_errors %>
       </div>
 

@@ -14,8 +14,8 @@ module TrainingSessions
       application = source.application
       source.with_current_trainer_lock(@actor) do
         eligibility_error = application.new_training_work_eligibility_error(actor: @actor, source: source)
-        raise ArgumentError, eligibility_error if eligibility_error
-        raise ArgumentError, I18n.t('training_sessions.schedule_additional.invalid_source') unless source.status_completed?
+        raise OperationError, eligibility_error if eligibility_error
+        raise OperationError, I18n.t('training_sessions.schedule_additional.invalid_source') unless source.status_completed?
 
         @training_session = application.training_sessions.create!(
           trainer: application.assigned_trainer, status: :scheduled, scheduled_for: @params[:scheduled_for],
@@ -34,7 +34,7 @@ module TrainingSessions
       success(I18n.t('training_sessions.schedule_additional.success'), { training_session: @training_session, notification_outcome: @notification_outcome })
     rescue ActiveRecord::RecordInvalid => e
       failure(e.record.errors.full_messages.to_sentence, { training_session: e.record })
-    rescue ArgumentError => e
+    rescue OperationError => e
       failure(e.message)
     end
   end

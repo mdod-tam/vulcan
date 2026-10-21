@@ -27,7 +27,7 @@ module TrainingSessions
       assert_equal attributes, template.reload.attributes
       assert_equal %w[en es], EmailTemplate.where(name: NAME, format: :text).order(:locale).pluck(:locale)
       assert_equal [], template.optional_variables
-      assert_equal %w[header_text recipient_full_name constituent_full_name trainer_full_name completed_date_formatted completed_time_formatted report_url footer_text], template.required_variables
+      assert_equal %w[header_text recipient_full_name constituent_full_name trainer_full_name completed_date_formatted completed_time_formatted report_access_text report_url footer_text], template.required_variables
     end
 
     test 'completion templates refuse private and unknown placeholders in Standard and Liquid runtime rendering' do
@@ -41,6 +41,18 @@ module TrainingSessions
           assert_includes error.message, 'not available for this template'
         end
       end
+    end
+
+    test 'migration snapshots match the seeded public completion guidance contract in each locale' do
+      EmailTemplate.where(name: NAME).destroy_all
+      InstallTrainingCompletedEmailTemplates.new.up
+      fields = %w[subject description body variables version syntax enabled]
+      installed = EmailTemplate.where(name: NAME, format: :text).order(:locale).map { |template| template.attributes.slice('locale', *fields) }
+
+      load_seeded_email_templates(NAME)
+
+      seeded = EmailTemplate.where(name: NAME, format: :text).order(:locale).map { |template| template.attributes.slice('locale', *fields) }
+      assert_equal installed, seeded
     end
   end
 end

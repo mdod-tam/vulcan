@@ -11,7 +11,7 @@ module TrainingSessions
 
     def call
       @training_session.with_current_trainer_lock(@actor) do
-        raise ArgumentError, I18n.t('training_sessions.complete.invalid_status') unless @training_session.can_complete?
+        raise OperationError, I18n.t('training_sessions.complete.invalid_status') unless @training_session.can_complete?
 
         attributes = {
           status: :completed, completed_at: @params[:completed_at], report_submitted_at: Time.current,
@@ -34,7 +34,7 @@ module TrainingSessions
       success(I18n.t('training_sessions.complete.success'), { training_session: @training_session, notification_outcome: @notification_outcome })
     rescue ActiveRecord::RecordInvalid => e
       failure(e.record.errors.full_messages.to_sentence, { training_session: @training_session })
-    rescue ArgumentError => e
+    rescue OperationError => e
       failure(e.message, { training_session: @training_session })
     end
   end

@@ -1,0 +1,38 @@
+es:
+  trainer_workflow:
+    list:
+      skip: "Saltar al contenido principal"
+      back: "Volver al panel"
+      titles:
+        requested: "Asignadas, pendientes de programación"
+        scheduled: "Sesiones de capacitación programadas"
+        completed: "Sesiones de capacitación completadas"
+        follow_up: "Sesiones de capacitación pendientes de seguimiento"
+        all: "Sesiones de capacitación"
+      scopes:
+        assigned_to_me: "Asignadas a mí"
+        all_trainers: "Todos los capacitadores"
+        my_sessions: "Mis sesiones"
+      filters:
+        view: "Vista"
+        status: "Estado"
+        all: "Todas"
+        requested: "Pendientes de programación"
+        scheduled: "Programadas"
+        completed: "Completadas"
+        needs_followup: "Pendientes de seguimiento"
+      columns:
+        date_time: "Fecha/Hora"
+        constituent: "Persona participante"
+        status: "Estado"
+        application_id: "ID de solicitud"
+        actions: "Acciones"
+      completed_date: "Completada: %{date}"
+      duration: "Duración: %{duration}"
+      session: "Sesión n.º %{number}"
+      actions:
+        view_schedule: "Ver/Programar"
+        complete_report: "Completar informe"
+        view_details: "Ver detalles"
+      action_name: "%{action} de %{name}, sesión %{number}"
+      empty: "No se encontraron sesiones de capacitación."
