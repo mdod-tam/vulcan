@@ -92,33 +92,45 @@ module Applications
       assert_equal I18n.t('applications.training_requests.messages.quota_exhausted'), result.message
     end
 
+    test 'current managing guardian can request training through the application authorization boundary' do
+      manager = create(:constituent)
+      create(:guardian_relationship, guardian_user: manager, dependent_user: @constituent)
+      @application.update!(managing_guardian: manager)
+
+      result = TrainingRequestService.new(application: @application, current_user: manager).call
+
+      assert result.success?, result.message
+      assert_not_nil @application.reload.training_requested_at
+      event = Event.find_by!(auditable: @application, action: 'training_session_requested')
+      assert_equal manager.id, event.user_id
+      assert_equal @constituent.id, event.metadata['constituent_id']
+    end
+
+    test 'another related guardian and the former manager cannot request training' do
+      manager = create(:constituent)
+      other_guardian = create(:constituent)
+      [manager, other_guardian].each do |guardian|
+        create(:guardian_relationship, guardian_user: guardian, dependent_user: @constituent)
+      end
+      @application.update!(managing_guardian: manager)
+      assert_no_difference -> { Event.where(auditable: @application, action: 'training_session_requested').count } do
+        result = TrainingRequestService.new(application: @application, current_user: other_guardian).call
+        assert_not result.success?
+        assert_equal I18n.t('applications.training_requests.messages.ineligible'), result.message
+      end
+      assert_nil @application.reload.training_requested_at
+
+      @application.update!(managing_guardian: other_guardian)
+      result = TrainingRequestService.new(application: @application, current_user: manager).call
+      assert_not result.success?
+      assert_equal I18n.t('applications.training_requests.messages.ineligible'), result.message
+      assert_nil @application.reload.training_requested_at
+    end
+
     private
 
     def create_reviewed_application(user:)
-      application = create(:application, skip_proofs: true, user: user, status: :in_progress)
-      attach_required_proofs(application)
-      application.update_columns(
-        application_date: 2.years.ago.to_date,
-        status: Application.statuses[:approved],
-        income_proof_status: Application.income_proof_statuses[:approved],
-        residency_proof_status: Application.residency_proof_statuses[:approved],
-        medical_certification_status: Application.medical_certification_statuses[:approved],
-        updated_at: Time.current
-      )
-      application.reload
-    end
-
-    def attach_required_proofs(application)
-      application.income_proof.attach(
-        io: StringIO.new('income proof content'),
-        filename: 'income.pdf',
-        content_type: 'application/pdf'
-      )
-      application.residency_proof.attach(
-        io: StringIO.new('residency proof content'),
-        filename: 'residency.pdf',
-        content_type: 'application/pdf'
-      )
+      create(:application, :approved, :with_all_proofs, user: user, application_date: 2.years.ago.to_date)
     end
   end
 end

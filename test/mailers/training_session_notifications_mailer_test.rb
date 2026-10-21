@@ -40,11 +40,11 @@ class TrainingSessionNotificationsMailerTest < ActionMailer::TestCase
                       first_name: 'Jane',
                       last_name: 'Smith',
                       email: "jane.smith.#{SecureRandom.hex(6)}@example.com")
-    @application = create(:application, :in_progress, user: @constituent)
+    @application = create(:application, :in_progress, user: @constituent, assigned_trainer: @trainer)
 
     @scheduled_for = 1.week.from_now
     @training_session = Struct.new(
-      :application, :trainer, :constituent, :scheduled_for, :completed_at, :status, :id
+      :application, :trainer, :constituent, :scheduled_for, :completed_at, :status, :id, :location
     ).new(
       @application, @trainer, @constituent, @scheduled_for, @completed_at, :scheduled, 1
     )
@@ -97,29 +97,21 @@ class TrainingSessionNotificationsMailerTest < ActionMailer::TestCase
     assert_includes email.body.to_s, expected_text
   end
 
-  test 'trainer_assigned uses English template for Spanish locale trainer' do
+  test 'trainer assignment uses the supported Spanish template for a Spanish trainer' do
     @trainer.update!(locale: 'es')
-    expected_text = "English body for #{@trainer.full_name} about #{@constituent.full_name}"
-    english_template = mock('trainer_assigned_english_specific')
-    english_template.stubs(:subject).returns('English trainer assignment')
-    english_template.stubs(:render_subject).returns('English trainer assignment')
-    english_template.stubs(:render).returns(['English trainer assignment', expected_text])
-    english_template.stubs(:enabled?).returns(true)
-
+    @constituent.update!(hearing_disability: true, vision_disability: true, speech_disability: true,
+                         mobility_disability: true, cognition_disability: true)
     EmailTemplate.unstub(:find_by!)
-    EmailTemplate.stubs(:find_by!)
-                 .with(name: 'training_session_notifications_trainer_assigned', format: :text, locale: 'en')
-                 .returns(english_template)
+    load_seeded_email_templates('training_session_notifications_trainer_assigned')
 
-    emails = capture_emails do
-      TrainingSessionNotificationsMailer.trainer_assigned(@training_session).deliver_now
-    end
+    email = TrainingSessionNotificationsMailer.trainer_assigned(@training_session).deliver_now
 
-    assert_equal 1, emails.size
-    email = emails.first
     assert_equal [@trainer.email], email.to
-    assert_equal 'English trainer assignment', email.subject
-    assert_includes email.body.to_s, expected_text
+    assert_equal 'Nueva asignación de capacitación', email.subject
+    assert_includes email.body.decoded, @trainer.full_name
+    assert_includes email.body.decoded, 'Preferencias de comunicación'
+    %w[Audición Visión Habla Movilidad Cognición].each { |label| assert_includes email.body.decoded, "- #{label}" }
+    assert_not_includes email.body.decoded, '- Hearing'
   end
 
   test 'the stock trainer assignment uses application manager contacts and preferences rather than the first guardian' do
@@ -134,7 +126,7 @@ class TrainingSessionNotificationsMailerTest < ActionMailer::TestCase
                                      physical_address_1: 'Applicant Street')
     create(:guardian_relationship, guardian_user: first_guardian, dependent_user: applicant)
     create(:guardian_relationship, guardian_user: manager, dependent_user: applicant)
-    application = create(:application, user: applicant, managing_guardian: manager)
+    application = create(:application, user: applicant, managing_guardian: manager, assigned_trainer: @trainer)
     training_session = create(:training_session, application: application, trainer: @trainer)
 
     email = TrainingSessionNotificationsMailer.trainer_assigned(training_session).deliver_now
@@ -163,7 +155,7 @@ class TrainingSessionNotificationsMailerTest < ActionMailer::TestCase
     applicant = Current.instance.set(paper_context: true) do
       create(:constituent, email: nil, phone: nil, phone_type: 'letter', communication_preference: 'letter')
     end
-    application = create(:application, user: applicant)
+    application = create(:application, user: applicant, assigned_trainer: @trainer)
     training_session = create(:training_session, application: application, trainer: @trainer)
 
     email = TrainingSessionNotificationsMailer.trainer_assigned(training_session).deliver_now

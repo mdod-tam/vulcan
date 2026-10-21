@@ -86,6 +86,7 @@ en:
       letter_blocked: The letter is blocked by delivery controls and has not yet been
         canceled in the print queue.
     reasons:
+      trainer_coverage_changed: This message was not sent because the recipient is no longer the assigned trainer.
       all_disabled: All communications are switched off.
       global_disabled: Email is switched off.
       letters_disabled: Letters are switched off.

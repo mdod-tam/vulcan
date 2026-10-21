@@ -1,0 +1,6 @@
+<%# locals: (action:, attribute:, form_errors:) -%>
+<% if action_form_field_errors(action, attribute, form_errors: form_errors).any? %>
+  <p id="<%= action_form_field_error_id(action, attribute) %>" class="mt-1 text-sm text-red-700">
+    <%= action_form_field_errors(action, attribute, form_errors: form_errors).join('. ') %>
+  </p>
+<% end %>

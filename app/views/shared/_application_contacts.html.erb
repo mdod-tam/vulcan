@@ -1,38 +1,39 @@
+<%# locals: (context:) -%>
 <div class="px-4 py-5 sm:grid sm:grid-cols-3 sm:gap-4">
-  <dt class="text-sm font-medium text-gray-500"><%= t('evaluator_context.applicant') %></dt>
+  <dt class="text-sm font-medium text-gray-500"><%= t('application_contact.applicant') %></dt>
   <dd class="mt-1 text-sm text-gray-900 sm:col-span-2 sm:mt-0"><%= context.applicant.full_name %></dd>
 </div>
 <% if context.guardian %>
   <div class="px-4 py-5 sm:grid sm:grid-cols-3 sm:gap-4">
-    <dt class="text-sm font-medium text-gray-500"><%= t('evaluator_context.guardian') %></dt>
+    <dt class="text-sm font-medium text-gray-500"><%= t('application_contact.guardian') %></dt>
     <dd class="mt-1 text-sm text-gray-900 sm:col-span-2 sm:mt-0"><%= context.guardian.full_name %></dd>
   </div>
 <% end %>
 <div class="px-4 py-5 sm:grid sm:grid-cols-3 sm:gap-4">
-  <dt class="text-sm font-medium text-gray-500"><%= t('evaluator_context.email') %></dt>
+  <dt class="text-sm font-medium text-gray-500"><%= t('application_contact.email') %></dt>
   <dd class="mt-1 text-sm text-gray-900 sm:col-span-2 sm:mt-0">
     <% if context.email.present? %>
       <%= mail_to context.email, class: 'break-words text-indigo-600 underline' %>
-      <p class="mt-1 text-gray-600"><%= context.email_owner.full_name %> — <%= language_label(context.email_locale) %></p>
+      <p class="mt-1 text-gray-600"><%= context.email_owner.full_name %> — <%= localized_contact_label(:languages, context.email_locale) %></p>
     <% else %>
-      <%= t('evaluator_context.not_provided') %>
+      <%= t('application_contact.not_provided') %>
     <% end %>
   </dd>
 </div>
 <div class="px-4 py-5 sm:grid sm:grid-cols-3 sm:gap-4">
-  <dt class="text-sm font-medium text-gray-500"><%= t('evaluator_context.phone') %></dt>
+  <dt class="text-sm font-medium text-gray-500"><%= t('application_contact.phone') %></dt>
   <dd class="mt-1 text-sm text-gray-900 sm:col-span-2 sm:mt-0">
     <% if context.phone.present? %>
       <%= link_to context.phone, "tel:#{context.phone}", class: 'text-indigo-600 underline' %>
-      <p class="mt-1 text-gray-600"><%= context.phone_owner.full_name %> — <%= contact_method_label(context.phone_type) %></p>
-      <p class="text-gray-600"><%= t('evaluator_context.language') %>: <%= language_label(context.phone_locale) %></p>
+      <p class="mt-1 text-gray-600"><%= context.phone_owner.full_name %> — <%= localized_contact_label(:phone_methods, context.phone_type) %></p>
+      <p class="text-gray-600"><%= t('application_contact.language') %>: <%= localized_contact_label(:languages, context.phone_locale) %></p>
     <% else %>
-      <%= t('evaluator_context.not_provided') %>
+      <%= t('application_contact.not_provided') %>
     <% end %>
   </dd>
 </div>
 <div class="px-4 py-5 sm:grid sm:grid-cols-3 sm:gap-4">
-  <dt class="text-sm font-medium text-gray-500"><%= t('evaluator_context.address') %></dt>
+  <dt class="text-sm font-medium text-gray-500"><%= t('application_contact.address') %></dt>
   <dd class="mt-1 text-sm text-gray-900 sm:col-span-2 sm:mt-0">
     <% if context.address_owner.physical_address_1.present? %>
       <p><%= context.address_owner.full_name %></p>
@@ -40,36 +41,39 @@
       <% if context.address_owner.physical_address_2.present? %><p><%= context.address_owner.physical_address_2 %></p><% end %>
       <p><%= [context.address_owner.city, context.address_owner.state, context.address_owner.zip_code].compact_blank.join(', ') %></p>
     <% else %>
-      <%= t('evaluator_context.not_provided') %>
+      <%= t('application_contact.not_provided') %>
     <% end %>
   </dd>
 </div>
 <div class="px-4 py-5 sm:grid sm:grid-cols-3 sm:gap-4">
-  <dt class="text-sm font-medium text-gray-500"><%= t('evaluator_context.communication') %></dt>
+  <dt class="text-sm font-medium text-gray-500"><%= t('application_contact.communication') %></dt>
   <dd class="mt-1 space-y-1 text-sm text-gray-900 sm:col-span-2 sm:mt-0">
     <p class="font-medium"><%= context.communication_owner.full_name %></p>
-    <p><%= t('evaluator_context.language') %>: <%= language_label(context.locale) %></p>
-    <p><%= t('evaluator_context.modality') %>: <%= context.communication_modality.presence || t('evaluator_context.not_provided') %></p>
-    <p><%= t('evaluator_context.delivery') %>: <%= context.communication_preference.to_s.humanize.presence || t('evaluator_context.not_provided') %></p>
+    <p><%= t('application_contact.language') %>: <%= localized_contact_label(:languages, context.locale) %></p>
+    <p><%= t('application_contact.modality') %>: <%= localized_contact_label(:modalities, context.communication_modality) %></p>
+    <p><%= t('application_contact.delivery') %>: <%= localized_contact_label(:deliveries, context.communication_preference) %></p>
   </dd>
 </div>
 <div class="px-4 py-5 sm:grid sm:grid-cols-3 sm:gap-4">
-  <dt class="text-sm font-medium text-gray-500"><%= t('evaluator_context.disabilities') %></dt>
+  <dt class="text-sm font-medium text-gray-500"><%= t('application_contact.disabilities') %></dt>
   <dd class="mt-1 text-sm text-gray-900 sm:col-span-2 sm:mt-0">
     <% if context.applicant.disabilities.any? %>
-      <ul class="list-disc pl-5">
-        <% context.applicant.disabilities.each do |disability| %><li><%= disability %></li><% end %>
-      </ul>
+      <%= context.applicant.disabilities.map { |disability| localized_contact_label(:disability_types, disability.downcase) }.to_sentence %>
     <% else %>
-      <%= t('evaluator_context.not_provided') %>
+      <%= t('application_contact.no_disabilities_recorded') %>
     <% end %>
   </dd>
 </div>
 <div class="px-4 py-5 sm:grid sm:grid-cols-3 sm:gap-4">
-  <dt class="text-sm font-medium text-gray-500"><%= t('evaluator_context.alternate_contact') %></dt>
+  <dt class="text-sm font-medium text-gray-500"><%= t('application_contact.alternate_contact') %></dt>
   <dd class="mt-1 space-y-1 text-sm text-gray-900 sm:col-span-2 sm:mt-0">
     <% if context.alternate_contact_name.present? || context.alternate_contact_phone.present? || context.alternate_contact_email.present? %>
-      <p><%= context.alternate_contact_name %><% if context.alternate_contact_relationship_type.present? %> — <%= context.alternate_contact_relationship_type.humanize %><% end %></p>
+      <p>
+        <%= context.alternate_contact_name %>
+        <% if context.alternate_contact_relationship_type.present? %>
+          — <%= localized_contact_label(:relationships, context.alternate_contact_relationship_type) %>
+        <% end %>
+      </p>
       <% if context.alternate_contact_phone.present? %>
         <p><%= link_to context.alternate_contact_phone, "tel:#{context.alternate_contact_phone}", class: 'text-indigo-600 underline' %></p>
       <% end %>
@@ -78,7 +82,7 @@
       <% end %>
       <p class="mt-2 text-gray-600"><%= t('applications.alternate_contact.admin_authorization_help') %></p>
     <% else %>
-      <%= t('evaluator_context.not_provided') %>
+      <%= t('application_contact.not_provided') %>
     <% end %>
   </dd>
 </div>

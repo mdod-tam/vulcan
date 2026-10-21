@@ -1,0 +1,13 @@
+en:
+  training_history:
+    title: "Training history and summaries"
+    back: "Back to dashboard"
+    empty: "No completed training reports are available yet."
+    session: "Session #%{number}"
+    open: "Read summary and product resources"
+    completed: "Completed %{date} with %{trainer}."
+    summary: "What we covered"
+    language: "Written in %{language}. No automatic translation is provided."
+    product: "Resources for %{name}"
+    product_help: "This is the product used during training. It may have been a demonstration model and does not establish ownership."
+    devices: "Devices"

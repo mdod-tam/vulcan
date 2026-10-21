@@ -28,6 +28,9 @@ Rails.application.config.filter_parameters += [
   :notes, :post_completion_notes, :working_notes, :recommendation_notes, :reschedule_reason, :attendees,
   :serial_number, :imei, :tracking_number, :reason, :impact_token,
 
+  # Training report and outcome text is private request content. Anchor exact keys.
+  /\Ainternal_notes\z/, /\Aconstituent_summary\z/, /\Acancellation_reason\z/, /\Ano_show_notes\z/, /\Areschedule_reason\z/,
+
   # SMS contact
   :phone_number,
 

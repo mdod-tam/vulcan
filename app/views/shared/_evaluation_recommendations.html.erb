@@ -1,0 +1,31 @@
+<%# locals: (evaluation:, locale: :en) -%>
+      <dl class="mb-3">
+        <dt class="text-sm font-medium text-gray-500">
+          <% if evaluation.recommendation_outcome_catalog_products? %>
+            <%= t('evaluators.evaluations.recommendations.catalog_heading', locale: locale) %>
+          <% else %>
+            <%= t('trainer_workflow.recommendations.outcome', locale: locale) %>
+          <% end %>
+        </dt>
+        <dd class="mt-1 text-sm text-gray-900">
+          <% if evaluation.recommendation_outcome_catalog_products? %>
+            <% recommended = evaluation.recommended_products # rubocop:disable Lint/UselessAssignment -- Used by later ERB fragments. %>
+            <% if recommended.any? %>
+              <ul class="list-disc list-inside">
+                <% recommended.each do |product| %>
+                  <li><%= product.name %></li>
+                <% end %>
+              </ul>
+            <% else %>
+              <span class="text-gray-500"><%= t('trainer_workflow.recommendations.none', locale: locale) %></span>
+            <% end %>
+            <% if evaluation.recommendation_notes.present? %>
+              <%= simple_format(evaluation.recommendation_notes) %>
+            <% end %>
+          <% else %>
+            <p class="font-medium"><%= t("evaluations.recommendation_outcomes.#{evaluation.recommendation_outcome}", locale: locale) %></p>
+            <%= simple_format(evaluation.recommendation_notes) %>
+            <p class="text-gray-600"><%= t('trainer_workflow.recommendations.review_help', locale: locale) %></p>
+          <% end %>
+        </dd>
+      </dl>

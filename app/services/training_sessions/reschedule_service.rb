@@ -1,81 +1,51 @@
 # frozen_string_literal: true
 
 module TrainingSessions
-  # Service object to handle rescheduling a training session.
-  # This service encapsulates the logic for updating the training session's
-  # scheduled time and reason, and creating the associated event.
   class RescheduleService < BaseService
     def initialize(training_session, current_user, params)
       super()
       @training_session = training_session
-      @current_user = current_user
+      @actor = current_user
       @params = params
     end
 
     def call
-      validate_params!
+      @training_session.with_current_trainer_lock(@actor) do
+        validate_transition!
+        old_scheduled_for = @training_session.scheduled_for
+        @training_session.assign_attributes(scheduled_for: @params[:scheduled_for], reschedule_reason: @params[:reschedule_reason],
+                                            location: @params[:location], status: :scheduled)
+        if @training_session.scheduled_for == old_scheduled_for
+          @training_session.errors.add(:scheduled_for, I18n.t('training_rules.changed_date_required'))
+          raise ActiveRecord::RecordInvalid, @training_session
+        end
 
-      old_scheduled_for = @training_session.scheduled_for
-
-      ActiveRecord::Base.transaction do
-        update_training_session!(old_scheduled_for)
-        create_event!(old_scheduled_for)
+        @training_session.save!
+        AuditEventService.log(
+          actor: @actor, action: 'training_rescheduled', auditable: @training_session,
+          metadata: { application_id: @training_session.application_id, training_session_id: @training_session.id,
+                      old_scheduled_for: old_scheduled_for.iso8601, new_scheduled_for: @training_session.scheduled_for.iso8601,
+                      initiator: 'constituent' }
+        )
+        @notification_outcome = TrainingSessionNotifier.new(
+          @training_session, actor: @actor, action: 'training_rescheduled', old_scheduled_for: old_scheduled_for
+        ).deliver_after_commit
       end
-
-      success('Training session rescheduled successfully.', { training_session: @training_session })
+      success(I18n.t('training_rules.rescheduled'), { training_session: @training_session, notification_outcome: @notification_outcome })
     rescue ActiveRecord::RecordInvalid => e
-      Rails.logger.error("Error rescheduling training session: #{e.message}")
-      failure(e.message)
-    rescue ArgumentError => e
-      log_validation_failure(e)
-      failure(e.message)
-    rescue StandardError => e
-      Rails.logger.error("Unexpected error rescheduling training session: #{e.message}")
-      failure("An unexpected error occurred: #{e.message}")
+      failure(e.record.errors.full_messages.to_sentence, { training_session: @training_session })
+    rescue OperationError => e
+      failure(e.message, { training_session: @training_session })
     end
 
     private
 
-    def validate_params!
-      unless @training_session.can_reschedule_current_session?
-        raise ArgumentError, I18n.t('training_sessions.reschedule.wrong_status')
-      end
+    def validate_transition!
+      raise OperationError, I18n.t('training_rules.reschedulable_session_only') unless @training_session.can_reschedule_current_session?
+      return if @params[:reschedule_reason].present?
 
-      return unless @params[:scheduled_for].blank? || @params[:reschedule_reason].blank?
-
-      raise ArgumentError, 'scheduled_for and reschedule_reason are required'
-    end
-
-    def log_validation_failure(error)
-      Rails.logger.warn("TrainingSessions::RescheduleService validation failed: #{error.message}")
-    end
-
-    def update_training_session!(_old_scheduled_for)
-      @training_session.update!(
-        scheduled_for: @params[:scheduled_for],
-        reschedule_reason: @params[:reschedule_reason],
-        location: @params[:location],
-        status: :scheduled,
-        cancellation_reason: nil, # Clear cancellation reason on reschedule
-        no_show_notes: nil # Clear no show notes on reschedule
-      )
-    end
-
-    def create_event!(old_scheduled_for)
-      AuditEventService.log(
-        actor: @current_user,
-        action: 'training_rescheduled',
-        auditable: @training_session,
-        metadata: {
-          application_id: @training_session.application_id,
-          training_session_id: @training_session.id,
-          old_scheduled_for: old_scheduled_for&.iso8601,
-          new_scheduled_for: @training_session.scheduled_for.iso8601,
-          reason: @training_session.reschedule_reason,
-          location: @training_session.location,
-          timestamp: Time.current.iso8601
-        }
-      )
+      @training_session.errors.add(:reschedule_reason, I18n.t('training_rules.reschedule_reason_required'))
+      raise ActiveRecord::RecordInvalid, @training_session
     end
   end
 end

@@ -2,6 +2,10 @@
 
 module ConstituentPortal
   class DashboardsController < ApplicationController
+    include ViewerLocale
+
+    around_action :with_viewer_locale
+
     # The shared scope preloads users and their guardian relationships for managed applications.
     include ApplicationDataLoading
 
@@ -51,12 +55,8 @@ module ConstituentPortal
 
     def load_applications
       # Drafts have separate continuation links.
-      @applications = current_user.applications.where.not(status: :draft).order(created_at: :desc)
-
-      if @applications.empty?
-        Rails.logger.info "No applications found via association for user #{current_user.id}, trying direct query"
-        @applications = Application.where(user_id: current_user.id).where.not(status: :draft).order(created_at: :desc)
-      end
+      @applications = current_user.applications.accessible_by(current_user)
+                                  .where.not(status: :draft).order(created_at: :desc)
 
       # The shared scope excludes draft, rejected, and archived applications.
       @managed_applications = build_application_base_scope
@@ -74,7 +74,8 @@ module ConstituentPortal
     def set_active_and_draft_applications
       @active_application = @applications.first
 
-      @draft_application = current_user.applications.where(status: :draft).first
+      @draft_application = current_user.applications.accessible_by(current_user)
+                                       .where(status: :draft).order(:id).first
 
       @active_managed_application = @managed_applications.first
 
@@ -99,17 +100,12 @@ module ConstituentPortal
       @max_training_sessions = Policy.max_training_sessions
 
       all_sessions = @active_application.training_sessions
-      @completed_training_sessions       = all_sessions.completed_sessions
-                                                          .includes(:trainer, :product_trained_on)
-                                                          .order(completed_at: :desc)
+      @completed_training_sessions = all_sessions.completed_sessions
+                                                 .where(application: Application.accessible_by(current_user))
+                                                 .includes(:trainer, :product_trained_on)
+                                                 .order(completed_at: :desc, id: :desc)
       @completed_training_sessions_count = @completed_training_sessions.count
       @active_training_session           = @active_application.active_training_session
-
-      # Display numbers follow completion order. Open sessions reserve quota without numbers in this map.
-      @training_session_numbers = all_sessions.completed_sessions.order(completed_at: :asc, created_at: :asc)
-                                              .pluck(:id)
-                                              .each_with_index
-                                              .to_h { |id, i| [id, i + 1] }
 
       @remaining_training_sessions = @active_application.remaining_training_sessions
     end

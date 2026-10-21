@@ -1,87 +1,47 @@
 # frozen_string_literal: true
 
 module TrainingSessions
-  # Service object to handle cancelling a training session.
-  # This service encapsulates the logic for updating the training session status
-  # to cancelled, validating required parameters, and creating the associated event.
   class CancelService < BaseService
-    def initialize(training_session, current_user, params, cancellation_initiator: nil)
+    def initialize(training_session, current_user, params)
       super()
       @training_session = training_session
-      @current_user = current_user
+      @actor = current_user
       @params = params
-      @cancellation_initiator = cancellation_initiator
+      @cancellation_initiator = params[:cancellation_initiator]
     end
 
     def call
-      validate_status!
-      validate_params!
+      @training_session.with_current_trainer_lock(@actor) do
+        raise OperationError, I18n.t('training_sessions.cancel.invalid_status') unless @training_session.can_cancel?
 
-      ActiveRecord::Base.transaction do
-        update_training_session!
-        create_event!
+        validate_params!
+        initiator = @cancellation_initiator
+        @training_session.update!(status: :cancelled, cancelled_at: Time.current,
+                                  cancellation_reason: @params[:cancellation_reason], cancellation_initiator: initiator)
+        AuditEventService.log(
+          actor: @actor, action: 'training_cancelled', auditable: @training_session,
+          metadata: { application_id: @training_session.application_id, training_session_id: @training_session.id,
+                      cancellation_initiator: @training_session.cancellation_initiator }
+        )
+        @notification_outcome = TrainingSessionNotifier.new(
+          @training_session, actor: @actor, action: 'training_cancelled'
+        ).deliver_after_commit
       end
-
-      success(I18n.t('training_sessions.cancel.success'), { training_session: @training_session })
+      success(I18n.t('training_sessions.cancel.success'), { training_session: @training_session, notification_outcome: @notification_outcome })
     rescue ActiveRecord::RecordInvalid => e
-      Rails.logger.error("Error cancelling training session: #{e.message}")
-      failure(e.message)
-    rescue ArgumentError => e
-      log_validation_failure(e)
-      failure(e.message)
-    rescue StandardError => e
-      Rails.logger.error("Unexpected error cancelling training session: #{e.message}")
-      failure("An unexpected error occurred: #{e.message}")
+      failure(e.record.errors.full_messages.to_sentence, { training_session: @training_session })
+    rescue OperationError => e
+      failure(e.message, { training_session: @training_session })
     end
 
     private
 
-    def validate_status!
-      return if @training_session.can_cancel?
-
-      raise ArgumentError, I18n.t('training_sessions.cancel.invalid_status')
-    end
-
     def validate_params!
-      return if @params[:cancellation_reason].present?
-
-      raise ArgumentError, I18n.t('training_sessions.cancel.reason_required')
-    end
-
-    def log_validation_failure(error)
-      Rails.logger.warn("TrainingSessions::CancelService validation failed: #{error.message}")
-    end
-
-    def update_training_session!
-      update_attributes = {
-        status: :cancelled,
-        cancelled_at: Time.current,
-        cancellation_reason: @params[:cancellation_reason],
-        notes: nil,
-        no_show_notes: nil
-      }
-      update_attributes[:cancellation_initiator] = cancellation_initiator if TrainingSession.cancellation_initiator_column?
-
-      @training_session.update!(update_attributes)
-    end
-
-    def create_event!
-      AuditEventService.log(
-        actor: @current_user,
-        action: 'training_cancelled',
-        auditable: @training_session,
-        metadata: {
-          application_id: @training_session.application_id,
-          training_session_id: @training_session.id,
-          cancellation_reason: @training_session.cancellation_reason,
-          cancellation_initiator: @training_session.cancellation_initiator,
-          timestamp: Time.current.iso8601
-        }
-      )
-    end
-
-    def cancellation_initiator
-      @cancellation_initiator || (@current_user&.admin? ? :admin : :trainer)
+      @training_session.errors.add(:cancellation_reason, :blank) if @params[:cancellation_reason].blank?
+      unless %w[constituent trainer program].include?(@cancellation_initiator.to_s)
+        @training_session.errors.add(:cancellation_initiator, I18n.t('training_rules.cancellation_initiator_required'))
+      end
+      raise ActiveRecord::RecordInvalid, @training_session if @training_session.errors.any?
     end
   end
 end

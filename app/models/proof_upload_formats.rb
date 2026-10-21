@@ -1,6 +1,6 @@
 # frozen_string_literal: true
 
-# Canonical allowed types for proof, certification, and W9 document uploads.
+# Canonical manual-upload types and purpose-specific limits, including public product PDFs.
 module ProofUploadFormats
   ALLOWED_CONTENT_TYPES = %w[
     application/pdf
@@ -23,7 +23,8 @@ module ProofUploadFormats
   MAX_SIZES = {
     proof: { bytes: PROOF_MAX_BYTES, inclusive: true },
     certification: { bytes: 10.megabytes, inclusive: true },
-    w9: { bytes: 10.megabytes, inclusive: false }
+    w9: { bytes: 10.megabytes, inclusive: false },
+    product_resource: { bytes: 10.megabytes, inclusive: true }
   }.freeze
 
   # Public secure forms refuse near-empty files; other channels set no minimum.
@@ -32,12 +33,16 @@ module ProofUploadFormats
   # Provider-generated documents keep their own acceptance contract and skip manual-upload limits.
   GENERATED_SOURCES = %w[docuseal].freeze
 
-  def self.allowed_content_types_json
-    ALLOWED_CONTENT_TYPES.to_json
+  def self.content_types(purpose = nil)
+    purpose == :product_resource ? ['application/pdf'] : ALLOWED_CONTENT_TYPES
   end
 
-  def self.allowed_content_type?(content_type)
-    ALLOWED_CONTENT_TYPES.include?(content_type.to_s.split(';').first)
+  def self.allowed_content_types_json(purpose = nil)
+    content_types(purpose).to_json
+  end
+
+  def self.allowed_content_type?(content_type, purpose: nil)
+    content_types(purpose).include?(content_type.to_s.split(';').first)
   end
 
   def self.max_bytes(purpose)

@@ -23,8 +23,12 @@
           data: { controller: 'recommendation-outcome', action: 'change->recommendation-outcome#update',
                   recommendation_outcome_conflict_value: t('evaluators.evaluations.recommendations.conflict') }
         ) do |f| %>
-      <%= render 'action_errors', action: :submit_report, form: f, form_errors: @evaluation_form_errors,
-                                  field_targets: evaluation_report_error_targets %>
+      <%= render(
+            'shared/action_errors',
+            action: :submit_report, form: f, form_errors: @evaluation_form_errors,
+            heading: evaluation_action_error_heading(:submit_report),
+            field_targets: evaluation_report_error_targets
+          ) %>
       <% if evaluation.outside_specialist_report_allowed?(current_user) %>
         <div>
           <%= f.label :assessment_source, 'Assessment source', class: 'block text-sm font-medium text-gray-700' %>
@@ -33,12 +37,12 @@
                          selected: form_values.fetch(:assessment_source, evaluation.status_requested? ? nil : 'direct_assessment') },
                        required: true,
                        class: 'mt-1 block w-full border border-gray-300 rounded-md shadow-sm py-2 px-3',
-                       aria: evaluation_field_aria(:submit_report, :assessment_source, describedby: 'assessment-source-help', form_errors: @evaluation_form_errors),
+                       aria: action_form_field_aria(:submit_report, :assessment_source, describedby: 'assessment-source-help', form_errors: @evaluation_form_errors),
                        data: { recommendation_outcome_target: 'source', action: 'recommendation-outcome#update' } %>
           <p id="assessment-source-help" class="mt-1 text-sm text-gray-500">
             Outside-specialist reports require the actual consultation date and written source/context in Working Notes. Record trials only when known. Use scheduling for a direct assessment.
           </p>
-          <%= render 'field_errors', action: :submit_report, attribute: :assessment_source, form_errors: @evaluation_form_errors %>
+          <%= render 'shared/field_errors', action: :submit_report, attribute: :assessment_source, form_errors: @evaluation_form_errors %>
         </div>
       <% end %>
       <div>
@@ -54,10 +58,13 @@
               class: 'mt-1 block w-full border border-gray-300 rounded-md shadow-sm py-2 px-3 ' \
                      'focus:outline-none focus:ring-indigo-500 focus:border-indigo-500 sm:text-sm',
               required: true,
-              aria: evaluation_field_aria(:submit_report, :appointment_completed_at, describedby: 'complete-time-help', form_errors: @evaluation_form_errors)
+              aria: action_form_field_aria(:submit_report, :appointment_completed_at, describedby: 'complete-time-help', form_errors: @evaluation_form_errors)
             ) %>
-        <p id="complete-time-help" class="mt-1 text-sm text-gray-500"><%= t('evaluators.evaluations.forms.appointment_time_help') %></p>
-        <%= render 'field_errors', action: :submit_report, attribute: :appointment_completed_at, form_errors: @evaluation_form_errors %>
+        <p id="complete-time-help" class="mt-1 text-sm text-gray-500">
+          <%= t('evaluators.evaluations.forms.appointment_time_help') %>
+          <%= t('date_time_input.hint', zone: Time.zone.name) %>
+        </p>
+        <%= render 'shared/field_errors', action: :submit_report, attribute: :appointment_completed_at, form_errors: @evaluation_form_errors %>
       </div>
       <div>
         <%= f.label :location, class: 'block text-sm font-medium text-gray-700' do %>
@@ -69,10 +76,10 @@
               class: 'mt-1 block w-full border border-gray-300 rounded-md shadow-sm py-2 px-3 ' \
                      'focus:outline-none focus:ring-indigo-500 focus:border-indigo-500 sm:text-sm',
               required: location_required,
-              aria: evaluation_field_aria(:submit_report, :location, form_errors: @evaluation_form_errors).merge(required: location_required),
+              aria: action_form_field_aria(:submit_report, :location, form_errors: @evaluation_form_errors).merge(required: location_required),
               data: { recommendation_outcome_target: 'location' }
             ) %>
-        <%= render 'field_errors', action: :submit_report, attribute: :location, form_errors: @evaluation_form_errors %>
+        <%= render 'shared/field_errors', action: :submit_report, attribute: :location, form_errors: @evaluation_form_errors %>
       </div>
 
       <div>
@@ -85,14 +92,14 @@
               class: 'mt-1 block w-full border border-gray-300 rounded-md shadow-sm py-2 px-3 ' \
                      'focus:outline-none focus:ring-indigo-500 focus:border-indigo-500 sm:text-sm',
               placeholder: 'e.g., family friend, interpreter, Jane Doe',
-              aria: evaluation_field_aria(:submit_report, :attendees_field, describedby: 'complete-attendees-help', form_errors: @evaluation_form_errors)
+              aria: action_form_field_aria(:submit_report, :attendees_field, describedby: 'complete-attendees-help', form_errors: @evaluation_form_errors)
             ) %>
         <p id="complete-attendees-help" class="mt-1 text-sm text-gray-500">If anyone else attended the session, include them here. Separate multiple attendees with commas.</p>
-        <%= render 'field_errors', action: :submit_report, attribute: :attendees_field, form_errors: @evaluation_form_errors %>
+        <%= render 'shared/field_errors', action: :submit_report, attribute: :attendees_field, form_errors: @evaluation_form_errors %>
       </div>
 
       <fieldset id="products-tried-group" tabindex="-1" class="rounded-md focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-indigo-500"
-                <%= tag.attributes(aria: evaluation_field_aria(
+                <%= tag.attributes(aria: action_form_field_aria(
                       :submit_report, :products_tried_inputs,
                       describedby: 'products-tried-help',
                       form_errors: @evaluation_form_errors
@@ -104,7 +111,7 @@
           </span>
         </legend>
         <p id="products-tried-help" class="mt-1 text-sm text-gray-500"><%= t('evaluators.evaluations.recommendations.tried_help') %></p>
-        <%= render 'field_errors', action: :submit_report, attribute: :products_tried_inputs, form_errors: @evaluation_form_errors %>
+        <%= render 'shared/field_errors', action: :submit_report, attribute: :products_tried_inputs, form_errors: @evaluation_form_errors %>
         <div class="mt-2 space-y-2 max-h-48 overflow-y-auto border border-gray-300 rounded-md p-3 bg-white">
           <% available_products.each do |product| %>
             <% trial = trial_inputs.fetch(product.id.to_s, {}).with_indifferent_access # rubocop:disable Lint/UselessAssignment -- ERB local. %>
@@ -122,7 +129,7 @@
                                options_for_select(Evaluation::TRIAL_REACTIONS, trial[:reaction]),
                                include_blank: 'Select satisfaction', id: "trial-#{product.id}-reaction",
                                class: 'mt-1 block w-full rounded-md border-gray-300 text-sm',
-                               aria: evaluation_field_aria(:submit_report, :products_tried_inputs, form_errors: @evaluation_form_errors),
+                               aria: action_form_field_aria(:submit_report, :products_tried_inputs, form_errors: @evaluation_form_errors),
                                data: { trial_reaction: true } %>
               </div>
             </div>
@@ -132,9 +139,9 @@
 
       <fieldset id="catalog-recommendations-group" tabindex="-1"
                 class="rounded-md focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-indigo-500"
-                <%= tag.attributes(aria: evaluation_field_aria(:submit_report, :recommended_product_ids, form_errors: @evaluation_form_errors)) %>>
+                <%= tag.attributes(aria: action_form_field_aria(:submit_report, :recommended_product_ids, form_errors: @evaluation_form_errors)) %>>
         <legend class="block text-sm font-medium text-gray-700"><%= t('evaluators.evaluations.recommendations.catalog_heading') %></legend>
-        <%= render 'field_errors', action: :submit_report, attribute: :recommended_product_ids, form_errors: @evaluation_form_errors %>
+        <%= render 'shared/field_errors', action: :submit_report, attribute: :recommended_product_ids, form_errors: @evaluation_form_errors %>
         <div class="mt-2 space-y-2 max-h-48 overflow-y-auto border border-gray-300 rounded-md p-3 bg-white">
           <%= f.collection_check_boxes(
                 :recommended_product_ids,
@@ -170,13 +177,13 @@
                         required: false,
                         class: 'mt-1 block w-full border border-gray-300 rounded-md shadow-sm py-2 px-3 ' \
                                'focus:outline-none focus:ring-indigo-500 focus:border-indigo-500 sm:text-sm',
-                        aria: evaluation_field_aria(
+                        aria: action_form_field_aria(
                           :submit_report, :recommendation_notes,
                           describedby: 'recommendation-notes-help',
                           form_errors: @evaluation_form_errors
                         ),
                         data: { recommendation_outcome_target: 'notes' } %>
-        <%= render 'field_errors', action: :submit_report, attribute: :recommendation_notes, form_errors: @evaluation_form_errors %>
+        <%= render 'shared/field_errors', action: :submit_report, attribute: :recommendation_notes, form_errors: @evaluation_form_errors %>
       </div>
 
       <div id="recommendation-outcome-group" tabindex="-1" class="rounded-md focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-indigo-500">
@@ -185,14 +192,14 @@
           <%= check_box_tag 'evaluation[no_suitable_product]', '1', form_values[:no_suitable_product] == '1',
                             id: 'complete_evaluation_no_suitable_product',
                             class: 'mt-1 h-4 w-4 rounded border-gray-300 text-indigo-600 focus:ring-indigo-500',
-                            aria: evaluation_field_aria(
+                            aria: action_form_field_aria(
                               :submit_report, :no_suitable_product, describedby: 'no-suitable-product-help', form_errors: @evaluation_form_errors
                             ),
                             data: { recommendation_outcome_target: 'noSuitable' } %>
           <%= f.label :no_suitable_product, t('evaluators.evaluations.recommendations.no_suitable_product_label'), class: 'text-sm font-medium text-gray-700' %>
         </div>
         <p id="no-suitable-product-help" class="mt-1 text-sm text-gray-500"><%= t('evaluators.evaluations.recommendations.no_suitable_product_help') %></p>
-        <%= render 'field_errors', action: :submit_report, attribute: :no_suitable_product, form_errors: @evaluation_form_errors %>
+        <%= render 'shared/field_errors', action: :submit_report, attribute: :no_suitable_product, form_errors: @evaluation_form_errors %>
       </div>
 
       <div>
@@ -207,10 +214,10 @@
                      'focus:outline-none focus:ring-indigo-500 focus:border-indigo-500 sm:text-sm',
               placeholder: 'Evaluation notes, including specific needs...',
               required: true,
-              aria: evaluation_field_aria(:submit_report, :notes, describedby: 'complete-internal-notes-help', form_errors: @evaluation_form_errors)
+              aria: action_form_field_aria(:submit_report, :notes, describedby: 'complete-internal-notes-help', form_errors: @evaluation_form_errors)
             ) %>
         <p id="complete-internal-notes-help" class="mt-1 text-sm text-gray-700"><strong><%= t('evaluators.evaluations.forms.internal_notes_only') %></strong></p>
-        <%= render 'field_errors', action: :submit_report, attribute: :notes, form_errors: @evaluation_form_errors %>
+        <%= render 'shared/field_errors', action: :submit_report, attribute: :notes, form_errors: @evaluation_form_errors %>
       </div>
 
       <%= f.submit 'Mark as Completed',

@@ -1,0 +1,38 @@
+en:
+  trainer_workflow:
+    list:
+      skip: "Skip to main content"
+      back: "Back to Dashboard"
+      titles:
+        requested: "Assigned, Needs Scheduling"
+        scheduled: "Scheduled Training Sessions"
+        completed: "Completed Training Sessions"
+        follow_up: "Training Sessions Needing Follow-up"
+        all: "Training Sessions"
+      scopes:
+        assigned_to_me: "Assigned to Me"
+        all_trainers: "All Trainers"
+        my_sessions: "My Sessions"
+      filters:
+        view: "View"
+        status: "Status"
+        all: "All"
+        requested: "Needs Scheduling"
+        scheduled: "Scheduled"
+        completed: "Completed"
+        needs_followup: "Needs Follow-up"
+      columns:
+        date_time: "Date/Time"
+        constituent: "Constituent"
+        status: "Status"
+        application_id: "Application ID"
+        actions: "Actions"
+      completed_date: "Completed: %{date}"
+      duration: "Duration: %{duration}"
+      session: "Session #%{number}"
+      actions:
+        view_schedule: "View/Schedule"
+        complete_report: "Complete Report"
+        view_details: "View Details"
+      action_name: "%{action} for %{name}, session %{number}"
+      empty: "No training sessions found."

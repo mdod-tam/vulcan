@@ -1,0 +1,47 @@
+<%# locals: (form_errors: { save_resource: @resource.errors.to_hash(true) }) %>
+<p class="mt-4 text-gray-700">Saving publishes public program guidance for this exact product. Do not include personal or session information. Resources are ordered by title within each language.</p>
+<p class="mt-2 text-sm text-gray-600">Use descriptive titles. PDFs should be searchable and tagged for accessibility. Hosted videos should have captions and a transcript. Prefer HTTPS links.</p>
+<%= form_with model: [:admin, @product, @resource], class: 'mt-6 space-y-5' do |form| %>
+  <%= render 'shared/action_errors', action: :save_resource, form: form, form_errors: form_errors,
+                                     field_targets: { base: 'product_resource_source', document: 'product_resource_document' } %>
+  <div>
+    <%= form.label :title, 'Descriptive title (in the resource language)', class: 'block font-medium' %>
+    <%= form.text_field :title, required: true, class: 'mt-1 block w-full rounded border-gray-300',
+                                aria: action_form_field_aria(:save_resource, :title, form_errors: form_errors) %>
+    <%= render 'shared/field_errors', action: :save_resource, attribute: :title, form_errors: form_errors %>
+  </div>
+  <div>
+    <%= form.label :locale, 'Content language', class: 'block font-medium' %>
+    <%= form.select :locale, I18n.available_locales.map { |locale| [product_resource_language(locale), locale] },
+                    { include_blank: 'Choose a language' }, required: true, class: 'mt-1 block w-full rounded border-gray-300',
+                                                            aria: action_form_field_aria(:save_resource, :locale, form_errors: form_errors) %>
+    <%= render 'shared/field_errors', action: :save_resource, attribute: :locale, form_errors: form_errors %>
+  </div>
+  <div>
+    <%= label_tag 'product_resource_source', 'Resource source', class: 'block font-medium' %>
+    <%= select_tag 'product_resource[source]', options_for_select([['External link', 'url'], ['PDF document', 'pdf']], @source),
+                   id: 'product_resource_source', class: 'mt-1 block w-full rounded border-gray-300',
+                   aria: action_form_field_aria(:save_resource, :base, form_errors: form_errors, describedby: 'source-help') %>
+    <p id="source-help" class="mt-1 text-sm text-gray-600">Choose the source to save. Selecting an external link replaces the saved PDF after a successful save; selecting PDF replaces the saved link. Only the selected source is saved.</p>
+    <%= render 'shared/field_errors', action: :save_resource, attribute: :base, form_errors: form_errors %>
+  </div>
+  <div>
+    <%= form.label :url, 'External URL', class: 'block font-medium' %>
+    <%= form.text_field :url, value: @attempted_url, inputmode: 'url', class: 'mt-1 block w-full rounded border-gray-300',
+                              aria: action_form_field_aria(:save_resource, :url, form_errors: form_errors, describedby: 'url-help') %>
+    <p id="url-help" class="mt-1 text-sm text-gray-600">An absolute HTTP or HTTPS URL without credentials. Hosted videos open as external links.</p>
+    <%= render 'shared/field_errors', action: :save_resource, attribute: :url, form_errors: form_errors %>
+  </div>
+  <div>
+    <%= form.label :document, 'PDF document', class: 'block font-medium' %>
+    <p id="pdf-help" class="mb-2 text-sm text-gray-600">PDF only, up to and including 10 MB. Select a replacement or remove the selected upload before choosing another.</p>
+    <%= render 'shared/document_upload', form: form, model: @resource, field: :document, input_id: 'product_resource_document',
+                                         input_aria: action_form_field_aria(:save_resource, :document, form_errors: form_errors, describedby: 'pdf-help'),
+                                         blob: @retained_document, accept: '.pdf,application/pdf' %>
+    <%= render 'shared/field_errors', action: :save_resource, attribute: :document, form_errors: form_errors %>
+  </div>
+  <div class="flex flex-wrap items-center gap-4">
+    <%= form.submit 'Save public resource', class: 'rounded bg-indigo-600 px-4 py-2 text-white', data: { turbo_submits_with: 'Saving…' } %>
+    <%= link_to 'Cancel', admin_product_path(@product), class: 'text-indigo-700 underline' %>
+  </div>
+<% end %>

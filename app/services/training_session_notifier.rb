@@ -1,76 +1,58 @@
 # frozen_string_literal: true
 
 class TrainingSessionNotifier
-  attr_reader :training_session
-
-  def initialize(training_session)
-    @training_session = training_session
+  ACTIONS = %w[trainer_assigned training_scheduled training_rescheduled training_cancelled training_missed training_completed].freeze
+  DeliveryOutcome = Struct.new(:status, :notification_id, :error_class, keyword_init: true) do
+    def warning? = %i[failed suppressed].include?(status)
   end
 
-  def deliver_all
-    return unless should_send_notification?
-    return unless notification_action
+  def initialize(training_session, actor:, action:, old_scheduled_for: nil)
+    raise ArgumentError, 'Unknown training notification action' unless ACTIONS.include?(action.to_s)
 
-    ActiveRecord::Base.transaction do
-      create_consolidated_notification
-    end
+    @training_session = training_session
+    @actor = actor
+    @action = action.to_s
+    @metadata = {
+      training_session_id: training_session.id,
+      application_id: training_session.application_id,
+      status: training_session.status,
+      old_scheduled_for: old_scheduled_for&.iso8601,
+      scheduled_for: training_session.scheduled_for&.iso8601,
+      completed_at: training_session.completed_at&.iso8601,
+      cancellation_initiator: training_session.cancellation_initiator,
+      trainer_name: training_session.trainer.full_name,
+      location: training_session.location
+    }.freeze
+  end
+
+  def deliver_after_commit
+    outcome = DeliveryOutcome.new(status: :deferred)
+    ActiveRecord.after_all_transactions_commit { deliver(outcome) }
+    outcome
   end
 
   private
 
-  def should_send_notification?
-    training_session.saved_change_to_status? ||
-      training_session.saved_change_to_scheduled_for? ||
-      training_session.saved_change_to_completed_at?
-  end
-
-  def create_consolidated_notification
-    NotificationService.create_and_deliver!(
-      type: notification_action,
-      recipient: training_session.constituent,
-      actor: Current.user || training_session.trainer,
-      notifiable: training_session,
-      metadata: notification_metadata,
+  def deliver(outcome)
+    notification = NotificationService.create_and_deliver!(
+      type: @action,
+      recipient: @action == 'trainer_assigned' ? @training_session.trainer : @training_session.constituent,
+      actor: @actor,
+      notifiable: @training_session,
+      metadata: @metadata,
       channel: :email
     )
+    outcome.notification_id = notification&.id
+    outcome.status = if notification.nil? || notification.error_delivery_status?
+                       :failed
+                     elsif notification.suppressed_delivery_status?
+                       :suppressed
+                     else
+                       :queued
+                     end
   rescue StandardError => e
-    Rails.logger.error(
-      'Failed to send training session notification via NotificationService ' \
-      "(training_session_id=#{training_session.id}, action=#{notification_action}): #{e.message}"
-    )
-    raise if Rails.env.local?
-
-    # In production, notification errors should not fail the training session update.
-  end
-
-  def notification_action
-    return 'training_rescheduled' if rescheduled_notification?
-
-    case training_session.status
-    when 'scheduled', 'confirmed' then 'training_scheduled'
-    when 'cancelled' then 'training_cancelled'
-    when 'no_show' then 'training_missed'
-    end
-  end
-
-  def rescheduled_notification?
-    training_session.saved_change_to_scheduled_for? &&
-      training_session.saved_change_to_scheduled_for.first.present? &&
-      (training_session.status_scheduled? || training_session.status_confirmed?)
-  end
-
-  def notification_metadata
-    {
-      training_session_id: training_session.id,
-      application_id: training_session.application.id,
-      status: training_session.status,
-      old_scheduled_for: training_session.saved_change_to_scheduled_for&.first&.iso8601,
-      scheduled_for: training_session.scheduled_for&.iso8601,
-      completed_at: training_session.completed_at&.iso8601,
-      cancellation_initiator: training_session.cancellation_initiator,
-      reschedule_reason: training_session.reschedule_reason,
-      trainer_name: training_session.trainer.full_name,
-      timestamp: Time.current.iso8601
-    }
+    outcome.status = :failed
+    outcome.error_class = e.class.name
+    Rails.logger.error("Training notification failed (training_session_id=#{@training_session.id}, action=#{@action}, error_class=#{e.class.name})")
   end
 end

@@ -1,0 +1,18 @@
+<div class="container mx-auto max-w-4xl px-4 py-8">
+  <h1 class="text-2xl font-bold"><%= t('training_history.session', number: @training_session.appointment_number) %> — <%= @training_session.application.user.full_name %></h1>
+  <%= link_to t('training_history.title'), constituent_portal_training_sessions_path, class: 'mt-3 inline-block text-indigo-700 underline' %>
+  <section class="mt-6 rounded-lg bg-white p-6 shadow">
+    <p><%= t('training_history.completed', date: l(@training_session.completed_at, format: :long), trainer: @training_session.trainer.full_name) %></p>
+    <h2 class="mt-4 text-lg font-semibold"><%= t('training_history.summary') %></h2>
+    <p class="mt-1 text-sm text-gray-600"><%= t('training_history.language', language: localized_contact_label(:languages, @training_session.summary_locale)) %></p>
+    <div lang="<%= @training_session.summary_locale %>" class="mt-3"><%= simple_format(@training_session.constituent_summary) %></div>
+  </section>
+  <% if @training_session.product_trained_on %>
+    <section class="mt-6 rounded-lg bg-white p-6 shadow">
+      <h2 id="training-product-heading" class="text-lg font-semibold"><%= t('training_history.product', name: @training_session.product_trained_on.name) %></h2>
+      <p class="mt-2 text-sm text-gray-600"><%= t('training_history.product_help') %></p>
+      <%= render 'shared/product_resources', product: @training_session.product_trained_on, heading_level: 3,
+                                             region_id: dom_id(@training_session, :completed_product_resources), context_id: 'training-product-heading' %>
+    </section>
+  <% end %>
+</div>

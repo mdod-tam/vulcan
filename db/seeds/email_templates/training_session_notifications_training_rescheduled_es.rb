@@ -18,19 +18,20 @@ EmailTemplate.create_or_find_by!(name: 'training_session_notifications_training_
     - Fecha: %<scheduled_date_formatted>s
     - Hora: %<scheduled_time_formatted>s
 
-    Motivo: %<reschedule_reason>s
 
     Si tiene preguntas, comuniquese con su capacitador:
     - Correo electronico: %<trainer_email>s
     - Telefono: %<trainer_phone_formatted>s
+
+    Lugar o instrucciones para reunirse: %<scheduled_location>s
 
     %<footer_text>s
   TEXT
   template.variables = {
     'required' => %w[header_text constituent_full_name trainer_full_name old_scheduled_date_formatted
                      old_scheduled_time_formatted scheduled_date_formatted scheduled_time_formatted
-                     reschedule_reason trainer_email trainer_phone_formatted footer_text],
-    'optional' => []
+                     trainer_email trainer_phone_formatted footer_text],
+    'optional' => %w[scheduled_location]
   }
   template.version = 1
 end

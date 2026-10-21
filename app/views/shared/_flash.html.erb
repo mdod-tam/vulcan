@@ -1,7 +1,9 @@
 <% if flash.any? %>
-  <div class="flash-messages" aria-live="polite">
+  <div class="flash-messages">
     <% flash.each do |type, message| %>
-      <div role="alert" class="flash-message flash-<%= type %> mb-4 <%= flash_class_for(type) %>" data-testid="flash-<%= type %>">
+      <div role="<%= %w[notice success].include?(type.to_s) ? 'status' : 'alert' %>"
+           aria-live="<%= %w[notice success].include?(type.to_s) ? 'polite' : 'assertive' %>" aria-atomic="true"
+           class="flash-message flash-<%= type %> mb-4 <%= flash_class_for(type) %>" data-testid="flash-<%= type %>">
         <%= message %>
       </div>
     <% end %>

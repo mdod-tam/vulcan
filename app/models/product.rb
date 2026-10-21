@@ -1,6 +1,7 @@
 # frozen_string_literal: true
 
 class Product < ApplicationRecord
+  self.filter_attributes += [:documentation_url]
   has_and_belongs_to_many :evaluations
   has_and_belongs_to_many :vendors,
                           class_name: 'User',
@@ -9,6 +10,7 @@ class Product < ApplicationRecord
 
   has_many :voucher_transaction_products, dependent: :destroy
   has_many :voucher_transactions, through: :voucher_transaction_products
+  has_many :product_resources, dependent: :destroy
   has_many :equipment_needs, dependent: :restrict_with_error
   has_many :equipment_items, dependent: :restrict_with_error
 
@@ -16,7 +18,7 @@ class Product < ApplicationRecord
   validates :manufacturer, presence: true
   validates :model_number, presence: true
   validates :device_types, presence: true
-  validates :documentation_url, format: { with: URI::DEFAULT_PARSER.make_regexp }, allow_blank: true
+  validates :documentation_url, web_url: true, allow_blank: true
   validate :device_types_must_be_valid
 
   DEVICE_TYPES = [

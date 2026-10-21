@@ -15,12 +15,13 @@ class ProofAttachmentValidator
     end
   end
 
-  def self.check_content!(attachment)
-    new.check_content!(attachment)
+  def self.check_content!(attachment, allowed_types: ALLOWED_MIME_TYPES)
+    new.check_content!(attachment, allowed_types: allowed_types)
   end
 
   # Raises ValidationError with :invalid_type, :suspicious_content, or :unreadable
-  def check_content!(attachment)
+  def check_content!(attachment, allowed_types: ALLOWED_MIME_TYPES)
+    @allowed_types = allowed_types
     @attachment_content = nil
     @detected_mime_type = nil
 
@@ -42,7 +43,12 @@ class ProofAttachmentValidator
   end
 
   def valid_mime_type?(attachment)
-    ALLOWED_MIME_TYPES.include?(detected_mime_type(attachment))
+    if @allowed_types == ['application/pdf']
+      # Public guidance must identify as PDF from bytes, without a filename/MIME fallback.
+      return Marcel::MimeType.for(StringIO.new(attachment_content(attachment))) == 'application/pdf'
+    end
+
+    @allowed_types.include?(detected_mime_type(attachment))
   end
 
   def potentially_malicious?(attachment)

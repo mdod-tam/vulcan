@@ -78,6 +78,7 @@ complete:
 
 # Applications for proof testing
 one:
+  assigned_trainer: trainer_jane
   user: constituent_john
   application_date: <%= Time.current %>
   status: awaiting_proof
@@ -97,6 +98,7 @@ one:
   submission_method: web
 
 two:
+  assigned_trainer: trainer_jane
   user: constituent_john
   application_date: <%= 2.years.ago %>
   status: approved
@@ -130,6 +132,7 @@ draft_application:
   submission_method: web
 
 submitted_application:
+  assigned_trainer: trainer_john
   user: constituent_kenneth
   application_date: <%= 1.week.ago.strftime("%F %T") %>
   status: in_progress
@@ -146,6 +149,7 @@ submitted_application:
   submission_method: web
 
 approved_application:
+  assigned_trainer: trainer_john
   user: constituent_steven
   application_date: <%= 2.months.ago.strftime("%F %T") %>
   status: approved

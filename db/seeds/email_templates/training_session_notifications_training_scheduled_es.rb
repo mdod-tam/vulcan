@@ -24,12 +24,14 @@ EmailTemplate.create_or_find_by!(name: 'training_session_notifications_training_
     - Teléfono: %<trainer_phone_formatted>s
 
     ¡Esperamos ayudarle con su sesión de entrenamiento!
+    Lugar o instrucciones para reunirse: %<scheduled_location>s
+
     %<footer_text>s
   TEXT
   template.variables = {
     'required' => %w[header_text constituent_full_name scheduled_date_formatted scheduled_time_formatted
                      trainer_full_name trainer_email trainer_phone_formatted footer_text],
-    'optional' => []
+    'optional' => %w[scheduled_location]
   }
   template.version = 1
 end

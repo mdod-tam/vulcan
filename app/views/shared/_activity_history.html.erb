@@ -1,21 +1,21 @@
-<section class="bg-white shadow rounded-lg p-6 mb-8" aria-labelledby="activity-history-heading">
+<section class="min-w-0 bg-white shadow rounded-lg p-6 mb-8" aria-labelledby="activity-history-heading">
   <h2 id="activity-history-heading" class="text-xl font-semibold text-gray-900 mb-4">
-    <%= local_assigns.fetch(:title, "Activity History") %>
+    <%= local_assigns.fetch(:title, t('activity_history.table.title')) %>
   </h2>
 
   <% show_subject = local_assigns.fetch(:show_subject, false) %>
 
-  <div class="overflow-x-auto">
-    <table class="min-w-full divide-y divide-gray-200">
+  <div class="max-w-full overflow-x-auto focus:outline-none focus:ring-2 focus:ring-indigo-500" role="region" aria-label="<%= t('activity_history.table.scroll_region') %>" tabindex="0" data-activity-history-scroll>
+    <table class="min-w-full divide-y divide-gray-200" aria-labelledby="activity-history-heading">
       <thead class="bg-gray-50">
         <tr>
-          <th scope="col" class="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Date</th>
-          <th scope="col" class="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Activity</th>
+          <th scope="col" class="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider"><%= t('activity_history.table.date') %></th>
+          <th scope="col" class="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider"><%= t('activity_history.table.activity') %></th>
           <% if show_subject %>
-            <th scope="col" class="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Constituent</th>
+            <th scope="col" class="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider"><%= t('activity_history.table.constituent') %></th>
           <% end %>
-          <th scope="col" class="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">User</th>
-          <th scope="col" class="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Details</th>
+          <th scope="col" class="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider"><%= t('activity_history.table.user') %></th>
+          <th scope="col" class="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider"><%= t('activity_history.table.details') %></th>
         </tr>
       </thead>
       <tbody class="bg-white divide-y divide-gray-200">
@@ -23,7 +23,7 @@
           <% activity_logs.each do |event| %>
             <tr class="hover:bg-gray-50">
               <td class="px-6 py-4 whitespace-nowrap text-sm text-gray-500">
-                <%= event.created_at.strftime("%B %d, %Y %I:%M %p") %>
+                <%= l(event.created_at, format: :long) %>
               </td>
               <td class="px-6 py-4 whitespace-nowrap">
                 <div class="flex flex-col gap-1">
@@ -51,7 +51,7 @@
         <% else %>
           <tr>
             <td colspan="<%= show_subject ? 5 : 4 %>" class="px-6 py-4 text-center text-sm text-gray-500">
-              No activity has been recorded yet.
+              <%= t('activity_history.table.empty') %>
             </td>
           </tr>
         <% end %>

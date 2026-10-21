@@ -203,7 +203,7 @@ class ApplicationTest < ActiveSupport::TestCase
     end
 
     travel_to Time.zone.local(2026, 4, 7, 10, 0, 0) do
-      create(:training_session, application: application, trainer: trainer, status: :completed, notes: 'done', completed_at: Time.current)
+      create(:training_session, :completed, application: application, trainer: trainer, completed_at: Time.current)
     end
 
     travel_to Time.zone.local(2026, 4, 7, 11, 0, 0) do
@@ -314,12 +314,13 @@ class ApplicationTest < ActiveSupport::TestCase
     assert_equal ['Select an active trainer.'], application.errors[:base]
 
     Current.user = @admin
-    assert_difference ['TrainingSession.count', 'Notification.count', "Event.where(action: 'trainer_assigned').count"], 1 do
+    assert_difference ['TrainingSession.count', "Event.where(action: 'trainer_assigned').count"], 1 do
       assert_equal true, application.assign_trainer!(trainer)
     end
 
     assert_empty application.errors
-    assert_equal application_attributes, application.reload.attributes
+    assert_equal application_attributes.except('assigned_trainer_id', 'updated_at'), application.reload.attributes.except('assigned_trainer_id', 'updated_at')
+    assert_equal trainer.id, application.assigned_trainer_id
     training_session = application.training_sessions.sole
     assert_equal trainer.id, training_session.trainer_id
     assert training_session.status_requested?
@@ -327,10 +328,6 @@ class ApplicationTest < ActiveSupport::TestCase
     event = Event.find_by!(action: 'trainer_assigned', auditable: application)
     assert_equal @admin.id, event.user_id
     assert_equal trainer.id, event.metadata['trainer_id']
-    notification = Notification.find_by!(action: 'trainer_assigned', notifiable: training_session)
-    assert_equal trainer.id, notification.recipient_id
-    assert_equal @admin.id, notification.actor_id
-    assert_equal application.id, notification.metadata['application_id']
   end
 
   test 'assign_trainer! audit failure rolls back the requested session without a notification or job' do
@@ -351,7 +348,7 @@ class ApplicationTest < ActiveSupport::TestCase
       end
     end
 
-    assert_equal [audit_failure.message], application.errors[:base]
+    assert_equal [invalid_event.errors.full_messages.to_sentence], application.errors[:base]
     assert_equal application_attributes, application.reload.attributes
     assert_empty application.training_sessions
   end
@@ -362,8 +359,8 @@ class ApplicationTest < ActiveSupport::TestCase
     application = create(:application, status: :approved, application_date: 2.years.ago.to_date)
     trainer = create(:trainer)
     admin = create(:admin)
-    training_session = create(:training_session, :requested, application: application, trainer: trainer)
-    scheduled_session = create(:training_session, :scheduled, application: application, trainer: trainer)
+    application.update!(assigned_trainer: trainer)
+    training_session = create(:training_session, :requested, application: application, trainer: trainer, internal_notes: 'Private scheduling context')
 
     assert_difference -> { Event.where(action: 'trainer_unassigned').count }, 1 do
       assert application.unassign_trainer!(actor: admin)
@@ -372,13 +369,12 @@ class ApplicationTest < ActiveSupport::TestCase
     training_session.reload
     assert training_session.status_cancelled?
     assert training_session.cancellation_initiator_admin?
-    scheduled_session.reload
-    assert scheduled_session.status_cancelled?
-    assert scheduled_session.cancellation_initiator_admin?
+    assert_equal 'Private scheduling context', training_session.internal_notes
+    assert_nil application.reload.assigned_trainer_id
     assert_not application.reload.active_training_session_present?
 
     event = Event.where(action: 'trainer_unassigned').last
-    assert_equal [training_session.id, scheduled_session.id].sort, event.metadata['training_session_ids'].sort
+    assert_equal [training_session.id], event.metadata['training_session_ids']
   end
 
   test 'assign_evaluator! fails outside the service window' do

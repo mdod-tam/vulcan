@@ -20,7 +20,7 @@
         <p class="mt-1 max-w-2xl text-sm text-gray-500">
           Application #<%= @evaluation.application_id %>
         </p>
-        <%= link_to current_user.admin? ? 'View Full Application Details' : t('evaluator_context.link'),
+        <%= link_to current_user.admin? ? 'View Full Application Details' : t('application_contact.link'),
                     current_user.admin? ? admin_application_path(@evaluation.application) : application_details_evaluators_evaluation_path(@evaluation),
                     class: "mt-1 inline-block text-sm text-indigo-600 hover:text-indigo-900" %>
       </div>
@@ -144,7 +144,7 @@
           </div>
         <% end %>
 
-        <%= render 'assessment_contacts', context: @contact_context %>
+        <%= render 'shared/application_contacts', context: @contact_context %>
 
         <% if @evaluation.attendees.any? %>
           <div class="bg-white px-4 py-5 sm:grid sm:grid-cols-3 sm:gap-4 sm:px-6">
@@ -255,7 +255,11 @@
     <% end %>
     <% (@evaluation_form_errors.keys.map(&:to_sym) - visible_form_actions - [:save_working_notes]).each do |action| %>
       <div class="mt-6">
-        <%= render 'action_errors', action: action, form: nil, form_errors: @evaluation_form_errors %>
+        <%= render(
+              'shared/action_errors',
+              action: action, form: nil, form_errors: @evaluation_form_errors,
+              heading: evaluation_action_error_heading(action)
+            ) %>
       </div>
     <% end %>
   </section>

@@ -3,367 +3,132 @@
 require 'test_helper'
 
 class TrainingSessionTest < ActiveSupport::TestCase
-  # Validations
-  test 'should be valid with required attributes' do
-    training_session = create(:training_session, :scheduled)
-    assert training_session.valid?, -> { training_session.errors.full_messages.join(', ') }
+  test 'requested appointments do not need an agreed date or a report' do
+    session = build(:training_session)
+
+    assert session.valid?, session.errors.full_messages.to_sentence
+    assert_nil session.scheduled_for
+    assert_nil session.completed_at
   end
 
-  test 'defaults duration_hours to two hours' do
-    training_session = TrainingSession.new
+  test 'scheduled appointments require a future agreed date' do
+    session = build(:training_session, :scheduled, scheduled_for: nil)
+    assert_not session.valid?
+    assert_includes session.errors[:scheduled_for], "can't be blank"
 
-    assert_equal BigDecimal('2.0'), training_session.duration_hours
+    session.scheduled_for = 1.hour.ago
+    assert_not session.valid?
+    assert_includes session.errors[:scheduled_for], 'must be in the future'
   end
 
-  test 'should require application' do
-    training_session = build(:training_session, application: nil)
-    assert_not training_session.valid?
-    assert_includes training_session.errors[:application], 'must exist'
+  test 'trainer capability is required while administrators can train' do
+    session = build(:training_session, trainer: create(:evaluator))
+    assert_not session.valid?
+    assert_includes session.errors[:trainer], 'must be a trainer'
+
+    session.trainer = create(:admin)
+    assert session.valid?, session.errors.full_messages.to_sentence
   end
 
-  test 'should require trainer' do
-    training_session = build(:training_session, trainer: nil)
-    assert_not training_session.valid?
-    assert_includes training_session.errors[:trainer], 'must exist'
-  end
+  test 'completion requires a deliberate summary language product actual time and positive duration' do
+    session = build(:training_session, :completed, constituent_summary: nil, summary_locale: nil,
+                                                   product_trained_on: nil, completed_at: nil, duration_hours: 0)
 
-  test 'should require scheduled_for unless status is requested' do
-    training_session = build(:training_session, status: :scheduled, scheduled_for: nil)
-    assert_not training_session.valid?
-    assert_includes training_session.errors[:scheduled_for], "can't be blank"
-
-    training_session = build(:training_session, status: :requested, scheduled_for: nil)
-    assert training_session.valid?
-  end
-
-  test 'trainer must be of type Users::Trainer' do
-    user = create(:user)
-    training_session = build(:training_session, trainer: user)
-    assert_not training_session.valid?
-    assert_includes training_session.errors[:trainer], 'must be a trainer'
-
-    trainer = create(:trainer)
-    training_session = build(:training_session, trainer: trainer)
-    assert training_session.valid?
-  end
-
-  test 'allows administrators as trainers through inherent capability' do
-    training_session = build(:training_session, trainer: create(:admin))
-
-    assert training_session.valid?, -> { training_session.errors.full_messages.join(', ') }
-  end
-
-  test 'does not allow evaluators as trainers even with explicit can_train capability' do
-    evaluator = create(:evaluator)
-    create(:role_capability, user: evaluator, capability: 'can_train')
-    training_session = build(:training_session, trainer: evaluator)
-
-    assert_not training_session.valid?
-    assert_includes training_session.errors[:trainer], 'must be a trainer'
-  end
-
-  test 'scheduled_for must be in the future on create' do
-    skip 'Validation behaves differently in test environment'
-
-    trainer = create(:trainer)
-    application = create(:application)
-
-    training_session = TrainingSession.new(application: application, trainer: trainer, scheduled_for: 1.year.ago, status: :scheduled)
-    # The model validates past dates in the test environment too.
-    training_session.valid?
-
-    if Rails.env.test? && training_session.errors[:scheduled_for].exclude?('must be in the future')
-      puts 'Note: In test environment, past scheduled dates are allowed'
-    else
-      assert_includes training_session.errors[:scheduled_for], 'must be in the future'
+    assert_not session.valid?
+    %i[constituent_summary summary_locale product_trained_on completed_at duration_hours].each do |attribute|
+      assert session.errors[attribute].any?, "Missing error on #{attribute}"
     end
-
-    training_session = TrainingSession.new(application: application, trainer: trainer, scheduled_for: 1.day.from_now, status: :scheduled)
-    assert training_session.valid?
-
-    # The model also validates changes to scheduled_for on persisted sessions.
-    existing_session = create(:training_session, :scheduled, scheduled_for: 1.day.from_now)
-    existing_session.scheduled_for = 1.day.ago
-    assert existing_session.valid?
+    assert_nil session.completed_at, 'validation must not invent an occurrence time'
   end
 
-  # Conditional validations
-  test 'should require cancellation_reason if status is cancelled' do
-    training_session = build(:training_session, :scheduled)
-    training_session.status = :cancelled
-    training_session.cancellation_reason = nil
-    assert_not training_session.valid?
-    assert_includes training_session.errors[:cancellation_reason], "can't be blank"
+  test 'internal notes are optional and do not supply the shared summary' do
+    session = build(:training_session, :completed, internal_notes: nil)
+    assert session.valid?, session.errors.full_messages.to_sentence
 
-    training_session.cancellation_reason = 'User cancelled'
-    assert training_session.valid?
+    session.internal_notes = 'Private observations'
+    session.constituent_summary = ' '
+    assert_not session.valid?
+    assert_includes session.errors[:constituent_summary], "can't be blank"
   end
 
-  test 'should require no_show_notes if status is no_show' do
-    training_session = build(:training_session, :scheduled)
-    training_session.status = :no_show
-    training_session.no_show_notes = nil
-    assert_not training_session.valid?
-    assert_includes training_session.errors[:no_show_notes], "can't be blank"
+  test 'completion rejects future actual time while allowing an early visit' do
+    session = build(:training_session, :completed, scheduled_for: 1.week.from_now, completed_at: 1.hour.ago)
+    assert session.valid?, session.errors.full_messages.to_sentence
 
-    training_session.no_show_notes = 'Did not show up'
-    assert training_session.valid?
+    session.completed_at = 1.hour.from_now
+    assert_not session.valid?
+    assert_includes session.errors[:completed_at], 'cannot be in the future'
   end
 
-  test 'should require notes if status is completed' do
-    training_session = build(:training_session, :scheduled)
-    training_session.status = :completed
-    training_session.notes = nil
-    assert_not training_session.valid?
-    assert_includes training_session.errors[:notes], "can't be blank"
+  test 'completion language must be supported' do
+    session = build(:training_session, :completed, summary_locale: 'invented')
 
-    training_session.notes = 'Training completed successfully'
-    assert training_session.valid?
+    assert_not session.valid?
+    assert session.errors[:summary_locale].any?
   end
 
-  test 'should require positive duration_hours if status is completed' do
-    training_session = build(:training_session, :scheduled, status: :completed, notes: 'Training completed successfully')
+  test 'completion cannot precede request creation even when it precedes the planned appointment' do
+    created_at = 2.days.ago
+    session = build(:training_session, :completed, created_at: created_at, completed_at: created_at - 1.minute)
 
-    training_session.duration_hours = nil
-    assert_not training_session.valid?
-    assert_includes training_session.errors[:duration_hours], "can't be blank"
+    assert_not session.valid?
+    assert_includes session.errors[:completed_at], I18n.t('training_rules.completion_before_creation')
 
-    training_session.duration_hours = 0
-    assert_not training_session.valid?
-    assert_includes training_session.errors[:duration_hours], 'must be greater than 0'
-
-    training_session.duration_hours = 2.5
-    assert training_session.valid?, -> { training_session.errors.full_messages.join(', ') }
+    session.completed_at = created_at
+    assert session.valid?, session.errors.full_messages.to_sentence
   end
 
-  test 'should allow multiple open sessions while training slots remain' do
-    update_max_training_sessions(3)
-    application = create(:application, :old_enough_for_new_application)
-    create(:training_session, :scheduled, application: application)
+  test 'only one unresolved appointment is permitted even below quota' do
+    Policy.stubs(:max_training_sessions).returns(3)
+    existing = create(:training_session, :scheduled)
+    second = build(:training_session, application: existing.application, trainer: existing.trainer)
 
-    additional_session = build(:training_session, :scheduled, application: application)
-
-    assert additional_session.valid?, -> { additional_session.errors.full_messages.join(', ') }
+    assert_not second.valid?
+    assert_includes second.errors[:base], 'Record the outcome of the open appointment first.'
   end
 
-  test 'should reject open sessions when reserved training slots are exhausted' do
-    update_max_training_sessions(2)
-    application = create(:application, :old_enough_for_new_application)
+  test 'the database rejects a second unresolved appointment' do
+    existing = create(:training_session, :scheduled)
+    duplicate = existing.attributes.except('id').merge('status' => TrainingSession.statuses[:requested], 'scheduled_for' => nil)
+
+    assert_raises(ActiveRecord::RecordNotUnique) do
+      TrainingSession.transaction(requires_new: true) { TrainingSession.insert_all!([duplicate]) }
+    end
+    assert_equal [existing.id], existing.application.training_sessions.assigned_or_scheduled.pluck(:id)
+  end
+
+  test 'the final reserved slot remains editable and can be closed at quota' do
+    Policy.stubs(:max_training_sessions).returns(1)
+    session = create(:training_session, :scheduled)
+
+    session.internal_notes = 'Preparation retained'
+    assert session.valid?, session.errors.full_messages.to_sentence
+    session.assign_attributes(status: :cancelled, cancellation_reason: 'Requested cancellation')
+    assert session.valid?, session.errors.full_messages.to_sentence
+  end
+
+  test 'historical outcomes cannot reopen or replace another recorded outcome' do
+    session = create(:training_session, :cancelled)
+    session.assign_attributes(status: :scheduled, scheduled_for: 1.day.from_now)
+    assert_not session.valid?
+    assert_includes session.errors[:base], I18n.t('activerecord.errors.models.training_session.attributes.base.historical_session_reopen')
+
+    session.assign_attributes(status: :no_show, no_show_notes: 'Later interpretation')
+    assert_not session.valid?
+    assert_includes session.errors[:base], 'A recorded appointment outcome cannot be replaced.'
+  end
+
+  test 'appointment ordinals and prior reports use deterministic creation order' do
+    Policy.stubs(:max_training_sessions).returns(5)
+    application = create(:application, :approved, application_date: Date.current)
     trainer = create(:trainer)
-    create(:training_session, :scheduled, application: application, trainer: trainer)
-    create(:training_session, :completed, application: application, trainer: trainer)
+    timestamp = 2.days.ago
+    first = create(:training_session, :completed, application: application, trainer: trainer, created_at: timestamp)
+    second = create(:training_session, :completed, application: application, trainer: trainer, created_at: timestamp)
+    current = create(:training_session, application: application, trainer: trainer, created_at: timestamp)
+    create(:training_session, :completed)
 
-    additional_session = build(:training_session, :scheduled, application: application, trainer: trainer)
-
-    assert_not additional_session.valid?
-    assert_includes additional_session.errors[:base],
-                    I18n.t('activerecord.errors.models.training_session.attributes.base.training_session_quota_exhausted')
-  end
-
-  test 'should allow updates to an existing open session' do
-    training_session = create(:training_session, :scheduled)
-
-    training_session.notes = 'Updated preparation notes'
-
-    assert training_session.valid?, -> { training_session.errors.full_messages.join(', ') }
-  end
-
-  test 'should not reopen historical sessions' do
-    training_session = create(:training_session, :cancelled)
-
-    training_session.status = :scheduled
-    training_session.scheduled_for = 1.week.from_now
-
-    assert_not training_session.valid?
-    assert_includes training_session.errors[:base], I18n.t('activerecord.errors.models.training_session.attributes.base.historical_session_reopen')
-  end
-
-  # Callbacks
-  test 'set_completed_at should set completed_at when status changes to completed' do
-    training_session = create(:training_session, :scheduled)
-    assert_nil training_session.completed_at
-    training_session.status = :completed
-    training_session.notes = 'Completed notes'
-    training_session.save!
-    assert_not_nil training_session.completed_at
-  end
-
-  test 'set_completed_at should not change completed_at if already set' do
-    training_session = create(:training_session, :scheduled, scheduled_for: 2.days.from_now)
-    training_session.update!(status: :completed, completed_at: 1.day.ago, notes: 'Initial notes')
-
-    completed_at = training_session.completed_at
-    training_session.notes = 'Updated notes'
-    training_session.save!
-    assert_equal completed_at, training_session.completed_at
-  end
-
-  test 'set_cancelled_at should set cancelled_at when status changes to cancelled' do
-    training_session = create(:training_session, :scheduled)
-    assert_nil training_session.cancelled_at
-    training_session.status = :cancelled
-    training_session.cancellation_reason = 'User cancelled'
-    training_session.save!
-    assert_not_nil training_session.cancelled_at
-  end
-
-  test 'set_cancelled_at should not change cancelled_at if already set' do
-    training_session = create(:training_session, :cancelled)
-    cancelled_at = training_session.cancelled_at
-    training_session.cancellation_reason = 'Updated reason'
-    training_session.save!
-    assert_equal cancelled_at, training_session.cancelled_at
-  end
-
-  test 'ensure_status_schedule_consistency should update status to scheduled if scheduled_for is added to a requested session' do
-    training_session = create(:training_session, :requested)
-    assert_equal 'requested', training_session.status
-    training_session.scheduled_for = 1.day.from_now
-    training_session.save!
-    assert_equal 'scheduled', training_session.status
-  end
-
-  test 'ensure_status_schedule_consistency should prevent removing scheduled_for from scheduled/confirmed sessions' do
-    training_session = create(:training_session, :scheduled)
-    training_session.scheduled_for = nil
-    assert_not training_session.valid?
-    assert_includes training_session.errors[:scheduled_for], "can't be blank"
-
-    # Add coverage for confirmed sessions.
-    # training_session_confirmed = create(:training_session, status: :confirmed, trainer: trainer, application: application, scheduled_for: 1.day.from_now)
-    # training_session_confirmed.scheduled_for = nil
-    # assert_not training_session_confirmed.valid?
-    # assert_includes training_session_confirmed.errors[:scheduled_for], "cannot be removed while status is confirmed"
-  end
-
-  # Helper methods
-  test 'rescheduling? should be true when scheduled_for changes on a persisted record' do
-    training_session = create(:training_session, :scheduled)
-    assert_not training_session.rescheduling?
-
-    training_session.status
-    training_session.scheduled_for = 2.days.from_now
-
-    # Hold status_was at scheduled to isolate the date change.
-    training_session.define_singleton_method(:status_was) { 'scheduled' }
-
-    assert training_session.rescheduling?
-
-    requested_session = create(:training_session, :scheduled)
-    requested_session.define_singleton_method(:status_was) { 'scheduled' }
-    requested_session.scheduled_for = 1.day.from_now
-    assert requested_session.rescheduling?
-  end
-
-  test 'rescheduling? should be false for new records' do
-    training_session = build(:training_session, :scheduled)
-    assert_not training_session.rescheduling?
-  end
-
-  test 'rescheduling? should be false if only status changes' do
-    training_session = create(:training_session, :scheduled)
-    original_scheduled_for = training_session.scheduled_for
-    training_session.status = :completed
-    training_session.notes = 'Completed notes'
-    training_session.scheduled_for = original_scheduled_for
-    assert_not training_session.rescheduling?
-  end
-
-  # Associations
-  test 'should belong to an application' do
-    training_session = create(:training_session)
-    assert_instance_of Application, training_session.application
-    assert_not_nil training_session.application.id
-  end
-
-  test 'should belong to a trainer' do
-    training_session = create(:training_session)
-    assert_instance_of Users::Trainer, training_session.trainer
-    assert_equal 'Users::Trainer', training_session.trainer.type
-    assert_not_nil training_session.trainer.id
-  end
-
-  test 'should have one constituent through application' do
-    training_session = create(:training_session)
-    assert_instance_of Users::Constituent, training_session.constituent
-    assert_equal training_session.application.user, training_session.constituent
-  end
-
-  test 'should optionally belong to a product_trained_on' do
-    training_session = create(:training_session, :scheduled, scheduled_for: 2.days.from_now)
-    product = create(:product)
-    training_session.update!(status: :completed, completed_at: 1.day.ago, notes: 'Completed notes', product_trained_on: product)
-
-    assert_instance_of Product, training_session.product_trained_on
-    assert_equal product, training_session.product_trained_on
-
-    training_session_no_product = create(:training_session)
-    assert_nil training_session_no_product.product_trained_on
-  end
-
-  test 'previous_completed_sessions returns earlier completed sessions for the same application newest first' do
-    update_max_training_sessions(4)
-    application = create(:application)
-    trainer = create(:trainer)
-    old_completed_session = create(
-      :training_session,
-      :completed,
-      application: application,
-      trainer: trainer,
-      completed_at: 5.days.ago,
-      created_at: 6.days.ago
-    )
-    recent_completed_session = create(
-      :training_session,
-      :completed,
-      application: application,
-      trainer: trainer,
-      completed_at: 3.days.ago,
-      created_at: 4.days.ago
-    )
-    create(
-      :training_session,
-      :completed,
-      application: application,
-      trainer: trainer,
-      completed_at: 1.hour.ago,
-      created_at: 1.hour.ago
-    )
-    create(:training_session, :cancelled, application: application, trainer: trainer, created_at: 5.days.ago)
-    current_session = create(:training_session, :requested, application: application, trainer: trainer, created_at: 2.days.ago)
-    create(:training_session, :completed, created_at: 6.days.ago)
-
-    assert_equal [recent_completed_session, old_completed_session], current_session.previous_completed_sessions.to_a
-  end
-
-  # Scopes
-  test 'completed_sessions scope should return only completed sessions' do
-    completed_session = create(:training_session, :scheduled, scheduled_for: 2.days.from_now)
-    completed_session.assign_attributes(status: :completed, completed_at: 1.day.ago, notes: 'Completed')
-    completed_session.save(validate: false)
-
-    scheduled_session = create(:training_session, :scheduled)
-    cancelled_session = create(:training_session, :cancelled)
-    requested_session = create(:training_session, :requested)
-    no_show_session = create(:training_session, :no_show)
-
-    completed_sessions = TrainingSession.completed_sessions
-    assert_includes completed_sessions, completed_session
-    assert_not_includes completed_sessions, scheduled_session
-    assert_not_includes completed_sessions, cancelled_session
-    assert_not_includes completed_sessions, requested_session
-    assert_not_includes completed_sessions, no_show_session
-    assert_equal 1, completed_sessions.count
-  end
-
-  # Add tests for NotificationDelivery if needed.
-  # Add tests for StatusManagement if needed.
-
-  private
-
-  def update_max_training_sessions(value)
-    policy = Policy.find_or_create_by(key: 'max_training_sessions')
-    policy.updated_by = create(:admin)
-    policy.update!(value: value)
+    assert_equal [1, 2, 3], [first, second, current].map(&:appointment_number)
+    assert_equal [second.id, first.id], current.previous_completed_sessions.pluck(:id)
   end
 end

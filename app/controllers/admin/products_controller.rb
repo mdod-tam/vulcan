@@ -13,7 +13,9 @@ module Admin
       @products_by_type = group_products_by_type(@products)
     end
 
-    def show; end
+    def show
+      @product_resources = @product.product_resources.with_attached_document.by_language_and_title
+    end
 
     def new
       @product = Product.new

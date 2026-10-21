@@ -1,0 +1,5 @@
+en:
+  training_session_notifications:
+    training_completed:
+      report_accessible: "Sign in to read the written session summary and find guidance for the product used during training:"
+      report_managed: "Ask the managing guardian to sign in to read the training report. Contact the program if you need help accessing it."

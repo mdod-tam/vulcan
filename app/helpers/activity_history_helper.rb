@@ -7,8 +7,8 @@ module ActivityHistoryHelper
     'training_cancelled' => 'Training Cancelled',
     'training_rescheduled' => 'Training Rescheduled',
     'training_followup_scheduled' => 'Follow-up Training Scheduled',
-    'training_no_show' => 'No Show',
-    'training_missed' => 'No Show',
+    'training_no_show' => 'No show',
+    'training_missed' => 'No show',
     'evaluation_scheduled' => 'Evaluation Scheduled',
     'evaluation_completed' => 'Evaluation Completed',
     'evaluation_cancelled' => 'Evaluation Cancelled',
@@ -39,17 +39,19 @@ module ActivityHistoryHelper
 
     details = case event.action
               when 'training_scheduled'
-                scheduled_detail(metadata, 'scheduled_for', 'Scheduled for')
+                training_scheduled_detail(metadata)
               when 'training_completed'
                 completed_training_detail(metadata)
-              when 'training_cancelled', 'evaluation_cancelled'
+              when 'training_cancelled'
+                training_cancellation_detail(metadata)
+              when 'evaluation_cancelled'
                 cancellation_detail(metadata)
               when 'training_rescheduled'
-                rescheduled_detail(metadata, old_key: 'old_scheduled_for', new_key: 'new_scheduled_for')
+                training_rescheduled_detail(metadata)
               when 'training_followup_scheduled'
                 followup_scheduled_detail(metadata)
               when 'training_no_show', 'training_missed'
-                metadata_value(metadata, 'no_show_notes').presence || 'Marked as no show'
+                I18n.t('training_activity.no_show')
               when 'evaluation_no_show'
                 metadata_value(metadata, 'no_show_notes').presence || 'Marked as no-show'
               when 'evaluation_scheduled'
@@ -62,21 +64,21 @@ module ActivityHistoryHelper
                 evaluator_assigned_detail(metadata)
               end
 
-    details.presence || STATIC_ACTIVITY_DETAILS.fetch(event.action, 'No additional details recorded')
+    details.presence || STATIC_ACTIVITY_DETAILS.fetch(event.action, I18n.t('activity_history.table.no_details'))
   end
 
   def activity_actor_name(event)
-    event.user&.full_name.presence || 'System'
+    event.user&.full_name.presence || I18n.t('activity_history.table.system')
   end
 
   def activity_subject_name(event)
     activity_subject_record(event)&.then do |record|
       constituent_name_for(record)
-    end.presence || 'Unknown constituent'
+    end.presence || I18n.t('activity_history.table.unknown_constituent')
   end
 
   def activity_source_label(event)
-    'Application' if APPLICATION_ACTIONS.include?(event.action)
+    I18n.t('activity_history.table.application') if APPLICATION_ACTIONS.include?(event.action)
   end
 
   private
@@ -116,19 +118,47 @@ module ActivityHistoryHelper
     parts.join('. ')
   end
 
+  def training_scheduled_detail(metadata)
+    return unless metadata_value(metadata, 'scheduled_for')
+
+    I18n.t('training_activity.scheduled_for', time: format_training_activity_time(metadata['scheduled_for']))
+  end
+
   def followup_scheduled_detail(metadata)
+    return unless metadata_value(metadata, 'scheduled_for')
+
+    I18n.t('training_activity.followup_scheduled_for', time: format_training_activity_time(metadata['scheduled_for']))
+  end
+
+  def training_rescheduled_detail(metadata)
     parts = []
-    parts << scheduled_detail(metadata, 'scheduled_for', I18n.t('activity_history.details.followup_scheduled_for'))
-    parts << I18n.t('activity_history.details.reason', reason: metadata_value(metadata, 'reason')) if metadata_value(metadata, 'reason')
-    parts.compact_blank.join('. ')
+    parts << I18n.t('training_activity.rescheduled_from', time: format_training_activity_time(metadata['old_scheduled_for'])) if metadata_value(metadata,
+                                                                                                                                                'old_scheduled_for')
+    parts << I18n.t('training_activity.rescheduled_to', time: format_training_activity_time(metadata['new_scheduled_for'])) if metadata_value(metadata,
+                                                                                                                                              'new_scheduled_for')
+    parts.join('. ')
+  end
+
+  def training_cancellation_detail(metadata)
+    initiator = metadata_value(metadata, 'cancellation_initiator')
+    return I18n.t('training_activity.cancelled') unless %w[constituent trainer admin program].include?(initiator.to_s)
+
+    I18n.t('training_activity.cancelled_by', initiator: I18n.t("training_activity.initiators.#{initiator}"))
   end
 
   def completed_training_detail(metadata)
     parts = []
-    parts << "Completed #{format_activity_time(metadata_value(metadata, 'completed_at'))}" if metadata_value(metadata, 'completed_at')
-    parts << "Product: #{metadata_value(metadata, 'product_trained_on')}" if metadata_value(metadata, 'product_trained_on')
-    parts << "Notes: #{metadata_value(metadata, 'notes')}" if metadata_value(metadata, 'notes')
+    parts << I18n.t('training_activity.actual_completion', time: format_training_activity_time(metadata['completed_at'])) if metadata_value(metadata, 'completed_at')
+    parts << I18n.t('training_activity.report_submitted', time: format_training_activity_time(metadata['report_submitted_at'])) if metadata_value(metadata,
+                                                                                                                                                  'report_submitted_at')
+    parts << I18n.t('training_activity.duration', hours: metadata['duration_hours']) if metadata_value(metadata, 'duration_hours')
+    parts << I18n.t('training_activity.product', name: metadata['product_trained_on_name']) if metadata_value(metadata, 'product_trained_on_name')
     parts.join('. ')
+  end
+
+  def format_training_activity_time(value)
+    time = parse_activity_time(value)
+    time ? I18n.l(time, format: :long) : I18n.t('training_activity.time_unavailable')
   end
 
   def completed_evaluation_detail(metadata)

@@ -1,0 +1,13 @@
+es:
+  training_history:
+    title: "Historial y resúmenes de capacitación"
+    back: "Volver al panel"
+    empty: "Todavía no hay informes de capacitación completados."
+    session: "Sesión n.º %{number}"
+    open: "Leer el resumen y los recursos del producto"
+    completed: "Completada el %{date} con %{trainer}."
+    summary: "Lo que cubrimos"
+    language: "Escrito en %{language}. No se proporciona traducción automática."
+    product: "Recursos para %{name}"
+    product_help: "Este es el producto usado durante la capacitación. Puede haber sido un modelo de demostración y no indica propiedad."
+    devices: "Dispositivos"

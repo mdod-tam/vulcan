@@ -55,9 +55,9 @@ module ApplicationHelper
                 )}")
   end
 
-  def training_session_status_badge(session)
+  def training_session_status_badge(session, label: nil)
     content_tag(:span,
-                badge_label_for(:training_session, session.status),
+                label || badge_label_for(:training_session, session.status),
                 class: "px-3 py-2 text-sm font-medium rounded-full whitespace-nowrap inline-flex items-center justify-center #{badge_class_for(
                   :training_session, session.status
                 )}")
@@ -66,7 +66,7 @@ module ApplicationHelper
   def training_duration_hours_label(duration_hours)
     hours = number_with_precision(duration_hours, precision: 2, strip_insignificant_zeros: true)
 
-    "#{hours} #{'hour'.pluralize(hours.to_f)}"
+    t('trainer_workflow.duration_label', count: duration_hours.to_f, hours: hours)
   end
 
   def medical_certification_status_badge(application)

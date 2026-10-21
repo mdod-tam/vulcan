@@ -1,0 +1,7 @@
+es:
+  training_feedback:
+    save_warning: "Se guardó. No se pudo poner el aviso en cola; comuníquese con el programa. No vuelva a enviarlo."
+    request_warning: "Se guardó su solicitud. No se pudo poner el aviso en cola; comuníquese con el programa. No vuelva a enviarla."
+    coverage_changed: "La asignación de capacitación cambió."
+    access_denied: "Acceso denegado"
+    open_appointment: "Cita pendiente: sesión n.º %{number}"

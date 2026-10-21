@@ -5,96 +5,42 @@ module TrainingSessions
     def initialize(source_training_session, current_user, params)
       super()
       @source_training_session = source_training_session
-      @current_user = current_user
+      @actor = current_user
       @params = params
     end
 
     def call
-      validate_params!
+      source = @source_training_session
+      application = source.application
+      source.with_current_trainer_lock(@actor) do
+        eligibility_error = application.new_training_work_eligibility_error(actor: @actor, source: source)
+        raise OperationError, eligibility_error if eligibility_error
+        raise OperationError, I18n.t('training_sessions.schedule_follow_up.invalid_source') unless application.latest_training_follow_up_session&.id == source.id
 
-      application.with_lock do
-        validate_application_state!
-        create_follow_up_session!
-        create_event!
+        if @params[:reschedule_reason].blank?
+          source.errors.add(:reschedule_reason, I18n.t('training_rules.follow_up_reason_required'))
+          raise ActiveRecord::RecordInvalid, source
+        end
+
+        @training_session = application.training_sessions.create!(
+          trainer: application.assigned_trainer, status: :scheduled, scheduled_for: @params[:scheduled_for],
+          location: @params[:location], internal_notes: @params[:internal_notes], reschedule_reason: @params[:reschedule_reason]
+        )
+        AuditEventService.log(
+          actor: @actor, action: 'training_followup_scheduled', auditable: @training_session,
+          metadata: { application_id: application.id, training_session_id: @training_session.id,
+                      previous_training_session_id: source.id, previous_training_session_status: source.status,
+                      scheduled_for: @training_session.scheduled_for.iso8601 }
+        )
+        @notification_outcome = TrainingSessionNotifier.new(
+          @training_session, actor: @actor, action: 'training_scheduled'
+        ).deliver_after_commit
       end
-
-      success(I18n.t('training_sessions.schedule_follow_up.success'), { training_session: @follow_up_session })
+      success(I18n.t('training_sessions.schedule_follow_up.success'), { training_session: @training_session, notification_outcome: @notification_outcome })
     rescue ActiveRecord::RecordInvalid => e
-      Rails.logger.error("Error scheduling follow-up training session: #{e.message}")
+      failure(e.record.errors.full_messages.to_sentence, { training_session: e.record })
+    rescue OperationError => e
       failure(e.message)
-    rescue ArgumentError => e
-      Rails.logger.warn("TrainingSessions::ScheduleFollowUpService validation failed: #{e.message}")
-      failure(e.message)
-    rescue StandardError => e
-      Rails.logger.error("Unexpected error scheduling follow-up training session: #{e.message}")
-      failure(I18n.t('training_sessions.schedule_follow_up.unexpected_error', message: e.message))
-    end
-
-    private
-
-    attr_reader :source_training_session
-
-    def application
-      @application ||= source_training_session.application
-    end
-
-    def validate_params!
-      raise ArgumentError, I18n.t('training_sessions.schedule_follow_up.invalid_source') unless source_training_session.can_schedule_followup?
-
-      raise ArgumentError, I18n.t('training_sessions.schedule_follow_up.missing_required_fields') if @params[:scheduled_for].blank? || @params[:reschedule_reason].blank?
-
-      validate_scheduled_time!
-    end
-
-    def validate_application_state!
-      raise ArgumentError, I18n.t('training_sessions.schedule_follow_up.service_window_closed') unless application.service_window_active?
-      raise ArgumentError, I18n.t('training_sessions.schedule_follow_up.quota_exhausted') if application.training_session_quota_exhausted?
-    end
-
-    def validate_scheduled_time!
-      raise ArgumentError, I18n.t('training_sessions.schedule_follow_up.invalid_scheduled_for') unless scheduled_for
-      return if scheduled_for > Time.current
-
-      raise ArgumentError, I18n.t('training_sessions.schedule_follow_up.scheduled_for_in_future')
-    end
-
-    def scheduled_for
-      @scheduled_for ||= case @params[:scheduled_for]
-                         when Time, ActiveSupport::TimeWithZone
-                           @params[:scheduled_for]
-                         else
-                           Time.zone.parse(@params[:scheduled_for].to_s)
-                         end
-    rescue ArgumentError, TypeError
-      nil
-    end
-
-    def create_follow_up_session!
-      @follow_up_session = application.training_sessions.create!(
-        trainer: source_training_session.trainer,
-        status: :scheduled,
-        scheduled_for: scheduled_for,
-        location: @params[:location],
-        reschedule_reason: @params[:reschedule_reason]
-      )
-    end
-
-    def create_event!
-      AuditEventService.log(
-        actor: @current_user,
-        action: 'training_followup_scheduled',
-        auditable: @follow_up_session,
-        metadata: {
-          application_id: application.id,
-          training_session_id: @follow_up_session.id,
-          previous_training_session_id: source_training_session.id,
-          previous_training_session_status: source_training_session.status,
-          scheduled_for: @follow_up_session.scheduled_for&.iso8601,
-          reason: @follow_up_session.reschedule_reason,
-          location: @follow_up_session.location,
-          timestamp: Time.current.iso8601
-        }
-      )
     end
   end
 end

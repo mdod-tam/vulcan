@@ -133,12 +133,15 @@ class MailQueueBoundaryTest < ActiveSupport::TestCase
   end
 
   test 'training stays committed but its notification reports a deferred queue failure' do
-    @application = create(:application, user: @user)
     @trainer = create(:trainer)
-    @training_session = create(:training_session, :scheduled, application: @application, trainer: @trainer)
+    @application = create(:application, :approved, :with_all_proofs, user: @user, assigned_trainer: @trainer, application_date: Date.current)
+    @training_session = create(:training_session, application: @application, trainer: @trainer)
+    load_seeded_email_templates('training_session_notifications_training_scheduled')
     reject_mail_inserts!
 
-    TrainingSessionNotifier.new(@training_session).deliver_all
+    result = TrainingSessions::ScheduleService.new(@training_session, @trainer, scheduled_for: 2.days.from_now).call
+    assert result.success?, result.message
+    assert_equal :failed, result.data[:notification_outcome].status
 
     assert @training_session.reload.status_scheduled?
     notification = Notification.find_by!(notifiable: @training_session, action: 'training_scheduled')

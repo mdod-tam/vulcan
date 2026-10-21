@@ -1,0 +1,34 @@
+en:
+  training_activity:
+    scheduled_for: "Scheduled for %{time}"
+    followup_scheduled_for: "Follow-up scheduled for %{time}"
+    rescheduled_from: "From %{time}"
+    rescheduled_to: "To %{time}"
+    cancelled: "Training cancelled"
+    cancelled_by: "Cancelled by %{initiator}"
+    actual_completion: "Actual completion: %{time}"
+    report_submitted: "Report submitted: %{time}"
+    duration: "Duration: %{hours} hours"
+    product: "Product: %{name}"
+    no_show: "Marked as no show"
+    time_unavailable: "Time unavailable"
+    initiators:
+      constituent: "constituent"
+      trainer: "trainer"
+      admin: "administrator"
+      program: "program"
+
+  activity_history:
+    table:
+      title: "Activity History"
+      scroll_region: "Scrollable activity history table"
+      date: "Date"
+      activity: "Activity"
+      constituent: "Constituent"
+      user: "User"
+      details: "Details"
+      empty: "No activity has been recorded yet."
+      no_details: "No additional details recorded"
+      system: "System"
+      unknown_constituent: "Unknown constituent"
+      application: "Application"

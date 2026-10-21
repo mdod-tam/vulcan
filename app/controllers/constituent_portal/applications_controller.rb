@@ -2,6 +2,10 @@
 
 module ConstituentPortal
   class ApplicationsController < ApplicationController
+    include ViewerLocale
+
+    around_action :with_viewer_locale, only: :request_training
+
     include ParamCasting
     include ApplicationFormHandling
     include ApplicationDataStructures
@@ -128,7 +132,7 @@ module ConstituentPortal
     end
 
     def request_training
-      @application = current_user.applications.find(params[:id])
+      @application = Application.accessible_by(current_user).find(params.expect(:id))
 
       result = Applications::TrainingRequestService.new(
         application: @application,
@@ -136,6 +140,7 @@ module ConstituentPortal
       ).call
 
       if result.success?
+        flash[:alert] = t('training_feedback.request_warning') if result.data.fetch(:notification_outcomes).intersect?(%i[failed suppressed])
         redirect_with_notice(constituent_portal_dashboard_path, result.message)
       else
         redirect_with_alert(constituent_portal_dashboard_path, result.message)

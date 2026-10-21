@@ -10,7 +10,7 @@
 #
 # It's strongly recommended that you check this file into your version control system.
 
-ActiveRecord::Schema[8.1].define(version: 2026_10_19_180000) do
+ActiveRecord::Schema[8.1].define(version: 2026_10_20_124000) do
   # These are extensions that must be enabled in order to support this database
   enable_extension "pg_catalog.plpgsql"
 
@@ -147,6 +147,8 @@ ActiveRecord::Schema[8.1].define(version: 2026_10_19_180000) do
     t.bigint "user_id", null: false
     t.jsonb "autosave_revisions", default: {}, null: false
     t.datetime "equipment_needs_initialized_at"
+    t.bigint "assigned_trainer_id"
+    t.index ["assigned_trainer_id"], name: "index_applications_on_assigned_trainer_id"
     t.index ["document_signing_service"], name: "index_applications_on_document_signing_service"
     t.index ["document_signing_status"], name: "index_applications_on_document_signing_status"
     t.index ["document_signing_submission_id"], name: "index_applications_on_document_signing_submission_id"
@@ -553,6 +555,17 @@ ActiveRecord::Schema[8.1].define(version: 2026_10_19_180000) do
     t.check_constraint "letter_type >= 0 AND letter_type <= 13", name: "check_print_queue_items_on_letter_type"
   end
 
+  create_table "product_resources", force: :cascade do |t|
+    t.bigint "product_id", null: false
+    t.string "title", null: false
+    t.string "locale", null: false
+    t.text "url"
+    t.datetime "created_at", null: false
+    t.datetime "updated_at", null: false
+    t.index ["product_id", "locale"], name: "index_product_resources_on_product_id_and_locale"
+    t.index ["product_id"], name: "index_product_resources_on_product_id"
+  end
+
   create_table "products", force: :cascade do |t|
     t.datetime "archived_at"
     t.text "compatibility_notes"
@@ -878,14 +891,18 @@ ActiveRecord::Schema[8.1].define(version: 2026_10_19_180000) do
     t.decimal "duration_hours", precision: 5, scale: 2, default: "2.0", null: false
     t.string "location"
     t.text "no_show_notes"
-    t.text "notes"
+    t.text "internal_notes"
     t.bigint "product_trained_on_id"
     t.text "reschedule_reason"
     t.datetime "scheduled_for"
     t.integer "status", default: 0
     t.bigint "trainer_id", null: false
     t.datetime "updated_at", null: false
+    t.text "constituent_summary"
+    t.string "summary_locale"
+    t.datetime "report_submitted_at"
     t.index ["application_id"], name: "index_training_sessions_on_application_id"
+    t.index ["application_id"], name: "index_training_sessions_one_open_per_application", unique: true, where: "(status = ANY (ARRAY[0, 1, 2]))"
     t.index ["product_trained_on_id"], name: "index_training_sessions_on_product_trained_on_id"
     t.index ["trainer_id"], name: "index_training_sessions_on_trainer_id"
   end
@@ -1138,6 +1155,7 @@ ActiveRecord::Schema[8.1].define(version: 2026_10_19_180000) do
   add_foreign_key "application_status_changes", "applications"
   add_foreign_key "application_status_changes", "users"
   add_foreign_key "applications", "users"
+  add_foreign_key "applications", "users", column: "assigned_trainer_id"
   add_foreign_key "applications", "users", column: "income_verified_by_id"
   add_foreign_key "applications", "users", column: "managing_guardian_id"
   add_foreign_key "applications", "users", column: "medical_certification_verified_by_id"
@@ -1178,6 +1196,7 @@ ActiveRecord::Schema[8.1].define(version: 2026_10_19_180000) do
   add_foreign_key "print_queue_items", "secure_request_forms"
   add_foreign_key "print_queue_items", "users", column: "admin_id"
   add_foreign_key "print_queue_items", "users", column: "constituent_id"
+  add_foreign_key "product_resources", "products"
   add_foreign_key "proof_reviews", "applications"
   add_foreign_key "proof_reviews", "users", column: "admin_id"
   add_foreign_key "purchase_orders", "users", column: "vendor_id"

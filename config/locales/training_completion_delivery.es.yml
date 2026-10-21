@@ -1,0 +1,5 @@
+es:
+  training_session_notifications:
+    training_completed:
+      report_accessible: "Inicie sesión para leer el resumen escrito de la sesión y encontrar orientación sobre el producto utilizado durante la capacitación:"
+      report_managed: "Pida al tutor responsable que inicie sesión para leer el informe de capacitación. Comuníquese con el programa si necesita ayuda para acceder a él."

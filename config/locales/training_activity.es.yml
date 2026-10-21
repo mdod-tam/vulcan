@@ -1,0 +1,34 @@
+es:
+  training_activity:
+    scheduled_for: "Programada para %{time}"
+    followup_scheduled_for: "Seguimiento programado para %{time}"
+    rescheduled_from: "De %{time}"
+    rescheduled_to: "A %{time}"
+    cancelled: "Capacitación cancelada"
+    cancelled_by: "Cancelada por %{initiator}"
+    actual_completion: "Finalización real: %{time}"
+    report_submitted: "Informe presentado: %{time}"
+    duration: "Duración: %{hours} horas"
+    product: "Producto: %{name}"
+    no_show: "Marcada como ausencia"
+    time_unavailable: "Hora no disponible"
+    initiators:
+      constituent: "la persona participante"
+      trainer: "el instructor"
+      admin: "el administrador"
+      program: "el programa"
+
+  activity_history:
+    table:
+      title: "Historial de actividad"
+      scroll_region: "Tabla desplazable del historial de actividad"
+      date: "Fecha"
+      activity: "Actividad"
+      constituent: "Persona participante"
+      user: "Usuario"
+      details: "Detalles"
+      empty: "Aún no se ha registrado actividad."
+      no_details: "No se registraron detalles adicionales"
+      system: "Sistema"
+      unknown_constituent: "Persona participante desconocida"
+      application: "Solicitud"

@@ -1,15 +1,15 @@
 <div class="container mx-auto max-w-5xl px-4 py-8">
   <div class="mb-6 flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
-    <h1 class="text-2xl font-bold"><%= t('evaluator_context.title') %></h1>
-    <%= link_to t('evaluator_context.back'), evaluators_evaluation_path(@evaluation),
+    <h1 class="text-2xl font-bold"><%= t('application_contact.title') %></h1>
+    <%= link_to t('application_contact.back'), evaluators_evaluation_path(@evaluation),
                 class: 'inline-flex min-h-10 items-center rounded border border-indigo-300 px-4 py-2 text-indigo-700 ' \
                        'focus:outline-none focus:ring-2 focus:ring-indigo-500' %>
   </div>
-  <p class="mb-6 text-gray-600"><%= t('evaluator_context.help') %></p>
+  <p class="mb-6 text-gray-600"><%= t('application_contact.help') %></p>
   <section class="rounded-lg bg-white p-6 shadow" aria-labelledby="assessment-contact-heading">
     <h2 id="assessment-contact-heading" class="mb-4 text-xl font-semibold"><%= @contact_context.applicant.full_name %></h2>
     <dl class="divide-y divide-gray-200">
-      <%= render 'assessment_contacts', context: @contact_context %>
+      <%= render 'shared/application_contacts', context: @contact_context %>
     </dl>
   </section>
 </div>

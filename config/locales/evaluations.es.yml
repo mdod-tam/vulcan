@@ -1,0 +1,10 @@
+es:
+  evaluations:
+    recommendation_outcomes:
+      catalog_products: "Productos del catálogo"
+      outside_catalog: "Fuera del catálogo"
+      no_suitable_product: "Ningún producto adecuado"
+  evaluators:
+    evaluations:
+      recommendations:
+        catalog_heading: "Productos recomendados del catálogo"

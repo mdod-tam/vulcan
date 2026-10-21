@@ -1,0 +1,34 @@
+en:
+  product_resources:
+    heading: Product guidance
+    empty: No product guides have been added yet.
+    preferred_unavailable: "Guidance in %{language} is unavailable. Other language resources are listed below."
+    other_language: Other language
+    external_link: "(external link, opens in a new tab)"
+    pdf_download: "(PDF download, %{size}, %{language})"
+    manufacturer_documentation: General manufacturer documentation
+    invalid_pdf: must be a PDF document
+    languages:
+      en: English
+      es: Spanish
+    devices:
+      heading: Devices
+      description: Devices purchased with program vouchers or shipped by the program, grouped by beneficiary.
+      shipment_notice: Shipment is recorded by the program; it does not confirm receipt.
+      beneficiary: "Devices for %{name}"
+      model: "Model: %{number}"
+      empty_heading: No recorded devices yet
+      empty: Completed voucher purchases and program shipments will appear here. Training on a demonstration device does not add it to this list.
+      dashboard: Back to dashboard
+      back: Back to Devices
+      access_denied: This page is available to constituents.
+      sources:
+        voucher_purchase: Purchased with voucher
+        program_shipment: Shipped by the program
+    heading_for: "Guides for %{product}"
+    external_context: " — %{product}, %{language}, external link, opens in a new tab"
+    pdf_context: " — %{product}, %{language}, PDF download, %{size}"
+    admin:
+      edit_name: "Edit resource: %{title} — %{product}"
+      delete_name: "Delete resource: %{title} — %{product}"
+      delete_confirm: "Delete %{title} for %{product}?"

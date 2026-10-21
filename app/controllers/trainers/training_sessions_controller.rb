@@ -1,382 +1,187 @@
 # frozen_string_literal: true
 
 module Trainers
-  # Controller for managing training sessions for trainers.
-  # Handles listing, filtering, showing, and updating the status of training sessions.
   class TrainingSessionsController < Trainers::BaseController
-    before_action :set_training_session, only: %i[show update_status complete schedule schedule_additional reschedule cancel] # Removed :edit
-    before_action :authorize_training_session_mutation!, only: %i[update_status complete schedule schedule_additional reschedule cancel]
+    FORM_FIELDS = {
+      schedule: %i[scheduled_for location internal_notes],
+      schedule_additional: %i[scheduled_for location internal_notes],
+      follow_up: %i[scheduled_for location internal_notes reschedule_reason],
+      reschedule: %i[scheduled_for location reschedule_reason],
+      complete: %i[completed_at product_trained_on_id duration_hours internal_notes constituent_summary summary_locale],
+      cancel: %i[cancellation_reason cancellation_initiator],
+      no_show: %i[no_show_notes]
+    }.freeze
+
+    FORM_ERROR_FIELD_ALIASES = { product_trained_on: :product_trained_on_id }.freeze
+
+    before_action :set_training_session, only: %i[show complete schedule schedule_additional reschedule cancel no_show]
+    before_action :authorize_training_session_mutation!, only: %i[complete schedule schedule_additional reschedule cancel no_show]
 
     def index
-      if params[:status].present? || params[:scope].present? || params[:filter].present?
-        filter # Delegate to the filter action if parameters are present
-      else
-        redirect_to trainers_dashboard_path
-      end
+      render_filtered_sessions(params[:status])
     end
 
-    # New action for handling scope + status filtering
     def filter
-      scope_param = params[:scope] || (current_user.admin? ? 'all' : 'mine')
-
-      # If not admin, force scope to 'mine' regardless of params
-      scope_param = 'mine' unless current_user.admin?
-
-      status_param = params[:status]
-
-      # Apply filters
-      @training_sessions = filter_sessions(scope_param, status_param)
-
-      # Set current selections for UI state
-      @current_scope = scope_param
-      @current_status = status_param
-      @trainer_filter = User.find_by(id: params[:trainer_id]) if current_user.admin? && params[:trainer_id].present?
-
-      @pagy, @training_sessions = pagy(@training_sessions, items: 20)
-      render :index
+      render_filtered_sessions(params[:status])
     end
 
     def requested
-      scope = if current_user.admin?
-                TrainingSession.where(status: :requested)
-                               .includes(application: :user)
-                               .order(created_at: :desc)
-              else
-                TrainingSession.where(trainer_id: current_user.id)
-                               .where(status: :requested)
-                               .includes(application: :user)
-                               .order(created_at: :desc)
-              end
-
-      @pagy, @training_sessions = pagy(scope, items: 20)
-      render :index
+      render_filtered_sessions('requested')
     end
 
     def scheduled
-      scope = if current_user.admin?
-                TrainingSession.where(status: %i[scheduled confirmed])
-                               .includes(application: :user)
-                               .order(scheduled_for: :asc)
-              else
-                TrainingSession.where(trainer_id: current_user.id)
-                               .where(status: %i[scheduled confirmed])
-                               .includes(application: :user)
-                               .order(scheduled_for: :asc)
-              end
-
-      @pagy, @training_sessions = pagy(scope, items: 20)
-      render :index
+      render_filtered_sessions('scheduled')
     end
 
     def completed
-      scope = if current_user.admin?
-                TrainingSession.where(status: :completed)
-                               .includes(application: :user)
-                               .order(completed_at: :desc)
-              else
-                TrainingSession.where(trainer_id: current_user.id, status: :completed)
-                               .includes(application: :user)
-                               .order(completed_at: :desc)
-              end
-
-      @pagy, @training_sessions = pagy(scope, items: 20)
-      render :index
+      render_filtered_sessions('completed')
     end
 
     def needs_followup
-      @current_scope = current_user.admin? ? 'all' : 'mine'
-      @current_status = 'needs_followup'
-      @pagy, @training_sessions = pagy(ordered_followup_sessions, items: 20)
-      render :index
+      render_filtered_sessions('needs_followup')
     end
 
     def show
-      EmailDelivery::Visibility.preload([@training_session])
       prepare_show_context
     end
 
-    def update_status
-      @application = @training_session.application
-      @constituent = @application&.user
-
-      result = ::TrainingSessions::UpdateStatusService.new(@training_session, current_user, params).call
-
-      if result.success?
-        redirect_to trainers_training_session_path(@training_session),
-                    notice: result.message
-      else
-        @training_session.reload # Reset invalid changes so the view renders correctly
-        prepare_show_context
-        flash.now[:alert] = t('trainers.training_sessions.flash.update_status_failed', message: result.message)
-        render :show, status: :unprocessable_content
-      end
-    end
-
     def complete
-      @application = @training_session.application
-      @constituent = @application&.user
-
-      result = ::TrainingSessions::CompleteService.new(@training_session, current_user, complete_params).call
-
-      if result.success?
-        redirect_to trainers_training_session_path(@training_session), notice: result.message
-      else
-        @training_session.reload # Reset invalid changes so the view renders correctly
-        prepare_show_context
-        flash.now[:alert] = t('trainers.training_sessions.flash.complete_failed', message: result.message)
-        render :show, status: :unprocessable_content
-      end
+      run_training_command(:complete, ::TrainingSessions::CompleteService)
     end
 
     def schedule
-      @application = @training_session.application
-      @constituent = @application&.user
-
-      result = ::TrainingSessions::ScheduleService.new(@training_session, current_user, schedule_params).call
-
-      if result.success?
-        redirect_to trainers_training_session_path(@training_session),
-                    notice: result.message
-      else
-        @training_session.reload # Reset invalid changes so the view renders correctly
-        prepare_show_context
-        flash.now[:alert] = t('trainers.training_sessions.flash.schedule_failed', message: result.message)
-        render :show, status: :unprocessable_content
-      end
+      run_training_command(:schedule, ::TrainingSessions::ScheduleService)
     end
 
     def schedule_additional
-      @application = @training_session.application
-      @constituent = @application&.user
-
-      result = ::TrainingSessions::ScheduleAdditionalService.new(@training_session, current_user, schedule_additional_params).call
-
-      if result.success?
-        redirect_to trainers_training_session_path(result.data[:training_session]),
-                    notice: result.message
-      else
-        @training_session.reload
-        prepare_show_context
-        flash.now[:alert] = t('trainers.training_sessions.flash.schedule_additional_failed', message: result.message)
-        render :show, status: :unprocessable_content
-      end
+      run_training_command(:schedule_additional, ::TrainingSessions::ScheduleAdditionalService)
     end
 
     def reschedule
-      @application = @training_session.application
-      @constituent = @application&.user
-
-      result = ::TrainingSessions::RescheduleService.new(@training_session, current_user, reschedule_params).call
-
-      if result.success?
-        redirect_to trainers_training_session_path(@training_session),
-                    notice: result.message
-      else
-        @training_session.reload # Reset invalid changes so the view renders correctly
-        prepare_show_context
-        flash.now[:alert] = t('trainers.training_sessions.flash.reschedule_failed', message: result.message)
-        render :show, status: :unprocessable_content
-      end
+      run_training_command(:reschedule, ::TrainingSessions::RescheduleService)
     end
 
-    # New action to handle training session cancellation
     def cancel
-      @application = @training_session.application
-      @constituent = @application&.user
+      run_training_command(:cancel, ::TrainingSessions::CancelService)
+    end
 
-      result = ::TrainingSessions::CancelService.new(@training_session, current_user, cancel_params).call
-
-      if result.success?
-        redirect_to trainers_training_session_path(@training_session), notice: result.message
-      else
-        @training_session.reload # Reset invalid changes so the view renders correctly
-        prepare_show_context
-        flash.now[:alert] = t('trainers.training_sessions.flash.cancel_failed', message: result.message)
-        render :show, status: :unprocessable_content
-      end
+    def no_show
+      run_training_command(:no_show, ::TrainingSessions::NoShowService)
     end
 
     private
 
+    def run_training_command(action, service)
+      attempted = params.permit(*FORM_FIELDS.fetch(action))
+      result = service.new(@training_session, current_user, attempted).call
+      if result.success?
+        outcome = result.data[:notification_outcome]
+        flash[:alert] = t('training_feedback.save_warning') if outcome&.warning?
+        redirect_to trainers_training_session_path(result.data[:training_session] || @training_session),
+                    notice: result.message, status: :see_other
+      else
+        render_training_failure(action, attempted, result.message, result.data&.[](:training_session))
+      end
+    end
+
+    def render_training_failure(action, attempted, message, result_record = nil)
+      errors = (result_record || @training_session).errors.each_with_object({}) do |error, mapped|
+        attribute = FORM_ERROR_FIELD_ALIASES.fetch(error.attribute, error.attribute)
+        key = FORM_FIELDS.fetch(action).include?(attribute) ? attribute : :base
+        (mapped[key] ||= []) << error.full_message
+      end
+      errors[:base] = [message] if errors.empty?
+      @training_session.reload
+      unless current_user.admin? || current_assignment? || @training_session.status_completed?
+        redirect_to trainers_training_sessions_path, alert: t('training_feedback.coverage_changed'), status: :see_other
+        return
+      end
+      @training_form_values = { action => attempted.to_h.with_indifferent_access }
+      @training_form_errors = { action => errors }
+      @failed_training_action = action
+      prepare_show_context
+      render 'trainers/training_sessions/show', status: :unprocessable_content
+    end
+
     def prepare_show_context
+      @training_form_values ||= {}
+      @training_form_errors ||= {}
       @application = @training_session.application
       @constituent = @application.user
-      @max_training_sessions = Policy.max_training_sessions
+      @session_number = @training_session.appointment_number
+      @can_manage_training_session = current_assignment?
+      @current_training_access = current_user.admin? || @can_manage_training_session
+      return unless @current_training_access
+
+      @contact_context = ::Applications::ContactContext.new(application: @application)
+      @max_training_sessions = @application.max_training_sessions
       @completed_training_sessions_count = @application.completed_training_sessions_count
       @remaining_training_session_slots = @application.remaining_training_sessions
-      @open_training_sessions = @application.training_sessions
-                                            .assigned_or_scheduled
-                                            .includes(:trainer)
-                                            .order(:scheduled_for, :created_at)
-      @session_number = calculate_session_number
-      @previous_training_sessions = @training_session.previous_completed_sessions
-      @constituent_cancelled_sessions_count = count_constituent_cancelled_sessions
+      @reserved_training_sessions_count = @application.reserved_training_sessions_count
+      @open_training_sessions = @application.training_sessions.assigned_or_scheduled.includes(:trainer).order(:created_at, :id)
+      @previous_training_sessions = @training_session.previous_completed_sessions.includes(:trainer, :product_trained_on)
+      @evaluation_recommendations = @application.evaluations.completed_sessions.by_report_submission.includes(:recommended_products).first
+      @known_products = ::Applications::ProductHistory.new(applications: Application.where(id: @application.id)).products
+      @available_products = @known_products + Product.order(:name, :id).where.not(id: @known_products.map(&:id)).to_a
       @activity_logs = ::TrainingSessions::AuditLogBuilder.new(@training_session).build
+      @training_notifications = Notification.where(notifiable: @training_session).order(created_at: :desc, id: :desc)
+      EmailDelivery::Visibility.preload(@training_notifications)
+      @unlinked_training_attempts = @training_session.email_delivery_attempts.where(notification_id: nil).includes(:delivery_owner).order(:id)
     end
 
-    def filter_sessions(scope, status)
-      return ordered_status_scope(scope, followup_statuses(status)) if followup_status?(status)
-
-      base_query = if scope == 'all' && current_user.admin?
-                     TrainingSession.all
-                   else
-                     TrainingSession.where(trainer_id: current_user.id)
-                   end
-
-      query = status.present? ? base_query.where(status: status) : base_query
-      query = query.where(trainer_id: params[:trainer_id]) if current_user.admin? && params[:trainer_id].present?
-
-      ordering = {
-        'completed' => { completed_at: :desc },
-        'scheduled' => { scheduled_for: :asc },
-        'requested' => { created_at: :desc }
-      }[status] || { updated_at: :desc }
-
-      query.order(ordering).includes(application: :user)
+    def render_filtered_sessions(status)
+      @current_scope = current_user.admin? && params[:scope] != 'mine' ? 'all' : 'mine'
+      @current_status = status if TrainingSession.statuses.key?(status.to_s) || status == 'needs_followup'
+      @trainer_filter = User.find_by(id: params[:trainer_id]) if current_user.admin? && params[:trainer_id].present?
+      query = if current_user.admin? && @current_scope == 'all'
+                TrainingSession.all
+              else
+                TrainingSession.where(trainer_id: current_user.id).joins(:application)
+                               .where('applications.assigned_trainer_id = :trainer OR training_sessions.status = :completed',
+                                      trainer: current_user.id, completed: TrainingSession.statuses.fetch('completed'))
+              end
+      query = query.where(trainer_id: @trainer_filter.id) if @trainer_filter
+      query = filtered_status(query, @current_status)
+      @pagy, @training_sessions = pagy(query.includes(application: :user), items: 20)
+      render :index
     end
 
-    def followup_status?(status)
-      %w[cancelled no_show needs_followup].include?(status.to_s)
-    end
-
-    def followup_statuses(status)
-      status.to_s == 'needs_followup' ? %i[no_show cancelled] : status
-    end
-
-    def ordered_status_scope(scope, status)
-      apply_trainer_visibility(TrainingSession.ordered_followup_per_application(status), scope)
-    end
-
-    def ordered_followup_sessions
-      scope = current_user.admin? ? 'all' : 'mine'
-
-      ordered_status_scope(scope, %i[no_show cancelled])
-    end
-
-    def apply_trainer_visibility(query, scope)
-      if current_user.admin?
-        query = query.where(trainer_id: params[:trainer_id]) if params[:trainer_id].present?
-        return query if scope == 'all'
+    def filtered_status(query, status)
+      case status
+      when 'scheduled'
+        query.where(status: %i[scheduled confirmed]).order(:scheduled_for, :id)
+      when 'completed'
+        query.where(status: :completed).order(completed_at: :desc, id: :desc)
+      when 'needs_followup', 'cancelled', 'no_show'
+        query.merge(TrainingSession.ordered_followup_per_application(status == 'needs_followup' ? %i[cancelled no_show] : status))
+             .joins(:application).where('applications.assigned_trainer_id = training_sessions.trainer_id')
+      else
+        query = query.where(status: status) if status.present?
+        query.order(created_at: :desc, id: :desc)
       end
-
-      query.where(trainer_id: current_user.id)
     end
 
     def set_training_session
-      begin
-        @training_session = TrainingSession.find(params[:id])
-      rescue ActiveRecord::RecordNotFound => e
-        # Log the error for debugging purposes
-        Rails.logger.error { "ERROR: TrainingSession not found with ID #{params[:id]}. #{e.message}" }
-        # Re-raise to trigger standard Rails 404 handling
-        raise e
-      end
+      scope = if current_user.admin?
+                TrainingSession.all
+              else
+                TrainingSession.where(trainer_id: current_user.id)
+              end
+      @training_session = scope.find(params[:id] || params[:training_session_id])
+      return if current_user.admin? || current_assignment? || @training_session.status_completed?
 
-      # Authorization check: Allow admins or the assigned trainer
-      return if current_user&.admin? || assigned_trainer?
-
-      # If not authorized, redirect with an alert
-      redirect_to trainers_dashboard_path, alert: "You don't have access to this training session."
-    ensure
-      @can_manage_training_session = assigned_trainer?
+      raise ActiveRecord::RecordNotFound
     end
 
     def authorize_training_session_mutation!
-      return if assigned_trainer?
+      return if current_assignment?
 
-      redirect_target = current_user&.admin? ? trainers_training_session_path(@training_session) : trainers_dashboard_path
-      redirect_to redirect_target, alert: t('trainers.training_sessions.flash.assigned_trainer_only')
+      redirect_to trainers_training_session_path(@training_session),
+                  alert: t('trainers.training_sessions.flash.assigned_trainer_only'), status: :see_other
     end
 
-    def training_session_params
-      params.expect(
-        training_session: %i[
-          status notes scheduled_for reschedule_reason cancellation_reason
-          product_trained_on_id location
-        ]
-      )
-    end
-
-    def schedule_params
-      params.permit(:scheduled_for, :notes, :location)
-    end
-
-    def schedule_additional_params
-      params.permit(:scheduled_for, :notes, :location)
-    end
-
-    def reschedule_params
-      params.permit(:scheduled_for, :reschedule_reason, :location)
-    end
-
-    def complete_params
-      params.permit(:notes, :product_trained_on_id, :duration_hours)
-    end
-
-    def cancel_params
-      params.permit(:cancellation_reason)
-    end
-
-    def create_status_change_event(old_status)
-      AuditEventService.log(
-        actor: current_user,
-        action: 'training_status_changed',
-        auditable: @training_session,
-        metadata: {
-          application_id: @training_session.application_id,
-          training_session_id: @training_session.id,
-          old_status: old_status,
-          new_status: @training_session.status,
-          timestamp: Time.current.iso8601
-        }
-      )
-    end
-
-    def calculate_session_number
-      return nil unless @training_session.status_completed? || @training_session.open_status?
-
-      if @training_session.status_completed?
-        completed_ids = @application.training_sessions.completed_sessions.order(:completed_at, :created_at).pluck(:id)
-        return completed_ids.index(@training_session.id).to_i + 1
-      end
-
-      open_sessions = @application.training_sessions.assigned_or_scheduled.to_a.sort_by do |session|
-        [session.scheduled_for.nil? ? 1 : 0, session.scheduled_for || session.created_at, session.created_at, session.id]
-      end
-
-      open_index = open_sessions.index { |session| session.id == @training_session.id }
-      return nil unless open_index
-
-      @application.completed_training_sessions_count + open_index + 1
-    end
-
-    def count_constituent_cancelled_sessions
-      constituent_training_session_ids = @constituent.applications.joins(:training_sessions).pluck('training_sessions.id')
-      cancelled_sessions = TrainingSession.where(id: constituent_training_session_ids, status: :cancelled)
-      no_show_count = TrainingSession.where(id: constituent_training_session_ids, status: :no_show).count
-
-      @constituent_session_outcome_counts =
-        if TrainingSession.cancellation_initiator_column?
-          {
-            constituent_cancellations: cancelled_sessions.where(cancellation_initiator: :constituent).count,
-            no_shows: no_show_count,
-            trainer_or_program_cancellations: cancelled_sessions.where.not(cancellation_initiator: :constituent).count
-          }
-        else
-          {
-            # Before the new column exists locally, avoid blaming constituents for historical cancellations
-            # that cannot yet be attributed reliably.
-            constituent_cancellations: 0,
-            no_shows: no_show_count,
-            trainer_or_program_cancellations: cancelled_sessions.count
-          }
-        end
-
-      @constituent_session_outcome_counts[:constituent_cancellations] + @constituent_session_outcome_counts[:no_shows]
-    end
-
-    def assigned_trainer?
-      @training_session&.trainer_id == current_user&.id
+    def current_assignment?
+      @training_session.trainer_id == current_user.id && @training_session.application.current_trainer?(current_user)
     end
   end
 end

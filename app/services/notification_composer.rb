@@ -68,14 +68,13 @@ class NotificationComposer
   # --- Message Generation Methods ---
 
   def message_for_trainer_assigned
-    trainer_name = @actor&.full_name || 'A trainer'
-    application = @notifiable
-    constituent_name = application.try(:constituent_full_name) || 'a constituent'
+    return default_message unless @notifiable.is_a?(TrainingSession)
 
-    training_session = find_training_session(application, @actor)
-    status_info = training_session ? " (#{training_session.status.humanize})" : ''
-
-    safe_join([trainer_name, ' assigned to train ', constituent_name, ' for ', sentence_application_reference, status_info, '.'])
+    session = @notifiable
+    trainer_name = session.trainer.full_name
+    constituent_name = session.constituent.full_name
+    reference = link_to("training session for #{constituent_name}", Rails.application.routes.url_helpers.trainers_training_session_path(session))
+    safe_join([trainer_name, ' assigned to ', reference, '.'])
   end
 
   def message_for_training_requested
@@ -283,7 +282,9 @@ class NotificationComposer
   def application_path_for_viewer(application)
     routes = Rails.application.routes.url_helpers
 
-    if @viewer.blank? || @viewer.admin?
+    if application.current_trainer?(@viewer) && (@viewer.trainer? || (@action == 'training_requested' && metadata_value('recipient_audience') == 'assigned_trainer'))
+      routes.trainers_training_session_path(application.latest_training_session)
+    elsif @viewer.blank? || @viewer.admin?
       routes.admin_application_path(application)
     else
       routes.constituent_portal_application_path(application)
@@ -307,15 +308,5 @@ class NotificationComposer
     return unless @notifiable.association(:trainer).loaded?
 
     @notifiable.trainer&.full_name.presence
-  end
-
-  def find_training_session(application, actor)
-    return nil unless application.respond_to?(:training_sessions) && actor
-
-    if application.training_sessions.loaded?
-      application.training_sessions.select { |ts| ts.trainer_id == actor.id }.max_by(&:created_at)
-    else
-      application.training_sessions.where(trainer_id: actor.id).order(:created_at).last
-    end
   end
 end

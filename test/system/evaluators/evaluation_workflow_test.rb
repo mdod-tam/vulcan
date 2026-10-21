@@ -328,9 +328,9 @@ module Evaluators
       evaluation = create(:evaluation, application: application, constituent: applicant, evaluator: @evaluator)
       page.current_window.resize_to(1200, 900)
       visit evaluators_evaluation_path(evaluation)
-      click_link I18n.t('evaluator_context.link')
+      click_link I18n.t('application_contact.link')
 
-      assert_selector 'h1', text: I18n.t('evaluator_context.title')
+      assert_selector 'h1', text: I18n.t('application_contact.title')
       assert_text applicant.full_name
       assert_text guardian.full_name
       assert_selector "a[href='mailto:#{guardian.email}']"
@@ -344,7 +344,7 @@ module Evaluators
       take_screenshot('evaluator-assessment-desktop', html: true, full: true)
 
       page.current_window.resize_to(375, 812)
-      assert_selector 'h1', text: I18n.t('evaluator_context.title')
+      assert_selector 'h1', text: I18n.t('application_contact.title')
       assert_operator page.evaluate_script('document.documentElement.scrollWidth'), :<=,
                       page.evaluate_script('window.innerWidth')
       take_screenshot('evaluator-assessment-narrow', html: true, full: true)
@@ -436,7 +436,7 @@ module Evaluators
       click_button 'Sign Out'
       system_test_sign_in(replacement)
       visit application_details_evaluators_evaluation_path(evaluation)
-      assert_selector 'h1', text: I18n.t('evaluator_context.title')
+      assert_selector 'h1', text: I18n.t('application_contact.title')
       assert_text application.user.full_name
       take_screenshot('replacement-evaluator-assessment', html: true, full: true)
     ensure

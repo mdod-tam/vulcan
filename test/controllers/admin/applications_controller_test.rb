@@ -509,6 +509,20 @@ module Admin
       assert_includes response.body, '2.5 hours'
     end
 
+    test 'equipment training reports remain visible without a completed evaluation' do
+      application = create(:application, :completed, :with_all_proofs)
+      assert application.equipment_fulfillment?
+      session = create(:training_session, :completed, application: application, internal_notes: 'Private staff report',
+                                                      constituent_summary: 'Shared practice summary')
+
+      get admin_application_path(application)
+
+      assert_response :success
+      assert_select 'a[href=?]', trainers_training_session_path(session), text: 'View Session'
+      assert_includes response.body, 'Private staff report'
+      assert_includes response.body, 'Shared practice summary'
+    end
+
     test 'admin training mutation routes are removed' do
       assert_raises(NoMethodError) do
         schedule_training_admin_application_path(@application)

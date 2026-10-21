@@ -4,1029 +4,552 @@ require 'test_helper'
 
 module Trainers
   class TrainingSessionsControllerTest < ActionDispatch::IntegrationTest
-    # include AuthenticationTestHelper # Already included via test_helper.rb
-
     setup do
-      constituent = create(:constituent)
-      @application = create(:application, :old_enough_for_new_application, user: constituent)
+      Policy.stubs(:max_training_sessions).returns(5)
       @trainer = create(:trainer)
       @admin = create(:admin)
-
-      @requested_application = create(:application, :old_enough_for_new_application, user: constituent)
-      @cancelled_application = create(:application, :old_enough_for_new_application, user: constituent)
-      @no_show_application = create(:application, :old_enough_for_new_application, user: constituent)
-      @completed_application = create(:application, :old_enough_for_new_application, user: constituent)
-
-      @training_session = create(:training_session, :scheduled, trainer: @trainer, application: @application)
-      @requested_session = create(:training_session, :requested, trainer: @trainer, application: @requested_application)
-      @cancelled_session = create(:training_session, :cancelled, trainer: @trainer, application: @cancelled_application)
-      @no_show_session = create(:training_session, :no_show, trainer: @trainer, application: @no_show_application)
-      @completed_session = create(:training_session, :completed, trainer: @trainer, application: @completed_application)
+      @application = create(:application, :approved, :with_all_proofs, application_date: Date.current, assigned_trainer: @trainer)
+      @session = create(:training_session, :scheduled, application: @application, trainer: @trainer,
+                                                       created_at: 2.days.ago, internal_notes: 'Private preparation retained', scheduled_for: 1.day.from_now.change(sec: 0))
       @product = create(:product)
-
       @other_trainer = create(:trainer)
-      @other_application = create(:application, :old_enough_for_new_application, user: create(:constituent))
-      @other_trainer_session = create(:training_session, :scheduled, trainer: @other_trainer, application: @other_application)
-
-      @constituent = @application.user
-      @app2 = create(:application, :old_enough_for_new_application, user: @constituent)
-      @session1_cancelled = create(:training_session, :cancelled, application: @application, trainer: @trainer)
-      @session2_no_show = create(:training_session, :no_show, application: @app2, trainer: @trainer)
+      @other_session = create(:training_session, :scheduled, trainer: @other_trainer)
+      sign_in_for_controller_test(@trainer)
     end
 
-    # Authorization
-    test 'trainer should only see their own training sessions' do
-      sign_in_for_controller_test @trainer
-
-      get trainers_training_session_url(@training_session)
-      assert_response :success
-
-      get trainers_training_session_url(@other_trainer_session)
-      assert_redirected_to trainers_dashboard_path
-      assert_equal "You don't have access to this training session.", flash[:alert]
-    end
-
-    test 'admin should see any training session' do
-      sign_in_for_controller_test @admin
-
-      get trainers_training_session_url(@training_session)
-      assert_response :success
-
-      get trainers_training_session_url(@other_trainer_session)
-      assert_response :success
-    end
-
-    test 'admin sees training session as read-only' do
-      sign_in_for_controller_test @admin
-
-      get trainers_training_session_url(@requested_session)
+    test 'current trainer sees coordinating contact preparation and named outcome controls' do
+      get trainers_training_session_path(@session)
 
       assert_response :success
-      assert_includes @response.body, 'This is a read-only oversight view.'
-      assert_includes @response.body, 'This training has yet to be scheduled.'
-      assert_includes @response.body, 'The assigned trainer should contact the constituent and set the training date.'
-      assert_not_includes @response.body, 'Schedule Training'
-      assert_not_includes @response.body, 'Mark as Completed'
-      assert_not_includes @response.body, 'Cancel Training'
+      assert_select '#preparation-heading', text: 'Preparation and coordinating contact'
+      assert_select "a[href='mailto:#{@application.user.email}']"
+      assert_select "a[href='#{admin_application_path(@application)}']", count: 0
+      assert_select '#training-outcome option[value=complete]'
+      assert_select '#training-outcome option[value=cancel]'
+      assert_select '#training-outcome option[value=reschedule]'
+      assert_select '#training-outcome option[value=no_show]', count: 0
+      assert_select "form[action='#{schedule_additional_trainers_training_session_path(@session)}']", count: 0
+      assert_select '#complete_internal_notes', text: 'Private preparation retained'
+      assert_select_value '#complete_product_trained_on_id', ''
+      assert_select '#complete_completed_at[value]', count: 0
+      assert_select '#complete_duration_hours[aria-describedby=duration_hours_hint]'
+      assert_select '#duration_hours_hint', text: 'Enter total time spent training, in hours.'
+      assert_select 'h2#session-actions-heading', text: 'What happened?'
+      assert_select '[data-training-outcome-target=status][role=status][aria-live=polite][aria-atomic=true]', text: ''
+      assert_select 'h2#training-capacity-heading', text: 'Training session allowance'
+      assert_operator response.body.index('id="session-actions"'), :<, response.body.index('id="preparation-heading"')
+      assert_select '#complete_completed_at[aria-describedby=complete-time-help]'
+      assert_select '#complete-time-help', text: /format displayed by your browser.*Eastern Time/m
+      assert_select 'label[for=complete_constituent_summary] span', text: '(required)'
+      assert_select '#complete_constituent_summary[aria-describedby=complete-summary-help]'
+      assert_select '#complete_internal_notes[aria-describedby=complete-observations-help]'
     end
 
-    test 'assigned trainer sees scheduling next step for requested session' do
-      sign_in_for_controller_test @trainer
-
-      get trainers_training_session_url(@requested_session)
-
-      assert_response :success
-      assert_includes @response.body, 'This training has yet to be scheduled.'
-      assert_includes @response.body, 'Contact the constituent, agree on a training time, then use the scheduling form below.'
-      assert_includes @response.body, 'Schedule Training'
-    end
-
-    test 'assigned trainer sees completion form before scheduled time but not no-show form' do
-      sign_in_for_controller_test @trainer
-
-      get trainers_training_session_url(@training_session)
-
-      assert_response :success
-      assert_includes @response.body, 'Mark Training as Completed'
-      assert_select 'label', text: /Training Duration/
-      assert_select 'input[name="duration_hours"][type="number"][step="0.25"][value="2.0"]'
-      assert_select 'p', text: 'Enter total time spent training, in hours.'
-      assert_includes @response.body, 'Cancel Training'
-      assert_not_includes @response.body, 'Mark as No Show'
-      assert_includes @response.body, 'aria-label="Session #'
-    end
-
-    test 'assigned trainer sees cancellation form after scheduled time' do
-      sign_in_for_controller_test @trainer
-      update_max_training_sessions(3)
-      @application.update_columns(status: Application.statuses[:approved], application_date: 1.year.ago.to_date)
-      @training_session.update_columns(scheduled_for: 1.day.ago)
-
-      get trainers_training_session_url(@training_session)
-
-      assert_response :success
-      assert_includes @response.body, 'Mark Training as Completed'
-      assert_includes @response.body, 'Cancel Training'
-      assert_includes @response.body, 'Mark as No Show'
-      assert_includes @response.body, 'Schedule Another Session'
-      assert_select '#notes', count: 1
-      assert_select 'label[for=schedule_additional_notes]', count: 1
-      assert_select '#schedule_additional_notes', count: 1
-      assert_select 'label[for=schedule_additional_scheduled_for]', count: 1
-      assert_select '#schedule_additional_scheduled_for', count: 1
-    end
-
-    test 'assigned trainer sees schedule another session form after completing a session when quota remains' do
-      sign_in_for_controller_test @trainer
-      update_max_training_sessions(3)
-      application = create(:application, :approved, user: create(:constituent), application_date: 1.year.ago)
-      completed_session = create(:training_session, :completed, trainer: @trainer, application: application)
-
-      get trainers_training_session_url(completed_session)
-
-      assert_response :success
-      assert_includes @response.body, 'Training Duration'
-      assert_includes @response.body, '2 hours'
-      assert_includes @response.body, 'Schedule Another Session'
-      assert_includes @response.body, 'This creates another scheduled session and sends the constituent'
-    end
-
-    test 'admin cannot schedule a training session' do
-      sign_in_for_controller_test @admin
-
-      post schedule_trainers_training_session_url(@requested_session),
-           params: { scheduled_for: 2.days.from_now, notes: 'Admin attempt' }
-
-      assert_redirected_to trainers_training_session_url(@requested_session)
-      assert_equal I18n.t('trainers.training_sessions.flash.assigned_trainer_only'), flash[:alert]
-      assert_equal 'requested', @requested_session.reload.status
-    end
-
-    test 'admin cannot complete a training session' do
-      sign_in_for_controller_test @admin
-
-      post complete_trainers_training_session_url(@training_session),
-           params: { notes: 'Admin attempt', product_trained_on_id: @product.id, duration_hours: '2.0' }
-
-      assert_redirected_to trainers_training_session_url(@training_session)
-      assert_equal I18n.t('trainers.training_sessions.flash.assigned_trainer_only'), flash[:alert]
-      assert_equal 'scheduled', @training_session.reload.status
-    end
-
-    test 'admin cannot schedule an additional training session' do
-      sign_in_for_controller_test @admin
-
-      assert_no_difference('TrainingSession.count') do
-        post schedule_additional_trainers_training_session_url(@training_session),
-             params: { scheduled_for: 2.weeks.from_now, notes: 'Admin attempt' }
-      end
-
-      assert_redirected_to trainers_training_session_url(@training_session)
-      assert_equal I18n.t('trainers.training_sessions.flash.assigned_trainer_only'), flash[:alert]
-    end
-
-    test 'other trainer cannot mutate a training session' do
-      sign_in_for_controller_test @other_trainer
-
-      post schedule_trainers_training_session_url(@requested_session),
-           params: { scheduled_for: 2.days.from_now, notes: 'Other trainer attempt' }
-
-      assert_redirected_to trainers_dashboard_path
-      assert_equal "You don't have access to this training session.", flash[:alert]
-      assert_equal 'requested', @requested_session.reload.status
-    end
-
-    test 'unauthenticated user should be redirected to login' do
-      get trainers_training_session_url(@training_session)
-      assert_redirected_to sign_in_url
-    end
-
-    # Show
-    test 'should get show and assign instance variables for trainer' do
-      sign_in_for_controller_test @trainer
-      application = create(:application, :old_enough_for_new_application, user: @constituent)
-      training_session = create(:training_session, :scheduled, trainer: @trainer, application: application)
-      get trainers_training_session_url(training_session)
-      assert_response :success
-
-      assert_equal training_session, assigns(:training_session)
-      assert_equal training_session.application, assigns(:application)
-      assert_equal training_session.constituent, assigns(:constituent)
-      assert_not_nil assigns(:max_training_sessions)
-      assert_equal training_session.application.training_sessions.completed_sessions.count,
-                   assigns(:completed_training_sessions_count)
-      assert_equal training_session.application.completed_training_sessions_count + 1,
-                   assigns(:session_number)
-      assert_not_nil assigns(:constituent_cancelled_sessions_count)
-      assert_includes @response.body, 'Activity History'
-      assert_includes @response.body, 'Session Capacity'
-      assert_includes @response.body, 'sessions reserved'
-    end
-
-    test 'should get show and assign instance variables for admin' do
-      sign_in_for_controller_test @admin
-      get trainers_training_session_url(@training_session)
-      assert_response :success
-
-      assert_equal @training_session, assigns(:training_session)
-      assert_equal @training_session.application, assigns(:application)
-      assert_equal @training_session.constituent, assigns(:constituent)
-      assert_not_nil assigns(:max_training_sessions)
-      assert_equal @training_session.application.training_sessions.completed_sessions.count,
-                   assigns(:completed_training_sessions_count)
-      assert_equal @training_session.application.completed_training_sessions_count + 1,
-                   assigns(:session_number)
-      assert_not_nil assigns(:constituent_cancelled_sessions_count)
-      assert_includes @response.body, 'Activity History'
-      assert_select 'a[href=?]',
-                    filtered_trainers_training_sessions_path(scope: 'all', trainer_id: @trainer.id),
-                    text: @trainer.full_name
-    end
-
-    test 'show assigns distinct session numbers for multiple open sessions' do
-      sign_in_for_controller_test @trainer
-      update_max_training_sessions(3)
-      application = create(:application, :approved, user: @constituent, application_date: 1.year.ago)
-      create(:training_session, :completed, trainer: @trainer, application: application)
-      first_open = create(:training_session, :scheduled,
-                          trainer: @trainer,
-                          application: application,
-                          scheduled_for: 1.week.from_now)
-      second_open = create(:training_session, :scheduled,
-                           trainer: @trainer,
-                           application: application,
-                           scheduled_for: 2.weeks.from_now)
-
-      get trainers_training_session_url(first_open)
-      assert_response :success
-      assert_equal 2, assigns(:session_number)
-
-      get trainers_training_session_url(second_open)
-      assert_response :success
-      assert_equal 3, assigns(:session_number)
-    end
-
-    test 'show action should correctly calculate constituent_cancelled_sessions_count' do
-      sign_in_for_controller_test @trainer
-      @session1_cancelled.update!(cancellation_initiator: :constituent)
-
-      get trainers_training_session_url(@training_session)
-      assert_response :success
-
-      # @no_show_session and @session2_no_show belong to this constituent through different applications.
-      # The count also includes @session1_cancelled after its initiator becomes constituent.
-      assert_equal 3, assigns(:constituent_cancelled_sessions_count)
-      assert_equal 1, assigns(:constituent_session_outcome_counts)[:constituent_cancellations]
-      assert_equal 2, assigns(:constituent_session_outcome_counts)[:no_shows]
-    end
-
-    test 'show renders activity history with relevant training events' do
-      sign_in_for_controller_test @trainer
-      Event.create!(
-        user: @trainer,
-        action: 'training_scheduled',
-        auditable: @training_session,
-        metadata: {
-          training_session_id: @training_session.id,
-          scheduled_for: @training_session.scheduled_for.iso8601,
-          location: 'Library'
-        }
-      )
-
-      get trainers_training_session_url(@training_session)
-
-      assert_response :success
-      assert_includes @response.body, 'Activity History'
-      assert_includes @response.body, 'Training Scheduled'
-      assert_includes @response.body, 'Library'
-    end
-
-    test 'show displays notes from previous completed training sessions on the same application' do
-      sign_in_for_controller_test @trainer
-      application = create(:application, :old_enough_for_new_application, user: create(:constituent))
-      product = create(:product)
-      previous_session = create(
-        :training_session,
-        :completed,
-        application: application,
-        trainer: @trainer,
-        product_trained_on: product,
-        notes: 'Covered shortcuts, setup, and practice tasks.',
-        completed_at: 3.days.ago,
-        created_at: 4.days.ago
-      )
-      current_session = create(
-        :training_session,
-        :requested,
-        application: application,
-        trainer: @trainer,
-        created_at: 1.day.ago
-      )
-
-      get trainers_training_session_url(current_session)
-
-      assert_response :success
-      assert_equal [previous_session], assigns(:previous_training_sessions).to_a
-      assert_includes @response.body, 'Training Session #2 Details'
-      assert_includes @response.body, 'Previous Training Notes'
-      assert_includes @response.body, product.name
-      assert_includes @response.body, 'Covered shortcuts, setup, and practice tasks.'
-    end
-
-    # Status update
-
-    test 'update_status should update status and log generic event' do
-      sign_in_for_controller_test @trainer
-      original_status = @training_session.status
-      new_status = :confirmed
-
-      assert_difference('Event.count') do
-        patch update_status_trainers_training_session_url(@training_session),
-              params: { training_session: { status: new_status } }
-      end
-
-      @training_session.reload
-      assert_equal new_status.to_s, @training_session.status
-      assert_redirected_to trainers_training_session_url(@training_session)
-      assert_equal 'Training session status updated successfully.', flash[:notice]
-
-      event = Event.last
-      assert_equal 'training_status_changed', event.action
-      assert_equal original_status.to_s, event.metadata['old_status']
-      assert_equal new_status.to_s, event.metadata['new_status']
-      assert_equal @training_session.id, event.metadata['training_session_id']
-      assert_equal @training_session.application_id, event.metadata['application_id']
-      assert_equal @trainer, event.user
-    end
-
-    test 'update_status should handle no_show status and log specific event' do
-      sign_in_for_controller_test @trainer
-      new_status = :no_show
-      no_show_notes = 'Constituent did not appear for the session.'
-
-      assert_difference('Event.count') do
-        patch update_status_trainers_training_session_url(@training_session),
-              params: { training_session: { status: new_status, no_show_notes: no_show_notes } }
-      end
-
-      @training_session.reload
-      assert_equal new_status.to_s, @training_session.status
-      assert_equal no_show_notes, @training_session.no_show_notes
-      assert_redirected_to trainers_training_session_url(@training_session)
-      assert_equal 'Training session status updated successfully.', flash[:notice]
-
-      event = Event.last
-      assert_equal 'training_no_show', event.action
-      assert_equal @training_session.id, event.metadata['training_session_id']
-      assert_equal @training_session.application_id, event.metadata['application_id']
-      assert_equal no_show_notes, event.metadata['no_show_notes']
-      assert_equal @trainer, event.user
-    end
-
-    test 'update_status should not reopen cancelled sessions' do
-      sign_in_for_controller_test @trainer
-      @cancelled_session.update!(cancellation_reason: 'Was cancelled')
-      assert_not_nil @cancelled_session.cancellation_reason
-
-      assert_no_difference('Event.count') do
-        patch update_status_trainers_training_session_url(@cancelled_session),
-              params: { training_session: { status: :scheduled, scheduled_for: 1.day.from_now } }
-      end
-
-      @cancelled_session.reload
-      assert_equal 'cancelled', @cancelled_session.status
-      assert_equal 'Was cancelled', @cancelled_session.cancellation_reason
-      assert_response :unprocessable_content
-      assert_includes @response.body, I18n.t('activerecord.errors.models.training_session.attributes.base.historical_session_reopen')
-    end
-
-    test 'update_status should not reopen no-show sessions' do
-      sign_in_for_controller_test @trainer
-      @no_show_session.update!(no_show_notes: 'Was no show')
-      assert_not_nil @no_show_session.no_show_notes
-
-      assert_no_difference('Event.count') do
-        patch update_status_trainers_training_session_url(@no_show_session),
-              params: { training_session: { status: :scheduled, scheduled_for: 1.day.from_now } }
-      end
-
-      @no_show_session.reload
-      assert_equal 'no_show', @no_show_session.status
-      assert_equal 'Was no show', @no_show_session.no_show_notes
-      assert_response :unprocessable_content
-      assert_includes @response.body, I18n.t('activerecord.errors.models.training_session.attributes.base.historical_session_reopen')
-    end
-
-    # Complete
-    test 'complete should update status to completed, set completed_at, notes, product, and log specific event' do
-      sign_in_for_controller_test @trainer
-      notes = 'Training session completed successfully.'
-
-      assert_difference('Event.count') do
-        post complete_trainers_training_session_url(@training_session),
-             params: { notes: notes, product_trained_on_id: @product.id, duration_hours: '2.5' }
-      end
-
-      @training_session.reload
-      assert_equal 'completed', @training_session.status
-      assert_not_nil @training_session.completed_at
-      assert_equal notes, @training_session.notes
-      assert_equal @product, @training_session.product_trained_on
-      assert_equal BigDecimal('2.5'), @training_session.duration_hours
-      assert_nil @training_session.cancellation_reason
-      assert_nil @training_session.no_show_notes
-      assert_redirected_to trainers_training_session_url(@training_session)
-      assert_equal 'Training session completed successfully.', flash[:notice]
-
-      event = Event.last
-      assert_equal 'training_completed', event.action
-      assert_equal @training_session.id, event.metadata['training_session_id']
-      assert_equal @training_session.application_id, event.metadata['application_id']
-      assert_not_nil event.metadata['completed_at']
-      assert_equal '2.5', event.metadata['duration_hours']
-      assert_equal notes, event.metadata['notes']
-      assert_equal @product.name, event.metadata['product_trained_on']
-      assert_equal @trainer, event.user
-    end
-
-    test 'complete should work before scheduled time' do
-      sign_in_for_controller_test @trainer
-      @training_session.update_columns(scheduled_for: 2.weeks.from_now)
-
-      assert_difference('Event.where(action: "training_completed").count', 1) do
-        post complete_trainers_training_session_url(@training_session),
-             params: { notes: 'Completed during an early visit.', product_trained_on_id: @product.id, duration_hours: '2.0' }
-      end
-
-      @training_session.reload
-      assert_equal 'completed', @training_session.status
-      assert_equal 'Completed during an early visit.', @training_session.notes
-      assert_redirected_to trainers_training_session_url(@training_session)
-    end
-
-    test 'complete should fail for requested sessions' do
-      sign_in_for_controller_test @trainer
-
-      assert_no_difference('Event.count') do
-        post complete_trainers_training_session_url(@requested_session),
-             params: { notes: 'Premature completion attempt.', product_trained_on_id: @product.id, duration_hours: '2.0' }
-      end
-
-      @requested_session.reload
-      assert_equal 'requested', @requested_session.status
-      assert_response :unprocessable_content
-      assert_includes @response.body, I18n.t('training_sessions.complete.invalid_status')
-    end
-
-    test 'complete should fail without notes' do
-      sign_in_for_controller_test @trainer
-
-      assert_no_difference('Event.count') do
-        post complete_trainers_training_session_url(@training_session),
-             params: { product_trained_on_id: @product.id, duration_hours: '2.0' }
-      end
-
-      @training_session.reload
-      assert_equal 'scheduled', @training_session.status
-      assert_response :unprocessable_content
-      assert_includes @response.body, 'Failed to complete training session:'
-    end
-
-    test 'complete should fail without product_trained_on_id' do
-      sign_in_for_controller_test @trainer
-      notes = 'Training session completed successfully.'
-
-      assert_no_difference('Event.count') do
-        post complete_trainers_training_session_url(@training_session), params: { notes: notes }
-      end
-
-      @training_session.reload
-      assert_equal 'scheduled', @training_session.status
-      assert_response :unprocessable_content
-      assert_includes @response.body, 'Failed to complete training session:'
-    end
-
-    test 'complete should fail without duration_hours' do
-      sign_in_for_controller_test @trainer
-
-      assert_no_difference('Event.count') do
-        post complete_trainers_training_session_url(@training_session),
-             params: { notes: 'Training session completed successfully.', product_trained_on_id: @product.id }
-      end
-
-      @training_session.reload
-      assert_equal 'scheduled', @training_session.status
-      assert_response :unprocessable_content
-      assert_includes @response.body, 'Failed to complete training session:'
-    end
-
-    test 'complete should fail with zero or negative duration_hours' do
-      sign_in_for_controller_test @trainer
-
-      ['0', '-1'].each do |duration_hours|
-        assert_no_difference('Event.count') do
-          post complete_trainers_training_session_url(@training_session),
-               params: {
-                 notes: 'Training session completed successfully.',
-                 product_trained_on_id: @product.id,
-                 duration_hours: duration_hours
-               }
+    test 'completion defaults use recorded appointment details but rejected blanks still win' do
+      @session.update!(product_trained_on: @product, duration_hours: '1.5')
+      travel_to(@session.scheduled_for + 1.hour) do
+        sign_in_for_controller_test(@trainer)
+        get trainers_training_session_path(@session)
+
+        assert_response :success
+        assert_input_value '#complete_completed_at', @session.scheduled_for.strftime('%Y-%m-%dT%H:%M')
+        assert_select_value '#complete_product_trained_on_id', @product.id.to_s
+        assert_select '#complete_duration_hours' do |fields|
+          assert_equal BigDecimal('1.5'), BigDecimal(fields.sole['value'])
         end
 
-        @training_session.reload
-        assert_equal 'scheduled', @training_session.status
+        attempted = completion_params.merge(completed_at: '', product_trained_on_id: '', duration_hours: '')
+        post complete_trainers_training_session_path(@session), params: attempted
         assert_response :unprocessable_content
-        assert_includes @response.body, 'Failed to complete training session:'
+        assert_completion_values(attempted)
+        assert_select_value '#complete_product_trained_on_id', ''
       end
     end
 
-    # Schedule
-    test 'schedule should update status to scheduled, set scheduled_for, notes, and log specific event' do
-      sign_in_for_controller_test @trainer
-      scheduled_time = 2.days.from_now
-      notes = 'Scheduling notes.'
-
-      starting_event_count = Event.count
-
-      post schedule_trainers_training_session_url(@requested_session),
-           params: { scheduled_for: scheduled_time, notes: notes }
-
-      assert_equal starting_event_count + 1, Event.count,
-                   'Expected Event.count to increase by 1 but it remained the same'
-
-      @requested_session.reload
-      assert_equal 'scheduled', @requested_session.status
-      assert_in_delta scheduled_time, @requested_session.scheduled_for, 1.second
-      assert_equal notes, @requested_session.notes
-      assert_nil @requested_session.cancellation_reason
-      assert_nil @requested_session.no_show_notes
-      assert_redirected_to trainers_training_session_url(@requested_session)
-      assert_equal 'Training session scheduled successfully.', flash[:notice]
-
-      event = Event.last
-      assert_equal 'training_scheduled', event.action
-      assert_equal @requested_session.id, event.metadata['training_session_id']
-      assert_equal @requested_session.application_id, event.metadata['application_id']
-      assert_not_nil event.metadata['scheduled_for']
-      assert_equal notes, event.metadata['notes']
-      assert_equal @trainer, event.user
-    end
-
-    test 'schedule should fail without scheduled_for' do
-      sign_in_for_controller_test @trainer
-      notes = 'Scheduling notes.'
-
-      assert_no_difference('Event.count') do
-        post schedule_trainers_training_session_url(@requested_session), params: { notes: notes }
-      end
-
-      @requested_session.reload
-      assert_equal 'requested', @requested_session.status
-      assert_response :unprocessable_content
-      assert_includes @response.body, 'Failed to schedule training session:'
-    end
-
-    test 'schedule additional creates another scheduled session and logs event' do
-      sign_in_for_controller_test @trainer
-      update_max_training_sessions(3)
-      @application.update_columns(status: Application.statuses[:approved], application_date: 1.year.ago.to_date)
-      scheduled_time = 2.weeks.from_now
-
-      assert_difference('TrainingSession.count', 1) do
-        assert_difference('Event.where(action: "training_scheduled").count', 1) do
-          post schedule_additional_trainers_training_session_url(@training_session),
-               params: {
-                 scheduled_for: scheduled_time,
-                 location: 'Library',
-                 notes: 'Second weekly session'
-               }
-        end
-      end
-
-      additional_session = @application.training_sessions.order(created_at: :desc).first
-      assert_equal 'scheduled', additional_session.status
-      assert_equal @trainer, additional_session.trainer
-      assert_in_delta scheduled_time, additional_session.scheduled_for, 1.second
-      assert_equal 'Library', additional_session.location
-      assert_equal 'Second weekly session', additional_session.notes
-      assert_redirected_to trainers_training_session_url(additional_session)
-
-      event = Event.where(action: 'training_scheduled').last
-      assert_equal additional_session.id, event.metadata['training_session_id']
-      assert_equal @application.id, event.metadata['application_id']
-      assert_equal @training_session.id, event.metadata['source_training_session_id']
-      assert_equal 'additional', event.metadata['scheduled_via']
-    end
-
-    test 'schedule additional works from a completed session' do
-      sign_in_for_controller_test @trainer
-      update_max_training_sessions(3)
-      application = create(:application, :approved, user: create(:constituent), application_date: 1.year.ago)
-      completed_session = create(:training_session, :completed, trainer: @trainer, application: application)
-      scheduled_time = 2.weeks.from_now
-
-      assert_difference('TrainingSession.count', 1) do
-        assert_difference('Event.where(action: "training_scheduled").count', 1) do
-          post schedule_additional_trainers_training_session_url(completed_session),
-               params: {
-                 scheduled_for: scheduled_time,
-                 notes: 'Second session after completion'
-               }
-        end
-      end
-
-      additional_session = application.training_sessions.where(status: :scheduled).order(created_at: :desc).first
-      assert_redirected_to trainers_training_session_url(additional_session)
-      assert_equal completed_session.id, Event.where(action: 'training_scheduled').last.metadata['source_training_session_id']
-    end
-
-    test 'schedule additional fails when training slots are exhausted' do
-      sign_in_for_controller_test @trainer
-      update_max_training_sessions(1)
-      @application.update_columns(status: Application.statuses[:approved], application_date: 1.year.ago.to_date)
-
-      assert_no_difference('TrainingSession.count') do
-        assert_no_difference('Event.count') do
-          post schedule_additional_trainers_training_session_url(@training_session),
-               params: { scheduled_for: 2.weeks.from_now }
-        end
-      end
-
-      assert_response :unprocessable_content
-      assert_includes @response.body, 'Failed to schedule additional training session:'
-    end
-
-    test 'schedule additional fails with a past scheduled time' do
-      sign_in_for_controller_test @trainer
-
-      assert_no_difference('TrainingSession.count') do
-        assert_no_difference('Event.count') do
-          post schedule_additional_trainers_training_session_url(@training_session),
-               params: { scheduled_for: 1.day.ago }
-        end
-      end
-
-      assert_response :unprocessable_content
-      assert_includes @response.body, 'scheduled_for must be in the future'
-    end
-
-    # Reschedule
-    test 'reschedule should update scheduled_for, reschedule_reason, status to scheduled, and log specific event' do
-      sign_in_for_controller_test @trainer
-      new_scheduled_time = 3.days.from_now
-      reschedule_reason = 'Trainer unavailable at original time.'
-
-      # NotificationDeliveryStub suppresses model delivery, so this test verifies the audit event.
-      assert_difference('Event.count') do
-        post reschedule_trainers_training_session_url(@training_session),
-             params: { scheduled_for: new_scheduled_time, reschedule_reason: reschedule_reason }
-      end
-
-      @training_session.reload
-      assert_equal 'scheduled', @training_session.status
-      assert_in_delta new_scheduled_time, @training_session.scheduled_for, 1.second
-      assert_equal reschedule_reason, @training_session.reschedule_reason
-      assert_nil @training_session.cancellation_reason
-      assert_nil @training_session.no_show_notes
-      assert_redirected_to trainers_training_session_url(@training_session)
-      assert_equal 'Training session rescheduled successfully.', flash[:notice]
-
-      event = Event.last
-      assert_equal 'training_rescheduled', event.action
-      assert_equal @training_session.id, event.metadata['training_session_id']
-      assert_equal @training_session.application_id, event.metadata['application_id']
-      assert_not_nil event.metadata['old_scheduled_for']
-      assert_not_nil event.metadata['new_scheduled_for']
-      assert_equal reschedule_reason, event.metadata['reason']
-      assert_equal @trainer, event.user
-    end
-
-    test 'reschedule should fail without scheduled_for' do
-      sign_in_for_controller_test @trainer
-      reschedule_reason = 'Trainer unavailable.'
-
-      assert_no_difference('Event.count') do
-        post reschedule_trainers_training_session_url(@training_session),
-             params: { reschedule_reason: reschedule_reason }
-      end
-
-      @training_session.reload
-      assert_equal 'scheduled', @training_session.status
-      assert_response :unprocessable_content
-      assert_includes @response.body, 'Failed to reschedule training session:'
-    end
-
-    test 'reschedule should fail without reschedule_reason' do
-      sign_in_for_controller_test @trainer
-      new_scheduled_time = 3.days.from_now
-
-      assert_no_difference('Event.count') do
-        post reschedule_trainers_training_session_url(@training_session),
-             params: { scheduled_for: new_scheduled_time }
-      end
-
-      @training_session.reload
-      assert_equal 'scheduled', @training_session.status
-      assert_response :unprocessable_content
-      assert_includes @response.body, 'Failed to reschedule training session:'
-    end
-
-    test 'reschedule does not accept cancelled sessions' do
-      sign_in_for_controller_test @trainer
-
-      assert_no_difference('TrainingSession.count') do
-        assert_no_difference('Event.count') do
-          post reschedule_trainers_training_session_url(@cancelled_session),
-               params: {
-                 scheduled_for: 3.days.from_now,
-                 reschedule_reason: 'Wrong endpoint'
-               }
-        end
-      end
-
-      @cancelled_session.reload
-      assert_equal 'cancelled', @cancelled_session.status
-      assert_response :unprocessable_content
-      assert_includes @response.body, I18n.t('training_sessions.reschedule.wrong_status')
-    end
-
-    test 'reschedule cancelled session schedules follow-up without mutating historical row' do
-      sign_in_for_controller_test @trainer
-      application = create(:application, :approved, user: create(:constituent), application_date: 1.year.ago)
-      cancelled_session = create(:training_session, :cancelled, trainer: @trainer, application: application)
-      original_cancelled_at = cancelled_session.cancelled_at
-      original_reason = cancelled_session.cancellation_reason
-      scheduled_time = 3.days.from_now
-
-      assert_difference('TrainingSession.count', 1) do
-        assert_difference('Event.where(action: "training_followup_scheduled").count', 1) do
-          post trainers_training_session_follow_up_url(cancelled_session),
-               params: {
-                 scheduled_for: scheduled_time,
-                 reschedule_reason: 'Follow-up after cancellation',
-                 location: 'Library'
-               }
-        end
-      end
-
-      cancelled_session.reload
-      follow_up_session = cancelled_session.application.training_sessions.where(status: :scheduled).order(:created_at).last
-
-      assert_equal 'cancelled', cancelled_session.status
-      assert_equal original_cancelled_at.to_i, cancelled_session.cancelled_at.to_i
-      assert_equal original_reason, cancelled_session.cancellation_reason
-      assert_equal 'scheduled', follow_up_session.status
-      assert_equal cancelled_session.application, follow_up_session.application
-      assert_equal @trainer, follow_up_session.trainer
-      assert_equal 'Follow-up after cancellation', follow_up_session.reschedule_reason
-      assert_redirected_to trainers_training_session_url(follow_up_session)
-
-      event = Event.where(action: 'training_followup_scheduled').last
-      assert_equal follow_up_session.id, event.metadata['training_session_id']
-      assert_equal cancelled_session.id, event.metadata['previous_training_session_id']
-    end
-
-    test 'reschedule no-show session schedules follow-up when another session is active and quota remains' do
-      sign_in_for_controller_test @trainer
-      update_max_training_sessions(3)
-      application = create(:application, :approved, user: create(:constituent), application_date: 1.year.ago)
-      no_show_session = create(:training_session, :no_show, application: application, trainer: @trainer)
-      create(:training_session, :scheduled, application: application, trainer: @trainer)
-      scheduled_time = 3.days.from_now
-
-      assert_difference('TrainingSession.count', 1) do
-        assert_difference('Event.where(action: "training_followup_scheduled").count', 1) do
-          post trainers_training_session_follow_up_url(no_show_session),
-               params: {
-                 scheduled_for: scheduled_time,
-                 reschedule_reason: 'Schedule within remaining quota'
-               }
-        end
-      end
-
-      no_show_session.reload
-      follow_up_session = application.training_sessions.where(status: :scheduled).order(:created_at).last
-      assert_equal 'no_show', no_show_session.status
-      assert_redirected_to trainers_training_session_url(follow_up_session)
-      assert_equal 'Schedule within remaining quota', follow_up_session.reschedule_reason
-    end
-
-    # Cancel
-    test 'cancel should update status to cancelled, set cancelled_at, cancellation_reason, and log specific event' do
-      sign_in_for_controller_test @trainer
-      cancellation_reason = 'Constituent cancelled.'
-
-      assert_difference('Event.count') do
-        post cancel_trainers_training_session_url(@training_session),
-             params: { cancellation_reason: cancellation_reason }
-      end
-
-      @training_session.reload
-      assert_equal 'cancelled', @training_session.status
-      assert_not_nil @training_session.cancelled_at
-      assert_equal cancellation_reason, @training_session.cancellation_reason
-      assert_equal 'trainer', @training_session.cancellation_initiator
-      assert_nil @training_session.notes
-      assert_nil @training_session.no_show_notes
-      assert_redirected_to trainers_training_session_url(@training_session)
-      assert_equal 'Training session cancelled successfully.', flash[:notice]
-
-      event = Event.last
-      assert_equal 'training_cancelled', event.action
-      assert_equal @training_session.id, event.metadata['training_session_id']
-      assert_equal @training_session.application_id, event.metadata['application_id']
-      assert_equal cancellation_reason, event.metadata['cancellation_reason']
-      assert_equal 'trainer', event.metadata['cancellation_initiator']
-      assert_equal @trainer, event.user
-    end
-
-    test 'cancel should work after scheduled time' do
-      sign_in_for_controller_test @trainer
-      @training_session.update_columns(scheduled_for: 1.day.ago)
-
-      assert_difference('Event.where(action: "training_cancelled").count', 1) do
-        post cancel_trainers_training_session_url(@training_session),
-             params: { cancellation_reason: 'Constituent called after the appointment time.' }
-      end
-
-      @training_session.reload
-      assert_equal 'cancelled', @training_session.status
-      assert_equal 'Constituent called after the appointment time.', @training_session.cancellation_reason
-      assert_redirected_to trainers_training_session_url(@training_session)
-    end
-
-    test 'cancel should fail for completed sessions' do
-      sign_in_for_controller_test @trainer
-
-      assert_no_difference('Event.count') do
-        post cancel_trainers_training_session_url(@completed_session),
-             params: { cancellation_reason: 'Late cancellation attempt.' }
-      end
-
-      @completed_session.reload
-      assert_equal 'completed', @completed_session.status
-      assert_response :unprocessable_content
-      assert_includes @response.body, I18n.t('training_sessions.cancel.invalid_status')
-    end
-
-    test 'cancel should fail without cancellation_reason' do
-      sign_in_for_controller_test @trainer
-
-      assert_no_difference('Event.count') do
-        post cancel_trainers_training_session_url(@training_session)
-      end
-
-      @training_session.reload
-      assert_equal 'scheduled', @training_session.status
-      assert_response :unprocessable_content
-      assert_includes @response.body, 'Failed to cancel training session:'
-    end
-
-    # Index and filter
-
-    test 'index should return success when signed in (basic check)' do
-      sign_in_for_controller_test @trainer
-      get trainers_training_sessions_url
-      assert_response :redirect
-    end
-
-    test 'index should redirect to dashboard if no filter params' do
-      sign_in_for_controller_test @trainer
-      get trainers_training_sessions_url
-      assert_redirected_to trainers_dashboard_url
-    end
-
-    test 'index should filter sessions if filter params are present (trainer)' do
-      sign_in_for_controller_test @trainer
-      trainer_scheduled = @training_session
-      trainer_completed = @completed_session
-      other_trainer_scheduled = @other_trainer_session
-
-      get trainers_training_sessions_url(status: 'scheduled', scope: 'mine')
-      assert_response :success
-      assert_equal 'mine', assigns(:current_scope)
-      assert_equal 'scheduled', assigns(:current_status)
-      assert_includes assigns(:training_sessions), trainer_scheduled
-      assert_not_includes assigns(:training_sessions), trainer_completed
-      assert_not_includes assigns(:training_sessions), other_trainer_scheduled
-    end
-
-    test 'index should filter sessions if filter params are present (admin)' do
-      sign_in_for_controller_test @admin
-      trainer_scheduled = @training_session
-      trainer_completed = @completed_session
-      other_trainer_scheduled = @other_trainer_session
-
-      get trainers_training_sessions_url(status: 'scheduled', scope: 'all')
-      assert_response :success
-      assert_equal 'all', assigns(:current_scope)
-      assert_equal 'scheduled', assigns(:current_status)
-      assert_includes assigns(:training_sessions), trainer_scheduled
-      assert_not_includes assigns(:training_sessions), trainer_completed
-      assert_includes assigns(:training_sessions), other_trainer_scheduled
-    end
-
-    test 'filter should filter sessions and render index (trainer)' do
-      sign_in_for_controller_test @trainer
-      trainer_scheduled = @training_session
-      trainer_completed = @completed_session
-      other_trainer_scheduled = @other_trainer_session
-
-      get filtered_trainers_training_sessions_url(status: 'scheduled', scope: 'mine')
-      assert_response :success
-      assert_template :index
-      assert_equal 'mine', assigns(:current_scope)
-      assert_equal 'scheduled', assigns(:current_status)
-      assert_includes assigns(:training_sessions), trainer_scheduled
-      assert_not_includes assigns(:training_sessions), trainer_completed
-      assert_not_includes assigns(:training_sessions), other_trainer_scheduled
-    end
-
-    test 'needs_followup orders sessions by newest updated_at first' do
-      trainer = create(:trainer)
-      sign_in_for_controller_test trainer
-      older_application = create(:application, :approved, user: create(:constituent), application_date: 1.year.ago)
-      newer_application = create(:application, :approved, user: create(:constituent), application_date: 1.year.ago)
-      older_session = create(:training_session, :cancelled, trainer: trainer, application: older_application, updated_at: 2.days.ago)
-      newer_session = create(:training_session, :no_show, trainer: trainer, application: newer_application, updated_at: 1.hour.ago)
-
-      get needs_followup_trainers_training_sessions_url
+    test 'same product guidance has placement-specific unique headings and landmark names' do
+      report = new_session(:completed, product_trained_on: @product)
+      create(:product_resource, product: @product, title: 'Practice guide')
+      purchase = create(:voucher_transaction, voucher: create(:voucher, application: report.application))
+      purchase.voucher_transaction_products.create!(product: @product, quantity: 1)
+      get trainers_training_session_path(report)
 
       assert_response :success
-      assert_equal [newer_session, older_session], assigns(:training_sessions).to_a.first(2)
+      document = response.parsed_body
+      ids = document.css('[id]').pluck('id')
+      assert_equal ids.uniq, ids
+      regions = document.css('section[aria-labelledby]')
+                        .select { |node| node['aria-labelledby'].include?('known-products-heading') || node['aria-labelledby'].include?('completed-trained-product-heading') }
+      assert_equal 2, regions.length
+      names = regions.map do |region|
+        region['aria-labelledby'].split.map { |id| document.at_css("##{id}").text.strip }.join(' ')
+      end
+      assert_equal names.uniq, names
+      assert(names.all? { |name| name.include?(@product.name) })
+      assert_select 'section[aria-labelledby~="known-products-heading"] h4', text: /Practice|Guides for/
+      assert_select 'section[aria-labelledby~="completed-trained-product-heading"] h3', text: /Guides for/
+      assert_select 'dd[lang=en]', text: report.constituent_summary
     end
 
-    test 'needs_followup excludes cancelled sessions superseded by newer scheduled session' do
-      sign_in_for_controller_test @trainer
-      application = create(:application, :approved, user: create(:constituent), application_date: 1.year.ago)
-      cancelled_session = create(:training_session, :cancelled, trainer: @trainer, application: application, created_at: 1.day.ago)
-      scheduled_session = create(:training_session, :scheduled, trainer: @trainer, application: application, created_at: Time.current)
-
-      get needs_followup_trainers_training_sessions_url
+    test 'older reports do not claim that another appointment is unavailable' do
+      report = new_session(:completed)
+      create(:training_session, :requested, application: report.application, trainer: @trainer, created_at: Time.current)
+      get trainers_training_session_path(report)
 
       assert_response :success
-      assert_not_includes assigns(:training_sessions), cancelled_session
-      assert_not_includes assigns(:training_sessions), scheduled_session
+      assert_not_includes response.body, 'Another appointment is unavailable'
+      assert_not_includes response.body, I18n.t('training_rules.close_open_first')
+      assert_select 'input[value="Schedule another session"]', count: 0
     end
 
-    test 'follow-up scheduling creates a scheduled session without intermediate requested row' do
-      sign_in_for_controller_test @trainer
-      application = create(:application, :approved, user: create(:constituent), application_date: 1.year.ago)
-      cancelled_session = create(:training_session, :cancelled, trainer: @trainer, application: application)
+    test 'guardian-coordinated preparation uses the applications managing guardian and proposed summary language' do
+      guardian = create(:constituent, locale: 'es')
+      applicant = create(:constituent, dependent_email: guardian.email, dependent_phone: guardian.phone)
+      create(:guardian_relationship, guardian_user: guardian, dependent_user: applicant)
+      application = create(:application, :approved, :with_all_proofs, user: applicant, managing_guardian: guardian,
+                                                                      application_date: Date.current, assigned_trainer: @trainer)
+      session = create(:training_session, :scheduled, application: application, trainer: @trainer)
 
-      post trainers_training_session_follow_up_url(cancelled_session),
-           params: {
-             scheduled_for: 3.days.from_now,
-             reschedule_reason: 'Follow-up after cancellation'
-           }
-
-      follow_up_session = application.training_sessions.where(status: :scheduled).order(created_at: :desc).first
-      assert_not application.training_sessions.exists?(status: :requested)
-      assert_redirected_to trainers_training_session_url(follow_up_session)
-    end
-
-    test 'trainer cannot use all trainers or trainer_id filters' do
-      sign_in_for_controller_test @trainer
-
-      get filtered_trainers_training_sessions_url(scope: 'all', status: 'scheduled', trainer_id: @other_trainer.id)
+      get trainers_training_session_path(session)
 
       assert_response :success
+      assert_includes response.body, guardian.full_name
+      assert_select "a[href='mailto:#{guardian.email}']"
+      assert_select "a[href='mailto:#{applicant.email}']", count: 0
+      assert_select '#complete_summary_locale option[value=es][selected]'
+      assert_includes response.body, 'Spanish'
+    end
+
+    test 'requested appointments offer scheduling and cancellation with a blank agreed date' do
+      session = new_session(:requested)
+      get trainers_training_session_path(session)
+
+      assert_response :success
+      assert_select "form[action='#{schedule_trainers_training_session_path(session)}']"
+      assert_select "form[action='#{cancel_trainers_training_session_path(session)}']"
+      assert_select '#schedule_scheduled_for[required]'
+      assert_select '#schedule_scheduled_for[value]', count: 0
+      assert_select 'details:not([open]) summary', text: 'Cancel this unscheduled appointment'
+      assert_select "form[action='#{cancel_trainers_training_session_path(session)}'][data-turbo-confirm]"
+      assert_select '#schedule_scheduled_for[aria-describedby=schedule-time-help]'
+      assert_select 'h2#session-actions-heading', text: 'Session actions'
+      assert_select "form[action='#{complete_trainers_training_session_path(session)}']", count: 0
+    end
+
+    test 'admin oversight is read-only and another trainer has no report or contact access' do
+      sign_in_for_controller_test(@admin)
+      get trainers_training_session_path(@session)
+      assert_response :success
+      assert_includes response.body, 'This view is read-only.'
+      assert_select "form[action='#{complete_trainers_training_session_path(@session)}']", count: 0
+      assert_select '#preparation-heading'
+
+      sign_in_for_controller_test(@other_trainer)
+      get trainers_training_session_path(@session)
+      assert_response :not_found
+      assert_not_includes response.body, @application.user.email
+    end
+
+    test 'historical author retains their report without current contact preparation or newer reports' do
+      report = new_session(:completed, internal_notes: 'Own authored observations', constituent_summary: 'Own shared summary')
+      application = report.application
+      contact_email = application.user.email
+      assert application.unassign_trainer!(actor: @admin)
+      assert application.assign_trainer!(@other_trainer, actor: @admin)
+      newer = create(:training_session, :completed, application: application, trainer: @other_trainer,
+                                                    internal_notes: 'NEW TRAINER REPORT SENTINEL', constituent_summary: 'New shared summary')
+      cancelled = create(:training_session, :cancelled, application: application, trainer: @other_trainer,
+                                                        cancellation_reason: 'NEW CANCELLATION SENTINEL')
+      create(:notification, notifiable: report, recipient: application.user, action: 'training_completed', delivery_status: :error)
+
+      get trainers_training_session_path(report)
+
+      assert_response :success
+      assert_includes response.body, 'Own authored observations'
+      assert_includes response.body, 'Own shared summary'
+      assert_includes response.body, 'read-only access to this authored report'
+      assert_not_includes response.body, contact_email
+      assert_not_includes response.body, newer.internal_notes
+      assert_not_includes response.body, cancelled.cancellation_reason
+      assert_select '#preparation-heading', count: 0
+      assert_select '#activity-history-heading', count: 0
+      assert_select "[aria-label='#{I18n.t('delivery_visibility.history')}']", count: 0
+      assert_select '[aria-label="Training capacity"]', count: 0
+      assert_select 'form[action*="training_sessions"]', count: 0
+      assert_select "a[href='#{trainers_training_session_path(newer)}']", count: 0
+      assert_select 'h2', text: 'Previous completed reports', count: 0
+
+      assert_no_difference ['TrainingSession.count', 'Event.count'] do
+        post schedule_additional_trainers_training_session_path(report), params: { scheduled_for: 2.days.from_now }
+      end
+      assert_redirected_to trainers_training_session_path(report)
+      assert_equal I18n.t('trainers.training_sessions.flash.assigned_trainer_only'), flash[:alert]
+      follow_redirect!
+      assert_select '[data-testid=flash-alert][role=alert][aria-live=assertive]', text: I18n.t('trainers.training_sessions.flash.assigned_trainer_only')
+    end
+
+    test 'early visit completion stores deliberate shared content and actual occurrence separately from submission' do
+      actual_time = 2.hours.ago.change(sec: 0)
+      assert_difference "Event.where(action: 'training_completed').count", 1 do
+        post complete_trainers_training_session_path(@session), params: completion_params.merge(completed_at: actual_time)
+      end
+
+      assert_response :see_other
+      assert_redirected_to trainers_training_session_path(@session)
+      @session.reload
+      assert @session.status_completed?
+      assert_equal actual_time, @session.completed_at
+      assert_operator @session.report_submitted_at, :>, @session.completed_at
+      assert_operator @session.scheduled_for, :>, @session.completed_at
+      assert_equal 'Shared practice and next steps', @session.constituent_summary
+      assert_equal 'es', @session.summary_locale
+      assert_equal 'Private report observations', @session.internal_notes
+      assert_equal @product.id, @session.product_trained_on_id
+      assert_equal BigDecimal('1.25'), @session.duration_hours
+      assert_equal @trainer.id, @application.reload.assigned_trainer_id
+      event = Event.find_by!(action: 'training_completed', auditable: @session)
+      assert_not_includes event.metadata.to_json, 'Private report observations'
+      assert_not_includes event.metadata.to_json, 'Shared practice and next steps'
+      follow_redirect!
+      assert_select '[data-testid=flash-notice][role=status][aria-live=polite][aria-atomic=true]', text: 'Training session completed successfully.'
+      assert_select '#activity-history-heading + div td', text: /Product: #{Regexp.escape(@product.name)}/
+      assert_select '#activity-history-heading + div td', text: /Product ID:/, count: 0
+    end
+
+    test 'invalid completion retains all independent fields then unchanged and corrected retries remain truthful' do
+      attempted = completion_params.merge(completed_at: 1.day.from_now.strftime('%Y-%m-%dT%H:%M'),
+                                          duration_hours: '1.75', internal_notes: 'Attempted private notes',
+                                          constituent_summary: 'Attempted authored summary')
+      2.times do
+        assert_no_difference 'Event.count' do
+          post complete_trainers_training_session_path(@session), params: attempted
+        end
+        assert_response :unprocessable_content
+        assert @session.reload.status_scheduled?
+        assert_nil @session.report_submitted_at
+        assert_completion_values(attempted)
+        assert_select '#complete-errors[role=alert][tabindex="-1"][data-controller=error-summary]'
+        assert_select '#complete_completed_at[aria-invalid=true]'
+        assert_select 'select#training-outcome option[value=complete][selected]'
+        assert_select '[data-training-outcome-target=status]', text: ''
+      end
+
+      post complete_trainers_training_session_path(@session),
+           params: attempted.merge(completed_at: 1.hour.ago.strftime('%Y-%m-%dT%H:%M'), internal_notes: '')
+      assert_response :see_other
+      assert @session.reload.status_completed?
+      assert_equal '', @session.internal_notes
+      assert_equal 'Attempted authored summary', @session.constituent_summary
+    end
+
+    test 'completion preserves deliberately blank required inputs without substituting report language or product' do
+      attempted = completion_params.merge(completed_at: '', product_trained_on_id: '', duration_hours: '',
+                                          internal_notes: '', constituent_summary: '', summary_locale: '')
+      post complete_trainers_training_session_path(@session), params: attempted
+
+      assert_response :unprocessable_content
+      assert_completion_values(attempted)
+      assert_select_value '#complete_summary_locale', ''
+      assert_select_value '#complete_product_trained_on_id', ''
+      assert_equal 'Private preparation retained', @session.reload.internal_notes
+      assert_nil @session.constituent_summary
+    end
+
+    test 'missing trained product links its association error to the submitted product control' do
+      post complete_trainers_training_session_path(@session), params: completion_params.merge(product_trained_on_id: '')
+
+      assert_response :unprocessable_content
+      assert_select '#complete_product_trained_on_id[aria-invalid=true]'
+      assert_select '#complete-errors a[href="#complete_product_trained_on_id"]'
+      assert @session.reload.status_scheduled?
+      assert_nil @session.product_trained_on_id
+    end
+
+    test 'completion with omitted private notes retains preparation and cannot accept a supplied submission timestamp' do
+      post complete_trainers_training_session_path(@session), params: completion_params.except(:internal_notes).merge(report_submitted_at: 5.years.ago)
+
+      assert_response :see_other
+      @session.reload
+      assert_equal 'Private preparation retained', @session.internal_notes
+      assert_operator @session.report_submitted_at, :>, 1.minute.ago
+    end
+
+    test 'new appointments accept only scheduling fields and preserve invalid submitted date location and private notes' do
+      session = new_session(:requested)
+      attempted = { scheduled_for: 1.day.ago.strftime('%Y-%m-%dT%H:%M'), location: 'Attempted community room', internal_notes: 'Attempted preparation' }
+      2.times do
+        post schedule_trainers_training_session_path(session), params: attempted
+        assert_response :unprocessable_content
+        assert_input_value '#schedule_scheduled_for', attempted[:scheduled_for]
+        assert_input_value '#schedule_location', attempted[:location]
+        assert_select '#schedule_internal_notes', text: attempted[:internal_notes]
+        assert session.reload.status_requested?
+      end
+      agreed = 2.days.from_now.strftime('%Y-%m-%dT%H:%M')
+      post schedule_trainers_training_session_path(session), params: attempted.merge(scheduled_for: agreed, location: '', internal_notes: '', status: 'completed', constituent_summary: 'Forged summary')
+
+      assert_response :see_other
+      assert session.reload.status_scheduled?
+      assert_equal '', session.location
+      assert_equal '', session.internal_notes
+      assert_nil session.constituent_summary
+    end
+
+    test 'requested cancellation records the named initiator and preserves private preparation' do
+      session = new_session(:requested, internal_notes: 'Private scheduling history')
+      assert_difference "Event.where(action: 'training_cancelled').count", 1 do
+        post cancel_trainers_training_session_path(session), params: { cancellation_reason: 'Constituent requested cancellation', cancellation_initiator: 'constituent' }
+      end
+
+      assert_response :see_other
+      assert session.reload.status_cancelled?
+      assert session.cancellation_initiator_constituent?
+      assert_equal 'Private scheduling history', session.internal_notes
+      assert_equal @trainer.id, session.application.reload.assigned_trainer_id
+      event = Event.find_by!(action: 'training_cancelled', auditable: session)
+      assert_equal @trainer.id, event.user_id
+      assert_equal 'constituent', event.metadata['cancellation_initiator']
+      assert_not_includes event.metadata.to_json, session.cancellation_reason
+    end
+
+    test 'invalid cancellation preserves its reason and initiator for retry' do
+      post cancel_trainers_training_session_path(@session), params: { cancellation_reason: '', cancellation_initiator: 'program' }
+      assert_response :unprocessable_content
+      assert_select '#cancel_cancellation_reason[aria-invalid=true]', text: ''
+      assert_select '#cancel-errors a[href="#cancel_cancellation_reason"]'
+      assert_select '#cancel_cancellation_initiator option[value=program][selected]'
+      assert @session.reload.status_scheduled?
+
+      post cancel_trainers_training_session_path(@session), params: { cancellation_reason: 'Program unavailable', cancellation_initiator: 'program' }
+      assert_response :see_other
+      assert @session.reload.cancellation_initiator_program?
+    end
+
+    test 'missing cancellation initiator and reschedule reason point the error summary to their controls' do
+      post cancel_trainers_training_session_path(@session), params: { cancellation_reason: 'Participant requested cancellation', cancellation_initiator: '' }
+      assert_response :unprocessable_content
+      assert_select '#cancel_cancellation_initiator[aria-invalid=true]'
+      assert_select '#cancel-errors a[href="#cancel_cancellation_initiator"]'
+      assert_select '#cancel_cancellation_reason', text: 'Participant requested cancellation'
+      assert @session.reload.status_scheduled?
+
+      post reschedule_trainers_training_session_path(@session), params: { scheduled_for: 3.days.from_now, location: 'Attempted room', reschedule_reason: '' }
+      assert_response :unprocessable_content
+      assert_select '#reschedule_reschedule_reason[aria-invalid=true]'
+      assert_select '#reschedule-errors a[href="#reschedule_reschedule_reason"]'
+      assert_input_value '#reschedule_location', 'Attempted room'
+      assert @session.reload.status_scheduled?
+
+      post reschedule_trainers_training_session_path(@session), params: { scheduled_for: @session.scheduled_for.strftime('%Y-%m-%dT%H:%M'), reschedule_reason: 'Same agreement submitted again' }
+      assert_response :unprocessable_content
+      assert_select '#reschedule_scheduled_for[aria-invalid=true]'
+      assert_select '#reschedule-errors a[href="#reschedule_scheduled_for"]'
+    end
+
+    test 'new outcome validation uses the trainers supported viewer language' do
+      @trainer.update!(locale: 'es')
+      post no_show_trainers_training_session_path(@session), params: { no_show_notes: 'Demasiado pronto' }
+
+      assert_response :unprocessable_content
+      assert_includes response.body, 'Registre una ausencia solo después de la hora programada de la cita.'
+      assert @session.reload.status_scheduled?
+    end
+
+    test 'passed appointments offer no-show and closing while an early no-show and stale terminal rewrite fail' do
+      post no_show_trainers_training_session_path(@session), params: { no_show_notes: 'Too early' }
+      assert_response :unprocessable_content
+      assert @session.reload.status_scheduled?
+
+      travel_to 2.days.from_now do
+        sign_in_for_controller_test(@trainer)
+        get trainers_training_session_path(@session)
+        assert_select '#training-outcome option[value=no_show]'
+        assert_select '#training-outcome option[value=reschedule]'
+        post no_show_trainers_training_session_path(@session), params: { no_show_notes: '' }
+        assert_response :unprocessable_content
+        assert_select '#no_show_no_show_notes', text: ''
+        post no_show_trainers_training_session_path(@session), params: { no_show_notes: 'Private absence reason' }
+        assert_response :see_other
+      end
+      assert @session.reload.status_no_show?
+      assert_equal 'Private preparation retained', @session.internal_notes
+      assert_no_difference 'Event.count' do
+        post complete_trainers_training_session_path(@session), params: completion_params
+      end
+      assert_response :unprocessable_content
+      assert @session.reload.status_no_show?
+    end
+
+    test 'rescheduling requires a different future agreed date and retains rejected submitted state' do
+      attempted = { scheduled_for: @session.scheduled_for.strftime('%Y-%m-%dT%H:%M'), location: 'Attempted new location', reschedule_reason: 'Constituent requested a change' }
+      attempted[:scheduled_for] = ''
+      2.times do
+        post reschedule_trainers_training_session_path(@session), params: attempted
+        assert_response :unprocessable_content
+        assert_input_value '#reschedule_scheduled_for', ''
+        assert_input_value '#reschedule_location', attempted[:location]
+        assert_select '#reschedule_reschedule_reason', text: attempted[:reschedule_reason]
+      end
+      post reschedule_trainers_training_session_path(@session), params: attempted.merge(scheduled_for: 3.days.from_now.strftime('%Y-%m-%dT%H:%M'), location: '')
+      assert_response :see_other
+      assert_equal '', @session.reload.location
+      assert_equal 'Private preparation retained', @session.internal_notes
+      assert_equal attempted[:reschedule_reason], @session.reschedule_reason
+    end
+
+    test 'additional appointments start only from the current latest completed outcome and preserve invalid fields' do
+      assert_no_difference 'TrainingSession.count' do
+        post schedule_additional_trainers_training_session_path(@session), params: { scheduled_for: 2.days.from_now }
+      end
+      assert_response :unprocessable_content
+      report = new_session(:completed)
+      get trainers_training_session_path(report)
+      assert_select '#schedule_additional_scheduled_for[value]', count: 0
+      attempted = { scheduled_for: '', location: 'Follow-on location', internal_notes: 'Follow-on private notes' }
+      2.times do
+        post schedule_additional_trainers_training_session_path(report), params: attempted
+        assert_response :unprocessable_content
+        assert_input_value '#schedule_additional_scheduled_for', ''
+        assert_input_value '#schedule_additional_location', attempted[:location]
+        assert_select '#schedule_additional_internal_notes', text: attempted[:internal_notes]
+      end
+      assert_difference 'TrainingSession.count', 1 do
+        post schedule_additional_trainers_training_session_path(report), params: attempted.merge(scheduled_for: 3.days.from_now, internal_notes: '')
+      end
+      created = report.application.training_sessions.assigned_or_scheduled.sole
+      assert_redirected_to trainers_training_session_path(created)
+      assert_equal '', created.internal_notes
+      assert report.reload.status_completed?
+      assert_no_difference ['TrainingSession.count', 'Event.count'] do
+        post schedule_additional_trainers_training_session_path(report), params: { scheduled_for: 4.days.from_now }
+      end
+      assert_response :unprocessable_content
+    end
+
+    test 'a stale form overtaken by removal is denied after locked recheck without rendering contact details' do
+      constructor = ::TrainingSessions::CompleteService.method(:new)
+      remove_before_service = lambda do |*arguments|
+        assert @application.unassign_trainer!(actor: @admin)
+        constructor.call(*arguments)
+      end
+
+      ::TrainingSessions::CompleteService.stub(:new, remove_before_service) do
+        post complete_trainers_training_session_path(@session), params: completion_params
+      end
+
+      assert_redirected_to trainers_training_sessions_path
+      assert_not_includes response.body, @application.user.email
+      assert @session.reload.status_cancelled?
+      assert_nil @session.constituent_summary
+      assert_nil @application.reload.assigned_trainer_id
+      assert_not Event.exists?(action: 'training_completed', auditable: @session)
+    end
+
+    test 'generic status creation edit and destruction routes are absent' do
+      [[:post, "/trainers/training_sessions/#{@session.id}/update_status"],
+       [:patch, "/trainers/training_sessions/#{@session.id}"],
+       [:post, '/trainers/training_sessions'],
+       [:get, "/trainers/training_sessions/#{@session.id}/edit"],
+       [:delete, "/trainers/training_sessions/#{@session.id}"]].each do |method, path|
+        assert_raises(ActionController::RoutingError) { Rails.application.routes.recognize_path(path, method: method) }
+      end
+    end
+
+    test 'named routes reject another trainers session without changing either application' do
+      before = @other_session.attributes
+      assert_no_difference ['TrainingSession.count', 'Event.count'] do
+        post complete_trainers_training_session_path(@other_session), params: completion_params
+        assert_response :not_found
+        post cancel_trainers_training_session_path(@other_session), params: { cancellation_reason: 'Forged cancellation' }
+        assert_response :not_found
+      end
+      assert_equal before, @other_session.reload.attributes
+      assert @session.reload.status_scheduled?
+    end
+
+    test 'filtered lists preserve trainer isolation while admins can select a trainer' do
+      completed = new_session(:completed, duration_hours: 2.5)
+      get trainers_training_sessions_path(status: 'scheduled', scope: 'all', trainer_id: @other_trainer.id)
+      assert_response :success
+      assert_equal [@session.id], assigns(:training_sessions).pluck(:id)
       assert_equal 'mine', assigns(:current_scope)
       assert_nil assigns(:trainer_filter)
-      assert_includes assigns(:training_sessions), @training_session
-      assert_not_includes assigns(:training_sessions), @other_trainer_session
-      assert_select 'a', text: 'All Trainers', count: 0
-      assert_select 'a', text: 'My Sessions', count: 0
-    end
 
-    test 'filter should filter sessions and render index (admin)' do
-      sign_in_for_controller_test @admin
-      trainer_scheduled = @training_session
-      trainer_completed = @completed_session
-      other_trainer_scheduled = @other_trainer_session
-
-      get filtered_trainers_training_sessions_url(status: 'scheduled', scope: 'all')
+      get completed_trainers_training_sessions_path
       assert_response :success
-      assert_template :index
-      assert_equal 'all', assigns(:current_scope)
-      assert_equal 'scheduled', assigns(:current_status)
-      assert_includes assigns(:training_sessions), trainer_scheduled
-      assert_not_includes assigns(:training_sessions), trainer_completed
-      assert_includes assigns(:training_sessions), other_trainer_scheduled
-    end
+      assert_equal [completed.id], assigns(:training_sessions).pluck(:id)
+      assert_includes response.body, 'Duration: 2.5 hours'
 
-    test 'admin can filter sessions by trainer' do
-      sign_in_for_controller_test @admin
-
-      get filtered_trainers_training_sessions_url(scope: 'all', trainer_id: @trainer.id)
-
+      sign_in_for_controller_test(@admin)
+      get filtered_trainers_training_sessions_path(scope: 'all', status: 'scheduled')
       assert_response :success
-      assert_equal 'all', assigns(:current_scope)
-      assert_equal @trainer, assigns(:trainer_filter)
-      assert_includes assigns(:training_sessions), @training_session
-      assert_includes assigns(:training_sessions), @completed_session
-      assert_not_includes assigns(:training_sessions), @other_trainer_session
-      assert_includes @response.body, @trainer.full_name
+      assert_includes assigns(:training_sessions).pluck(:id), @session.id
+      assert_includes assigns(:training_sessions).pluck(:id), @other_session.id
+      get filtered_trainers_training_sessions_path(scope: 'all', trainer_id: @trainer.id)
+      assert_response :success
+      assert_equal [@session.id, completed.id].sort, assigns(:training_sessions).pluck(:id).sort
+      assert_equal @trainer.id, assigns(:trainer_filter).id
     end
 
-    test 'completed sessions list displays training duration' do
-      sign_in_for_controller_test @trainer
-      @completed_session.update!(duration_hours: 2.5)
+    test 'status filters identify the selected filter as current without describing it as a page' do
+      { nil => 'All', 'requested' => 'Needs Scheduling', 'scheduled' => 'Scheduled', 'completed' => 'Completed',
+        'needs_followup' => 'Needs Follow-up', 'cancelled' => 'Needs Follow-up', 'no_show' => 'Needs Follow-up' }.each do |status, label|
+        get trainers_training_sessions_path(status: status)
 
-      get completed_trainers_training_sessions_url
+        assert_response :success
+        assert_select '[role=group][aria-labelledby=training-status-filter-label]', count: 1 do
+          assert_select 'a[aria-current=true]', text: label, count: 1
+          assert_select 'a[aria-current=page]', count: 0
+        end
+      end
+    end
+
+    test 'follow-up lists exclude removed coverage and older outcomes superseded by an open session' do
+      eligible = new_session(:cancelled)
+      removed = new_session(:no_show)
+      assert removed.application.unassign_trainer!(actor: @admin)
+      superseded = new_session(:cancelled)
+      create(:training_session, :scheduled, application: superseded.application, trainer: @trainer)
+
+      get needs_followup_trainers_training_sessions_path
 
       assert_response :success
-      assert_includes @response.body, 'Duration: 2.5 hours'
+      assert_equal [eligible.id], assigns(:training_sessions).pluck(:id)
+      assert_not_includes assigns(:training_sessions), removed
+      assert_not_includes assigns(:training_sessions), superseded
     end
-
-    # Add direct-route tests for requested, scheduled, completed, and needs_followup where coverage is missing.
 
     private
 
-    def update_max_training_sessions(value)
-      policy = Policy.find_or_create_by(key: 'max_training_sessions')
-      policy.updated_by = @admin
-      policy.update!(value: value)
+    def new_session(status, **attributes)
+      application = create(:application, :approved, :with_all_proofs, application_date: Date.current, assigned_trainer: @trainer)
+      create(:training_session, status, application: application, trainer: @trainer, **attributes)
+    end
+
+    def completion_params
+      { completed_at: 1.hour.ago.strftime('%Y-%m-%dT%H:%M'), product_trained_on_id: @product.id.to_s,
+        duration_hours: '1.25', constituent_summary: 'Shared practice and next steps', summary_locale: 'es',
+        internal_notes: 'Private report observations' }
+    end
+
+    def assert_input_value(selector, expected)
+      assert_select selector do |nodes|
+        assert_equal expected.to_s, nodes.sole['value'].to_s
+      end
+    end
+
+    def assert_select_value(selector, expected)
+      assert_select selector do |nodes|
+        selected = nodes.sole.css('option[selected]').first || nodes.sole.css('option').first
+        assert_equal expected.to_s, selected['value'].to_s
+      end
+    end
+
+    def assert_completion_values(values)
+      %i[completed_at duration_hours].each { |field| assert_input_value "#complete_#{field}", values[field] }
+      %i[internal_notes constituent_summary].each { |field| assert_select "#complete_#{field}", text: values[field] }
+      %i[product_trained_on_id summary_locale].each do |field|
+        assert_select_value "#complete_#{field}", values[field].to_s
+      end
     end
   end
 end
