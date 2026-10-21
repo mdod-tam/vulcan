@@ -34,7 +34,8 @@ module Trainers
       assert_select '#complete_completed_at[value]', count: 0
       assert_select '#complete_duration_hours[aria-describedby=duration_hours_hint]'
       assert_select '#duration_hours_hint', text: 'Enter total time spent training, in hours.'
-      assert_select 'h2#session-actions-heading', text: 'Session actions'
+      assert_select 'h2#session-actions-heading', text: 'What happened?'
+      assert_select '[data-training-outcome-target=status][role=status][aria-live=polite][aria-atomic=true]', text: ''
       assert_select 'h2#training-capacity-heading', text: 'Training session allowance'
       assert_operator response.body.index('id="session-actions"'), :<, response.body.index('id="preparation-heading"')
       assert_select '#complete_completed_at[aria-describedby=complete-time-help]'
@@ -130,6 +131,7 @@ module Trainers
       assert_select 'details:not([open]) summary', text: 'Cancel this unscheduled appointment'
       assert_select "form[action='#{cancel_trainers_training_session_path(session)}'][data-turbo-confirm]"
       assert_select '#schedule_scheduled_for[aria-describedby=schedule-time-help]'
+      assert_select 'h2#session-actions-heading', text: 'Session actions'
       assert_select "form[action='#{complete_trainers_training_session_path(session)}']", count: 0
     end
 
@@ -181,6 +183,8 @@ module Trainers
       end
       assert_redirected_to trainers_training_session_path(report)
       assert_equal I18n.t('trainers.training_sessions.flash.assigned_trainer_only'), flash[:alert]
+      follow_redirect!
+      assert_select '[data-testid=flash-alert][role=alert][aria-live=assertive]', text: I18n.t('trainers.training_sessions.flash.assigned_trainer_only')
     end
 
     test 'early visit completion stores deliberate shared content and actual occurrence separately from submission' do
@@ -205,6 +209,8 @@ module Trainers
       event = Event.find_by!(action: 'training_completed', auditable: @session)
       assert_not_includes event.metadata.to_json, 'Private report observations'
       assert_not_includes event.metadata.to_json, 'Shared practice and next steps'
+      follow_redirect!
+      assert_select '[data-testid=flash-notice][role=status][aria-live=polite][aria-atomic=true]', text: 'Training session completed successfully.'
     end
 
     test 'invalid completion retains all independent fields then unchanged and corrected retries remain truthful' do
@@ -222,6 +228,7 @@ module Trainers
         assert_select '#complete-errors[role=alert][tabindex="-1"][data-controller=error-summary]'
         assert_select '#complete_completed_at[aria-invalid=true]'
         assert_select 'select#training-outcome option[value=complete][selected]'
+        assert_select '[data-training-outcome-target=status]', text: ''
       end
 
       post complete_trainers_training_session_path(@session),
@@ -479,6 +486,19 @@ module Trainers
       assert_response :success
       assert_equal [@session.id, completed.id].sort, assigns(:training_sessions).pluck(:id).sort
       assert_equal @trainer.id, assigns(:trainer_filter).id
+    end
+
+    test 'status filters identify the selected filter as current without describing it as a page' do
+      { nil => 'All', 'requested' => 'Needs Scheduling', 'scheduled' => 'Scheduled', 'completed' => 'Completed',
+        'needs_followup' => 'Needs Follow-up', 'cancelled' => 'Needs Follow-up', 'no_show' => 'Needs Follow-up' }.each do |status, label|
+        get trainers_training_sessions_path(status: status)
+
+        assert_response :success
+        assert_select '[role=group][aria-labelledby=training-status-filter-label]', count: 1 do
+          assert_select 'a[aria-current=true]', text: label, count: 1
+          assert_select 'a[aria-current=page]', count: 0
+        end
+      end
     end
 
     test 'follow-up lists exclude removed coverage and older outcomes superseded by an open session' do

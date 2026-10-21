@@ -138,13 +138,16 @@
                   <td class="px-6 py-4 whitespace-nowrap text-sm font-medium">
                     <% if application.current_trainer?(current_user) %>
                       <%= link_to t('trainer_workflow.dashboard.review_request'), trainers_training_session_path(@pending_request_sessions.fetch(application.id)),
-                                  class: 'bg-indigo-600 hover:bg-indigo-700 text-white py-1 px-3 rounded-md inline-block transition-colors duration-200' %>
+                                  class: 'bg-indigo-600 hover:bg-indigo-700 text-white py-1 px-3 rounded-md inline-block transition-colors duration-200',
+                                  aria: { label: t('trainer_workflow.dashboard.review_request_for', name: application.constituent_full_name) } %>
                     <% elsif application.assigned_trainer_id.present? %>
                       <%= link_to t('trainer_workflow.dashboard.review_coverage'), admin_application_path(application),
-                                  class: 'bg-indigo-600 hover:bg-indigo-700 text-white py-1 px-3 rounded-md inline-block transition-colors duration-200' %>
+                                  class: 'bg-indigo-600 hover:bg-indigo-700 text-white py-1 px-3 rounded-md inline-block transition-colors duration-200',
+                                  aria: { label: t('trainer_workflow.dashboard.review_coverage_for', name: application.constituent_full_name) } %>
                     <% else %>
                       <%= link_to t('trainer_workflow.dashboard.assign_trainer'), admin_application_path(application),
-                                  class: 'bg-indigo-600 hover:bg-indigo-700 text-white py-1 px-3 rounded-md inline-block transition-colors duration-200' %>
+                                  class: 'bg-indigo-600 hover:bg-indigo-700 text-white py-1 px-3 rounded-md inline-block transition-colors duration-200',
+                                  aria: { label: t('trainer_workflow.dashboard.assign_trainer_for', name: application.constituent_full_name) } %>
                     <% end %>
                   </td>
                 </tr>
@@ -164,7 +167,8 @@
                   </td>
                   <td class="px-6 py-4 whitespace-nowrap text-sm font-medium">
                     <%= link_to t('trainer_workflow.dashboard.view_schedule'), trainers_training_session_path(session),
-                                class: 'bg-indigo-600 hover:bg-indigo-700 text-white py-1 px-3 rounded-md inline-block transition-colors duration-200' %>
+                                class: 'bg-indigo-600 hover:bg-indigo-700 text-white py-1 px-3 rounded-md inline-block transition-colors duration-200',
+                                aria: { label: t('trainer_workflow.dashboard.view_schedule_for', name: session.application.constituent_full_name) } %>
                   </td>
                 </tr>
               <% end %>

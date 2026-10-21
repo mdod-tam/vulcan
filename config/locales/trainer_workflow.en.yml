@@ -32,6 +32,7 @@ en:
       what_happened: "What happened?"
       choose_outcome: "Choose an outcome or appointment change"
       choose_action: "Choose an action"
+      form_shown: "%{action} form shown below. Fill in the details, then save."
       next_unavailable: "Another appointment is unavailable. Current coverage, the latest outcome, service window, an open appointment, and remaining capacity determine eligibility."
       read_only: "This view is read-only. Only the currently assigned trainer can record an outcome."
       historical_access: "You retain read-only access to this authored report. Current contact and preparation details are available to the current trainer."

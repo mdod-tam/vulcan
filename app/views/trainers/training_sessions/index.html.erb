@@ -53,8 +53,8 @@
     <% end %>
 
     <!-- Status filter pills -->
-    <div class="flex flex-wrap items-center gap-2 bg-gray-100 p-1 rounded-lg">
-      <span class="text-xs font-semibold text-gray-500 px-2"><%= t('trainer_workflow.list.filters.status') %>:</span>
+    <div class="flex flex-wrap items-center gap-2 bg-gray-100 p-1 rounded-lg" role="group" aria-labelledby="training-status-filter-label">
+      <span id="training-status-filter-label" class="text-xs font-semibold text-gray-500 px-2"><%= t('trainer_workflow.list.filters.status') %>:</span>
       <%= link_to t('trainer_workflow.list.filters.all'),
                   if current_user.admin?
                     filtered_trainers_training_sessions_path({ scope: @current_scope }.merge(trainer_filter_params))
@@ -63,7 +63,7 @@
                   end,
                   class: [@current_status.blank? ? 'bg-white shadow-sm text-blue-600' : 'text-gray-700 hover:bg-gray-200',
                           'px-4 py-2 rounded-md font-medium transition-colors duration-200'],
-                  aria: { current: (@current_status.blank? ? 'page' : nil) } %>
+                  aria: { current: (@current_status.blank? ? 'true' : nil) } %>
 
       <%= link_to t('trainer_workflow.list.filters.requested'),
                   if current_user.admin?
@@ -73,7 +73,7 @@
                   end,
                   class: [@current_status == 'requested' ? 'bg-white shadow-sm text-blue-600' : 'text-gray-700 hover:bg-gray-200',
                           'px-4 py-2 rounded-md font-medium transition-colors duration-200'],
-                  aria: { current: (@current_status == 'requested' ? 'page' : nil) } %>
+                  aria: { current: (@current_status == 'requested' ? 'true' : nil) } %>
 
       <%= link_to t('trainer_workflow.list.filters.scheduled'),
                   if current_user.admin?
@@ -83,7 +83,7 @@
                   end,
                   class: [@current_status == 'scheduled' ? 'bg-white shadow-sm text-blue-600' : 'text-gray-700 hover:bg-gray-200',
                           'px-4 py-2 rounded-md font-medium transition-colors duration-200'],
-                  aria: { current: (@current_status == 'scheduled' ? 'page' : nil) } %>
+                  aria: { current: (@current_status == 'scheduled' ? 'true' : nil) } %>
 
       <%= link_to t('trainer_workflow.list.filters.completed'),
                   if current_user.admin?
@@ -93,7 +93,7 @@
                   end,
                   class: [@current_status == 'completed' ? 'bg-white shadow-sm text-blue-600' : 'text-gray-700 hover:bg-gray-200',
                           'px-4 py-2 rounded-md font-medium transition-colors duration-200'],
-                  aria: { current: (@current_status == 'completed' ? 'page' : nil) } %>
+                  aria: { current: (@current_status == 'completed' ? 'true' : nil) } %>
 
       <%= link_to t('trainer_workflow.list.filters.needs_followup'),
                   if current_user.admin?
@@ -107,7 +107,7 @@
                             else
                               'text-gray-700 hover:bg-gray-200'
                             end} px-4 py-2 rounded-md font-medium transition-colors duration-200",
-                  aria: { current: (%w[needs_followup cancelled no_show].include?(@current_status) ? 'page' : nil) } %>
+                  aria: { current: (%w[needs_followup cancelled no_show].include?(@current_status) ? 'true' : nil) } %>
     </div>
   </div>
 

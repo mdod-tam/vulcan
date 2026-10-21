@@ -76,7 +76,13 @@
       <% end %>
     </section>
     <section id="session-actions" class="mb-6" aria-labelledby="session-actions-heading" tabindex="-1">
-      <h2 id="session-actions-heading" class="mb-4 text-xl font-semibold"><%= t('trainer_workflow.show.actions_heading') %></h2>
+      <h2 id="session-actions-heading" class="mb-4 text-xl font-semibold">
+        <%= if @training_session.status_scheduled? || @training_session.status_confirmed?
+              t('trainer_workflow.show.what_happened')
+            else
+              t('trainer_workflow.show.actions_heading')
+            end %>
+      </h2>
       <% if @application.training_request_pending? %>
         <p class="mb-4 rounded-lg bg-blue-50 p-4 font-medium"><%= t('trainer_workflow.show.request_pending') %></p>
       <% end %>
@@ -88,13 +94,14 @@
           <%= render 'outcome_reason_form', action: :cancel, training_session: @training_session %>
         </details>
       <% elsif @training_session.status_scheduled? || @training_session.status_confirmed? %>
-        <section class="mb-6 rounded-lg bg-white p-6 shadow" data-controller="training-outcome">
-          <p class="text-lg font-semibold"><%= t('trainer_workflow.show.what_happened') %></p>
+        <section class="mb-6 rounded-lg bg-white p-6 shadow" data-controller="training-outcome"
+                 data-training-outcome-message-value="<%= t('trainer_workflow.show.form_shown', action: '__ACTION__') %>">
           <label for="training-outcome" class="mt-3 block font-medium"><%= t('trainer_workflow.show.choose_outcome') %></label>
           <%= select_tag :training_outcome,
                          options_for_select(training_outcome_options(@training_session, can_manage: @can_manage_training_session), @failed_training_action),
                          include_blank: t('trainer_workflow.show.choose_action'), id: 'training-outcome', class: 'mt-2 w-full rounded-md border-gray-300',
                          data: { training_outcome_target: 'selection', action: 'training-outcome#change' } %>
+          <p class="mt-2 text-sm text-gray-600" role="status" aria-live="polite" aria-atomic="true" data-training-outcome-target="status"></p>
           <% training_available_actions(@training_session, can_manage: @can_manage_training_session).each do |action| %>
             <div data-training-outcome-target="panel" data-outcome="<%= action %>">
               <% if action == :complete %><%= render 'completion_form', training_session: @training_session %>

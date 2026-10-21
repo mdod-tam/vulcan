@@ -32,6 +32,7 @@ es:
       what_happened: "¿Qué ocurrió?"
       choose_outcome: "Seleccione un resultado o un cambio de cita"
       choose_action: "Seleccione una acción"
+      form_shown: "Se muestra el formulario de «%{action}». Complete los datos y guarde los cambios."
       next_unavailable: "No se puede programar otra cita. La asignación actual, el resultado más reciente, el plazo de servicio, las citas pendientes y la capacidad disponible determinan la elegibilidad."
       read_only: "Esta vista es de solo lectura. Solo el capacitador asignado actualmente puede registrar un resultado."
       historical_access: "Conserva acceso de solo lectura a este informe que redactó. Los datos de contacto actuales y la información de preparación están disponibles para el capacitador actual."

@@ -15,8 +15,10 @@ module Trainers
       assert_response :success
       assert_select 'h1', text: "Detalles de la sesión de capacitación n.º #{session.appointment_number}"
       assert_select 'h2', text: 'Preparación y contacto para la coordinación'
-      assert_select 'p', text: '¿Qué ocurrió?'
-      assert_select 'h2#session-actions-heading', text: I18n.t('trainer_workflow.show.actions_heading', locale: :es)
+      assert_select 'h2#session-actions-heading', text: '¿Qué ocurrió?'
+      assert_select '[data-training-outcome-target=status][role=status][aria-live=polite]', text: ''
+      assert_select '[data-controller=training-outcome][data-training-outcome-message-value=?]',
+                    'Se muestra el formulario de «__ACTION__». Complete los datos y guarde los cambios.'
       assert_select 'dt', text: 'Correo electrónico de contacto'
       assert_select 'p', text: 'Idioma preferido: inglés'
       assert_not_includes response.body, 'Translation missing'

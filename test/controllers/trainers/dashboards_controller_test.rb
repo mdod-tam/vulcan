@@ -173,7 +173,8 @@ module Trainers
       assert_not_includes assigns(:pending_training_requests), other_application
       assert_select '#needs-scheduling-section tr', text: /#{Regexp.escape(application.user.full_name)}/ do
         assert_select 'span', text: 'Awaiting Scheduling'
-        assert_select 'a[href=?]', trainers_training_session_path(report), text: 'Review request and arrange next appointment'
+        assert_select 'a[href=?][aria-label=?]', trainers_training_session_path(report),
+                      "Review request and arrange next appointment for #{application.constituent_full_name}", text: 'Review request and arrange next appointment'
         assert_select 'a[href=?]', admin_application_path(application), count: 0
       end
       assert_select 'a[href=?]', admin_application_path(application), count: 0
@@ -190,15 +191,18 @@ module Trainers
       get trainers_dashboard_path
 
       assert_select '#needs-scheduling-section tr', text: /#{Regexp.escape(own_application.user.full_name)}/ do
-        assert_select 'a[href=?]', trainers_training_session_path(own_report), text: 'Review request and arrange next appointment'
+        assert_select 'a[href=?][aria-label=?]', trainers_training_session_path(own_report),
+                      "Review request and arrange next appointment for #{own_application.constituent_full_name}", text: 'Review request and arrange next appointment'
       end
       assert_select '#needs-scheduling-section tr', text: /#{Regexp.escape(covered_application.user.full_name)}/ do
         assert_select 'span', text: 'Awaiting Scheduling'
-        assert_select 'a[href=?]', admin_application_path(covered_application), text: 'Review trainer coverage'
+        assert_select 'a[href=?][aria-label=?]', admin_application_path(covered_application),
+                      "Review trainer coverage for #{covered_application.constituent_full_name}", text: 'Review trainer coverage'
       end
       assert_select '#needs-scheduling-section tr', text: /#{Regexp.escape(uncovered.user.full_name)}/ do
         assert_select 'span', text: 'Awaiting Assignment'
-        assert_select 'a[href=?]', admin_application_path(uncovered), text: 'Visit App And Assign Trainer'
+        assert_select 'a[href=?][aria-label=?]', admin_application_path(uncovered),
+                      "Visit App And Assign Trainer for #{uncovered.constituent_full_name}", text: 'Visit App And Assign Trainer'
       end
     end
 
@@ -282,6 +286,21 @@ module Trainers
         assert_not_includes assigns(:my_scheduled_sessions_display), own_past
         assert_select 'a[href=?]', trainers_training_sessions_path(scope: 'mine', status: 'scheduled'), text: 'My scheduled'
       end
+    end
+
+    test 'Spanish scheduling links identify the constituent for both new and follow-up requests' do
+      @trainer.update!(locale: 'es')
+      application, report = requested_covered_application(@trainer)
+      requested = create(:training_session, :requested, trainer: @trainer, application: covered_application)
+      sign_in_for_integration_test(@trainer)
+
+      get trainers_dashboard_path
+
+      assert_response :success
+      assert_select '#needs-scheduling-section a[href=?][aria-label=?]', trainers_training_session_path(report),
+                    "Revisar la solicitud y acordar la próxima cita de #{application.constituent_full_name}", text: 'Revisar la solicitud y acordar la próxima cita'
+      assert_select '#needs-scheduling-section a[href=?][aria-label=?]', trainers_training_session_path(requested),
+                    "Ver/Programar para #{requested.application.constituent_full_name}", text: 'Ver/Programar'
     end
 
     test 'Spanish viewer receives translated dashboard status activity columns and empty states' do

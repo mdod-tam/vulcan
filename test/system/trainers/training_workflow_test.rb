@@ -76,17 +76,26 @@ module Trainers
       observe_native_submission
       find('input[type=submit][value="Schedule appointment"]').double_click
       assert_text 'Training session scheduled successfully.'
+      assert_selector '[data-testid="flash-notice"][role="status"][aria-live="polite"]',
+                      text: 'Training session scheduled successfully.'
       assert_equal 'scheduled', @session.reload.status
       assert_equal 1, Event.where(auditable: @session, action: 'training_scheduled').count
       assert_native_submission('Saving appointment…')
       assert_no_selector '#complete_completed_at'
       assert_no_selector '#no_show_no_show_notes'
+      assert_selector 'h2#session-actions-heading', text: 'What happened?'
+      assert_selector '[data-training-outcome-target="status"]:empty', visible: :all
+      find_by_id('training-outcome').click
       select 'Complete training', from: 'training-outcome'
+      assert_selector '#training-outcome:focus'
+      assert_selector '[data-training-outcome-target="status"][role="status"][aria-live="polite"]',
+                      text: 'Complete training form shown below. Fill in the details, then save.'
       assert_field 'complete_completed_at', with: ''
       assert_selector :select, 'complete_product_trained_on_id', selected: 'Select a product'
       assert_field 'complete_internal_notes', with: 'Call before arrival; preparation notes stay private.'
       assert_selector '#complete_duration_hours[aria-describedby="duration_hours_hint"]'
       assert_no_selector '#reschedule_scheduled_for'
+      take_screenshot('trainer-completion-revealed-accessible-feedback', html: true, full: true)
 
       rejected_time = 1.day.from_now.strftime('%Y-%m-%dT%H:%M')
       fill_in 'complete_completed_at', with: rejected_time
@@ -98,6 +107,7 @@ module Trainers
       click_button 'Save completed report'
       2.times do |attempt|
         assert_action_error('complete')
+        assert_selector '[data-training-outcome-target="status"]:empty', visible: :all
         assert_selector :select, 'training-outcome', selected: 'Complete training'
         assert_field 'complete_completed_at', with: rejected_time
         assert_selector :select, 'complete_product_trained_on_id', selected: @product.name
@@ -109,6 +119,8 @@ module Trainers
         click_button 'Save completed report' if attempt.zero?
       end
       select 'Reschedule at constituent request', from: 'training-outcome'
+      assert_selector '[data-training-outcome-target="status"]',
+                      text: 'Reschedule at constituent request form shown below. Fill in the details, then save.'
       assert_field 'reschedule_scheduled_for', with: ''
       assert_no_selector '#complete_completed_at:not([disabled])', visible: :all
       select 'Complete training', from: 'training-outcome'
@@ -130,6 +142,7 @@ module Trainers
       find('input[type=submit][value="Save completed report"]').double_click
 
       assert_text 'Training session completed successfully.'
+      assert_selector '[data-testid="flash-notice"][role="status"]', text: 'Training session completed successfully.'
       assert_text 'Actual completion'
       assert_text 'Report submitted'
       assert_text 'Captions practice guide'
@@ -205,7 +218,14 @@ module Trainers
       @trainer.update!(locale: 'es')
       @session.update!(status: :scheduled, scheduled_for: 1.day.from_now.change(sec: 0))
       visit trainers_training_session_path(@session, locale: 'es')
+      assert_selector 'h2#session-actions-heading', text: '¿Qué ocurrió?'
+      assert_selector '[data-training-outcome-target="status"]:empty', visible: :all
+      find_by_id('training-outcome').click
       select 'Completar capacitación', from: 'training-outcome'
+      assert_selector '#training-outcome:focus'
+      assert_selector '[data-training-outcome-target="status"]',
+                      text: 'Se muestra el formulario de «Completar capacitación». Complete los datos y guarde los cambios.'
+      take_screenshot('trainer-spanish-completion-revealed-accessible-feedback', html: true, full: true)
       future_time = 1.hour.from_now.strftime('%Y-%m-%dT%H:%M')
       fill_in 'complete_completed_at', with: future_time
       select @product.name, from: 'complete_product_trained_on_id'
@@ -231,6 +251,7 @@ module Trainers
       assert_selector 'dialog[open]', text: '¿Confirma 2.75 horas?'
       within('dialog[open]') { find('[data-training-duration-confirmation-target=yesButton]').click }
       assert_action_error('complete', heading: 'Corrija los siguientes errores')
+      assert_selector '[data-training-outcome-target="status"]:empty', visible: :all
       assert_native_submission(I18n.t('trainer_workflow.forms.saving_report', locale: :es), submitter_id: 'complete_submit')
       assert_field 'complete_completed_at', with: future_time
       assert_field 'complete_duration_hours', with: '2.75'
@@ -244,6 +265,8 @@ module Trainers
       assert_selector 'dialog[open]', text: '¿Confirma 2.75 horas?'
       within('dialog[open]') { find('[data-training-duration-confirmation-target=yesButton]').click }
       assert_text 'La sesión de capacitación se marcó como completada correctamente.'
+      assert_selector '[data-testid="flash-notice"][role="status"][aria-live="polite"]',
+                      text: 'La sesión de capacitación se marcó como completada correctamente.'
       assert @session.reload.status_completed?
       assert_equal BigDecimal('2.75'), @session.duration_hours
       assert_equal 'es', @session.summary_locale
