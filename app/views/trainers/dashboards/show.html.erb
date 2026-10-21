@@ -10,15 +10,17 @@
     <section class="mb-6 rounded-lg border border-amber-300 bg-amber-50 p-6" aria-labelledby="overdue-training-heading">
       <h2 id="overdue-training-heading" class="text-lg font-semibold"><%= t('trainer_workflow.dashboard.overdue_heading') %></h2>
       <p class="mt-2"><%= t('trainer_workflow.dashboard.overdue_count', count: @overdue_sessions_count) %></p>
-      <p class="mt-2"><%= t('trainer_workflow.dashboard.overdue_preview', shown: @overdue_sessions_display.size, total: @overdue_sessions_count) %></p>
-      <%= link_to t('trainer_workflow.dashboard.all_scheduled'), trainers_training_sessions_path(status: 'scheduled'),
-                  class: 'mt-2 inline-block text-indigo-700 underline' %>
+      <% if @overdue_sessions_display.size < @overdue_sessions_count %>
+        <p class="mt-2"><%= t('trainer_workflow.dashboard.overdue_preview', shown: @overdue_sessions_display.size, total: @overdue_sessions_count) %></p>
+      <% end %>
       <% @overdue_sessions_display.each do |session| %>
         <p class="mt-2"><%= session.application.user.full_name %> —
           <%= link_to t('trainer_workflow.dashboard.record_outcome'), trainers_training_session_path(session),
                       class: 'text-indigo-700 underline',
                       aria: { label: t('trainer_workflow.dashboard.record_outcome_for', name: session.application.user.full_name) } %></p>
       <% end %>
+      <%= link_to t('trainer_workflow.dashboard.all_scheduled'), trainers_training_sessions_path(status: 'scheduled'),
+                  class: 'mt-2 inline-block text-indigo-700 underline' %>
     </section>
   <% end %>
   <section aria-labelledby="trainer-summary-heading" class="mb-8">

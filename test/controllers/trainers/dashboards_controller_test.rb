@@ -130,10 +130,15 @@ module Trainers
         assert_not_includes assigns(:upcoming_sessions), @session
         assert_equal [later.id, confirmed.id], assigns(:upcoming_sessions).pluck(:id)
         assert_includes assigns(:scheduled_sessions), confirmed
-        assert_select 'h2', text: 'Past appointments needing an outcome'
+        assert_select 'h2', text: 'Past appointments to update'
+        assert_select 'section[aria-labelledby="overdue-training-heading"]' do
+          assert_select 'p', text: 'You have 1 past appointment to update. Tell us what happened.'
+          assert_select 'p', text: /Showing/, count: 0
+          assert_select 'a', text: 'Update appointment'
+        end
         assert_select 'section[aria-labelledby="overdue-training-heading"] a[href=?]', trainers_training_session_path(@session)
         assert_select 'section[aria-labelledby="overdue-training-heading"] a[href=?][aria-label=?]',
-                      trainers_training_session_path(@session), "Record what happened for #{@constituent.full_name}"
+                      trainers_training_session_path(@session), "Update appointment for #{@constituent.full_name}"
         assert_select 'section[aria-labelledby="overdue-training-heading"] a[href=?]', trainers_training_session_path(@other_session), count: 0
       end
     end
@@ -247,9 +252,9 @@ module Trainers
         assert_equal 10, assigns(:overdue_sessions_display).size
         assert_equal [future.id], assigns(:upcoming_sessions).pluck(:id)
         assert_select 'section[aria-labelledby="overdue-training-heading"]' do
-          assert_select 'p', text: '13 past appointments need an outcome.'
-          assert_select 'p', text: /Showing 10 of 13/
-          assert_select 'a[href=?]', trainers_training_sessions_path(status: 'scheduled'), text: 'View all scheduled appointments'
+          assert_select 'p', text: 'You have 13 past appointments to update. Tell us what happened.'
+          assert_select 'p', text: 'Showing 10 of 13 appointments.'
+          assert_select 'a[href=?]', trainers_training_sessions_path(status: 'scheduled'), text: 'View your appointment list'
         end
         assert_select 'h3#card-scheduled + p', text: /14 scheduled sessions/
         assert_select 'a[href=?]', trainers_training_sessions_path(status: 'scheduled'), text: 'View scheduled'

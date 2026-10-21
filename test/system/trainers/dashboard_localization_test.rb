@@ -30,9 +30,9 @@ module Trainers
       assert_selector 'h3#card-needs-scheduling + p', text: /11\s+elementos pendientes de programación/
       requests.each { |application| assert_text application.user.full_name }
       within 'section[aria-labelledby="overdue-training-heading"]' do
-        assert_text '11 citas pasadas están pendientes de registrar el resultado.'
-        assert_text 'Se muestran 10 de 11.'
-        assert_link 'Ver todas las citas programadas', href: trainers_training_sessions_path(status: 'scheduled')
+        assert_text 'Tiene 11 citas pasadas por actualizar. Cuéntenos qué pasó.'
+        assert_text 'Se muestran 10 de 11 citas.'
+        assert_link 'Ver su lista de citas', href: trainers_training_sessions_path(status: 'scheduled')
       end
       assert_text 'No hay próximas sesiones de capacitación programadas.'
       assert_text 'No hay sesiones de capacitación pendientes de seguimiento.'
@@ -51,7 +51,7 @@ module Trainers
       take_screenshot('trainer-dashboard-spanish-activity-scroll-narrow', html: true, full: true)
 
       within 'section[aria-labelledby="overdue-training-heading"]' do
-        click_link 'Ver todas las citas programadas'
+        click_link 'Ver su lista de citas'
       end
       assert_selector 'h1', text: 'Sesiones de capacitación programadas'
       overdue.each { |session| assert_link href: trainers_training_session_path(session) }

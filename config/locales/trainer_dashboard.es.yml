@@ -57,8 +57,8 @@ es:
       empty_completed: "Aún no hay sesiones de capacitación completadas."
       recent_activity: "Actividad reciente"
       overdue_count:
-        one: "%{count} cita pasada está pendiente de registrar el resultado."
-        other: "%{count} citas pasadas están pendientes de registrar el resultado."
-      overdue_preview: "Se muestran %{shown} de %{total}. La lista de sesiones programadas incluye todas las citas pasadas pendientes de registrar el resultado."
-      all_scheduled: "Ver todas las citas programadas"
-      record_outcome_for: "Registrar lo que ocurrió con %{name}"
+        one: "Tiene %{count} cita pasada por actualizar. Cuéntenos qué pasó."
+        other: "Tiene %{count} citas pasadas por actualizar. Cuéntenos qué pasó."
+      overdue_preview: "Se muestran %{shown} de %{total} citas."
+      all_scheduled: "Ver su lista de citas"
+      record_outcome_for: "Actualizar cita de %{name}"

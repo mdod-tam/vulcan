@@ -114,7 +114,7 @@ en:
       none: "No specific products recommended."
       review_help: "Program staff must review this outcome before deciding any equipment fulfillment."
     dashboard:
-      overdue_heading: "Past appointments needing an outcome"
-      record_outcome: "Record what happened"
+      overdue_heading: "Past appointments to update"
+      record_outcome: "Update appointment"
       awaiting_scheduling: "Awaiting Scheduling"
       review_request: "Review request and arrange next appointment"

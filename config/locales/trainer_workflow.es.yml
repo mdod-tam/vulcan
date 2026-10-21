@@ -114,7 +114,7 @@ es:
       none: "No se recomendaron productos específicos."
       review_help: "El personal del programa debe revisar este resultado antes de decidir qué equipos se suministrarán."
     dashboard:
-      overdue_heading: "Citas pasadas pendientes de registrar el resultado"
-      record_outcome: "Registrar lo que ocurrió"
+      overdue_heading: "Citas pasadas por actualizar"
+      record_outcome: "Actualizar cita"
       awaiting_scheduling: "Pendiente de programación"
       review_request: "Revisar la solicitud y acordar la próxima cita"

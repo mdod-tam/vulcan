@@ -57,8 +57,8 @@ en:
       empty_completed: "No completed training sessions yet."
       recent_activity: "Recent Activity"
       overdue_count:
-        one: "%{count} past appointment needs an outcome."
-        other: "%{count} past appointments need an outcome."
-      overdue_preview: "Showing %{shown} of %{total}. The scheduled list includes every past appointment needing an outcome."
-      all_scheduled: "View all scheduled appointments"
-      record_outcome_for: "Record what happened for %{name}"
+        one: "You have %{count} past appointment to update. Tell us what happened."
+        other: "You have %{count} past appointments to update. Tell us what happened."
+      overdue_preview: "Showing %{shown} of %{total} appointments."
+      all_scheduled: "View your appointment list"
+      record_outcome_for: "Update appointment for %{name}"
