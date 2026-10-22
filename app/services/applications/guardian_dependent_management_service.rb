@@ -264,6 +264,8 @@ module Applications
       data[:zip_code] = @guardian_user.zip_code
     end
 
+    # These helpers record the fallback strategy for callers that restore contact choices.
+    # The fallback callers pass 'guardian', whose branch does not recurse.
     def apply_email_strategy_with(strategy, data)
       @params[:email_strategy] = strategy
       apply_email_strategy(data)

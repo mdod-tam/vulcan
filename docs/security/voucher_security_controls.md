@@ -33,6 +33,8 @@ Each redemption form carries a `submission_id` the server mints when it renders 
 
 The vendor portal redeems through `Vouchers::RedemptionService`, which checks vendor eligibility and DOB verification in the session. `Voucher#redeem!` then locks the voucher and writes the purchase, product associations, and remaining balance in one database transaction.
 
+Calling `Voucher#redeem!` directly bypasses the service's vendor eligibility and DOB verification checks. Application callers must use `Vouchers::RedemptionService`. Keep the spending writes together inside `Voucher#redeem!` under its row lock and transaction.
+
 ### Verification limits
 
 DOB verification reads the submitted date with [DateInputNormalizer](../../app/services/date_input_normalizer.rb), month first. It compares the date with the application owner's date of birth and stores successful voucher IDs in `session[:verified_vouchers]`. The redemption service requires this session record before redemption.

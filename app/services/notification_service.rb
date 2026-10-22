@@ -599,6 +599,8 @@ class NotificationService
   end
 
   def log_to_audit_trail(notification)
+    # handle_delivery_logic stores these flags on this instance, outside database attributes.
+    # reload refreshes persisted routing metadata and preserves the flags.
     should_deliver = notification.instance_variable_get(:@should_deliver)
     delivery_successful = notification.instance_variable_get(:@delivery_successful)
 

@@ -384,6 +384,8 @@ class TwoFactorCredentialsController < ApplicationController
     TwoFactorAuth.log_verification_failure(current_user.id, :totp, 'Invalid code during setup')
   end
 
+  # The hidden form value supplies the secret when session metadata has none.
+  # Enrollment verifies the code against the selected secret before it saves the credential.
   def totp_secret_from_session
     challenge_data = TwoFactorAuth.retrieve_challenge(session)
     challenge_data[:metadata]&.dig(:secret) || params[:secret]
