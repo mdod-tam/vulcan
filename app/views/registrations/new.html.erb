@@ -8,7 +8,6 @@
 
 <div class="flex items-center justify-center bg-gray-100 px-4 py-12">
   <div class="bg-white p-6 sm:p-8 rounded-lg shadow-md w-full max-w-md">
-    <!-- Page Heading -->
     <header>
       <h1 id="signup-heading" class="text-2xl font-semibold mb-6 text-center text-gray-900">
         <%= t("portal_self_service.registrations.title") %>
@@ -19,7 +18,6 @@
       <span style="color: red;">*</span> <%= t("portal_self_service.registrations.required_indicator") %>
     </p>
 
-    <!-- Flash/Alert Messages -->
     <% if flash[:alert] %>
       <div role="alert" aria-live="polite" aria-atomic="true"
            class="bg-red-100 border border-red-400 text-red-700 px-4 py-3 rounded mb-6">
@@ -41,7 +39,6 @@
       </div>
     <% end %>
 
-    <!-- Main Form -->
     <main role="main" aria-labelledby="signup-heading">
       <%= form_with model: @user,
                     url: sign_up_path,
@@ -61,7 +58,6 @@
           </div>
         <% end %>
 
-        <!-- Name Fields -->
         <fieldset class="mb-4">
           <legend class="sr-only"><%= t("portal_self_service.registrations.name_legend") %></legend>
           <div class="mb-4">
@@ -89,7 +85,6 @@
           </div>
         </fieldset>
 
-        <!-- Contact Fields -->
         <div data-controller="optional-phone-type">
         <fieldset class="mb-4">
           <legend class="sr-only"><%= t("portal_self_service.registrations.contact_legend") %></legend>
@@ -159,7 +154,6 @@
         </fieldset>
         </div>
 
-        <!-- Security Fields -->
         <fieldset class="mb-4">
           <legend class="sr-only"><%= t("portal_self_service.registrations.security_legend") %></legend>
           <div class="mb-4">
@@ -183,7 +177,6 @@
           </div>
         </fieldset>
 
-        <!-- Date of Birth -->
         <div class="mb-4">
           <%= form.label :date_of_birth, t('shared.date_of_birth.label'), class: 'block text-sm font-medium text-gray-700 mb-1 required-label' %>
           <%= date_of_birth_text_field form,
@@ -197,7 +190,6 @@
           <% end %>
         </div>
 
-        <!-- Language Preference -->
         <div class="mb-4">
           <%= form.label :locale, t("portal_self_service.registrations.language_preference_label"), class: "block text-sm font-medium text-gray-700 mb-1 required-label" %>
           <%= form.select :locale,
@@ -215,7 +207,6 @@
           <% end %>
         </div>
 
-        <!-- Notification Method -->
         <fieldset class="mb-4" data-controller="delivery-preference">
           <legend id="comm-pref-legend" class="block text-sm font-medium text-gray-700 mb-1"><%= t("portal_self_service.registrations.notification_method_label") %></legend>
           <div class="space-y-2">
@@ -271,7 +262,6 @@
           </div>
         </fieldset>
 
-        <!-- Newsletter Signup -->
         <div class="mb-4">
           <div class="flex items-start">
             <%= form.check_box :newsletter_signup,
@@ -283,7 +273,6 @@
           </div>
         </div>
 
-        <!-- Submit -->
         <div class="mb-4">
           <%= form.submit t("portal_self_service.registrations.submit"),
               class: "w-full py-2 px-4 rounded-md shadow-sm text-sm font-medium text-white bg-indigo-600 hover:bg-indigo-700 focus:outline-none focus:ring-2 focus:ring-indigo-500",
@@ -291,7 +280,6 @@
         </div>
 
         <% unless @registration_support_needed %>
-          <!-- Sign In -->
           <footer class="text-center">
             <p class="text-sm text-gray-700"><%= t("portal_self_service.registrations.sign_in_prompt") %> <%= link_to t("portal_self_service.registrations.sign_in_link"), sign_in_path(locale: public_form_locale_param), class: "font-medium text-indigo-600 hover:text-indigo-500 focus:outline-none focus:ring-2 focus:ring-indigo-500" %></p>
           </footer>

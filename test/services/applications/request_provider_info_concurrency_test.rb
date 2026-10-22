@@ -3,19 +3,17 @@
 require 'test_helper'
 
 module Applications
-  # Focused concurrency evidence for the secure-request-issuance lock-order fix (plan
-  # section 4): SecureRequestIssuanceIntegrity locks the full known User pool before
-  # dependent rows and retries the whole savepoint if the exact locked application reveals
-  # a newly transferred owner. Both sides of every race are real production code.
+  # Concurrency evidence for the secure-request-issuance lock order. SecureRequestIssuanceIntegrity
+  # locks the full known User pool before dependent rows. It retries the whole savepoint when the
+  # exact locked application reveals a newly transferred owner. Both sides of every race are real
+  # production code.
   #
-  # Recipients are resolved fresh from `application.user`/`managing_guardian` at issuance
-  # time, and the merge service itself transfers application ownership and guardian
-  # relationships as part of retiring a duplicate -- so "merge commits first, then an
-  # applicant-owner issuance" does not manifest as a hard failure the way it does for
-  # autosave/session/password-reset (whose target user is fixed by the caller, not re-derived
-  # from the row a concurrent merge also mutates). What the lock actually guarantees here is
-  # that the post-merge issuance re-resolves against the *current* owner rather than a stale
-  # pre-merge recipient -- proven directly below.
+  # Issuance resolves recipients fresh from application.user/managing_guardian, and the merge
+  # service transfers application ownership and guardian relationships when it retires a
+  # duplicate. So a merge-first race here succeeds instead of failing hard. Autosave, session,
+  # and password-reset fix the target user in the caller rather than re-derive it from a row
+  # the merge also mutates, so they fail closed. The lock here guarantees that a post-merge
+  # issuance re-resolves against the current owner, not a stale pre-merge recipient.
   class RequestProviderInfoConcurrencyTest < ActiveSupport::TestCase
     self.use_transactional_tests = false
 

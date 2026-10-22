@@ -17,9 +17,9 @@ class ApplicationMailer < ActionMailer::Base
     def deliver_now = self
   end
 
-  # Raised when a delivery that carries a secure link is intentionally not sent (a disabled
-  # template or an email control), so the issuing service revokes the unsent link and records
-  # a suppression rather than a failure.
+  # Raised when a delivery that carries a secure link is intentionally not sent: a disabled
+  # template or an email control. The issuing service then revokes the unsent link and
+  # records a suppression rather than a failure.
   class DeliverySkipped < StandardError
     attr_reader :reason
 
@@ -67,7 +67,7 @@ class ApplicationMailer < ActionMailer::Base
 
     unless template.enabled?
       Rails.logger.warn("Email template '#{template.name}' is disabled. Skipping delivery")
-      # No message is built, so the final check never runs; record the suppression here.
+      # No message is built, so the final check never runs. Record the suppression here.
       EmailDelivery::Outcome.record_not_sent(EmailDelivery::Decision.suppressed(:template_disabled),
                                              context: @delivery_context,
                                              mail_action: "#{self.class.name}##{action_name}")

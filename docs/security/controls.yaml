@@ -19,9 +19,9 @@ controls:
       priority: { label: "Critical", value: 1 }
       owner: "@david"
       implementation:
-        summary: "BCrypt via has_secure_password; lockout after five failed attempts."
+        summary: "Passwords are hashed with BCrypt (has_secure_password). Accounts lock after five failed attempts."
         files: ["app/models/concerns/user_authentication.rb", "app/controllers/sessions_controller.rb"]
-      verification_needed: "Verify the stated BCrypt cost target of at least 12 and review password-hashing policy."
+      verification_needed: "Verify the stated BCrypt cost target of at least 12, and review the password-hashing policy."
       audit: { report: null, coverage: null, next_review_due: null }
 
     - id: "AUTH-002"
@@ -30,7 +30,7 @@ controls:
       priority: { label: "Critical", value: 1 }
       owner: "@david"
       implementation:
-        summary: "WebAuthn, TOTP, and SMS; required for administrators, evaluators, trainers, and vendors. Optional for constituents."
+        summary: "WebAuthn (security keys), TOTP (authenticator-app codes), and SMS codes. Required for administrators, evaluators, trainers, and vendors. Optional for constituents."
         files: ["app/controllers/application_controller.rb", "app/controllers/two_factor_authentications_controller.rb"]
       verification_needed: "Confirm role coverage against applicable authentication requirements."
       audit: { report: null, coverage: null, next_review_due: null }
@@ -41,9 +41,9 @@ controls:
       priority: { label: "High", value: 2 }
       owner: "@david"
       implementation:
-        summary: "Minimum password length is 12 characters (UserAuthentication::PASSWORD_MIN_LENGTH), matching the cited external-user guidance; every new-password field states it."
+        summary: "Minimum password length is 12 characters (UserAuthentication::PASSWORD_MIN_LENGTH), matching the cited external-user guidance. Every new-password field states it."
         files: ["app/models/concerns/user_authentication.rb"]
-      verification_needed: "Confirm the guidance's sensitivity-based authentication requirements beyond length; see baseline_policy.md."
+      verification_needed: "Confirm the guidance's sensitivity-based authentication requirements beyond length. See baseline_policy.md."
 
     - id: "AUTH-004"
       name: "Session Management"
@@ -51,7 +51,7 @@ controls:
       priority: { label: "High", value: 2 }
       owner: "@david"
       implementation:
-        summary: "Signed session token; HttpOnly cookie and Secure in production. Default absolute expiry is 24 hours."
+        summary: "Signed session token in an HttpOnly cookie, marked Secure in production. The default absolute expiry is 24 hours."
         files: ["app/models/session.rb", "app/controllers/concerns/authentication.rb", "app/controllers/application_controller.rb"]
       verification_needed: "The stated 30-minute idle target and session-fixation reset are not established by absolute expiry."
 
@@ -62,7 +62,7 @@ controls:
       priority: { label: "Critical", value: 1 }
       owner: "@david"
       implementation:
-        summary: "Selected model attributes are encrypted; see pii_encryption.md for fields, lookup rules, and key constraints."
+        summary: "Selected database fields are encrypted. See pii_encryption.md for fields, lookup rules, and key constraints."
         files: ["app/models/concerns/user_profile.rb", "config/initializers/active_record_encryption.rb"]
       verification_needed: "Stable deployed keys, storage/backup encryption, TLS settings, and annual key-rotation evidence."
       audit: { report: null, coverage: null, next_review_due: null }
@@ -73,9 +73,9 @@ controls:
       priority: { label: "High", value: 2 }
       owner: "@david"
       implementation:
-        summary: "Sensitive parameters are filtered; controller parameters and model validations remain specific to each workflow."
+        summary: "Sensitive parameters are filtered out of logs. Controller parameters and model validations remain specific to each workflow."
         files: ["config/initializers/filter_parameter_logging.rb", "app/models/concerns/user_profile.rb"]
-      verification_needed: "Check new fields, named SQL binds, and error logs for personal data or bearer links."
+      verification_needed: "Check new fields, named SQL binds (query values sent with their column names), and error logs for personal data or bearer links."
 
     - id: "DATA-003"
       name: "CSRF Protection"
@@ -83,7 +83,7 @@ controls:
       priority: { label: "High", value: 2 }
       owner: "@david"
       implementation:
-        summary: "ApplicationController uses protect_from_forgery with exception handling."
+        summary: "The base controller has cross-site request forgery (CSRF) protection on. A forged request is rejected with an error (protect_from_forgery with exception handling)."
         files: ["app/controllers/application_controller.rb"]
       verification_needed: "Review exemptions and the authentication contract of each public endpoint."
 
@@ -94,7 +94,7 @@ controls:
       priority: { label: "Critical", value: 1 }
       owner: "@david"
       implementation:
-        summary: "Authentication helpers supply role checks; portal controllers own record-access scope."
+        summary: "Authentication helpers supply role checks. Portal controllers own record-access scope."
         files: ["app/controllers/concerns/authentication.rb"]
       verification_needed: "Exercise unauthorized roles and cross-owner record access at the affected endpoint."
 
@@ -104,7 +104,7 @@ controls:
       priority: { label: "High", value: 2 }
       owner: "@david"
       implementation:
-        summary: "Policy-backed cache throttles for proofs/secure forms and digest-keyed public-auth limits."
+        summary: "Policy-backed request throttles, held in cache, for proofs and secure forms. Public sign-in, password-reset, and account-recovery limits are keyed by identifier digest."
         files: ["app/services/rate_limit.rb", "app/services/auth_rate_limit.rb"]
       verification_needed: "Review token audience, expiry, replay, and throttle behavior for each exposed path."
 
@@ -115,9 +115,9 @@ controls:
       priority: { label: "Critical", value: 1 }
       owner: "@david"
       implementation:
-        summary: "Production enables force_ssl and hides local exception details. The CSP initializer is commented out."
+        summary: "Production forces HTTPS (force_ssl) and hides local exception details. The CSP initializer is commented out."
         files: ["config/environments/production.rb", "config/initializers/content_security_policy.rb"]
-      verification_needed: "Confirm deployed TLS, HSTS and other headers, CSP, secret custody, and 90-day secret rotation."
+      verification_needed: "Confirm deployed TLS, the Strict-Transport-Security header (HSTS), other headers, CSP, secret custody, and 90-day secret rotation."
 
   audit_and_logging:
     - id: "AUDIT-001"
@@ -125,7 +125,7 @@ controls:
       frameworks: { doit: ["DE.AE-1/2"] }
       priority: { label: "High", value: 2 }
       implementation:
-        summary: "Production sends tagged application logs to stdout."
+        summary: "Production sends tagged application logs to standard output (stdout)."
         files: ["config/environments/production.rb"]
       verification_needed: "Central collection, 400-day retention target, access controls, and authentication/privilege alerts."
 
@@ -134,7 +134,7 @@ controls:
       frameworks: { doit: ["AU-3"] }
       priority: { label: "Medium", value: 3 }
       implementation:
-        summary: "Domain workflows record Event rows through AuditEventService; coverage depends on the workflow."
+        summary: "Domain workflows record audit Event rows through AuditEventService. Coverage depends on the workflow."
         files: ["app/services/audit_event_service.rb", "app/models/event.rb"]
       verification_needed: "Confirm actor, subject, event coverage, and retention without sensitive metadata."
 
@@ -144,7 +144,7 @@ controls:
       frameworks: { doit: ["CA-2.1", "RA-5", "SI-2"] }
       priority: { label: "Critical", value: 1 }
       implementation:
-        summary: "CI runs Brakeman."
+        summary: "The continuous-integration (CI) pipeline runs Brakeman, a static security scanner for Rails."
         files: [".github/workflows/ci.yml", ".github/workflows/main.yml"]
       verification_needed: "Dated annual independent penetration test, quarterly vulnerability scans, and remediation evidence."
 
@@ -155,14 +155,14 @@ controls:
       implementation:
         summary: "Dependabot checks Bundler and GitHub Actions daily."
         files: [".github/dependabot.yml"]
-      verification_needed: "Required CI dependency scanning and SBOM generation are not present in the checked-in workflows."
+      verification_needed: "Required CI dependency scanning and software bill of materials (SBOM) generation are not present in the checked-in workflows."
 
     - id: "PATCH-001"
       name: "Patch Management (Ruby/Rails)"
       frameworks: { doit: ["RA-5"] }
       priority: { label: "High", value: 2 }
       implementation:
-        summary: "Dependabot provides dependency update proposals; deployment timing needs operational records."
+        summary: "Dependabot provides dependency update proposals. Deployment timing needs operational records."
         files: [".github/dependabot.yml"]
       verification_needed: "Weekly alert triage and Ruby/Rails security updates and critical fixes within 30 days, or stricter applicable deadlines."
 
@@ -174,7 +174,7 @@ controls:
       implementation:
         summary: "Production disables local exception detail pages and provides a public error page."
         files: ["config/environments/production.rb", "public/500.html"]
-      verification_needed: "Confirm deployed error reporting and redaction; no monitoring provider is certified here."
+      verification_needed: "Confirm deployed error reporting and redaction. No monitoring provider is certified here."
 
   file_security:
     - id: "FILE-SEC-001"
@@ -184,11 +184,11 @@ controls:
       implementation:
         summary: "Proof uploads are checked for allowed content types and size."
         files: ["app/models/concerns/proof_manageable.rb"]
-      verification_needed: "Check each upload path, download authorization, and malware scanning; validation alone does not scan files."
+      verification_needed: "Check each upload path, download authorization, and malware scanning. Validation alone does not scan files."
 
 metadata:
   review_frequency: "Quarterly"
   responsible_team: "Security Team"
   last_audit_date: null
-  evidence_note: "Null audit values mean unverified. Add real reports, measured coverage, and assigned review dates after assessment."
+  evidence_note: "Empty (null) audit values mean unverified. Add real reports, measured coverage, and assigned review dates after assessment."
   policy: "docs/security/baseline_policy.md"

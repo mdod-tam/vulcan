@@ -38,7 +38,6 @@
               data: edit_form_data) do |f| %>
    
    <%= render 'autosave_fields', state: autosave_form_state %>
-   <!-- Autosave status indicator -->
    <div data-autosave-target="status" class="text-sm mt-2 min-h-10 sm:min-h-5" role="status" aria-live="polite"></div>
    <div class="bg-white shadow sm:rounded-lg">
      <h2 id="application_form_heading" class="sr-only">Application Details Form</h2>
@@ -66,7 +65,6 @@
     <% end %>
 
      <div class="p-6 space-y-6">
-       <!-- Application Status Display -->
        <div>
          <label class="block text-sm font-medium text-gray-700">Application Status</label>
          <div class="mt-1">
@@ -79,7 +77,6 @@
          </p>
        </div>
 
-       <!-- Residency Verification Section -->
        <div class="space-y-4 p-4 bg-gray-50 rounded">
          <h2 class="text-lg font-medium text-gray-900 required-label">Residency Verification</h2>
          
@@ -93,7 +90,6 @@
          </div>
        </div>
 
-      <!-- Household Information Section -->
       <% if @application.income_collection_enabled? %>
       <fieldset class="space-y-6">
         <legend class="text-lg font-medium text-gray-900">Household Information</legend>
@@ -134,11 +130,9 @@
         </div>
       </fieldset>
 
-       <!-- Income Threshold Warning Container -->
        <div id="income-threshold-warning" hidden class="hidden" data-income-validation-target="warningContainer"></div>
       <% end %>
 
-        <!-- Applicant and Guardian Display -->
         <section class="space-y-4 p-4 bg-gray-50 rounded">
           <h2 id="applicant-guardian-title" class="text-lg font-medium text-gray-900">Application Details</h2>
           <div>
@@ -164,7 +158,6 @@
             dependent_application: @application.for_dependent?,
             use_guardian_address: @use_guardian_address %>
 
-         <!-- Disability Section -->
        <section class="space-y-4 p-4 bg-gray-50 rounded">
          <h2 id="disability-section-title" class="text-lg font-medium text-gray-900 required-label">Disability Information</h2>
          
@@ -207,15 +200,13 @@
          </fieldset>
        </section>
 
-       <!-- Certifying Professional Information -->
-       <%# fields_for does not auto-fetch a non-association attribute: without an explicit object
-           it builds the fields against nil, which is why these inputs never rendered a value --
-           on the edit page or on any re-render after a refusal. %>
+       <%# fields_for does not bind a non-association attribute: without an explicit object it
+           builds fields against nil, so these inputs showed no value on the edit page or on
+           any re-render after a refusal. %>
        <%= f.fields_for :medical_provider_attributes, @application.medical_provider_attributes do |mp| %>
          <%= render "medical_provider_form", form: mp %>
        <% end %>
 
-        <!-- Alternate Contact Section (optional) -->
         <section class="space-y-4 p-4 bg-gray-50 rounded">
           <h2 id="alternate-contact-section-title" class="text-lg font-medium text-gray-900">Alternate Contact (Optional)</h2>
           <p class="text-sm text-gray-700"><%= t("applications.alternate_contact.portal_help") %></p>
@@ -256,7 +247,6 @@
          </div>
        </section>
 
-       <!-- Document Upload Section -->
        <section class="space-y-4 p-4 bg-gray-50 rounded">
          <h2 id="documents-section-title" class="text-lg font-medium text-gray-900">Required Documentation</h2>
 
@@ -303,7 +293,6 @@
        </section>
      </div>
 
-     <%# Terms and Conditions %>
      <div class="px-6 py-4 bg-gray-50">
        <h3 class="font-semibold mb-2 text-gray-900">MAT Statement of Terms and Conditions Agreement</h3>
        <div class="max-h-60 overflow-y-auto mb-4 p-4 bg-white rounded border border-gray-200">
@@ -320,7 +309,6 @@
        </div>
      </div>
 
-     <%# Information Verification %>
      <div class="px-6 py-4 bg-gray-50">
        <div class="flex items-start">
          <%= f.check_box :information_verified,
@@ -333,7 +321,6 @@
        </div>
      </div>
 
-     <!-- Form Actions -->
     <div class="px-6 py-4 bg-gray-50 flex items-center justify-end space-x-3 rounded-b-lg">
       <%= link_to "Cancel",
           constituent_portal_application_path(@application),

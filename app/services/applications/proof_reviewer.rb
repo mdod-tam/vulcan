@@ -170,10 +170,8 @@ module Applications
     end
 
     def set_reviewed_at_if_needed
-      # If it's an existing record being updated, the `on: :create` `set_reviewed_at` callback
-      # won't run. We need to explicitly update `reviewed_at` to reflect this new review action.
-      # If it's a new record, the `on: :create` callback will set it.
-      # `reviewed_at` is validated for presence, so it must be set before save!.
+      # Updating an existing record skips the `on: :create` `set_reviewed_at` callback,
+      # so set `reviewed_at` here. Presence validation requires it before save!.
       @proof_review.reviewed_at = Time.current unless @proof_review.new_record?
     end
 
@@ -226,12 +224,10 @@ module Applications
       @application.update!(column_name => @status_key)
     end
 
-    # Explicitly call purge logic on the application if the status was just set to rejected
     def purge_if_rejected
       return unless @status_key == 'rejected'
 
       Rails.logger.debug { "[ProofReviewer] Status is rejected for #{@proof_type_key}, attempting purge." }
-      # Call a method on the application model to handle the purge
       @application.purge_rejected_proof(@proof_type_key)
     end
 

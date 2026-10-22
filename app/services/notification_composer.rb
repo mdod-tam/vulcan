@@ -1,22 +1,11 @@
 # frozen_string_literal: true
 
-# Composes user-facing messages for notifications.
-# This service decouples message content from the Notification model and decorator,
-# providing a single source of truth for all notification text. This makes
-# testing, maintenance, and future localization much simpler.
-#
-# Usage:
-#   NotificationComposer.generate(
-#     notification.action,
-#     notification.notifiable,
-#     notification.actor,
-#     notification.metadata
-#   )
-#
+# Composes notification text in one place, so the Notification model and
+# decorator carry no copy of their own.
 class NotificationComposer
-  include ActionView::Helpers::TextHelper # For helpers like pluralize
-  include ActionView::Helpers::UrlHelper # For link_to
-  include ActionView::Helpers::OutputSafetyHelper # For safe_join
+  include ActionView::Helpers::TextHelper
+  include ActionView::Helpers::UrlHelper
+  include ActionView::Helpers::OutputSafetyHelper
 
   def self.generate(notification_action, notifiable, actor = nil, metadata = {}, viewer: nil)
     new(notification_action, notifiable, actor, metadata, viewer: viewer).generate

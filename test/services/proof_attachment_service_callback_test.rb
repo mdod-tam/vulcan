@@ -20,8 +20,6 @@ class ProofAttachmentServiceCallbackTest < ActiveSupport::TestCase
     Current.reset
   end
 
-  # --- needs_review_since: set exactly once ---
-
   test 'portal proof attachment sets needs_review_since exactly once via service attrs' do
     app = create_application_for_resubmission
 
@@ -46,11 +44,9 @@ class ProofAttachmentServiceCallbackTest < ActiveSupport::TestCase
   test 'set_needs_review_timestamp callback is suppressed during proof attachment' do
     app = create_application_for_resubmission
 
-    # The concern's set_needs_review_timestamp skips when
-    # Current.proof_attachment_service_context? is true.
-    # Verify the flag is active during the service call by checking that
-    # needs_review_since is set to the value from the service attrs,
-    # not from a second callback-driven update!.
+    # The concern's set_needs_review_timestamp skips while
+    # Current.proof_attachment_service_context? is true. needs_review_since must carry the
+    # value from the service attrs, not from a second callback-driven update!.
     result = ProofAttachmentService.attach_proof(
       application: app,
       proof_type: :income,
@@ -67,8 +63,6 @@ class ProofAttachmentServiceCallbackTest < ActiveSupport::TestCase
     assert Current.proof_attachment_service_context != true,
            'Context flag should be restored after service call'
   end
-
-  # --- Scanned/paper proof with status :approved does NOT set needs_review_since ---
 
   test 'scanned proof with approved status does not set needs_review_since' do
     app = create(:application, :in_progress, user: @constituent)
@@ -90,8 +84,6 @@ class ProofAttachmentServiceCallbackTest < ActiveSupport::TestCase
     assert_nil app.needs_review_since, 'Approved scanned proofs should not set needs_review_since'
     assert_equal 'approved', app.income_proof_status
   end
-
-  # --- Auto-approval fires through callback chain ---
 
   test 'proof attachment with approved status triggers reconciler auto-approval when all requirements met' do
     app = create_application_ready_for_final_proof
@@ -149,8 +141,6 @@ class ProofAttachmentServiceCallbackTest < ActiveSupport::TestCase
                  'Application should NOT auto-approve when proof is not_reviewed'
   end
 
-  # --- Paper context suppresses admin self-notifications ---
-
   test 'paper context suppresses admin proof notifications via notify_admins_of_new_proofs' do
     app = create_application_for_resubmission
 
@@ -169,8 +159,6 @@ class ProofAttachmentServiceCallbackTest < ActiveSupport::TestCase
     end
   end
 
-  # --- Validation safety: update! does not fail on proof attachment validations ---
-
   test 'proof attachment service update! does not trigger proof attachment validations' do
     app = create(:application, :in_progress, user: @constituent)
 
@@ -187,8 +175,6 @@ class ProofAttachmentServiceCallbackTest < ActiveSupport::TestCase
     app.reload
     assert_equal 'not_reviewed', app.income_proof_status
   end
-
-  # --- Proof ingress participates in callback-driven lifecycle ---
 
   test 'proof status update uses update! so validations and callbacks fire' do
     app = create(:application, :in_progress, user: @constituent)

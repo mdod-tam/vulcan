@@ -4,8 +4,7 @@ require 'test_helper'
 
 class AccountRecoveryControllerTest < ActionDispatch::IntegrationTest
   setup do
-    # Set up a test user with WebAuthn credentials
-    @user = create(:user) # Replaced fixture with factory
+    @user = create(:user)
     @admin = create(:admin)
     @system_audit_actor = User.find_by(email: PublicAuditActor::SYSTEM_AUDIT_EMAIL) ||
                           create(:admin, email: PublicAuditActor::SYSTEM_AUDIT_EMAIL)
@@ -16,11 +15,10 @@ class AccountRecoveryControllerTest < ActionDispatch::IntegrationTest
     get lost_security_key_path
     assert_response :success
 
-    # Check that the form contains the necessary fields
     assert_select 'form'
     assert_select 'input[name=?]', 'contact'
-    assert_select 'textarea' # For details field
-    # Form submission could be either button or input
+    assert_select 'textarea' # details field
+    # The submit control is either a button or an input.
     assert(css_select('button[type=submit]').any? || css_select('input[type=submit]').any?,
            'Form must have a submit button or input')
   end
@@ -44,10 +42,8 @@ class AccountRecoveryControllerTest < ActionDispatch::IntegrationTest
       }
     end
 
-    # Check that we're redirected to confirmation page
     assert_redirected_to account_recovery_confirmation_path
 
-    # Verify the recovery request was created correctly
     recovery_request = RecoveryRequest.last
     assert_equal @user.id, recovery_request.user_id
     assert_equal 'pending', recovery_request.status
@@ -244,8 +240,7 @@ class AccountRecoveryControllerTest < ActionDispatch::IntegrationTest
       }
     end
 
-    # Should still redirect to confirmation page for security reasons
-    # This prevents email enumeration attacks
+    # The same confirmation response prevents email enumeration.
     assert_redirected_to account_recovery_confirmation_path
   end
 
@@ -280,7 +275,6 @@ class AccountRecoveryControllerTest < ActionDispatch::IntegrationTest
     get account_recovery_confirmation_path
     assert_response :success
 
-    # Check for confirmation message content
     assert_select 'h1', /Recovery Request Received/i
     assert_match(/If the information provided matches a portal account/i, response.body)
     assert_no_match(/check your email/i, response.body)
@@ -340,7 +334,6 @@ class AccountRecoveryControllerTest < ActionDispatch::IntegrationTest
       }
     end
 
-    # Should still redirect to confirmation page
     assert_redirected_to account_recovery_confirmation_path
   end
 
@@ -356,18 +349,15 @@ class AccountRecoveryControllerTest < ActionDispatch::IntegrationTest
   end
 
   test 'does not require authentication for recovery actions' do
-    # Verify that unauthenticated users can access recovery form
     get lost_security_key_path
     assert_response :success
 
-    # Verify that unauthenticated users can submit recovery request
     post request_security_key_reset_path, params: {
       contact: @user.email,
       details: 'Unauthenticated access test'
     }
     assert_redirected_to account_recovery_confirmation_path
 
-    # Verify that unauthenticated users can access confirmation page
     get account_recovery_confirmation_path
     assert_response :success
   end
@@ -375,19 +365,15 @@ class AccountRecoveryControllerTest < ActionDispatch::IntegrationTest
   private
 
   def setup_webauthn_credential_for(user)
-    # Set up WebAuthn for testing
     WebAuthn.configure do |config|
       config.allowed_origins = ['https://example.com']
     end
     fake_client = WebAuthn::FakeClient.new('https://example.com')
 
-    # Create credential options
     credential_options = WebAuthn::Credential.options_for_create(user: { id: user.id, name: user.email })
 
-    # Simulate credential creation with fake client
     credential_hash = fake_client.create(challenge: credential_options.challenge)
 
-    # Create and save a credential for the user
     user.webauthn_credentials.create!(
       external_id: credential_hash['id'],
       public_key: 'dummy_public_key_for_testing',

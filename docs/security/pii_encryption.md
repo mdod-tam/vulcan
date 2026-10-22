@@ -1,8 +1,8 @@
 # PII Encryption
 
-Rails encrypts selected attributes before storing them and decrypts them when models read them.
+Rails encrypts selected fields before storing them and decrypts them when the application reads them. In Rails terms these are model attributes, each backed by a database column.
 
-Values stay in their normal columns; there are no separate `_encrypted` columns for current user-profile fields.
+Values stay in their normal columns. There are no separate `_encrypted` columns for current user-profile fields.
 
 Encryption covers the declarations below, not every piece of personal information in the database.
 
@@ -21,39 +21,41 @@ Encryption covers the declarations below, not every piece of personal informatio
 | [EquipmentItem](../../app/models/equipment_item.rb) | `normalized_imei`, `normalized_serial_number` | `imei`, `serial_number`, `tracking_number` |
 | [Event](../../app/models/event.rb) | — | `change_values` (see [audit events](#audit-events)) |
 
-Deterministic encryption produces matching ciphertext for matching values under the same encryption configuration. This supports equality queries and unique indexes, but reveals equality patterns. Use it only when lookup or uniqueness requires it.
+Deterministic encryption produces matching ciphertext for matching values under the same encryption configuration. Ciphertext is the encrypted form of a value. This supports equality searches and unique indexes, but it reveals which values match. Use it only when lookup or uniqueness requires it.
 
-Equipment identifiers use normalized encrypted equality for duplicate checks. Partial database indexes enforce one active IMEI and one active serial within the recorded normalized manufacturer/model identity, including duplicate catalog entries. Shipped and detached devices retain those assignments; withdrawn historical devices release them. Device identifier corrections use the encrypted audit values described below, and identifiers are excluded from bid exports.
+Equipment identifiers use normalized encrypted equality for duplicate checks. Normalized means reformatted to one standard form before comparing. Partial database indexes enforce one active IMEI — a device identifier for mobile equipment — and one active serial within the recorded normalized manufacturer/model identity, including duplicate catalog entries. Shipped and detached devices retain those assignments. Withdrawn historical devices release them. Device identifier corrections use the encrypted audit values described below, and identifiers are excluded from bid exports.
 
 ### Audit events
 
-`Event#metadata` is plain JSON, so it must not hold values whose columns are encrypted. When `metadata[:changes]` names an encrypted record field or an explicitly sensitive audit field, [`AuditEventService.log`](../../app/services/audit_event_service.rb) keeps the field name in metadata, with an empty placeholder, and moves its old and new values to the encrypted `Event#change_values`. The sensitive-field list includes `serial_duplicate_reason`: an equipment acknowledgment may contain a device identifier even though it is not a stored EquipmentItem attribute. Read recorded changes with `Event#field_changes`, which restores those values; reading `metadata['changes']` directly shows only the names. Other change fields are stored as given.
+`Event#metadata` is plain JSON — a plain-text data format — so it must not hold values whose columns are encrypted. When `metadata[:changes]` names an encrypted record field or an explicitly sensitive audit field, [`AuditEventService.log`](../../app/services/audit_event_service.rb) keeps the field name in metadata, with an empty placeholder, and moves its old and new values to the encrypted `Event#change_values`. The sensitive-field list includes `serial_duplicate_reason`: an equipment acknowledgment may contain a device identifier even though it is not a stored EquipmentItem attribute. Read recorded changes with `Event#field_changes`, which restores those values. Reading `metadata['changes']` directly shows only the names. Other change fields are stored as given.
 
 The password digest is a BCrypt hash that is also encrypted at rest. A WebAuthn public key is not a cryptographic secret, though this application encrypts its stored value.
 
 ## Training content and public product guidance
 
-Training report `internal_notes`, `constituent_summary`, and private cancellation/no-show reasons are not encrypted attributes. Their audience is controlled by application/session authorization: current staff/trainer views can resolve preparation and private notes; former trainers retain only their own completed-report access; the applicant/current managing guardian receives the deliberately authored shared summary. Shared text is not inferred from private notes, and completion notifications link to the authenticated report instead of copying private report content into delivery metadata. Adding note encryption would require a separate design for both training and evaluation content.
+Training report `internal_notes`, `constituent_summary`, and private cancellation and no-show reasons are not encrypted attributes. Their audience is controlled by application and session authorization. Current staff and trainer views can resolve preparation and private notes. Former trainers retain only their own completed-report access.
+
+The applicant or current managing guardian receives the deliberately authored shared summary. Shared text is not inferred from private notes. Completion notifications link to the authenticated report instead of copying private report content into delivery metadata. Adding note encryption would require a separate design for both training and evaluation content.
 
 Product resources have a different audience: they are public program guidance with an explicit language and exact catalog-product target. Resource PDFs use signed Active Storage proxy links without a resource-specific login guard. Editors must not include personal, application, or session information in a resource URL or file. Device associations and shared training history remain authorized even though their linked guidance is public. A demo model's guidance can appear on its authorized training summary without adding that model to Devices.
 
 ## Looking up encrypted contacts
 
-`User.find_by_email`, `find_by_phone`, `exists_with_email?`, and `exists_with_phone?` are the contact lookup and uniqueness path. They share one normalization — lowercased email, and `XXX-XXX-XXXX` formatting for valid US numbers — which is what makes a deterministic match possible at all, since the ciphertext of an unnormalized value differs. Database unique indexes back the same two columns.
+`User.find_by_email`, `find_by_phone`, `exists_with_email?`, and `exists_with_phone?` are the contact lookup and uniqueness path. They share one normalization: lowercased email, and `XXX-XXX-XXXX` formatting for valid US numbers. That is what makes a deterministic match possible at all, because the ciphertext of an unnormalized value differs. Database unique indexes back the same two columns.
 
-Public sign-in and recovery use `find_by_login_identifier`; account-access requests use `find_for_account_access`. These enforce eligibility beyond a matching contact value. A phone-only paper record must not become a public login account through a generic contact lookup. See [authentication](authentication_system.md) and [user management](../development/user_management_features.md).
+Public sign-in and recovery use `find_by_login_identifier`. Account-access requests use `find_for_account_access`. These enforce eligibility beyond a matching contact value. A phone-only paper record must not become a public login account through a generic contact lookup. See [authentication](authentication_system.md) and [user management](../development/user_management_features.md).
 
-SQL `LOWER`, `LIKE`, and substring matching operate on ciphertext and silently return nothing useful. Admin email search works around that with the separate HMAC search tokens in [UserEmailSearch](../../app/models/concerns/user_email_search.rb).
+Database search functions such as SQL `LOWER`, `LIKE`, and substring matching operate on ciphertext and silently return nothing useful. Admin email search works around that with separate HMAC search tokens in [UserEmailSearch](../../app/models/concerns/user_email_search.rb). An HMAC token is a keyed fingerprint that can match a value without revealing it.
 
 ## Keys and existing data
 
 [The initializer](../../config/initializers/active_record_encryption.rb) reads `primary_key`, `deterministic_key`, and `key_derivation_salt` from `Rails.application.credentials.active_record_encryption`.
 
-**Retained data needs stable keys.** Normal non-test startup, including development, refuses missing, incomplete or blank encryption credentials. The error names the missing entries and the credentials-edit command for the environment. Temporary random keys are limited to disposable test runs and asset builds with `SECRET_KEY_BASE_DUMMY=1` and `assets:precompile` as the sole requested Rake task. Complete configured keys are reused in those paths too.
+**Retained data needs stable keys.** Normal non-test startup, including development, refuses missing, incomplete, or blank encryption credentials. The error names the missing entries and the credentials-edit command for the environment. Temporary random keys are limited to disposable test runs and asset builds with `SECRET_KEY_BASE_DUMMY=1` and `assets:precompile` as the sole requested Rake task. A Rake task is a command-line job the framework can run. Complete configured keys are reused in those paths too.
 
-When initializing fresh data, use `bin/rails db:encryption:init` to generate keys, then save all three entries in the matching credentials file before saving records. Preserve the original encryption keys and salt for any data you retain; temporary keys cannot reliably read records after a restart, and losing the matching keys makes encrypted records unreadable, including restored backups.
+When initializing fresh data, run `bin/rails db:encryption:init` to generate keys. Save all three entries in the matching credentials file before saving records. Preserve the original encryption keys and salt for any data you retain. Temporary keys cannot reliably read records after a restart. Losing the matching keys makes encrypted records unreadable, including restored backups.
 
-`RAILS_MASTER_KEY` decrypts the credentials file, not database columns. A replacement instance can use a different master key only with credentials re-encrypted under it that preserve the original Active Record keys and salt. Preserve the effective `secret_key_base` too: besides signed cookies/links, it supplies the HMAC key for the persisted email-search index. Changing it requires rebuilding those tokens.
+`RAILS_MASTER_KEY` decrypts the credentials file, not database columns. A replacement instance can use a different master key only with credentials re-encrypted under it that preserve the original Active Record keys and salt. Preserve the effective `secret_key_base` too. Besides signed cookies and links, it supplies the HMAC key for the persisted email-search index. Changing it requires rebuilding those tokens.
 
 Use the [backup checklist and settings comparison](../infrastructure/backup_and_recovery.md) for recovery. See the [vendor tax-record cutover](../infrastructure/vendor_tax_records_cutover.md) for the stable-key check, resumable TIN/audit conversion, W9 storage-key rotation, and cache invalidation order.
 
@@ -62,22 +64,22 @@ Two settings matter during migrations:
 - `support_unencrypted_data: true` allows existing plaintext values to be read.
 - `extend_queries: false` means equality searches do not automatically cover both plaintext and encrypted representations.
 
-Fixtures are encrypted and key references are stored. These settings do not establish automated key rotation. Plan rotation with previous-key support, deterministic lookup and uniqueness checks, data migration, and a tested restore before retiring old keys.
+Fixtures — the test data files — are encrypted, and key references are stored. These settings do not establish automated key rotation. Plan rotation with previous-key support, deterministic lookup and uniqueness checks, data migration, and a tested restore before retiring old keys.
 
 ## Keep personal data out of logs
 
-[Parameter filtering](../../config/initializers/filter_parameter_logging.rb) covers contact details, names, addresses, DOB, password fields, provider contacts, and tokens. Paper identity receipts, rationales, and upload `*_signed_id` parameters are filtered. The filter also covers `identity_decision` as defense in depth. Autosave filters `field_value`, which can contain personal data, and its `autosave_context` page identifier. Encrypted attributes are also added to filtering. Review storage and filtering together when adding a sensitive field.
+[Parameter filtering](../../config/initializers/filter_parameter_logging.rb) covers contact details, names, addresses, DOB (date of birth), password fields, provider contacts, and tokens. Paper identity receipts, rationales, and upload `*_signed_id` parameters are filtered. The filter also covers `identity_decision` as defense in depth. Autosave filters `field_value`, which can contain personal data, and its `autosave_context` page identifier. Encrypted attributes are also added to filtering. Review storage and filtering together when adding a sensitive field.
 
-Training request filters cover exact `internal_notes`, `constituent_summary`, cancellation/no-show reason keys, and reschedule reasons. Audit/notification metadata contains structural training facts instead of those text bodies. [Product resource filtering](../../config/initializers/product_resource_parameter_filter.rb) hides uploaded document parameters, signed upload references, resource URLs, and manufacturer-documentation URLs. Model filtering also hides resource/manufacturer URLs from SQL/inspection output because an external URL can carry query credentials even when its guidance is public.
+Training request filters cover exact `internal_notes`, `constituent_summary`, cancellation and no-show reason keys, and reschedule reasons. Audit and notification metadata contains structural training facts instead of those text bodies. [Product resource filtering](../../config/initializers/product_resource_parameter_filter.rb) hides uploaded document parameters, signed upload references, resource URLs, and manufacturer-documentation URLs. Model filtering also hides resource and manufacturer URLs from SQL and inspection output, because an external URL can carry query credentials even when its guidance is public.
 
-Equipment request filtering covers serial, IMEI, tracking, correction reasons, and the signed `impact_token` confirmation payload. That signature binds reviewed values; it does not encrypt the payload, so it needs explicit log filtering even when the individual identifier fields are filtered.
+Equipment request filtering covers serial, IMEI, tracking, correction reasons, and the signed `impact_token` confirmation payload. That signature binds the reviewed values. It does not encrypt the payload, so it needs explicit log filtering even when the individual identifier fields are filtered.
 
-SQL binds need names for filtering to work. A hash condition carries its column name; a positional value in `where('LOWER(first_name) = ?', value)` does not. [Constituent duplicate matching](../../app/models/users/constituent.rb) uses named query attributes for this reason.
+SQL binds need names for filtering to work. A bind is a query value sent separately from the SQL text. A hash condition carries its column name. A positional value in `where('LOWER(first_name) = ?', value)` does not. [Constituent duplicate matching](../../app/models/users/constituent.rb) uses named query attributes for this reason.
 
-Reset, verification, and secure-upload links are bearer credentials: anything holding one durably — notification metadata, an unsanitized delivery error — is a second copy of the credential. [SecureErrorSanitizer](../../app/services/concerns/secure_error_sanitizer.rb) strips them from mailer and SMS failures, and SMS carrying one is sent with `sensitive: true`.
+Reset, verification, and secure-upload links are bearer credentials: anyone holding the link can use it, like a password in the URL. Anything that durably holds one — notification metadata, an unsanitized delivery error — is a second copy of the credential. [`SecureErrorSanitizer`](../../app/services/concerns/secure_error_sanitizer.rb) strips them from mailer and SMS failures. An SMS carrying one is sent with `sensitive: true`.
 
 ## What breaks when a field changes
 
-An encrypted field has four surfaces that fail independently: the model's own reads and writes, the raw stored value, the normalized lookup and uniqueness path where one applies, and request and query-log filtering. A field can round-trip correctly through the model while its plaintext still reaches the logs, and a deterministic field can encrypt correctly while its uniqueness check quietly stops matching.
+An encrypted field has four surfaces that fail independently: the model's own reads and writes, the raw stored value, the normalized lookup and uniqueness path where one applies, and request and query-log filtering. A field can round-trip correctly through the model while its plaintext still reaches the logs. A deterministic field can encrypt correctly while its uniqueness check quietly stops matching.
 
 [Encrypted validation tests](../../test/models/user_encrypted_validation_test.rb) and [parameter filtering tests](../../test/config/filter_parameter_logging_test.rb) cover the first and last of those. Operational requirements are in the [security baseline](baseline_policy.md).

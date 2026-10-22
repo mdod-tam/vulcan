@@ -19,8 +19,6 @@ class VoucherTransitionBehaviorTest < ActiveSupport::TestCase
     Current.reset
   end
 
-  # --- AuditEventService: value-aware dedup for feature_flag_toggled ---
-
   test 'AuditEventService allows rapid toggles with different values' do
     admin = create(:admin)
     flag = create(:feature_flag, name: 'test_toggle_flag', enabled: true)
@@ -90,8 +88,6 @@ class VoucherTransitionBehaviorTest < ActiveSupport::TestCase
     assert_not_equal fp_admin1, fp_admin2, 'Different admins should produce different fingerprints'
   end
 
-  # --- ApplicationForm: conditional income validation ---
-
   test 'ApplicationForm validates annual_income on submission when income required' do
     @vouchers_flag.update!(enabled: false)
     user = create(:constituent, :with_disabilities)
@@ -149,8 +145,6 @@ class VoucherTransitionBehaviorTest < ActiveSupport::TestCase
 
     assert form.valid?, "Expected form valid when app has income_proof_required=false: #{form.errors.full_messages}"
   end
-
-  # --- PaperApplicationService: income threshold skip ---
 
   test 'PaperApplicationService skips income threshold validation when flag is off' do
     @vouchers_flag.update!(enabled: true)
@@ -226,17 +220,15 @@ class VoucherTransitionBehaviorTest < ActiveSupport::TestCase
     assert result, "Expected success: #{service.errors}"
 
     app = service.application
-    # When income is not required and residency is approved, required_proofs_for_dcf_approved?
-    # returns true. The reconciler fires inside ProofAttachmentService after writing the approved
-    # proof status, so the application correctly escalates to awaiting_dcf. This verifies that
-    # income is ignored in the proof-sufficiency check when the flag is off.
+    # Income not required plus residency approved makes required_proofs_for_dcf_approved? true.
+    # The reconciler fires inside ProofAttachmentService after the approved proof status is
+    # written, so the application escalates to awaiting_dcf. Income is ignored in the
+    # proof-sufficiency check when the flag is off.
     assert_equal 'awaiting_dcf', app.status,
                  'Expected awaiting_dcf: income ignored (flag off), residency approved triggers DCF escalation'
     assert_equal 'not_requested', app.medical_certification_status,
                  'Escalation leaves the certification request to staff'
   end
-
-  # --- PaperApplicationService: income proof processing skip ---
 
   test 'PaperApplicationService does not process income proof when flag is off' do
     @vouchers_flag.update!(enabled: true)
@@ -279,8 +271,6 @@ class VoucherTransitionBehaviorTest < ActiveSupport::TestCase
                  'Income proof status should remain not_reviewed when income processing is skipped'
   end
 
-  # --- Voucher details visibility ---
-
   test 'voucher_fulfillment? remains true after voucher issuance' do
     @vouchers_flag.update!(enabled: true)
     user = create(:constituent, :with_disabilities)
@@ -307,8 +297,6 @@ class VoucherTransitionBehaviorTest < ActiveSupport::TestCase
       end
     end
   end
-
-  # --- FeatureFlagsController: transactional audit ---
 
   test 'FeatureFlagsController update creates audit event with old and new values' do
     flag = create(:feature_flag, name: 'audit_test_flag', enabled: true)

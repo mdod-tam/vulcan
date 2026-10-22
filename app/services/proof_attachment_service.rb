@@ -14,7 +14,7 @@ class ProofAttachmentService
   )
   # Attaches a proof document to an application.
   #
-  # @param args [Hash] A hash containing the arguments for attachment:
+  # @param args [Hash] attachment arguments:
   #   - :application [Application] (required) The application to attach the proof to.
   #   - :proof_type [Symbol] (required) The type of proof (:income, :residency, or :id).
   #   - :blob_or_file [ActiveStorage::Blob, String, ActionDispatch::Http::UploadedFile] (required) The file to attach.

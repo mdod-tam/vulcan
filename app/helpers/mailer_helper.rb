@@ -1,7 +1,6 @@
 # frozen_string_literal: true
 
 module MailerHelper
-  # Returns colors and an icon for a status box.
   # @param status [Symbol] The status (:success, :warning, :error, :info)
   # @return [Hash] The color values for the status
   def status_box_colors(status)
@@ -36,7 +35,6 @@ module MailerHelper
     colors[status] || colors[:info]
   end
 
-  # Formats a date for mailer templates.
   # @param date [Date, Time, DateTime, String] The date to format
   # @param format [Symbol] The format to use (:short, :long, :full)
   # @return [String] The formatted date
@@ -49,7 +47,6 @@ module MailerHelper
     format_date_str(date, format)
   end
 
-  # Formats a currency value for mailer templates.
   # @param amount [Numeric] The amount to format
   # @param precision [Integer] The number of decimal places
   # @return [String] The formatted currency
@@ -57,7 +54,6 @@ module MailerHelper
     number_to_currency(amount, precision: precision)
   end
 
-  # Formats a phone number for mailer templates.
   # @param phone [String] The phone number to format
   # @return [String] The formatted phone number
   def format_phone(phone)
@@ -137,7 +133,7 @@ module MailerHelper
     )
   end
 
-  # Returns schedule information or an instruction to arrange a training session.
+  # Returns the scheduled session details, or an instruction to arrange one.
   # @param training_session [TrainingSession] The training session
   # @return [String] The formatted scheduling information text
   def training_session_schedule_text(training_session)
@@ -162,8 +158,6 @@ module MailerHelper
     end
   end
 
-  # Formats a date with strftime.
-  #
   # @param [Date, Time, DateTime] date the date object to format
   # @param [Symbol] format the format (:short, :long, :full)
   # @return [String] the formatted date string

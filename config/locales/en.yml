@@ -1,25 +1,5 @@
-# Rails loads locale files from this directory.
-#
-# Translation lookup:
-#
-#     I18n.t "hello"
-#
-# In views:
-#
-#     <%= t("hello") %>
-#
-# Select config/locales/es.yml:
-#
-#     I18n.locale = :es
-#
-# Rails Internationalization guide: https://guides.rubyonrails.org/i18n.html.
-#
-# Quote `true`, `false`, `on`, `off`, `yes`, and `no` to prevent YAML boolean
-# conversion, regardless of case. For example:
-#
-#     en:
-#       "yes": yup
-#       enabled: "ON"
+# Quote true, false, on, off, yes, and no when they are translation keys or text.
+# YAML reads these unquoted words as booleans.
 
 en:
   layouts:

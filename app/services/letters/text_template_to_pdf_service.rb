@@ -1,8 +1,8 @@
 # frozen_string_literal: true
 
 module Letters
-  # This service converts database-stored email text templates to PDFs for printing
-  # It allows us to maintain a single source of templates (in the database with versioning logic)
+  # Converts database-stored email text templates to PDFs for printing.
+  # Keeping templates in the database preserves one versioned source of truth.
   class TextTemplateToPdfService
     LETTER_TYPE_BY_TEMPLATE = {
       'application_notifications_account_created' => :account_created,
@@ -52,20 +52,17 @@ module Letters
     def generate_pdf
       return nil unless @template
 
-      # Render the template with the provided variables
       rendered_subject, rendered_content = rendered_template
 
-      # Create a PDF document using the rendered content
       pdf = Prawn::Document.new do |doc|
         setup_document(doc)
-        # Conditionally add header and footer based on template requirements
+        # The template's own header/footer variables render them in the body; skipping avoids printing both.
         add_header(doc, rendered_subject) unless template_requires_shared_partials?
         add_date(doc)
         add_address(doc)
         add_salutation(doc)
         add_body_content(doc, rendered_content)
         add_closing(doc)
-        # Conditionally add header and footer based on template requirements
         add_footer(doc) unless template_requires_shared_partials?
         add_page_numbers(doc)
       end
@@ -112,11 +109,9 @@ module Letters
     end
 
     def add_header(pdf, rendered_subject = nil)
-      # Add logo if available
       logo_path = Rails.root.join('app/assets/images/mat_logo.png')
       pdf.image(logo_path.to_s, width: 150) if File.exist?(logo_path)
 
-      # Add title with template name stylized as a title
       pdf.move_down 20
       pdf.font_size 18
       pdf.text determine_letter_title(rendered_subject), style: :bold, align: :center
@@ -148,14 +143,11 @@ module Letters
     end
 
     def add_body_content(pdf, content)
-      # Split the content into paragraphs
       paragraphs = content.split(/\n\n+/)
 
       paragraphs.each do |paragraph|
-        # Ignore empty paragraphs
         next if paragraph.strip.empty?
 
-        # Format lists if they exist in the paragraph
         if paragraph.match(/^\s*[*\-•]\s+/)
           paragraph.split("\n").each do |list_item|
             if list_item.match(/^\s*[*\-•]\s+/)
@@ -258,7 +250,6 @@ module Letters
       end
     end
 
-    # Check if the template requires shared partial variables (header_text and footer_text)
     def template_requires_shared_partials?
       template = EmailTemplate.find_by(name: template_name, format: format, locale: resolved_locale) ||
                  EmailTemplate.find_by(name: template_name, format: format, locale: I18n.default_locale.to_s)

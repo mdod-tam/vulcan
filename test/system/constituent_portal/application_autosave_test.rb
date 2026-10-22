@@ -3,9 +3,9 @@
 require 'application_system_test_case'
 require Rails.root.join('test/support/system_test_evidence')
 
-# Browser contract for constituent-application autosave: what reaches the draft, and what the page
-# tells the constituent about it. The full form post stays authoritative; these prove the draft is
-# current in between, including when the constituent leaves without leaving the field first.
+# Browser contract for constituent autosave: what reaches the draft, and what the page tells the
+# constituent about it. The full form post stays authoritative. These tests prove the draft stays
+# current in between, including when the constituent departs with focus still in the field.
 class ApplicationAutosaveTest < ApplicationSystemTestCase
   include SystemTestEvidence
 
@@ -29,8 +29,8 @@ class ApplicationAutosaveTest < ApplicationSystemTestCase
     assert_focused 'application_household_size'
     capture_both_widths('application-new-autosave-saved-en')
 
-    # Typed and saved with no pause and no leaving the field: the form still posts to create, and
-    # the server continues the draft autosave started instead of starting a second one.
+    # The form posts to create. The server continues the draft autosave started without
+    # creating a second application.
     fill_in 'Annual Income', with: 45_000
     find('input[name="save_draft"]').click
 
@@ -434,7 +434,7 @@ class ApplicationAutosaveTest < ApplicationSystemTestCase
   end
 
   # Real keystrokes with focus left in the field. Capybara's fill_in fires change and blur after
-  # typing, which would hide exactly the case these tests are about: leaving with an unsent edit.
+  # typing, which would hide the case under test: leaving with an unsent edit.
   def type_in_place(label, value)
     field = find_field(label)
     page.execute_script("arguments[0].value = ''; arguments[0].focus()", field)

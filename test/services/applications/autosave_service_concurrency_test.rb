@@ -3,13 +3,11 @@
 require 'test_helper'
 
 module Applications
-  # Focused concurrency evidence for the autosave boundary (plan section 4): autosave's
-  # user-field writer and the merge service must serialize through
-  # User.lock_for_merge_integrity! on the target user, exactly like the sections 1-3 shared
-  # primitive already requires of merge itself. Both sides of every race are the real
-  # production services -- including the "holder" side, which is the *winning* transaction,
-  # not a copy of its effects (see create_service_concurrency_test.rb's header comment for
-  # why wrapping a real service call in an outer `transaction do ... end` works).
+  # Concurrency evidence for the autosave boundary. Autosave's user-field writer and the
+  # merge service must serialize through User.lock_for_merge_integrity! on the target user.
+  # Both sides of every race are real production services. The "holder" side is the winning
+  # transaction, not a copy of its effects. See create_service_concurrency_test.rb's header
+  # comment for why wrapping a real service call in an outer `transaction do ... end` works.
   class AutosaveServiceConcurrencyTest < ActiveSupport::TestCase
     self.use_transactional_tests = false
 
@@ -197,7 +195,7 @@ module Applications
       contender_thread = on_own_connection do
         contender_pid_queue << backend_pid
         # If autosave fell back to find-or-create instead of failing closed on the exact
-        # supplied id, this second draft is what it would silently substitute and write to.
+        # supplied id, this second draft is what it would silently write to.
         other_draft_never_touched = Application.create!(user: User.find(user.id), status: :draft,
                                                         application_date: Time.current, submission_method: :online)
         autosave_result = run_autosave_application_field(user:, application_id: draft.id)
@@ -212,12 +210,11 @@ module Applications
       assert_equal 'in_progress', draft.reload.status
       assert_not autosave_result[:success], 'expected autosave to fail closed once the supplied draft was submitted underneath it'
       assert_includes autosave_result[:errors][:base], 'This application is no longer a draft.'
-      # 2, not autosave's attempted 4: the committed submission's own form legitimately set
-      # household_size to 2 as part of its real mutation -- the losing autosave's value must
-      # simply never have landed on top of it.
+      # 2, not autosave's attempted 4: the submission's own form set household_size to 2.
+      # The losing autosave's value must never land on top of it.
       assert_equal 2, draft.reload.household_size, "zero side effects: autosave's own value must never overwrite the submission's"
-      # 1, not 0: the committed submission's own real field changes legitimately log exactly
-      # one application_updated event on their own -- the losing autosave must add none on top.
+      # 1, not 0: the submission's own field changes log exactly one application_updated
+      # event. The losing autosave must add none.
       assert_equal 1, Event.where(action: 'application_updated', auditable: draft).count
       assert_equal 'draft', other_draft_never_touched.reload.status,
                    'the other draft must never have been touched -- autosave must never substitute a different application'
@@ -325,9 +322,9 @@ module Applications
       duplicate = nil
       begin
         Current.paper_context = true
-        # No disability field is set explicitly: the :constituent factory's after(:build) hook
-        # force-defaults hearing_disability to true whenever every disability flag would
-        # otherwise be blank, so vision_disability (autosaved below) starts reliably false.
+        # No disability field is set explicitly. The :constituent factory's after(:build) hook
+        # force-defaults hearing_disability to true when every disability flag would be blank.
+        # vision_disability (autosaved below) therefore starts reliably false.
         duplicate = create(:constituent, email: nil, phone: "555-#{rand(100..999)}-#{rand(1000..9999)}",
                                          communication_preference: :letter)
       ensure

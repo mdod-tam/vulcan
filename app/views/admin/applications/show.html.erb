@@ -1,7 +1,6 @@
 <main class="container mx-auto px-4 py-8" role="main" aria-labelledby="application-title">
   <div data-controller="modal">
   <div class="max-w-7xl mx-auto">
-    <!-- Header Section -->
     <div class="flex flex-col md:flex-row justify-between items-start md:items-center mb-6">
       <h1 id="application-title" class="text-3xl font-bold text-gray-900 mb-4 md:mb-0">
         Application #<%= @application.id %> Details
@@ -19,7 +18,6 @@
     </div>
 
     <%= turbo_frame_tag(turbo_frame_request_id || "application_show_#{@application.id}", target: (turbo_frame_request_id ? nil : '_top')) do %>
-    <!-- Application Status Section -->
     <div class="bg-white rounded-lg shadow p-6 mb-6">
       <div class="flex flex-col md:flex-row items-start md:items-center justify-between">
         <div class="flex items-center space-x-2">
@@ -36,7 +34,6 @@
       </div>
     </div>
 
-    <!-- Applicant and Managing Guardian Details Section -->
     <section class="bg-white rounded-lg shadow p-6 mb-6" aria-labelledby="applicant-guardian-details-title">
       <h2 id="applicant-guardian-details-title" class="text-xl font-semibold text-gray-900 mb-4">Applicant and Managing Guardian Details</h2>
       <dl class="grid grid-cols-1 md:grid-cols-2 gap-6">
@@ -67,7 +64,6 @@
       </dl>
     </section>
 
-    <!-- Applicant Information Section -->
     <section class="bg-white rounded-lg shadow p-6 mb-6" aria-labelledby="applicant-info-title">
       <h2 id="applicant-info-title" class="text-xl font-semibold text-gray-900 mb-4">Applicant Information</h2>
       <dl class="grid grid-cols-1 md:grid-cols-2 gap-6">
@@ -143,7 +139,6 @@
       </dl>
     </section>
 
-    <!-- Application Details Section -->
     <section class="bg-white rounded-lg shadow p-6 mb-6" aria-labelledby="application-details-title">
       <h2 id="application-details-title" class="text-xl font-semibold text-gray-900 mb-4">Application Details</h2>
       <dl class="grid grid-cols-1 md:grid-cols-2 gap-6">
@@ -170,7 +165,6 @@
       </dl>
     </section>
 
-    <!-- Evaluation and Training Status Section -->
     <% if @application.status_approved? %>
       <%= render "evaluation_training_status" %>
     <% end %>
@@ -178,11 +172,9 @@
       <%= render 'equipment_purchasing', application: @application %>
     <% end %>
 
-    <!-- Admin Notes Section -->
     <%= render "admin_notes" %>
 
     <% if @application.income_proof_required? || @application.household_size.present? || @application.annual_income.present? %>
-    <!-- Financial Information Section -->
     <section class="bg-white rounded-lg shadow p-6 mb-6" aria-labelledby="financial-info-title">
       <h2 id="financial-info-title" class="text-xl font-semibold text-gray-900 mb-4">Financial Information</h2>
       <dl class="grid grid-cols-1 md:grid-cols-2 gap-6">
@@ -212,7 +204,6 @@
     </section>
     <% end %>
 
-    <!-- Alternate Contact Information Section -->
     <section class="bg-white rounded-lg shadow p-6 mb-6" aria-labelledby="alternate-contact-info-title">
       <h2 id="alternate-contact-info-title" class="text-xl font-semibold text-gray-900 mb-4">Alternate Contact Information</h2>
       <p class="text-sm text-gray-600 mb-4"><%= t("applications.alternate_contact.admin_authorization_help") %></p>
@@ -248,7 +239,6 @@
       <% end %>
     </section>
 
-    <!-- Medical Certification Section -->
     <section class="bg-white rounded-lg shadow p-6 mb-6" aria-labelledby="certification-title" id="medical-certification-section" data-testid="medical-certification-section">
       <%= render "medical_certification_section" %>
     </section>
@@ -259,21 +249,17 @@
       </section>
     <% end %>
 
-    <!-- Attachments Section (Proofs) -->
     <section class="bg-white rounded-lg shadow p-6 mb-6" aria-labelledby="attachments-title" id="attachments-section">
       <h2 id="attachments-title" class="text-xl font-semibold text-gray-900 mb-4">Attachments</h2>
       <%= render "attachments" %>
     </section>
 
-    <!-- Modals -->
     <%= render "modals" %>
 
-    <!-- Voucher Details Section -->
     <% if FeatureFlag.enabled?(:vouchers_enabled) && @application.voucher_fulfillment? %>
       <%= render "voucher_details" %>
     <% end %>
 
-    <!-- Audit Logs Section -->
     <%= render "audit_logs" %>
     <% end %>
   </div>

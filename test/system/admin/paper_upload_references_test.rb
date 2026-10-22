@@ -4,9 +4,9 @@ require 'application_system_test_case'
 require_relative 'paper_applications_test_helper'
 
 module Admin
-  # Rails uploads a form's files one after another and adds a hidden signed-ID input for each
-  # completed one. When a later upload is canceled, the earlier one's reference stays in the form,
-  # so Remove must clear it or the removed document still submits.
+  # Rails uploads a form's files one by one and adds a hidden signed-ID input for each completed
+  # one. Canceling a later upload leaves the earlier reference in the form, so Remove must clear
+  # it or the removed document still submits.
   class PaperUploadReferencesTest < ApplicationSystemTestCase
     include PaperApplicationsTestHelper
 
@@ -219,7 +219,7 @@ module Admin
       @screenshot_artifact_label = nil
     end
 
-    # Passes the browser's type and size checks; only the server's content inspection refuses it
+    # Passes the browser's type and size checks. Only the server's content inspection refuses it.
     def active_content_pdf(label = 'scripted_certification')
       @active_content_pdfs ||= {}
       @active_content_pdfs[label] ||= Tempfile.new([label, '.pdf']).tap do |file|
