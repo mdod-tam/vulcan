@@ -152,48 +152,6 @@ class ApplicationLifecycleFlowTest < ActiveSupport::TestCase
     end
   end
 
-  # TARGET: After PR 4 migrates ProofReviewer through WorkflowReconciler, auto-approval
-  # via proof review should produce the full audit trail. Unskip this test and delete the
-  # characterization test above when that migration lands.
-  test 'PR4 target: proof reviewer auto-approval creates full audit artifacts' do
-    skip 'Requires PR 4: migrate ProofReviewer auto-approval through WorkflowReconciler'
-
-    with_after_commit_callbacks do
-      admin = create(:admin)
-      application = create_application_with_documents(
-        attach_medical_certification: true
-      )
-      set_application_state(
-        application,
-        status: :in_progress,
-        income_proof_status: :approved,
-        residency_proof_status: :not_reviewed,
-        id_proof_status: :approved,
-        medical_certification_status: :approved
-      )
-
-      reviewer = Applications::ProofReviewer.new(application, admin)
-
-      assert_difference -> { application.proof_reviews.where(proof_type: :residency, status: :approved).count }, 1 do
-        assert_no_difference -> { Event.where(auditable: application, action: 'application_auto_approved').count } do
-          reviewer.review(proof_type: :residency, status: :approved)
-        end
-      end
-
-      application.reload
-
-      assert_equal 'approved', application.status
-      assert_equal 1, ApplicationStatusChange.where(application: application, to_status: 'approved').count
-
-      approved_status_events = Event.where(auditable: application, action: 'application_status_changed').select do |event|
-        event.metadata['new_status'] == 'approved'
-      end
-      assert_equal 1, approved_status_events.count
-      assert_equal admin, approved_status_events.first.user
-      assert_equal 'auto_approval', approved_status_events.first.metadata['trigger']
-    end
-  end
-
   test 'certification approval auto-approves the application via reconciler' do
     with_after_commit_callbacks do
       admin = create(:admin)
@@ -230,13 +188,12 @@ class ApplicationLifecycleFlowTest < ActiveSupport::TestCase
       assert_equal 'approved', application.medical_certification_status
       assert_equal 'approved', application.status
 
-      # Exactly 1 lifecycle ApplicationStatusChange to approved (from reconciler via transition_status!)
+      # One lifecycle change to approved, written by the reconciler via transition_status!.
       approved_status_changes = ApplicationStatusChange.lifecycle.where(
         application: application, to_status: 'approved'
       )
       assert_equal 1, approved_status_changes.count
 
-      # Exactly 1 application_status_changed event with trigger: auto_approval
       approved_status_events = Event.where(
         auditable: application, action: 'application_status_changed'
       ).select { |e| e.metadata['new_status'] == 'approved' }
@@ -244,7 +201,6 @@ class ApplicationLifecycleFlowTest < ActiveSupport::TestCase
       assert_equal 'auto_approval', approved_status_events.first.metadata['trigger']
       assert_equal admin, approved_status_events.first.user
 
-      # No legacy application_auto_approved events
       assert_equal 0, Event.where(auditable: application, action: 'application_auto_approved').count
 
       voucher = Voucher.find_by!(application: application)
@@ -275,21 +231,18 @@ class ApplicationLifecycleFlowTest < ActiveSupport::TestCase
 
       assert_equal 'approved', application.status
 
-      # Exactly 1 lifecycle ApplicationStatusChange to approved with trigger metadata
       approved_changes = ApplicationStatusChange.lifecycle.where(
         application: application, to_status: 'approved'
       )
       assert_equal 1, approved_changes.count
       assert_equal 'auto_approval', approved_changes.first.metadata['trigger']
 
-      # Exactly 1 application_status_changed event with trigger: auto_approval
       approved_events = Event.where(
         auditable: application, action: 'application_status_changed'
       ).select { |e| e.metadata['new_status'] == 'approved' }
       assert_equal 1, approved_events.count
       assert_equal 'auto_approval', approved_events.first.metadata['trigger']
 
-      # No legacy application_auto_approved events
       assert_equal 0, Event.where(auditable: application, action: 'application_auto_approved').count
     end
   end
@@ -347,9 +300,8 @@ class ApplicationLifecycleFlowTest < ActiveSupport::TestCase
     end
   end
 
-  # CHARACTERIZATION: When status changes via transition_status! (e.g. Approver),
-  # it creates both an ApplicationStatusChange and an application_status_changed event.
-  # This is the explicit API-driven path.
+  # Characterization: transition_status! is the explicit API path (for example, Approver). It
+  # creates both an ApplicationStatusChange and an application_status_changed event.
   test 'transition_status! creates ApplicationStatusChange and application_status_changed for manual path' do
     with_after_commit_callbacks do
       admin = create(:admin)
@@ -380,8 +332,6 @@ class ApplicationLifecycleFlowTest < ActiveSupport::TestCase
       assert_equal 'awaiting_dcf', event.metadata['new_status']
     end
   end
-
-  # (Deleted stale log_status_change test here as the method and ivars were removed in PR 99)
 
   private
 

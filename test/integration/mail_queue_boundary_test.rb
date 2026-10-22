@@ -2,9 +2,9 @@
 
 require 'test_helper'
 
-# Mail jobs against Solid Queue as production runs it: queue tables in the application database,
-# reached through their own connection pool, so the queue write is never part of the application's
-# transaction. Uses real commits; each test removes what it created.
+# Mail jobs run against Solid Queue as production runs it. The queue tables live in the
+# application database behind their own connection pool, so a queue write never joins the
+# application's transaction. These tests commit for real. Each test removes what it created.
 class MailQueueBoundaryTest < ActiveSupport::TestCase
   self.use_transactional_tests = false
 
@@ -241,7 +241,7 @@ class MailQueueBoundaryTest < ActiveSupport::TestCase
   end
 
   # Create the queue tables in the application database without recording the queue schema's
-  # version there, then give SolidQueue::Record its own pool on that database.
+  # version, then give SolidQueue::Record its own pool on that database.
   def use_queue_tables_in_application_database!
     SolidQueue::Record.establish_connection(ActiveRecord::Base.connection_db_config.configuration_hash)
     body = File.read(QUEUE_SCHEMA)[/define\(version: [\d_]+\) do\n(.*)\nend/m, 1]

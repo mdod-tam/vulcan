@@ -369,11 +369,6 @@ class SecureProviderInfoFormsControllerTest < ActionDispatch::IntegrationTest
     assert_response :success
     assert_select 'h1', I18n.t!('secure_provider_info_form_resends.create.heading')
   end
-
-  # -----------------------------------------------------------------------
-  # Security headers on success and resend-create responses
-  # -----------------------------------------------------------------------
-
   test 'success page response uses secure public headers' do
     get secure_provider_info_form_success_path
 
@@ -395,11 +390,6 @@ class SecureProviderInfoFormsControllerTest < ActionDispatch::IntegrationTest
     assert_equal 'no-store', response.headers['Cache-Control']
     assert_equal 'no-referrer', response.headers['Referrer-Policy']
   end
-
-  # -----------------------------------------------------------------------
-  # Unavailable show-page states: blank, revoked, submitted tokens
-  # -----------------------------------------------------------------------
-
   test 'show renders unavailable for blank token and returns ok' do
     get secure_provider_info_form_path(token: '')
 
@@ -485,11 +475,6 @@ class SecureProviderInfoFormsControllerTest < ActionDispatch::IntegrationTest
     assert_response :ok
     assert_no_match raw_token, response.body
   end
-
-  # -----------------------------------------------------------------------
-  # Already-submitted re-POST renders explicit submitted state (no re-submission)
-  # -----------------------------------------------------------------------
-
   test 'PATCH with a revoked token renders unavailable' do
     application = create(:application)
     token = SecureRequestForm.generate_public_token
@@ -577,11 +562,6 @@ class SecureProviderInfoFormsControllerTest < ActionDispatch::IntegrationTest
     assert_select 'h1', I18n.t!('secure_provider_info_forms.submitted.heading')
     assert_equal 'Dr. Already Submitted', application.reload.medical_provider_name
   end
-
-  # -----------------------------------------------------------------------
-  # Resend new: unavailable states
-  # -----------------------------------------------------------------------
-
   test 'resend new renders unavailable for a revoked token' do
     application = create(:application)
     token = SecureRequestForm.generate_public_token
@@ -639,11 +619,6 @@ class SecureProviderInfoFormsControllerTest < ActionDispatch::IntegrationTest
     assert_select 'h1', I18n.t!('secure_provider_info_form_resends.unavailable.heading', locale: :es)
     assert_includes response.body, I18n.t!('secure_provider_info_form_resends.unavailable.body', locale: :es)
   end
-
-  # -----------------------------------------------------------------------
-  # Spanish i18n: resend cooldown and neutral confirmation
-  # -----------------------------------------------------------------------
-
   test 'resend new renders expiry heading in Spanish for Spanish-locale recipient' do
     constituent = create(:constituent, locale: 'es')
     application = create(:application, user: constituent)

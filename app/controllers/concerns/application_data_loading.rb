@@ -5,7 +5,6 @@ module ApplicationDataLoading
 
   DEFAULT_ATTACHMENT_NAMES = %w[income_proof residency_proof id_proof medical_certification].freeze
 
-  # This loader finds an application and queries its attachment metadata.
   # @param application_id [Integer, String] The ID of the application to load
   # @return [Application] The loaded application
   def load_application_with_attachments(application_id)
@@ -37,7 +36,6 @@ module ApplicationDataLoading
       .to_a
   end
 
-  # This helper queries records for application show views.
   # @param application [Application] Application whose related records the queries read
   def load_application_show_associations(application)
     ApplicationStatusChange.where(application_id: application.id)
@@ -59,7 +57,6 @@ module ApplicationDataLoading
     load_training_associations(application) if application.status_approved?
   end
 
-  # This helper builds relations for evaluation and training data.
   # @param application [Application] Application for the evaluation and training relations
   def load_training_associations(application)
     application.evaluations.preload(:evaluator) if application.respond_to?(:evaluations)

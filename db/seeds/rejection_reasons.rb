@@ -1,14 +1,12 @@
 # frozen_string_literal: true
 
-# Seeds EN rejection reason records from the authoritative strings in
-# app/views/admin/applications/_modals.html.erb.
-#
-# address_mismatch body uses a %{address} placeholder so it can be
-# interpolated with the applicant's actual address at send time.
+# Creates missing English and Spanish rejection reasons for the admin review modal.
+# Existing records keep their current bodies.
+# The address_mismatch bodies contain %<address>s for the applicant's address.
 # All other bodies are static.
 def seed_rejection_reasons # rubocop:disable Metrics/MethodLength
   reasons = [
-    # ── Income ────────────────────────────────────────────────────────────
+    # Income
     {
       code: 'address_mismatch',
       proof_type: 'income',
@@ -112,7 +110,7 @@ def seed_rejection_reasons # rubocop:disable Metrics/MethodLength
                'documentación que incluya toda la información requerida para verificar sus ingresos.'
     },
 
-    # ── Residency ──────────────────────────────────────────────────────────
+    # Residency
     {
       code: 'address_mismatch',
       proof_type: 'residency',
@@ -180,7 +178,7 @@ def seed_rejection_reasons # rubocop:disable Metrics/MethodLength
                'documentación que incluya toda la información requerida para verificar su residencia en Maryland.'
     },
 
-    # ── ID ──────────────────────────────────────────────────────────────────
+    # ID
     {
       code: 'none_provided',
       proof_type: 'id',
@@ -222,7 +220,7 @@ def seed_rejection_reasons # rubocop:disable Metrics/MethodLength
                'clara y legible de su identificación que muestre toda la información requerida.'
     },
 
-    # ── Medical Certification ──────────────────────────────────────────────
+    # Medical Certification
     {
       code: 'missing_provider_credentials',
       proof_type: 'medical_certification',
@@ -292,7 +290,6 @@ def seed_rejection_reasons # rubocop:disable Metrics/MethodLength
   ]
 
   reasons.each do |attrs|
-    # Ensure EN reason exists
     RejectionReason.find_or_create_by!(
       code: attrs[:code],
       proof_type: attrs[:proof_type],
@@ -301,7 +298,6 @@ def seed_rejection_reasons # rubocop:disable Metrics/MethodLength
       r.body = attrs[:en_body]
     end
 
-    # Ensure ES reason exists
     RejectionReason.find_or_create_by!(
       code: attrs[:code],
       proof_type: attrs[:proof_type],

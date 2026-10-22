@@ -57,7 +57,6 @@ export default class extends Controller {
     }
   }
 
-  // Stimulus action for handling proof type selection
   // HTML: data-action="click->rejection-form#handleProofTypeClick"
   handleProofTypeClick(event) {
     const proofType = event.currentTarget.dataset.proofType
@@ -67,21 +66,18 @@ export default class extends Controller {
     }
   }
 
-  // Private method for managing reason group visibility
   _updateReasonGroupsVisibility(proofType) {
-    // Early exit if no reason group targets exist
     if (!this.hasMedicalOnlyReasonsTarget && !this.hasGeneralReasonsTarget) {
       return
     }
 
-    // Handle empty or unknown proof types gracefully - reset all groups to hidden
+    // An empty proof type hides all groups
     if (!proofType) {
       if (this.hasMedicalOnlyReasonsTarget) setVisible(this.medicalOnlyReasonsTarget, false, { ariaHidden: true, inlineStyleFallback: false })
       if (this.hasGeneralReasonsTarget) setVisible(this.generalReasonsTarget, false, { ariaHidden: true, inlineStyleFallback: false })
       return
     }
 
-    // Use symmetric logic for all reason groups
     const isMedical = proofType === 'medical'
 
     const groups = [
@@ -89,14 +85,12 @@ export default class extends Controller {
       { target: this.hasGeneralReasonsTarget ? this.generalReasonsTarget : null, show: !isMedical, name: 'general' }
     ]
 
-    // Apply visibility to groups
     groups.forEach(({ target, show, name }) => {
       if (target) {
         setVisible(target, show, { ariaHidden: !show, inlineStyleFallback: false })
       }
     })
 
-    // Filter individual reason buttons based on proof-type attribute
     if (this.hasReasonButtonTarget) {
       this.reasonButtonTargets.forEach(button => {
         const proofTypes = button.dataset.proofTypes
@@ -109,7 +103,6 @@ export default class extends Controller {
     }
   }
 
-  // Handle predefined reason selection
   selectPredefinedReason(event) {
     if (!this.hasReasonFieldTarget) {
       if (process.env.NODE_ENV !== 'production') {
@@ -156,7 +149,6 @@ export default class extends Controller {
     this.reasonFieldTarget.focus()
   }
 
-  // Handle form validation
   validateForm(event) {
     if (!this.hasReasonFieldTarget) {
       if (process.env.NODE_ENV !== 'production') {
@@ -185,8 +177,7 @@ export default class extends Controller {
 
     reasonField.classList.remove('border-red-500')
 
-    // Notify any parent modal controllers that a form is being submitted
-    // This helps ensure proper scroll restoration after the form submission
+    // Let parent modal controllers react to the submit, e.g. for scroll restoration
     document.dispatchEvent(new CustomEvent('turbo-form-submit', {
       detail: { 
         element: event.target,

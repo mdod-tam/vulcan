@@ -1,7 +1,6 @@
 # frozen_string_literal: true
 
 module Applications
-  # Handles guardian/dependent user management for paper applications
   class GuardianDependentManagementService < BaseService
     SYNTHETIC_PHONE_RANDOM_SPACE = 10_000_000
     SYNTHETIC_PHONE_MAX_ATTEMPTS = 25
@@ -91,8 +90,7 @@ module Applications
       data
     end
 
-    # Public method for creating guardian/dependent relationships
-    # Used by controllers when users and relationships need to be created separately
+    # Controllers use this when users and relationships are created separately.
     def create_guardian_relationship(relationship_type)
       return false unless @guardian_user && @dependent_user
 
@@ -209,11 +207,12 @@ module Applications
 
       case params[:email_strategy]
       when 'guardian'
+        # The @system.matvulcan.local address is an undeliverable stand-in that fills the required
+        # login column; the guardian's address, when present, carries the correspondence (dependent_email).
         if @guardian_user&.email.present?
           data[:dependent_email] = @guardian_user.email
           data[:email] = "dependent-#{SecureRandom.uuid}@system.matvulcan.local"
         else
-          # Fallback: generate a unique email if guardian email is missing
           data[:email] = "dependent-#{SecureRandom.uuid}@system.matvulcan.local"
           data[:dependent_email] = data[:email]
         end
@@ -229,10 +228,6 @@ module Applications
         return apply_email_strategy_with('guardian', data)
       end
 
-      # Final safety check: ensure email is always set
-      return true if data[:email].present?
-
-      data[:email] = "dependent-#{SecureRandom.uuid}@system.matvulcan.local"
       true
     end
 
@@ -269,6 +264,8 @@ module Applications
       data[:zip_code] = @guardian_user.zip_code
     end
 
+    # These helpers record the fallback strategy for callers that restore contact choices.
+    # The fallback callers pass 'guardian', whose branch does not recurse.
     def apply_email_strategy_with(strategy, data)
       @params[:email_strategy] = strategy
       apply_email_strategy(data)

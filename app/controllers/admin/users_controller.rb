@@ -753,7 +753,6 @@ module Admin
       end
     end
 
-    # Role conversion
     def validate_and_normalize_role(raw_role_param, user_id)
       return nil if raw_role_param.blank?
 

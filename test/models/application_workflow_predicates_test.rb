@@ -8,8 +8,6 @@ class ApplicationWorkflowPredicatesTest < ActiveSupport::TestCase
     @vouchers_flag = FeatureFlag.find_or_create_by!(name: 'vouchers_enabled') { |f| f.enabled = false }
   end
 
-  # --- stamp_workflow_defaults! ---
-
   test 'stamp_workflow_defaults! sets equipment when vouchers_enabled is off' do
     @vouchers_flag.update!(enabled: false)
     app = create(:application, :in_progress)
@@ -42,8 +40,6 @@ class ApplicationWorkflowPredicatesTest < ActiveSupport::TestCase
     assert_not app.income_proof_required?, 'Expected income_proof_required stamped false when vouchers enabled'
   end
 
-  # --- scrub_income_fields ---
-
   test 'scrub_income_fields nils out income data on new record when income is off' do
     @vouchers_flag.update!(enabled: true)
     app = create(:application, :in_progress)
@@ -71,8 +67,6 @@ class ApplicationWorkflowPredicatesTest < ActiveSupport::TestCase
     assert_nil app.annual_income
   end
 
-  # --- income_collection_enabled? ---
-
   test 'income_collection_enabled? returns income_proof_required for persisted records' do
     @vouchers_flag.update!(enabled: false)
     app = create(:application, :in_progress)
@@ -92,8 +86,6 @@ class ApplicationWorkflowPredicatesTest < ActiveSupport::TestCase
     assert_not app.income_collection_enabled?
   end
 
-  # --- Fulfillment predicates ---
-
   test 'voucher_fulfillment? and equipment_fulfillment?' do
     @vouchers_flag.update!(enabled: false)
     app = create(:application, :in_progress)
@@ -104,8 +96,6 @@ class ApplicationWorkflowPredicatesTest < ActiveSupport::TestCase
     assert app.voucher_fulfillment?
     assert_not app.equipment_fulfillment?
   end
-
-  # --- required_proofs_approved? ---
 
   test 'required_proofs_approved? requires all proofs when income is required' do
     app = create(:application, :in_progress)
@@ -139,8 +129,6 @@ class ApplicationWorkflowPredicatesTest < ActiveSupport::TestCase
     app.reload
     assert app.required_proofs_approved?
   end
-
-  # --- voucher_issuable? ---
 
   test 'voucher_issuable? requires voucher fulfillment, approved status, and cert' do
     app = create(:application, :completed, :voucher_fulfillment)
@@ -180,8 +168,6 @@ class ApplicationWorkflowPredicatesTest < ActiveSupport::TestCase
     assert_not app.voucher_issuable?
   end
 
-  # --- with_proofs_needing_review scope ---
-
   test 'with_proofs_needing_review includes income not_reviewed only when income required' do
     app_with_income = create(:application, :in_progress)
     app_without_income = create(:application, :in_progress, :income_not_required)
@@ -220,8 +206,6 @@ class ApplicationWorkflowPredicatesTest < ActiveSupport::TestCase
     assert_includes Application.with_proofs_needing_review, app
   end
 
-  # --- VoucherManagement#can_create_voucher? ---
-
   test 'can_create_voucher? requires voucher fulfillment' do
     app = create(:application, :completed, :with_all_proofs)
     assert app.equipment_fulfillment?
@@ -251,8 +235,6 @@ class ApplicationWorkflowPredicatesTest < ActiveSupport::TestCase
     end
   end
 
-  # --- all_requirements_met? uses required_proofs_approved? ---
-
   test 'all_requirements_met? skips income when income_proof_required is false' do
     app = create(:application, :in_progress, :income_not_required)
     app.update_columns(
@@ -264,8 +246,6 @@ class ApplicationWorkflowPredicatesTest < ActiveSupport::TestCase
 
     assert app.send(:all_requirements_met?)
   end
-
-  # --- ProofReviewer auto-approval without income ---
 
   test 'ProofReviewer auto-approves when income not required and residency approved' do
     app = create(:application, :in_progress, :income_not_required)
@@ -311,8 +291,6 @@ class ApplicationWorkflowPredicatesTest < ActiveSupport::TestCase
     assert_equal 'approved', status_event.metadata['new_status']
   end
 
-  # --- ProofConsistencyValidation respects income_proof_required ---
-
   test 'proof consistency skips income proof check when income not required' do
     app = create(:application, :in_progress, :income_not_required)
     app.update_columns(
@@ -323,8 +301,6 @@ class ApplicationWorkflowPredicatesTest < ActiveSupport::TestCase
 
     assert app.valid?, "Expected valid despite no income proof attached: #{app.errors.full_messages}"
   end
-
-  # --- ProofManageable#require_proof_attachments ---
 
   test 'require_proof_attachments skips income proof when not required' do
     ENV['REQUIRE_PROOF_VALIDATIONS'] = 'true'
@@ -339,8 +315,6 @@ class ApplicationWorkflowPredicatesTest < ActiveSupport::TestCase
   ensure
     ENV.delete('REQUIRE_PROOF_VALIDATIONS')
   end
-
-  # --- pending_proof_types ---
 
   test 'pending_proof_types omits income when not required' do
     app = create(:application, :in_progress, :income_not_required)
@@ -367,8 +341,6 @@ class ApplicationWorkflowPredicatesTest < ActiveSupport::TestCase
     assert_includes app.send(:pending_proof_types), 'residency'
   end
 
-  # --- proof_type_reviewable? ---
-
   test 'proof_type_reviewable? allows rejected attached proofs to be reviewed again' do
     app = create(:application, :in_progress)
     app.income_proof.attach(
@@ -392,8 +364,6 @@ class ApplicationWorkflowPredicatesTest < ActiveSupport::TestCase
 
     assert_not app.proof_type_reviewable?(:income)
   end
-
-  # --- evaluation_request_pending? / with_pending_evaluation_request ---
 
   test 'evaluation_request_pending? is false when evaluation_requested_at is nil' do
     app = create(:application, :completed)
@@ -451,8 +421,6 @@ class ApplicationWorkflowPredicatesTest < ActiveSupport::TestCase
     assert_equal app.id, event.metadata['application_id']
   end
 
-  # --- training_request_pending? / with_pending_training_request ---
-
   test 'training_request_pending? tracks unresolved training requests' do
     app = create(:application, :completed)
     app.update_columns(training_requested_at: 2.hours.ago)
@@ -496,8 +464,6 @@ class ApplicationWorkflowPredicatesTest < ActiveSupport::TestCase
     assert_not_includes results, assigned
     assert_not_includes results, unapproved
   end
-
-  # --- service_window_end_date ---
 
   test 'service_window_end_date returns application_date + waiting_period_years' do
     app = create(:application, :completed)

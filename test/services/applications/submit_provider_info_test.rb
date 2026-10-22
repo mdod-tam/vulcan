@@ -198,10 +198,6 @@ module Applications
       assert_equal '', @application.reload.medical_provider_fax
     end
 
-    # -----------------------------------------------------------------------
-    # Transaction rollback: application.update! raises
-    # -----------------------------------------------------------------------
-
     test 'does not mark secure request submitted or create audit event when application update rolls back' do
       @application.stubs(:update!).raises(ActiveRecord::RecordInvalid.new(@application))
 
@@ -217,10 +213,6 @@ module Applications
       assert_not_predicate @secure_request_form, :submitted?
       assert_predicate @secure_request_form, :status_sent?
     end
-
-    # -----------------------------------------------------------------------
-    # Audit metadata shape and PII exclusion
-    # -----------------------------------------------------------------------
 
     test 'successful submission creates exactly one medical_provider_info_submitted event' do
       assert_difference -> { Event.where(action: 'medical_provider_info_submitted').count }, 1 do
@@ -304,7 +296,6 @@ module Applications
       submitted_presence = event.metadata.deep_stringify_keys['submitted_presence']
 
       assert_kind_of Hash, submitted_presence
-      # Presence values must be booleans, not the raw field values
       submitted_presence.each_value do |v|
         assert_includes [true, false], v, "Expected boolean presence flag, got #{v.inspect}"
       end

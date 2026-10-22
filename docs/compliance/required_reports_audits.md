@@ -29,10 +29,10 @@ These are responsibilities to assign, not evidence that each named role is staff
 
 ## Current automation
 
-- [CI](../../.github/workflows/ci.yml) runs Brakeman. Review findings and verify fixes with a fresh scan.
-- [Dependabot](../../.github/dependabot.yml) checks Bundler dependencies and GitHub Actions daily; review and deployment remain separate work.
-- The checked-in workflows do not run `bundler-audit`, generate an SBOM, or validate the controls YAML. Those items need a defined process and evidence before being marked complete.
-- Centralized logging, alerting, penetration testing, and key rotation require operational evidence outside the source tree.
+- [CI](../../.github/workflows/ci.yml) is configured to run Brakeman. Review findings and verify fixes with a fresh scan.
+- [Dependabot](../../.github/dependabot.yml) is configured for daily Bundler and GitHub Actions update checks.
+
+[Security hardening tasks](../future_work/mat_vulcan_todos.md#security-hardening) track implementation work.
 
 ## Record the result
 

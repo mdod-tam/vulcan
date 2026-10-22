@@ -293,7 +293,7 @@ module DuplicateReconciliation
 
     def render_provenance_lines(result, detailed_pii)
       lines = []
-      lines << '=== PR 208 ARCHITECTURE DISCOVERY PROBE ==='
+      lines << '=== ARCHITECTURE DISCOVERY PROBE ==='
       lines << "Environment:  #{result.provenance[:rails_env]}"
       lines << "Timestamp:    #{result.provenance[:timestamp]}"
       lines << "Code SHA:     #{result.provenance[:code_sha]}"

@@ -148,7 +148,6 @@ class Application < ApplicationRecord
   before_create :ensure_managing_guardian_set
   after_update :reconcile_pending_letters_after_owner_change
 
-  # Scopes
   scope :draft, -> { where(status: :draft) }
   scope :search_by_last_name, lambda { |query|
     includes(:user, :proof_reviews, :training_sessions, :evaluations)
@@ -261,7 +260,6 @@ class Application < ApplicationRecord
     ).distinct
   }
 
-  # Attachment preloads
   # Preload income, residency, and medical certification attachments with their blobs.
   # Active Storage uses separate preload queries. Use with a relation or a single-record finder:
   #   Application.with_proof_blobs.includes(:user).page(params[:page])
@@ -333,7 +331,6 @@ class Application < ApplicationRecord
     end
   end
 
-  # Instance methods
   def skip_medical_provider_validation?
     status_draft? ||
       status_awaiting_proof? ||
@@ -511,8 +508,6 @@ class Application < ApplicationRecord
     managing_guardian_id.present?
   end
 
-  # Workflow predicates
-
   def income_collection_enabled?
     if persisted?
       income_proof_required?
@@ -593,7 +588,6 @@ class Application < ApplicationRecord
     )&.relationship_type
   end
 
-  # Authorization
   def editable_by?(user)
     return false unless user
 

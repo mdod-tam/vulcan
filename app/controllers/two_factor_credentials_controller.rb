@@ -296,7 +296,6 @@ class TwoFactorCredentialsController < ApplicationController
     generate_totp_qr_code
   end
 
-  # SMS enrollment helpers.
   def render_invalid_phone_error
     handle_error_response(
       html_render_action: 'sms_credentials/new',
@@ -380,13 +379,13 @@ class TwoFactorCredentialsController < ApplicationController
     Rails.logger.warn("[2FA_CREDENTIAL] Failed to build SMS credential for user #{current_user.id}: #{credential.errors.full_messages.join(', ')}")
   end
 
-  # TOTP failure helpers.
   def log_totp_setup_failure(message)
     Rails.logger.warn("[2FA_CREDENTIAL] TOTP credential setup verification failed for user #{current_user.id}: #{message}")
     TwoFactorAuth.log_verification_failure(current_user.id, :totp, 'Invalid code during setup')
   end
 
-  # TOTP enrollment helpers.
+  # The hidden form value supplies the secret when session metadata has none.
+  # Enrollment verifies the code against the selected secret before it saves the credential.
   def totp_secret_from_session
     challenge_data = TwoFactorAuth.retrieve_challenge(session)
     challenge_data[:metadata]&.dig(:secret) || params[:secret]
@@ -523,7 +522,6 @@ class TwoFactorCredentialsController < ApplicationController
     )
   end
 
-  # WebAuthn enrollment helpers.
   def process_webauthn_params
     params.expect(
       two_factor_credential: [:id, :rawId, :type, :authenticatorAttachment,

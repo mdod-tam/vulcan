@@ -64,7 +64,6 @@ end
 %>
 
 <div id="modals">
-  <!-- Certification History Modal -->
   <%= render "certification_history_modal" %>
 
   <% proof_modal_configs = []
@@ -186,7 +185,6 @@ end
     </dialog>
   <% end %>
 
-  <!-- Rejection Modal for Proof Reviews -->
   <dialog id="proofRejectionModal" class="backdrop:bg-gray-500 backdrop:bg-opacity-75 bg-white rounded-lg max-w-lg w-full shadow-xl p-0" data-controller="modal rejection-form"
        aria-labelledby="proofRejectionModal-heading">
     <div class="p-6">
@@ -280,7 +278,6 @@ end
     </div>
   </dialog>
 
-  <!-- Disability Certification Rejection Modal -->
   <dialog id="medicalCertificationRejectionModal" class="backdrop:bg-gray-500 backdrop:bg-opacity-75 bg-white rounded-lg max-w-lg w-full shadow-xl p-0" data-controller="modal rejection-form"
        aria-labelledby="medicalCertificationRejectionModal-heading">
     <div class="p-6">

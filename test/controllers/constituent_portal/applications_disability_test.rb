@@ -7,7 +7,7 @@ module ConstituentPortal
     include AuthenticationTestHelper
 
     setup do
-      # Set up FPL policies for income validation
+      # FPL policies drive the income validation.
       setup_fpl_policies
 
       @constituent = create(:constituent)
@@ -16,7 +16,7 @@ module ConstituentPortal
       @application_params = {
         application: {
           household_size: 2,
-          annual_income: '18000', # Safely under the $20,000 threshold for household of 2
+          annual_income: '18000', # below the eligibility ceiling for a household of 2 (federal poverty level times the policy modifier)
           maryland_resident: '1',
           self_certify_disability: '1',
           medical_provider_attributes: {
@@ -29,7 +29,7 @@ module ConstituentPortal
           terms_accepted: '1',
           information_verified: '1',
           medical_release_authorized: '1',
-          # No disabilities selected initially
+          # no disabilities selected by default
           hearing_disability: '0',
           vision_disability: '0',
           speech_disability: '0',
@@ -40,7 +40,6 @@ module ConstituentPortal
     end
 
     test 'should not create application when submitting with no disabilities' do
-      # Ensure constituent has no disabilities
       @constituent.update(
         hearing_disability: false,
         vision_disability: false,
@@ -58,7 +57,6 @@ module ConstituentPortal
     end
 
     test 'should create application when submitting with one disability' do
-      # Set one disability in the params
       @application_params[:application][:hearing_disability] = '1'
 
       assert_difference 'Application.count', 1 do
@@ -71,7 +69,6 @@ module ConstituentPortal
     end
 
     test 'should create application when submitting with multiple disabilities' do
-      # Set multiple disabilities in the params
       @application_params[:application][:hearing_disability] = '1'
       @application_params[:application][:vision_disability] = '1'
       @application_params[:application][:mobility_disability] = '1'
@@ -97,11 +94,9 @@ module ConstituentPortal
     end
 
     test 'should update application when adding disabilities' do
-      # First create a draft application
       post constituent_portal_applications_path, params: @application_params
       application = Application.last
 
-      # Now update with disabilities and required fields for submission
       put constituent_portal_application_path(application), params: {
         application: {
           hearing_disability: '1',
@@ -131,16 +126,14 @@ module ConstituentPortal
     end
 
     test 'should properly process all disability types' do
-      # Test each disability type individually
       disability_types = %i[hearing vision speech mobility cognition]
 
       disability_types.each_with_index do |disability_type, index|
-        # Create a unique constituent for each disability type to avoid 3-year validation
+        # A unique constituent avoids the 3-year duplicate-application validation.
         constituent = create(:constituent,
                              email: "disability_test_#{Time.now.to_i}_#{index}@example.com")
         sign_in_for_integration_test(constituent)
 
-        # Set all disabilities to false, then set the target disability to true
         constituent.update(
           hearing_disability: disability_type == :hearing,
           vision_disability: disability_type == :vision,
@@ -149,16 +142,13 @@ module ConstituentPortal
           cognition_disability: disability_type == :cognition
         )
 
-        # Create params with just this disability
         params = @application_params.dup
         params[:application]["#{disability_type}_disability"] = '1'
 
-        # Capture application count before POST to find the newly created one
         assert_difference 'Application.count', 1 do
           post constituent_portal_applications_path, params: params.merge(submit_application: true)
         end
 
-        # Find the application that was just created for this constituent
         created_application = constituent.applications.order(created_at: :desc).first
         assert_redirected_to constituent_portal_application_path(created_application)
         assert constituent.reload.send("#{disability_type}_disability"),
@@ -167,12 +157,10 @@ module ConstituentPortal
     end
 
     test 'should handle disability validation when transitioning from draft to submitted' do
-      # Create a draft application first
       post constituent_portal_applications_path, params: @application_params
       application = Application.last
       assert_equal 'draft', application.status
 
-      # Try to submit without disabilities but with other required fields
       put constituent_portal_application_path(application), params: {
         application: {
           household_size: 3,
@@ -194,7 +182,6 @@ module ConstituentPortal
       assert_response :unprocessable_content
       assert_match(/At least one disability must be selected/, response.body)
 
-      # Now add a disability along with required fields
       put constituent_portal_application_path(application), params: {
         application: {
           household_size: 3,

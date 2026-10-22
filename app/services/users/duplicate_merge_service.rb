@@ -107,8 +107,6 @@ module Users
       end
     end
 
-    # --- Preflight -----------------------------------------------------------
-
     def static_preflight
       identity_preflight || intent_preflight || contact_choice_error || delivery_choice_error
     end
@@ -292,8 +290,6 @@ module Users
       nil
     end
 
-    # --- Contact resolution --------------------------------------------------
-
     # contact_choice_error validates source choices before contact capture or mutation.
     def final_email_source
       @contact_choices[:email].to_s
@@ -389,8 +385,6 @@ module Users
 
       User::REAL_PHONE_TYPES.exclude?(final_phone_type.to_s)
     end
-
-    # --- Mutations -----------------------------------------------------------
 
     # Lock participants through +User.lock_for_merge_integrity!+ in ascending id order.
     # Include the actor, merge pair, relationship neighbors, and related case participants.
@@ -698,8 +692,6 @@ module Users
       )
     end
 
-    # --- Live blocker checks -------------------------------------------------
-
     def duplicate_pending_recovery?
       @duplicate_user.recovery_requests.pending.exists?
     end
@@ -748,8 +740,6 @@ module Users
     def application_conflict_message
       'Merging would leave the canonical record with more than one active application; archive or reject one first'
     end
-
-    # --- Guards --------------------------------------------------------------
 
     def admin_actor?
       @actor.respond_to?(:admin?) && @actor.admin? && @actor.public_login_active?

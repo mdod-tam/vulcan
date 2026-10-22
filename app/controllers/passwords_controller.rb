@@ -1,6 +1,5 @@
 # frozen_string_literal: true
 
-# Handles password reset and forced password change functionality
 class PasswordsController < ApplicationController
   include SecureErrorSanitizer
 
@@ -12,10 +11,7 @@ class PasswordsController < ApplicationController
 
   def new; end
 
-  def edit
-    # The form to enter new password
-    # @user is set by set_user_from_token for reset links.
-  end
+  def edit; end
 
   def create
     @account_access_contact = account_access_contact.to_s.strip.presence
@@ -253,10 +249,10 @@ class PasswordsController < ApplicationController
       return render :edit, status: :unprocessable_content
     end
 
-    # Lock the user row before requalifying and consuming the token, so a concurrent merge
-    # and a concurrent reset-password submission can never interleave: either the merge
-    # commits first and this reload sees the retired record and fails closed, or the
-    # password update commits first and the merge -- which takes the same lock -- waits.
+    # Lock the user row before requalifying and consuming the token. The lock keeps a
+    # concurrent merge and a concurrent reset-password submission from interleaving.
+    # Either the merge commits first and this reload sees the retired record and fails
+    # closed. Or the password update commits first and the merge waits on the same lock.
     token = params[:token]
     eligible = false
     update_succeeded = false
@@ -265,12 +261,11 @@ class PasswordsController < ApplicationController
       eligible = locked_user.public_login_active?
       next unless eligible
 
-      # Re-resolve the token itself under lock: the unlocked lookup above only proves the
-      # token's payload (bound to the password digest) was valid at that moment. A concurrent
-      # password change -- a different reset token, an admin reset, etc. -- in the window
-      # before this lock was granted would already have invalidated it; re-verifying against
-      # the now-locked row's current state closes that gap instead of letting a stale token
-      # still land.
+      # Re-resolve the token under lock. The unlocked lookup above proves only that the
+      # token payload, bound to the password digest, was valid at that moment. A concurrent
+      # password change in the window before the lock was granted would already have
+      # invalidated it. That change may be a different reset token or an admin reset.
+      # Re-verifying against the locked row's current state closes that gap.
       resolved_by_token = User.find_by_token_for(:password_reset, token)
       eligible = resolved_by_token.present? && resolved_by_token.id == locked_user.id
       next unless eligible

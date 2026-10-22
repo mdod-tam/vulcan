@@ -1,13 +1,10 @@
 import * as WebAuthnJSON from "@github/webauthn-json";
 
-// Cached constants
 const CSRF_TOKEN = document.querySelector('meta[name="csrf-token"]')?.getAttribute("content") || null;
 const FETCH_TIMEOUT = 15000; // ms
 
-// Toggle verbose logging
 const DEBUG = false;
 
-// Endpoint mappings
 const ENDPOINTS = {
   verify: type => `/two_factor_authentication/verify/${type}`,
   options: type => `/two_factor_authentication/verification_options/${type}`,
@@ -19,28 +16,26 @@ const ENDPOINTS = {
   smsResend: () => "/two_factor_authentication/credentials/sms/resend"
 };
 
-// Simple centralized logger
+// Only log and warn are gated by DEBUG; errors always print
 const Logger = {
   log: (...args) => { if (DEBUG) console.log(...args); },
   warn: (...args) => { if (DEBUG) console.warn(...args); },
-  error: (...args) => console.error(...args) // could hook into external service here
+  error: (...args) => console.error(...args)
 };
 
 const Auth = {
   debug: DEBUG,
 
-  // Retrieve CSRF token (cached)
   getCSRFToken() {
     return CSRF_TOKEN;
   },
 
-  // Build endpoint URL
   getEndpointUrl(operation, type, id = null) {
     const fn = ENDPOINTS[operation];
     return fn ? fn(type, id) : '/two_factor_authentication';
   },
 
-  // Core fetch with timeout and retries on 502/503
+  // Fetch with a timeout; retries 502/503 responses with backoff
   async sendRequest(url, method, body = null, messages = {}) {
     const controller = new AbortController();
     const timeoutId = setTimeout(() => controller.abort(), FETCH_TIMEOUT);
@@ -90,7 +85,6 @@ const Auth = {
     return this.formatError(messages.failed || "Operation failed after multiple attempts.");
   },
 
-  // Handle fetch response
   async handleResponse(response, messages = {}) {
     if (response.ok) {
       const data = await response.json();
@@ -113,12 +107,11 @@ const Auth = {
     }
   },
 
-  // Consistent error object
   formatError(message, details = "") {
     return { success: false, message, details };
   },
 
-  // Feedback handler: accepts DOM element or callback
+  // Target may be a DOM element or a callback(message, isError)
   updateFeedback(target, message, isError = true) {
     if (typeof target === 'function') {
       target(message, isError);
@@ -130,7 +123,6 @@ const Auth = {
     isError ? target.classList.add('error') : target.classList.remove('error');
   },
 
-  // Map WebAuthn errors to user messages
   getErrorMessage(error) {
     const map = {
       NotAllowedError: "The operation was cancelled or timed out.",
@@ -142,7 +134,6 @@ const Auth = {
     return map[error.name] || "Failed to complete operation.";
   },
 
-  // WebAuthn registration
   async registerWebAuthnCredential(callbackUrl, credentialOptions, nickname, feedback) {
     this.updateFeedback(feedback, "Preparing to register security key...", false);
     try {
@@ -167,7 +158,6 @@ const Auth = {
     }
   },
 
-  // WebAuthn verification
   async verifyWebAuthnCredential(credentialOptions, callbackUrl, feedback, messages = {}) {
     this.updateFeedback(feedback, messages.preparing || "Preparing to verify security key...", false);
     try {
@@ -189,7 +179,6 @@ const Auth = {
   }
 };
 
-// Named exports for clarity
 const registerWebAuthn = (callbackUrl, credentialOptions, nickname, feedback) =>
   Auth.registerWebAuthnCredential(callbackUrl, credentialOptions, nickname, feedback);
 

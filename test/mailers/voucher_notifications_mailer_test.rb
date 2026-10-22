@@ -4,7 +4,6 @@ require 'test_helper'
 
 class VoucherNotificationsMailerTest < ActionMailer::TestCase
   setup do
-    # 1. Initialize Test Data
     @application = create(:application)
     @user = @application.user
     @voucher = create(:voucher, application: @application, issued_at: 6.months.ago)
@@ -15,7 +14,6 @@ class VoucherNotificationsMailerTest < ActionMailer::TestCase
                           status: :transaction_completed,
                           amount: 100.00)
 
-    # 2. Create Mocks for Main Templates
     assigned_template = mock('email_template_assigned')
     assigned_template.stubs(:subject).returns('Voucher assigned')
     assigned_template.stubs(:render_subject).returns('Voucher assigned')
@@ -40,28 +38,23 @@ class VoucherNotificationsMailerTest < ActionMailer::TestCase
     redeemed_template.stubs(:enabled?).returns(true)
     redeemed_template.stubs(:render).returns(['Voucher redeemed', "Text Redeemed for voucher #{@voucher.code}"])
 
-    # 3. Create Mocks for Header & Footer (CRITICAL FIX)
-    #    The mailer now calls these for every email, so we must stub them.
+    # The mailer loads the header and footer templates for every email, so these must be stubbed.
     header_template = mock('email_header_text')
     header_template.stubs(:render).returns(['Header Subject', 'Header Content'])
 
     footer_template = mock('email_footer_text')
     footer_template.stubs(:render).returns(['Footer Subject', 'Footer Content'])
 
-    # 4. Register All Stubs
-    #    We use specific .with() calls so the right mock is returned for the right name.
+    # Specific .with() calls make each template name resolve to its own mock.
 
-    # Headers & Footers
     EmailTemplate.stubs(:find_by!).with(name: 'email_header_text').returns(header_template)
     EmailTemplate.stubs(:find_by!).with(name: 'email_footer_text').returns(footer_template)
 
-    # Main Templates
     EmailTemplate.stubs(:find_by!).with(name: 'voucher_notifications_voucher_assigned', format: :text, locale: 'en').returns(assigned_template)
     EmailTemplate.stubs(:find_by!).with(name: 'voucher_notifications_voucher_expiring_soon', format: :text, locale: 'en').returns(expiring_soon_template)
     EmailTemplate.stubs(:find_by!).with(name: 'voucher_notifications_voucher_expired', format: :text, locale: 'en').returns(expired_template)
     EmailTemplate.stubs(:find_by!).with(name: 'voucher_notifications_voucher_redeemed', format: :text, locale: 'en').returns(redeemed_template)
 
-    # 5. Stub Policy
     Policy.stubs(:get).returns(nil)
     Policy.stubs(:get).with('voucher_validity_period_months').returns(12)
     Policy.stubs(:get).with('minimum_voucher_redemption_amount').returns(10)
@@ -97,13 +90,11 @@ class VoucherNotificationsMailerTest < ActionMailer::TestCase
   end
 
   test 'voucher_expiring_soon' do
-    # Override the generic stub from setup with a more specific one for this test
     rendered_variables = nil
     specific_template = mock('specific_expiring')
     specific_template.stubs(:subject).returns('Voucher expiring soon')
     specific_template.stubs(:render_subject).returns('Voucher expiring soon')
     specific_template.stubs(:enabled?).returns(true)
-    # Use a generic regex match for the body to avoid fragile date math in assertions
     specific_template.define_singleton_method(:render) do |**vars|
       rendered_variables = vars
       ['Voucher expiring soon', 'Text Your voucher will expire in 11 days']
@@ -162,25 +153,21 @@ class VoucherNotificationsMailerTest < ActionMailer::TestCase
   end
 
   test 'voucher_redeemed' do
-    # 1. Define specific text we want to check for
     redeemed_text = "Text Redeemed for voucher #{@voucher.code} at #{@vendor.business_name}"
 
-    # 2. Create a specific mock for this test
     specific_redeemed_template = mock('specific_redeemed')
     specific_redeemed_template.stubs(:subject).returns('Voucher redeemed')
     specific_redeemed_template.stubs(:render_subject).returns('Voucher redeemed')
     specific_redeemed_template.stubs(:enabled?).returns(true)
     specific_redeemed_template.stubs(:render).returns(['Voucher redeemed', redeemed_text])
 
-    # 3. Update ONLY the redeemed template stub (Header/Footer stubs from setup remain active!)
+    # Override only the redeemed template stub. The header and footer stubs from setup stay active.
     EmailTemplate.stubs(:find_by!)
                  .with(name: 'voucher_notifications_voucher_redeemed', format: :text, locale: 'en')
                  .returns(specific_redeemed_template)
 
-    # 4. Perform Action
     email = VoucherNotificationsMailer.with(transaction: @transaction).voucher_redeemed.deliver_now
 
-    # 5. Assertions
     assert_emails 1
     assert_equal 'Voucher redeemed', email.subject
     assert_includes email.body.to_s, redeemed_text

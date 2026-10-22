@@ -14,7 +14,6 @@
       </h1>
     </header>
 
-    <%# Application Details Section %>
     <section aria-labelledby="details-heading" class="mb-6 p-4 bg-gray-50 rounded">
       <h2 id="details-heading" class="text-xl font-semibold mb-4 text-gray-900">Application Details</h2>
       <dl class="grid grid-cols-1 sm:grid-cols-2 gap-x-6 gap-y-3">
@@ -71,7 +70,6 @@
       </dl>
     </section>
 
-    <%# Guardian/Dependent Relationship Section %>
     <% if @application.for_dependent? %>
       <section aria-labelledby="relationship-heading" class="mb-6 p-4 bg-gray-50 rounded">
         <h2 id="relationship-heading" class="text-xl font-semibold mb-4 text-gray-900">Guardian/Dependent Relationship</h2>
@@ -97,7 +95,6 @@
       </section>
     <% end %>
 
-    <%# Alternate Contact Section %>
     <section aria-labelledby="alternate-contact-heading" class="mb-6 p-4 bg-gray-50 rounded">
       <h2 id="alternate-contact-heading" class="text-xl font-semibold mb-4 text-gray-900">Alternate Contact Information</h2>
       <% if @application.alternate_contact_name.present? || @application.alternate_contact_phone.present? || @application.alternate_contact_email.present? || @application.alternate_contact_relationship_type.present? %>
@@ -135,7 +132,6 @@
       <% end %>
     </section>
 
-    <%# Disability Information Section %>
     <section aria-labelledby="disability-heading" class="mb-6 p-4 bg-gray-50 rounded">
       <h2 id="disability-heading" class="text-xl font-semibold mb-4 text-gray-900">Disability Information</h2>
       <dl class="space-y-3">
@@ -156,7 +152,6 @@
       </dl>
     </section>
 
-    <%# Disability Certification Section %>
     <section aria-labelledby="medical-heading" class="mb-6 p-4 bg-gray-50 rounded">
       <h2 id="medical-heading" class="text-xl font-semibold mb-4 text-gray-900">Disability Certification</h2>
       <% if @application.medical_provider_name.present? %>
@@ -195,12 +190,10 @@
       </div>
     </section>
 
-    <%# Uploaded Documents Section %>
     <section aria-labelledby="documents-heading" class="mb-6 p-4 bg-gray-50 rounded">
       <h2 id="documents-heading" class="text-xl font-semibold mb-4 text-gray-900">Uploaded Documents</h2>
 
       <% if @application.income_proof_required? %>
-      <%# Income Proof %>
       <div class="mb-6">
         <h3 class="text-lg font-medium text-gray-900 mb-3">Income Proof</h3>
         <% if @application.income_proof.attached? %>
@@ -238,7 +231,6 @@
       </div>
       <% end %>
 
-      <%# Residency Proof %>
       <div>
         <h3 class="text-lg font-medium text-gray-900 mb-3">Residency Proof</h3>
         <% if @application.residency_proof.attached? %>
@@ -275,7 +267,6 @@
         <% end %>
       </div>
 
-      <%# ID Proof %>
       <div>
         <h3 class="text-lg font-medium text-gray-900 mb-3">ID Proof</h3>
         <% if @application.id_proof.attached? %>
@@ -313,7 +304,6 @@
       </div>
     </section>
 
-    <%# Notes from MAT Staff Section %>
     <% if @application.application_notes.public_notes.any? %>
       <section aria-labelledby="notes-heading" class="mb-6 p-4 bg-gray-50 rounded">
         <h2 id="notes-heading" class="text-xl font-semibold mb-4 text-gray-900">Notes from MAT Staff</h2>
@@ -349,7 +339,6 @@
       </section>
     <% end %>
 
-    <%# Actions Section %>
     <section aria-labelledby="actions-heading" class="p-4 bg-gray-50 rounded">
       <h2 id="actions-heading" class="text-xl font-semibold mb-4 text-gray-900">Actions</h2>
       <div class="flex flex-wrap gap-3">

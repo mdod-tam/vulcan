@@ -7,11 +7,11 @@ module Applications
     include AutosaveTestHelper
 
     setup do
-      # Create guardian with explicit disability settings to avoid factory defaults
+      # Explicit disability settings avoid factory defaults.
       @user = FactoryBot.create(:constituent,
                                 hearing_disability: false,
                                 vision_disability: true)
-      # Create dependent with explicit disability settings to avoid factory defaults
+      # Explicit disability settings avoid factory defaults.
       @dependent = FactoryBot.create(:constituent,
                                      first_name: 'Dependent',
                                      last_name: 'Child',
@@ -37,10 +37,8 @@ module Applications
     end
 
     test 'reuses existing draft application instead of creating duplicate' do
-      # Create initial draft
       existing_draft = FactoryBot.create(:application, :draft, user: @user)
 
-      # Simulate multiple rapid autosave requests (race condition)
       assert_no_difference -> { Application.count } do
         3.times do
           result = Applications::AutosaveService.new(
@@ -80,7 +78,6 @@ module Applications
     end
 
     test 'reuses existing draft on multiple concurrent autosaves without id' do
-      # Simulate the race condition: multiple requests fired before first returns with ID
       results = []
 
       assert_difference -> { Application.count }, 1 do
@@ -96,7 +93,6 @@ module Applications
         end
       end
 
-      # All should succeed and return the SAME application_id
       application_ids = results.pluck(:application_id)
       assert_equal 1, application_ids.uniq.size, 'Should only create one application'
       assert results.all? { |r| r[:success] }, 'All autosaves should succeed'
@@ -128,10 +124,8 @@ module Applications
     end
 
     test 'creates separate drafts for self vs dependent applications' do
-      # Create draft for self
       self_draft = FactoryBot.create(:application, :draft, user: @user)
 
-      # Autosave for dependent should create NEW draft (not reuse self draft)
       assert_difference -> { Application.count }, 1 do
         result = Applications::AutosaveService.new(
           current_user: @user,
@@ -204,8 +198,8 @@ module Applications
     end
 
     test 'does not create new draft when active application exists' do
-      # When user has a submitted/active application, they cannot create a new draft
-      # This prevents duplicate applications and aligns with controller logic
+      # A user with an active application cannot start a new draft. This prevents duplicate
+      # applications and matches the controller's rule.
       FactoryBot.create(:application, :in_progress, user: @user)
 
       assert_no_difference -> { Application.count } do
@@ -303,7 +297,8 @@ module Applications
     end
 
     test 'finds dependent draft by id when guardian is current user' do
-      # This tests the bug fix: searching in managed_applications when id is provided
+      # A supplied id must be searched in managed_applications, not only the guardian's own
+      # applications.
       dependent_draft = FactoryBot.create(
         :application,
         :draft,
@@ -328,7 +323,7 @@ module Applications
     end
 
     test 'updates disability fields on dependent user record not guardian' do
-      # This tests the bug fix: disability fields should be saved to the dependent's record
+      # Disability fields must save to the dependent's record, not the guardian's.
       dependent_draft = FactoryBot.create(
         :application,
         :draft,
@@ -336,7 +331,6 @@ module Applications
         managing_guardian_id: @user.id
       )
 
-      # Verify initial state
       assert_not @dependent.hearing_disability
       assert_not @user.hearing_disability
 
@@ -352,7 +346,6 @@ module Applications
 
       assert result[:success], "Expected autosave to succeed but got errors: #{result[:errors]}"
 
-      # Verify the dependent's disability flag was updated, not the guardian's
       assert @dependent.reload.hearing_disability, 'Dependent should have hearing_disability set to true'
       assert_not @user.reload.hearing_disability, 'Guardian should not have hearing_disability set'
     end
@@ -408,7 +401,6 @@ module Applications
     end
 
     test 'handles maryland_resident checkbox for dependent applications' do
-      # This tests the bug fix: maryland_resident checkbox should work for dependent applications
       dependent_draft = FactoryBot.create(
         :application,
         :draft,

@@ -14,7 +14,6 @@
         <% end %>
       </section>
     <% end %>
-    <!-- Header Section -->
     <header class="flex flex-col md:flex-row justify-between items-start md:items-center mb-6">
       <h1 id="user-title" class="text-3xl font-bold text-gray-900 mb-4 md:mb-0">
         User Details: <%= @user.full_name %>
@@ -74,7 +73,6 @@
       </div>
     </header>
 
-    <!-- Basic User Information Section -->
     <section class="bg-white rounded-lg shadow p-6 mb-6" aria-labelledby="basic-info-title">
       <h2 id="basic-info-title" class="text-xl font-semibold text-gray-900 mb-4">Basic Information</h2>
       <dl class="grid grid-cols-1 md:grid-cols-2 gap-6">
@@ -139,7 +137,6 @@
       </dl>
     </section>
 
-    <!-- Guardian/Dependent Info Section -->
     <section class="bg-white rounded-lg shadow p-6 mb-6" aria-labelledby="guardian-dependent-info-title">
       <h2 id="guardian-dependent-info-title" class="text-xl font-semibold text-gray-900 mb-4">Guardian/Dependent Information</h2>
 
@@ -328,7 +325,6 @@
       <% end %>
     </section>
 
-    <!-- Applications Section with Modal Controller -->
     <div data-controller="application-modal" data-action="turbo:submit-end->application-modal#handleFormSubmit">
       <section aria-labelledby="applications-heading" class="bg-white rounded-lg shadow p-6 mb-6">
         <h2 id="applications-heading" class="text-xl font-semibold text-gray-900 mb-4"><%= @user.first_name %>'s Applications</h2>
@@ -395,14 +391,12 @@
         </div>
       </section>
 
-      <!-- Application Modal -->
       <dialog 
         id="application-modal"
         class="rounded-lg shadow-xl max-w-2xl w-full backdrop:bg-black backdrop:bg-opacity-50"
         aria-labelledby="modal-title">
   
   <div class="bg-white rounded-lg">
-    <!-- Modal Header -->
     <div class="sticky top-0 bg-white border-b border-gray-200 px-6 py-4 flex items-center justify-between">
       <h3 id="modal-title" class="text-lg font-semibold text-gray-900">
         Application Details
@@ -418,14 +412,12 @@
       </button>
     </div>
 
-    <!-- Modal Body -->
     <%= turbo_frame_tag "application-modal-content" do %>
       <div class="px-6 py-4">
         <p class="text-gray-600">Loading application details...</p>
       </div>
     <% end %>
 
-    <!-- Modal Footer -->
     <div class="sticky bottom-0 bg-gray-50 border-t border-gray-200 px-6 py-4 flex justify-end gap-3">
       <button 
         type="button"
@@ -452,14 +444,12 @@
   </div>
 </dialog>
 
-      <!-- Application Edit Modal -->
       <dialog 
         id="application-edit-modal"
         class="rounded-lg shadow-xl max-w-2xl w-full backdrop:bg-black backdrop:bg-opacity-50"
         aria-labelledby="application-edit-modal-title">
         
         <div class="bg-white rounded-lg">
-          <!-- Modal Header -->
           <div class="sticky top-0 bg-white border-b border-gray-200 px-6 py-4 flex items-center justify-between">
             <h3 id="application-edit-modal-title" class="text-lg font-semibold text-gray-900">
               Edit Application
@@ -475,14 +465,12 @@
             </button>
           </div>
 
-          <!-- Modal Body -->
           <%= turbo_frame_tag "application-edit-modal-content" do %>
             <div class="px-6 py-4">
               <p class="text-gray-600">Loading edit form...</p>
             </div>
           <% end %>
 
-          <!-- Modal Footer -->
           <div class="sticky bottom-0 bg-gray-50 border-t border-gray-200 px-6 py-4 flex justify-end gap-3">
             <button 
               type="button"

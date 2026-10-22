@@ -1,6 +1,5 @@
 import GuardianPickerController from "../../../app/javascript/controllers/users/guardian_picker_controller"
 
-// Mock the visibility utility
 jest.mock('../../../app/javascript/utils/visibility', () => ({
   setVisible: jest.fn((element, visible) => {
     if (visible) {
@@ -23,7 +22,6 @@ describe("GuardianPickerController", () => {
       json: jest.fn()
     })
 
-    // Set up DOM fixture
     document.body.innerHTML = `
       <div id="test-container">
         <div id="searchPane" class="">
@@ -56,17 +54,16 @@ describe("GuardianPickerController", () => {
     
     fixture = document.querySelector('#test-container')
     
-    // Create controller instance directly
     controller = new GuardianPickerController()
     
-    // Mock controller properties using Object.defineProperty
+    // No Stimulus application runs here, so define the targets
+    // Stimulus would otherwise provide directly on the instance
     Object.defineProperty(controller, 'element', {
       value: fixture,
       writable: false,
       configurable: true
     })
     
-    // Mock target properties
     Object.defineProperty(controller, 'searchPaneTarget', {
       value: fixture.querySelector('#searchPane'),
       writable: false,
@@ -81,11 +78,10 @@ describe("GuardianPickerController", () => {
     
     Object.defineProperty(controller, 'guardianIdFieldTarget', {
       value: fixture.querySelector('#guardianIdField'),
-      writable: true, // This might be modified in tests
+      writable: true,
       configurable: true
     })
     
-    // Mock the has target methods
     Object.defineProperty(controller, 'hasSearchPaneTarget', {
       value: true,
       writable: false,
@@ -100,7 +96,7 @@ describe("GuardianPickerController", () => {
     
     Object.defineProperty(controller, 'hasGuardianIdFieldTarget', {
       value: true,
-      writable: true, // This might be modified in tests
+      writable: true,
       configurable: true
     })
 
@@ -115,10 +111,8 @@ describe("GuardianPickerController", () => {
     })
     Object.defineProperty(controller, 'hasApplicantTypeRadioDependentTarget', { value: true, configurable: true })
     
-    // Mock the dispatch method
     controller.dispatch = jest.fn()
     
-    // Call connect manually
     controller.connect()
   })
   
@@ -136,13 +130,11 @@ describe("GuardianPickerController", () => {
     })
     
     it("initializes with selection when guardianIdField has value", () => {
-      // Create a new controller with pre-filled value
       const idField = fixture.querySelector('#guardianIdField')
       idField.value = "123"
       
       const newController = new GuardianPickerController()
       
-      // Mock the new controller properties
       Object.defineProperty(newController, 'element', {
         value: fixture,
         writable: false,
@@ -235,7 +227,6 @@ describe("GuardianPickerController", () => {
 
   describe("clearSelection", () => {
     beforeEach(() => {
-      // Start with a selection
       controller.selectGuardian("456", "<div>Guardian Info</div>")
       jest.clearAllMocks() // Clear the mocks after setup
     })
@@ -271,7 +262,6 @@ describe("GuardianPickerController", () => {
   
   describe("error handling", () => {
     it("handles missing guardianIdField target gracefully", () => {
-      // Simulate missing target by redefining properties
       Object.defineProperty(controller, 'guardianIdFieldTarget', {
         value: null,
         writable: false,
@@ -305,7 +295,6 @@ describe("GuardianPickerController", () => {
     it("togglePanes method works correctly", () => {
       jest.clearAllMocks()
       
-      // Test with selectedValue = true
       controller.selectedValue = true
       controller.togglePanes()
       
@@ -314,7 +303,6 @@ describe("GuardianPickerController", () => {
       
       jest.clearAllMocks()
       
-      // Test with selectedValue = false
       controller.selectedValue = false
       controller.togglePanes()
       

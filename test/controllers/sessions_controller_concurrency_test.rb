@@ -2,13 +2,12 @@
 
 require 'test_helper'
 
-# Focused concurrency evidence for the sign-in boundary (plan section 4, row 4;
-# concurrency-evidence item 6: "password-only sign-in versus a contact-changing merge"):
-# SessionsController#create (via the shared ApplicationController#_create_and_set_session_cookie
-# chokepoint) and the merge service must serialize through User.lock_for_merge_integrity! on
-# the target user.
+# Concurrency evidence for the sign-in boundary: password-only sign-in racing a
+# contact-changing merge. SessionsController#create (via the shared
+# ApplicationController#_create_and_set_session_cookie chokepoint) and the merge service
+# must serialize through User.lock_for_merge_integrity! on the target user.
 #
-# Exercises the real, private controller method directly (via a minimal
+# Exercising the real, private controller method directly (via a minimal
 # ActionDispatch::TestRequest/TestResponse pair, using set_request!/set_response! -- see
 # passwords_controller_concurrency_test.rb for why) rather than through routing. Both sides
 # of every race are real production code.
@@ -195,10 +194,9 @@ class SessionsControllerConcurrencyTest < ActiveSupport::TestCase
   def build_fixtures
     admin = create(:admin)
     canonical = create(:constituent, email: "portal-#{SecureRandom.hex(3)}@example.com", phone: nil)
-    # find_by_login_identifier requires real_email? even for a phone-based lookup (see
-    # user.rb's find_by_login_identifier), so a meaningful "phone-based sign-in" fixture needs
-    # both a real phone and a real email -- unlike the phone-only duplicate fixture used
-    # elsewhere in this suite, which can never reach a password sign-in attempt at all.
+    # User.find_by_login_identifier (app/models/user.rb) requires real_email? even for a
+    # phone-based lookup, so a meaningful phone-based sign-in fixture needs both a real phone
+    # and a real email. A phone-only fixture could never reach a password sign-in attempt.
     duplicate = create(:constituent, email: "dup-#{SecureRandom.hex(3)}@example.com",
                                      phone: "555-#{rand(100..999)}-#{rand(1000..9999)}",
                                      communication_preference: :letter,

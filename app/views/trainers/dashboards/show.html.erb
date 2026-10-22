@@ -97,7 +97,6 @@
     </ul>
   </section>
 
-    <!-- Assigned Sessions Awaiting Scheduling -->
     <div id="needs-scheduling-section" class="bg-white shadow rounded-lg p-6 mb-8">
       <div class="flex flex-wrap justify-between items-center gap-3 mb-4">
         <h2 id="needs-scheduling-table-heading" class="text-xl font-semibold"><%= t('trainer_workflow.dashboard.needs_scheduling') %></h2>
@@ -181,7 +180,6 @@
     </div>
 
     <% if current_user.admin? %>
-      <!-- Admin's own scheduled training sessions -->
       <div id="my-upcoming-sessions-section" class="bg-white shadow rounded-lg p-6 mb-8">
         <div class="flex flex-wrap justify-between items-center gap-3 mb-4">
           <h2 id="my-upcoming-sessions-table-heading" class="text-xl font-semibold"><%= t('trainer_workflow.dashboard.my_upcoming') %></h2>
@@ -231,7 +229,6 @@
       </div>
     <% end %>
 
-    <!-- Upcoming Training Sessions -->
     <div id="upcoming-sessions-section" class="bg-white shadow rounded-lg p-6 mb-8">
       <div class="flex flex-wrap justify-between items-center gap-3 mb-4">
         <h2 id="upcoming-sessions-table-heading" class="text-xl font-semibold"><%= t('trainer_workflow.dashboard.upcoming') %></h2>
@@ -280,7 +277,6 @@
       <% end %>
     </div>
 
-  <!-- Recent Training Sessions Needing Follow-up -->
     <div class="bg-white shadow rounded-lg p-6 mb-8">
       <div class="flex flex-wrap justify-between items-center gap-3 mb-4">
       <h2 id="followup-sessions-table-heading" class="text-xl font-semibold"><%= t('trainer_workflow.dashboard.recent_followup') %></h2>
@@ -334,7 +330,6 @@
       <% end %>
     </div>
 
-  <!-- Recent Activity -->
   <section aria-labelledby="recent-completed-heading" class="bg-white shadow rounded-lg p-6">
     <div class="flex flex-wrap justify-between items-center gap-3 mb-4">
       <h2 id="recent-completed-heading" class="text-xl font-semibold"><%= t('trainer_workflow.dashboard.recent_completed') %></h2>

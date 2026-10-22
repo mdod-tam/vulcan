@@ -154,10 +154,10 @@ class FilterParameterLoggingTest < ActiveSupport::TestCase
     assert_equal [{ 'name' => 'SqlAttendeeProbeName' }], evaluation.reload.attendees
   end
 
-  # Paper identity review posts the applicant's identifying facts and receives a short-lived
-  # decision token, which the form then submits back. POST keeps those out of the URL; this keeps
-  # them out of the log. The names matter here specifically because they travel alongside a date of
-  # birth and an address, and that combination is what identifies a person.
+  # Paper identity review posts the applicant's identifying facts; the server renders the review
+  # form with a short-lived decision token, which the form then submits back. POST keeps those out
+  # of the URL, and the filters keep them out of the log. The names travel with a date of birth
+  # and an address, and that combination identifies a person.
   test 'filters paper identity review facts and the decision token from logs' do
     filter = ActiveSupport::ParameterFilter.new(Rails.application.config.filter_parameters)
     filtered = filter.filter(
@@ -179,14 +179,13 @@ class FilterParameterLoggingTest < ActiveSupport::TestCase
     assert_equal 'identity_review', filtered['action']
   end
 
-  # Filtering the request parameters is only half of it. The identity-matching query puts the same
-  # names back on their way to the database, and `filter_parameters` matches on a bind's attribute
-  # name -- so a positional bind, which Active Record logs as `[nil, "smith"]`, has no name to match
-  # and lands in the query log in the clear. The date of birth was filtered the whole time only
-  # because a hash condition carries its column name.
+  # Filtering request parameters is half the work. The identity-matching query logs the same names
+  # again on the way to the database. `filter_parameters` matches on a bind's attribute name. A
+  # positional bind, which Active Record logs as `[nil, "smith"]`, has no name to match, so it
+  # lands in the query log in the clear. The date of birth stayed filtered only because a hash
+  # condition carries its column name.
   #
-  # Asserts the values are absent rather than that the binds are named: the requirement is that the
-  # name does not reach the log, not that any particular construction is used to achieve it.
+  # Assert that neither name reaches the log and that both named binds are redacted.
   test 'the duplicate-matching query does not write names to the query log' do
     log = capture_active_record_log do
       Users::Constituent.find_duplicates('SqlBindProbeFirst', 'SqlBindProbeLast', Date.new(1990, 4, 2)).to_a
@@ -198,8 +197,8 @@ class FilterParameterLoggingTest < ActiveSupport::TestCase
     assert_match(/\["last_name", "\[FILTERED\]"\]/, log, 'the last name bind should be named and redacted')
   end
 
-  # Redaction is worthless if it changed what the query matches, and this query decides whether two
-  # people are the same person.
+  # Redaction must not change what the query matches. This query decides whether two people are the
+  # same person.
   test 'the duplicate-matching query still matches case-insensitively on name and date of birth' do
     existing = create(:constituent, first_name: 'Casing', last_name: 'Probe',
                                     date_of_birth: Date.new(1990, 4, 2))
