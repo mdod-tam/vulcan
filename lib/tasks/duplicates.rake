@@ -17,7 +17,7 @@ namespace :duplicates do
     puts "Cleared: #{counts[:cleared_count]}"
   end
 
-  desc 'Read-only discovery probe for PR 208 architecture correction (optional DETAILED_PII=true)'
+  desc 'Read-only architecture discovery probe for duplicate reconciliation (optional DETAILED_PII=true)'
   task discovery: :environment do
     raw_detailed = ENV.fetch('DETAILED_PII', nil)
     detailed = case raw_detailed

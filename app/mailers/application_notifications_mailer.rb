@@ -696,8 +696,6 @@ class ApplicationNotificationsMailer < ApplicationMailer # rubocop:disable Metri
     end.join("\n")
   end
 
-  # --- Account created ---
-
   def handle_nil_constituent
     context = Rails.env.test? ? '[TEST_EDGE_CASE] ' : '[DATA_INTEGRITY] '
     Rails.logger.error("#{context}ApplicationNotificationsMailer#account_created called with nil constituent")
@@ -746,8 +744,6 @@ class ApplicationNotificationsMailer < ApplicationMailer # rubocop:disable Metri
     recipient_email_for(constituent)
   end
 
-  # --- Income threshold exceeded ---
-
   def get_income_threshold_data(constituent_params, notification_params)
     result = Notifications::IncomeThresholdService.call(constituent_params, notification_params)
 
@@ -789,8 +785,6 @@ class ApplicationNotificationsMailer < ApplicationMailer # rubocop:disable Metri
                          }).compact
   end
 
-  # --- Registration confirmation ---
-
   def build_active_vendors_list
     active_vendors = Vendor.active.order(:business_name)
     if active_vendors.any?
@@ -817,8 +811,6 @@ class ApplicationNotificationsMailer < ApplicationMailer # rubocop:disable Metri
                            active_vendors_text_list: active_vendors_text_list
                          }).compact
   end
-
-  # --- Application submitted ---
 
   def build_application_submitted_variables(application, template:, locale: nil)
     base_variables = build_base_email_variables(
@@ -871,8 +863,6 @@ class ApplicationNotificationsMailer < ApplicationMailer # rubocop:disable Metri
     end
   end
 
-  # --- Proof received ---
-
   def build_proof_received_variables(application, proof_type, template:, locale: nil)
     user                 = application.user
     organization_name    = Policy.get('organization_name') || 'MAT Program'
@@ -891,7 +881,6 @@ class ApplicationNotificationsMailer < ApplicationMailer # rubocop:disable Metri
                          }).compact
   end
 
-  # Medical certification not provided
   def build_medical_certification_not_provided_variables(application, template:, locale: nil)
     user = application.user
 

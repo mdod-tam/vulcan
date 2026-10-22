@@ -103,8 +103,6 @@ module DashboardMetricsLoading # rubocop:disable Metrics/ModuleLength
     safe_assign(:training_requests_count, training_count)
   end
 
-  # === Fiscal Year Utilities ===
-
   def load_fiscal_year_data
     current_fy = current_fiscal_year
     previous_fy = current_fy - 1
@@ -168,8 +166,6 @@ module DashboardMetricsLoading # rubocop:disable Metrics/ModuleLength
     safe_assign(:evaluation_requests_count, calculate_evaluation_requests_count)
   end
 
-  # === Chart Data Utilities ===
-
   def load_applications_chart_data
     load_fiscal_year_application_counts unless @current_fy_applications
 
@@ -216,8 +212,6 @@ module DashboardMetricsLoading # rubocop:disable Metrics/ModuleLength
                   }
                 })
   end
-
-  # === Vendor and MFR Data ===
 
   def load_vendor_data
     safe_assign(:active_vendors, Vendor.joins(:voucher_transactions).distinct.count)

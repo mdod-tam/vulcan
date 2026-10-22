@@ -667,7 +667,6 @@ module Admin
       Current.set(request, current_user)
     end
 
-    ### scope / filtering
     def filtered_scope(scope)
       result = Applications::FilterService.new(scope, params).apply_filters
       if result.is_a?(BaseService::Result)
@@ -681,7 +680,6 @@ module Admin
       scope
     end
 
-    ### pagination
     def paginate(scope)
       pagy(scope, items: 20)
     rescue StandardError => e

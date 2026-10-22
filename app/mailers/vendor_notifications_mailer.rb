@@ -335,24 +335,19 @@ class VendorNotificationsMailer < ApplicationMailer
     status_box_text(status: :warning, title: 'Association Requirement', message: association_msg)
   end
 
-  # Updated to accept arguments instead of relying on instance variables
   def generate_invoice_pdf(invoice, vendor, transactions)
     pdf = Prawn::Document.new do |pdf|
-      # Header
       pdf.text 'INVOICE', size: 24, style: :bold, align: :center
       pdf.move_down 20
 
-      # Invoice Details
       pdf.text "Invoice Number: #{invoice.invoice_number}"
       pdf.text "Date: #{invoice.created_at.strftime('%B %d, %Y')}"
       pdf.move_down 20
 
-      # Vendor Information
       pdf.text 'Vendor:', style: :bold
       pdf.text vendor.business_name.to_s
       pdf.move_down 20
 
-      # Period
       pdf.text 'Period:', style: :bold
       pdf.text invoice.period_label
       pdf.move_down 20
@@ -369,16 +364,14 @@ class VendorNotificationsMailer < ApplicationMailer
 
       pdf.move_down 20
 
-      # Total
-      pdf.text "Total Amount: #{number_to_currency(invoice.total_amount)}", # Use helper directly
+      pdf.text "Total Amount: #{number_to_currency(invoice.total_amount)}",
                size: 14,
                style: :bold,
                align: :right
 
-      # Footer
       pdf.move_down 40
       pdf.text 'Please allow up to 30 days for payment processing.', size: 10
-      pdf.text "Contact #{Policy.get('support_email') || 'mat.program1@maryland.gov'} for any questions.", size: 10 # Use Policy
+      pdf.text "Contact #{Policy.get('support_email') || 'mat.program1@maryland.gov'} for any questions.", size: 10
     end
 
     pdf.render

@@ -5,7 +5,6 @@
     </div>
   <% end %>
 
-  <!-- FPL Section -->
   <div class="p-6">
     <h2 class="text-lg font-medium text-gray-900 mb-4">Federal Poverty Level (FPL) Settings</h2>
     
@@ -16,7 +15,6 @@
       </p>
     </div>
 
-    <!-- FPL Modifier -->
     <div class="mb-6">
       <% modifier_policy = @policies.find_by(key: 'fpl_modifier_percentage') %>
       <%= render "create_missing_policy", policy: modifier_policy, key: 'fpl_modifier_percentage', default_value: 400 %>
@@ -41,7 +39,6 @@
       <% end %>
     </div>
 
-    <!-- FPL Table -->
     <div class="overflow-x-auto">
       <table class="min-w-full divide-y divide-gray-200">
         <thead class="bg-gray-50">
@@ -96,7 +93,6 @@
     </div>
   </div>
 
-  <!-- Rate Limits Section -->
   <div class="p-6 border-t border-gray-200">
     <h2 class="text-lg font-medium text-gray-900 mb-4">Proof Submission Rate Limits</h2>
     
@@ -108,7 +104,6 @@
     </div>
 
     <div class="grid grid-cols-1 gap-6">
-      <!-- Time Period -->
       <div>
         <% period_policy = @policies.find_by(key: 'proof_submission_rate_period') %>
         <%= render "create_missing_policy", policy: period_policy, key: 'proof_submission_rate_period', default_value: 1 %>
@@ -117,7 +112,6 @@
             label: "Time Window (hours)" %>
       </div>
 
-      <!-- Submission Limits -->
       <div class="grid grid-cols-1 gap-6">
         <div>
           <% web_policy = @policies.find_by(key: 'proof_submission_rate_limit_web') %>
@@ -130,7 +124,6 @@
     </div>
   </div>
 
-  <!-- Voucher Policies Section -->
   <div class="p-6 border-t border-gray-200">
     <h2 class="text-lg font-medium text-gray-900 mb-4">Voucher Policies</h2>
     
@@ -225,7 +218,6 @@
     </div>
   </div>
 
-  <!-- Other Policies Section -->
   <div class="p-6 border-t border-gray-200">
     <h2 class="text-lg font-medium text-gray-900 mb-4">Other System Policies</h2>
     
@@ -266,7 +258,6 @@
     </div>
   </div>
 
-  <!-- Policy Change History Section -->
   <div class="p-6 border-t border-gray-200">
     <h2 class="text-lg font-medium text-gray-900 mb-4">Recent Policy Changes</h2>
     

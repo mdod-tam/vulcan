@@ -1,7 +1,6 @@
 # frozen_string_literal: true
 
 module Applications
-  # Handles guardian/dependent user management for paper applications
   class GuardianDependentManagementService < BaseService
     SYNTHETIC_PHONE_RANDOM_SPACE = 10_000_000
     SYNTHETIC_PHONE_MAX_ATTEMPTS = 25

@@ -33,8 +33,6 @@ export default class extends Controller {
     }
   }
 
-  /* Public API ----------------------------------------------------------- */
-
   selectAdult(id, displayHTML, _userData) {
     if (this.hasConstituentIdFieldTarget) this.constituentIdFieldTarget.value = id
 
@@ -95,8 +93,6 @@ export default class extends Controller {
     this.dispatch("createNew", { detail: { createNew: true } })
   }
 
-  /* Contact mode switching ----------------------------------------------- */
-
   contactModeChanged(event) {
     const mode = event.target.value
     const contactFields = this._getContactFieldElements()
@@ -123,8 +119,6 @@ export default class extends Controller {
   verificationChanged(event) {
     this.dispatch("verificationChange", { detail: { verified: event.target.checked } })
   }
-
-  /* Data fetching -------------------------------------------------------- */
 
   async fetchAdultContext(userId) {
     try {
@@ -179,8 +173,6 @@ export default class extends Controller {
     setFieldValue('input[name="application[medical_provider_email]"]', data.medical_provider_email)
   }
 
-  /* Highlight changes before submit -------------------------------------- */
-
   highlightChanges() {
     const contactFields = this._getContactFieldElements()
     contactFields.forEach(el => {
@@ -193,8 +185,6 @@ export default class extends Controller {
       el.classList.toggle("pl-2", changed)
     })
   }
-
-  /* Internal helpers ----------------------------------------------------- */
 
   togglePanes() {
     const hideSearch = this.selectedValue

@@ -54,8 +54,6 @@ class NotificationComposer
     nil
   end
 
-  # --- Message Generation Methods ---
-
   def message_for_trainer_assigned
     return default_message unless @notifiable.is_a?(TrainingSession)
 
@@ -176,8 +174,6 @@ class NotificationComposer
 
     safe_join([@action.humanize, ' notification regarding ', reference, '.'])
   end
-
-  # --- Helper Methods ---
 
   def proof_attached_message(proof_type)
     safe_join([ProofNotificationCopy.attached_text(proof_type), ' for ', sentence_application_reference, '.'])

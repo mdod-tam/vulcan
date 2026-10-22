@@ -74,7 +74,7 @@ module DuplicateReconciliation
         Rake::Task['duplicates:discovery'].invoke
       end
 
-      assert_includes out, '=== PR 208 ARCHITECTURE DISCOVERY PROBE ==='
+      assert_includes out, '=== ARCHITECTURE DISCOVERY PROBE ==='
       assert_includes out, 'Transaction:  isolation=repeatable read, read_only=on'
       assert_includes out, 'PII Redacted: true'
     end

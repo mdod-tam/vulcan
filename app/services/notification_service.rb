@@ -3,8 +3,6 @@
 class NotificationService
   VALID_CHANNELS = %i[email letter sms].freeze
 
-  # ---- Public API -----------------------------------------------------------
-
   # Legacy proof-rejection example:
   #
   # NotificationService.create_and_deliver!(
@@ -56,8 +54,6 @@ class NotificationService
   def self.build
     new.build
   end
-
-  # ---- Builder ---------------------------------------------------------------
 
   class NotificationBuilder
     class FrozenBuilderError < StandardError; end
@@ -153,8 +149,6 @@ class NotificationService
 
   EMAIL_ONLY_ACTIONS = EmailDelivery::Catalog.notification_actions_with_routing(:email_only).freeze
 
-  # ---- Creation + validation -------------------------------------------------
-
   def create_and_deliver_with(params)
     type_for_log = params.is_a?(Hash) ? (params[:type] || params['type']) : nil
     normalized_params = normalize_builder_params(params)
@@ -239,8 +233,6 @@ class NotificationService
     end
   end
 
-  # ---- Instance orchestration ------------------------------------------------
-
   def log_notification_creation_info(opts, channel)
     recipient  = opts[:recipient] || opts['recipient']
     actor      = opts[:actor] || opts['actor']
@@ -322,8 +314,6 @@ class NotificationService
     Rails.logger.error 'NotificationService: notifiable disappeared; cannot create notification.'
     nil
   end
-
-  # ---- Delivery --------------------------------------------------------------
 
   def deliver_notification!(notification, channel:)
     return false unless VALID_CHANNELS.include?(channel)
@@ -608,8 +598,6 @@ class NotificationService
     Rails.logger.error "NotificationService: Failed persisting delivery error for Notification ##{notification.id}: #{e.message}"
   end
 
-  # ---- Audit ----------------------------------------------------------------
-
   def log_to_audit_trail(notification)
     should_deliver = notification.instance_variable_get(:@should_deliver)
     delivery_successful = notification.instance_variable_get(:@delivery_successful)
@@ -667,8 +655,6 @@ class NotificationService
     Rails.logger.error "NotificationService: Failed persisting audit error for Notification ##{notification.id}: #{e.message}"
   end
   private :handle_audit_trail_error
-
-  # ---- Helpers ---------------------------------------------------------------
 
   def defaults
     { audit: false, channel: :email, deliver: true }
@@ -789,8 +775,6 @@ class NotificationService
   private :ensure_action_contract?, :validate_notifiable_class, :validate_actor_presence, :validate_recipient_class,
           :enforce_delivery_contracts!, :send_notification_email, :redact_temp_password,
           :find_proof_review_for_notification
-
-  # ---- Class helpers ---------------------------------------------------------
 
   def self.normalize_options(options)
     if options.key?(:options) && options[:options].is_a?(Hash)

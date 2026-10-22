@@ -76,7 +76,6 @@
         </div>
       <% end %>
 
-      <%# Applicant type %>
       <section class="bg-white rounded-lg shadow-sm border border-slate-200 overflow-hidden">
         <div class="px-6 py-4 bg-indigo-50 border-b border-indigo-100">
           <h2 id="step1-heading" class="text-lg font-semibold text-indigo-900 flex items-center gap-2">
@@ -132,7 +131,6 @@
       <%# Keep adult search and information under one Stimulus controller so its targets resolve. %>
       <div class="contents" data-controller="adult-picker"
            data-adult-picker-restored-value="<%= @restored_from_submission ? 'true' : 'false' %>">
-      <%# Adult search %>
       <section id="adult-search-section"
                class="bg-white rounded-lg shadow-sm border border-slate-200 overflow-hidden hidden"
                data-applicant-type-target="adultSearchSection">
@@ -226,7 +224,6 @@
         </div>
       </section>
 
-      <%# Adult information %>
       <section class="bg-white rounded-lg shadow-sm border border-slate-200 overflow-hidden"
                id="self-info-section"
                data-applicant-type-target="adultSection">
@@ -314,7 +311,6 @@
       </section>
       </div>
 
-      <%# Guardian selection for dependents %>
       <fieldset id="guardian-info-section"
                class="bg-white rounded-lg shadow-sm border border-slate-200 overflow-hidden hidden"
                data-controller="guardian-picker"
@@ -446,7 +442,6 @@
         </div>
       </fieldset>
 
-      <%# Dependent information after guardian selection %>
       <div class="hidden" data-applicant-type-target="sectionsForDependentWithGuardian">
         <section class="bg-white rounded-lg shadow-sm border border-slate-200 overflow-hidden">
           <div class="px-6 py-4 bg-teal-50 border-b border-teal-100">
@@ -470,7 +465,6 @@
         </section>
       </div>
 
-      <%# Common sections for adults or dependents with a selected guardian %>
       <div data-applicant-type-target="commonSections" class="hidden space-y-6">
 
         <section class="bg-white rounded-lg shadow-sm border border-slate-200 overflow-hidden">

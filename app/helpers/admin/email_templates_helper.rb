@@ -124,8 +124,6 @@ module Admin
       cleaned_message
     end
 
-    # Provides sample data for rendering email template previews or tests.
-    # Auto-extracts variables from the template body and generates generic sample values.
     def sample_data_for_template(template_name, locale: 'en', subject: nil, format: :text,
                                  include_optional_variables: nil)
       template = EmailTemplate.find_by(name: template_name, format: format, locale: locale) ||
@@ -263,7 +261,6 @@ module Admin
       cursor[final_segment] = value
     end
 
-    # Base sample data shared across all templates
     def training_completion_sample_data(locale:)
       is_es = locale.to_s == 'es'
       {

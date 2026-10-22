@@ -64,7 +64,7 @@ Two settings matter during migrations:
 - `support_unencrypted_data: true` allows existing plaintext values to be read.
 - `extend_queries: false` means equality searches do not automatically cover both plaintext and encrypted representations.
 
-Fixtures — the test data files — are encrypted, and key references are stored. These settings do not establish automated key rotation. Plan rotation with previous-key support, deterministic lookup and uniqueness checks, data migration, and a tested restore before retiring old keys.
+Fixtures — the test data files — are encrypted, and key references are stored. Rotate keys with previous-key support, deterministic lookup and uniqueness checks, data migration, and a tested restore before retiring old keys.
 
 ## Keep personal data out of logs
 

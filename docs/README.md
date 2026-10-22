@@ -24,7 +24,7 @@ A few terms help when reading the code: a **constituent** receives assistance; a
 | Forms or browser behavior | [JavaScript architecture](development/javascript_architecture.md) and [testing/debugging](development/testing_and_debugging_guide.md). |
 | Communication controls or delivery history | [All, Email, Printed letters and SMS controls](infrastructure/email_system.md#delivery-controls), [notifications](features/notifications.md), and [audit tracking](features/audit_event_tracking.md). |
 
-Use the source and test links in the workflow guides to trace the current path. The [security baseline](security/baseline_policy.md) distinguishes policy requirements from implemented controls; the [control catalog](security/controls.yaml) records evidence still needed.
+Use the source and test links in the workflow guides to trace the current path. The [security baseline](security/baseline_policy.md) distinguishes policy requirements from implemented controls; the [control catalog](security/controls.yaml) maps control IDs to implementation descriptions and source files.
 
 ## Development
 
@@ -60,7 +60,7 @@ Use the source and test links in the workflow guides to trace the current path. 
 | [Voucher controls](security/voucher_security_controls.md) | Issuance, vendor verification, redemption, and history. |
 | [Invoice payment corrections](finance/payment_corrections.md) | What staff can change on an invoice at each stage, withdrawal and billing holds, and how to record a correction. |
 | [Security baseline](security/baseline_policy.md) | Policy requirements, implementation boundaries, and approval needs. |
-| [Control catalog](security/controls.yaml) | Control IDs, source pointers, and verification still needed. |
+| [Control catalog](security/controls.yaml) | Control IDs, implementation descriptions, and source pointers. |
 | [Reports and audits](compliance/required_reports_audits.md) | Operational review schedules, responsible roles, and evidence. |
 
 ## Planned work

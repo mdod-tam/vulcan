@@ -103,9 +103,6 @@ module ConstituentPortal
       relationship = @dependent.guardian_relationships_as_dependent.find_by(guardian_user: current_user)
 
       if relationship&.destroy
-        # if !@dependent.guardians.exists? && !@dependent.applications.exists?
-        #   @dependent.destroy
-        # end
         redirect_to constituent_portal_dashboard_path, notice: 'Dependent was successfully removed.'
       else
         redirect_to constituent_portal_dashboard_path, alert: 'Failed to remove dependent.'
