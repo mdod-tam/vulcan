@@ -127,6 +127,20 @@ module DuplicateReconciliation
       end
     end
 
+    test 'base and constituent writers share one encrypted DOB representation' do
+      dob = Date.new(1980, 5, 10)
+      base_writer = create(:user, type: 'Users::Constituent', date_of_birth: dob)
+      constituent_writer = create(:constituent, date_of_birth: dob)
+
+      assert_instance_of User, base_writer
+      [base_writer, constituent_writer].each do |user|
+        assert_equal dob, Users::Constituent.find(user.id).date_of_birth
+      end
+      assert_equal base_writer.ciphertext_for(:date_of_birth), constituent_writer.ciphertext_for(:date_of_birth)
+      ids = [base_writer.id, constituent_writer.id].sort
+      assert_equal ids, Users::Constituent.where(id: ids, date_of_birth: dob).order(:id).ids
+    end
+
     test 'derives opaque cluster reference from cluster key rather than cluster size' do
       ref_a = @probe.send(:opaque_ref, 'cluster', 'alpha:person:dob1')
       ref_b = @probe.send(:opaque_ref, 'cluster', 'beta:other:dob2')
@@ -509,12 +523,12 @@ module DuplicateReconciliation
       assert_equal 2, res.flag_metrics[:flagged_without_open_case_or_match]
     end
 
-    test 'dynamic matching and drift metrics support legacy plaintext DOBs' do
+    test 'dynamic matching and drift metrics support encrypted DOB updates' do
       initial_cluster_count = @probe.call.matching_metrics[:cluster_count]
       initial_dynamic_pairs = @probe.call.matching_metrics[:total_dynamic_pairs]
 
-      u1 = create(:constituent, first_name: 'Plaintext', last_name: 'LegacyDob', needs_duplicate_review: true, status: :active)
-      u2 = create(:constituent, first_name: 'Plaintext', last_name: 'LegacyDob', needs_duplicate_review: true, status: :active)
+      u1 = create(:constituent, first_name: 'Encrypted', last_name: 'UpdatedDob', needs_duplicate_review: true, status: :active)
+      u2 = create(:constituent, first_name: 'Encrypted', last_name: 'UpdatedDob', needs_duplicate_review: true, status: :active)
 
       Users::Constituent.where(id: [u1.id, u2.id]).update_all(date_of_birth: '1985-04-12')
 
@@ -606,21 +620,22 @@ module DuplicateReconciliation
       assert_no_match(/excluded from dynamic matching/, rendered)
     end
 
-    test 'DOB validation and date reader omit invalid raw values from captured logs' do
+    test 'DOB validation and date reader reject invalid stored values without logging content' do
       log_output = StringIO.new
       test_logger = Logger.new(log_output)
       original_logger = Rails.logger
       Rails.logger = test_logger
       begin
-        @probe.send(:valid_dob?, '1985-99-99')
-        @probe.send(:valid_dob?, '{"p":"super_secret_corrupt_payload","h":{"iv":"1","at":"2"}}')
-        @probe.send(:valid_dob?, 'not-a-date')
+        assert_not @probe.send(:valid_dob?, '1985-99-99')
+        assert_not @probe.send(:valid_dob?, '{"p":"super_secret_corrupt_payload","h":{"iv":"1","at":"2"}}')
+        assert_not @probe.send(:valid_dob?, 'not-a-date')
 
-        u = Users::Constituent.instantiate('id' => 999_888, 'date_of_birth' => '1985-99-99')
-        u.date_of_birth
+        invalid_date = Users::Constituent.type_for_attribute('date_of_birth').serialize('1985-99-99')
+        u = Users::Constituent.instantiate('id' => 999_888, 'date_of_birth' => invalid_date)
+        assert_nil u.date_of_birth
 
         u2 = Users::Constituent.instantiate('id' => 999_889, 'date_of_birth' => '{"p":"another_secret_payload","h":{"iv":"1","at":"2"}}')
-        u2.date_of_birth
+        assert_raises(ActiveRecord::Encryption::Errors::Decryption) { u2.date_of_birth }
 
         log_str = log_output.string
         assert_no_match(/1985-99-99/, log_str)

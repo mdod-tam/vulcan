@@ -1,0 +1,25 @@
+<%# locals: (template:, rendered_subject:, rendered_body:, error_message:, announce_result:) -%>
+<!DOCTYPE html>
+<html lang="<%= template.locale %>">
+  <head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title><%= rendered_subject.presence || 'Email body preview' %></title>
+    <% if announce_result %>
+      <script nonce="<%= request.content_security_policy_nonce %>">
+        window.addEventListener('DOMContentLoaded', () => {
+          window.parent.postMessage({ type: 'mat-vulcan:email-preview', failed: <%= error_message.present?.to_json %> }, window.location.origin);
+        }, { once: true });
+      </script>
+    <% end %>
+  </head>
+  <body>
+    <% if error_message.present? %>
+      <p role="alert"><%= error_message %></p>
+    <% else %>
+      <p><strong>Subject Preview:</strong> <%= rendered_subject %></p>
+      <%# Editable HTML has no script nonce and stays inside the opaque sandbox. %>
+      <%= raw rendered_body %><%# erb_lint:disable ErbSafety, Rubocop %>
+    <% end %>
+  </body>
+</html>

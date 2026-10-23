@@ -7,6 +7,8 @@ class RecurringConfigTest < ActiveSupport::TestCase
   RECURRING_TASKS = %w[
     poll_email_delivery
     cleanup_unattached_uploads
+    recover_document_scans
+    cleanup_document_scans
     generate_vendor_invoices
     check_voucher_expiration
     proof_attachment_metrics

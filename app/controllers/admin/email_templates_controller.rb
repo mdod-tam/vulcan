@@ -6,8 +6,9 @@ module Admin
 
     before_action :set_template,
                   only: %i[show edit update new_test_email send_test toggle_disabled mark_synced create_counterpart
-                           preview]
+                           preview preview_document]
     before_action :load_locale_templates, only: %i[show edit update preview]
+    prepend_before_action :protect_preview_document, only: %i[preview preview_document]
 
     # GET /admin/email_templates
     # Email controls, then template pairs grouped by category, then shared components.
@@ -82,6 +83,13 @@ module Admin
     def edit
       @counterpart_template = counterpart_template
       prepare_draft_preview_locals
+    end
+
+    # GET /admin/email_templates/:id/preview_document
+    def preview_document
+      return head :not_found unless @email_template.html?
+
+      render_preview_document(**draft_preview_locals_for(@email_template).except(:frame_id))
     end
 
     # PATCH/PUT /admin/email_templates/:id
@@ -251,6 +259,25 @@ module Admin
 
     private
 
+    def protect_preview_document
+      request.content_security_policy = ActionDispatch::ContentSecurityPolicy.new do |policy|
+        policy.default_src :none
+        policy.script_src :none
+        policy.script_src_attr :none
+        policy.style_src :unsafe_inline
+        policy.img_src :data
+        policy.base_uri :none
+        policy.form_action :none
+        policy.frame_ancestors :self
+        policy.sandbox
+      end
+      request.content_security_policy_nonce_directives = []
+      response.headers['Cache-Control'] = 'private, no-store, max-age=0'
+      response.headers['Pragma'] = 'no-cache'
+      response.headers['Referrer-Policy'] = 'no-referrer'
+      response.headers['X-Content-Type-Options'] = 'nosniff'
+    end
+
     def capture_original_values(template)
       {
         subject: template.subject,
@@ -284,6 +311,11 @@ module Admin
     end
 
     def render_draft_preview(frame_id:, template:, rendered_subject: nil, rendered_body: nil, error_message: nil)
+      if template.html?
+        return render_preview_document(template: template, rendered_subject: rendered_subject,
+                                       rendered_body: rendered_body, error_message: error_message, announce_result: true)
+      end
+
       render partial: 'admin/email_templates/draft_preview',
              locals: {
                frame_id: frame_id,
@@ -292,6 +324,19 @@ module Admin
                rendered_body: rendered_body,
                error_message: error_message
              },
+             status: error_message.present? ? :unprocessable_content : :ok
+    end
+
+    def render_preview_document(template:, rendered_subject: nil, rendered_body: nil, error_message: nil, announce_result: false)
+      if announce_result
+        # Draft results notify the parent without granting scripts in editable HTML.
+        request.content_security_policy.script_src "'nonce-#{request.content_security_policy_nonce}'"
+        request.content_security_policy.sandbox 'allow-scripts'
+      end
+
+      render partial: 'admin/email_templates/preview_document',
+             locals: { template: template, rendered_subject: rendered_subject, rendered_body: rendered_body,
+                       error_message: error_message, announce_result: announce_result },
              status: error_message.present? ? :unprocessable_content : :ok
     end
 

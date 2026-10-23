@@ -291,6 +291,11 @@ FactoryBot.define do
           filename: 'sample_w9.pdf',
           content_type: 'application/pdf'
         )
+        if Rails.env.test?
+          DocumentScanFixtures.clear!(vendor.w9_form.blob, user: vendor,
+                                                           purpose: :w9, slot: 'w9_form',
+                                                           fixture: 'sample_w9.pdf')
+        end
 
         vendor.update_column(:w9_status, :approved)
 

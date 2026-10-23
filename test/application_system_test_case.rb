@@ -27,7 +27,8 @@ Capybara.configure do |config|
   config.server_port = nil
   context = ArtifactReceipt.capture_context(root: Rails.root) if defined?(ArtifactReceipt)
   config.save_path = context ? context.fetch('artifact_dir') : Rails.root.join('tmp/capybara')
-  config.disable_animation = true
+  # Inline response injection conflicts with CSP nonces during Turbo navigation.
+  config.disable_animation = false
   config.enable_aria_label = true
 end
 
@@ -201,6 +202,36 @@ module MemorySafeTestHelpers
       filename: filename,
       content_type: 'application/pdf'
     )
+  end
+
+  # Positive review fixtures start with a known clean result; other fixtures remain unscanned.
+  def attach_cleared_proof(model, attachment_name, filename: 'test.pdf')
+    source = if File.extname(filename).downcase == '.png'
+               Rails.root.join('app/assets/images/TAM_color.png')
+             else
+               Rails.root.join('test/fixtures/files/income_proof.pdf')
+             end
+    source.open do |io|
+      blob = ActiveStorage::Blob.create_and_upload!(io: io, filename: filename, content_type: Marcel::MimeType.for(source))
+      mark_document_clean!(blob, user: model.user, purpose: UploadedDocument.declared_purpose(model, attachment_name), slot: attachment_name.to_s)
+      model.public_send(attachment_name).attach(blob)
+    end
+  end
+
+  # Exercise the real widget and acceptance receipt with a known provider verdict.
+  def attach_cleared_document(field, path, **)
+    input = find(:file_field, field, visible: :all)
+    widget = input.find(:xpath, 'ancestor::*[contains(concat(" ", normalize-space(@data-controller), " "), " document-upload ")][1]')
+    slot = widget['data-document-upload-slot-value']
+    purpose = widget['data-document-upload-purpose-value']
+    selector = "[data-document-upload-slot-value='#{slot}'][data-scan-state='%s']"
+    last_scan_id = DocumentScan.maximum(:id) || 0
+    attach_file(field, path, **)
+    assert_selector format(selector, 'pending')
+    scan = DocumentScan.where(id: (last_scan_id + 1).., slot: slot, purpose: purpose).sole
+    scan.update!(status: :clean, completed_at: Time.current)
+    assert_selector format(selector, 'clean')
+    scan
   end
 
   def debug_puts(msg)

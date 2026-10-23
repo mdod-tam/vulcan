@@ -409,7 +409,7 @@ module Admin
     # Keep usable uploads across validation and identity review. Errors report a refused file.
     def retained_uploads(existing_application)
       DOCUMENT_KEYS.index_with do |key|
-        UploadedDocument.retained(params, record: existing_application || Application, field: key)
+        UploadedDocument.retained(params, record: existing_application || Application, field: key, scan_owner: current_user)
       end.compact
     end
 

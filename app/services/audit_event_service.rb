@@ -4,6 +4,9 @@ class AuditEventService < BaseService
   # This window suppresses matching stored events. EventDeduplicationService deduplicates events for display.
   DEDUP_WINDOW = 5.seconds
   SENSITIVE_CHANGE_FIELDS = %w[serial_duplicate_reason].freeze
+  MUTATION_ACTIONS = %w[profile_updated profile_updated_by_guardian profile_updated_by_admin
+                        profile_created_by_admin_via_paper alternate_contact_updated medical_provider_info_updated
+                        constituent_contact_updated vendor_updated voucher_updated].freeze
 
   # Logs an event, or returns nil when deduplication suppresses a matching event within DEDUP_WINDOW.
   #
@@ -16,18 +19,14 @@ class AuditEventService < BaseService
   def self.log(action:, actor:, auditable: nil, metadata: {}, created_at: nil)
     # TODO: Add a partial unique index on (action, auditable_type, auditable_id) for recent events.
 
-    # application_created must retain a separate audit event for each creation.
-    skip_deduplication_actions = %w[application_created]
+    metadata = AuditMetadataPrivacy.new(auditable: auditable).filter(metadata)
 
-    # Deduplication requires an auditable record.
-    should_check_duplicates = auditable.present? && skip_deduplication_actions.exclude?(action.to_s)
-
-    if should_check_duplicates && recent_duplicate_exists?(action: action, auditable: auditable, metadata: metadata)
+    if deduplication_required?(action, auditable, metadata) && recent_duplicate_exists?(action: action, auditable: auditable, metadata: metadata)
       Rails.logger.info "AuditEventService: Duplicate event '#{action}' for #{auditable.class.name} ##{auditable.id} suppressed."
       return nil
     end
 
-    metadata, change_values = split_encrypted_change_values(auditable, metadata)
+    metadata, change_values = split_device_change_values(auditable, metadata)
 
     # Caller metadata takes precedence over service metadata. Internal keys use a separate namespace.
     final_metadata = metadata.reverse_merge(
@@ -45,10 +44,7 @@ class AuditEventService < BaseService
     event_attributes[:created_at] = created_at if created_at.present?
 
     application_creation = action.to_s == 'application_created' && auditable.present?
-    if application_creation
-      Rails.logger.debug { "AuditEventService: Creating application_created event for application #{auditable.id}" }
-      Rails.logger.debug { "Metadata: #{final_metadata.inspect}" }
-    end
+    Rails.logger.debug { "AuditEventService: Creating application_created event for application #{auditable.id}" } if application_creation
 
     event = Event.create!(event_attributes)
 
@@ -60,20 +56,20 @@ class AuditEventService < BaseService
     raise # Expose invalid events to callers and tests.
   end
 
-  # A stored event's metadata with encrypted change values restored, so it fingerprints like the
-  # caller's metadata, which still holds them.
-  def self.stored_metadata(event)
-    return event.metadata unless event.metadata.key?('changes')
+  def self.deduplication_required?(action, auditable, metadata)
+    return false if auditable.blank? || action.to_s == 'application_created'
+    return true if metadata['operation_id'].present? || metadata[:operation_id].present?
 
-    event.metadata.merge('changes' => event.field_changes)
+    MUTATION_ACTIONS.exclude?(action.to_s)
   end
+  private_class_method :deduplication_required?
 
-  # Encrypted record fields and sensitive audit text keep only their names in plain metadata.
-  # Their old and new values go to the existing encrypted Event#change_values cell.
-  def self.split_encrypted_change_values(auditable, metadata)
+  # Personal masks stay in metadata; only device-history values need encrypted storage.
+  def self.split_device_change_values(auditable, metadata)
     key = metadata.key?(:changes) ? :changes : 'changes'
     changes = metadata[key]
     encrypted = Array(auditable.class.try(:encrypted_attributes)).map(&:to_s) + SENSITIVE_CHANGE_FIELDS
+    encrypted &= AuditMetadataPrivacy::ENCRYPTED_DEVICE_FIELDS
     return [metadata, nil] unless changes.is_a?(Hash)
 
     values = changes.select { |field, _change| encrypted.include?(field.to_s) }
@@ -92,7 +88,7 @@ class AuditEventService < BaseService
 
     Event.where(action: action.to_s, auditable: auditable)
          .where(created_at: DEDUP_WINDOW.ago..)
-         .any? { |event| create_event_fingerprint(event.action, stored_metadata(event)) == fingerprint }
+         .any? { |event| create_event_fingerprint(event.action, event.metadata) == fingerprint }
   end
 
   # These fingerprints select the metadata that affects deduplication.
@@ -117,25 +113,6 @@ class AuditEventService < BaseService
         return "#{base}_#{proof_type}_blob_#{blob_id}"
       elsif proof_type && submission_method
         return "#{base}_#{proof_type}_#{submission_method}"
-      end
-    end
-
-    if action.to_s.include?('profile_updated') ||
-       %w[profile_created_by_admin_via_paper alternate_contact_updated medical_provider_info_updated vendor_updated].include?(action.to_s)
-      changes = metadata['changes'] || metadata[:changes]
-      if changes.present?
-        # Caller hashes and persisted JSON use different key types. Preserve false values in both.
-        # A hash limits the fingerprint size.
-        changes_hash = changes.map do |field, change|
-          new_value = if change.is_a?(Array)
-                        change.last
-                      else
-                        change.key?('new') ? change['new'] : change[:new]
-                      end
-          "#{field}:#{new_value.to_s[0..50]}"
-        end.sort.join('|')
-        fingerprint_hash = Digest::MD5.hexdigest(changes_hash)
-        return "#{base}_#{fingerprint_hash}"
       end
     end
 

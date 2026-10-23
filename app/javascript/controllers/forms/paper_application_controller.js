@@ -14,13 +14,17 @@ export default class extends Controller {
     this._uploading = false;
     this._boundIncome = this.handleIncomeValidation.bind(this);
     this._boundSync = this.syncFormState.bind(this);
-    this._boundUploadStart = () => { this._uploading = true; this._applySubmitGating(); };
-    this._boundUploadEnd = () => { this._uploading = false; this._applySubmitGating(); };
+    this._boundScanStatus = () => {
+      this._uploading = Array.from(this.element.querySelectorAll('[data-scan-state]')).some(widget => {
+        const input = widget.querySelector('input[type="file"]');
+        return input && !input.disabled && !["idle", "clean"].includes(widget.dataset.scanState);
+      });
+      this._applySubmitGating();
+    };
     this.element.addEventListener("income-validation:validated", this._boundIncome);
     this.element.addEventListener("input", this._boundSync);
     this.element.addEventListener("change", this._boundSync);
-    this.element.addEventListener("direct-uploads:start", this._boundUploadStart);
-    this.element.addEventListener("direct-uploads:end", this._boundUploadEnd);
+    this.element.addEventListener("document-upload:status", this._boundScanStatus);
     this.updateLanguagePreferenceNotices();
     requestAnimationFrame(() => this.syncFormState());
   }
@@ -29,8 +33,7 @@ export default class extends Controller {
     this.element.removeEventListener("income-validation:validated", this._boundIncome);
     this.element.removeEventListener("input", this._boundSync);
     this.element.removeEventListener("change", this._boundSync);
-    this.element.removeEventListener("direct-uploads:start", this._boundUploadStart);
-    this.element.removeEventListener("direct-uploads:end", this._boundUploadEnd);
+    this.element.removeEventListener("document-upload:status", this._boundScanStatus);
   }
 
   applicantLocaleTargetConnected() { this.updateLanguagePreferenceNotices(); }
@@ -84,7 +87,7 @@ export default class extends Controller {
     }
 
     if (this.hasStatusTarget) {
-      this.statusTarget.textContent = this._uploading ? "Uploading documents…" : (guardianSelectionBlocks
+      this.statusTarget.textContent = this._uploading ? "Wait for the document virus checks before submitting." : (guardianSelectionBlocks
         ? "Select or create a guardian before submitting this dependent's application."
         : (disable
           ? "Complete all required confirmations before submitting."

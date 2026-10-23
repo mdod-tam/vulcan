@@ -29,8 +29,10 @@ class RegistrationsController < ApplicationController
     end
 
     if save_user_with_duplicate_review!(duplicate_detection)
-      create_session_and_cookie
-      track_sign_in
+      unless _create_and_set_session_cookie(@user)
+        redirect_to sign_in_path(locale: public_form_locale_param), alert: t('alerts.session_fail')
+        return
+      end
       send_registration_confirmation
 
       @user.reload
@@ -137,22 +139,6 @@ class RegistrationsController < ApplicationController
         }
       )
     end
-  end
-
-  def create_session_and_cookie
-    @session = @user.sessions.create!(
-      user_agent: request.user_agent,
-      ip_address: request.remote_ip
-    )
-    cookies.signed[:session_token] = {
-      value: @session.session_token,
-      httponly: true,
-      permanent: true
-    }
-  end
-
-  def track_sign_in
-    @user.track_sign_in!(request.remote_ip)
   end
 
   def send_registration_confirmation

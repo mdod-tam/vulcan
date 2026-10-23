@@ -15,10 +15,12 @@ module Admin
       end
 
       redirect_to admin_application_path(@application),
+                  status: :see_other,
                   notice: t('admin.applications.secure_request_form_batch_revocations.create.success',
                             count: revoked_count)
     rescue ActiveRecord::RecordInvalid, ActiveRecord::RecordNotSaved, ActiveRecord::StatementInvalid
       redirect_to admin_application_path(@application),
+                  status: :see_other,
                   alert: t('admin.applications.secure_request_form_batch_revocations.create.failure')
     end
 

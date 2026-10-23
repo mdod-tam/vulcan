@@ -33,17 +33,17 @@ class AuditEventServiceTest < ActiveSupport::TestCase
   test 'change fingerprints match caller hashes and persisted JSON metadata' do
     %w[profile_updated profile_updated_by_guardian profile_created_by_admin_via_paper
        alternate_contact_updated medical_provider_info_updated].each do |action|
-      metadata = { changes: { first_name: { old: 'Before', new: 'After' } } }
+      metadata = { operation_id: 'first-edit', changes: { first_name: { old: 'Before', new: 'After' } } }
       event = AuditEventService.log(action: action, actor: @admin, auditable: @template, metadata: metadata)
 
-      assert_equal 'After', event.reload.metadata.dig('changes', 'first_name', 'new')
+      assert_equal 'A***', event.reload.metadata.dig('changes', 'first_name', 'new')
       assert_no_difference -> { Event.where(action: action, auditable: @template).count } do
         assert_nil AuditEventService.log(action: action, actor: @admin, auditable: @template, metadata: metadata)
         assert_nil AuditEventService.log(action: action, actor: @admin, auditable: @template,
                                          metadata: metadata.deep_stringify_keys)
       end
 
-      changed_metadata = { changes: { first_name: { old: 'After', new: 'Later' } } }
+      changed_metadata = { operation_id: 'second-edit', changes: { first_name: { old: 'After', new: 'Later' } } }
       assert_difference -> { Event.where(action: action, auditable: @template).count }, 1 do
         AuditEventService.log(action: action, actor: @admin, auditable: @template, metadata: changed_metadata)
       end
@@ -51,7 +51,7 @@ class AuditEventServiceTest < ActiveSupport::TestCase
   end
 
   test 'change fingerprints preserve false through JSON persistence' do
-    metadata = { changes: { hearing_disability: { old: true, new: false } } }
+    metadata = { operation_id: 'false-edit', changes: { hearing_disability: { old: true, new: false } } }
     event = AuditEventService.log(action: 'profile_updated', actor: @admin, auditable: @template, metadata: metadata)
 
     assert_equal false, event.reload.metadata.dig('changes', 'hearing_disability', 'new')
@@ -60,7 +60,7 @@ class AuditEventServiceTest < ActiveSupport::TestCase
 
     assert_difference -> { Event.where(action: 'profile_updated', auditable: @template).count }, 1 do
       AuditEventService.log(action: 'profile_updated', actor: @admin, auditable: @template,
-                            metadata: { changes: { hearing_disability: { old: false, new: nil } } })
+                            metadata: { operation_id: 'nil-edit', changes: { hearing_disability: { old: false, new: nil } } })
     end
   end
 
@@ -90,9 +90,9 @@ class AuditEventServiceTest < ActiveSupport::TestCase
                        rejection_reason_code: 'other', rejection_reason: 'Please correct the document.' }
         assert_predicate Vendors::ReviewW9.new(vendor: vendor, admin: @admin, attributes: attributes).call, :success?
 
-        second_blob = Vendors::ReplaceW9.call(
-          vendor: vendor, file: Rack::Test::UploadedFile.new(file_fixture('sample_w9.pdf'), 'application/pdf')
-        )
+        upload = scanned_upload(Rack::Test::UploadedFile.new(file_fixture('sample_w9.pdf'), 'application/pdf'),
+                                user: vendor, purpose: :w9, slot: 'w9_form')
+        second_blob = Vendors::ReplaceW9.call(vendor: vendor, file: upload)
         assert_not_equal first_blob.id, second_blob.id
         second_review = Vendors::ReviewW9.new(
           vendor: vendor, admin: @admin, attributes: attributes.merge(reviewed_blob_id: second_blob.id)

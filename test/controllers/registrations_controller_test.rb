@@ -95,6 +95,31 @@ class RegistrationsControllerTest < ActionDispatch::IntegrationTest
     assert_equal Date.new(1990, 1, 15), User.find_by!(email: 'newuser-mm-dd-yyyy@example.com').date_of_birth
   end
 
+  def test_session_creation_failure_preserves_spanish_registration_locale
+    RegistrationsController.any_instance.stubs(:_create_and_set_session_cookie).returns(nil)
+
+    assert_difference('User.count') do
+      assert_no_difference('Session.count') do
+        post sign_up_path, params: { user: {
+          email: 'spanish-session-failure@example.com',
+          password: 'password1234',
+          password_confirmation: 'password1234',
+          first_name: 'Nueva',
+          last_name: 'Persona',
+          date_of_birth: '1990-01-01',
+          timezone: 'Eastern Time (US & Canada)',
+          locale: 'es'
+        } }
+      end
+    end
+
+    assert_redirected_to sign_in_path(locale: :es)
+    assert_equal 'No se pudo iniciar la sesión.', flash[:alert]
+    follow_redirect!
+    assert_select '[data-testid="flash-alert"]', text: 'No se pudo iniciar la sesión.'
+    assert_select '#signin-heading', text: 'Iniciar sesión'
+  end
+
   def test_should_reject_malformed_text_date_of_birth
     assert_no_difference('User.count') do
       post sign_up_path, params: { user: {

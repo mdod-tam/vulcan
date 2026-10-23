@@ -19,9 +19,9 @@ module OnlineApplicationTestHelpers
   end
 
   def attach_required_documents
-    attach_file 'Upload Residency Proof Document', file_fixture('residency_proof.pdf').to_s
-    attach_file 'Upload Income Proof Document', file_fixture('income_proof.pdf').to_s
-    attach_file 'Upload ID Proof Document', file_fixture('residency_proof.pdf').to_s
+    attach_cleared_document 'Upload Residency Proof Document', file_fixture('residency_proof.pdf').to_s
+    attach_cleared_document 'Upload Income Proof Document', file_fixture('income_proof.pdf').to_s
+    attach_cleared_document 'Upload ID Proof Document', file_fixture('residency_proof.pdf').to_s
   end
 
   def accept_submit_confirmations

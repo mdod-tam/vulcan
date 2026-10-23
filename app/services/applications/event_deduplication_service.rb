@@ -84,6 +84,9 @@ module Applications
       return metadata['operation_id'].presence || event.id.to_s if event.action.start_with?('equipment_')
 
       case event.action
+      when *AuditEventService::MUTATION_ACTIONS
+        # Display every recorded mutation, including changes with identical visible masks.
+        event.id.to_s
       when 'duplicate_review_case_opened', 'duplicate_review_case_resolved', 'duplicate_review_case_resumed'
         metadata['duplicate_review_case_id'].to_s
       when 'provider_info_request_revoked', 'proof_resubmission_request_revoked'
@@ -92,9 +95,6 @@ module Applications
         metadata['medical_provider_secure_request_form_id'].to_s
       when 'proof_resubmission_request_failed'
         metadata['proof_review_id'].to_s
-      when 'alternate_contact_updated', 'medical_provider_info_updated'
-        # Each stored change is distinct. AuditEventService already drops identical repeats.
-        event.id.to_s
       when 'shipment_added', 'shipment_corrected', 'fulfillment_mode_changed',
            'evaluator_reassigned', 'evaluation_working_notes_updated'
         # Distinct operation IDs retain real changes made in the same minute.

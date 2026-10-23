@@ -22,6 +22,7 @@ rescue LoadError
 end
 
 # SEEDS_LOADED guards seed loading within this process.
+require_relative 'support/document_scan_helper'
 unless defined?(SEEDS_LOADED)
   Rails.application.load_seed
   SEEDS_LOADED = true

@@ -1,8 +1,12 @@
 # frozen_string_literal: true
 
 Rails.application.routes.draw do
+  draw :active_storage
+  resources :document_scans, only: %i[index create show destroy]
+
   # Browsers request this icon even when tests do not provide one.
   get '/favicon.ico', to: proc { [204, {}, []] }
+  post 'csp_reports', to: 'csp_reports#create', format: false
 
   get 'test/auth_status', to: 'test#auth_status' if Rails.env.test?
   post 'test/set_session', to: 'test#set_session' if Rails.env.test?
@@ -233,6 +237,7 @@ Rails.application.routes.draw do
     resources :email_templates, only: %i[index show edit update] do
       member do
         get :new_test_email
+        get :preview_document
         post :send_test
         patch :toggle_disabled
         patch :mark_synced
@@ -399,7 +404,6 @@ Rails.application.routes.draw do
   namespace :vendor_portal do
     resource :dashboard, only: [:show], controller: :dashboard
     resource :profile, only: %i[edit update], controller: :profiles
-    resources :w9_uploads, only: :create
     resources :vouchers, only: %i[index show], param: :code do
       member do
         get :verify

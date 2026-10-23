@@ -3,40 +3,52 @@ import DocumentProofHandlerController from "controllers/users/document_proof_han
 import DocumentUploadController from "controllers/ui/document_upload_controller"
 import PaperApplicationController from "controllers/forms/paper_application_controller"
 
-describe("paper uploads across a server review", () => {
-  let application, form, proof, widget, input, upload, handler
+const flush = () => new Promise(resolve => setTimeout(resolve, 0))
+const pending = { id: 7, status: "pending", filename: "replacement.pdf", status_url: "/document_scans/7" }
+const clean = { ...pending, status: "clean", signed_id: "cleared-replacement" }
+
+describe("paper document decisions and shared virus-check control", () => {
+  let application, form, widget, input, upload
 
   beforeEach(async () => {
+    global.fetch = jest.fn().mockResolvedValue({ ok: true, status: 200, json: async () => null })
     document.body.innerHTML = `
-      <form data-controller="paper-application" data-action="submit->paper-application#beforeSubmit">
+      <form data-controller="paper-application">
         <div data-controller="document-proof-handler">
-          <input type="radio" name="income_proof_action" value="upload_only" checked data-document-proof-handler-target="uploadOnlyRadio">
-          <input type="radio" name="income_proof_action" value="accept" data-document-proof-handler-target="acceptRadio">
-          <input type="radio" name="income_proof_action" value="reject" data-document-proof-handler-target="rejectRadio">
+          <input type="radio" name="income_proof_action" value="upload_only" checked
+                 data-action="change->document-proof-handler#toggleProofAction" data-document-proof-handler-target="uploadOnlyRadio">
+          <input type="radio" name="income_proof_action" value="accept"
+                 data-action="change->document-proof-handler#toggleProofAction" data-document-proof-handler-target="acceptRadio">
+          <input type="radio" name="income_proof_action" value="reject"
+                 data-action="change->document-proof-handler#toggleProofAction" data-document-proof-handler-target="rejectRadio">
           <div data-document-proof-handler-target="uploadSection">
             <div data-controller="document-upload"
                  data-action="document-upload:clear->document-upload#remove"
+                 data-document-upload-scans-url-value="/document_scans"
+                 data-document-upload-purpose-value="proof"
+                 data-document-upload-slot-value="income_proof"
+                 data-document-upload-context-value="paper-form-uuid"
                  data-document-upload-retained-name-value="income_proof_signed_id"
                  data-document-upload-retained-filename-value="original.pdf"
                  data-document-upload-invalid-type-message-value="Upload a PDF file."
-                 data-document-upload-selected-text-value="Selected: %{filename}"
                  data-document-upload-allowed-types-value='["application/pdf"]'
                  data-document-upload-max-bytes-value="5242880"
                  data-document-upload-max-inclusive-value="true"
-                 data-document-upload-uploaded-text-value="Uploaded: %{filename}"
-                 data-document-upload-uploading-text-value="Uploading %{filename}"
-                 data-document-upload-canceled-text-value="Upload canceled. Any earlier upload is kept."
-                 data-document-upload-failed-text-value="Upload failed. Any earlier upload is kept.">
+                 data-document-upload-uploaded-text-value="Ready: %{filename}"
+                 data-document-upload-scanning-text-value="Checking %{filename} for viruses"
+                 data-document-upload-canceled-text-value="Upload canceled.">
               <input type="file" name="income_proof" data-document-upload-target="input" data-document-proof-handler-target="fileInput">
               <input type="hidden" name="income_proof_signed_id" value="restored" data-document-upload-target="retained">
-              <p data-document-upload-target="status">Uploaded: original.pdf</p>
+              <p data-document-upload-target="status">Ready: original.pdf</p>
               <progress hidden data-document-upload-target="progress"></progress>
               <button type="button" data-document-upload-target="remove">Remove</button>
               <button type="button" hidden data-document-upload-target="cancel">Cancel</button>
+              <button type="button" hidden data-document-upload-target="retry">Check again</button>
             </div>
           </div>
           <div data-document-proof-handler-target="rejectionSection"></div>
         </div>
+        <input name="residency_proof" type="hidden" value="other-cleared-file">
         <p data-paper-application-target="status"></p>
         <button type="submit" data-paper-application-target="submitButton">Submit</button>
       </form>`
@@ -44,188 +56,76 @@ describe("paper uploads across a server review", () => {
     application.register("document-proof-handler", DocumentProofHandlerController)
     application.register("document-upload", DocumentUploadController)
     application.register("paper-application", PaperApplicationController)
-    await new Promise(resolve => setTimeout(resolve, 0))
+    await flush()
     form = document.querySelector("form")
-    proof = form.querySelector('[data-controller="document-proof-handler"]')
     widget = form.querySelector('[data-controller="document-upload"]')
     input = widget.querySelector('input[type="file"]')
-    handler = application.getControllerForElementAndIdentifier(proof, "document-proof-handler")
     upload = application.getControllerForElementAndIdentifier(widget, "document-upload")
   })
 
-  afterEach(() => { application.stop(); document.body.innerHTML = "" })
+  afterEach(async () => {
+    application.stop()
+    await flush()
+    document.body.innerHTML = ""
+    delete global.fetch
+  })
 
-  // Rails names the hidden signed-ID input after the file input while it uploads
-  const completeUpload = (signedId) => {
-    const uploaded = document.createElement("input")
-    Object.assign(uploaded, { type: "hidden", name: input.name, value: signedId })
-    input.before(uploaded)
-  }
-  const startUpload = () => input.dispatchEvent(new Event("direct-upload:initialize", { bubbles: true }))
-
-  test("normal submission is not intercepted and carries the retained upload", () => {
-    const submit = new Event("submit", { bubbles: true, cancelable: true })
-    form.dispatchEvent(submit)
-    expect(submit.defaultPrevented).toBe(false)
+  test("an unchanged retry keeps the server-retained upload and staff decision", () => {
     expect(new FormData(form).get("income_proof_signed_id")).toBe("restored")
-  })
-
-  test("a completed replacement keeps the retained upload until the server decides", () => {
-    upload.uploadStarted()
-    completeUpload("replacement")
-    upload.finished()
-    // The server prefers the replacement and falls back to the retained upload if it refuses it
-    expect(new FormData(form).get("income_proof")).toBe("replacement")
-    expect(new FormData(form).get("income_proof_signed_id")).toBe("restored")
-  })
-
-  test("remove clears the retained upload and the reference Rails added for a completed upload", () => {
-    upload.uploadStarted()
-    completeUpload("interrupted")
-    upload.finished()
-    upload.uploadStarted()
-    completeUpload("completed")
-    upload.finished()
-    upload.remove()
-    const data = new FormData(form)
-    expect(data.has("income_proof_signed_id")).toBe(false)
-    expect(data.getAll("income_proof").filter(value => typeof value === "string")).toEqual([])
-    expect(upload.statusTarget.textContent).toBe("")
-  })
-
-  test("repeated interrupted replacements preserve the server-retained upload", () => {
-    for (const signedId of ["first", "second", "third"]) {
-      upload.uploadStarted()
-      completeUpload(signedId)
-      upload.finished()
-      // A sibling upload stops submission before the server validates this replacement.
-      form.dispatchEvent(new Event("direct-uploads:end"))
-
-      const data = new FormData(form)
-      expect(data.getAll("income_proof").filter(value => typeof value === "string")).toEqual([signedId])
-      expect(data.getAll("income_proof_signed_id")).toEqual(["restored"])
-    }
-  })
-
-  test("an interrupted earlier upload is retained even when nothing was retained before", () => {
-    upload.remove()
-    upload.uploadStarted()
-    completeUpload("first")
-    upload.finished()
-    upload.uploadStarted()
-    completeUpload("second")
-    upload.finished()
-    upload.uploadStarted()
-    completeUpload("third")
-    upload.finished()
-    expect(new FormData(form).getAll("income_proof_signed_id")).toEqual(["first"])
-    upload.remove()
-    expect(new FormData(form).has("income_proof_signed_id")).toBe(false)
-  })
-
-  test("a refused choice keeps Remove and names the upload an interrupted submission still queues", () => {
-    upload.remove()
-    const choose = (name, type) => Object.defineProperty(input, "files", { value: [new File(["x"], name, { type })], configurable: true })
-    choose("first.pdf", "application/pdf")
-    upload.uploadStarted()
-    completeUpload("first")
-    upload.finished()
-    // The batch was interrupted; staff then choose a file the browser refuses
-    choose("notes.txt", "text/plain")
-    upload.select()
-    expect(upload.removeTarget.hidden).toBe(false)
-    expect(upload.statusTarget.textContent).toBe("Upload a PDF file. Uploaded: first.pdf")
-    expect(new FormData(form).get("income_proof")).toBe("first")
-  })
-
-  test("a refused choice names the server-retained upload it does not replace", () => {
-    Object.defineProperty(input, "files", { value: [new File(["x"], "notes.txt", { type: "text/plain" })], configurable: true })
-    upload.select()
-    expect(upload.removeTarget.hidden).toBe(false)
-    expect(upload.statusTarget.textContent).toBe("Upload a PDF file. Uploaded: original.pdf")
-  })
-
-  test("a canceled new attempt keeps the reference completed in an interrupted earlier one", () => {
-    upload.uploadStarted()
-    completeUpload("first")
-    upload.finished()
-    upload.uploadStarted()
-    upload.failed(new Event("direct-upload:error", { cancelable: true }))
-    upload.finished()
-    expect(new FormData(form).getAll("income_proof").filter(value => typeof value === "string")).toEqual(["first"])
-    expect(new FormData(form).get("income_proof_signed_id")).toBe("restored")
-  })
-
-  test("a failed replacement keeps the retained upload and releases the controls", () => {
-    upload.uploadStarted()
-    upload.failed(new Event("direct-upload:error", { cancelable: true }))
-    upload.finished()
-    expect(new FormData(form).get("income_proof_signed_id")).toBe("restored")
-    expect(upload.statusTarget.textContent).toContain("Upload failed")
-    expect(upload.removeTarget.disabled).toBe(false)
-  })
-
-  test("choosing rejection clears the retained upload", () => {
-    for (const signedId of ["interrupted", "replacement"]) {
-      upload.uploadStarted()
-      completeUpload(signedId)
-      upload.finished()
-    }
-    handler.rejectRadioTarget.checked = true
-    handler.updateVisibility()
-    const data = new FormData(form)
-    expect(data.has("income_proof_signed_id")).toBe(false)
-    expect(data.getAll("income_proof").filter(value => typeof value === "string")).toEqual([])
-    expect(input.disabled).toBe(true)
-  })
-
-  test("cancellation follows the uploader error path and keeps the retained upload", () => {
-    upload.uploadStarted()
-    const xhr = new EventTarget()
-    xhr.abort = jest.fn(() => xhr.dispatchEvent(new Event("abort")))
-    xhr.addEventListener("error", () => {
-      upload.failed(new Event("direct-upload:error", { cancelable: true }))
-      upload.finished()
-    })
-    upload.rememberRequest({ detail: { xhr } })
-    expect(upload.cancelTarget.hidden).toBe(false)
-    upload.cancel()
-    expect(xhr.abort).toHaveBeenCalledTimes(1)
-    expect(new FormData(form).get("income_proof_signed_id")).toBe("restored")
-    expect(upload.statusTarget.textContent).toContain("canceled")
-    expect(upload.uploading).toBe(false)
-  })
-
-  test("decisions are locked during an upload but still submitted with the form", () => {
-    const clickAccept = () => {
-      const click = new MouseEvent("click", { bubbles: true, cancelable: true })
-      handler.acceptRadioTarget.dispatchEvent(click)
-      return click.defaultPrevented
-    }
-    startUpload()
-    expect(handler.uploadOnlyRadioTarget.getAttribute("aria-disabled")).toBe("true")
-    // Rails submits the form before it fires direct-uploads:end, so the decision must stay enabled
     expect(new FormData(form).get("income_proof_action")).toBe("upload_only")
-    expect(clickAccept()).toBe(true)
-
-    form.dispatchEvent(new Event("direct-uploads:end"))
-    expect(handler.uploadOnlyRadioTarget.hasAttribute("aria-disabled")).toBe(false)
-    expect(clickAccept()).toBe(false)
+    expect(form.querySelector('button[type="submit"]').disabled).toBe(false)
   })
 
-  test("a form upload failure releases a widget still waiting in the Rails upload queue", () => {
-    upload.uploadStarted()
-    form.dispatchEvent(new Event("direct-uploads:end"))
-    expect(upload.uploading).toBe(false)
-    expect(upload.removeTarget.disabled).toBe(false)
-    expect(new FormData(form).get("income_proof_signed_id")).toBe("restored")
+  test("pending scan blocks submit while preserving the staff decision and sibling file", () => {
+    upload.applyStatus(pending)
+    const data = new FormData(form)
+    expect(data.get("income_proof_action")).toBe("upload_only")
+    expect(data.get("residency_proof")).toBe("other-cleared-file")
+    expect(data.has("income_proof")).toBe(false)
+    expect(form.querySelector('button[type="submit"]').disabled).toBe(true)
   })
 
-  test("uploads temporarily gate submit and release it on completion", () => {
-    form.dispatchEvent(new Event("direct-uploads:start"))
-    const submit = form.querySelector('button[type="submit"]')
-    expect(submit.disabled).toBe(true)
-    form.dispatchEvent(new Event("direct-uploads:end"))
-    expect(submit.disabled).toBe(false)
+  test("a clean replacement provides one receipt and releases submit", () => {
+    upload.applyStatus(pending)
+    upload.applyStatus(clean)
+    expect(new FormData(form).getAll("income_proof")).toEqual(["cleared-replacement"])
+    expect(new FormData(form).has("income_proof_signed_id")).toBe(false)
+    expect(new FormData(form).get("income_proof_action")).toBe("upload_only")
+    expect(form.querySelector('button[type="submit"]').disabled).toBe(false)
+  })
+
+  test("staff can change upload-only to approval while scanning without submitting early", async () => {
+    upload.applyStatus(pending)
+    form.querySelector('input[value="accept"]').click()
+    await flush()
+    expect(new FormData(form).get("income_proof_action")).toBe("accept")
+    expect(input.disabled).toBe(false)
+    expect(form.querySelector('button[type="submit"]').disabled).toBe(true)
+    upload.applyStatus(clean)
+    expect(new FormData(form).get("income_proof_action")).toBe("accept")
+    expect(form.querySelector('button[type="submit"]').disabled).toBe(false)
+  })
+
+  test("rejection dismisses the pending file and leaves other documents intact", async () => {
+    upload.applyStatus(pending)
+    form.querySelector('input[value="reject"]').click()
+    await flush()
+    expect(fetch).toHaveBeenCalledWith("/document_scans/7", expect.objectContaining({ method: "DELETE" }))
+    const data = new FormData(form)
+    expect(data.has("income_proof")).toBe(false)
+    expect(data.has("income_proof_signed_id")).toBe(false)
+    expect(data.get("income_proof_action")).toBe("reject")
+    expect(data.get("residency_proof")).toBe("other-cleared-file")
+    expect(input.disabled).toBe(true)
+    expect(form.querySelector('button[type="submit"]').disabled).toBe(false)
+  })
+
+  test("an invalid new selection keeps the cleared file and the decision", async () => {
+    upload.applyStatus(clean)
+    Object.defineProperty(input, "files", { value: [new File(["x"], "notes.txt", { type: "text/plain" })], configurable: true })
+    await upload.select()
+    expect(upload.statusTarget.textContent).toBe("Upload a PDF file. Ready: replacement.pdf")
+    expect(new FormData(form).get("income_proof")).toBe("cleared-replacement")
+    expect(new FormData(form).get("income_proof_action")).toBe("upload_only")
   })
 })

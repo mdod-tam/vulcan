@@ -46,7 +46,7 @@ controls:
       priority: { label: "High", value: 2 }
       owner: "@david"
       implementation:
-        summary: "Signed session token in an HttpOnly cookie, marked Secure in production. The default absolute expiry is 24 hours."
+        summary: "Signed HttpOnly login cookie, Secure in production and SameSite=Lax. Idle expiry is 30 minutes; absolute expiry remains 24 hours. Activity writes are limited to once per minute. Shared sign-in/registration completion resets browser session state after commit."
         files: ["app/models/session.rb", "app/controllers/concerns/authentication.rb", "app/controllers/application_controller.rb"]
 
   data_protection:
@@ -56,7 +56,7 @@ controls:
       priority: { label: "Critical", value: 1 }
       owner: "@david"
       implementation:
-        summary: "Selected database fields are encrypted. See pii_encryption.md for fields, lookup rules, and key constraints."
+        summary: "Selected database fields are encrypted. Non-test runtime startup rejects missing or blank encryption credentials. Secretless asset precompile leaves missing keys unset. See pii_encryption.md for fields, audit masking, lookup rules, and key constraints."
         files: ["app/models/concerns/user_profile.rb", "config/initializers/active_record_encryption.rb"]
       audit: { report: null, coverage: null, next_review_due: null }
 
@@ -104,8 +104,8 @@ controls:
       priority: { label: "Critical", value: 1 }
       owner: "@david"
       implementation:
-        summary: "Production forces HTTPS (force_ssl) and hides local exception details."
-        files: ["config/environments/production.rb"]
+        summary: "Production forces HTTPS and hides local exception details. Enforced CSP uses request nonces, same-origin upload connections, and a bounded public collector. HTML email previews use an isolated sandboxed document with a separate restrictive policy."
+        files: ["config/environments/production.rb", "config/initializers/content_security_policy.rb", "lib/security/csp_report_filter.rb", "app/controllers/csp_reports_controller.rb", "app/services/csp_violation_report.rb"]
 
   audit_and_logging:
     - id: "AUDIT-001"
@@ -121,8 +121,8 @@ controls:
       frameworks: { doit: ["AU-3"] }
       priority: { label: "Medium", value: 3 }
       implementation:
-        summary: "Domain workflows record audit Event rows through AuditEventService."
-        files: ["app/services/audit_event_service.rb", "app/models/event.rb"]
+        summary: "Domain workflows record audit Event rows through AuditEventService, with personal-value masking in nested metadata and staff name snapshots. Exact actor IDs, account associations, and role metadata are preserved. Distinct profile/contact mutations remain visible even when their masks match. HTTP CSV exports record actor, export type, and row count without exported contents."
+        files: ["app/services/audit_event_service.rb", "app/services/audit_metadata_privacy.rb", "app/models/event.rb", "app/services/csv_export.rb"]
 
   testing_and_vulnerability_management:
     - id: "TEST-001"
@@ -164,8 +164,8 @@ controls:
       frameworks: { doit: ["SC-13", "IA-7"], rails: ["ActiveStorage::Validations"] }
       priority: { label: "High", value: 2 }
       implementation:
-        summary: "Proof uploads are checked for allowed content types and size."
-        files: ["app/models/concerns/proof_manageable.rb"]
+        summary: "Uploaded documents are checked for allowed content types and size and remain unavailable until an antivirus result matches their stored bytes. Application-owned storage routes enforce document audience and private no-store downloads; guidance PDFs have an explicit public audience. First-release checks exercise private storage, browser upload and live scanner behavior."
+        files: ["app/models/document_scan.rb", "app/services/document_scans/stager.rb", "app/jobs/document_scan_job.rb", "app/models/attachment_access.rb", "app/controllers/attachment_downloads_controller.rb", "config/routes/active_storage.rb"]
 
 metadata:
   review_frequency: "Quarterly"

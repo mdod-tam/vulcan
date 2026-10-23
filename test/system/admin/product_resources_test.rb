@@ -7,7 +7,7 @@ module Admin
     test 'admin publishes edits and deletes exact product guidance with recoverable errors and PDF replacement' do
       admin = create(:admin)
       product = create(:product, name: 'Resource Journey Tablet')
-      system_test_sign_in(admin)
+      sign_in_resource_admin(admin)
       visit admin_products_path
       find('summary', text: 'Tablet').click
       within('tr', text: product.name) { click_link 'Resources' }
@@ -42,21 +42,23 @@ module Admin
       select 'PDF document', from: 'Resource source'
       fill_in 'Descriptive title (in the resource language)', with: '  '
       attach_file 'PDF document', public_guide_pdf.path
+      clear_resource_upload!(admin)
       click_button 'Save public resource'
       assert_selector '#save-resource-errors:focus'
       assert_text File.basename(public_guide_pdf.path)
       assert_field 'Resource source', with: 'pdf'
       assert_field 'External URL', with: 'https://example.org/spanish-guide'
-      assert_selector 'input[name="product_resource[document_signed_id]"]', visible: :all
+      assert_selector 'input[type="hidden"][name="product_resource[document]"]', visible: :all
       take_screenshot('product-resources-admin-pdf-retry', html: true, full: true)
-      accepted_pdf_reference = find('input[name="product_resource[document_signed_id]"]', visible: :all).value
+      accepted_pdf_blob_id = ActiveStorage::Blob.find_signed!(find('input[type="hidden"][name="product_resource[document]"]', visible: :all).value).id
       fill_in 'Descriptive title (in the resource language)', with: '  '
       click_button 'Save public resource'
       assert_selector '#save-resource-errors:focus'
-      assert_equal accepted_pdf_reference, find('input[name="product_resource[document_signed_id]"]', visible: :all).value
+      assert_equal accepted_pdf_blob_id, ActiveStorage::Blob.find_signed!(find('input[type="hidden"][name="product_resource[document]"]', visible: :all).value).id
       click_button I18n.t('documents.upload.remove')
-      assert_no_selector 'input[name="product_resource[document_signed_id]"]', visible: :all
+      assert_no_selector 'input[type="hidden"][name="product_resource[document]"]', visible: :all
       attach_file 'PDF document', public_guide_pdf.path
+      clear_resource_upload!(admin)
       fill_in 'Descriptive title (in the resource language)', with: 'Guía PDF accesible'
       click_button 'Save public resource'
       assert_current_path admin_product_path(product)
@@ -149,10 +151,33 @@ module Admin
 
     private
 
+    def clear_resource_upload!(admin)
+      assert_selector '[data-scan-state="pending"]'
+      scan = DocumentScan.where(user: admin, purpose: 'product_resource').order(:id).last
+      scan.update!(status: :clean, completed_at: Time.current)
+      assert_selector '[data-scan-state="clean"]'
+    end
+
+    def sign_in_resource_admin(admin)
+      credential = admin.totp_credentials.first || admin.totp_credentials.create!(secret: ROTP::Base32.random_base32, nickname: 'Browser authenticator')
+      visit sign_in_path
+      within('form[action="/sign_in"]') do
+        fill_in 'contact-input', with: admin.email
+        fill_in 'password-input', with: 'password1234'
+        click_button 'Sign In'
+      end
+      assert_current_path verify_method_two_factor_authentication_path(type: 'totp')
+      within("form[action='#{process_verification_two_factor_authentication_path(type: 'totp')}']") do
+        fill_in 'code', with: ROTP::TOTP.new(credential.secret).now
+        click_button I18n.t('two_factor_verification.common.submit')
+      end
+      assert_current_path admin_dashboard_path
+    end
+
     def switch_user(user)
       system_test_sign_out
       install_stimulus_error_reporting
-      system_test_sign_in(user)
+      user.admin? ? sign_in_resource_admin(user) : system_test_sign_in(user)
       page.current_window.resize_to(1200, 900)
     end
 
@@ -163,7 +188,7 @@ module Admin
     def public_guide_pdf
       @public_guide_pdf ||= Tempfile.new(['public-product-guide', '.pdf']).tap do |file|
         file.binmode
-        file.write("%PDF-1.4\nPublic program product guidance. No personal or session information.\n")
+        file.write(Rails.root.join('test/fixtures/files/medical_certification_valid.pdf').binread)
         file.flush
       end
     end

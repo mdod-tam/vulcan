@@ -2,14 +2,14 @@
 
 # Manual documents pass this gate before attachment.
 #
-# Accepts a multipart upload, an ActiveStorage::Blob, or a signed blob ID when the caller permits one.
+# Accepts cleared snapshots and their signed IDs. Raw multipart files must use scan staging first.
 # A signed blob ID does not authorize the submitter. Callers enforce request access and domain eligibility.
 #
 # Existing blobs must be unattached within the cleanup retention window, or attached to this record's permitted slots.
 # Intake and CleanupUnattachedUploadsJob lock the same blob row to prevent a concurrent purge.
 # The slot's DocumentValidator declaration selects its purpose and size limit.
 # ProofAttachmentValidator inspects content at intake. Routine model saves do not inspect file content.
-# Provider-generated documents follow their own acceptance contract.
+# DocuSeal PDFs pass the same clearance rule at their dedicated acceptance owner.
 class UploadedDocument
   class Refused < StandardError
     attr_reader :reason, :purpose
@@ -45,11 +45,10 @@ class UploadedDocument
     params[field].presence || params["#{field}_signed_id"].presence
   end
 
-  # Rebuilds the file shown after a failed submission. A new upload must pass the intake gate.
-  # An absent or refused upload falls back to the submitted retained reference when it is restorable.
-  def self.retained(params, record:, field:)
+  # Rebuilds a stored reference after validation failure. Pending files use scan recovery.
+  def self.retained(params, record:, field:, scan_owner:)
     fresh = params[field]
-    return resolve!(fresh, record: record, name: field) if fresh.present?
+    return resolve!(fresh, record: record, name: field, scan_owner: scan_owner) if fresh.is_a?(String) && fresh.present?
 
     restorable(params["#{field}_signed_id"], record: record, name: field)
   rescue Refused
@@ -59,9 +58,9 @@ class UploadedDocument
   # record and name identify the attachment slot. Use the model class before a record exists.
   # Existing blobs then must be unattached. min_bytes applies only to channels with a minimum size.
   # A domain owner can permit additional slots on this same record after checking document identity.
-  def self.resolve!(input, record:, name:, signed_ids: true, min_bytes: nil, additional_attachment_names: [])
+  def self.resolve!(input, record:, name:, signed_ids: true, min_bytes: nil, additional_attachment_names: [], scan_owner: nil) # rubocop:disable Metrics/ParameterLists -- Explicit slot and owner authority.
     new(record: record, name: name, purpose: declared_purpose(record, name), signed_ids: signed_ids,
-        min_bytes: min_bytes, additional_attachment_names: additional_attachment_names).resolve!(input)
+        min_bytes: min_bytes, additional_attachment_names: additional_attachment_names, scan_owner: scan_owner).resolve!(input)
   end
 
   def self.declared_purpose(record, name)
@@ -84,7 +83,8 @@ class UploadedDocument
     nil
   end
 
-  def initialize(record:, name:, purpose:, signed_ids:, min_bytes:, additional_attachment_names: [])
+  def initialize(record:, name:, purpose:, signed_ids:, min_bytes:, additional_attachment_names: [], scan_owner: nil) # rubocop:disable Metrics/ParameterLists -- Same intake contract as resolve!.
+    @scan_owner = scan_owner
     @record = record.is_a?(Class) ? nil : record
     @name = name.to_s
     @allowed_attachment_names = [@name] + additional_attachment_names.map(&:to_s)
@@ -97,7 +97,7 @@ class UploadedDocument
     if input.is_a?(ActiveStorage::Blob)
       checked_blob(input)
     elsif multipart_file?(input)
-      stored_upload(input)
+      unscanned_upload(input)
     elsif input.is_a?(String) && input.present?
       refuse(:unsupported) unless @signed_ids
       checked_blob(find_signed_blob(input))
@@ -109,7 +109,7 @@ class UploadedDocument
   end
 
   def reusable?(blob)
-    !quarantined?(blob) && !expired_unattached?(blob) && !attached_elsewhere?(blob)
+    !expired_unattached?(blob) && !attached_elsewhere?(blob)
   end
 
   private
@@ -118,32 +118,10 @@ class UploadedDocument
     input.respond_to?(:original_filename) && input.respond_to?(:tempfile)
   end
 
-  # Size checks precede content inspection and storage.
-  # The blob row precedes the storage write so cleanup can find unattached uploads.
-  # This method registers rollback cleanup before either write to handle a caller's later rollback.
-  # Rollback and write failures attempt storage deletion. delete_stored logs failed deletion.
-  def stored_upload(file)
+  def unscanned_upload(file)
     check_size(file.size)
     check_content(file)
-
-    io = file.tempfile.tap(&:rewind)
-    blob = ActiveStorage::Blob.build_after_unfurling(io: io, filename: file.original_filename,
-                                                     content_type: file.content_type)
-    ActiveRecord::Base.current_transaction.after_rollback { delete_stored(blob) }
-    blob.save!
-    begin
-      blob.upload_without_unfurling(io.tap(&:rewind))
-    rescue StandardError
-      delete_stored(blob)
-      raise
-    end
-    blob
-  end
-
-  def delete_stored(blob)
-    blob.service.delete(blob.key)
-  rescue StandardError => e
-    Rails.logger.error("UploadedDocument could not delete rolled-back upload #{blob.key}: #{e.message}")
+    refuse(:scan_required)
   end
 
   def find_signed_blob(signed_id)
@@ -154,11 +132,14 @@ class UploadedDocument
 
   def checked_blob(blob)
     blob.lock!
-    refuse(:unavailable) if quarantined?(blob)
     refuse(:expired) if expired_unattached?(blob)
     refuse(:attached_elsewhere) if attached_elsewhere?(blob)
     check_size(blob.byte_size)
     refuse(:unavailable) unless blob.service.exist?(blob.key)
+    scan = DocumentScan.find_by(blob_id: blob.id)
+    refuse(:scan_required) unless scan&.clean?
+    refuse(:unavailable) unless scan.purpose == @purpose.to_s
+    refuse(:unavailable) if !blob.attachments.exists?(record: @record, name: @allowed_attachment_names) && (scan.dismissed_at || !scan.owned_by?(@scan_owner))
     check_content(blob)
     blob
   rescue ActiveRecord::RecordNotFound
@@ -167,10 +148,6 @@ class UploadedDocument
 
   def expired_unattached?(blob)
     !blob.attachments.exists? && blob.created_at <= CleanupUnattachedUploadsJob::RETENTION.ago
-  end
-
-  def quarantined?(blob)
-    blob.metadata['w9_cutover_quarantined'] == true
   end
 
   def attached_elsewhere?(blob)

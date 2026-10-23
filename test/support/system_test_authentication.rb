@@ -60,21 +60,7 @@ module SystemTestAuthentication
     end
     wait_for_stimulus_controller('visibility')
 
-    # Test-only skip_2fa bypasses MFA enrollment and the guard for flow initiation.
-    # Sign-in still verifies existing credentials.
-    if page.driver.is_a?(Capybara::RackTest::Driver)
-      page.set_rack_session(skip_2fa: true)
-    else
-      # A synchronous request sets the bypass before form submission.
-      page.execute_script(<<~JS)
-        try {
-          var xhr = new XMLHttpRequest();
-          xhr.open('POST', '/test/set_session', false); // synchronous
-          xhr.setRequestHeader('Content-Type', 'application/x-www-form-urlencoded');
-          xhr.send('skip_2fa=true');
-        } catch(e) { /* no-op */ }
-      JS
-    end
+    set_system_test_mfa_bypass
 
     assert_selector('form[action="/sign_in"]', wait: 10)
 
@@ -91,6 +77,7 @@ module SystemTestAuthentication
     end
 
     expected_dashboard_path = user_dashboard_path(user)
+    restore_system_test_mfa_bypass(user) if verify_path.blank?
 
     using_wait_time(10) do
       if verify_path.present? && page.has_current_path?(verify_path, wait: 5)
@@ -174,20 +161,6 @@ module SystemTestAuthentication
   end
 
   def skip_2fa_and_sign_in(user)
-    # The controller recognizes skip_2fa as a test bypass.
-    if page.driver.is_a?(Capybara::RackTest::Driver)
-      page.set_rack_session(skip_2fa: true)
-    else
-      # A synchronous request sets the bypass before sign-in.
-      page.execute_script(<<~JS)
-        try {
-          var xhr = new XMLHttpRequest();
-          xhr.open('POST', '/test/set_session', false); // synchronous
-          xhr.setRequestHeader('Content-Type', 'application/x-www-form-urlencoded');
-          xhr.send('skip_2fa=true');
-        } catch(e) { /* no-op */ }
-      JS
-    end
     system_test_sign_in(user)
   end
 
@@ -245,6 +218,28 @@ module SystemTestAuthentication
   end
 
   private
+
+  def set_system_test_mfa_bypass
+    if page.driver.is_a?(Capybara::RackTest::Driver)
+      page.set_rack_session(skip_2fa: true)
+    else
+      page.execute_script(<<~JS)
+        var xhr = new XMLHttpRequest();
+        xhr.open('POST', '/test/set_session', false);
+        xhr.setRequestHeader('Content-Type', 'application/x-www-form-urlencoded');
+        xhr.send('skip_2fa=true');
+        if (xhr.status !== 200) throw new Error('Test MFA setup failed');
+      JS
+    end
+  end
+
+  # Session renewal can clear the test-only flag during password sign-in.
+  def restore_system_test_mfa_bypass(user)
+    return unless current_path == setup_two_factor_authentication_path
+
+    set_system_test_mfa_bypass
+    visit user_dashboard_path(user)
+  end
 
   # A redirect timeout falls back to a direct visit.
   def wait_for_redirect_or_visit(path, timeout: 15)

@@ -96,9 +96,9 @@ EDITOR="vim" bin/rails credentials:edit --environment development
 EDITOR="vim" bin/rails credentials:edit --environment test
 ```
 
-Use `bin/rails db:encryption:init` to generate the `active_record_encryption` entries for fresh or disposable data, then add all three entries to each local credentials file before saving data. For retained data, preserve the existing encryption keys and salt; newly generated values cannot decrypt it. Keep local keys and credentials out of your change.
+Use `bin/rails db:encryption:init` to generate the `active_record_encryption` entries, then add all three entries to each local credentials file before saving data. Keep these keys stable across restarts and keep local keys and credentials out of your change.
 
-Normal development and other non-test runtimes refuse missing, incomplete or blank encryption credentials. Temporary keys are limited to disposable tests and the explicitly marked asset-build path. See [PII encryption](docs/security/pii_encryption.md).
+Normal development and other non-test runtimes refuse missing, incomplete or blank encryption credentials. Encrypted attributes reject plaintext stored values. Temporary keys are limited to disposable tests. Secretless asset precompilation does not generate encryption keys. See [PII encryption](docs/security/pii_encryption.md).
 
 ### Local environment
 

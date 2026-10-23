@@ -57,9 +57,9 @@
                                 admin_application_secure_request_form_revocation_path(@application, secure_request_form),
                                 method: :post,
                                 form: { class: "inline",
-                                        onsubmit: "return confirm(#{t('admin.applications.secure_request_forms.table.revoke_confirm').to_json})",
                                         data: {
-                                          turbo: false
+                                          turbo_confirm: t('admin.applications.secure_request_forms.table.revoke_confirm'),
+                                          turbo_frame: '_top'
                                         } },
                                 'aria-label': secure_link_row_action_label(t('admin.applications.secure_request_forms.table.revoke'),
                                                                            secure_request_form, recipient: row_recipient),
@@ -70,17 +70,16 @@
                                   method: :post,
                                   params: { request_batch_id: secure_request_form.request_batch_id },
                                   form: { class: "inline",
-                                          onsubmit: "return confirm(#{t('admin.applications.secure_request_forms.table.revoke_batch_confirm').to_json})",
                                           data: {
-                                            turbo: false
+                                            turbo_confirm: t('admin.applications.secure_request_forms.table.revoke_batch_confirm'),
+                                            turbo_frame: '_top'
                                           } },
                                   class: "inline-flex items-center rounded-md border border-red-300 bg-white px-2.5 py-1.5 text-sm font-medium text-red-700 hover:bg-red-50 focus:outline-none focus:ring-2 focus:ring-red-600 focus:ring-offset-2" %>
                   <% end %>
                   <% if provider_info_missing %>
                     <%# Resending revokes the active link, so it confirms like Revoke. %>
                     <%= form_with url: admin_application_secure_request_forms_path(@application), method: :post, local: true,
-                                  data: { turbo: false }, class: 'inline',
-                                  html: { onsubmit: "return confirm(#{t('admin.applications.secure_request_forms.table.resend_confirm').to_json})" } do %>
+                                  data: { turbo_confirm: t('admin.applications.secure_request_forms.table.resend_confirm'), turbo_frame: '_top' }, class: 'inline' do %>
                       <%= hidden_field_tag 'recipient_ids[]', secure_request_form.recipient_id %>
                       <%= hidden_field_tag :resend_of_id, secure_request_form.id %>
                       <%= submit_tag t('admin.applications.secure_request_forms.table.resend'),

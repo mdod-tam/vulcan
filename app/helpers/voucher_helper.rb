@@ -130,15 +130,20 @@ module VoucherHelper
   def voucher_usage_bar(voucher)
     percentage = voucher_usage_percentage(voucher)
     color_class = if percentage >= 90
-                    'bg-red-600'
+                    '[&::-webkit-progress-value]:bg-red-600 [&::-moz-progress-bar]:bg-red-600'
                   elsif percentage >= 70
-                    'bg-yellow-600'
+                    '[&::-webkit-progress-value]:bg-yellow-600 [&::-moz-progress-bar]:bg-yellow-600'
                   else
-                    'bg-green-600'
+                    '[&::-webkit-progress-value]:bg-green-600 [&::-moz-progress-bar]:bg-green-600'
                   end
 
-    content_tag(:div, class: 'w-full bg-gray-200 rounded-full h-2.5') do
-      content_tag(:div, '', class: "#{color_class} h-2.5 rounded-full", style: "width: #{percentage}%")
-    end
+    classes = [
+      'block w-full h-2.5 appearance-none overflow-hidden rounded-full border-0 bg-gray-200',
+      '[&::-webkit-progress-bar]:bg-gray-200 [&::-webkit-progress-bar]:rounded-full',
+      '[&::-webkit-progress-value]:rounded-full [&::-moz-progress-bar]:rounded-full',
+      color_class
+    ].join(' ')
+
+    content_tag(:progress, "#{percentage}%", value: percentage, max: 100, 'aria-label': 'Voucher value used', class: classes)
   end
 end

@@ -13,6 +13,7 @@ export default class extends Controller {
     this._boundHandleIncomeValidation = this.handleIncomeValidation.bind(this)
     this.element.addEventListener("input", this._boundUpdate)
     this.element.addEventListener("change", this._boundUpdate)
+    this.element.addEventListener("document-upload:status", this._boundUpdate)
     this.element.addEventListener("income-validation:validated", this._boundHandleIncomeValidation)
     this.update()
   }
@@ -20,6 +21,7 @@ export default class extends Controller {
   disconnect() {
     this.element.removeEventListener("input", this._boundUpdate)
     this.element.removeEventListener("change", this._boundUpdate)
+    this.element.removeEventListener("document-upload:status", this._boundUpdate)
     this.element.removeEventListener("income-validation:validated", this._boundHandleIncomeValidation)
   }
 
@@ -38,7 +40,8 @@ export default class extends Controller {
       this._incomeExceedsThreshold ||
       this._requiredControlsBlockSubmit() ||
       this._requiredRadioGroupBlocksSubmit() ||
-      this._checkboxGroupBlocksSubmit()
+      this._checkboxGroupBlocksSubmit() ||
+      this._documentUploadBlocksSubmit()
 
     this.submitButtonTargets.forEach((button) => {
       button.disabled = disabled
@@ -168,6 +171,13 @@ export default class extends Controller {
           .filter((field) => !field.disabled && this.elementIsVisible(field))
         return checkboxes.length > 0 && !checkboxes.some((field) => field.checked)
       })
+  }
+
+  _documentUploadBlocksSubmit() {
+    return Array.from(this.element.querySelectorAll('[data-scan-state]')).some(widget => {
+      const input = widget.querySelector('input[type="file"]')
+      return input && !input.disabled && this.elementIsVisible(input) && !["idle", "clean"].includes(widget.dataset.scanState)
+    })
   }
 
   _requiredControlsBlockSubmit() {

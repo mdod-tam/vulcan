@@ -141,6 +141,7 @@ module Applications
       assert_equal 1, ActiveStorage::Attachment.where(record: draft, name: 'income_proof').count
     ensure
       draft&.destroy
+      DocumentScan.where(user: user).delete_all if user
       user&.destroy
     end
 
@@ -191,6 +192,7 @@ module Applications
       assert_equal 1, Event.where(action: 'application_updated', auditable: draft).count
     ensure
       draft&.destroy
+      DocumentScan.where(user: user).delete_all if user
       user&.destroy
     end
 
@@ -239,6 +241,7 @@ module Applications
                    'rapid draft and submission updates share the existing audit deduplication window'
     ensure
       draft&.destroy
+      DocumentScan.where(user: user).delete_all if user
       user&.destroy
     end
 
@@ -460,7 +463,7 @@ module Applications
         terms_accepted: true,
         information_verified: true,
         medical_release_authorized: true,
-        income_proof: submission_income_proof(attach_income_proof),
+        income_proof: submission_income_proof(attach_income_proof, user: user),
         is_submission: true
       )
       ApplicationCreator.call(form)
@@ -489,13 +492,14 @@ module Applications
       ApplicationCreator.call(form)
     end
 
-    def submission_income_proof(attach)
+    def submission_income_proof(attach, user:)
       return unless attach
 
-      Rack::Test::UploadedFile.new(
+      upload = Rack::Test::UploadedFile.new(
         Rails.root.join('test/fixtures/files/income_proof.pdf'),
         'application/pdf'
       )
+      scanned_upload(upload, user: user).signed_id
     end
 
     def run_role_conversion(user)

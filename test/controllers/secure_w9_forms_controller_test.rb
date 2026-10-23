@@ -18,7 +18,7 @@ class SecureW9FormsControllerTest < ActionDispatch::IntegrationTest
     assert_response :success
     assert_select 'form[action*=?]', secure_w9_form_path
     assert_select '#file_help', I18n.t('secure_w9_forms.show.file_help', max_size: ProofUploadFormats.max_megabytes(:w9))
-    assert_select 'input[type=file][name=file][aria-describedby=file_help]'
+    assert_select 'input[type=file][name=file][aria-describedby=?]', 'file_help file_status'
     assert_select 'button[type=submit]', I18n.t('secure_w9_forms.show.submit')
   end
 
@@ -97,8 +97,9 @@ class SecureW9FormsControllerTest < ActionDispatch::IntegrationTest
     result = BaseService::Result.new(success: true, message: 'ok', data: {})
     Vendors::SubmitW9Resubmission.any_instance.stubs(:call).returns(result)
     file = fixture_file_upload(Rails.root.join('test/fixtures/files/sample_w9.pdf'), 'application/pdf')
+    reference = scanned_upload(file, secure_form: @secure_request_form, purpose: :w9, slot: 'w9_form').signed_id
 
-    patch secure_w9_form_path, params: { token: @raw_token, file: file }
+    patch secure_w9_form_path, params: { token: @raw_token, file: reference }
 
     assert_redirected_to secure_w9_form_success_path(locale: 'en')
   end
@@ -110,7 +111,7 @@ class SecureW9FormsControllerTest < ActionDispatch::IntegrationTest
     assert_select 'h1', I18n.t('secure_w9_forms.show.heading')
     assert_select '#error-summary-title', I18n.t('secure_w9_forms.show.error_summary')
     assert_select '#file_error', I18n.t('documents.refused.missing')
-    assert_select 'input[type=file][name=file][aria-describedby=?]', 'file_help file_error'
+    assert_select 'input[type=file][name=file][aria-describedby=?]', 'file_help file_error file_status'
     assert_select 'input[type=hidden][name=token][value=?]', @raw_token
   end
 end

@@ -269,11 +269,11 @@ module Admin
         select 'Missing Income Amount', from: 'income_proof_rejection_reason'
 
         choose 'accept_residency_proof', allow_label_click: true
-        attach_file 'residency_proof', Rails.root.join('test/fixtures/files/residency_proof.pdf')
+        attach_cleared_document 'residency_proof', Rails.root.join('test/fixtures/files/residency_proof.pdf')
         choose 'accept_id_proof', allow_label_click: true
-        attach_file 'id_proof', Rails.root.join('test/fixtures/files/residency_proof.pdf')
+        attach_cleared_document 'id_proof', Rails.root.join('test/fixtures/files/residency_proof.pdf')
       end
-      attach_file 'medical_certification', Rails.root.join('test/fixtures/files/medical_certification_valid.pdf')
+      attach_cleared_document 'medical_certification', Rails.root.join('test/fixtures/files/medical_certification_valid.pdf')
       complete_paper_application_attestations
 
       assert_difference 'Application.count', 1 do
@@ -603,14 +603,14 @@ module Admin
         fill_in 'application_household_size', with: '5'
         fill_in 'application_annual_income', with: '29999'
 
-        attach_file 'income_proof', Rails.root.join('test/fixtures/files/income_proof.pdf')
+        attach_cleared_document 'income_proof', Rails.root.join('test/fixtures/files/income_proof.pdf')
 
         check 'application_maryland_resident'
         choose 'accept_residency_proof', allow_label_click: true
-        attach_file 'residency_proof', Rails.root.join('test/fixtures/files/residency_proof.pdf')
+        attach_cleared_document 'residency_proof', Rails.root.join('test/fixtures/files/residency_proof.pdf')
 
         choose 'accept_id_proof', allow_label_click: true
-        attach_file 'id_proof', Rails.root.join('test/fixtures/files/residency_proof.pdf')
+        attach_cleared_document 'id_proof', Rails.root.join('test/fixtures/files/residency_proof.pdf')
       end
 
       # This test inspects the completed form without submitting it.
@@ -651,9 +651,9 @@ module Admin
                                       residency_proof_status: :not_reviewed,
                                       medical_certification_status: :not_requested)
 
-      application.income_proof.attach(io: StringIO.new('dummy income proof content'), filename: 'income.pdf', content_type: 'application/pdf')
-      application.residency_proof.attach(io: StringIO.new('dummy residency proof content'), filename: 'residency.pdf', content_type: 'application/pdf')
-      application.id_proof.attach(io: StringIO.new('dummy id proof content'), filename: 'id.pdf', content_type: 'application/pdf')
+      attach_cleared_proof(application, :income_proof, filename: 'income.pdf')
+      attach_cleared_proof(application, :residency_proof, filename: 'residency.pdf')
+      attach_cleared_proof(application, :id_proof, filename: 'id.pdf')
       application.save!
 
       # Set up approval records directly for the reconciliation test.
@@ -684,11 +684,7 @@ module Admin
       )
       application.update!(id_proof_status: :approved)
 
-      application.medical_certification.attach(
-        io: StringIO.new('dummy medical certification content'),
-        filename: 'medical.pdf',
-        content_type: 'application/pdf'
-      )
+      attach_cleared_proof(application, :medical_certification, filename: 'medical.pdf')
       application.update!(
         medical_certification_status: :approved,
         medical_certification_verified_by: @admin
@@ -786,13 +782,13 @@ module Admin
       check 'application[information_verified]'
 
       choose 'upload_only_income_proof'
-      attach_file 'income_proof', Rails.root.join('test/fixtures/files/blank.pdf')
+      attach_cleared_document 'income_proof', Rails.root.join('test/fixtures/files/medical_certification_valid.pdf')
 
       choose 'upload_only_residency_proof'
-      attach_file 'residency_proof', Rails.root.join('test/fixtures/files/blank.pdf')
+      attach_cleared_document 'residency_proof', Rails.root.join('test/fixtures/files/medical_certification_valid.pdf')
 
       choose 'upload_only_id_proof'
-      attach_file 'id_proof', Rails.root.join('test/fixtures/files/blank.pdf')
+      attach_cleared_document 'id_proof', Rails.root.join('test/fixtures/files/medical_certification_valid.pdf')
 
       page.execute_script(<<~JS)
         const form = document.querySelector('form[data-controller~="paper-application"]');

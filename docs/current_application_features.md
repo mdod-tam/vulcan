@@ -12,7 +12,7 @@ The linked guides explain how each workflow works.
 
 Constituents can prepare drafts, autosave form fields, submit applications, upload proofs, and follow their status. Guardians can act for dependents they manage. Staff can enter paper applications, review documents, and handle follow-up.
 
-[The application workflow](features/application_workflow_guide.md) explains the shared lifecycle. [Paper intake](development/paper_application_architecture.md) covers staff-assisted creation, identity decisions, direct uploads, and recovery when a save or follow-up step fails.
+[The application workflow](features/application_workflow_guide.md) explains the shared lifecycle. [Paper intake](development/paper_application_architecture.md) covers staff-assisted creation, identity decisions, document uploads, and recovery when a save or follow-up step fails.
 
 Two rules shape submission:
 

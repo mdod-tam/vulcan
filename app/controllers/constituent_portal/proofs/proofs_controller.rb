@@ -1,6 +1,6 @@
 # frozen_string_literal: true
 
-# Lets a constituent replace a rejected proof. The form uploads the file directly to storage on submit.
+# Lets a constituent replace a rejected proof with a cleared upload.
 # ProofAttachmentService attaches the proof, as it does for paper intake.
 module ConstituentPortal
   module Proofs
@@ -119,7 +119,7 @@ module ConstituentPortal
       # A refused upload changes nothing. Restore the form with the reason and any earlier usable upload.
       def render_refused_upload(refusal)
         @proof_type = params[:proof_type]
-        @retained_upload = UploadedDocument.retained(params, record: @application, field: proof_field)
+        @retained_upload = UploadedDocument.retained(params, record: @application, field: proof_field, scan_owner: current_user)
         flash.now[:alert] = refusal.user_message
         render :new, status: :unprocessable_content
       end

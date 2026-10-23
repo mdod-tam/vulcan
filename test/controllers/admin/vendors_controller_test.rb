@@ -70,7 +70,7 @@ module Admin
       end
     end
 
-    test 'tax ID edit starts blank, preserves blank submissions, and audits an explicit replacement encrypted' do
+    test 'tax ID edit starts blank, preserves blank submissions, and audits only a masked replacement' do
       vendor = create(:vendor, business_tax_id: '123456789')
 
       get edit_admin_vendor_path(vendor)
@@ -90,8 +90,9 @@ module Admin
       assert_redirected_to admin_vendor_path(vendor)
       assert_equal '987654321', vendor.reload.business_tax_id
       event = Event.where(action: 'vendor_updated', auditable: vendor).order(:id).last
-      assert_equal %w[123456789 987654321], event.field_changes['business_tax_id']
-      assert_equal({}, event.metadata['changes']['business_tax_id'])
+      assert_equal ['***-**-6789', '***-**-4321'], event.field_changes['business_tax_id']
+      assert_equal ['***-**-6789', '***-**-4321'], event.metadata['changes']['business_tax_id']
+      assert_nil event.change_values
     end
 
     test 'failed admin edits do not echo a submitted replacement tax ID' do

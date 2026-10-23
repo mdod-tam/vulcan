@@ -24,8 +24,7 @@ module ConstituentPortal
             phone: '555-123-4567',
             email: 'dr.smith@example.com'
           },
-          income_proof: fixture_file_upload(Rails.root.join('test/fixtures/files/income_proof.pdf'), 'application/pdf'),
-          residency_proof: fixture_file_upload(Rails.root.join('test/fixtures/files/residency_proof.pdf'), 'application/pdf'),
+          **proof_receipts,
           terms_accepted: '1',
           information_verified: '1',
           medical_release_authorized: '1',
@@ -110,8 +109,7 @@ module ConstituentPortal
             phone: '555-123-4567',
             email: 'dr.smith@example.com'
           },
-          income_proof: fixture_file_upload(Rails.root.join('test/fixtures/files/income_proof.pdf'), 'application/pdf'),
-          residency_proof: fixture_file_upload(Rails.root.join('test/fixtures/files/residency_proof.pdf'), 'application/pdf'),
+          **proof_receipts,
           terms_accepted: '1',
           information_verified: '1',
           medical_release_authorized: '1'
@@ -142,7 +140,8 @@ module ConstituentPortal
           cognition_disability: disability_type == :cognition
         )
 
-        params = @application_params.dup
+        params = @application_params.deep_dup
+        params[:application].merge!(proof_receipts(user: constituent))
         params[:application]["#{disability_type}_disability"] = '1'
 
         assert_difference 'Application.count', 1 do
@@ -194,8 +193,7 @@ module ConstituentPortal
             phone: '555-123-4567',
             email: 'dr.smith@example.com'
           },
-          income_proof: fixture_file_upload(Rails.root.join('test/fixtures/files/income_proof.pdf'), 'application/pdf'),
-          residency_proof: fixture_file_upload(Rails.root.join('test/fixtures/files/residency_proof.pdf'), 'application/pdf'),
+          **proof_receipts,
           terms_accepted: '1',
           information_verified: '1',
           medical_release_authorized: '1'
@@ -206,6 +204,15 @@ module ConstituentPortal
       assert_redirected_to constituent_portal_application_path(application)
       assert @constituent.reload.cognition_disability
       assert_equal 'in_progress', application.reload.status
+    end
+
+    private
+
+    def proof_receipts(user: @constituent)
+      %i[income_proof residency_proof].to_h do |slot|
+        blob = scanned_upload(fixture_file_upload("#{slot}.pdf", 'application/pdf'), user: user, slot: slot.to_s)
+        [slot, blob.signed_id]
+      end
     end
   end
 end

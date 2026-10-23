@@ -6,6 +6,16 @@
 # Hourly schedules are timezone-invariant.
 
 production:
+  recover_document_scans:
+    class: RecoverDocumentScansJob
+    schedule: "every minute"
+    description: "Resume due antivirus scans and report a delayed scan backlog"
+
+  cleanup_document_scans:
+    class: CleanupDocumentScansJob
+    schedule: "30 4 * * * UTC"
+    description: "Purge unattached antivirus snapshots after seven days"
+
   poll_email_delivery:
     class: EmailDelivery::PollJob
     schedule: "15 * * * *"

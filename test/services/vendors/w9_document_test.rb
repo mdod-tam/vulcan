@@ -48,7 +48,9 @@ module Vendors
       original = vendor.w9_form.blob
       review_current(vendor)
       reference = W9Document.reference(original, vendor: vendor)
-      replacement = ReplaceW9.call(vendor: vendor, file: Rack::Test::UploadedFile.new(file_fixture('sample_w9.pdf'), 'application/pdf'))
+      upload = scanned_upload(Rack::Test::UploadedFile.new(file_fixture('sample_w9.pdf'), 'application/pdf'),
+                              user: vendor, purpose: :w9, slot: 'w9_form')
+      replacement = ReplaceW9.call(vendor: vendor, file: upload)
 
       assert_nil W9Document.restorable(reference, vendor: vendor)
       error = assert_raises(UploadedDocument::Refused) do
@@ -63,6 +65,7 @@ module Vendors
       vendor = create(:vendor, :with_w9)
       current = vendor.w9_form.blob
       review_current(vendor)
+      current.reload
       other_vendor = create(:vendor)
       other_vendor.w9_archive.attach(current)
       reference = W9Document.reference(current, vendor: vendor)

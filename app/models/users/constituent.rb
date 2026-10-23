@@ -8,8 +8,6 @@ module Users
 
     enum :communication_preference, { email: 0, letter: 1 }
 
-    encrypts :date_of_birth, deterministic: true
-
     # Voucher identity checks and name-and-birthdate duplicate detection both need it. Required when
     # the record is created or the date is changed, so an older record without one still saves
     # unrelated edits. Unreadable input already has its own error.

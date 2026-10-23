@@ -11,7 +11,8 @@ class MedicalCertificationAttachmentServiceTest < ActiveSupport::TestCase
     # Use FactoryBot instead of fixtures
     @application = create(:application, status: :in_progress)
     @admin = create(:admin)
-    @test_file = fixture_file_upload('medical_certification_valid.pdf', 'application/pdf')
+    @test_file = scanned_upload(fixture_file_upload('medical_certification_valid.pdf', 'application/pdf'),
+                                user: @admin, purpose: :certification, slot: 'medical_certification')
   end
 
   test 'accept_submission applies one placement table to every submission channel' do
@@ -34,6 +35,7 @@ class MedicalCertificationAttachmentServiceTest < ActiveSupport::TestCase
                                           change_type: 'medical_certification', changed_at: 2.days.ago)
         end
         blob = ActiveStorage::Blob.create_and_upload!(io: StringIO.new('cert'), filename: 'cert.pdf', content_type: 'application/pdf')
+        mark_document_clean!(blob, user: @admin, purpose: :certification, slot: 'medical_certification')
 
         result = MedicalCertificationAttachmentService.accept_submission(
           application: application, blob: blob, submission_method: submission_method,
@@ -50,9 +52,10 @@ class MedicalCertificationAttachmentServiceTest < ActiveSupport::TestCase
     end
   end
 
-  test 'attaching a direct upload does not log upload references or file names' do
+  test 'attaching a scanned document does not log upload references or file names' do
     blob = ActiveStorage::Blob.create_and_upload!(io: file_fixture('medical_certification_valid.pdf').open,
                                                   filename: 'private-proof.pdf', content_type: 'application/pdf')
+    mark_document_clean!(blob, user: @admin, purpose: :certification, slot: 'medical_certification')
     messages = []
     Rails.logger.stub(:info, ->(message = nil, &block) { messages << (message || block&.call) }) do
       MedicalCertificationAttachmentService.attach_certification(
@@ -65,7 +68,7 @@ class MedicalCertificationAttachmentServiceTest < ActiveSupport::TestCase
     end
   end
 
-  test 'attaches medical certification with ActionDispatch::Http::UploadedFile' do
+  test 'attaches a cleared multipart snapshot' do
     assert_no_enqueued_jobs only: EmailDelivery::MailDeliveryJob do
       assert_difference 'ActiveStorage::Attachment.count' do
         assert_difference -> { Notification.where(action: 'medical_certification_approved').count }, 1 do
@@ -78,7 +81,7 @@ class MedicalCertificationAttachmentServiceTest < ActiveSupport::TestCase
               submission_method: :admin_upload
             )
 
-            assert result[:success], 'Direct file upload should succeed'
+            assert result[:success], 'A cleared multipart snapshot should succeed'
             assert @application.reload.medical_certification.attached?
             assert_equal 'approved', @application.medical_certification_status # Corrected assertion
           end
@@ -147,16 +150,16 @@ class MedicalCertificationAttachmentServiceTest < ActiveSupport::TestCase
     assert_equal 'approved', @application.reload.medical_certification_status
   end
 
-  test 'a storage failure attaches nothing instead of falling back to the raw upload' do
-    ActiveStorage::Blob.service.stub :upload, ->(*, **) { raise StandardError, 'Simulated storage failure' } do
-      assert_no_difference 'ActiveStorage::Attachment.count' do
-        assert_raises(StandardError) do
-          MedicalCertificationAttachmentService.attach_certification(
-            application: @application, blob_or_file: @test_file, status: :approved,
-            admin: @admin, submission_method: :admin_upload
-          )
-        end
+  test 'a missing stored snapshot attaches nothing instead of accepting an unscanned upload' do
+    @test_file.service.delete(@test_file.key)
+    assert_no_difference 'ActiveStorage::Attachment.count' do
+      error = assert_raises(UploadedDocument::Refused) do
+        MedicalCertificationAttachmentService.attach_certification(
+          application: @application, blob_or_file: @test_file, status: :approved,
+          admin: @admin, submission_method: :admin_upload
+        )
       end
+      assert_equal :unavailable, error.reason
     end
     assert_not_predicate @application.reload.medical_certification, :attached?
   end
@@ -178,6 +181,29 @@ class MedicalCertificationAttachmentServiceTest < ActiveSupport::TestCase
 
       assert result[:success], 'Signed ID should work correctly'
       assert @application.reload.medical_certification.attached?
+    end
+  end
+
+  test 'uncleared provider submissions and certification approvals cannot change workflow state' do
+    blob = create_dummy_blob
+    @application.medical_certification.attach(blob)
+    scan = DocumentScan.find_by!(blob_id: blob.id)
+    %w[pending blocked failed].each do |status|
+      scan.update!(status: status)
+      assert_no_difference ['ActiveStorage::Attachment.count', 'Notification.count', 'ApplicationStatusChange.count'] do
+        assert_raises(DocumentScan::NotCleared) do
+          MedicalCertificationAttachmentService.accept_submission(
+            application: @application, blob: blob, submission_method: :docuseal,
+            requested_at: 1.hour.ago, admin: @admin
+          )
+        end
+        result = MedicalCertificationAttachmentService.update_certification_status(
+          application: @application, status: :approved, admin: @admin
+        )
+        assert_not result[:success]
+        assert_instance_of DocumentScan::NotCleared, result[:error]
+      end
+      assert_not_equal 'approved', @application.reload.medical_certification_status
     end
   end
 
@@ -253,10 +279,11 @@ class MedicalCertificationAttachmentServiceTest < ActiveSupport::TestCase
   private
 
   def create_dummy_blob
-    ActiveStorage::Blob.create_and_upload!(
+    blob = ActiveStorage::Blob.create_and_upload!(
       io: file_fixture('medical_certification_valid.pdf').open,
       filename: 'certification.pdf',
       content_type: 'application/pdf'
     )
+    mark_document_clean!(blob, user: @admin, purpose: :certification, slot: 'medical_certification')
   end
 end

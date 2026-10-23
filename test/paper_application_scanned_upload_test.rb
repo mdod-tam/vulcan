@@ -2,7 +2,7 @@
 
 require 'test_helper'
 
-class PaperApplicationDirectUploadTest < ActionDispatch::IntegrationTest
+class PaperApplicationScannedUploadTest < ActionDispatch::IntegrationTest
   include ActiveJob::TestHelper
 
   setup do
@@ -14,14 +14,13 @@ class PaperApplicationDirectUploadTest < ActionDispatch::IntegrationTest
     setup_fpl_policies
   end
 
-  test 'direct upload for paper applications should work with signed_ids' do
+  test 'paper intake accepts cleared uploads through retained signed IDs' do
     # Set up sample proof files using existing fixtures in test/fixtures/files/
     income_proof = fixture_file_upload('income_proof.pdf', 'application/pdf')
     residency_proof = fixture_file_upload('residency_proof.pdf', 'application/pdf')
 
-    # Create blobs using direct upload
-    income_blob = create_direct_upload_blob(income_proof)
-    residency_blob = create_direct_upload_blob(residency_proof)
+    income_blob = scanned_upload(income_proof, user: @admin, slot: 'income_proof')
+    residency_blob = scanned_upload(residency_proof, user: @admin, slot: 'residency_proof')
 
     # Verify blobs were created
     assert_not_nil income_blob.signed_id
@@ -72,25 +71,4 @@ class PaperApplicationDirectUploadTest < ActionDispatch::IntegrationTest
     assert_equal 'approved', application.income_proof_status
     assert_equal 'approved', application.residency_proof_status
   end
-
-  private
-
-  def create_direct_upload_blob(file)
-    blob = ActiveStorage::Blob.create_before_direct_upload!(
-      filename: file.original_filename,
-      byte_size: file.size,
-      checksum: OpenSSL::Digest::MD5.file(file.path).base64digest,
-      content_type: file.content_type
-    )
-
-    # Simulate the direct upload by directly attaching content to the blob
-    File.open(file.path) do |io|
-      blob.upload(io)
-    end
-
-    blob
-  end
-
-  # Use the sign_in helper from test_helper.rb rather than defining our own
-  # This ensures consistency with other tests
 end

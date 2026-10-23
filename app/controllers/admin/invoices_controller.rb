@@ -132,10 +132,9 @@ module Admin
     end
 
     def invoices_csv(scope)
-      CSV.generate do |csv|
-        csv << CSV_COLUMNS.keys
+      CsvExport.generate(headers: CSV_COLUMNS.keys, actor: current_user, export_type: 'admin_invoices') do |csv|
         scope.each do |invoice| # Same order as the page.
-          csv << CSV_COLUMNS.values.map { |value| SpreadsheetCell.safe(value.is_a?(Symbol) ? invoice.public_send(value) : instance_exec(invoice, &value)) }
+          csv << CSV_COLUMNS.values.map { |value| value.is_a?(Symbol) ? invoice.public_send(value) : instance_exec(invoice, &value) }
         end
       end
     end

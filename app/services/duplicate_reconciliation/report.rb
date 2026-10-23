@@ -1,7 +1,5 @@
 # frozen_string_literal: true
 
-require 'csv'
-
 module DuplicateReconciliation
   class Report
     CSV_HEADERS = %w[
@@ -53,7 +51,8 @@ module DuplicateReconciliation
     end
 
     def write_csv(path, pairs)
-      CSV.open(path, 'w', write_headers: true, headers: CSV_HEADERS) do |csv|
+      File.open(path, 'w') do |output|
+        csv = CsvExport.new(output, headers: CSV_HEADERS)
         pairs.each { |pair| csv << csv_row(pair) }
       end
     end
@@ -70,7 +69,7 @@ module DuplicateReconciliation
     def member_csv_fields(member)
       [
         member.id,
-        SpreadsheetCell.safe(member.name.to_s),
+        member.name.to_s,
         member.real_email,
         member.real_phone,
         member.application_summary,

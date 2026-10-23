@@ -109,10 +109,9 @@ export default class extends Controller {
     
     if (range && (range.commonAncestorContainer.parentElement === this.editorTarget || this.editorTarget.contains(range.commonAncestorContainer))) {
       const span = document.createElement('span')
-      span.className = 'protected-variable'
+      span.className = 'protected-variable protected-variable-movable'
       span.draggable = true
       span.contentEditable = false
-      span.style.cssText = 'background-color: #e5e7eb; color: #6b7280; padding: 2px 4px; border-radius: 3px; cursor: move; user-select: none;'
       span.textContent = variableText
       
       range.insertNode(span)
@@ -146,10 +145,9 @@ export default class extends Controller {
     const range = this.rangeForVariableInsertion()
 
     const span = document.createElement('span')
-    span.className = 'protected-variable'
+    span.className = 'protected-variable protected-variable-movable'
     span.draggable = true
     span.contentEditable = false
-    span.style.cssText = 'background-color: #e5e7eb; color: #6b7280; padding: 2px 4px; border-radius: 3px; cursor: move; user-select: none;'
     span.textContent = variableText
 
     range.deleteContents()
@@ -357,7 +355,7 @@ export default class extends Controller {
     
     const html = parts.map((part) => {
       if (part.match(/^%<[a-zA-Z0-9_.]+>s$/) || part.match(/^\{\{\-?\s*[a-zA-Z_][a-zA-Z0-9_]*(?:\.[a-zA-Z_][a-zA-Z0-9_]*)*\s*\-?\}\}$/)) {
-        return `<span class="protected-variable" draggable="true" contenteditable="false" style="background-color: #e5e7eb; color: #6b7280; padding: 2px 4px; border-radius: 3px; cursor: not-allowed; user-select: none;">${this.escapeHtml(part)}</span>`
+        return `<span class="protected-variable" draggable="true" contenteditable="false">${this.escapeHtml(part)}</span>`
       } else {
         return this.escapeHtml(part)
       }

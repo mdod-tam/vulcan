@@ -74,6 +74,7 @@ module ConstituentPortal
       assert_select 'select[name="constituent[locale]"]'
       assert_select 'select[name="constituent[locale]"] option[value="en"]', text: 'English'
       assert_select 'select[name="constituent[locale]"] option[value="es"]', text: 'Spanish'
+      assert_select '[data-document-upload-scans-url-value=?]', document_scans_path
     end
 
     test 'should create application as draft' do
@@ -184,8 +185,8 @@ module ConstituentPortal
             speech_disability: checkbox_params(false),
             mobility_disability: checkbox_params(false),
             cognition_disability: checkbox_params(false),
-            residency_proof: @valid_image,
-            income_proof: @valid_pdf,
+            residency_proof: cleared_proof(@valid_image, :residency_proof).signed_id,
+            income_proof: cleared_proof(@valid_pdf, :income_proof).signed_id,
             terms_accepted: checkbox_params(true),
             information_verified: checkbox_params(true),
             medical_release_authorized: checkbox_params(true),
@@ -224,7 +225,7 @@ module ConstituentPortal
           application: {
             maryland_resident: true, household_size: 3, annual_income: 50_000,
             self_certify_disability: checkbox_params(true), hearing_disability: checkbox_params(true),
-            residency_proof: @valid_image, income_proof: fixture_file_upload(disguised.path, 'application/pdf'),
+            residency_proof: cleared_proof(@valid_image, :residency_proof).signed_id, income_proof: fixture_file_upload(disguised.path, 'application/pdf'),
             terms_accepted: checkbox_params(true), information_verified: checkbox_params(true),
             medical_release_authorized: checkbox_params(true),
             medical_provider_attributes: { name: 'Dr. Smith', phone: '2025551234', email: 'drsmith@example.com' }
@@ -630,8 +631,8 @@ module ConstituentPortal
             speech_disability: checkbox_params(false),
             mobility_disability: checkbox_params(false),
             cognition_disability: checkbox_params(false),
-            residency_proof: @valid_image,
-            income_proof: @valid_pdf,
+            residency_proof: cleared_proof(@valid_image, :residency_proof).signed_id,
+            income_proof: cleared_proof(@valid_pdf, :income_proof).signed_id,
             no_provider_info_provided: '1',
             medical_provider_attributes: {
               name: '',
@@ -670,8 +671,8 @@ module ConstituentPortal
             speech_disability: checkbox_params(false),
             mobility_disability: checkbox_params(false),
             cognition_disability: checkbox_params(false),
-            residency_proof: @valid_image,
-            income_proof: @valid_pdf,
+            residency_proof: cleared_proof(@valid_image, :residency_proof).signed_id,
+            income_proof: cleared_proof(@valid_pdf, :income_proof).signed_id,
             no_provider_info_provided: '1',
             medical_provider_attributes: {
               name: '',
@@ -712,8 +713,8 @@ module ConstituentPortal
             speech_disability: checkbox_params(false),
             mobility_disability: checkbox_params(false),
             cognition_disability: checkbox_params(false),
-            residency_proof: @valid_image,
-            income_proof: @valid_pdf,
+            residency_proof: cleared_proof(@valid_image, :residency_proof).signed_id,
+            income_proof: cleared_proof(@valid_pdf, :income_proof).signed_id,
             terms_accepted: checkbox_params(true),
             information_verified: checkbox_params(true),
             medical_release_authorized: checkbox_params(true),
@@ -807,8 +808,8 @@ module ConstituentPortal
     end
 
     test 'should not get edit for submitted application' do
-      @application.income_proof.attach(@valid_pdf)
-      @application.residency_proof.attach(@valid_image)
+      @application.income_proof.attach(cleared_proof(@valid_pdf, :income_proof))
+      @application.residency_proof.attach(cleared_proof(@valid_image, :residency_proof))
 
       @application.update!(status: :in_progress)
 
@@ -868,8 +869,8 @@ module ConstituentPortal
           speech_disability: checkbox_params(false),
           mobility_disability: checkbox_params(false),
           cognition_disability: checkbox_params(false),
-          residency_proof: @valid_image,
-          income_proof: @valid_pdf,
+          residency_proof: cleared_proof(@valid_image, :residency_proof).signed_id,
+          income_proof: cleared_proof(@valid_pdf, :income_proof).signed_id,
           medical_provider_attributes: {
             name: 'Dr. Smith',
             phone: '2025551234',
@@ -886,8 +887,8 @@ module ConstituentPortal
     end
 
     test 'should not update submitted application' do
-      @application.income_proof.attach(@valid_pdf)
-      @application.residency_proof.attach(@valid_image)
+      @application.income_proof.attach(cleared_proof(@valid_pdf, :income_proof))
+      @application.residency_proof.attach(cleared_proof(@valid_image, :residency_proof))
 
       @application.update!(status: :in_progress, household_size: 3, annual_income: 50_000)
 
@@ -924,8 +925,8 @@ module ConstituentPortal
     end
 
     test 'should show uploaded document filenames on show page' do
-      @application.income_proof.attach(@valid_pdf)
-      @application.residency_proof.attach(@valid_image)
+      @application.income_proof.attach(cleared_proof(@valid_pdf, :income_proof))
+      @application.residency_proof.attach(cleared_proof(@valid_image, :residency_proof))
       @application.save!
 
       get constituent_portal_application_path(@application)
@@ -1131,8 +1132,8 @@ module ConstituentPortal
             city: 'Silver Spring',
             state: 'MD',
             zip_code: '20901',
-            residency_proof: @valid_image,
-            income_proof: @valid_pdf,
+            residency_proof: cleared_proof(@valid_image, :residency_proof).signed_id,
+            income_proof: cleared_proof(@valid_pdf, :income_proof).signed_id,
             terms_accepted: checkbox_params(true),
             information_verified: checkbox_params(true),
             medical_release_authorized: checkbox_params(true),
@@ -1197,8 +1198,8 @@ module ConstituentPortal
             city: 'Rockville',
             state: 'MD',
             zip_code: '20850',
-            residency_proof: @valid_image,
-            income_proof: @valid_pdf,
+            residency_proof: cleared_proof(@valid_image, :residency_proof).signed_id,
+            income_proof: cleared_proof(@valid_pdf, :income_proof).signed_id,
             terms_accepted: checkbox_params(true),
             information_verified: checkbox_params(true),
             medical_release_authorized: checkbox_params(true),
@@ -1233,6 +1234,11 @@ module ConstituentPortal
     end
 
     private
+
+    def cleared_proof(upload, slot)
+      @cleared_proofs ||= {}
+      @cleared_proofs[[@authenticated_user.id, slot]] ||= scanned_upload(upload, user: @authenticated_user, purpose: :proof, slot: slot)
+    end
 
     def pending_review_message
       I18n.t('activemodel.errors.models.application_form.attributes.base.pending_identity_review')
@@ -1290,8 +1296,8 @@ module ConstituentPortal
           speech_disability: checkbox_params(false),
           mobility_disability: checkbox_params(false),
           cognition_disability: checkbox_params(false),
-          residency_proof: @valid_image,
-          income_proof: @valid_pdf,
+          residency_proof: cleared_proof(@valid_image, :residency_proof).signed_id,
+          income_proof: cleared_proof(@valid_pdf, :income_proof).signed_id,
           terms_accepted: checkbox_params(true),
           information_verified: checkbox_params(true),
           medical_release_authorized: checkbox_params(true),

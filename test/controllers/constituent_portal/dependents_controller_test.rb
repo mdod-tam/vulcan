@@ -629,10 +629,11 @@ module ConstituentPortal
       assert_equal @guardian.id, event.metadata['updated_by']
 
       changes = event.field_changes
-      assert_equal({}, event.metadata['changes']['email'], 'encrypted values stay out of metadata')
-      assert_equal 'Updated Dependent', changes['first_name']['new']
-      assert_equal 'New Last Name', changes['last_name']['new']
-      assert_equal 'updated.dependent@example.com', changes['email']['new']
+      assert_equal 'u***@e***.com', event.metadata.dig('changes', 'email', 'new')
+      assert_nil event.change_values
+      assert_equal 'U*** D***', changes['first_name']['new']
+      assert_equal 'N*** L*** N***', changes['last_name']['new']
+      assert_equal 'u***@e***.com', changes['email']['new']
     end
 
     test 'should update dependent when submitted contact matches guardian contact' do
@@ -708,8 +709,9 @@ module ConstituentPortal
     end
 
     test 'should show recent changes on dependent show page' do
-      Event.create!(
-        user: @guardian,
+      AuditEventService.log(
+        actor: @guardian,
+        auditable: @dependent,
         action: 'profile_updated_by_guardian',
         metadata: {
           user_id: @dependent.id,
@@ -729,13 +731,14 @@ module ConstituentPortal
       assert_select '.bg-white', text: /Recent Changes/i
       assert_select 'span', text: @guardian.full_name
       assert_select 'span', text: /First name/i
-      assert_select 'span.text-red-600', text: 'Old Name'
-      assert_select 'span.text-green-600', text: 'New Name'
+      assert_select 'span.text-red-600', text: 'O*** N***'
+      assert_select 'span.text-green-600', text: 'N*** N***'
     end
 
     test 'should show recent changes on dependent edit page' do
-      Event.create!(
-        user: @guardian,
+      AuditEventService.log(
+        actor: @guardian,
+        auditable: @dependent,
         action: 'profile_updated_by_guardian',
         metadata: {
           user_id: @dependent.id,
@@ -753,8 +756,8 @@ module ConstituentPortal
 
       assert_select '.bg-white', text: /Recent Changes/i
       assert_select 'span', text: /Phone/i
-      assert_select 'span.text-red-600', text: '555-123-4567'
-      assert_select 'span.text-green-600', text: '555-987-6543'
+      assert_select 'span.text-red-600', text: '***-***-4567'
+      assert_select 'span.text-green-600', text: '***-***-6543'
     end
 
     test 'should not allow non-guardian to access dependent' do

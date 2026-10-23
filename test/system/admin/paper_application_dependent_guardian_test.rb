@@ -237,7 +237,7 @@ module Admin
 
       raise "Missing test fixture file: #{fixture_path}" unless File.exist?(fixture_path)
 
-      attach_file "#{type}_proof", fixture_path
+      attach_cleared_document "#{type}_proof", fixture_path
     end
   end
 end

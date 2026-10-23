@@ -1,7 +1,7 @@
 <main class="container mx-auto px-4 py-8" role="main">
  <header class="mb-6">
    <h1 class="text-3xl font-bold text-gray-900">Edit Application</h1>
-   <p class="text-l text-gray-900"><span style="color: red;">*</span> Indicates a required field</p>
+   <p class="text-l text-gray-900"><span class="text-[#ff0000]">*</span> Indicates a required field</p>
  </header>
 
  <% edit_form_data = {
@@ -258,10 +258,8 @@
                Upload one of the following acceptable documents: <strong>driver's license</strong>, <strong>state ID</strong>, 
                <strong>identification card</strong>, <strong>utility bill</strong>, or <strong> photo ID</strong>
              </p>
-             <%= f.file_field :residency_proof,
-                 class: "block w-full text-sm text-gray-500 file:mr-4 file:py-2 file:px-4 file:rounded-md file:border-0 file:text-sm file:font-semibold file:bg-indigo-50 file:text-indigo-700 hover:file:bg-indigo-100",
-                 "aria-describedby": "residency-hint",
-                 accept: proof_upload_accept_attribute %>
+             <%= render 'shared/document_upload', form: f, model: @application, field: :residency_proof,
+                                                  input_id: 'application_residency_proof', described_by: 'residency-hint' %>
            </div>
 
            <% if @application.income_collection_enabled? %>
@@ -271,10 +269,8 @@
              <p id="income-hint" class="text-xs text-gray-500 mb-2">
                Upload SSI/SSDI documentation, recent pay stubs, or tax forms
              </p>
-             <%= f.file_field :income_proof,
-                 class: "block w-full text-sm text-gray-500 file:mr-4 file:py-2 file:px-4 file:rounded-md file:border-0 file:text-sm file:font-semibold file:bg-indigo-50 file:text-indigo-700 hover:file:bg-indigo-100",
-                 "aria-describedby": "income-hint",
-                 accept: proof_upload_accept_attribute %>
+             <%= render 'shared/document_upload', form: f, model: @application, field: :income_proof,
+                                                  input_id: 'application_income_proof', described_by: 'income-hint' %>
            </div>
            <% end %>
 
@@ -284,10 +280,8 @@
              <p id="id-hint" class="text-xs text-gray-500 mb-2">
                Upload a government-issued photo ID such as a driver's license, state ID card, or passport
              </p>
-             <%= f.file_field :id_proof,
-                 class: "block w-full text-sm text-gray-500 file:mr-4 file:py-2 file:px-4 file:rounded-md file:border-0 file:text-sm file:font-semibold file:bg-indigo-50 file:text-indigo-700 hover:file:bg-indigo-100",
-                 "aria-describedby": "id-hint",
-                 accept: proof_upload_accept_attribute %>
+             <%= render 'shared/document_upload', form: f, model: @application, field: :id_proof,
+                                                  input_id: 'application_id_proof', described_by: 'id-hint' %>
            </div>
          </div>
        </section>

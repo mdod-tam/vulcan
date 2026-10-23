@@ -10,8 +10,15 @@ class PaperApplicationModeSwitchingTest < ActionDispatch::IntegrationTest
     Policy.find_or_create_by!(key: 'fpl_2_person') { |policy| policy.value = '21150' }
     Policy.find_or_create_by!(key: 'fpl_modifier_percentage') { |policy| policy.value = '400' }
 
-    @income_proof_file = fixture_file_upload('test/fixtures/files/income_proof.pdf', 'application/pdf')
-    @residency_proof_file = fixture_file_upload('test/fixtures/files/residency_proof.pdf', 'application/pdf')
+    @raw_income = fixture_file_upload('test/fixtures/files/income_proof.pdf', 'application/pdf')
+    @raw_residency = fixture_file_upload('test/fixtures/files/residency_proof.pdf', 'application/pdf')
+    @income_proof_file = scanned_upload(@raw_income, user: @admin, purpose: :proof, slot: 'income_proof').signed_id
+    @residency_proof_file = scanned_upload(@raw_residency, user: @admin, purpose: :proof, slot: 'residency_proof')
+  end
+
+  teardown do
+    @raw_income.tempfile.close
+    @raw_residency.tempfile.close
   end
 
   def unique_paper_contact

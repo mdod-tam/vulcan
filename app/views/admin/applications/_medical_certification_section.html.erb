@@ -177,9 +177,9 @@
                           'bg-white hover:bg-gray-50 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-indigo-500'
                         ],
                         form: {
-                          onsubmit: "return confirm(#{certification_action_state.secure_cert_upload_confirm.to_json})",
                           data: {
-                            turbo: false
+                            turbo_confirm: certification_action_state.secure_cert_upload_confirm,
+                            turbo_frame: '_top'
                           }
                         },
                         data: {

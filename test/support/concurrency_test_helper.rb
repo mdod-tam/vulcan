@@ -55,6 +55,7 @@ module ConcurrencyTestHelper
     RecoveryRequest.where('user_id IN (?) OR resolved_by_id IN (?)', ids, ids).delete_all
     GuardianRelationship.where('guardian_id IN (?) OR dependent_id IN (?)', ids, ids).delete_all
     Event.where('user_id IN (?) OR (auditable_type = ? AND auditable_id IN (?))', ids, 'User', ids).delete_all
+    DocumentScan.where(user_id: ids).delete_all
     Session.where(user_id: ids).delete_all
     User.unscoped.where(id: ids).delete_all
   end

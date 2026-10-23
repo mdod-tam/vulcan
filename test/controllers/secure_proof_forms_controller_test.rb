@@ -18,7 +18,7 @@ class SecureProofFormsControllerTest < ActionDispatch::IntegrationTest
     assert_response :success
     assert_select 'form[action*=?]', secure_proof_form_path
     assert_select '#file_help', I18n.t('secure_proof_forms.show.file_help', max_size: ProofUploadFormats.max_megabytes(:proof))
-    assert_select 'input[type=file][name=file][aria-describedby=file_help]'
+    assert_select 'input[type=file][name=file][aria-describedby=?]', 'file_help file_status'
     assert_select 'button[type=submit]', I18n.t('secure_proof_forms.show.submit')
   end
 
@@ -125,8 +125,9 @@ class SecureProofFormsControllerTest < ActionDispatch::IntegrationTest
     result = BaseService::Result.new(success: true, message: 'ok', data: {})
     Applications::SubmitProofResubmission.any_instance.stubs(:call).returns(result)
     file = fixture_file_upload(Rails.root.join('test/fixtures/files/income_proof.pdf'), 'application/pdf')
+    reference = scanned_upload(file, secure_form: @secure_request_form, purpose: :proof, slot: 'income_proof').signed_id
 
-    patch secure_proof_form_path, params: { token: @raw_token, file: file }
+    patch secure_proof_form_path, params: { token: @raw_token, file: reference }
 
     assert_redirected_to secure_proof_form_success_path(locale: :en)
   end
@@ -138,8 +139,9 @@ class SecureProofFormsControllerTest < ActionDispatch::IntegrationTest
       BaseService::Result.new(success: true, message: 'ok', data: {})
     )
     file = fixture_file_upload(Rails.root.join('test/fixtures/files/income_proof.pdf'), 'application/pdf')
+    reference = scanned_upload(file, secure_form: @secure_request_form, purpose: :proof, slot: 'income_proof').signed_id
 
-    patch secure_proof_form_path, params: { token: @raw_token, file: file }
+    patch secure_proof_form_path, params: { token: @raw_token, file: reference }
 
     assert_redirected_to secure_proof_form_success_path(locale: :es)
     get secure_proof_form_success_path(locale: :es)
@@ -156,7 +158,7 @@ class SecureProofFormsControllerTest < ActionDispatch::IntegrationTest
     )
     assert_select '#error-summary-title', I18n.t('secure_proof_forms.show.error_summary')
     assert_select '#file_error', I18n.t('documents.refused.missing')
-    assert_select 'input[type=file][name=file][aria-describedby=?]', 'file_help file_error'
+    assert_select 'input[type=file][name=file][aria-describedby=?]', 'file_help file_error file_status'
     assert_select 'input[type=hidden][name=token][value=?]', @raw_token
   end
 

@@ -118,11 +118,37 @@ module VendorPortal
         assert_select 'table tbody tr', count: 0
         assert_equal 0, controller.instance_variable_get(:@total_amount)
 
-        get vendor_portal_transactions_url(**filters, format: :csv)
+        assert_no_difference -> { Event.where(action: 'export_generated', user: @vendor_user).count } do
+          get vendor_portal_transactions_url(**filters, format: :csv)
+        end
         assert_response :unprocessable_content
         assert_match error, response.body
         assert_no_match purchase.reference_number, response.body
       end
+    end
+
+    test 'download escapes every text column while keeping vendor scope and numeric amounts' do
+      reference = "\r=SUM(1,2)"
+      constituent = create(:constituent, first_name: '＠Unsafe', last_name: 'Person')
+      application = create(:application, user: constituent)
+      voucher = create(:voucher, :active, application: application, code: '＋CODE')
+      create(:voucher_transaction, vendor: @vendor_user, voucher: voucher, reference_number: reference, amount: 42.25)
+      create(:voucher_transaction, vendor: create(:vendor_user))
+
+      assert_difference -> { Event.where(action: 'export_generated', user: @vendor_user).count } do
+        get vendor_portal_transactions_url(format: :csv)
+      end
+
+      assert_response :success
+      rows = CSV.parse(response.body, headers: true)
+      assert_equal ['Date', 'Voucher Code', 'Amount', 'Status', 'Reference Number', 'Constituent Name', 'Invoice Number', 'Billing'], rows.headers
+      assert_equal 1, rows.size
+      assert_equal "'#{reference}", rows.sole['Reference Number']
+      assert_equal "'#{voucher.code}", rows.sole['Voucher Code']
+      assert_equal "'#{constituent.full_name}", rows.sole['Constituent Name']
+      assert_equal BigDecimal('42.25'), rows.sole['Amount'].to_d
+      event = Event.where(action: 'export_generated', user: @vendor_user).order(:id).last
+      assert_equal({ 'export_type' => 'vendor_transactions', 'row_count' => 1, '__service_generated' => true }, event.metadata)
     end
 
     test 'should not show transactions belonging to another vendor' do

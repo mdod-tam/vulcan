@@ -51,8 +51,6 @@ The explicit command above provisions `system@mdmat.org` for audit attribution a
 
 The first release that includes the email delivery controls needs sending stopped during the deploy; follow [Releasing the delivery controls](email_system.md#releasing-the-delivery-controls).
 
-An upgrade that applies the evaluator `report_submitted` column removal also requires the [maintenance cutover below](#evaluator-workflow-column-removal) before pushing or promoting the release.
-
 The checked-in [Procfile](../../Procfile) defines web, worker, and release processes. Start with a Heroku app and attached Postgres database; [Heroku's Rails guide](https://devcenter.heroku.com/articles/getting-started-with-rails8#create-a-heroku-app) covers provisioning. Set the [production configuration](../../README.md#production-essentials), including storage and integration credentials, then deploy the intended checkout:
 
 ```bash
@@ -84,7 +82,7 @@ heroku ps --app "$MAT_APP"
 
 With a separate worker, leave `SOLID_QUEUE_IN_PUMA` unset. To run jobs inside Puma instead, set it and omit the separate worker; the Puma config tests variable presence, so setting it to the string `false` still enables the plugin.
 
-Before opening the environment to users, verify staff sign-in and MFA, a [direct upload and download](active_storage_s3_setup.md#verify-upload-and-retrieval), and a [queued email delivery](email_system.md#postmark). If using DocuSeal, complete its [go-live check](../development/docuseal_integration_guide.md#go-live-check).
+Before opening the environment to users, verify staff sign-in and MFA, an [upload, antivirus scan and download](active_storage_s3_setup.md#verify-upload-and-retrieval), and a [queued email delivery](email_system.md#postmark). If using DocuSeal, complete its [go-live check](../development/docuseal_integration_guide.md#go-live-check).
 
 For ongoing operations, keep `MAT_APP` set to the intended app:
 
@@ -99,20 +97,3 @@ For ongoing operations, keep `MAT_APP` set to the intended app:
 | Capture a database backup | `heroku pg:backups:capture DATABASE_URL --app "$MAT_APP"` |
 
 Capture a backup before data repairs or a deliberate template replacement. The [backup and recovery guide](backup_and_recovery.md) covers scheduling, retention, restoration on Heroku, and which secrets/settings must match. A database dump excludes uploaded files and encryption keys. Restoring an existing environment does not require initialization seeds; rerunning them can replace recovered policies and edited templates.
-
-### Evaluator workflow column removal
-
-For an existing environment that has not applied [20261012120200_remove_report_submitted_from_evaluations](../../db/migrate/20261012120200_remove_report_submitted_from_evaluations.rb), deploy with a maintenance cutover. The old release writes this column during evaluator assignment. Rails also caches column metadata and this app inserts column defaults, so removing explicit references alone does not make a later rolling drop safe. This release removes the dead code and column together; it requires stopping the old processes before the migration runs.
-
-1. Record the current process formation and queue settings, block traffic, and stop old web, worker, embedded Puma queue, additional process and writer one-off processes. Pause independent Scheduler tasks and external writers. Use the existing [stop and resume procedure](vendor_tax_records_cutover.md#pause-and-resume-solid-queue-on-heroku). Verify that the old processes have stopped before pushing or promoting this release. [Maintenance mode](https://devcenter.heroku.com/articles/maintenance-mode) blocks web routing but does not stop these processes.
-2. Keep writers stopped while deploying the candidate. The [release phase](https://devcenter.heroku.com/articles/release-phase) runs the checked-in migration before the new application formation starts. Check the release output and `bin/rails db:migrate:status` from the candidate release. Do not rerun initialization seeds during this upgrade.
-3. Verify the schema from a fresh candidate process before restoring workers or traffic:
-
-   ```sh
-   heroku run --exit-code --app "$MAT_APP" -- bin/rails runner 'abort "Evaluator column removal is pending" if Evaluation.column_names.include?("report_submitted")'
-   ```
-
-   Start only processes from the candidate release, with fresh schema metadata. Restore the recorded queue configuration and process formation using the linked resume procedure; restore public traffic last.
-4. If the migration fails, keep access and writers stopped until the schema and selected application release are compatible. Once the column is removed, a code-only rollback to the old writer is unsafe. Restore the compatible schema while processes are stopped, or roll forward to a compatible release, before resuming them.
-
-This cutover is required for the first application of the column drop to an existing environment. Later deployments that do not perform this removal do not inherit this requirement.

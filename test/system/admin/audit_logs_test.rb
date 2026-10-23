@@ -21,8 +21,8 @@ module Admin
 
       @original_application_host = ENV.fetch('APPLICATION_HOST', nil)
 
-      attach_lightweight_proof(@application, :income_proof)
-      attach_lightweight_proof(@application, :residency_proof)
+      attach_cleared_proof(@application, :income_proof)
+      attach_cleared_proof(@application, :residency_proof)
 
       @application.reload
 

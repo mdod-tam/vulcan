@@ -13,7 +13,8 @@ class ConstituentProofsSubmissionTest < ActionDispatch::IntegrationTest
     # The paper trait rejects proofs with no attachment.
     @application = create(:application, :paper_rejected_proofs, user: @user)
 
-    @valid_pdf = fixture_file_upload('test/fixtures/files/medical_certification_valid.pdf', 'application/pdf')
+    @valid_pdf = scanned_upload(fixture_file_upload('test/fixtures/files/medical_certification_valid.pdf', 'application/pdf'),
+                                user: @user, purpose: :proof, slot: 'income_proof').signed_id
 
     sign_in_for_integration_test(@user)
 
@@ -114,19 +115,19 @@ class ConstituentProofsSubmissionTest < ActionDispatch::IntegrationTest
 
   test 'can access dependent application for proof submission' do
     dependent = create(:constituent, :with_address_and_phone)
-    
+
     create(:guardian_relationship, guardian_user: @user, dependent_user: dependent)
 
     dependent_application = create(:application, :paper_rejected_proofs, user: dependent)
-  
+
     assert_difference 'Event.count', 2 do
       post "/constituent_portal/applications/#{dependent_application.id}/proofs/resubmit",
            params: { proof_type: 'income', income_proof: @valid_pdf }
     end
-  
+
     assert_redirected_to constituent_portal_application_path(dependent_application)
     assert_equal 'Proof submitted successfully', flash[:notice]
-  
+
     dependent_application.reload
     assert dependent_application.income_proof.attached?
     assert_equal 'not_reviewed', dependent_application.income_proof_status
@@ -137,6 +138,7 @@ class ConstituentProofsSubmissionTest < ActionDispatch::IntegrationTest
 
     assert_response :success
     assert_includes response.body, "or call #{ProgramContact.support_phone}."
+    assert_select '[data-document-upload-scans-url-value=?]', document_scans_path
   end
 
   test 'an application the constituent cannot reach redirects to the dashboard' do
@@ -170,9 +172,8 @@ class ConstituentProofsSubmissionTest < ActionDispatch::IntegrationTest
   end
 
   test 'a refused upload keeps an earlier usable upload for the next attempt' do
-    usable = ActiveStorage::Blob.create_and_upload!(
-      io: file_fixture('income_proof.pdf').open, filename: 'income_proof.pdf', content_type: 'application/pdf'
-    )
+    usable = scanned_upload(fixture_file_upload('income_proof.pdf', 'application/pdf'),
+                            user: @user, purpose: :proof, slot: 'income_proof')
 
     post "/constituent_portal/applications/#{@application.id}/proofs/resubmit",
          params: { proof_type: 'income', income_proof: fixture_file_upload('invalid.exe', 'application/octet-stream'),

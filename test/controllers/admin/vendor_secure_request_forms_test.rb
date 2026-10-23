@@ -58,7 +58,8 @@ module Admin
 
       assert_response :success
       assert_includes response.body, "#{form.recipient_email.first}***@#{form.recipient_email.split('@', 2).last}"
-      assert_select "form[action='#{admin_vendor_vendor_secure_request_form_revocation_path(@vendor, form)}'][data-turbo='false']"
+      assert_select "form[action='#{admin_vendor_vendor_secure_request_form_revocation_path(@vendor, form)}'][method='post'][data-turbo-confirm=?]:not([data-turbo='false']):not([onsubmit])",
+                    I18n.t('admin.vendors.vendor_secure_request_forms.table.revoke_confirm')
     end
 
     test 'show page offers a new secure W9 upload link after revocation' do
@@ -88,6 +89,7 @@ module Admin
       post admin_vendor_vendor_secure_request_form_revocation_path(@vendor, form)
 
       assert_redirected_to admin_vendor_path(@vendor)
+      assert_response :see_other
       assert_predicate form.reload, :revoked?
     end
 
@@ -167,6 +169,7 @@ module Admin
       post admin_vendor_vendor_secure_request_form_revocation_path(@vendor, form)
 
       assert_redirected_to admin_vendor_path(@vendor)
+      assert_response :see_other
       assert_equal I18n.t('admin.vendors.vendor_secure_request_form_revocations.create.not_active'), flash[:alert]
       assert_predicate form.reload, :submitted?
     end

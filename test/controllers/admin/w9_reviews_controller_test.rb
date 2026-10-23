@@ -12,11 +12,7 @@ module Admin
     test 'should get new with attached w9' do
       vendor = create(:vendor, type: 'Vendor')
 
-      vendor.w9_form.attach(
-        io: Rails.root.join('test/fixtures/files/sample_w9.pdf').open,
-        filename: 'w9.pdf',
-        content_type: 'application/pdf'
-      )
+      attach_w9(vendor)
 
       vendor.update!(w9_status: :pending_review)
       assert vendor.w9_form.attached?, 'W9 form should be attached'
@@ -29,11 +25,7 @@ module Admin
 
     test 'should create approved w9 review' do
       vendor = create(:vendor, type: 'Vendor')
-      vendor.w9_form.attach(
-        io: Rails.root.join('test/fixtures/files/test_proof.pdf').open,
-        filename: 'w9_form.pdf',
-        content_type: 'application/pdf'
-      )
+      attach_w9(vendor, filename: 'w9_form.pdf')
       vendor.update!(w9_status: :pending_review)
       assert vendor.w9_form.attached?
 
@@ -62,11 +54,7 @@ module Admin
     test 'should create rejected w9 review' do
       vendor = create(:vendor, type: 'Vendor')
 
-      vendor.w9_form.attach(
-        io: Rails.root.join('test/fixtures/files/sample_w9.pdf').open,
-        filename: 'w9.pdf',
-        content_type: 'application/pdf'
-      )
+      attach_w9(vendor)
 
       vendor.update!(w9_status: :pending_review)
       assert vendor.w9_form.attached?
@@ -103,11 +91,7 @@ module Admin
     test 'should not create rejected w9 review without reason' do
       vendor = create(:vendor, type: 'Vendor')
 
-      vendor.w9_form.attach(
-        io: Rails.root.join('test/fixtures/files/sample_w9.pdf').open,
-        filename: 'w9.pdf',
-        content_type: 'application/pdf'
-      )
+      attach_w9(vendor)
 
       vendor.update!(w9_status: :pending_review)
       assert vendor.w9_form.attached?
@@ -158,11 +142,7 @@ module Admin
       vendor = create(:vendor, type: 'Vendor')
 
       # The show action requires an attached W9.
-      vendor.w9_form.attach(
-        io: Rails.root.join('test/fixtures/files/sample_w9.pdf').open,
-        filename: 'w9.pdf',
-        content_type: 'application/pdf'
-      )
+      attach_w9(vendor)
 
       review = create(:w9_review, vendor: vendor, admin: @admin)
 
@@ -190,7 +170,9 @@ module Admin
       first_notification = create(:notification, recipient: vendor, actor: @admin, notifiable: vendor, action: 'w9_approved',
                                                  metadata: { w9_review_id: first_review.id })
       first_notification.mark_delivery_failed!(StandardError.new('Synthetic first-review delivery failure'))
-      Vendors::ReplaceW9.call(vendor: vendor, file: Rack::Test::UploadedFile.new(file_fixture('sample_w9.pdf'), 'application/pdf'))
+      upload = scanned_upload(Rack::Test::UploadedFile.new(file_fixture('sample_w9.pdf'), 'application/pdf'),
+                              user: vendor, purpose: :w9, slot: 'w9_form')
+      Vendors::ReplaceW9.call(vendor: vendor, file: upload)
       second_review = create(:w9_review, vendor: vendor, admin: @admin)
       second_notification = create(:notification, recipient: vendor, actor: @admin, notifiable: vendor, action: 'w9_approved',
                                                   metadata: { w9_review_id: second_review.id })
@@ -225,11 +207,7 @@ module Admin
     test 'should require admin authentication' do
       vendor = create(:vendor, type: 'Vendor')
 
-      vendor.w9_form.attach(
-        io: Rails.root.join('test/fixtures/files/sample_w9.pdf').open,
-        filename: 'w9.pdf',
-        content_type: 'application/pdf'
-      )
+      attach_w9(vendor)
 
       cookies.delete(:session_token)
       delete sign_out_path
@@ -251,11 +229,7 @@ module Admin
     test 'should redirect if review not found with specific message' do
       vendor = create(:vendor, type: 'Vendor')
 
-      vendor.w9_form.attach(
-        io: Rails.root.join('test/fixtures/files/sample_w9.pdf').open,
-        filename: 'w9.pdf',
-        content_type: 'application/pdf'
-      )
+      attach_w9(vendor)
 
       get admin_vendor_w9_review_path(vendor, 999_999)
       assert_redirected_to admin_vendor_path(vendor)
@@ -271,11 +245,7 @@ module Admin
     test 'should not allow non-admin to review w9' do
       vendor = create(:vendor, type: 'Vendor')
 
-      vendor.w9_form.attach(
-        io: Rails.root.join('test/fixtures/files/sample_w9.pdf').open,
-        filename: 'w9.pdf',
-        content_type: 'application/pdf'
-      )
+      attach_w9(vendor)
 
       non_admin = create(:vendor, type: 'Vendor')
 
@@ -285,6 +255,13 @@ module Admin
       get new_admin_vendor_w9_review_path(vendor)
       assert_redirected_to root_path
       assert_equal 'You are not authorized to perform this action', flash[:alert]
+    end
+
+    private
+
+    def attach_w9(vendor, filename: 'w9.pdf')
+      vendor.w9_form.attach(io: file_fixture('sample_w9.pdf').open, filename: filename, content_type: 'application/pdf')
+      mark_document_clean!(vendor.w9_form.blob, user: vendor, purpose: :w9, slot: 'w9_form')
     end
   end
 end

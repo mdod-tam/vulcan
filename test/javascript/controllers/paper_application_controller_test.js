@@ -385,6 +385,6 @@ describe("PaperApplicationController", () => {
     directController._uploading = true
     directController._applySubmitGating()
     expect(submitButton.disabled).toBe(true)
-    expect(status.textContent).toBe("Uploading documents…")
+    expect(status.textContent).toBe("Wait for the document virus checks before submitting.")
   })
 })

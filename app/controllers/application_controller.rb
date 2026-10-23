@@ -189,6 +189,9 @@ class ApplicationController < ActionController::Base
     end
     return unless session_record
 
+    return_path = session[:return_to]
+    reset_session
+    session[:return_to] = return_path if return_path.present?
     cookies.signed[:session_token] = _session_cookie_options(session_record.session_token)
     session_record
   end
@@ -197,9 +200,8 @@ class ApplicationController < ActionController::Base
     {
       value: token,
       httponly: true,
-      secure: Rails.env.production?
-      # Consider an explicit SameSite attribute for the session cookie:
-      # same_site: :lax # or :strict depending on your needs
+      secure: Rails.env.production?,
+      same_site: :lax
     }
   end
 

@@ -1,12 +1,10 @@
 import { Controller } from "@hotwired/stimulus"
 import { setVisible } from "../../utils/visibility"
 
-const DECISION_CONTROLS = 'input[type="radio"], [data-document-proof-handler-target="noneButton"]'
-
 /**
  * Controls acceptance, later review, or rejection of one document.
  * The document-upload control owns the pending file.
- * This controller clears that file on rejection and locks decisions during upload.
+ * This controller clears that file on rejection.
  */
 class DocumentProofHandlerController extends Controller {
   static targets = [
@@ -25,13 +23,6 @@ class DocumentProofHandlerController extends Controller {
   ]
 
   connect() {
-    this.uploadForm = this.element.closest('form');
-    this._lockDecisions = this.lockDecisionControls.bind(this);
-    this._unlockDecisions = this.unlockDecisionControls.bind(this);
-    this._blockLockedDecision = this.blockLockedDecision.bind(this);
-    this.element.addEventListener('direct-upload:initialize', this._lockDecisions);
-    this.element.addEventListener('click', this._blockLockedDecision, true);
-    this.uploadForm?.addEventListener('direct-uploads:end', this._unlockDecisions);
     this.restoreStateFromFormData();
     
     this.updateVisibility();
@@ -40,12 +31,6 @@ class DocumentProofHandlerController extends Controller {
       this.previewRejectionReason();
       this.updateReasonInputMode();
     }
-  }
-
-  disconnect() {
-    this.element.removeEventListener('direct-upload:initialize', this._lockDecisions);
-    this.element.removeEventListener('click', this._blockLockedDecision, true);
-    this.uploadForm?.removeEventListener('direct-uploads:end', this._unlockDecisions);
   }
 
   /**
@@ -71,28 +56,6 @@ class DocumentProofHandlerController extends Controller {
    */
   toggleProofAction(event) {
     this.updateVisibility();
-  }
-
-  // Decision controls remain enabled so Rails includes them in the submission.
-  // Rails submits before direct-uploads:end unlocks decisions.
-  lockDecisionControls() {
-    this.decisionsLocked = true;
-    this.element.querySelectorAll(DECISION_CONTROLS)
-      .forEach(control => control.setAttribute('aria-disabled', 'true'));
-  }
-
-  unlockDecisionControls() {
-    if (!this.decisionsLocked) return;
-    this.decisionsLocked = false;
-    this.element.querySelectorAll(DECISION_CONTROLS)
-      .forEach(control => control.removeAttribute('aria-disabled'));
-  }
-
-  // A canceled activation click preserves the current radio choice.
-  blockLockedDecision(event) {
-    if (!this.decisionsLocked || !event.target.closest(DECISION_CONTROLS)) return;
-    event.preventDefault();
-    event.stopImmediatePropagation();
   }
 
   /**

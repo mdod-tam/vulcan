@@ -18,15 +18,16 @@ class ProofAttachmentServiceTest < ActiveSupport::TestCase
                           annual_income: 15_000)
 
     pdf_file_path = Rails.root.join('test/fixtures/files/income_proof.pdf')
-    @test_file_upload = ActionDispatch::Http::UploadedFile.new(
+    @raw_file_upload = ActionDispatch::Http::UploadedFile.new(
       tempfile: File.open(pdf_file_path),
       filename: 'income_proof.pdf',
       type: 'application/pdf'
     )
+    @test_file_upload = scanned_upload(@raw_file_upload, user: @admin)
   end
 
   teardown do
-    @test_file_upload.tempfile.close if @test_file_upload&.tempfile.respond_to?(:close)
+    @raw_file_upload.tempfile.close if @raw_file_upload&.tempfile.respond_to?(:close)
   end
 
   test 'attach_proof successfully attaches a proof and updates status' do
@@ -70,7 +71,7 @@ class ProofAttachmentServiceTest < ActiveSupport::TestCase
     result = ProofAttachmentService.attach_proof({
                                                    application: @application,
                                                    proof_type: 'income',
-                                                   blob_or_file: @test_file_upload,
+                                                   blob_or_file: scanned_upload(@raw_file_upload, user: @constituent),
                                                    status: :not_reviewed,
                                                    admin: nil,
                                                    submission_method: :secure_form,
@@ -252,8 +253,8 @@ class ProofAttachmentServiceTest < ActiveSupport::TestCase
   end
 
   def stored_pdf_blob(size)
-    ActiveStorage::Blob.create_and_upload!(io: StringIO.new(pdf_bytes(size)), filename: 'proof.pdf',
-                                           content_type: 'application/pdf')
+    blob = ActiveStorage::Blob.create_and_upload!(io: StringIO.new(pdf_bytes(size)), filename: 'proof.pdf', content_type: 'application/pdf')
+    mark_document_clean!(blob, user: @constituent)
   end
 
   def pdf_upload(size)

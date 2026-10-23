@@ -19,25 +19,37 @@
         <%= form_tag admin_applications_path, method: :get, class: "flex flex-wrap items-center gap-4", data: { turbo_frame: "applications_list", turbo_action: "advance", controller: "autosubmit" } do %>
           <div class="flex items-center gap-2">
             <%= label_tag :status, "Status:", class: "text-sm font-medium text-gray-700" %>
-            <%= select_tag :status, options_for_select([
-              ["All", ""],
-              ["Active", "active"],
-              ["Draft", "draft"],
-              ["In Progress", "in_progress"],
-              ["Approved", "approved"],
-              ["Rejected", "rejected"]
-            ], params[:status]), class: "rounded-md border-gray-300 shadow-sm focus:border-indigo-300 focus:ring focus:ring-indigo-200 focus:ring-opacity-50", onchange: "this.form.requestSubmit()" %>
+            <%= select_tag :status,
+                           options_for_select(
+                             [
+                               ['All', ''],
+                               ['Active', 'active'],
+                               ['Draft', 'draft'],
+                               ['In Progress', 'in_progress'],
+                               ['Approved', 'approved'],
+                               ['Rejected', 'rejected']
+                             ],
+                             params[:status]
+                           ),
+                           class: 'rounded-md border-gray-300 shadow-sm focus:border-indigo-300 focus:ring focus:ring-indigo-200 focus:ring-opacity-50',
+                           data: { action: 'change->autosubmit#submit' } %>
           </div>
           
           <div class="flex items-center gap-2">
             <%= label_tag :date_range, "Date Range:", class: "text-sm font-medium text-gray-700" %>
-            <%= select_tag :date_range, options_for_select([
-              ["All Time", ""],
-              ["Current FY", "current_fy"],
-              ["Previous FY", "previous_fy"],
-              ["Last 30 Days", "last_30"],
-              ["Last 90 Days", "last_90"]
-            ], params[:date_range]), class: "rounded-md border-gray-300 shadow-sm focus:border-indigo-300 focus:ring focus:ring-indigo-200 focus:ring-opacity-50", onchange: "this.form.requestSubmit()" %>
+            <%= select_tag :date_range,
+                           options_for_select(
+                             [
+                               ['All Time', ''],
+                               ['Current FY', 'current_fy'],
+                               ['Previous FY', 'previous_fy'],
+                               ['Last 30 Days', 'last_30'],
+                               ['Last 90 Days', 'last_90']
+                             ],
+                             params[:date_range]
+                           ),
+                           class: 'rounded-md border-gray-300 shadow-sm focus:border-indigo-300 focus:ring focus:ring-indigo-200 focus:ring-opacity-50',
+                           data: { action: 'change->autosubmit#submit' } %>
           </div>
           
           <div class="flex items-center gap-2">
@@ -65,7 +77,9 @@
           </div>
 
           <div class="flex items-center gap-2">
-            <%= check_box_tag :for_minors, "true", params[:for_minors].present?, class: "h-4 w-4 text-indigo-600 focus:ring-indigo-500 border-gray-300 rounded", onchange: "this.form.requestSubmit()" %>
+            <%= check_box_tag :for_minors, 'true', params[:for_minors].present?,
+                              class: 'h-4 w-4 text-indigo-600 focus:ring-indigo-500 border-gray-300 rounded',
+                              data: { action: 'change->autosubmit#submit' } %>
             <%= label_tag :for_minors, "Show only dependent applications", class: "text-sm font-medium text-gray-700" %>
           </div>
           <%= submit_tag "Search", class: "sr-only" %>

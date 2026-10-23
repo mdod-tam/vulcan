@@ -39,4 +39,27 @@ class VoucherHelperTest < ActionView::TestCase
       assert_includes badge, color, status
     end
   end
+
+  test 'voucher usage exposes the exact percentage without inline styles' do
+    voucher = Voucher.new(initial_value: 1000, remaining_value: 630, status: :active)
+    progress = Nokogiri::HTML.fragment(voucher_usage_bar(voucher)).at_css('progress')
+
+    assert_equal '37', progress['value']
+    assert_equal '100', progress['max']
+    assert_equal 'Voucher value used', progress['aria-label']
+    assert_equal '37%', progress.text
+    assert_nil progress['style']
+  end
+
+  test 'voucher usage remains determinate for redeemed and zero value vouchers' do
+    [
+      [Voucher.new(initial_value: 500, remaining_value: 0, status: :redeemed), '100'],
+      [Voucher.new(initial_value: 0, remaining_value: 0, status: :active), '0']
+    ].each do |voucher, percentage|
+      progress = Nokogiri::HTML.fragment(voucher_usage_bar(voucher)).at_css('progress')
+
+      assert_equal percentage, progress['value']
+      assert_equal '100', progress['max']
+    end
+  end
 end

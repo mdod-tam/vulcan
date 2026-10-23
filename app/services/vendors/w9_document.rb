@@ -7,7 +7,7 @@ module Vendors
 
     def self.protected?(blob)
       return false unless blob
-      return true if blob.metadata[OWNER_KEY].present? || blob.metadata['w9_cutover_quarantined']
+      return true if blob.metadata[OWNER_KEY].present?
       return true if blob.attachments.exists?(name: %w[w9_form w9_archive], record_type: User.polymorphic_name)
       return true if W9Review.exists?(reviewed_blob_id: blob.id)
 
@@ -16,16 +16,6 @@ module Vendors
         (parent.is_a?(ActiveStorage::Blob) && protected?(parent)) ||
           (parent.is_a?(ActiveStorage::VariantRecord) && protected?(parent.blob))
       end
-    end
-
-    def self.protected_key?(key)
-      blob = ActiveStorage::Blob.find_by(key: key) || ActiveStorage::Blob.where('metadata::jsonb ->> ? = ?', 'w9_cutover_old_key', key).first
-      return protected?(blob) if blob
-      return false unless key.start_with?('variants/')
-
-      parent_key = key.split('/')[1]
-      parent = ActiveStorage::Blob.find_by(key: parent_key) || ActiveStorage::Blob.where('metadata::jsonb ->> ? = ?', 'w9_cutover_old_key', parent_key).first
-      protected?(parent)
     end
 
     def self.protect!(blob, vendor:)
@@ -64,18 +54,18 @@ module Vendors
       blob if !blob.attachments.exists? || current&.id == blob.id
     end
 
-    def self.resolve!(input, vendor:, signed_ids: true, min_bytes: nil)
+    def self.resolve!(input, vendor:, signed_ids: true, min_bytes: nil, scan_owner: vendor)
       if input.is_a?(String)
         raise UploadedDocument::Refused.new(:unavailable, purpose: :w9) unless signed_ids
 
-        input = resolve_reference(input, vendor: vendor) || raise(UploadedDocument::Refused.new(:unavailable, purpose: :w9))
+        input = resolve_reference(input, vendor: vendor) || ActiveStorage::Blob.find_signed(input) || raise(UploadedDocument::Refused.new(:unavailable, purpose: :w9))
       end
       # A reviewed current file also occupies the vendor's archive; retrying it is not a replacement.
       current_owned = input.is_a?(ActiveStorage::Blob) && input.metadata[OWNER_KEY].to_i == vendor.id && vendor.w9_form.blob&.id == input.id
       blob = UploadedDocument.resolve!(
         input,
         record: vendor, name: 'w9_form', signed_ids: false, min_bytes: min_bytes,
-        additional_attachment_names: current_owned ? ['w9_archive'] : []
+        additional_attachment_names: current_owned ? ['w9_archive'] : [], scan_owner: scan_owner
       )
       protect!(blob, vendor: vendor)
     end

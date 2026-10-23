@@ -12,10 +12,11 @@ module Admin
 
       @application = create(:application, :in_progress, skip_proofs: true, user: create(:constituent, email: generate(:email)))
       @application.income_proof.attach(
-        io: StringIO.new('income proof'),
+        io: file_fixture('income_proof.pdf').open,
         filename: 'income-proof.pdf',
         content_type: 'application/pdf'
       )
+      mark_document_clean!(@application.income_proof.blob, user: @application.user, slot: 'income_proof')
     end
 
     test 'create routes through proof review service behavior and updates proof status' do
@@ -162,8 +163,11 @@ module Admin
       @user = create(:constituent, email: generate(:email))
       sign_in_for_integration_test(@admin)
       @application = create(:application, :in_progress, :income_not_required, user: @user)
-      @application.residency_proof.attach(io: StringIO.new('residency proof'), filename: 'residency.pdf', content_type: 'application/pdf')
-      @application.id_proof.attach(io: StringIO.new('ID proof'), filename: 'id.pdf', content_type: 'application/pdf')
+      @application.residency_proof.attach(io: file_fixture('residency_proof.pdf').open, filename: 'residency.pdf', content_type: 'application/pdf')
+      @application.id_proof.attach(io: file_fixture('medical_certification_valid.pdf').open, filename: 'id.pdf', content_type: 'application/pdf')
+      %w[residency_proof id_proof].each do |slot|
+        mark_document_clean!(@application.public_send(slot).blob, user: @user, slot: slot)
+      end
       @application.update!(id_proof_status: :approved, medical_certification_status: :approved)
       ProofReview.any_instance.stubs(:handle_post_review_actions).raises(StandardError, 'after commit failed')
     end

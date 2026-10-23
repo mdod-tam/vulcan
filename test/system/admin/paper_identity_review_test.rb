@@ -58,18 +58,9 @@ module Admin
       capture('guardian-no-contact-selected')
     end
 
-    test 'native multipart submission retains all four uploads through identity review and retry' do
-      create(:constituent, first_name: 'Multipart', last_name: 'Applicant', date_of_birth: Date.new(1980, 1, 15))
-      start_self('Multipart', 'Applicant')
-      # Native multipart inputs exercise server retention without direct uploads.
-      page.execute_script(<<~JS, PROOFS)
-        const [proofs] = arguments;
-        proofs.forEach(key => {
-          const input = document.getElementById(key);
-          input.removeAttribute("data-direct-upload-url");
-          input.name = key;
-        });
-      JS
+    test 'cleared document references remain available through identity review and retry' do
+      create(:constituent, first_name: 'Cleared', last_name: 'Applicant', date_of_birth: Date.new(1980, 1, 15))
+      start_self('Cleared', 'Applicant')
       complete_application
       assert_no_difference ['User.count', 'Application.count', 'DuplicateReviewCase.count', 'Event.count'] do
         click_button 'Submit Paper Application'
@@ -77,15 +68,15 @@ module Admin
       end
       original = uploaded_ids
       assert_equal 4, original.size
-      capture('multipart-review-retains-uploads')
+      capture('cleared-review-retains-uploads')
       fill_in 'identity_rationale', with: 'Paper documents identify a different person.'
       assert_difference ['User.count', 'Application.count', 'DuplicateReviewCase.count'], 1 do
         click_button 'These are different people — create a new person'
         assert_selector 'h1', text: 'Application #', wait: 20
       end
       application = Application.order(:id).last
-      PROOFS.each { |key| assert_equal original[key], application.public_send(key).blob.signed_id }
-      capture('multipart-retry-application')
+      PROOFS.each { |key| assert_equal original[key], application.public_send(key).blob.id }
+      capture('cleared-retry-application')
     end
 
     private
@@ -113,12 +104,12 @@ module Admin
       assert_equal original, uploaded_ids
       capture('stale-review-retains-uploads')
 
-      attach_file 'income_proof', Rails.root.join('test/fixtures/files/residency_proof.pdf')
+      attach_cleared_document 'income_proof', Rails.root.join('test/fixtures/files/residency_proof.pdf')
       within find_by_id('id_proof').ancestor('[data-controller="document-proof-handler"]') do
         click_button 'Remove document'
       end
       assert_no_selector 'input[type=hidden][name=id_proof_signed_id]', visible: :all
-      attach_file 'id_proof', Rails.root.join('test/fixtures/files/residency_proof.pdf')
+      attach_cleared_document 'id_proof', Rails.root.join('test/fixtures/files/residency_proof.pdf')
       fill_in 'identity_rationale', with: 'Paper documents identify a different person.'
       assert_difference ['User.count', 'Application.count', 'DuplicateReviewCase.count'], 1 do
         click_button 'These are different people — create a new person'
@@ -126,7 +117,7 @@ module Admin
       end
       application = Application.order(:id).last
       PROOFS.each { |key| assert application.public_send(key).attached? }
-      assert_not_equal original['income_proof'], application.income_proof.blob.signed_id
+      assert_not_equal original['income_proof'], application.income_proof.blob.id
       review_case = DuplicateReviewCase.order(:id).last
       assert review_case.resolved_ignored?
       capture('keep-separate-application')
@@ -295,9 +286,12 @@ module Admin
 
     def uploaded_ids
       PROOFS.to_h do |key|
-        assert_text(/Uploaded:/)
         assert_equal '', find_by_id(key).value
-        [key, find("input[type=hidden][name='#{key}_signed_id']", visible: :all).value]
+        within find_by_id(key).ancestor('[data-controller="document-upload"]') do
+          assert_text(/Ready:/)
+          reference = find("input[type=hidden][name='#{key}'], input[type=hidden][name='#{key}_signed_id']", visible: :all).value
+          [key, ActiveStorage::Blob.find_signed!(reference).id]
+        end
       end
     end
 

@@ -69,16 +69,19 @@ module Admin
       assert(@letters.all? { |item| item.reload.pending? })
     end
 
-    test 'signed storage URLs cannot bypass release but ordinary PDFs remain downloadable' do
+    test 'signed storage URLs cannot bypass release and unattached PDFs are not public' do
       blob = @letters.first.pdf_letter.blob
       get rails_blob_path(blob, only_path: true)
       assert_response :not_found
       get rails_storage_proxy_path(blob, only_path: true)
       assert_response :not_found
+      @application.income_proof.attach(blob)
+      get rails_blob_path(blob, only_path: true)
+      assert_response :not_found
+      assert_nil @letters.first.reload.released_at
       reference = ActiveStorage::Blob.create_and_upload!(io: StringIO.new('%PDF blank'), filename: 'blank.pdf', content_type: 'application/pdf')
       get rails_blob_path(reference, only_path: true)
-      assert_response :success
-      assert_equal '%PDF blank', response.body
+      assert_response :not_found
     end
   end
 end

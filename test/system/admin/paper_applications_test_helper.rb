@@ -48,17 +48,17 @@ module PaperApplicationsTestHelper
   end
 
   def attach_and_accept_proofs
-    attach_file 'medical_certification', Rails.root.join('test/fixtures/files/medical_certification_valid.pdf')
+    attach_cleared_document 'medical_certification', Rails.root.join('test/fixtures/files/medical_certification_valid.pdf')
 
     within_proof_documents_fieldset do
       choose 'accept_income_proof', allow_label_click: true
-      attach_file 'income_proof', Rails.root.join('test/fixtures/files/income_proof.pdf')
+      attach_cleared_document 'income_proof', Rails.root.join('test/fixtures/files/income_proof.pdf')
 
       choose 'accept_residency_proof', allow_label_click: true
-      attach_file 'residency_proof', Rails.root.join('test/fixtures/files/residency_proof.pdf')
+      attach_cleared_document 'residency_proof', Rails.root.join('test/fixtures/files/residency_proof.pdf')
 
       choose 'accept_id_proof', allow_label_click: true
-      attach_file 'id_proof', Rails.root.join('test/fixtures/files/residency_proof.pdf')
+      attach_cleared_document 'id_proof', Rails.root.join('test/fixtures/files/residency_proof.pdf')
     end
   end
 

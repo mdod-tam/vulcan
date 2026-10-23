@@ -20,8 +20,8 @@ module AdminTests
                             self_certify_disability: true,
                             medical_certification_status: 'approved') # Hide certification request controls.
 
-      attach_lightweight_proof(@application, :income_proof)
-      attach_lightweight_proof(@application, :residency_proof)
+      attach_cleared_proof(@application, :income_proof)
+      attach_cleared_proof(@application, :residency_proof)
 
       system_test_sign_in(@admin)
       wait_for_turbo
@@ -217,7 +217,7 @@ module AdminTests
 
     test 'medical certification review uses Turbo Stream like income/residency proofs' do
       @application.update!(medical_certification_status: 'received')
-      attach_lightweight_proof(@application, :medical_certification)
+      attach_cleared_proof(@application, :medical_certification)
 
       visit_admin_application_with_retry(@application, user: @admin)
 

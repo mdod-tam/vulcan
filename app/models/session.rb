@@ -1,6 +1,9 @@
 # frozen_string_literal: true
 
 class Session < ApplicationRecord
+  IDLE_TIMEOUT = 30.minutes
+  ACTIVITY_WRITE_INTERVAL = 1.minute
+
   # associates the session with a user
   belongs_to :user
 
@@ -10,22 +13,39 @@ class Session < ApplicationRecord
   validates :ip_address, presence: true
   validates :user_agent, presence: true
 
-  # Scopes for active and expired sessions
-  scope :active, -> { where('expires_at IS NULL OR expires_at > ?', Time.current) }
-  scope :expired, -> { where('expires_at IS NOT NULL AND expires_at <= ?', Time.current) }
-
   # generate a session token before validation on create
   before_validation :generate_session_token, on: :create
 
   # sets the user agent and IP address before validation on create
   before_validation :set_user_agent_and_ip, on: :create
+  before_validation :set_initial_activity, on: :create
 
   # sets the expiration date on create
   before_create :set_expiry
 
   # Check if the session is expired
-  def expired?
-    expires_at.present? && expires_at <= Time.current
+  def expired?(at: Time.current)
+    expires_at.nil? || expires_at <= at || last_active_at <= at - IDLE_TIMEOUT
+  end
+
+  # Recheck under the row lock before refreshing an older timestamp. A stale request
+  # must not revive an expired session or move activity backwards.
+  def record_activity!
+    at = Time.current
+    return false if expired?(at:)
+    return true if last_active_at > at - ACTIVITY_WRITE_INTERVAL
+
+    with_lock do
+      at = Time.current
+      if expired?(at:)
+        false
+      else
+        update!(last_active_at: at) if last_active_at <= at - ACTIVITY_WRITE_INTERVAL
+        true
+      end
+    end
+  rescue ActiveRecord::RecordNotFound
+    false
   end
 
   # Default session expiration period
@@ -34,6 +54,10 @@ class Session < ApplicationRecord
   end
 
   private
+
+  def set_initial_activity
+    self.last_active_at ||= Time.current
+  end
 
   def generate_session_token
     return if session_token.present?

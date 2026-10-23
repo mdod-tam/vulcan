@@ -40,10 +40,11 @@ module ConstituentPortal
         metadata = %w[autosave_context autosave_revision].index_with { |name| html.at_css("input[name='#{name}']")['value'] }
       end
       sign_in_for_integration_test(@user)
+      upload = scanned_upload(fixture_file_upload('income_proof.pdf', 'application/pdf'), user: @user, slot: 'income_proof')
       patch constituent_portal_application_path(@draft_application), params: metadata.merge(
         save_draft: 'Save Application', application: {
           household_size: '4', annual_income: '40000', hearing_disability: '1',
-          income_proof: fixture_file_upload(Rails.root.join('test/fixtures/files/income_proof.pdf'), 'application/pdf')
+          income_proof: upload.signed_id
         }
       )
       assert_response :redirect

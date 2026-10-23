@@ -59,7 +59,7 @@ module Vendors
 
     # A failed attach rolls back the transaction, so the request is never consumed without a file
     def attach_w9!
-      Vendors::ReplaceW9.call(vendor: vendor, file: file, signed_ids: false,
+      Vendors::ReplaceW9.call(vendor: vendor, file: file, scan_owner: vendor_secure_request_form,
                               min_bytes: ProofUploadFormats::SECURE_FORM_MIN_BYTES)
     end
 

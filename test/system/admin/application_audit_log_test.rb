@@ -35,10 +35,13 @@ module Admin
     end
 
     test 'admin can see proof review history in audit log' do
+      upload = fixture_file_upload(Rails.root.join('test/fixtures/files/income_proof.pdf'), 'application/pdf')
+      proof = scanned_upload(upload, user: @admin, purpose: :proof, slot: 'income_proof')
+      upload.tempfile.close
       result = ProofAttachmentService.attach_proof(
         application: @application,
         proof_type: :income,
-        blob_or_file: fixture_file_upload(Rails.root.join('test/fixtures/files/income_proof.pdf'), 'application/pdf'),
+        blob_or_file: proof,
         status: :not_reviewed,
         admin: @admin,
         submission_method: :paper
@@ -142,7 +145,7 @@ module Admin
       # Vouchers are assigned only to voucher-fulfillment applications, with the voucher feature on.
       FeatureFlag.enable!(:vouchers_enabled)
       @application.update_columns(fulfillment_type: Application.fulfillment_types[:voucher])
-      %i[income_proof residency_proof id_proof].each { |proof| attach_lightweight_proof(@application, proof) }
+      %i[income_proof residency_proof id_proof].each { |proof| attach_cleared_proof(@application, proof) }
       @application.update!(
         status: 'approved',
         income_proof_status: 'approved',

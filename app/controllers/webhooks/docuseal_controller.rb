@@ -14,7 +14,8 @@ module Webhooks
       case event_type
       when 'form.viewed'   then handle_viewed(data)
       when 'form.started'  then handle_started(data)
-      when 'form.completed' then handle_completed(data)
+      when 'form.completed'
+        return head :service_unavailable if handle_completed(data) == false
       when 'form.declined' then handle_declined(data)
       else
         Rails.logger.warn "Unknown DocuSeal event: #{event_type}"
@@ -103,34 +104,23 @@ module Webhooks
     def handle_completed(data)
       app = find_application(data['submission_id'])
       return unless app
-
-      # Idempotency: skip if already processed for this submission (same URL check happens in attach)
       return if app.document_signing_status == 'signed' && app.document_signing_document_url.present?
 
-      outcome = accept_signed_pdf(app, data)
-      app.update!(document_signing_status: :signed, document_signing_signed_at: Time.current)
+      context = completion_context(app, data)
+      return false unless context
 
-      AuditEventService.log(
-        action: 'document_signing_completed',
-        actor: @system_actor,
-        auditable: app,
-        metadata: {
-          document_signing_service: 'docuseal',
-          document_signing_submission_id: data['submission_id'],
-          completed_at: Time.current.iso8601,
-          provider_email: data['email']
-        }.merge(document_signing_completion_metadata(outcome))
-      )
-    end
+      dedup_key = Digest::SHA256.hexdigest(['docuseal', app.id, context['submission_id'], context['document_url']].join(':'))
+      if (existing = DocumentScan.find_by(dedup_key: dedup_key))
+        DocumentScan.stage!(input: nil, purpose: :certification, slot: 'medical_certification',
+                            continuation: 'docuseal', context: context, dedup_key: dedup_key)
+        return existing
+      end
 
-    def document_signing_completion_metadata(outcome)
-      return {} unless outcome&.dig(:placement) == :additional
-
-      {
-        retained_as: 'additional_medical_certification',
-        additional_medical_certification_blob_id: outcome[:additional_blob_id],
-        retention_reason: outcome[:retention_reason]
-      }
+      stage_signed_pdf(app, context, dedup_key) || false
+    rescue StandardError => e
+      Rails.logger.error("Document signing intake failed for App ##{app.id} (#{e.class.name})")
+      log_attachment_failure(app, 'intake_failed', e.class.name)
+      false
     end
 
     def handle_declined(data)
@@ -151,87 +141,55 @@ module Webhooks
       )
     end
 
-    # Downloads the signed PDF and hands it to the certification owner, which
-    # decides between primary and additional. Returns the owner's result, or nil on failure.
-    def accept_signed_pdf(app, data)
-      url = signed_pdf_url(app, data)
-      return if url.blank?
-
-      # Idempotency: this document was already accepted.
-      existing_attachment = additional_signed_pdf_attachment(app, url)
-      if existing_attachment
-        return { success: true, placement: :additional, additional_blob_id: existing_attachment.blob_id,
-                 retention_reason: existing_attachment.blob.metadata['retention_reason'] }
-      end
-      return { success: true, placement: :primary } if app.document_signing_document_url == url
-
-      blob = signed_pdf_blob(app, data, url, filename: "medical_cert_docuseal_#{app.id}.pdf")
-      return unless blob
-
-      result = MedicalCertificationAttachmentService.accept_submission(
-        application: app,
-        blob: blob,
-        submission_method: :docuseal,
-        requested_at: app.document_signing_requested_at,
-        admin: @system_actor,
-        metadata: {
-          document_signing_service: 'docuseal',
-          document_signing_submission_id: app.document_signing_submission_id,
-          document_signing_document_url: url,
-          document_signing_audit_url: data['audit_log_url']
-        }
-      )
-      return unless result[:success]
-
-      persist_document_signing_urls!(app, data, url)
-      result
-    rescue StandardError => e
-      Rails.logger.error "Document signing download/attach failed for App ##{app.id}: #{e.message}"
-      Rails.logger.error "Payload data keys: #{data.keys.join(', ')}" if data.respond_to?(:keys)
-      log_attachment_failure(app, 'exception', e.message)
-      nil
-    end
-
-    def signed_pdf_url(app, data)
+    def completion_context(app, data)
       documents = data['documents'] || []
       url = documents.first && documents.first['url']
-      return url if url.present?
+      if url.blank?
+        log_attachment_failure(app, 'missing_document_url', 'No document URL provided in webhook payload')
+        return nil
+      end
 
-      Rails.logger.warn "DocuSeal webhook: missing document URL. Available keys: #{data.keys.join(', ')}"
-      log_attachment_failure(app, 'missing_document_url', 'No document URL provided in webhook payload')
-      nil
+      app.with_lock do
+        next unless app.document_signing_submission_id == data['submission_id'].to_s
+        next if app.document_signing_status == 'signed' && app.document_signing_document_url.present?
+
+        {
+          'application_id' => app.id,
+          'submission_id' => app.document_signing_submission_id,
+          'requested_at' => app.document_signing_requested_at&.iso8601(6),
+          'provider_email' => app.medical_provider_email,
+          'actor_id' => @system_actor.id,
+          'completed_at' => Time.current.iso8601(6),
+          'document_url' => url,
+          'audit_url' => data['audit_log_url']
+        }
+      end
     end
 
-    def signed_pdf_blob(app, data, url, filename:)
-      response = HTTP.timeout(30).get(url)
+    def stage_signed_pdf(app, context, dedup_key)
+      uri = URI.parse(context.fetch('document_url'))
+      raise ArgumentError, 'Document URL must use HTTPS' unless uri.is_a?(URI::HTTPS) && uri.host.present? && uri.userinfo.nil?
+
+      response = HTTP.timeout(30).get(uri.to_s)
       unless response.status.success?
         log_attachment_failure(app, 'download_failed', "HTTP #{response.status.code}")
         return nil
       end
 
-      ActiveStorage::Blob.create_and_upload!(
-        io: StringIO.new(response.body.to_s),
-        filename: filename,
-        content_type: 'application/pdf',
-        metadata: {
-          source: 'docuseal',
-          document_signing_document_url: url,
-          document_signing_audit_url: data['audit_log_url']
-        }
-      )
-    end
+      Tempfile.create(['docuseal', '.pdf']) do |file|
+        file.binmode
+        response.body.each do |chunk|
+          raise IOError, 'Document exceeds the upload limit' if file.size + chunk.bytesize > ProofUploadFormats.max_bytes(:certification)
 
-    def additional_signed_pdf_attachment(app, url)
-      app.additional_medical_certifications.attachments.find do |attachment|
-        attachment.blob.metadata['document_signing_document_url'] == url
+          file.write(chunk)
+        end
+        file.rewind
+        upload = ActionDispatch::Http::UploadedFile.new(tempfile: file, filename: "medical_cert_docuseal_#{app.id}.pdf", type: 'application/pdf')
+        DocumentScan.stage!(input: upload, purpose: :certification, slot: 'medical_certification',
+                            continuation: 'docuseal', context: context, dedup_key: dedup_key)
       end
-    end
-
-    def persist_document_signing_urls!(app, data, url)
-      app.update!(
-        document_signing_audit_url: data['audit_log_url'],
-        document_signing_document_url: url
-      )
+    ensure
+      response.body.connection.close if response
     end
 
     def log_attachment_failure(app, reason, details)
