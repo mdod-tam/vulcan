@@ -13,8 +13,14 @@ class DocumentScanMaintenanceTest < ActiveSupport::TestCase
       unready = scan(next_attempt_at: nil, created_at: 1.hour.ago)
       active = scan(lease_token: SecureRandom.uuid, lease_expires_at: 1.minute.from_now, next_attempt_at: nil)
       continuation = scan(status: 'clean', user: nil, continuation: 'docuseal')
+      blocked = scan(status: 'blocked', user: nil, continuation: 'docuseal')
+      failed = scan(status: 'failed', user: nil, continuation: 'docuseal')
+      handled = scan(status: 'failed', user: nil, continuation: 'docuseal', continued_at: Time.current)
       DocumentScanJob.expects(:perform_later).with(expired.id)
       DocumentSigning::AcceptScannedDocumentJob.expects(:perform_later).with(continuation.id)
+      DocumentSigning::AcceptScannedDocumentJob.expects(:perform_later).with(blocked.id)
+      DocumentSigning::AcceptScannedDocumentJob.expects(:perform_later).with(failed.id)
+      DocumentSigning::AcceptScannedDocumentJob.expects(:perform_later).with(handled.id).never
 
       RecoverDocumentScansJob.perform_now
 
@@ -27,6 +33,9 @@ class DocumentScanMaintenanceTest < ActiveSupport::TestCase
 
   test 'cleanup removes old unattached snapshots and preserves attached or recent documents' do
     abandoned = scan(status: 'failed', created_at: 8.days.ago)
+    blocked = scan(status: 'blocked', created_at: 8.days.ago)
+    clean = scan(status: 'clean', created_at: 8.days.ago)
+    pending = scan(created_at: 8.days.ago)
     recent = scan(status: 'blocked')
     attached = scan(status: 'clean', created_at: 8.days.ago)
     application = create(:application)
@@ -35,10 +44,29 @@ class DocumentScanMaintenanceTest < ActiveSupport::TestCase
     CleanupDocumentScansJob.perform_now
 
     assert_not DocumentScan.exists?(abandoned.id)
+    [blocked, clean].each do |expired|
+      assert_not DocumentScan.exists?(expired.id)
+      assert_not ActiveStorage::Blob.exists?(expired.blob_id)
+    end
+    assert DocumentScan.exists?(pending.id)
     assert DocumentScan.exists?(recent.id)
     assert DocumentScan.exists?(attached.id)
     assert application.reload.income_proof.attached?
     assert attached.blob.service.exist?(attached.blob.key)
+  end
+
+  test 'cleanup preserves scan clearance when a retained W9 review prevents blob deletion' do
+    vendor = create(:vendor)
+    retained = scan(status: 'clean', user: vendor, purpose: 'w9', slot: 'w9_form', created_at: 8.days.ago)
+    review = create(:w9_review, vendor: vendor, reviewed_blob: retained.blob)
+    abandoned = scan(status: 'failed', created_at: 8.days.ago)
+
+    CleanupDocumentScansJob.perform_now
+
+    assert DocumentScan.exists?(retained.id)
+    assert DocumentScan.cleared?(review.reload.reviewed_blob)
+    assert retained.blob.service.exist?(retained.blob.key)
+    assert_not DocumentScan.exists?(abandoned.id)
   end
 
   private

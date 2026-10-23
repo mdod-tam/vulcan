@@ -207,20 +207,131 @@ module Webhooks
       end
     end
 
-    test 'blocked failed and unresolved provider scans never complete signing' do
+    test 'pending provider scans cannot complete signing' do
       mock_successful_docuseal_download
       make_signed_webhook_request(@completed_payload)
       assert_response :ok
       scan = DocumentScan.find_by!(continuation: 'docuseal')
 
-      %w[pending blocked failed].each do |status|
-        scan.update!(status: status)
-        assert_no_difference ['ActiveStorage::Attachment.count', 'Event.count', 'Notification.count'] do
-          assert_raises(DocumentScan::NotCleared) { DocumentSigning::AcceptScannedDocument.call(scan) }
-        end
-        assert_equal 'sent', @application.reload.document_signing_status
-        assert_equal 'requested', @application.medical_certification_status
+      assert_no_difference ['ActiveStorage::Attachment.count', 'Event.count', 'Notification.count'] do
+        assert_raises(DocumentScan::NotCleared) { DocumentSigning::AcceptScannedDocument.call(scan) }
       end
+      assert_equal 'sent', @application.reload.document_signing_status
+      assert_equal 'requested', @application.medical_certification_status
+    end
+
+    test 'a blocked DocuSeal verdict records one failure and alerts only admins without accepting the PDF' do
+      create(:admin)
+      scan = stage_docuseal_scan!
+      work = scan.claim_work!
+      result = AttachmentScanner::Client::Result.new(status: 'found', scan_id: SecureRandom.uuid, sha256: scan.sha256,
+                                                     byte_size: scan.blob.byte_size)
+
+      assert_enqueued_with(job: DocumentSigning::AcceptScannedDocumentJob, args: [scan.id]) do
+        scan.complete_work!(token: work.token, result: result)
+      end
+      assert_predicate scan.reload, :blocked?
+      assert_terminal_docuseal_failure(scan, 'scan_blocked')
+    end
+
+    test 'a terminal scanner failure records its safe code and alerts admins once' do
+      create(:admin)
+      scan = stage_docuseal_scan!
+      work = scan.claim_work!
+
+      assert_enqueued_with(job: DocumentSigning::AcceptScannedDocumentJob, args: [scan.id]) do
+        scan.fail_work!(token: work.token, code: 'unauthorized', retryable: false)
+      end
+      assert_predicate scan.reload, :failed?
+      assert_terminal_docuseal_failure(scan, 'scan_failed')
+      event = Event.find_by!(auditable: @application, action: 'document_signing_attachment_failed')
+      assert_equal 'unauthorized', event.metadata['failure_details']
+    end
+
+    test 'distinct failed DocuSeal snapshots keep separate audits within the dedup window' do
+      freeze_time do
+        create(:admin)
+        first = stage_docuseal_scan!
+        @completed_payload[:data]['documents'].first['url'] = 'https://example.com/second_signed_doc.pdf'
+        second = nil
+        assert_difference 'DocumentScan.count', 1 do
+          second = stage_docuseal_scan!
+        end
+        assert_not_equal first.id, second.id
+        scans = [first, second]
+        scans.each { |scan| scan.update!(status: :blocked, completed_at: Time.current, last_error_code: 'scan_found') }
+
+        assert_difference -> { Event.where(auditable: @application, action: 'document_signing_attachment_failed').count }, 2 do
+          assert_difference 'Notification.count', 2 * User.admins.count do
+            scans.each { |scan| DocumentSigning::AcceptScannedDocumentJob.perform_now(scan.id) }
+          end
+        end
+
+        events = Event.where(auditable: @application, action: 'document_signing_attachment_failed')
+        assert_equal scans.map(&:id).sort, events.map { |event| event.metadata['document_scan_id'] }.sort
+        assert_equal 2, events.map { |event| event.metadata['operation_id'] }.uniq.size
+        assert(scans.all? { |scan| scan.reload.continued_at && !DocumentScan.cleared?(scan.blob) })
+        assert_no_difference ['Event.count', 'Notification.count', 'ActiveStorage::Attachment.count'] do
+          scans.each { |scan| DocumentSigning::AcceptScannedDocumentJob.perform_now(scan.id) }
+        end
+      end
+    end
+
+    test 'an expired DocuSeal scan remains blocked and recovery records its terminal failure' do
+      create(:admin)
+      scan = stage_docuseal_scan!
+      scan.update!(created_at: 2.hours.ago, next_attempt_at: nil)
+
+      assert_enqueued_with(job: DocumentSigning::AcceptScannedDocumentJob, args: [scan.id]) do
+        RecoverDocumentScansJob.perform_now
+      end
+
+      assert_predicate scan.reload, :failed?
+      assert_terminal_docuseal_failure(scan, 'scan_failed')
+      assert_equal 'scan_unresolved', Event.find_by!(auditable: @application, action: 'document_signing_attachment_failed').metadata['failure_details']
+    end
+
+    test 'a terminal scan for a superseded DocuSeal request creates no failure notice for the newer request' do
+      create(:admin)
+      scan = stage_docuseal_scan!
+      scan.update!(status: :blocked, completed_at: Time.current, last_error_code: 'scan_found')
+      @application.update!(document_signing_submission_id: 'new-submission')
+
+      assert_no_difference ['ActiveStorage::Attachment.count', 'Event.count', 'Notification.count'] do
+        DocumentSigning::AcceptScannedDocumentJob.perform_now(scan.id)
+      end
+
+      assert scan.reload.continued_at
+      assert_equal 'new-submission', @application.reload.document_signing_submission_id
+      assert_equal 'sent', @application.document_signing_status
+    end
+
+    test 'a failure audit error rolls back admin notices and leaves the continuation retryable' do
+      create(:admin)
+      scan = stage_docuseal_scan!
+      scan.update!(status: :failed, completed_at: Time.current, last_error_code: 'scan_unresolved')
+      AuditEventService.expects(:log).with do |**attributes|
+        attributes[:action] == 'document_signing_attachment_failed'
+      end.raises(ActiveRecord::RecordInvalid.new(Event.new))
+
+      assert_no_difference ['Event.count', 'Notification.count', 'ActiveStorage::Attachment.count'] do
+        assert_raises(ActiveRecord::RecordInvalid) { DocumentSigning::AcceptScannedDocument.call(scan) }
+      end
+      assert_nil scan.reload.continued_at
+      assert_equal 'sent', @application.reload.document_signing_status
+    end
+
+    test 'an admin notice failure rolls back the failure audit and leaves the continuation retryable' do
+      create(:admin)
+      scan = stage_docuseal_scan!
+      scan.update!(status: :blocked, completed_at: Time.current, last_error_code: 'scan_found')
+      NotificationService.expects(:create_and_deliver!).returns(nil)
+
+      assert_no_difference ['Event.count', 'Notification.count', 'ActiveStorage::Attachment.count'] do
+        assert_raises(ActiveRecord::RecordNotSaved) { DocumentSigning::AcceptScannedDocument.call(scan) }
+      end
+      assert_nil scan.reload.continued_at
+      assert_equal 'sent', @application.reload.document_signing_status
     end
 
     test 'a duplicate completion does not acknowledge a snapshot that was never made ready' do
@@ -232,7 +343,7 @@ module Webhooks
       HTTP.expects(:get).never
 
       assert_no_enqueued_jobs(only: DocumentScanJob) do
-        assert_no_difference ['DocumentScan.count', 'ActiveStorage::Blob.count', 'ActiveStorage::Attachment.count'] do
+        assert_no_difference ['DocumentScan.count', 'ActiveStorage::Blob.count', 'ActiveStorage::Attachment.count', 'Event.count', 'Notification.count'] do
           make_signed_webhook_request(@completed_payload)
           assert_response :service_unavailable
         end
@@ -643,6 +754,49 @@ module Webhooks
     end
 
     private
+
+    def stage_docuseal_scan!
+      mock_successful_docuseal_download
+      make_signed_webhook_request(@completed_payload)
+      assert_response :ok
+      DocumentScan.where(continuation: 'docuseal').order(:id).last!
+    end
+
+    def assert_terminal_docuseal_failure(scan, reason)
+      admins = User.admins.order(:id).pluck(:id)
+      assert_no_difference 'ActiveStorage::Attachment.count' do
+        assert_difference -> { Event.where(auditable: @application, action: 'document_signing_attachment_failed').count }, 1 do
+          assert_difference 'Notification.count', admins.size do
+            DocumentSigning::AcceptScannedDocumentJob.perform_now(scan.id)
+          end
+        end
+      end
+
+      event = Event.find_by!(auditable: @application, action: 'document_signing_attachment_failed')
+      assert_equal @system_user.id, event.user_id
+      assert_equal reason, event.metadata['failure_reason']
+      assert_equal scan.id, event.metadata['document_scan_id']
+      assert_equal 'sub_123456', event.metadata['document_signing_submission_id']
+      assert_not_includes event.metadata.to_json, 'https://'
+      notices = Notification.where(notifiable: @application, action: 'attachment_failure_warning')
+      assert_equal admins, notices.order(:recipient_id).pluck(:recipient_id)
+      assert(notices.all? { |notice| notice.actor_id == @system_user.id && notice.metadata['document_scan_id'] == scan.id })
+      assert_not_includes notices.map(&:metadata).to_json, 'https://'
+      notices.each { |notice| assert_includes notice.message(notice.recipient), admin_application_path(@application) }
+      assert scan.reload.continued_at
+      assert_not DocumentScan.cleared?(scan.blob)
+      assert_equal 'sent', @application.reload.document_signing_status
+      assert_equal 'requested', @application.medical_certification_status
+      assert_nil @application.document_signing_signed_at
+      assert_nil @application.document_signing_document_url
+      assert_not @application.medical_certification.attached?
+
+      travel 6.seconds do
+        assert_no_difference ['Event.count', 'Notification.count', 'ActiveStorage::Attachment.count'] do
+          DocumentSigning::AcceptScannedDocumentJob.perform_now(scan.id)
+        end
+      end
+    end
 
     def assert_rejected_completion(headers)
       assert_no_difference ['Event.count', 'Notification.count', 'ActiveStorage::Attachment.count', 'ActiveStorage::Blob.count'] do

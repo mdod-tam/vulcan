@@ -163,7 +163,7 @@ export default class extends Controller {
     this.statusTarget.textContent = message
     const waiting = ["uploading", "pending"].includes(state)
     const blocked = !["idle", "clean"].includes(state)
-    this.inputTarget.setCustomValidity(blocked ? (message || this.waitTextValue) : "")
+    this.inputTarget.setCustomValidity(blocked ? (waiting ? this.waitTextValue : message || this.waitTextValue) : "")
     this.inputTarget.required = this.originalRequired && state !== "clean"
     this.inputTarget.setAttribute("aria-required", this.inputTarget.required ? "true" : "false")
     this.progressTarget.hidden = !waiting

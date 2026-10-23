@@ -10,7 +10,7 @@
 #
 # It's strongly recommended that you check this file into your version control system.
 
-ActiveRecord::Schema[8.1].define(version: 2026_10_22_233100) do
+ActiveRecord::Schema[8.1].define(version: 2026_10_23_140000) do
   # These are extensions that must be enabled in order to support this database
   enable_extension "pg_catalog.plpgsql"
 
@@ -214,13 +214,14 @@ ActiveRecord::Schema[8.1].define(version: 2026_10_22_233100) do
     t.datetime "created_at", null: false
     t.datetime "updated_at", null: false
     t.index ["blob_id"], name: "index_document_scans_on_blob_id", unique: true
+    t.index ["created_at"], name: "index_document_scans_on_created_at"
     t.index ["dedup_key"], name: "index_document_scans_on_dedup_key", unique: true
     t.index ["secure_form_type", "secure_form_id"], name: "index_document_scans_on_secure_form"
     t.index ["status", "next_attempt_at"], name: "index_document_scans_on_status_and_next_attempt_at"
     t.index ["user_id", "purpose", "slot", "form_context"], name: "index_document_scans_on_recovery"
     t.index ["user_id"], name: "index_document_scans_on_user_id"
     t.check_constraint "((user_id IS NOT NULL)::integer + (secure_form_id IS NOT NULL)::integer + COALESCE((continuation::text = 'docuseal'::text)::integer, 0)) <= 1", name: "document_scans_owner"
-    t.check_constraint "status::text = ANY (ARRAY['pending'::character varying, 'clean'::character varying, 'blocked'::character varying, 'failed'::character varying]::text[])", name: "document_scans_status"
+    t.check_constraint "status::text = ANY (ARRAY['pending'::character varying::text, 'clean'::character varying::text, 'blocked'::character varying::text, 'failed'::character varying::text])", name: "document_scans_status"
   end
 
   create_table "duplicate_review_case_candidates", force: :cascade do |t|

@@ -596,6 +596,7 @@ module Admin
         fill_in 'application_medical_provider_email', with: 'doc@tor.net'
       end
 
+      proof_scans = {}
       proof_fieldset = page.find('section', text: 'Proof Documents', visible: true)
       within proof_fieldset do
         choose 'accept_income_proof', allow_label_click: true
@@ -603,14 +604,14 @@ module Admin
         fill_in 'application_household_size', with: '5'
         fill_in 'application_annual_income', with: '29999'
 
-        attach_cleared_document 'income_proof', Rails.root.join('test/fixtures/files/income_proof.pdf')
+        proof_scans[:income_proof] = attach_cleared_document 'income_proof', Rails.root.join('test/fixtures/files/income_proof.pdf')
 
         check 'application_maryland_resident'
         choose 'accept_residency_proof', allow_label_click: true
-        attach_cleared_document 'residency_proof', Rails.root.join('test/fixtures/files/residency_proof.pdf')
+        proof_scans[:residency_proof] = attach_cleared_document 'residency_proof', Rails.root.join('test/fixtures/files/residency_proof.pdf')
 
         choose 'accept_id_proof', allow_label_click: true
-        attach_cleared_document 'id_proof', Rails.root.join('test/fixtures/files/residency_proof.pdf')
+        proof_scans[:id_proof] = attach_cleared_document 'id_proof', Rails.root.join('test/fixtures/files/residency_proof.pdf')
       end
 
       # This test inspects the completed form without submitting it.
@@ -634,8 +635,14 @@ module Admin
       assert_field 'application[medical_provider_email]', with: 'doc@tor.net'
       assert find_field('accept_income_proof').checked?
       assert find_field('accept_residency_proof').checked?
-      assert_match(/income_proof\.pdf$/, find_field('income_proof', visible: false).value)
-      assert_match(/residency_proof\.pdf$/, find_field('residency_proof', visible: false).value)
+      proof_scans.each do |field, scan|
+        reference = find("input[type='hidden'][name='#{field}']", visible: :all).value
+        assert_equal scan.blob_id, ActiveStorage::Blob.find_signed!(reference).id
+        assert_equal 'clean', scan.reload.status
+        assert_equal '', find_field(field.to_s, visible: :all).value
+      end
+      page.scroll_to(:top)
+      take_screenshot('admin-dependent-paper-form-cleared-documents', html: true, full: true)
     end
 
     test 'paper application auto-approves when all proofs and certification are approved' do

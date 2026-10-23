@@ -109,7 +109,7 @@ module DocumentScans
     def enqueue(scan)
       if scan.pending?
         DocumentScanJob.perform_later(scan.id)
-      elsif scan.clean? && scan.continuation == 'docuseal'
+      elsif scan.continuation == 'docuseal' && scan.continued_at.nil?
         DocumentSigning::AcceptScannedDocumentJob.perform_later(scan.id)
       end
     end

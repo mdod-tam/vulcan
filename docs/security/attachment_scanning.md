@@ -24,6 +24,8 @@ The worker claims a five-minute lease before contacting the provider and checks 
 
 A lost submission response can mean that a scan was accepted but its ID never reached Rails. A bounded retry may cause another billable scan. The application does not promise exactly-once provider billing.
 
+If a signed DocuSeal PDF is blocked or its scan fails, it stays unavailable. The application records `document_signing_attachment_failed` and creates an in-app notice for admins, without sending email or marking the document signed. Recovery retries any unfinished failure reporting. A result from an older signing request does not change or alert on a newer request. A repeated webhook received while its file is still uploading gets a retryable response without a false failure event.
+
 An overnight cleanup removes terminal scan records and private snapshots that have remained unattached for seven days. It keeps attached documents and their scan state. Files still awaiting a result remain blocked; cleanup does not make them available.
 
 ## Monitoring and operator actions
@@ -42,6 +44,7 @@ When scans stop completing:
 
 Before enabling document intake on the deployed application:
 
+- Re-upload any documents you intend to keep that have no scan record, using the normal upload forms after deployment. This includes sample documents loaded by development seeds: seeding alone does not scan them. Keep user accounts and credentials; a database reset is not part of this cutover. There is no automatic rescan or clean-result backfill, and the old files remain blocked.
 - Confirm the provisioned plan, scanning engines, region, API limit and quota behavior.
 - Submit a synthetic clean document and confirm it becomes available. Test EICAR in a supported document format, or through the provider API if intake rejects its type. Check the provider's verdict and confirm the infected file stays blocked; a type rejection does not test the antivirus engine.
 - Exercise a worker restart and provider outage. Confirm pending files stay blocked and recovery resumes safely.

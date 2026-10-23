@@ -26,7 +26,7 @@ describe("document upload quarantine and scan control", () => {
            data-document-upload-invalid-type-message-value="Upload a PDF file."
            data-document-upload-too-large-message-value="Upload a smaller file."
            data-document-upload-uploading-text-value="Uploading %{filename}"
-           data-document-upload-scanning-text-value="Checking %{filename} for viruses"
+           data-document-upload-scanning-text-value="Checking %{filename} for viruses… You can keep filling out the form."
            data-document-upload-uploaded-text-value="Ready: %{filename}"
            data-document-upload-failed-text-value="Upload failed. Choose the file again."
            data-document-upload-unavailable-text-value="Your file is saved. Check again."
@@ -75,9 +75,24 @@ describe("document upload quarantine and scan control", () => {
     expect(options.body.get("context")).toBe("application:1:2026")
     expect(options.headers["X-CSRF-Token"]).toBe("csrf-value")
     expect(input.name).toBe("")
-    expect(input.validationMessage).toBe("Checking proof.pdf for viruses")
+    expect(upload.statusTarget.textContent).toBe("Checking proof.pdf for viruses… You can keep filling out the form.")
+    expect(input.validationMessage).toBe("Wait for the virus check.")
     expect(widget.querySelector('input[type="hidden"]')).toBeNull()
     expect(document.querySelector("form").dispatchEvent(new Event("submit", { cancelable: true }))).toBe(false)
+  })
+
+  test("an ongoing transfer gives a submission instruction without replacing its progress text", async () => {
+    await render()
+    let finish
+    fetch.mockReturnValueOnce(new Promise(resolve => { finish = resolve }))
+    await choose()
+    expect(upload.statusTarget.textContent).toBe("Uploading proof.pdf")
+    expect(input.validationMessage).toBe("Wait for the virus check.")
+    expect(document.querySelector("form").dispatchEvent(new Event("submit", { cancelable: true }))).toBe(false)
+    finish(response(clean))
+    await flush()
+    expect(input.validationMessage).toBe("")
+    expect(document.querySelector("form").dispatchEvent(new Event("submit", { cancelable: true }))).toBe(true)
   })
 
   test("clean status enables submission and supplies only the cleared receipt", async () => {

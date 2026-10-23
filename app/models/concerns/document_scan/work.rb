@@ -36,7 +36,7 @@ class DocumentScan
     end
 
     def complete_work!(token:, result:)
-      applied = with_lock do
+      with_lock do
         if !pending? || lease_token != token
           false
         elsif provider_scan_id && provider_scan_id != result.scan_id
@@ -47,8 +47,6 @@ class DocumentScan
           true
         end
       end
-      DocumentSigning::AcceptScannedDocumentJob.perform_later(id) if applied && clean? && continuation == 'docuseal'
-      applied
     end
 
     def fail_work!(token:, code:, retryable:)
@@ -110,6 +108,7 @@ class DocumentScan
     def finish_scan!(value, error_code: nil)
       update!(status: value, completed_at: Time.current, lease_token: nil, lease_expires_at: nil, next_attempt_at: nil, last_error_code: error_code)
       Rails.event.notify('document_scan.completed', document_scan_id: id, status: value, error_code: error_code)
+      DocumentSigning::AcceptScannedDocumentJob.perform_later(id) if continuation == 'docuseal'
     end
 
     def retry_delay

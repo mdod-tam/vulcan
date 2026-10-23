@@ -117,6 +117,8 @@ module Webhooks
       end
 
       stage_signed_pdf(app, context, dedup_key) || false
+    rescue DocumentScans::Stager::SnapshotNotReady
+      false # The original webhook is still uploading its snapshot; ask the provider to retry.
     rescue StandardError => e
       Rails.logger.error("Document signing intake failed for App ##{app.id} (#{e.class.name})")
       log_attachment_failure(app, 'intake_failed', e.class.name)

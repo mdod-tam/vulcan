@@ -130,15 +130,19 @@ module Admin
       click_button 'Assign Evaluator'
       assert_text I18n.t('admin.applications.assign_evaluator.eval_assign_pass')
 
-      if page.has_css?('#audit-logs')
-        # Resolve the section again to avoid a stale element.
-        within('#audit-logs') do
-          assert_selector('tr', text: 'Evaluator Assigned', wait: 15)
+      assert_equal @evaluator.id, @application.evaluations.sole.evaluator_id
+      event = Event.where(auditable: @application, action: 'evaluator_assigned').sole
+      assert_equal @evaluator.id, event.metadata.fetch('evaluator_id')
+      assert_equal 'T*** E***', event.metadata.fetch('evaluator_name')
+      assert_equal @admin.id, event.user_id
 
-          assert_text @evaluator.full_name
-          assert_text @admin.full_name
-        end
+      within('#audit-logs') do
+        assert_selector('tr', text: 'Evaluator Assigned', wait: 15)
+        assert_text 'Evaluator T*** E*** assigned'
+        assert_no_text @evaluator.full_name
+        assert_text @admin.full_name
       end
+      take_screenshot('admin-evaluator-assignment-audit-masked', html: true, full: true)
     end
 
     test 'admin can see voucher assignments in audit log' do

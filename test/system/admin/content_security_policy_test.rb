@@ -197,6 +197,15 @@ module Admin
         select 'Email', from: 'Submission Method'
         attach_file 'medical_certification', fixture_path
         assert_selector '[data-scan-state="pending"]'
+        assert_text I18n.t('documents.upload.scanning', filename: fixture_path.basename.to_s)
+        input = find_field('medical_certification')
+        assert_equal I18n.t('documents.upload.wait'), input.evaluate_script('this.validationMessage')
+        assert_includes find('noscript', visible: :all).text(:all), I18n.t('documents.upload.javascript_required')
+        click_button 'Process Certification'
+        assert_current_path admin_application_path(application)
+        assert_not application.reload.medical_certification.attached?
+        assert_empty(page.driver.network_traffic.select { |exchange| URI(exchange.request.url).path == upload_path })
+        take_screenshot('default-csp-certification-scan-pending', full: true, html: true)
         scan = DocumentScan.where(user: @admin, slot: 'medical_certification').sole
         scan.update!(status: :clean, completed_at: Time.current)
         assert_selector '[data-scan-state="clean"]'

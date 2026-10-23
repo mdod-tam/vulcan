@@ -153,6 +153,10 @@ Data privacy compliance  [DATA-001][DATA-002]
 
 ## System Integrations
 
+DocuSeal go-live requirements
+- [ ] Verify DocuSeal's timestamped HMAC signature using the exact raw request body and reject stale or malformed signatures. Cover valid, expired, tampered, and replayed callbacks. See the [signature contract](../development/docuseal_integration_guide.md#signature-contract-and-current-gap).
+- [ ] Supply the configured signing template in the submission API payload and verify the request, signing, webhook, and scanned-PDF workflow against the live service. See the [go-live check](../development/docuseal_integration_guide.md#go-live-check).
+
 Inbound fax processing (Twilio)  [DATA-001][FILE-SEC-001][AUTHZ-003][AUDIT-001]
 - [ ] Mapping model for provider↔fax numbers; media lifecycle and trust  [DATA-001]
 - [ ] Route: POST `/webhooks/twilio/fax_received`
