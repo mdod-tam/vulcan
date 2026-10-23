@@ -1,5 +1,7 @@
 # frozen_string_literal: true
 
+require_relative '../support/document_scan_fixtures' if Rails.env.test?
+
 # Admin phone numbers must be unique across users. Runs that share the test database can see each
 # other's committed rows (non-transactional tests), so each process draws admin numbers from its own
 # random range in 888, which no fixture or test literal uses; numbers within a process never repeat.

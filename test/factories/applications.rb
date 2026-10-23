@@ -1,5 +1,7 @@
 # frozen_string_literal: true
 
+require_relative '../support/document_scan_fixtures' if Rails.env.test?
+
 FactoryBot.define do
   factory :application do
     user factory: %i[constituent with_disabilities], strategy: :create

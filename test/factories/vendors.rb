@@ -1,5 +1,7 @@
 # frozen_string_literal: true
 
+require_relative '../support/document_scan_fixtures' if Rails.env.test?
+
 FactoryBot.define do
   factory :vendor, parent: :user, class: 'Users::Vendor' do
     type { 'Users::Vendor' }

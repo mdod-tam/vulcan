@@ -50,6 +50,7 @@
           <%# Proof Preview Section %>
           <div class="bg-gray-50 p-4 rounded-lg">
             <h2 class="text-lg font-medium text-gray-900 mb-4">Proof Preview</h2>
+            <%= render 'shared/document_scan_status', document: @proof %>
             <% if @proof.content_type.start_with?('image/') %>
               <%= image_tag url_for(@proof), 
                   class: "max-w-full h-auto rounded", 

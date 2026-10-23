@@ -19,6 +19,16 @@ module Admin
       mark_document_clean!(@application.income_proof.blob, user: @application.user, slot: 'income_proof')
     end
 
+    test 'new displays the reviewed proof virus scan result' do
+      @application.update_column(:income_proof_required, true)
+
+      get new_admin_proof_review_path(application_id: @application.id, proof_type: 'income')
+
+      assert_response :success
+      assert_select '[data-testid="document-scan-status"][data-scan-status="clean"]', text: /Passed/, count: 1
+      assert_select 'a', text: 'View PDF'
+    end
+
     test 'create routes through proof review service behavior and updates proof status' do
       assert_difference -> { @application.proof_reviews.count }, 1 do
         post admin_proof_reviews_path, params: {

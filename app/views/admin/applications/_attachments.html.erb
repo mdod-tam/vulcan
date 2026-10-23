@@ -1,3 +1,4 @@
+<% preload_document_scans([@application.income_proof, @application.residency_proof, @application.id_proof]) %>
 <div class="space-y-6" data-controller="stream-ready">
 
   <% if @application.income_proof_required? %>
@@ -22,6 +23,7 @@
             File: <%= safe_attachment_filename(@application.income_proof) %>
             (<%= number_to_human_size(safe_attachment_byte_size(@application.income_proof)) %>)
           </p>
+          <%= render 'shared/document_scan_status', document: @application.income_proof %>
         </div>
       <% elsif @application.income_proof_status == 'rejected' %>
         <% latest_rejection = get_chronological_proof_history(@application, "income").find { |activity| activity.activity_type == :rejection } %>
@@ -224,6 +226,7 @@
             File: <%= safe_attachment_filename(@application.residency_proof) %>
             (<%= number_to_human_size(safe_attachment_byte_size(@application.residency_proof)) %>)
           </p>
+          <%= render 'shared/document_scan_status', document: @application.residency_proof %>
         </div>
       <% elsif @application.residency_proof_status == 'rejected' %>
          <% latest_rejection = get_chronological_proof_history(@application, "residency").find { |activity| activity.activity_type == :rejection } %>
@@ -424,6 +427,7 @@
             File: <%= safe_attachment_filename(@application.id_proof) %>
             (<%= number_to_human_size(safe_attachment_byte_size(@application.id_proof)) %>)
           </p>
+          <%= render 'shared/document_scan_status', document: @application.id_proof %>
         </div>
       <% elsif @application.id_proof_status == 'rejected' %>
         <% latest_rejection = get_chronological_proof_history(@application, "id").find { |activity| activity.activity_type == :rejection } %>

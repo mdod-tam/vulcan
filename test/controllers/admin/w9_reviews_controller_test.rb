@@ -21,6 +21,7 @@ module Admin
 
       assert_response :success
       assert_select 'h1', 'Review W9 Form'
+      assert_select '[data-testid="document-scan-status"][data-scan-status="clean"]', text: /Passed/, count: 1
     end
 
     test 'should create approved w9 review' do
@@ -148,6 +149,24 @@ module Admin
 
       get admin_vendor_w9_review_path(vendor, review)
       assert_response :success
+    end
+
+    test 'historical review shows the reviewed W9 virus scan rather than its replacement' do
+      vendor = create(:vendor, :with_w9)
+      reviewed_blob = vendor.w9_form.blob
+      review = create(:w9_review, vendor: vendor, admin: @admin)
+      replacement = scanned_upload(Rack::Test::UploadedFile.new(file_fixture('sample_w9.pdf'), 'application/pdf'),
+                                   user: vendor, purpose: :w9, slot: 'w9_form')
+      Vendors::ReplaceW9.call(vendor: vendor, file: replacement)
+      DocumentScan.find_by!(blob: replacement).update!(status: :failed)
+
+      get admin_vendor_w9_review_path(vendor, review)
+
+      assert_response :success
+      assert_not_equal reviewed_blob.id, vendor.reload.w9_form.blob.id
+      assert_select '[data-testid="document-scan-status"][data-scan-status="clean"]', text: /Passed/, count: 1
+      assert_select '[data-testid="document-scan-status"][data-scan-status="failed"]', count: 0
+      assert_select 'span', text: 'Approved'
     end
 
     test 'review shows recorded delivery failure instead of claiming an email was sent' do

@@ -20,6 +20,17 @@ module Admin
       assert_select "a[href='#{new_admin_vendor_w9_review_path(drifted_vendor)}']", text: 'Review W9', count: 0
     end
 
+    test 'show distinguishes the current W9 virus scan from its business review status' do
+      vendor = create(:vendor, :with_w9)
+      DocumentScan.find_by!(blob: vendor.w9_form.blob).update!(status: :failed)
+
+      get admin_vendor_path(vendor)
+
+      assert_response :success
+      assert_select '[data-testid="document-scan-status"][data-scan-status="failed"]', text: /Failed/, count: 1
+      assert_select 'span', text: 'Pending Review'
+    end
+
     test 'edit shows sign-in email and phone read-only and saves the approval status' do
       vendor = create(:vendor, :approved)
 

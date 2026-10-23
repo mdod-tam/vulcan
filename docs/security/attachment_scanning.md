@@ -4,6 +4,8 @@ Uploaded documents stay private and unavailable until AttachmentScanner returns 
 
 Development or staging files without a scan record are unavailable too. Upload them again; do not mark them clean or backfill clean results.
 
+Admin document views show **Virus scan** beside a result badge: Passed, Pending, Blocked, Failed, or Not scanned. The result belongs to the displayed file, including the original file in a W-9 review. It is separate from staff approval of the proof, certification, or W-9.
+
 Scanning uses private server uploads. The scanner receives file bytes with a random filename, not the original filename or an application download link. Scan jobs submit and poll in the background. A shared database budget spaces operations at least twenty-one seconds apart across workers. This leaves room for up to three HTTP requests per operation, including redirects, under the provider's default limit of ten requests per minute. A rate-limit response schedules a bounded retry. Secure upload forms keep their policy-controlled expiry; downloading and scanning a document do not shorten that lifetime.
 
 ## Configuration
