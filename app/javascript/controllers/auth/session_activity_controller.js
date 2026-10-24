@@ -6,7 +6,7 @@ const minute = 60_000
 // Only genuine interaction renews idle time; background checks only read its deadline.
 export default class extends Controller {
   static targets = ["notice", "message", "renew"]
-  static values = { url: String, state: Object }
+  static values = { url: String, state: Object, messages: Object }
 
   connect() {
     this.lastAttemptAt = Date.now()
@@ -95,14 +95,15 @@ export default class extends Controller {
     const expired = this.ended || Math.min(idleRemaining, absoluteRemaining) <= 0
     let text = ""
     if (expired) {
-      text = "Your session expired. Keep this page open and copy any unfinished work before signing in again."
+      text = this.messagesValue.expired
     } else if (absoluteRemaining <= 5 * minute) {
-      text = "Your sign-in expires soon. Save your work before signing in again."
+      text = this.messagesValue.absolute
     } else if (this.refreshFailed) {
-      text = "We couldn't refresh your session. Check your connection, then choose Keep working."
+      text = this.messagesValue.refresh_failed
     } else if (idleRemaining <= 5 * minute) {
       const minutes = Math.max(1, Math.ceil(idleRemaining / minute))
-      text = `Your session expires in ${minutes} ${minutes === 1 ? "minute" : "minutes"}. Choose Keep working to stay signed in.`
+      const template = minutes === 1 ? this.messagesValue.idle_one : this.messagesValue.idle_other
+      text = template.replace("%{minutes}", minutes)
     }
     if (this.messageTarget.textContent !== text) this.messageTarget.textContent = text
     this.noticeTarget.hidden = !text

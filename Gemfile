@@ -72,6 +72,7 @@ group :development, :test do
   gem 'brakeman', '~> 8.0', '>= 8.0.4', require: false
   gem 'byebug', '~> 13.0'
   gem 'debug', '~> 1.11', require: 'debug/prelude'
+  gem 'factory_bot_rails'
 end
 
 group :development do
@@ -89,7 +90,6 @@ group :test do
   gem 'capybara', '~> 3.40'
   gem 'cuprite', '~> 0.17'
   gem 'database_cleaner-active_record'
-  gem 'factory_bot_rails'
   gem 'minitest-rails', '~> 8.1'
   gem 'mocha', '~> 3.1', require: false
   gem 'rails-controller-testing'

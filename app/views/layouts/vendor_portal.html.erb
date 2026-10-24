@@ -11,6 +11,11 @@
 </head>
 
 <body class="min-h-screen bg-gray-50">
+  <% if (session_deadlines = session_activity_deadlines) %>
+    <%= render 'shared/session_activity',
+               deadlines: session_deadlines,
+               locale: public_request_locale_param || current_user.effective_message_locale || I18n.default_locale %>
+  <% end %>
   <header class="bg-blue-900 text-white py-4">
     <div class="container mx-auto px-4">
       <div class="flex flex-wrap justify-between items-center gap-4">

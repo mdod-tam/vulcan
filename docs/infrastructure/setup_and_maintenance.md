@@ -51,6 +51,8 @@ The explicit command above provisions `system@mdmat.org` for audit attribution a
 
 The first release that includes the email delivery controls needs sending stopped during the deploy; follow [Releasing the delivery controls](email_system.md#releasing-the-delivery-controls).
 
+Before deploying the [session-activity migration](../../db/migrate/20261022173000_add_last_active_at_to_sessions.rb) to a running instance, schedule a maintenance window: stop web and worker processes and pause scheduled jobs before migration. It signs everyone out, and old code cannot sign users in after the required column is added. Heroku maintenance mode alone does not stop dynos or scheduled jobs; record the current process counts and stop them explicitly. Restore the process counts after the new release is promoted, check sign-in, then reopen traffic. See [Heroku's maintenance guidance](https://devcenter.heroku.com/articles/maintenance-mode#maintenance-mode-and-dynos).
+
 The checked-in [Procfile](../../Procfile) defines web, worker, and release processes. Start with a Heroku app and attached Postgres database; [Heroku's Rails guide](https://devcenter.heroku.com/articles/getting-started-with-rails8#create-a-heroku-app) covers provisioning. Set the [production configuration](../../README.md#production-essentials), including storage and integration credentials, then deploy the intended checkout:
 
 ```bash
@@ -81,6 +83,8 @@ heroku ps --app "$MAT_APP"
 ```
 
 With a separate worker, leave `SOLID_QUEUE_IN_PUMA` unset. To run jobs inside Puma instead, set it and omit the separate worker; the Puma config tests variable presence, so setting it to the string `false` still enables the plugin.
+
+Check both scan and general job backlogs after deployment. The default worker configuration reserves one thread for document scans and one for general work, including mail; see [scan workers and monitoring](../security/attachment_scanning.md).
 
 Before opening the environment to users, verify staff sign-in and MFA, an [upload, antivirus scan and download](active_storage_s3_setup.md#verify-upload-and-retrieval), and a [queued email delivery](email_system.md#postmark). If using DocuSeal, complete its [go-live check](../development/docuseal_integration_guide.md#go-live-check).
 

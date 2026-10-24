@@ -7,8 +7,24 @@ jest.mock("services/rails_request", () => ({ railsRequest: { perform: jest.fn() 
 const minute = 60_000
 const posts = () => railsRequest.perform.mock.calls.filter(([options]) => options.method === "post")
 const flush = async () => { await Promise.resolve(); await Promise.resolve() }
+const messages = {
+  en: {
+    expired: "Your session expired. Keep this page open and copy any unfinished work before signing in again.",
+    absolute: "Your sign-in expires soon. Save your work before signing in again.",
+    refresh_failed: "We couldn't refresh your session. Check your connection, then choose Keep working.",
+    idle_one: "Your session expires in %{minutes} minute. Choose Keep working to stay signed in.",
+    idle_other: "Your session expires in %{minutes} minutes. Choose Keep working to stay signed in."
+  },
+  es: {
+    expired: "Su sesión ha expirado. Mantenga esta página abierta y copie el trabajo pendiente antes de volver a iniciar sesión.",
+    absolute: "Su sesión está por expirar. Guarde su trabajo antes de volver a iniciar sesión.",
+    refresh_failed: "No pudimos renovar su sesión. Revise su conexión y seleccione Seguir trabajando.",
+    idle_one: "Su sesión vence en %{minutes} minuto. Seleccione Seguir trabajando para mantener la sesión iniciada.",
+    idle_other: "Su sesión vence en %{minutes} minutos. Seleccione Seguir trabajando para mantener la sesión iniciada."
+  }
+}
 
-describe("admin form session activity", () => {
+describe("signed-in form session activity", () => {
   let application, controller, host, serverDeadlines
   const state = ({ idle = 30, absolute = 24 * 60 } = {}) => ({
     idle_expires_at: new Date(Date.now() + idle * minute).toISOString(),
@@ -16,16 +32,17 @@ describe("admin form session activity", () => {
     issued_at: new Date().toISOString()
   })
 
-  const render = async ({ idle = 30, absolute = 24 * 60 } = {}) => {
+  const render = async ({ idle = 30, absolute = 24 * 60, locale = "en" } = {}) => {
     const initial = state({ idle, absolute })
     serverDeadlines = initial
     document.body.innerHTML = `<div data-controller="session-activity"
       data-session-activity-url-value="/session_activity"
       data-session-activity-state-value='${JSON.stringify(initial)}'
+      data-session-activity-messages-value="${JSON.stringify(messages[locale]).replaceAll('"', '&quot;')}"
       data-action="input@document->session-activity#recordInteraction change@document->session-activity#recordInteraction keydown@document->session-activity#recordInteraction pointerdown@document->session-activity#recordInteraction submit@document->session-activity#beforeSubmit">
       <aside hidden data-session-activity-target="notice" tabindex="-1">
         <p role="status" data-session-activity-target="message"></p>
-        <button type="button" data-session-activity-target="renew" data-action="session-activity#renew">Keep working</button>
+        <button type="button" data-session-activity-target="renew" data-action="session-activity#renew">${locale === "es" ? "Seguir trabajando" : "Keep working"}</button>
       </aside>
     </div><main><form method="post"><input name="first_name" value="Unfinished work"><button>Submit</button></form></main>`
     application = Application.start()
@@ -151,5 +168,42 @@ describe("admin form session activity", () => {
     await flush()
     expect(controller.noticeTarget.hidden).toBe(true)
     expect(document.querySelector("input").value).toBe("Unfinished work")
+  })
+
+  test("Spanish countdown uses server-provided singular and plural text without renewing in the background", async () => {
+    await render({ idle: 4, locale: "es" })
+    expect(controller.messageTarget.textContent).toBe(messages.es.idle_other.replace("%{minutes}", "4"))
+    jest.advanceTimersByTime(3 * minute)
+    await flush()
+    expect(controller.messageTarget.textContent).toBe(messages.es.idle_one.replace("%{minutes}", "1"))
+    expect(controller.renewTarget.textContent).toBe("Seguir trabajando")
+    expect(posts()).toHaveLength(0)
+    controller.renewTarget.click()
+    await flush()
+    expect(controller.noticeTarget.hidden).toBe(true)
+    expect(document.querySelector("input").value).toBe("Unfinished work")
+  })
+
+  test("Spanish absolute expiry and failed refresh messages remain localized", async () => {
+    await render({ idle: 4, locale: "es" })
+    railsRequest.perform.mockRejectedValueOnce(new TypeError("offline"))
+    controller.renewTarget.click()
+    await flush()
+    expect(controller.messageTarget.textContent).toBe(messages.es.refresh_failed)
+    controller.absoluteDeadline = Date.now() + 4 * minute
+    controller.updateNotice()
+    expect(controller.messageTarget.textContent).toBe(messages.es.absolute)
+    expect(controller.renewTarget.hidden).toBe(true)
+  })
+
+  test("Spanish expiry preserves the form and announces the localized next step", async () => {
+    await render({ idle: 1, locale: "es" })
+    jest.advanceTimersByTime(minute)
+    await flush()
+    const event = new Event("submit", { bubbles: true, cancelable: true })
+    expect(document.querySelector("main form").dispatchEvent(event)).toBe(false)
+    expect(controller.messageTarget.textContent).toBe(messages.es.expired)
+    expect(document.querySelector("input").value).toBe("Unfinished work")
+    expect(posts()).toHaveLength(0)
   })
 })

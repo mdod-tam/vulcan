@@ -14,6 +14,15 @@ en:
       hide: "Hide password"
   sessions:
     title: "Sign In"
+    activity:
+      label: "Sign-in time remaining"
+      keep_working: "Keep working"
+      messages:
+        expired: "Your session expired. Keep this page open and copy any unfinished work before signing in again."
+        absolute: "Your sign-in expires soon. Save your work before signing in again."
+        refresh_failed: "We couldn't refresh your session. Check your connection, then choose Keep working."
+        idle_one: "Your session expires in %{minutes} minute. Choose Keep working to stay signed in."
+        idle_other: "Your session expires in %{minutes} minutes. Choose Keep working to stay signed in."
     form:
       contact_label: "Email Address or Phone Number"
       contact_hint: "Use your account email or phone number. Text access links are sent only to text-capable numbers."

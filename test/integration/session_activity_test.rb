@@ -8,6 +8,78 @@ class SessionActivityTest < ActionDispatch::IntegrationTest
     @user = create(:constituent)
   end
 
+  %i[admin constituent vendor evaluator trainer].each do |role|
+    test "fully signed-in #{role} receives session activity controls" do
+      user = create(role)
+      credential = user.totp_credentials.create!(secret: ROTP::Base32.random_base32, nickname: 'Authenticator') unless role == :constituent
+      post sign_in_path, params: { email: user.email, password: 'password1234' }
+      if credential
+        assert_redirected_to verify_method_two_factor_authentication_path(type: 'totp')
+        post process_verification_two_factor_authentication_path(type: 'totp'), params: { code: ROTP::TOTP.new(credential.secret).now }
+      else
+        assert_not user.second_factor_enabled?, 'Constituents may use the warning without optional MFA'
+      end
+      assert cookies[:session_token].present?
+
+      get(role == :vendor ? edit_vendor_portal_profile_path : edit_profile_path)
+
+      assert_response :success
+      assert_select '[data-controller~="session-activity"]', count: 1
+    end
+  end
+
+  %i[vendor evaluator trainer].each do |role|
+    test "#{role} session activity does not mount before required MFA enrollment" do
+      user = create(role)
+      post sign_in_path, params: { email: user.email, password: 'password1234' }
+      assert_redirected_to setup_two_factor_authentication_path
+
+      get setup_two_factor_authentication_path
+
+      assert_response :success
+      assert_select '[data-controller~="session-activity"]', count: 0
+    end
+  end
+
+  test 'constituent session activity does not mount during a required password change' do
+    @user.update!(force_password_change: true)
+    post sign_in_path, params: { email: @user.email, password: 'password1234' }
+    assert cookies[:session_token].present?
+
+    get edit_password_path
+
+    assert_response :success
+    assert_select '[data-controller~="session-activity"]', count: 0
+  end
+
+  # rubocop:disable-next Style/FormatStringToken -- Rails I18n tokens are retained for the browser countdown.
+  {
+    en: { label: 'Sign-in time remaining', button: 'Keep working', singular: 'Your session expires in %{minutes} minute.',
+          plural: 'Your session expires in %{minutes} minutes.' },
+    es: { label: 'Tiempo restante de la sesión', button: 'Seguir trabajando', singular: 'Su sesión vence en %{minutes} minuto.',
+          plural: 'Su sesión vence en %{minutes} minutos.' }
+  }.each do |locale, copy|
+    test "session activity renders #{locale} copy and countdown templates for the signed-in viewer" do
+      @user.update!(locale: locale)
+      post sign_in_path, params: { email: @user.email, password: 'password1234' }
+
+      get edit_profile_path
+
+      assert_response :success
+      assert_select '[data-controller~="session-activity"]' do |controllers|
+        assert_equal locale.to_s, controllers.first['lang']
+        serialized_messages = controllers.first['data-session-activity-messages-value']
+        assert serialized_messages.present?, 'Countdown copy must come from the selected server locale'
+        messages = JSON.parse(serialized_messages)
+        assert_includes messages.fetch('idle_one'), copy.fetch(:singular)
+        assert_includes messages.fetch('idle_other'), copy.fetch(:plural)
+        %w[expired absolute refresh_failed].each { |key| assert messages.fetch(key).present? }
+      end
+      assert_select '[data-session-activity-target="notice"][aria-label=?]', copy.fetch(:label)
+      assert_select 'button[data-session-activity-target="renew"]', text: copy.fetch(:button)
+    end
+  end
+
   test 'admin session activity does not mount before required MFA enrollment' do
     admin = create(:admin)
     post sign_in_path, params: { email: admin.email, password: 'password1234' }

@@ -32,6 +32,15 @@ es:
       hide: "Ocultar contraseña"
   sessions:
     title: "Iniciar sesión"
+    activity:
+      label: "Tiempo restante de la sesión"
+      keep_working: "Seguir trabajando"
+      messages:
+        expired: "Su sesión ha expirado. Mantenga esta página abierta y copie el trabajo pendiente antes de volver a iniciar sesión."
+        absolute: "Su sesión está por expirar. Guarde su trabajo antes de volver a iniciar sesión."
+        refresh_failed: "No pudimos renovar su sesión. Revise su conexión y seleccione Seguir trabajando."
+        idle_one: "Su sesión vence en %{minutes} minuto. Seleccione Seguir trabajando para mantener la sesión iniciada."
+        idle_other: "Su sesión vence en %{minutes} minutos. Seleccione Seguir trabajando para mantener la sesión iniciada."
     form:
       contact_label: "Correo electrónico o número de teléfono"
       contact_hint: "Use el correo electrónico o número de teléfono de su cuenta. Los enlaces de acceso por texto solo se envían a números con capacidad de recibir textos."

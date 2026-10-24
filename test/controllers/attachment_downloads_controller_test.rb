@@ -143,6 +143,50 @@ class AttachmentDownloadsControllerTest < ActionDispatch::IntegrationTest
     end
   end
 
+  test 'clean HEIC and HEIF documents preview inline while explicit downloads remain attachments' do
+    authenticate(create(:admin))
+    %w[heic heif].each do |format|
+      # This boundary serves stored bytes without invoking an image decoder.
+      @application.income_proof.attach(io: StringIO.new("stored #{format} bytes"), filename: "proof.#{format}",
+                                       content_type: "image/#{format}", identify: false)
+      blob = @application.income_proof.blob
+      mark_document_clean!(blob, user: @application.user)
+
+      [rails_blob_path(blob), document_attachment_path(@application.income_proof.attachment)].each do |path|
+        get path, params: { disposition: 'inline' }
+        assert_response :success
+        assert_equal "image/#{format}", response.media_type
+        assert_match(/\Ainline;/, response.headers['Content-Disposition'])
+        assert_equal blob.download, response.body
+        assert_private_response
+
+        get path, params: { disposition: 'attachment' }
+        assert_response :success
+        assert_match(/\Aattachment;/, response.headers['Content-Disposition'])
+      end
+    end
+  end
+
+  test 'HTML and SVG cannot be served inline even if stored as clean proof documents' do
+    authenticate(create(:admin))
+    { 'html' => ['text/html', '<script>alert(1)</script>'],
+      'svg' => ['image/svg+xml', '<svg xmlns="http://www.w3.org/2000/svg" onload="alert(1)"></svg>'] }.each do |format, (type, bytes)|
+      # Test the serving backstop independently of the intake validator that refuses these types.
+      blob = ActiveStorage::Blob.create_and_upload!(io: StringIO.new(bytes), filename: "proof.#{format}", content_type: type, identify: false)
+      @application.income_proof.attachment.update!(blob: blob)
+      mark_document_clean!(blob, user: @application.user)
+
+      [rails_blob_path(blob), document_attachment_path(@application.income_proof.attachment)].each do |path|
+        get path, params: { disposition: 'inline' }
+        assert_response :success
+        assert_equal 'application/octet-stream', response.media_type
+        assert_match(/\Aattachment;/, response.headers['Content-Disposition'])
+        assert_equal 'nosniff', response.headers['X-Content-Type-Options']
+        assert_private_response
+      end
+    end
+  end
+
   test 'the managing guardian can read proofs and loses access when management changes' do
     guardian = create(:constituent)
     create(:guardian_relationship, guardian_user: guardian, dependent_user: @application.user)

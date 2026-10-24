@@ -218,7 +218,11 @@ Development boots without scanner credentials. Testing real uploads requires bot
 
 ### Heroku-style deployment
 
-The checked-in [Procfile](Procfile) defines web, worker, and release processes. Start with a Heroku app and attached Postgres database; [Heroku's Rails guide](https://devcenter.heroku.com/articles/getting-started-with-rails8#create-a-heroku-app) covers provisioning. Set the [production configuration](#production-essentials), including storage and integration credentials, then deploy the intended checkout:
+The checked-in [Procfile](Procfile) defines web, worker, and release processes. Start with a Heroku app and attached Postgres database; [Heroku's Rails guide](https://devcenter.heroku.com/articles/getting-started-with-rails8#create-a-heroku-app) covers provisioning. Set the [production configuration](#production-essentials), including storage and integration credentials.
+
+For a running instance, follow the [session-migration maintenance window](docs/infrastructure/setup_and_maintenance.md#heroku-deployment-and-operations): stop old web and worker processes and pause scheduled jobs until the migration finishes and the new release is promoted. Everyone must sign in again afterward.
+
+Deploy the intended checkout:
 
 ```bash
 export MAT_APP=your-app-name

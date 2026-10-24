@@ -1,7 +1,5 @@
 # frozen_string_literal: true
 
-require 'factory_bot_rails'
-
 # Prevent payment notification callback during seeding
 begin
   Invoice.skip_callback(:save, :after, :send_payment_notification)
