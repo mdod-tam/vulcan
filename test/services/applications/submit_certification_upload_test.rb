@@ -12,7 +12,9 @@ module Applications
                             medical_provider_name: 'Dr. Provider',
                             medical_provider_email: 'provider@example.com')
       @secure_request_form = create(:medical_provider_secure_request_form, application: @application)
-      @file = fixture_file_upload(Rails.root.join('test/fixtures/files/medical_certification_valid.pdf'), 'application/pdf')
+      upload = fixture_file_upload(Rails.root.join('test/fixtures/files/medical_certification_valid.pdf'), 'application/pdf')
+      @file = scanned_upload(upload, secure_form: @secure_request_form, purpose: :certification,
+                                     slot: 'medical_certification').signed_id
     end
 
     test 'attaches certification through attachment service and marks request submitted' do
@@ -71,7 +73,7 @@ module Applications
 
       event = Event.find_by!(auditable: @application, action: 'cert_submitted_via_secure_form')
       assert_equal @secure_request_form.id, event.metadata.fetch('medical_provider_secure_request_form_id')
-      assert_equal @secure_request_form.provider_email, event.metadata.fetch('provider_email')
+      assert_equal 'p***@e***.com', event.metadata.fetch('provider_email')
       assert_equal @secure_request_form.request_batch_id, event.metadata.fetch('request_batch_id')
       assert_equal 'additional_medical_certification', event.metadata.fetch('retained_as')
       assert_equal additional_blob.id, event.metadata.fetch('additional_medical_certification_blob_id')

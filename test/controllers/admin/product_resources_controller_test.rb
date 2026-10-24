@@ -15,6 +15,7 @@ module Admin
       assert_response :success
       assert_includes response.body, 'Do not include personal or session information'
       assert_select 'input[type=file][accept=".pdf,application/pdf"]'
+      assert_select '[data-document-upload-scans-url-value=?]', document_scans_path
       assert_select '#product_resource_document' do |inputs|
         assert_equal %w[pdf-help product_resource_document_status], inputs.sole['aria-describedby'].split
       end
@@ -60,7 +61,7 @@ module Admin
     end
 
     test 'accepted PDF is retained across validation failure and can be submitted unchanged with corrected title' do
-      blob = ActiveStorage::Blob.create_and_upload!(io: StringIO.new("%PDF-1.4\n#{'x' * 1024}"), filename: 'guide.pdf', content_type: 'application/pdf')
+      blob = cleared_pdf
       attributes = { title: '', locale: 'es', source: 'pdf', document_signed_id: blob.signed_id }
       post admin_product_product_resources_path(@product), params: { product_resource: attributes }
       assert_response :unprocessable_content
@@ -88,7 +89,7 @@ module Admin
 
     test 'a failed link to PDF switch preserves the active link and all attempted form state until corrected' do
       resource = create(:product_resource, product: @product)
-      blob = ActiveStorage::Blob.create_and_upload!(io: StringIO.new("%PDF-1.4\n#{'x' * 1024}"), filename: 'replacement.pdf', content_type: 'application/pdf')
+      blob = cleared_pdf
       attributes = { title: '', locale: 'es', source: 'pdf', url: resource.url, document_signed_id: blob.signed_id }
       patch admin_product_product_resource_path(@product, resource), params: { product_resource: attributes }
       assert_response :unprocessable_content
@@ -127,6 +128,11 @@ module Admin
     end
 
     private
+
+    def cleared_pdf
+      scanned_upload(fixture_file_upload('medical_certification_valid.pdf', 'application/pdf'),
+                     user: @admin, purpose: :product_resource, slot: 'document')
+    end
 
     def link_attributes
       { title: 'Guide', locale: 'en', source: 'url', url: 'https://example.org/guide' }

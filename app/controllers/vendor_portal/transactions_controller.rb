@@ -8,6 +8,7 @@ module VendorPortal
 
     # How a vendor may say a purchase reaches the customer. Unspecified is only the starting state.
     FULFILLMENT_MODES = %w[shipping local_pickup].freeze
+    CSV_HEADERS = ['Date', 'Voucher Code', 'Amount', 'Status', 'Reference Number', 'Constituent Name', 'Invoice Number', 'Billing'].freeze
 
     def index
       filter = VoucherTransactions::ListFilter.new(vendor: current_user, params: params)
@@ -56,18 +57,9 @@ module VendorPortal
     private
 
     def generate_csv(transactions)
-      return '' if transactions.empty?
-
-      require 'smarter_csv'
-      require 'tempfile'
-
-      transactions_data = transactions.map { |t| transaction_to_hash(t).transform_values { |value| SpreadsheetCell.safe(value) } }
-
-      Tempfile.create(['vendor-transactions', '.csv']) do |temp_file|
-        writer = SmarterCSV::Writer.new(temp_file.path)
-        writer << transactions_data
-        writer.finalize
-        temp_file.read
+      headers = transactions.empty? ? [] : CSV_HEADERS
+      CsvExport.generate(headers: headers, actor: current_user, export_type: 'vendor_transactions') do |csv|
+        transactions.each { |transaction| csv << transaction_csv_row(transaction) }
       end
     end
 
@@ -77,17 +69,10 @@ module VendorPortal
       transaction.on_billing_hold? ? 'On hold' : 'Not yet invoiced'
     end
 
-    def transaction_to_hash(transaction)
-      {
-        'Date' => transaction.processed_at.strftime('%Y-%m-%d %H:%M'),
-        'Voucher Code' => transaction.voucher&.code,
-        'Amount' => transaction.amount,
-        'Status' => transaction.status.humanize,
-        'Reference Number' => transaction.reference_number,
-        'Constituent Name' => transaction.voucher&.application&.user&.full_name,
-        'Invoice Number' => transaction.invoice&.invoice_number,
-        'Billing' => billing_label(transaction)
-      }
+    def transaction_csv_row(transaction)
+      [transaction.processed_at.strftime('%Y-%m-%d %H:%M'), transaction.voucher&.code, transaction.amount,
+       transaction.status.humanize, transaction.reference_number, transaction.voucher&.application&.user&.full_name,
+       transaction.invoice&.invoice_number, billing_label(transaction)]
     end
   end
 end

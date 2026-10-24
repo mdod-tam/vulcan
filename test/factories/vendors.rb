@@ -1,5 +1,7 @@
 # frozen_string_literal: true
 
+require_relative '../support/document_scan_fixtures' if Rails.env.test?
+
 FactoryBot.define do
   factory :vendor, parent: :user, class: 'Users::Vendor' do
     type { 'Users::Vendor' }
@@ -24,6 +26,11 @@ FactoryBot.define do
           filename: 'w9.pdf',
           content_type: 'application/pdf'
         )
+        if Rails.env.test?
+          DocumentScanFixtures.clear!(vendor.w9_form.blob, user: vendor,
+                                                           purpose: :w9, slot: 'w9_form',
+                                                           fixture: 'sample_w9.pdf')
+        end
         # Set w9_status to approved after file attachment to override callback
         vendor.update_column(:w9_status, :approved)
       end
@@ -44,6 +51,11 @@ FactoryBot.define do
           filename: 'w9.pdf',
           content_type: 'application/pdf'
         )
+        if Rails.env.test?
+          DocumentScanFixtures.clear!(vendor.w9_form.blob, user: vendor,
+                                                           purpose: :w9, slot: 'w9_form',
+                                                           fixture: 'sample_w9.pdf')
+        end
         vendor.update(w9_status: :pending_review)
       end
     end
@@ -92,6 +104,11 @@ FactoryBot.define do
           filename: 'w9.pdf',
           content_type: 'application/pdf'
         )
+        if Rails.env.test?
+          DocumentScanFixtures.clear!(vendor.w9_form.blob, user: vendor,
+                                                           purpose: :w9, slot: 'w9_form',
+                                                           fixture: 'sample_w9.pdf')
+        end
       end
     end
   end

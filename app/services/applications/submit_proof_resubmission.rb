@@ -75,7 +75,7 @@ module Applications
         application: application,
         proof_type: proof_type,
         blob_or_file: file,
-        signed_ids: false, # the public form accepts only a multipart upload
+        scan_owner: secure_request_form,
         min_bytes: ProofUploadFormats::SECURE_FORM_MIN_BYTES,
         submission_method: :secure_form,
         status: :not_reviewed,

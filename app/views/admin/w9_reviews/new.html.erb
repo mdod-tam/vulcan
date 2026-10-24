@@ -17,6 +17,7 @@
       </div>
       <div class="border-t border-gray-200 p-4">
         <% if @w9_form.attached? %>
+          <%= render 'shared/document_scan_status', document: @w9_form %>
           <div class="w-full h-[600px] overflow-hidden" data-controller="pdf-loader"
                data-pdf-loader-pdf-url-value="<%= vendor_w9_document_path(@vendor,
                                                                           @w9_form.is_a?(ActiveStorage::Blob) ? @w9_form : @w9_form.blob) %>">

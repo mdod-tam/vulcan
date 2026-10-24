@@ -27,6 +27,8 @@ class MedicalCertificationAttachmentService
     begin
       raise 'Cannot update certification status: No certification is attached' unless application.medical_certification.attached?
 
+      DocumentScan.require_clean!(application.medical_certification.blob) if status.to_s == 'approved'
+
       Rails.logger.info "Updating disability certification status to #{status} for application #{application.id}"
 
       update_certification_status_only(application, status, admin, submission_method, metadata)
@@ -54,7 +56,7 @@ class MedicalCertificationAttachmentService
       application.with_lock do
         raise StaffUploadNotAllowed unless application.staff_certification_upload_allowed?
 
-        blob = UploadedDocument.resolve!(blob_or_file, record: application, name: 'medical_certification')
+        blob = UploadedDocument.resolve!(blob_or_file, record: application, name: 'medical_certification', scan_owner: admin)
         process_attachment(application: application, blob: blob, status: status, admin: admin,
                            submission_method: submission_method, metadata: metadata)
       end
@@ -74,10 +76,9 @@ class MedicalCertificationAttachmentService
   # @return [Hash] :success, :placement (:primary or :additional), :additional_blob_id, :retention_reason
   def self.accept_submission(application:, blob:, submission_method:, requested_at:, admin:, metadata: {})
     application.with_lock do
+      DocumentScan.require_clean!(blob)
       retention_reason = submission_retention_reason(application, requested_at)
       if retention_reason.nil?
-        # Secure forms validate manual uploads through UploadedDocument.
-        # DocuSeal supplies a generated document under its own contract.
         result = execute_with_timing(:received) do
           process_attachment(application: application, blob: blob, status: :received, admin: admin,
                              submission_method: submission_method, metadata: metadata)

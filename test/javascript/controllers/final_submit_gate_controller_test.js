@@ -119,6 +119,29 @@ describe("FinalSubmitGateController", () => {
     expect(status.textContent).toBe("Application is ready to submit.")
   })
 
+  test.each(["pending", "blocked", "failed", "unavailable"])("explains the %s scan instead of missing confirmations", state => {
+    const widget = document.createElement("div")
+    widget.dataset.scanState = state
+    widget.innerHTML = '<input type="file"><p data-document-upload-target="status"></p>'
+    const file = widget.querySelector("input")
+    file.setCustomValidity(`${state}: choose a file or wait for its check.`)
+    form.append(widget)
+    controller.update()
+    expect(submitButton.disabled).toBe(true)
+    expect(status.textContent).toBe(file.validationMessage)
+  })
+
+  test("unchanged submit readiness does not repeat its live-region text", async () => {
+    controller.update()
+    const announcements = jest.fn()
+    const observer = new MutationObserver(announcements)
+    observer.observe(status, { childList: true, characterData: true, subtree: true })
+    controller.update()
+    await Promise.resolve()
+    expect(announcements).not.toHaveBeenCalled()
+    observer.disconnect()
+  })
+
   function completeEveryRequirement() {
     document.querySelector('input[name="application[self_certify_disability]"]').checked = true
     document.querySelector('input[name="application[terms_accepted]"]').checked = true

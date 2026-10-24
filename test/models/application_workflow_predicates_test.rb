@@ -251,10 +251,11 @@ class ApplicationWorkflowPredicatesTest < ActiveSupport::TestCase
     app = create(:application, :in_progress, :income_not_required)
     app.update_columns(medical_certification_status: Application.medical_certification_statuses[:approved], id_proof_status: Application.id_proof_statuses[:approved])
     app.residency_proof.attach(
-      io: StringIO.new('test residency proof'),
+      io: file_fixture('residency_proof.pdf').open,
       filename: 'residency.pdf',
       content_type: 'application/pdf'
     )
+    mark_document_clean!(app.residency_proof.blob, user: app.user, slot: 'residency_proof')
     admin = create(:admin)
     app.stubs(:purge_rejected_proof).returns(true)
 
@@ -271,10 +272,11 @@ class ApplicationWorkflowPredicatesTest < ActiveSupport::TestCase
     app = create(:application, :in_progress, :income_not_required)
     app.update_columns(medical_certification_status: Application.medical_certification_statuses[:approved], id_proof_status: Application.id_proof_statuses[:approved])
     app.residency_proof.attach(
-      io: StringIO.new('test residency proof'),
+      io: file_fixture('residency_proof.pdf').open,
       filename: 'residency.pdf',
       content_type: 'application/pdf'
     )
+    mark_document_clean!(app.residency_proof.blob, user: app.user, slot: 'residency_proof')
     admin = create(:admin)
     app.stubs(:purge_rejected_proof).returns(true)
 

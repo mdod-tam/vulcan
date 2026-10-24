@@ -7,6 +7,7 @@ class RecurringConfigTest < ActiveSupport::TestCase
   RECURRING_TASKS = %w[
     poll_email_delivery
     cleanup_unattached_uploads
+    recover_document_scans
     generate_vendor_invoices
     check_voucher_expiration
     proof_attachment_metrics
@@ -33,6 +34,15 @@ class RecurringConfigTest < ActiveSupport::TestCase
     tasks = rendered_production_tasks
 
     assert_equal (RECURRING_TASKS - ['check_voucher_expiration']).sort, tasks.keys.sort
+  end
+
+  test 'development resumes antivirus scans every minute' do
+    config = YAML.safe_load(ERB.new(Rails.root.join('config/recurring.yml').read).result, aliases: true)
+    task = config.fetch('development', {}).to_h.fetch('recover_document_scans')
+
+    assert_equal 'RecoverDocumentScansJob', task.fetch('class')
+    assert_equal 'every minute', task.fetch('schedule')
+    assert_not_nil Fugit.parse(task.fetch('schedule'))
   end
 
   private

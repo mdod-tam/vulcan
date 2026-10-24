@@ -417,7 +417,8 @@ class ProofAttachmentService
         record: application,
         name: get_attachment_method_name(proof_type),
         signed_ids: params.fetch(:signed_ids),
-        min_bytes: params.fetch(:min_bytes)
+        min_bytes: params.fetch(:min_bytes),
+        scan_owner: params[:scan_owner] || params[:admin] || application.user
       )
 
       Struct.new(:application, :proof_type, :attachment_param, :blob_size, :submission_method, keyword_init: true).new( # rubocop:disable Style/RedundantStructKeywordInit

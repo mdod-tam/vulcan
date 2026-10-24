@@ -15,8 +15,6 @@ module Admin
 
       setup_fpl_policies
 
-      ensure_test_files_exist
-
       setup_paper_application_context
 
       def @controller.redirect_to(*args)
@@ -29,14 +27,9 @@ module Admin
       teardown_paper_application_context
     end
 
-    def ensure_test_files_exist
-      fixture_dir = Rails.root.join('test/fixtures/files')
-      FileUtils.mkdir_p(fixture_dir)
-
-      ['test_proof.pdf', 'test_income_proof.pdf', 'test_residency_proof.pdf'].each do |filename|
-        file_path = fixture_dir.join(filename)
-        File.write(file_path, "test content for #{filename}") unless File.exist?(file_path)
-      end
+    def paper_pdf_receipt(filename)
+      upload = Rack::Test::UploadedFile.new(Rails.root.join('test/fixtures/files/income_proof.pdf'), 'application/pdf', original_filename: filename)
+      scanned_upload(upload, user: @admin).signed_id
     end
 
     test 'should get new' do
@@ -356,8 +349,8 @@ module Admin
 
     test 'should create paper application for self-applicant with valid data' do
       unique_email = "self.applicant.#{Time.now.to_i}@example.com"
-      income_proof_file = fixture_file_upload(Rails.root.join('test/fixtures/files/test_income_proof.pdf'), 'application/pdf')
-      residency_proof_file = fixture_file_upload(Rails.root.join('test/fixtures/files/test_residency_proof.pdf'), 'application/pdf')
+      income_proof_file = paper_pdf_receipt('test_income_proof.pdf')
+      residency_proof_file = paper_pdf_receipt('test_residency_proof.pdf')
 
       ProofAttachmentService.stubs(:attach_proof).returns({ success: true })
       ApplicationNotificationsMailer.stubs(:account_created).returns(stub(deliver_later: true))
@@ -482,8 +475,8 @@ module Admin
     test 'final submit refuses an unsaved new guardian and preserves the retry fields' do
       dependent_email = "dependent.newguardian.#{Time.now.to_i}@example.com"
       guardian_email = "new.guardian.#{Time.now.to_i}@example.com"
-      income_proof_file = fixture_file_upload(Rails.root.join('test/fixtures/files/test_income_proof.pdf'), 'application/pdf')
-      residency_proof_file = fixture_file_upload(Rails.root.join('test/fixtures/files/test_residency_proof.pdf'), 'application/pdf')
+      income_proof_file = paper_pdf_receipt('test_income_proof.pdf')
+      residency_proof_file = paper_pdf_receipt('test_residency_proof.pdf')
 
       ProofAttachmentService.stubs(:attach_proof).returns({ success: true })
       ApplicationNotificationsMailer.stubs(:account_created).returns(stub(deliver_later: true))
@@ -601,8 +594,8 @@ module Admin
                                           email: guardian_email, phone: '555-000-0003',
                                           physical_address_1: '300 Shared Contact Ave',
                                           city: 'Shareville', state: 'MD', zip_code: '21003')
-      income_proof_file = fixture_file_upload(Rails.root.join('test/fixtures/files/test_income_proof.pdf'), 'application/pdf')
-      residency_proof_file = fixture_file_upload(Rails.root.join('test/fixtures/files/test_residency_proof.pdf'), 'application/pdf')
+      income_proof_file = paper_pdf_receipt('test_income_proof.pdf')
+      residency_proof_file = paper_pdf_receipt('test_residency_proof.pdf')
 
       ProofAttachmentService.stubs(:attach_proof).returns({ success: true })
       ApplicationNotificationsMailer.stubs(:account_created).returns(stub(deliver_later: true))
@@ -662,8 +655,8 @@ module Admin
       existing_guardian = create(:constituent, email: "existing.guardian.#{Time.now.to_i}@example.com", first_name: 'ExistGuard',
                                                last_name: 'IanSr')
       dependent_email = "dependent.existingguardian.#{Time.now.to_i}@example.com"
-      income_proof_file = fixture_file_upload(Rails.root.join('test/fixtures/files/test_income_proof.pdf'), 'application/pdf')
-      residency_proof_file = fixture_file_upload(Rails.root.join('test/fixtures/files/test_residency_proof.pdf'), 'application/pdf')
+      income_proof_file = paper_pdf_receipt('test_income_proof.pdf')
+      residency_proof_file = paper_pdf_receipt('test_residency_proof.pdf')
 
       ProofAttachmentService.stubs(:attach_proof).returns({ success: true })
       ApplicationNotificationsMailer.stubs(:account_created).returns(stub(deliver_later: true))
@@ -812,7 +805,7 @@ module Admin
     test 'creates application, approves income proof, rejects residency proof' do
       Event.delete_all
 
-      @income_pdf   = fixture_file_upload('income_proof.pdf', 'application/pdf')
+      @income_pdf   = paper_pdf_receipt('income_proof.pdf')
       @unique_email = "rejectedproofs.#{SecureRandom.hex(6)}@example.com"
 
       stub_mailers
@@ -930,7 +923,7 @@ module Admin
       ActionMailer::Base.delivery_method = :test
       ActionMailer::Base.perform_deliveries = false
 
-      income_proof = fixture_file_upload(Rails.root.join('test/fixtures/files/test_proof.pdf'), 'application/pdf')
+      income_proof = paper_pdf_receipt('test_proof.pdf')
 
       application_count_before = Application.count
 
@@ -1269,7 +1262,7 @@ module Admin
     end
 
     test 'should handle proof rejection without setting properties directly on application' do
-      income_proof = fixture_file_upload(Rails.root.join('test/fixtures/files/test_proof.pdf'), 'application/pdf')
+      income_proof = paper_pdf_receipt('test_proof.pdf')
 
       unique_email = "proof_rejection_#{Time.now.to_i}@example.com"
       unique_phone = "555-#{rand(100..999)}-#{rand(1000..9999)}"
@@ -1429,8 +1422,8 @@ module Admin
 
     test 'self-application disability attrs should apply to constituent not guardian' do
       constituent_email = "self.applicant.disability.#{Time.now.to_i}@example.com"
-      income_proof_file = fixture_file_upload(Rails.root.join('test/fixtures/files/test_income_proof.pdf'), 'application/pdf')
-      residency_proof_file = fixture_file_upload(Rails.root.join('test/fixtures/files/test_residency_proof.pdf'), 'application/pdf')
+      income_proof_file = paper_pdf_receipt('test_income_proof.pdf')
+      residency_proof_file = paper_pdf_receipt('test_residency_proof.pdf')
 
       ProofAttachmentService.stubs(:attach_proof).returns({ success: true })
       ApplicationNotificationsMailer.stubs(:account_created).returns(stub(deliver_later: true))
@@ -1737,7 +1730,7 @@ module Admin
           medical_provider_email: 'dr.rollback@example.com'
         },
         income_proof_action: 'upload_only',
-        income_proof: fixture_file_upload(Rails.root.join('test/fixtures/files/income_proof.pdf'), 'application/pdf')
+        income_proof: paper_pdf_receipt('income_proof.pdf')
       }
     end
 

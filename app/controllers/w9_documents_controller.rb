@@ -1,7 +1,7 @@
 # frozen_string_literal: true
 
 class W9DocumentsController < ApplicationController
-  include ActiveStorage::Streaming
+  include PrivateAttachmentStreaming
 
   before_action :authenticate_user!
 
@@ -12,22 +12,14 @@ class W9DocumentsController < ApplicationController
     blob = authorized_blob(vendor)
     return head :not_found unless blob
 
-    response.headers['Cache-Control'] = 'private, no-store, max-age=0'
-    response.headers['Pragma'] = 'no-cache'
-    response.headers['X-Content-Type-Options'] = 'nosniff'
-    response.headers['Vary'] = 'Cookie'
-    if request.headers['Range'].present?
-      send_blob_byte_range_data(blob, request.headers['Range'], disposition: disposition)
-    else
-      send_blob_stream(blob, disposition: disposition)
-    end
-  rescue ActiveRecord::RecordNotFound, ActiveStorage::FileNotFoundError
+    DocumentScan.require_clean!(blob)
+
+    stream_private_blob(blob)
+  rescue ActiveRecord::RecordNotFound, ActiveStorage::FileNotFoundError, DocumentScan::NotCleared
     head :not_found
   end
 
   private
-
-  def disposition = params[:disposition] == 'attachment' ? 'attachment' : 'inline'
 
   def authorized_blob(vendor)
     return Vendors::W9Document.restorable(params[:reference], vendor: vendor) if params[:reference].present?

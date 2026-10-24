@@ -47,8 +47,6 @@ gem 'rotp', '~> 6.3'
 gem 'rqrcode', '~> 3.2'
 # gem for creating zip files
 gem 'rubyzip', '~> 3.2'
-# CSV processing, representing rows as Ruby hashes for easy integration with ActiveRecord
-gem 'smarter_csv', '~> 1.14', '>= 1.14.4'
 # hotwire's modest JavaScript framework [https://stimulus.hotwired.dev]
 gem 'stimulus-rails', '~> 1.3', '>= 1.3.4'
 # Add HTTP asset caching/compression and X-Sendfile acceleration to Puma [https://github.com/basecamp/thruster/]

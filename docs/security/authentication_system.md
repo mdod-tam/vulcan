@@ -20,9 +20,21 @@ Required password changes and MFA enrollment take priority. Pending MFA verifica
 
 [`SessionsController#create`](../../app/controllers/sessions_controller.rb) resolves the identifier and rejects locked accounts before checking the password or updating either failure counter. An unknown account or wrong password goes through the shared IP rate limiter first. A rate limiter slows or blocks repeated attempts. Only requests the limiter allows increment a matched account's failure count. Valid credentials bypass that limiter. They then either create a session or start MFA verification.
 
-Session creation itself is [`ApplicationController#_create_and_set_session_cookie`](../../app/controllers/application_controller.rb). It locks the user and rechecks them before writing a [`Session`](../../app/models/session.rb). Password-only sign-in also re-verifies the submitted identifier and password inside that lock. A merge or credential change landing mid-request therefore cannot be accepted on stale reads. Registration creates its first session by a separate path.
+Session creation itself is [`ApplicationController#_create_and_set_session_cookie`](../../app/controllers/application_controller.rb). It locks the user and rechecks them before writing a [`Session`](../../app/models/session.rb). Password-only sign-in also re-verifies the submitted identifier and password inside that lock. A merge or credential change landing mid-request therefore cannot be accepted on stale reads. Registration uses this same session owner. After the session transaction commits, it resets the Rails browser session, preserves the intended return path, and sets the signed login cookie. Password and MFA sign-in use that same completion boundary.
 
 The signed `session_token` cookie identifies the session row. [`Authentication`](../../app/controllers/concerns/authentication.rb) resolves it on every later request. Sign-out deletes the session, the cookie, and any pending MFA state.
+
+## Session lifetime
+
+Sessions have a **30-minute idle limit** and retain the existing **24-hour absolute limit**. Activity can move the idle deadline but cannot extend the absolute deadline. Background document-scan status checks do not refresh the idle deadline. The login cookie has HttpOnly, production Secure, and explicit SameSite=Lax flags.
+
+Password sign-in, MFA completion, and registration deliberately use a browser-session cookie without `Expires` or `Max-Age`. Registration follows the same cookie lifetime policy as subsequent sign-ins; it does not request a permanent cookie. The stored session still expires at the server deadlines if a browser restores the cookie. During deployment, inspect the HTTPS sign-in and registration responses to confirm `Secure`, `HttpOnly`, and `SameSite=Lax` on `session_token`.
+
+Authenticated requests refresh `Session#last_active_at` only when its stored value is at least one minute old. This bounds database writes and makes the idle deadline conservative by up to one minute compared with the latest request. Expiry is checked again under the session row lock before an activity write; waiting for another request cannot revive an expired session. Activity refresh runs inside `authenticate_user!`, so inherited callback ordering cannot skip the expiry recheck. Public actions that skip authentication do not refresh activity.
+
+Admin pages also record genuine typing and interaction through an authenticated, CSRF-protected session-activity POST, at most once a minute. Background scan polling, warning timers, and session-status GETs do not renew the session. The browser checks the server's deadlines when the page opens or regains focus and before showing a five-minute warning. **Keep working** renews idle time while the session remains valid; the absolute limit still requires another sign-in. If the session expires, the page keeps its visible form input and blocks submission so staff can copy unfinished work. This does not save a draft or guarantee that signing in restores the form.
+
+Apply [the session migration](../../db/migrate/20261022173000_add_last_active_at_to_sessions.rb) with the rest of the schema before first launch. It clears stored sessions, requiring anyone signed in on an existing instance to sign in once more. New sessions record activity at creation. An expired protected request clears browser authentication and pending session state. JSON receives the no-store 401 response described below; HTML and Turbo return to sign-in with an English or Spanish expiry alert. The redirect uses a supported request locale, then the expired session user's effective locale, then the default. An anonymous request instead receives a generic sign-in alert in its supported request locale.
 
 Five recorded password failures lock the account for an hour ([`UserAuthentication`](../../app/models/concerns/user_authentication.rb)). This lockout is separate from request throttling.
 
@@ -103,7 +115,8 @@ Tests simulate Twilio Verify and accept `123456`. Development falls back to the 
 ## Tests
 
 - [Root redirects](../../test/controllers/home_controller_test.rb) — role destinations, expired sessions, password/MFA gates, and public sign-in links.
-- [Sessions](../../test/controllers/sessions_controller_test.rb), [enrollment policy](../../test/controllers/mfa_enrollment_policy_test.rb)
+- [Sessions](../../test/controllers/sessions_controller_test.rb), [idle and absolute lifetime](../../test/models/session_test.rb), [real-cookie activity flow](../../test/integration/session_activity_test.rb), [enrollment policy](../../test/controllers/mfa_enrollment_policy_test.rb)
+- [Password sign-in and registration cookie attributes](../../test/integration/session_cookie_test.rb) — browser-session lifetime, HttpOnly, SameSite=Lax, and the stored 24-hour deadline.
 - [WebAuthn verification](../../test/controllers/two_factor_authentication_webauthn_test.rb), [SMS selection](../../test/controllers/two_factor_authentication_sms_selection_test.rb)
 - [Password reset](../../test/controllers/passwords_controller_test.rb), [concurrent resets](../../test/controllers/passwords_controller_concurrency_test.rb)
 - [Recovery requests](../../test/controllers/account_recovery_controller_test.rb), [admin approval](../../test/controllers/admin/recovery_requests_controller_test.rb)

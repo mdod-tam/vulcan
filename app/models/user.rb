@@ -159,6 +159,7 @@ class User < ApplicationRecord
 
   after_save :reset_all_caches
 
+  has_many :document_scans, dependent: :nullify
   has_many :events, dependent: :destroy
   has_many :received_notifications,
            class_name: 'Notification',

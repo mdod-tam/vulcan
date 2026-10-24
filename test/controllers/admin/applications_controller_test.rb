@@ -163,6 +163,58 @@ module Admin
       assert_response :success
     end
 
+    test 'certification upload recovery is scoped to the application' do
+      other_application = create(:application, medical_certification_status: :requested)
+      get admin_application_path(other_application)
+      assert_response :success
+      other_context = css_select('#medical-certification-upload-form [data-document-upload-context-value]').sole['data-document-upload-context-value']
+
+      post document_scans_path, params: { file: fixture_file_upload('medical_certification_valid.pdf', 'application/pdf'),
+                                          purpose: 'certification', slot: 'medical_certification', context: other_context }
+      assert_response :accepted
+      scan = DocumentScan.find(response.parsed_body.fetch('id'))
+      scan.update!(status: :clean, completed_at: Time.current)
+
+      get admin_application_path(@application)
+      assert_response :success
+      context = css_select('#medical-certification-upload-form [data-document-upload-context-value]').sole['data-document-upload-context-value']
+      assert_not_equal other_context, context
+      get document_scans_path, params: { purpose: 'certification', slot: 'medical_certification', context: context }
+      assert_response :success
+      assert_nil response.parsed_body
+
+      get document_scans_path, params: { purpose: 'certification', slot: 'medical_certification', context: other_context }
+      assert_response :success
+      assert_equal scan.id, response.parsed_body.fetch('id')
+      assert_equal scan.blob, ActiveStorage::Blob.find_signed!(response.parsed_body.fetch('signed_id'))
+      assert_not_predicate @application.reload.medical_certification, :attached?
+    end
+
+    test 'show binds each document virus scan to its own file separately from review status' do
+      @application.update_column(:income_proof_required, true)
+      { income_proof: 'clean', residency_proof: 'blocked', id_proof: 'failed', medical_certification: 'pending' }.each do |slot, status|
+        attachment = @application.public_send(slot)
+        attachment.attach(io: file_fixture('medical_certification_valid.pdf').open, filename: "#{slot}.pdf", content_type: 'application/pdf')
+        mark_document_clean!(attachment.blob, user: @application.user, purpose: slot == :medical_certification ? :certification : :proof, slot: slot.to_s)
+        DocumentScan.find_by!(blob: attachment.blob).update!(status: status, completed_at: status == 'pending' ? nil : Time.current)
+      end
+      @application.additional_medical_certifications.attach(
+        io: file_fixture('medical_certification_valid.pdf').open, filename: 'additional.pdf', content_type: 'application/pdf'
+      )
+
+      get admin_application_path(@application)
+
+      assert_response :success
+      { income_proof: 'clean', residency_proof: 'blocked', id_proof: 'failed' }.each do |slot, status|
+        assert_select 'div.mb-3', text: /File: #{slot}\.pdf/ do
+          assert_select "[data-testid='document-scan-status'][data-scan-status='#{status}']", count: 1
+        end
+      end
+      assert_select '[data-testid="medical-certification"] [data-scan-status="pending"]', count: 1
+      assert_select '[data-testid="additional-medical-certifications"] [data-scan-status="not_scanned"]', text: /Not scanned/, count: 1
+      assert_select 'span', text: 'Not Reviewed', minimum: 3
+    end
+
     test 'show page displays secure proof and certification submissions in activity history' do
       Event.create!(
         user: @application.user,

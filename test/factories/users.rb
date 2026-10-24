@@ -1,5 +1,7 @@
 # frozen_string_literal: true
 
+require_relative '../support/document_scan_fixtures' if Rails.env.test?
+
 # Admin phone numbers must be unique across users. Runs that share the test database can see each
 # other's committed rows (non-transactional tests), so each process draws admin numbers from its own
 # random range in 888, which no fixture or test literal uses; numbers within a process never repeat.
@@ -291,6 +293,11 @@ FactoryBot.define do
           filename: 'sample_w9.pdf',
           content_type: 'application/pdf'
         )
+        if Rails.env.test?
+          DocumentScanFixtures.clear!(vendor.w9_form.blob, user: vendor,
+                                                           purpose: :w9, slot: 'w9_form',
+                                                           fixture: 'sample_w9.pdf')
+        end
 
         vendor.update_column(:w9_status, :approved)
 

@@ -99,7 +99,7 @@
               ["Trainer", "trainer"]
             ], params[:role]), 
             class: "block w-full pl-3 pr-10 py-2 text-base border-gray-300 focus:outline-none focus:ring-indigo-500 focus:border-indigo-500 sm:text-sm rounded-md",
-            onchange: "this.form.requestSubmit()" %>
+            data: { action: 'change->autosubmit#submit' } %>
           </div>
           
           <div class="w-48">
@@ -110,13 +110,13 @@
               ["Dependents Only", "dependent"]
             ], params[:relationship]), 
             class: "block w-full pl-3 pr-10 py-2 text-base border-gray-300 focus:outline-none focus:ring-indigo-500 focus:border-indigo-500 sm:text-sm rounded-md",
-            onchange: "this.form.requestSubmit()" %>
+            data: { action: 'change->autosubmit#submit' } %>
           </div>
           
           <div class="flex items-center">
             <%= check_box_tag :needs_review, "true", params[:needs_review].present?, 
                 class: "h-4 w-4 text-indigo-600 focus:ring-indigo-500 border-gray-300 rounded",
-                onchange: "this.form.requestSubmit()" %>
+                data: { action: 'change->autosubmit#submit' } %>
             <%= label_tag :needs_review, "Needs Review", class: "ml-2 text-sm font-medium text-gray-700" %>
           </div>
           

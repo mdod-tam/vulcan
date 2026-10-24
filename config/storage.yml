@@ -20,7 +20,7 @@ s3:
   access_key_id: <%= ENV['S3_ACCESS_KEY_ID'] || ENV['BUCKETEER_AWS_ACCESS_KEY_ID'] %>
   secret_access_key: <%= ENV['S3_SECRET_ACCESS_KEY'] || ENV['BUCKETEER_AWS_SECRET_ACCESS_KEY'] %>
   region: <%= ENV['S3_REGION'] || ENV['BUCKETEER_AWS_REGION'] || 'us-east-1' %>
-  bucket: <%= ENV['S3_BUCKET'] || ENV['BUCKETEER_BUCKET_NAME'] %>
+  bucket: <%= (ENV['S3_BUCKET'] || ENV['BUCKETEER_BUCKET_NAME']).to_json %>
 
 # Remember not to checkin your GCS keyfile to a repository
 # google:

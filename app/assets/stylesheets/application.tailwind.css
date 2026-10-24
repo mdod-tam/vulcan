@@ -71,3 +71,23 @@
     @apply bg-blue-50 border-blue-200 text-blue-800;
   }
 }
+
+/* Keep shared browser styles in the asset so Turbo responses need no inline nonce. */
+a:focus, button:focus {
+  outline: 2px solid #4a90e2;
+  outline-offset: 2px;
+}
+
+.protected-variable {
+  background-color: #e5e7eb;
+  color: #6b7280;
+  padding: 2px 4px;
+  border-radius: 3px;
+  font-weight: 500;
+  cursor: not-allowed;
+  user-select: none;
+}
+
+.protected-variable-movable {
+  cursor: move;
+}

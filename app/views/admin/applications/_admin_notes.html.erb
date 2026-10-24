@@ -61,11 +61,20 @@
               <div class="flex items-center gap-2">
                 <% if note.assigned_to.present? && note.assigned_to == current_user %>
                   <% if note.completed_at.present? %>
-                    <%= button_to "Reopen", admin_application_note_path(@application, note), method: :patch, params: { mark_incomplete: true }, class: "text-xs px-2 py-1 text-gray-600 hover:text-gray-900 bg-white border border-gray-300 rounded hover:bg-gray-50", form: { style: "display: inline;" } %>
+                    <%= button_to 'Reopen', admin_application_note_path(@application, note),
+                                  method: :patch, params: { mark_incomplete: true },
+                                  class: 'text-xs px-2 py-1 text-gray-600 hover:text-gray-900 bg-white border border-gray-300 rounded hover:bg-gray-50',
+                                  form: { class: 'inline' } %>
                   <% else %>
-                    <%= button_to "Mark as Done", admin_application_note_path(@application, note), method: :patch, params: { mark_done: true }, class: "text-xs px-2 py-1 text-green-600 hover:text-green-900 bg-white border border-green-300 rounded hover:bg-green-50", form: { style: "display: inline;" } %>
+                    <%= button_to 'Mark as Done', admin_application_note_path(@application, note),
+                                  method: :patch, params: { mark_done: true },
+                                  class: 'text-xs px-2 py-1 text-green-600 hover:text-green-900 bg-white border border-green-300 rounded hover:bg-green-50',
+                                  form: { class: 'inline' } %>
                   <% end %>
-                  <%= button_to "Unassign", admin_application_note_path(@application, note), method: :patch, params: { unassign: true }, class: "text-xs px-2 py-1 text-gray-600 hover:text-gray-900 bg-white border border-gray-300 rounded hover:bg-gray-50", form: { style: "display: inline;" } %>
+                  <%= button_to 'Unassign', admin_application_note_path(@application, note),
+                                method: :patch, params: { unassign: true },
+                                class: 'text-xs px-2 py-1 text-gray-600 hover:text-gray-900 bg-white border border-gray-300 rounded hover:bg-gray-50',
+                                form: { class: 'inline' } %>
                 <% elsif note.assigned_to.present? %>
                   <!-- Note is assigned to someone else, show no action buttons -->
                 <% else %>
@@ -75,7 +84,11 @@
                     </summary>
                     <div class="absolute right-0 mt-1 w-48 bg-white border border-gray-300 rounded-md shadow-lg z-10">
                       <% User.where(type: "Users::Administrator").active.each do |admin| %>
-                        <%= button_to admin.full_name, admin_application_note_path(@application, note), method: :patch, params: { assigned_to_id: admin.id }, class: "block w-full text-left px-4 py-2 text-sm text-gray-700 hover:bg-indigo-50 hover:text-indigo-900 border-b border-gray-100 last:border-b-0", form: { style: "display: block;" } %>
+                        <%= button_to admin.full_name, admin_application_note_path(@application, note),
+                                      method: :patch, params: { assigned_to_id: admin.id },
+                                      class: 'block w-full text-left px-4 py-2 text-sm text-gray-700 hover:bg-indigo-50 ' \
+                                             'hover:text-indigo-900 border-b border-gray-100 last:border-b-0',
+                                      form: { class: 'block' } %>
                       <% end %>
                     </div>
                   </details>

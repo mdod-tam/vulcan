@@ -167,8 +167,8 @@ class UserEncryptedValidationTest < ActiveSupport::TestCase
 
     assert_equal false, Rails.application.config.active_record.encryption.extend_queries,
                  'extend_queries should be disabled'
-    assert_equal true, Rails.application.config.active_record.encryption.support_unencrypted_data,
-                 'support_unencrypted_data should be enabled'
+    assert_equal false, Rails.application.config.active_record.encryption.support_unencrypted_data,
+                 'Encrypted attributes must reject plaintext storage values'
 
     puts '✓ Encryption configuration verified'
   end

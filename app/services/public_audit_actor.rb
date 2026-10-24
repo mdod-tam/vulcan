@@ -40,7 +40,7 @@ module PublicAuditActor
       metadata: metadata.reverse_merge(public_audit_actor: PUBLIC_AUDIT_ACTOR_METADATA)
     )
   rescue StandardError => e
-    Rails.logger.warn("PublicAuditActor: unable to log audit '#{action}': #{e.message}")
+    Rails.logger.warn("PublicAuditActor: unable to log audit '#{action}' (#{e.class})")
     nil
   end
 end

@@ -186,7 +186,7 @@ module UserProfile
       next unless saved_change_to_attribute?(field)
 
       old_value, new_value = saved_change_to_attribute(field)
-      # AuditEventService.log stores values of encrypted fields encrypted (see Event#change_values).
+      # AuditEventService applies the shared privacy policy before storing changes.
       changed_attributes[field] = { old: old_value, new: new_value }
     end
 

@@ -5,6 +5,7 @@ import RecommendationOutcomeController from "./evaluators/recommendation_outcome
 import RoleSelectController from "./admin/role_select_controller"
 import AdminUserSearchController from "./admin/user_search_controller"
 import ProtectedVariablesController from "./admin/protected_variables_controller"
+import EmailPreviewController from "./admin/email_preview_controller"
 import AutosubmitController from "./admin/autosubmit_controller"
 import EquipmentSelectionController from "./admin/equipment_selection_controller"
 
@@ -12,6 +13,7 @@ import EquipmentSelectionController from "./admin/equipment_selection_controller
 import AddCredentialController from "./auth/add_credential_controller"
 import CredentialAuthenticatorController from "./auth/credential_authenticator_controller"
 import TotpFormController from "./auth/totp_form_controller"
+import SessionActivityController from "./auth/session_activity_controller"
 
 // Chart Controllers
 import ChartController from "./charts/chart_controller"
@@ -58,6 +60,7 @@ import GuardianPickerController from "./users/guardian_picker_controller"
 application.register("role-select", RoleSelectController)
 application.register("admin-user-search", AdminUserSearchController)
 application.register("protected-variables", ProtectedVariablesController)
+application.register("email-preview", EmailPreviewController)
 application.register("autosubmit", AutosubmitController)
 application.register("equipment-selection", EquipmentSelectionController)
 
@@ -65,6 +68,7 @@ application.register("equipment-selection", EquipmentSelectionController)
 application.register("add-credential", AddCredentialController)
 application.register("credential-authenticator", CredentialAuthenticatorController)
 application.register("totp-form", TotpFormController)
+application.register("session-activity", SessionActivityController)
 
 // Chart Controllers
 application.register("chart", ChartController)

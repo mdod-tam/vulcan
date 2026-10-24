@@ -9,20 +9,23 @@ class ProofReviewServiceTest < ActiveSupport::TestCase
     @application = create(:application, :in_progress, skip_proofs: true)
     @admin = create(:admin)
     @application.income_proof.attach(
-      io: StringIO.new('income proof'),
+      io: file_fixture('income_proof.pdf').open,
       filename: 'income-proof.pdf',
       content_type: 'application/pdf'
     )
     @application.residency_proof.attach(
-      io: StringIO.new('residency proof'),
+      io: file_fixture('residency_proof.pdf').open,
       filename: 'residency-proof.pdf',
       content_type: 'application/pdf'
     )
     @application.id_proof.attach(
-      io: StringIO.new('id proof'),
+      io: file_fixture('medical_certification_valid.pdf').open,
       filename: 'id-proof.pdf',
       content_type: 'application/pdf'
     )
+    %w[income_proof residency_proof id_proof].each do |slot|
+      mark_document_clean!(@application.public_send(slot).blob, user: @application.user, slot: slot)
+    end
   end
 
   test 'a failure before saving the review rolls back without exposing exception details' do
@@ -280,10 +283,11 @@ class ProofReviewServiceTest < ActiveSupport::TestCase
   test 'rejecting one proof is not blocked by unrelated missing required proofs' do
     application = create(:application, :in_progress)
     application.residency_proof.attach(
-      io: StringIO.new('residency proof'),
+      io: file_fixture('residency_proof.pdf').open,
       filename: 'residency-proof.pdf',
       content_type: 'application/pdf'
     )
+    mark_document_clean!(application.residency_proof.blob, user: application.user, slot: 'residency_proof')
     NotificationService.stubs(:create_and_deliver!).returns(true)
 
     with_required_proof_validations do
@@ -393,8 +397,11 @@ class ProofReviewCommitOutcomeTest < ActiveSupport::TestCase
     @admin = create(:admin)
     @user = create(:constituent)
     @application = create(:application, :in_progress, :income_not_required, user: @user)
-    @application.residency_proof.attach(io: StringIO.new('residency proof'), filename: 'residency.pdf', content_type: 'application/pdf')
-    @application.id_proof.attach(io: StringIO.new('ID proof'), filename: 'id.pdf', content_type: 'application/pdf')
+    @application.residency_proof.attach(io: file_fixture('residency_proof.pdf').open, filename: 'residency.pdf', content_type: 'application/pdf')
+    @application.id_proof.attach(io: file_fixture('medical_certification_valid.pdf').open, filename: 'id.pdf', content_type: 'application/pdf')
+    %w[residency_proof id_proof].each do |slot|
+      mark_document_clean!(@application.public_send(slot).blob, user: @user, slot: slot)
+    end
     @application.update!(id_proof_status: :approved, medical_certification_status: :approved)
     clear_enqueued_jobs
   end

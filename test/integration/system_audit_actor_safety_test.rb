@@ -94,11 +94,13 @@ class SystemAuditActorSafetyTest < ActionDispatch::IntegrationTest
       payload = { event_type: 'form.viewed', data: { submission_id: 'actor-probe' } }
       secret = 'system-actor-test-secret'
       Rails.application.credentials.stubs(:webhook_secret).returns(secret)
-      signature = OpenSSL::HMAC.hexdigest('SHA256', secret, payload.to_json)
+      timestamp = Time.current.to_i
+      digest = OpenSSL::HMAC.hexdigest('SHA256', secret, "#{timestamp}.#{payload.to_json}")
+      signature = "#{timestamp}.#{digest}"
 
       assert_no_difference ['User.count', 'Event.count'] do
         post webhooks_docuseal_medical_certification_path, params: payload,
-                                                           headers: { 'X-Webhook-Signature' => signature }, as: :json
+                                                           headers: { 'X-Docuseal-Signature' => signature }, as: :json
       end
 
       assert_response :service_unavailable

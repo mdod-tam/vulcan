@@ -82,8 +82,9 @@ module Applications
     end
 
     def secure_upload_blob
-      blob = UploadedDocument.resolve!(file, record: application, name: 'medical_certification', signed_ids: false,
-                                             min_bytes: ProofUploadFormats::SECURE_FORM_MIN_BYTES)
+      blob = UploadedDocument.resolve!(file, record: application, name: 'medical_certification',
+                                             min_bytes: ProofUploadFormats::SECURE_FORM_MIN_BYTES,
+                                             scan_owner: medical_provider_secure_request_form)
       blob.update!(metadata: blob.metadata.merge(secure_upload_metadata))
       blob
     end

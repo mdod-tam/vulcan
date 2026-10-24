@@ -15,9 +15,9 @@ class SecureFormTerminalStateTest < ApplicationSystemTestCase
     visit secure_proof_form_path(token: raw_token)
     assert_selector 'h1', text: I18n.t('secure_proof_forms.show.heading',
                                        proof_type: I18n.t('secure_proof_forms.proof_types.income'))
-    form.revoke!(reason: 'system test')
+    attach_cleared_document 'file', Rails.root.join('test/fixtures/files/income_proof.pdf'), make_visible: true
 
-    attach_file 'file', Rails.root.join('test/fixtures/files/income_proof.pdf'), make_visible: true
+    form.revoke!(reason: 'system test')
     click_button I18n.t('secure_proof_forms.show.submit')
 
     assert_selector 'h1', text: I18n.t('secure_proof_forms.unavailable.heading')
@@ -43,14 +43,15 @@ class SecureFormTerminalStateTest < ApplicationSystemTestCase
 
   test 'W9 upload on a revoked link shows the unavailable page through Turbo' do
     vendor = create(:vendor, :with_w9)
+    vendor.update!(w9_status: :rejected)
     raw_token = VendorSecureRequestForm.generate_public_token
     form = create(:vendor_secure_request_form, vendor: vendor, raw_token: raw_token)
 
     visit secure_w9_form_path(token: raw_token)
     assert_no_selector 'form[data-turbo="false"]'
-    form.revoke!(reason: 'system test')
+    attach_cleared_document 'file', Rails.root.join('test/fixtures/files/sample_w9.pdf'), make_visible: true
 
-    attach_file 'file', Rails.root.join('test/fixtures/files/sample_w9.pdf'), make_visible: true
+    form.revoke!(reason: 'system test')
     click_button I18n.t('secure_w9_forms.show.submit')
 
     assert_selector 'h1', text: I18n.t('secure_w9_forms.unavailable.heading')

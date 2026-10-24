@@ -27,6 +27,8 @@ module Admin
         blob = ActiveStorage::Blob.create_and_upload!(
           io: File.open(file_fixture('income_proof.pdf')), filename: "#{key}.pdf", content_type: 'application/pdf'
         )
+        purpose = key == 'medical_certification' ? :certification : :proof
+        DocumentScanFixtures.clear!(blob, user: @admin, purpose: purpose, slot: key, fixture: 'income_proof.pdf')
         @params["#{key}_action"] = 'upload_only'
         @params["#{key}_signed_id"] = blob.signed_id
         [key, blob]
@@ -42,7 +44,7 @@ module Admin
       @blobs.each do |key, blob|
         assert_select "input[type=hidden][name='#{key}_signed_id'][value='#{blob.signed_id}']"
         assert_select "[data-document-upload-retained-name-value='#{key}_signed_id']"
-        assert_select 'p', text: "Uploaded: #{blob.filename}"
+        assert_select 'p', text: I18n.t('documents.upload.uploaded', filename: blob.filename)
       end
 
       receipt = css_select('input[name=identity_review_receipt]').sole['value']
@@ -73,35 +75,39 @@ module Admin
       assert_equal application.id, review_case.metadata['application_id']
     end
 
-    test 'multipart POST retains all four documents for identity review and retry' do
-      multipart = @params.dup
-      @blobs.each_key do |key|
-        multipart.delete("#{key}_signed_id")
-        multipart[key] = fixture_file_upload('income_proof.pdf', 'application/pdf')
+    test 'cleared upload receipts in fresh fields retain all four documents for identity review and retry' do
+      staged = @params.dup
+      @blobs.each do |key, blob|
+        staged.delete("#{key}_signed_id")
+        staged[key] = blob.signed_id
       end
-      assert_no_difference ['User.count', 'Application.count', 'DuplicateReviewCase.count', 'Event.count'] do
-        post admin_paper_applications_path, params: multipart
+      assert_no_difference ['User.count', 'Application.count', 'DuplicateReviewCase.count', 'Event.count',
+                            'ActiveStorage::Blob.count', 'DocumentScan.count'] do
+        post admin_paper_applications_path, params: staged
       end
       assert_response :unprocessable_content
       assert_select '#identity-review-heading'
       retained = @blobs.keys.to_h do |key|
         signed_id = css_select("input[type=hidden][name='#{key}_signed_id']").sole['value']
         blob = ActiveStorage::Blob.find_signed!(signed_id)
+        assert_equal @blobs.fetch(key), blob
         assert_equal file_fixture('income_proof.pdf').binread, blob.download
         assert_empty blob.attachments
         ["#{key}_signed_id", signed_id]
       end
       assert_equal 4, retained.size
 
-      assert_difference ['User.count', 'Application.count', 'DuplicateReviewCase.count'], 1 do
-        post admin_paper_applications_path, params: @params.merge(retained).merge(
-          identity_review_receipt: css_select('input[name=identity_review_receipt]').sole['value'],
-          identity_determination: 'keep_separate', identity_rationale: 'Paper identifies a different person.'
-        )
+      assert_no_difference ['ActiveStorage::Blob.count', 'DocumentScan.count'] do
+        assert_difference ['User.count', 'Application.count', 'DuplicateReviewCase.count'], 1 do
+          post admin_paper_applications_path, params: @params.merge(retained).merge(
+            identity_review_receipt: css_select('input[name=identity_review_receipt]').sole['value'],
+            identity_determination: 'keep_separate', identity_rationale: 'Paper identifies a different person.'
+          )
+        end
       end
       assert_response :redirect
       application = Application.order(:id).last
-      @blobs.each_key { |key| assert_equal retained["#{key}_signed_id"], application.public_send(key).blob.signed_id }
+      @blobs.each { |key, blob| assert_equal blob, application.public_send(key).blob }
     end
 
     test 'paper submission requires an authenticated admin' do

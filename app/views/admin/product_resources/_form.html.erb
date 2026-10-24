@@ -37,7 +37,8 @@
     <p id="pdf-help" class="mb-2 text-sm text-gray-600">PDF only, up to and including 10 MB. Select a replacement or remove the selected upload before choosing another.</p>
     <%= render 'shared/document_upload', form: form, model: @resource, field: :document, input_id: 'product_resource_document',
                                          input_aria: action_form_field_aria(:save_resource, :document, form_errors: form_errors, describedby: 'pdf-help'),
-                                         blob: @retained_document, accept: '.pdf,application/pdf' %>
+                                         blob: @retained_document, accept: '.pdf,application/pdf',
+                                         active_selector: '#product_resource_source', active_value: 'pdf' %>
     <%= render 'shared/field_errors', action: :save_resource, attribute: :document, form_errors: form_errors %>
   </div>
   <div class="flex flex-wrap items-center gap-4">

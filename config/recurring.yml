@@ -6,6 +6,11 @@
 # Hourly schedules are timezone-invariant.
 
 production:
+  recover_document_scans:
+    class: RecoverDocumentScansJob
+    schedule: "every minute"
+    description: "Resume due antivirus scans and report a delayed scan backlog"
+
   poll_email_delivery:
     class: EmailDelivery::PollJob
     schedule: "15 * * * *"
@@ -14,7 +19,7 @@ production:
   cleanup_unattached_uploads:
     class: CleanupUnattachedUploadsJob
     schedule: "0 5 * * * UTC"
-    description: "Purge unattached direct uploads after seven days"
+    description: "Purge unattached documents after seven days, preserving pending scans"
 
   generate_vendor_invoices:
     class: GenerateVendorInvoicesJob
@@ -58,12 +63,10 @@ production:
     queue: "low"
 
 development:
-  # Development recurring tasks (if any)
-  # proof_attachment_metrics:
-  #   class: ProofAttachmentMetricsJob
-  #   schedule: "0 0 * * *"
-  #   description: "Generate daily metrics on proof attachment success/failure rates"
-  #   queue: "low"
+  recover_document_scans:
+    class: RecoverDocumentScansJob
+    schedule: "every minute"
+    description: "Resume due antivirus scans and report a delayed scan backlog"
 
 test:
   # No recurring tasks in test environment

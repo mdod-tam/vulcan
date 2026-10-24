@@ -9,29 +9,11 @@ module Admin
       @application = create(:application, :in_progress_with_pending_proofs, skip_proofs: true)
 
       # The pending-proofs trait supplies income and residency files without a certification.
-      unless @application.income_proof.attached?
-        @application.income_proof.attach(
-          io: Rails.root.join('test/fixtures/files/income_proof.pdf').open,
-          filename: 'income_proof.pdf',
-          content_type: 'application/pdf'
-        )
-      end
+      attach_cleared_proof(@application, :income_proof, filename: 'income_proof.pdf') unless @application.income_proof.attached?
 
-      unless @application.residency_proof.attached?
-        @application.residency_proof.attach(
-          io: Rails.root.join('test/fixtures/files/residency_proof.pdf').open,
-          filename: 'residency_proof.pdf',
-          content_type: 'application/pdf'
-        )
-      end
+      attach_cleared_proof(@application, :residency_proof, filename: 'residency_proof.pdf') unless @application.residency_proof.attached?
 
-      unless @application.medical_certification.attached?
-        @application.medical_certification.attach(
-          io: Rails.root.join('test/fixtures/files/medical_certification_valid.pdf').open,
-          filename: 'medical_certification_valid.pdf',
-          content_type: 'application/pdf'
-        )
-      end
+      attach_cleared_proof(@application, :medical_certification, filename: 'medical_certification_valid.pdf') unless @application.medical_certification.attached?
 
       @application.update!(medical_certification_status: :received)
 
@@ -138,7 +120,7 @@ module Admin
         residency_proof_status: :not_reviewed,
         id_proof_status: :not_reviewed
       )
-      attach_lightweight_proof(@application, :id_proof) unless @application.id_proof.attached?
+      attach_cleared_proof(@application, :id_proof) unless @application.id_proof.attached?
 
       proof_reviewer = Applications::ProofReviewer.new(@application, @admin)
 

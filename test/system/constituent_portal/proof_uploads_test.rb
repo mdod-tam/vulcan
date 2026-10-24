@@ -53,7 +53,7 @@ class ProofUploadsTest < ApplicationSystemTestCase
     click_on 'Resubmit Income Proof'
     assert_selector 'h1', text: /Upload New Income Proof/i
 
-    attach_file 'income_proof', @valid_pdf
+    attach_cleared_document 'income_proof', @valid_pdf
     click_button 'Submit Document'
 
     assert_success_message('Proof submitted successfully')
@@ -77,10 +77,9 @@ class ProofUploadsTest < ApplicationSystemTestCase
     visit constituent_portal_application_new_proof_path(@application, proof_type: 'income')
     wait_for_turbo
 
-    attach_file 'income_proof', @valid_pdf
-    assert_text I18n.t('documents.upload.selected', filename: 'income_proof.pdf')
+    attach_cleared_document 'income_proof', @valid_pdf
+    assert_text I18n.t('documents.upload.uploaded', filename: 'income_proof.pdf')
 
-    # The file uploads when the form is submitted
     click_button 'Submit Document'
     wait_for_turbo
 
@@ -92,11 +91,16 @@ class ProofUploadsTest < ApplicationSystemTestCase
   end
 
   test 'cancelling an upload before the file is stored keeps the form usable and a new submit succeeds' do
-    # Hold the first blob-creation request so Cancel lands before any storage request exists
+    visit constituent_portal_application_new_proof_path(@application, proof_type: 'income')
+    wait_for_turbo
+    previous_blob = @application.income_proof.blob
+    previous_scan_id = DocumentScan.maximum(:id) || 0
+
+    # Hold selection-time staging so Cancel arrives before the server stores the file.
     browser = page.driver.browser
     held_requests = Queue.new
     hold_next = true
-    browser.network.intercept(pattern: '*/rails/active_storage/direct_uploads*')
+    browser.network.intercept(pattern: '*/document_scans')
     browser.on(:request) do |request|
       if hold_next
         hold_next = false
@@ -106,13 +110,9 @@ class ProofUploadsTest < ApplicationSystemTestCase
       end
     end
 
-    visit constituent_portal_application_new_proof_path(@application, proof_type: 'income')
-    wait_for_turbo
-
     attach_file 'income_proof', @valid_pdf
-    click_button 'Submit Document'
     held_request = held_requests.pop(timeout: 10)
-    assert held_request, 'the blob-creation request should be held'
+    assert held_request, 'the staging request should be held'
     assert_text I18n.t('documents.upload.uploading', filename: 'income_proof.pdf')
 
     click_button I18n.t('documents.upload.cancel')
@@ -125,9 +125,14 @@ class ProofUploadsTest < ApplicationSystemTestCase
     rescue Ferrum::Error
       # The browser already dropped the aborted request
     end
+    wait_until do
+      DocumentScan.where(user: @user, slot: 'income_proof').where('id > ?', previous_scan_id).where.not(dismissed_at: nil).exists?
+    end
     assert_current_path constituent_portal_application_new_proof_path(@application, proof_type: 'income')
     assert_predicate @application.reload, :income_proof_status_rejected?
+    assert_equal previous_blob, @application.income_proof.blob
 
+    attach_cleared_document 'income_proof', @valid_pdf
     click_button 'Submit Document'
     wait_for_turbo
 

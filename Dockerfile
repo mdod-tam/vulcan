@@ -61,8 +61,9 @@ COPY . .
 # Precompile bootsnap code for faster boot times
 RUN bundle exec bootsnap precompile app/ lib/
 
-# Precompiling assets for production without requiring secret RAILS_MASTER_KEY
-RUN SECRET_KEY_BASE_DUMMY=1 ./bin/rails assets:precompile
+# Compile without runtime secrets and discard Rails' generated build signing secret.
+RUN SECRET_KEY_BASE_DUMMY=1 APPLICATION_HOST=assets.invalid ./bin/rails assets:precompile && \
+    rm -f tmp/local_secret.txt
 
 
 RUN rm -rf node_modules

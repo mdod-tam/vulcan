@@ -20,6 +20,17 @@ module Admin
       assert_select "a[href='#{new_admin_vendor_w9_review_path(drifted_vendor)}']", text: 'Review W9', count: 0
     end
 
+    test 'show distinguishes the current W9 virus scan from its business review status' do
+      vendor = create(:vendor, :with_w9)
+      DocumentScan.find_by!(blob: vendor.w9_form.blob).update!(status: :failed)
+
+      get admin_vendor_path(vendor)
+
+      assert_response :success
+      assert_select '[data-testid="document-scan-status"][data-scan-status="failed"]', text: /Failed/, count: 1
+      assert_select 'span', text: 'Pending Review'
+    end
+
     test 'edit shows sign-in email and phone read-only and saves the approval status' do
       vendor = create(:vendor, :approved)
 
@@ -70,7 +81,7 @@ module Admin
       end
     end
 
-    test 'tax ID edit starts blank, preserves blank submissions, and audits an explicit replacement encrypted' do
+    test 'tax ID edit starts blank, preserves blank submissions, and audits only a masked replacement' do
       vendor = create(:vendor, business_tax_id: '123456789')
 
       get edit_admin_vendor_path(vendor)
@@ -90,8 +101,9 @@ module Admin
       assert_redirected_to admin_vendor_path(vendor)
       assert_equal '987654321', vendor.reload.business_tax_id
       event = Event.where(action: 'vendor_updated', auditable: vendor).order(:id).last
-      assert_equal %w[123456789 987654321], event.field_changes['business_tax_id']
-      assert_equal({}, event.metadata['changes']['business_tax_id'])
+      assert_equal ['***-**-6789', '***-**-4321'], event.field_changes['business_tax_id']
+      assert_equal ['***-**-6789', '***-**-4321'], event.metadata['changes']['business_tax_id']
+      assert_nil event.change_values
     end
 
     test 'failed admin edits do not echo a submitted replacement tax ID' do

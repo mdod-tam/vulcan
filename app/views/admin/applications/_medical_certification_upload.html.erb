@@ -73,7 +73,7 @@
           </p>
           
           <%= render 'shared/document_upload',
-                     form: f, field: 'medical_certification', model: Application, described_by: 'certification_hint',
+                     form: f, field: 'medical_certification', model: @application, described_by: 'certification_hint',
                      input_data: { document_proof_handler_target: 'fileInput' } %>
 
           <p id="certification_keyboard_hint" class="mt-1 text-xs text-gray-700">

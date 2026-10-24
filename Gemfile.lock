@@ -422,8 +422,6 @@ GEM
       jwt (>= 2.0, < 4.0)
     securerandom (0.4.1)
     smart_properties (1.17.0)
-    smarter_csv (1.19.0)
-      bigdecimal
     solid_cable (3.0.12)
       actioncable (>= 7.2)
       activejob (>= 7.2)
@@ -550,7 +548,6 @@ DEPENDENCIES
   rubocop-factory_bot
   rubocop-rails
   rubyzip (~> 3.2)
-  smarter_csv (~> 1.14, >= 1.14.4)
   solid_cable (~> 3.0, >= 3.0.12)
   solid_cache (~> 1.0, >= 1.0.7)
   solid_queue (~> 1.2, >= 1.2.1)

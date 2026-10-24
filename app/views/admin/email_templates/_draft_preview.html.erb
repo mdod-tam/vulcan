@@ -10,17 +10,27 @@
       </span>
     </div>
 
-    <% if error_message.present? %>
+    <% if template.html? %>
+      <%= tag.div class: 'rounded-md border border-red-300 bg-red-50 p-3 text-sm text-red-800',
+                  role: 'alert', aria: { atomic: true }, data: { 'email-preview-target': 'error' },
+                  hidden: error_message.blank? do %>
+        <%= 'Preview unavailable. Review the error below, correct the draft, and try again.' if error_message.present? %>
+      <% end %>
+    <% end %>
+
+    <% if error_message.present? && !template.html? %>
       <div class="rounded-md border border-red-300 bg-red-50 p-3 text-sm text-red-800" role="alert">
         <p><%= error_message %></p>
       </div>
     <% else %>
       <div role="status">
-        <div class="mb-4">
-          <h4 class="text-md font-medium text-gray-600 mb-2">
-            Subject Preview: <span class="font-normal"><%= rendered_subject %></span>
-          </h4>
-        </div>
+        <% unless template.html? %>
+          <div class="mb-4">
+            <h4 class="text-md font-medium text-gray-600 mb-2">
+              Subject Preview: <span class="font-normal"><%= rendered_subject %></span>
+            </h4>
+          </div>
+        <% end %>
 
         <div class="prose max-w-none mb-4">
           <h4 class="text-md font-medium text-gray-600 mb-2">
@@ -29,9 +39,10 @@
 
           <div class="border border-gray-300 rounded-lg shadow-sm p-4 bg-white">
             <% if template.format == 'html' %>
-              <div class="email-preview">
-                <%= raw rendered_body %>
-              </div>
+              <%= render 'admin/email_templates/html_preview',
+                         template: template,
+                         frame_id: "#{frame_id}-document", title: "Draft email body preview (#{template.locale.upcase})",
+                         error_message: error_message, announce_result: true %>
             <% else %>
               <pre class="whitespace-pre-wrap text-sm"><%= rendered_body %></pre>
             <% end %>

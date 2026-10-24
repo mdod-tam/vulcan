@@ -4,8 +4,7 @@ class Event < ApplicationRecord
   belongs_to :user
   belongs_to :auditable, polymorphic: true, optional: true
 
-  # Old and new values for fields the audited record encrypts. Metadata is plain JSON, so it keeps
-  # only those fields' names; AuditEventService.log moves the values here.
+  # Device history keeps full operational values encrypted; personal changes are masked in metadata.
   encrypts :change_values
 
   validates :action, presence: true
@@ -21,8 +20,7 @@ class Event < ApplicationRecord
     super || {}
   end
 
-  # The recorded changes, with values of encrypted fields restored. Read changes through this, not
-  # metadata['changes'], which holds an empty placeholder for each of those fields.
+  # Combine metadata changes with values held in the encrypted audit cell.
   def field_changes
     (metadata['changes'] || {}).to_h { |field, change| [field, stored_change_values.fetch(field, change)] }
   end
@@ -31,7 +29,7 @@ class Event < ApplicationRecord
     field_changes.transform_values do |change|
       case change
       when Array then change
-      when Hash then change.values_at('old', 'new')
+      when Hash then change.key?('old') ? change.values_at('old', 'new') : change.values_at('from', 'to')
       else [nil, change]
       end
     end

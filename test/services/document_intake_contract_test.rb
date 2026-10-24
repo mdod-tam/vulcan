@@ -65,7 +65,7 @@ class DocumentIntakeContractTest < ActiveSupport::TestCase
   # Each prepare_ method creates the records first, so only the submission is measured.
   def prepare_proof_writer
     application = create(:application, :in_progress)
-    lambda do |file|
+    scanning_submitter(user: application.user, purpose: :proof, slot: 'income_proof') do |file|
       result = ProofAttachmentService.attach_proof(application: application, proof_type: :income, blob_or_file: file,
                                                    submission_method: :paper, status: :not_reviewed)
       result[:success] ? :accepted : refusal_reason(result[:error])
@@ -75,7 +75,7 @@ class DocumentIntakeContractTest < ActiveSupport::TestCase
   def prepare_certification_writer
     application = create(:application, :in_progress)
     admin = create(:admin)
-    lambda do |file|
+    scanning_submitter(user: admin, purpose: :certification, slot: 'medical_certification') do |file|
       MedicalCertificationAttachmentService.attach_certification(application: application, blob_or_file: file, admin: admin,
                                                                  status: :received, submission_method: :admin_upload)
       :accepted
@@ -85,9 +85,9 @@ class DocumentIntakeContractTest < ActiveSupport::TestCase
   end
 
   def prepare_secure_proof_form
-    application = create(:application, :in_progress)
+    application = create(:application, :in_progress, income_proof_required: true)
     form = create(:secure_request_form, kind: :income_proof_resubmission, application: application)
-    lambda do |file|
+    scanning_submitter(secure_form: form, purpose: :proof, slot: 'income_proof') do |file|
       secure_outcome(Applications::SubmitProofResubmission.new(application: application, secure_request_form: form,
                                                                file: file).call)
     end
@@ -97,7 +97,7 @@ class DocumentIntakeContractTest < ActiveSupport::TestCase
     application = create(:application, :in_progress, medical_provider_name: 'Dr. Provider',
                                                      medical_provider_email: 'provider@example.com')
     form = create(:medical_provider_secure_request_form, application: application)
-    lambda do |file|
+    scanning_submitter(secure_form: form, purpose: :certification, slot: 'medical_certification') do |file|
       secure_outcome(Applications::SubmitCertificationUpload.new(application: application,
                                                                  medical_provider_secure_request_form: form,
                                                                  file: file).call)
@@ -108,8 +108,17 @@ class DocumentIntakeContractTest < ActiveSupport::TestCase
     vendor = create(:vendor, :with_w9)
     vendor.update!(w9_status: :rejected)
     form = create(:vendor_secure_request_form, vendor: vendor)
-    lambda do |file|
+    scanning_submitter(secure_form: form, purpose: :w9, slot: 'w9_form') do |file|
       secure_outcome(Vendors::SubmitW9Resubmission.new(vendor: vendor, vendor_secure_request_form: form, file: file).call)
+    end
+  end
+
+  def scanning_submitter(purpose:, slot:, user: nil, secure_form: nil, &submit)
+    lambda do |file|
+      blob = scanned_upload(file, user: user, secure_form: secure_form, purpose: purpose, slot: slot)
+      submit.call(blob.signed_id)
+    rescue UploadedDocument::Refused => e
+      e.reason
     end
   end
 

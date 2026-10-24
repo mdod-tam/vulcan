@@ -28,6 +28,16 @@ module Applications
       assert_equal events.map(&:id).sort, EventDeduplicationService.new.deduplicate(events).map(&:id).sort
     end
 
+    test 'retains separate profile edits when the masks match in the same minute' do
+      events = %w[Before After Before].map do |name|
+        AuditEventService.log(action: 'profile_updated_by_admin', actor: @admin, auditable: @application.user,
+                              metadata: { changes: { first_name: { old: 'Alice', new: name } } },
+                              created_at: Time.current.beginning_of_minute)
+      end
+
+      assert_equal events.map(&:id).sort, EventDeduplicationService.new.deduplicate(events).map(&:id).sort
+    end
+
     test 'correctly deduplicates events with different priorities' do
       service = EventDeduplicationService.new
       time = Time.current

@@ -42,7 +42,7 @@ class ApplicationIngressCharacterizationTest < ActionDispatch::IntegrationTest
     post "/constituent_portal/applications/#{application.id}/proofs/resubmit",
          params: {
            proof_type: 'income',
-           income_proof: fixture_file_upload(Rails.root.join('test/fixtures/files/test_income_proof.pdf'), 'application/pdf')
+           income_proof: scanned_reference('income_proof.pdf', user: constituent, purpose: :proof, slot: 'income_proof')
          }
 
     assert_redirected_to constituent_portal_application_path(application)
@@ -85,11 +85,11 @@ class ApplicationIngressCharacterizationTest < ActionDispatch::IntegrationTest
           medical_provider_email: 'paper-doctor@example.com'
         },
         income_proof_action: 'accept',
-        income_proof: fixture_file_upload(Rails.root.join('test/fixtures/files/test_income_proof.pdf'), 'application/pdf'),
+        income_proof: scanned_reference('income_proof.pdf', user: @admin, purpose: :proof, slot: 'income_proof'),
         residency_proof_action: 'accept',
-        residency_proof: fixture_file_upload(Rails.root.join('test/fixtures/files/test_residency_proof.pdf'), 'application/pdf'),
+        residency_proof: scanned_reference('residency_proof.pdf', user: @admin, purpose: :proof, slot: 'residency_proof'),
         medical_certification_action: 'approved',
-        medical_certification: fixture_file_upload(Rails.root.join('test/fixtures/files/test_document.pdf'), 'application/pdf')
+        medical_certification: scanned_reference('medical_certification_valid.pdf', user: @admin, purpose: :certification, slot: 'medical_certification')
       },
       admin: @admin
     )
@@ -115,7 +115,7 @@ class ApplicationIngressCharacterizationTest < ActionDispatch::IntegrationTest
 
     patch upload_medical_certification_admin_application_path(application),
           params: {
-            medical_certification: fixture_file_upload(Rails.root.join('test/fixtures/files/test_document.pdf'), 'application/pdf'),
+            medical_certification: scanned_reference('medical_certification_valid.pdf', user: @admin, purpose: :certification, slot: 'medical_certification'),
             medical_certification_status: 'approved'
           }
 
@@ -136,6 +136,8 @@ class ApplicationIngressCharacterizationTest < ActionDispatch::IntegrationTest
       :application,
       document_signing_service: 'docuseal',
       document_signing_submission_id: 'sub_123456',
+      document_signing_submitter_id: 'submitter_789',
+      document_signing_requested_at: 1.day.ago,
       document_signing_status: :sent,
       medical_certification_status: :requested
     )
@@ -144,13 +146,14 @@ class ApplicationIngressCharacterizationTest < ActionDispatch::IntegrationTest
     status = mock('docuseal_status')
     status.stubs(:success?).returns(true)
     response.stubs(:status).returns(status)
-    response.stubs(:body).returns('signed pdf')
+    response.stubs(:body).returns(HTTP::Response::Body.new(DocumentScanFixtures::ResponseStream.new(file_fixture('medical_certification_valid.pdf').binread)))
     HTTP.stubs(:timeout).with(30).returns(HTTP)
     HTTP.stubs(:get).with('https://example.com/signed_doc.pdf').returns(response)
 
     payload = {
       event_type: 'form.completed',
       data: {
+        'id' => 'submitter_789',
         'submission_id' => 'sub_123456',
         'email' => 'doctor@example.com',
         'documents' => [{ 'url' => 'https://example.com/signed_doc.pdf' }],
@@ -165,6 +168,17 @@ class ApplicationIngressCharacterizationTest < ActionDispatch::IntegrationTest
 
     assert_response :ok
 
+    scan = DocumentScan.find_by!(continuation: 'docuseal')
+    assert_predicate scan, :pending?
+    assert_empty scan.blob.attachments
+    assert_not application.reload.medical_certification.attached?
+    assert_equal 'requested', application.medical_certification_status
+    assert_equal 'sent', application.document_signing_status
+    assert_not Event.exists?(auditable: application, action: 'document_signing_completed')
+
+    scan.update!(status: :clean, completed_at: Time.current)
+    DocumentSigning::AcceptScannedDocumentJob.perform_now(scan.id)
+
     application.reload
     assert application.medical_certification.attached?
     assert_equal 'received', application.medical_certification_status
@@ -174,6 +188,13 @@ class ApplicationIngressCharacterizationTest < ActionDispatch::IntegrationTest
   end
 
   private
+
+  def scanned_reference(filename, user:, purpose:, slot:)
+    file = fixture_file_upload(file_fixture(filename), 'application/pdf')
+    scanned_upload(file, user: user, purpose: purpose, slot: slot).signed_id
+  ensure
+    file&.tempfile&.close
+  end
 
   def proof_rate_limit_policy
     @proof_rate_limit_policy ||= Policy.find_or_initialize_by(key: 'proof_submission_rate_limit_web')
@@ -231,9 +252,11 @@ class ApplicationIngressCharacterizationTest < ActionDispatch::IntegrationTest
   end
 
   def webhook_headers(payload)
+    timestamp = Time.current.to_i
+    digest = OpenSSL::HMAC.hexdigest('sha256', @webhook_secret, "#{timestamp}.#{payload.to_json}")
     {
       'Content-Type' => 'application/json',
-      'X-Webhook-Signature' => OpenSSL::HMAC.hexdigest('sha256', @webhook_secret, payload.to_json)
+      'X-Docuseal-Signature' => "#{timestamp}.#{digest}"
     }
   end
 end

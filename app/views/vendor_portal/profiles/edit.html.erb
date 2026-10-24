@@ -182,8 +182,7 @@
             <div class="mt-2">
               <%= render 'shared/document_upload',
                          form: f, field: 'w9_form', model: Users::Vendor, input_id: 'users_vendor_w9_form',
-                         blob: @retained_w9, described_by: 'w9_form_help',
-                         upload_url: vendor_portal_w9_uploads_path, retained_reference: @retained_w9_reference %>
+                         blob: @retained_w9, described_by: 'w9_form_help', retained_reference: @retained_w9_reference %>
             </div>
           </div>
         </div>

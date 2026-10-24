@@ -3,9 +3,9 @@
 module Vendors
   class ReplaceW9
     # Callers hold the vendor lock before any secure-request or blob lock.
-    def self.call(vendor:, file:, attributes: {}, signed_ids: true, min_bytes: nil)
+    def self.call(vendor:, file:, attributes: {}, signed_ids: true, min_bytes: nil, scan_owner: vendor)
       vendor.with_lock do
-        blob = W9Document.resolve!(file, vendor: vendor, signed_ids: signed_ids, min_bytes: min_bytes)
+        blob = W9Document.resolve!(file, vendor: vendor, signed_ids: signed_ids, min_bytes: min_bytes, scan_owner: scan_owner)
         previous = vendor.w9_form.blob
         if previous && previous.id != blob.id &&
            (vendor.w9_status_approved? || vendor.w9_reviews.exists?(reviewed_blob_id: previous.id))

@@ -1,4 +1,8 @@
 es:
+  alerts:
+    sign_in_required: "Inicie sesión para continuar."
+    session_expired: "Su sesión ha expirado; vuelva a iniciar sesión."
+    session_fail: "No se pudo iniciar la sesión."
   layouts:
     secure_public:
       program_name: "Programa de Telecomunicaciones Accesibles de Maryland"
@@ -184,16 +188,31 @@ es:
       reason: "Motivo: %{reason}"
   documents:
     upload:
-      uploaded: "Subido: %{filename}"
-      selected: "Seleccionado: %{filename}. Se sube cuando envíe el formulario."
+      uploaded: "Listo: %{filename}"
       uploading: "Subiendo %{filename}…"
-      canceled: "Carga cancelada. Se conserva cualquier archivo anterior."
-      failed: "La carga falló. Inténtelo de nuevo o elija otro archivo. Se conserva cualquier archivo anterior."
+      canceled: "Carga cancelada."
+      failed: "La carga falló. Elija el archivo de nuevo."
       progress: "Progreso de la carga"
       remove: "Quitar documento"
       cancel: "Cancelar carga"
+      scanning: "Comprobando si %{filename} contiene virus… Esto puede tardar unos minutos."
+      blocked: "Este archivo no pasó la comprobación de virus. Elija otro archivo."
+      unavailable: "No pudimos comprobar el estado de la carga. Su archivo está guardado. Inténtelo de nuevo."
+      wait: "Espere a que termine la comprobación de virus antes de enviar el formulario."
+      retry: "Comprobar de nuevo"
+      choose_again: "Elegir archivo de nuevo"
+      session_expired: "Su sesión ha caducado. Actualice esta página para iniciar sesión de nuevo."
+      javascript_required: "Active JavaScript para comprobar los archivos antes de enviar el formulario."
+    scan:
+      pending: "Comprobando si este archivo contiene virus."
+      clean: "Este archivo pasó la comprobación de virus."
+      blocked: "Este archivo no pasó la comprobación de virus. Elija otro archivo."
+      failed: "No pudimos terminar la comprobación de virus. Intente subir el archivo de nuevo más tarde."
+      limit_reached: "Se alcanzó el límite de cargas. Espere y luego elija el archivo de nuevo para reintentar."
+      link_unavailable: "Este enlace de carga ya no está activo. Pida un enlace nuevo a la persona que lo envió."
     refused_document: "%{document}: %{reason}"
     refused:
+      scan_required: "Espere a que el archivo pase la comprobación de virus antes de enviar el formulario."
       missing: "Elija un archivo para subir."
       unsupported: "No pudimos leer ese archivo. Elíjalo de nuevo."
       unreadable: "No pudimos leer ese archivo. Suba otro archivo."

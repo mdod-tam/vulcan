@@ -29,9 +29,12 @@ module Admin
 
     test 'selected export combines quantities and excludes device and recipient identity' do
       other = create(:equipment_need)
-      get admin_equipment_index_path(format: :csv, need_ids: [@need.id], item_ids: [@detached.id])
+      assert_difference -> { Event.where(action: 'export_generated', user: @admin).count } do
+        get admin_equipment_index_path(format: :csv, need_ids: [@need.id], item_ids: [@detached.id])
+      end
       assert_response :success
       records = CSV.parse(response.body, headers: true)
+      assert_equal ['Manufacturer', 'Catalog model', 'Model identifier', 'Required quantity'], records.headers
       assert_equal 1, records.size
       assert_equal '3', records.sole['Required quantity']
       assert_equal "'+Unsafe maker", records.sole['Manufacturer']
@@ -39,6 +42,8 @@ module Admin
       assert_not_includes response.body, 'PRIVATE-ID'
       assert_not_includes response.body, @need.application.user.email
       assert_not_includes response.body, other.product.name
+      event = Event.where(action: 'export_generated', user: @admin).order(:id).last
+      assert_equal({ 'export_type' => 'equipment_bids', 'row_count' => 1, '__service_generated' => true }, event.metadata)
     end
 
     test 'unselected export uses current product and carrying-vendor filters' do

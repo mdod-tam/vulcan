@@ -1,5 +1,7 @@
 # frozen_string_literal: true
 
+require_relative '../support/document_scan_fixtures' if Rails.env.test?
+
 FactoryBot.define do
   factory :application do
     user factory: %i[constituent with_disabilities], strategy: :create
@@ -101,11 +103,21 @@ FactoryBot.define do
           filename: 'income_proof.pdf',
           content_type: 'application/pdf'
         )
+        if Rails.env.test?
+          DocumentScanFixtures.clear!(application.income_proof.blob, user: application.user,
+                                                                     purpose: :proof, slot: 'income_proof',
+                                                                     fixture: 'medical_certification_valid.pdf')
+        end
         application.residency_proof.attach(
           io: Rails.root.join('test/fixtures/files/medical_certification_valid.pdf').open,
           filename: 'residency_proof.pdf',
           content_type: 'application/pdf'
         )
+        if Rails.env.test?
+          DocumentScanFixtures.clear!(application.residency_proof.blob, user: application.user,
+                                                                        purpose: :proof, slot: 'residency_proof',
+                                                                        fixture: 'medical_certification_valid.pdf')
+        end
       end
     end
 
@@ -135,6 +147,11 @@ FactoryBot.define do
           filename: 'income_proof.pdf',
           content_type: 'application/pdf'
         )
+        if Rails.env.test?
+          DocumentScanFixtures.clear!(application.income_proof.blob, user: application.user,
+                                                                     purpose: :proof, slot: 'income_proof',
+                                                                     fixture: 'medical_certification_valid.pdf')
+        end
       end
     end
 
@@ -145,6 +162,11 @@ FactoryBot.define do
           filename: 'residency_proof.pdf',
           content_type: 'application/pdf'
         )
+        if Rails.env.test?
+          DocumentScanFixtures.clear!(application.residency_proof.blob, user: application.user,
+                                                                        purpose: :proof, slot: 'residency_proof',
+                                                                        fixture: 'medical_certification_valid.pdf')
+        end
       end
     end
 
@@ -155,6 +177,11 @@ FactoryBot.define do
           filename: 'id_proof.pdf',
           content_type: 'application/pdf'
         )
+        if Rails.env.test?
+          DocumentScanFixtures.clear!(application.id_proof.blob, user: application.user,
+                                                                 purpose: :proof, slot: 'id_proof',
+                                                                 fixture: 'medical_certification_valid.pdf')
+        end
       end
     end
 
@@ -165,6 +192,11 @@ FactoryBot.define do
           filename: 'medical_certification.pdf',
           content_type: 'application/pdf'
         )
+        if Rails.env.test?
+          DocumentScanFixtures.clear!(application.medical_certification.blob, user: application.user,
+                                                                              purpose: :certification, slot: 'medical_certification',
+                                                                              fixture: 'medical_certification_valid.pdf')
+        end
       end
     end
 
@@ -191,12 +223,22 @@ FactoryBot.define do
           filename: 'income_proof.pdf',
           content_type: 'application/pdf'
         )
+        if Rails.env.test?
+          DocumentScanFixtures.clear!(application.income_proof.blob, user: application.user,
+                                                                     purpose: :proof, slot: 'income_proof',
+                                                                     fixture: 'medical_certification_valid.pdf')
+        end
 
         application.residency_proof.attach(
           io: Rails.root.join('test/fixtures/files/medical_certification_valid.pdf').open,
           filename: 'residency_proof.pdf',
           content_type: 'application/pdf'
         )
+        if Rails.env.test?
+          DocumentScanFixtures.clear!(application.residency_proof.blob, user: application.user,
+                                                                        purpose: :proof, slot: 'residency_proof',
+                                                                        fixture: 'medical_certification_valid.pdf')
+        end
 
         # Submission events make needs_proof_type_review? true before any review exists.
         Event.create!(
@@ -238,11 +280,21 @@ FactoryBot.define do
           filename: 'income_proof.pdf',
           content_type: 'application/pdf'
         )
+        if Rails.env.test?
+          DocumentScanFixtures.clear!(application.income_proof.blob, user: application.user,
+                                                                     purpose: :proof, slot: 'income_proof',
+                                                                     fixture: 'medical_certification_valid.pdf')
+        end
         application.residency_proof.attach(
           io: Rails.root.join('test/fixtures/files/medical_certification_valid.pdf').open,
           filename: 'residency_proof.pdf',
           content_type: 'application/pdf'
         )
+        if Rails.env.test?
+          DocumentScanFixtures.clear!(application.residency_proof.blob, user: application.user,
+                                                                        purpose: :proof, slot: 'residency_proof',
+                                                                        fixture: 'medical_certification_valid.pdf')
+        end
       end
     end
 

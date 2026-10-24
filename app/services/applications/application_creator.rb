@@ -292,7 +292,7 @@ module Applications
     end
 
     def resolved_upload(slot, upload)
-      UploadedDocument.resolve!(upload, record: target_application, name: slot, signed_ids: false)
+      UploadedDocument.resolve!(upload, record: target_application, name: slot, scan_owner: current_user)
     rescue UploadedDocument::Refused => e
       # In the constituent's language, like the creator's other constituent messages
       message = I18n.with_locale(@form.message_locale) { e.user_message_for(Application.human_attribute_name(slot)) }

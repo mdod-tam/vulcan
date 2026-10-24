@@ -4,7 +4,6 @@ This document lists only remaining work. Tasks are small, explicit, and testable
 
 ## Table of Contents
 
-- [Encryption startup validation](#encryption-startup-validation)
 - [Application & Dependent Contact Management](#application--dependent-contact-management)
 - [JavaScript Architecture & Frontend Tests](#javascript-architecture--frontend-tests)
 - [Registration & Account Integrity](#registration--account-integrity)
@@ -17,14 +16,6 @@ This document lists only remaining work. Tasks are small, explicit, and testable
 - [Proofs, Statuses, Templates (Tech Debt)](#proofs-statuses-templates-tech-debt)
 - [Mobile Proofs Workflow](#mobile-proofs-workflow)
 - [Optional / Larger Architectural Work](#optional--larger-architectural-work)
-
-## Encryption startup validation
-
-The [encryption initializer](../../config/initializers/active_record_encryption.rb) now rejects absent, missing, and blank production key settings. The [Docker asset build](../../Dockerfile) permits process-local temporary keys only when `SECRET_KEY_BASE_DUMMY=1` and the sole top-level Rake task is `assets:precompile`. [Guard tests](../../test/config/encryption_key_configuration_test.rb) cover that exception and reject dummy-key runtime and database tasks.
-
-- [ ] Add isolated boot coverage for configured startup with an existing encrypted-value round trip and the development/test fallback, using generated material without production credentials or database access.
-- [ ] Exercise the Docker asset build in its deployment environment and verify that server, worker, console, and release startup require persistent keys in the resulting image.
-- [ ] Verify restored encrypted data with the configured keys using the [recovery guide](../infrastructure/backup_and_recovery.md). A presence check cannot establish that supplied keys match a restored database.
 
 ## Application & Dependent Contact Management  [DATA-001][DATA-002][AUTHZ-002][AUDIT-002]
 
@@ -66,7 +57,7 @@ Paper guardian/dependent identity-review follow-ups
 
 Customer import — post-import reconciliation  [DATA-001][DATA-002]
 
-- [ ] Run the documented read-only production duplicate-review inventory grouped by source/status. *(Development inventory was empty, which does not prove production zero. Historical `paper_intake` and `admin_create` rows remain historical and are not post-import suppression state.)*
+- [ ] Run the read-only duplicate-review inventory grouped by source and status.
 
 Signed-in portal locale routing  [DATA-002]
 
@@ -75,8 +66,6 @@ Signed-in portal locale routing  [DATA-002]
   (`ApplicationController#with_public_request_locale`), so nothing routes a signed-in guardian to the
   Spanish strings that already exist for their pages. Decide whether the portal should follow the
   account locale, a request parameter, or both, then apply it once rather than per-controller.
-  Surfaced while adding `constituent_portal.dependents.*`: the `es` entries are correct and
-  unreachable.
 
 MFA enrollment localization
 
@@ -97,13 +86,13 @@ Analytics  [AUDIT-001][DATA-001]
 - [ ] Tests: event emission, dashboard queries, permission checks
 
 Admin notices for recurring jobs  [AUDIT-001]
-- [ ] Decide whether admins need an "invoice ready for review" notice and an expired-voucher report. Invoice generation and voucher expiration called a nonexistent `AdminNotificationsMailer`; those calls were removed. Building them needs a mailer, EN templates, and catalog entries.
+- [ ] Decide whether admins need an "invoice ready for review" notice and an expired-voucher report. Add the mailer, English templates, and catalog entries if needed.
 
 Bounce/complaint webhook  [AUDIT-001]
-- [ ] Deploy the attempt-based delivery feedback implementation and configure authenticated outbound webhooks after following the [Postmark rollout runbook](../infrastructure/postmark_delivery_visibility.md). The route no longer depends on `MedicalProviderEmail`; production stream configuration remains an operations step.
+- [ ] Configure authenticated outbound webhooks and the production Postmark stream using the [Postmark runbook](../infrastructure/postmark_delivery_visibility.md).
 
 Certification queue visibility  [DATA-001]
-- [ ] DCF escalation no longer requests certification automatically. Consider an admin filter for applications that are `awaiting_dcf` with certification Not Requested.
+- [ ] Consider an admin filter for applications that are `awaiting_dcf` with certification Not Requested.
 
 SMS alignment  [DATA-001][DATA-002][AUTHZ-003]
 - [ ] Decide scope (email + 2FA-SMS only vs. general SMS)
@@ -158,21 +147,14 @@ Custom report builder
 - [ ] Tests: query service, controller, CSV export job
 
 Data privacy compliance  [DATA-001][DATA-002]
+
 - [ ] Review current reports vs. privacy policy/security controls
 - [ ] Mask/omit sensitive PII in exports; add regression tests
 
 ## System Integrations
 
-Production Bucketeer direct uploads  [FILE-SEC-001]
-- [ ] Verify a nonsensitive file uploads through a browser form on dev and production, persists as an attachment, and reopens through the application; a server-side upload does not prove browser CORS.
-
-Medical certification document signing  [DATA-001][AUTHZ-003][AUDIT-001]
-- [ ] Docuseal artifact storage plan  [DATA-001]
-- [ ] Prototype: send signing request, receive webhook, verify signature  [AUTHZ-003]
-- [ ] Secrets: configure provider keys; secure storage  [DATA-001]
-- [ ] Storage: signed document to S3 with encryption + retention policy  [DATA-001]
-- [ ] Audit: log send/complete events; error handling + retries  [AUDIT-001]
-- [ ] Tests: webhook verification, failure paths
+DocuSeal go-live requirements
+- [ ] Supply the configured signing template in the submission API payload and verify the request, signing, webhook, and scanned-PDF workflow against the live service. See the [go-live check](../development/docuseal_integration_guide.md#go-live-check).
 
 Inbound fax processing (Twilio)  [DATA-001][FILE-SEC-001][AUTHZ-003][AUDIT-001]
 - [ ] Mapping model for provider↔fax numbers; media lifecycle and trust  [DATA-001]

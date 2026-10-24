@@ -33,7 +33,7 @@ class VendorOnboardingAcceptanceTest < ApplicationSystemTestCase
     complete_required_profile_address
     fill_in 'Business name', with: 'Connected Vendor Updated'
     fill_in 'Website URL', with: 'ftp://example.test'
-    attach_file 'Upload New W9', Rails.root.join('test/fixtures/files/sample_w9.pdf')
+    attach_cleared_document 'Upload New W9', Rails.root.join('test/fixtures/files/sample_w9.pdf')
     check I18n.t('vendor_onboarding.terms.acceptance_label')
     click_button 'Save Changes'
     assert_text 'Website url must be a valid URL'

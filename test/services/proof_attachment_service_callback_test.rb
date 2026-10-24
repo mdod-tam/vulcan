@@ -13,11 +13,12 @@ class ProofAttachmentServiceCallbackTest < ActiveSupport::TestCase
 
     @admin = create(:admin)
     @constituent = create(:constituent, email: "callback-test-#{SecureRandom.hex(4)}@example.com")
-    @valid_pdf = fixture_file_upload('test/fixtures/files/medical_certification_valid.pdf', 'application/pdf')
+    @valid_pdf_file = fixture_file_upload('test/fixtures/files/medical_certification_valid.pdf', 'application/pdf')
   end
 
   teardown do
     Current.reset
+    @valid_pdf_file.tempfile.close
   end
 
   test 'portal proof attachment sets needs_review_since exactly once via service attrs' do
@@ -28,7 +29,7 @@ class ProofAttachmentServiceCallbackTest < ActiveSupport::TestCase
     result = ProofAttachmentService.attach_proof(
       application: app,
       proof_type: :income,
-      blob_or_file: @valid_pdf,
+      blob_or_file: scanned_pdf,
       status: :not_reviewed,
       submission_method: :web,
       metadata: {}
@@ -50,7 +51,7 @@ class ProofAttachmentServiceCallbackTest < ActiveSupport::TestCase
     result = ProofAttachmentService.attach_proof(
       application: app,
       proof_type: :income,
-      blob_or_file: @valid_pdf,
+      blob_or_file: scanned_pdf,
       status: :not_reviewed,
       submission_method: :web,
       metadata: {}
@@ -70,7 +71,7 @@ class ProofAttachmentServiceCallbackTest < ActiveSupport::TestCase
     result = ProofAttachmentService.attach_proof(
       application: app,
       proof_type: :income,
-      blob_or_file: @valid_pdf,
+      blob_or_file: scanned_pdf(user: @admin),
       status: :approved,
       admin: @admin,
       submission_method: :paper,
@@ -93,7 +94,7 @@ class ProofAttachmentServiceCallbackTest < ActiveSupport::TestCase
     result = ProofAttachmentService.attach_proof(
       application: app,
       proof_type: :income,
-      blob_or_file: @valid_pdf,
+      blob_or_file: scanned_pdf(user: @admin),
       status: :approved,
       admin: @admin,
       submission_method: :paper,
@@ -128,7 +129,7 @@ class ProofAttachmentServiceCallbackTest < ActiveSupport::TestCase
     result = ProofAttachmentService.attach_proof(
       application: app,
       proof_type: :income,
-      blob_or_file: @valid_pdf,
+      blob_or_file: scanned_pdf,
       status: :not_reviewed,
       submission_method: :web,
       metadata: {}
@@ -150,7 +151,7 @@ class ProofAttachmentServiceCallbackTest < ActiveSupport::TestCase
       ProofAttachmentService.attach_proof(
         application: app,
         proof_type: :income,
-        blob_or_file: @valid_pdf,
+        blob_or_file: scanned_pdf(user: @admin),
         status: :not_reviewed,
         admin: @admin,
         submission_method: :paper,
@@ -165,7 +166,7 @@ class ProofAttachmentServiceCallbackTest < ActiveSupport::TestCase
     result = ProofAttachmentService.attach_proof(
       application: app,
       proof_type: :income,
-      blob_or_file: @valid_pdf,
+      blob_or_file: scanned_pdf,
       status: :not_reviewed,
       submission_method: :web,
       metadata: {}
@@ -189,7 +190,7 @@ class ProofAttachmentServiceCallbackTest < ActiveSupport::TestCase
     ProofAttachmentService.attach_proof(
       application: app,
       proof_type: :income,
-      blob_or_file: @valid_pdf,
+      blob_or_file: scanned_pdf(user: @admin),
       status: :approved,
       admin: @admin,
       submission_method: :paper,
@@ -201,6 +202,10 @@ class ProofAttachmentServiceCallbackTest < ActiveSupport::TestCase
   end
 
   private
+
+  def scanned_pdf(user: @constituent)
+    scanned_upload(@valid_pdf_file, user: user)
+  end
 
   def create_application_for_resubmission
     app = create(:application, :in_progress, user: @constituent)
@@ -214,21 +219,10 @@ class ProofAttachmentServiceCallbackTest < ActiveSupport::TestCase
 
   def create_application_ready_for_final_proof
     app = create(:application, :in_progress, user: @constituent)
-    app.income_proof.attach(
-      io: Rails.root.join('test/fixtures/files/medical_certification_valid.pdf').open,
-      filename: 'income_proof.pdf',
-      content_type: 'application/pdf'
-    )
-    app.residency_proof.attach(
-      io: Rails.root.join('test/fixtures/files/medical_certification_valid.pdf').open,
-      filename: 'residency_proof.pdf',
-      content_type: 'application/pdf'
-    )
-    app.id_proof.attach(
-      io: Rails.root.join('test/fixtures/files/medical_certification_valid.pdf').open,
-      filename: 'id_proof.pdf',
-      content_type: 'application/pdf'
-    )
+    %i[income residency id].each do |proof_type|
+      blob = scanned_upload(@valid_pdf_file, user: @constituent, slot: "#{proof_type}_proof")
+      app.public_send("#{proof_type}_proof").attach(blob)
+    end
     app.save!
     app.update_columns(
       income_proof_status: Application.income_proof_statuses[:not_reviewed],

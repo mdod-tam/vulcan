@@ -17,9 +17,11 @@ module Admin
 
       if result.success?
         redirect_to admin_application_path(@application),
+                    status: :see_other,
                     notice: t('admin.applications.secure_request_forms.create.success')
       else
         redirect_to admin_application_path(@application),
+                    status: :see_other,
                     alert: result.message.presence || t('admin.applications.secure_request_forms.create.failure')
       end
     end

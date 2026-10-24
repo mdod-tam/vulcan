@@ -18,13 +18,13 @@ class ApplicationContactChangeAuditTest < ActiveSupport::TestCase
   end
 
   test 'a staff edit records old and new provider values without a review flag' do
-    old_email = @application.medical_provider_email
+    @application.update_columns(medical_provider_email: 'original@example.test')
 
     @application.update!(medical_provider_email: 'updated-provider@example.test')
 
     event = Event.find_by!(action: 'medical_provider_info_updated', auditable: @application)
     assert_equal @admin, event.user
-    assert_equal({ 'old' => old_email, 'new' => 'updated-provider@example.test' },
+    assert_equal({ 'old' => 'o***@e***.test', 'new' => 'u***@e***.test' },
                  event.metadata['changes']['medical_provider_email'])
     assert_equal ['medical_provider_email'], event.metadata['changes'].keys
     assert_nil event.metadata['review_required']
@@ -49,7 +49,7 @@ class ApplicationContactChangeAuditTest < ActiveSupport::TestCase
     @application.update!(alternate_contact_name: 'New Alternate')
 
     event = Event.find_by!(action: 'alternate_contact_updated', auditable: @application)
-    assert_equal 'New Alternate', event.metadata['changes']['alternate_contact_name']['new']
+    assert_equal 'N*** A***', event.metadata['changes']['alternate_contact_name']['new']
   end
 
   test 'provider info requests stay visible while a link is active after the info is complete' do

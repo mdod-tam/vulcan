@@ -3,9 +3,9 @@
     <%= render 'admin/shared/communications_section_nav', current: :email_templates %>
     <%# Header Section %>
     <div class="flex flex-col md:flex-row justify-between items-start md:items-center gap-4 mb-6">
-      <h1 id="template-title" class="text-3xl font-bold text-gray-900 min-w-0 max-w-full flex-1 break-words" style="min-width: 0; max-width: 100%; overflow-wrap: anywhere;">
+      <h1 id="template-title" class="text-3xl font-bold text-gray-900 min-w-0 max-w-full flex-1 [overflow-wrap:anywhere]">
         <span>Template:</span>
-        <span class="break-all" style="overflow-wrap: anywhere; word-break: break-word;"><%= @email_template.name %></span>
+        <span class="[overflow-wrap:anywhere] [word-break:break-word]"><%= @email_template.name %></span>
         <span class="whitespace-nowrap">(<%= @email_template.format.titleize %>, <%= template_syntax_label(@email_template) %>)</span>
       </h1>
       <div class="flex flex-wrap gap-3">
@@ -127,9 +127,9 @@
             <div class="prose max-w-none mb-4">
               <div class="border border-gray-300 rounded-lg shadow-sm p-4 bg-white h-full">
                 <% if @en_template.format == 'html' %>
-                  <div class="email-preview">
-                    <%= raw @en_rendered_body %>
-                  </div>
+                  <%= render 'admin/email_templates/html_preview',
+                             template: @en_template,
+                             frame_id: 'email-preview-en', title: 'English email body preview' %>
                 <% else %>
                   <pre class="whitespace-pre-wrap text-sm"><%= @en_rendered_body %></pre>
                 <% end %>
@@ -149,9 +149,9 @@
             <div class="prose max-w-none mb-4">
               <div class="border border-gray-300 rounded-lg shadow-sm p-4 bg-white h-full">
                 <% if @es_template.format == 'html' %>
-                  <div class="email-preview">
-                    <%= raw @es_rendered_body %>
-                  </div>
+                  <%= render 'admin/email_templates/html_preview',
+                             template: @es_template,
+                             frame_id: 'email-preview-es', title: 'Spanish email body preview' %>
                 <% else %>
                   <pre class="whitespace-pre-wrap text-sm"><%= @es_rendered_body %></pre>
                 <% end %>

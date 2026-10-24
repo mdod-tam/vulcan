@@ -13,7 +13,8 @@ module Admin
     end
 
     def attach_income_proof!
-      @application.income_proof.attach(io: StringIO.new('test content'), filename: 'income.pdf', content_type: 'application/pdf')
+      @application.income_proof.attach(io: file_fixture('income_proof.pdf').open, filename: 'income.pdf', content_type: 'application/pdf')
+      DocumentScanFixtures.clear!(@application.income_proof.blob, user: @admin, slot: 'income_proof', fixture: 'income_proof.pdf')
     end
 
     test 'approve income proof responds with turbo redirect when workflow state may change' do
@@ -87,7 +88,8 @@ module Admin
 
     test 'approve residency proof responds with turbo redirect when workflow state may change' do
       # Attach residency proof and keep income untouched
-      @application.residency_proof.attach(io: StringIO.new('test content'), filename: 'residency.pdf', content_type: 'application/pdf')
+      @application.residency_proof.attach(io: file_fixture('residency_proof.pdf').open, filename: 'residency.pdf', content_type: 'application/pdf')
+      DocumentScanFixtures.clear!(@application.residency_proof.blob, user: @admin, slot: 'residency_proof', fixture: 'residency_proof.pdf')
 
       patch update_proof_status_admin_application_path(@application),
             params: { proof_type: 'residency', status: 'approved' },

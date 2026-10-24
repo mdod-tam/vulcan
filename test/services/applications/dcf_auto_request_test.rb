@@ -14,7 +14,9 @@ module Applications
       @application = create(:application, :in_progress, :income_not_required, medical_provider_email: 'provider@example.test')
       @user = @application.user
       %i[id_proof residency_proof].each do |proof|
-        @application.public_send(proof).attach(io: StringIO.new('proof'), filename: "#{proof}.pdf", content_type: 'application/pdf')
+        attachment = @application.public_send(proof)
+        attachment.attach(io: file_fixture('residency_proof.pdf').open, filename: "#{proof}.pdf", content_type: 'application/pdf')
+        mark_document_clean!(attachment.blob, user: @user, slot: proof.to_s)
       end
       @application.update_columns(id_proof_status: Application.id_proof_statuses[:approved],
                                   residency_proof_status: Application.residency_proof_statuses[:approved],
@@ -124,7 +126,6 @@ module Applications
 
     def escalate_by_approving_proof
       @application.update_columns(residency_proof_status: Application.residency_proof_statuses[:not_reviewed])
-      @application.residency_proof.attach(io: StringIO.new('proof'), filename: 'proof.pdf', content_type: 'application/pdf')
       ProofReviewer.new(@application, @admin).review(proof_type: :residency, status: :approved)
     end
   end

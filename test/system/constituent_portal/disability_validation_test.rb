@@ -118,8 +118,8 @@ module ConstituentPortal
         check 'I authorize the release and sharing of my disability-related information as described above'
       end
 
-      attach_file 'Upload Residency Proof Document', @valid_image
-      attach_file 'Upload Income Proof Document', @valid_pdf
+      attach_cleared_document 'Upload Residency Proof Document', @valid_image
+      attach_cleared_document 'Upload Income Proof Document', @valid_pdf
 
       click_button 'Save Application'
 
@@ -139,8 +139,8 @@ module ConstituentPortal
         check 'I authorize the release and sharing of my disability-related information as described above'
       end
 
-      attach_file 'Upload Residency Proof Document', @valid_image
-      attach_file 'Upload Income Proof Document', @valid_pdf
+      attach_cleared_document 'Upload Residency Proof Document', @valid_image
+      attach_cleared_document 'Upload Income Proof Document', @valid_pdf
 
       click_button 'Save Application'
       wait_for_turbo

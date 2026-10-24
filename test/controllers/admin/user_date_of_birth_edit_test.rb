@@ -52,13 +52,14 @@ module Admin
       assert_equal 'Users::Constituent', User.find(trainer.id).type
     end
 
-    # Event metadata is plain JSON, so it names the field; the values are stored encrypted.
-    test 'a date of birth change is audited with its values encrypted' do
+    # History records the date correction without retaining either date in the audit payload.
+    test 'a date of birth change is audited without exposing the values' do
       patch admin_user_path(@constituent), params: { user: { date_of_birth: '10/09/1980' } }
 
       event = Event.where(auditable: @constituent).where('action LIKE ?', 'profile_%').order(:id).last
-      assert_equal({ 'date_of_birth' => {} }, event.metadata['changes'])
-      assert_equal({ 'old' => '1980-09-10', 'new' => '1980-10-09' }, event.field_changes['date_of_birth'])
+      assert_equal({ 'date_of_birth' => { 'old' => '[withheld]', 'new' => '[withheld]' } }, event.metadata['changes'])
+      assert_equal({ 'old' => '[withheld]', 'new' => '[withheld]' }, event.field_changes['date_of_birth'])
+      assert_nil event.change_values
       raw = Event.connection.select_one("SELECT metadata::text, change_values FROM events WHERE id = #{event.id}")
       assert_not_includes raw.values.join, '1980'
     end
