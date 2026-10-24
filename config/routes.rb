@@ -3,6 +3,8 @@
 Rails.application.routes.draw do
   draw :active_storage
   resources :document_scans, only: %i[index create show destroy]
+  get 'document_attachments/:attachment_id', to: 'attachment_downloads#attachment', as: :document_attachment
+  resource :session_activity, only: %i[show create]
 
   # Browsers request this icon even when tests do not provide one.
   get '/favicon.ico', to: proc { [204, {}, []] }

@@ -3,7 +3,7 @@
                      residency: @application.residency_proof,
                      id: @application.id_proof,
                      medical: @application.medical_certification } %>
-<% proof_urls    = proof_files.transform_values { |f| f.attached? ? rails_blob_path(f, disposition: :inline) : nil } %>
+<% proof_urls = proof_files.transform_values { |f| f.attached? ? document_download_path(f, disposition: :inline) : nil } %>
 
 <% address_1 = @application.user&.physical_address_1.to_s %>
 <% address_2 = @application.user&.physical_address_2.presence || '' %>

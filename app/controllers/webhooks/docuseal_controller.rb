@@ -112,14 +112,11 @@ module Webhooks
       dedup_key = completion_key(context)
       return if permanent_intake_failure?(app, dedup_key)
 
-      if (existing = DocumentScan.find_by(dedup_key: dedup_key))
-        DocumentScan.stage!(input: nil, purpose: :certification, slot: 'medical_certification',
-                            continuation: 'docuseal', context: context, dedup_key: dedup_key)
-        return existing
-      end
+      existing = DocumentScan.find_by(dedup_key: dedup_key)
+      return existing.resume! if existing
 
       stage_signed_pdf(app, context, dedup_key)
-    rescue DocumentScans::Stager::SnapshotNotReady
+    rescue DocumentScan::SnapshotNotReady
       false # The original webhook is still uploading its snapshot; ask the provider to retry.
     rescue PermanentIntakeFailure => e
       log_attachment_failure(app, e.reason, e.details, context: context, retryable: false)

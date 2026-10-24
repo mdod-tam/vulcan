@@ -1,5 +1,6 @@
 import { Controller } from "@hotwired/stimulus";
 import { setVisible } from "../../utils/visibility";
+import { documentUploadBlocker } from "../../utils/document_upload_state";
 
 export default class extends Controller {
   static targets = [
@@ -11,16 +12,9 @@ export default class extends Controller {
 
   connect() {
     this._incomeExceedsThreshold = false;
-    this._uploading = false;
     this._boundIncome = this.handleIncomeValidation.bind(this);
     this._boundSync = this.syncFormState.bind(this);
-    this._boundScanStatus = () => {
-      this._uploading = Array.from(this.element.querySelectorAll('[data-scan-state]')).some(widget => {
-        const input = widget.querySelector('input[type="file"]');
-        return input && !input.disabled && !["idle", "clean"].includes(widget.dataset.scanState);
-      });
-      this._applySubmitGating();
-    };
+    this._boundScanStatus = this._applySubmitGating.bind(this);
     this.element.addEventListener("income-validation:validated", this._boundIncome);
     this.element.addEventListener("input", this._boundSync);
     this.element.addEventListener("change", this._boundSync);
@@ -73,8 +67,9 @@ export default class extends Controller {
     const proofActionBlocks = this._requiredRadioGroupBlocksSubmit();
     const checkboxGroupBlocks = this._checkboxGroupBlocksSubmit();
     const guardianSelectionBlocks = this._guardianSelectionBlocksSubmit();
+    const uploadBlocker = documentUploadBlocker(this.element, field => this.elementIsVisible(field));
     const disable = incomeBlocks || verifyBlocks || requiredControlBlocks || proofActionBlocks ||
-      checkboxGroupBlocks || this._uploading || guardianSelectionBlocks;
+      checkboxGroupBlocks || uploadBlocker !== null || guardianSelectionBlocks;
 
     if (this.hasSubmitButtonTarget) {
       this.submitButtonTarget.disabled = disable;
@@ -87,11 +82,12 @@ export default class extends Controller {
     }
 
     if (this.hasStatusTarget) {
-      this.statusTarget.textContent = this._uploading ? "Wait for the document virus checks before submitting." : (guardianSelectionBlocks
+      const message = uploadBlocker?.validationMessage || (guardianSelectionBlocks
         ? "Select or create a guardian before submitting this dependent's application."
         : (disable
           ? "Complete all required confirmations before submitting."
           : "Paper application is ready to submit."));
+      if (this.statusTarget.textContent !== message) this.statusTarget.textContent = message;
     }
 
     if (this.hasRejectionButtonTarget) {

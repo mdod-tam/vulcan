@@ -22,7 +22,7 @@
     
     <% if proof&.attached? %>
       <div class="mt-4 flex items-center space-x-4">
-        <%= link_to url_for(proof), 
+        <%= link_to document_download_path(proof),
             class: "text-sm text-indigo-600 hover:text-indigo-500",
             target: "_blank",
             rel: "noopener" do %>

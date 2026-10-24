@@ -14,18 +14,12 @@ class W9DocumentsController < ApplicationController
 
     DocumentScan.require_clean!(blob)
 
-    if request.headers['Range'].present?
-      send_blob_byte_range_data(blob, request.headers['Range'], disposition: disposition)
-    else
-      send_blob_stream(blob, disposition: disposition)
-    end
+    stream_private_blob(blob)
   rescue ActiveRecord::RecordNotFound, ActiveStorage::FileNotFoundError, DocumentScan::NotCleared
     head :not_found
   end
 
   private
-
-  def disposition = params[:disposition] == 'attachment' ? 'attachment' : 'inline'
 
   def authorized_blob(vendor)
     return Vendors::W9Document.restorable(params[:reference], vendor: vendor) if params[:reference].present?

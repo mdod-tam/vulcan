@@ -5,6 +5,7 @@ require_relative '../../db/seeds/development_applications'
 
 class DevelopmentApplicationsTest < ActiveSupport::TestCase
   setup do
+    Rails.env.stubs(:development?).returns(true)
     @admin = User.find_by_email('admin@example.com')
     # Exercise the submission rules that run in development too.
     @original_proof_validation = ENV.fetch('REQUIRE_PROOF_VALIDATIONS', nil)
@@ -13,6 +14,35 @@ class DevelopmentApplicationsTest < ActiveSupport::TestCase
 
   teardown do
     ENV['REQUIRE_PROOF_VALIDATIONS'] = @original_proof_validation
+  end
+
+  test 'development examples do not consume real upload allocation quotas' do
+    stub_const(DocumentScans::Stager, :GLOBAL_DAILY_LIMIT, 0) do
+      applications = Seeds::DevelopmentApplications.new(admin: @admin).call
+
+      assert_equal Seeds::DevelopmentApplications::PROFILES.size, applications.size
+      assert(applications.any? { |application| application.income_proof.attached? })
+      assert applications.select { |application| application.income_proof.attached? }.all? do |application|
+        DocumentScan.cleared?(application.income_proof.blob)
+      end
+    end
+  end
+
+  test 'the development seed class refuses other environments before writing records' do
+    Rails.env.stubs(:development?).returns(false)
+
+    assert_no_difference ['Application.count', 'User.count', 'DocumentScan.count', 'ActiveStorage::Blob.count'] do
+      assert_raises(RuntimeError) { Seeds::DevelopmentApplications.new(admin: @admin).call }
+    end
+  end
+
+  test 'fixture clearance cannot run in production even if its helper is loaded' do
+    blob = ActiveStorage::Blob.create_and_upload!(io: StringIO.new('fixture'), filename: 'fixture.pdf')
+    Rails.stubs(:env).returns(ActiveSupport::EnvironmentInquirer.new('production'))
+
+    assert_no_difference 'DocumentScan.count' do
+      assert_raises(RuntimeError) { DocumentScanFixtures.clear!(blob, user: @admin) }
+    end
   end
 
   test 'equipment gallery covers lifecycle and actionable review queues with truthful ownership' do

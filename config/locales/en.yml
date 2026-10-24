@@ -173,18 +173,18 @@ en:
     # The shared document upload control. %{filename} is the chosen or kept file.
     upload:
       uploaded: "Ready: %{filename}"
-      selected: "Selected: %{filename}"
       uploading: "Uploading %{filename}…"
       canceled: "Upload canceled."
       failed: "The upload failed. Choose the file again."
       progress: "Upload progress"
       remove: "Remove document"
       cancel: "Cancel upload"
-      scanning: "Checking %{filename} for viruses… You can keep filling out the form."
+      scanning: "Checking %{filename} for viruses… This may take a few minutes."
       blocked: "This file did not pass the virus check. Choose a different file."
       unavailable: "We couldn't check the upload status. Your file is saved. Try again."
       wait: "Wait for the virus check before submitting."
       retry: "Check again"
+      choose_again: "Choose file again"
       session_expired: "Your session expired. Refresh this page to sign in again."
       javascript_required: "Turn on JavaScript to check files before submitting."
     scan:
@@ -192,7 +192,7 @@ en:
       clean: "This file passed the virus check."
       blocked: "This file did not pass the virus check. Choose a different file."
       failed: "We couldn't finish the virus check. Try uploading the file again later."
-      limit_reached: "The upload limit has been reached. Please try again later."
+      limit_reached: "The upload limit has been reached. Wait, then choose the file again to retry."
       link_unavailable: "This upload link is no longer active. Ask the person who sent it for a new link."
     refused_document: "%{document}: %{reason}"
     refused:

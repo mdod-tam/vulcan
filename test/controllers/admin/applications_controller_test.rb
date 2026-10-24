@@ -163,6 +163,33 @@ module Admin
       assert_response :success
     end
 
+    test 'certification upload recovery is scoped to the application' do
+      other_application = create(:application, medical_certification_status: :requested)
+      get admin_application_path(other_application)
+      assert_response :success
+      other_context = css_select('#medical-certification-upload-form [data-document-upload-context-value]').sole['data-document-upload-context-value']
+
+      post document_scans_path, params: { file: fixture_file_upload('medical_certification_valid.pdf', 'application/pdf'),
+                                          purpose: 'certification', slot: 'medical_certification', context: other_context }
+      assert_response :accepted
+      scan = DocumentScan.find(response.parsed_body.fetch('id'))
+      scan.update!(status: :clean, completed_at: Time.current)
+
+      get admin_application_path(@application)
+      assert_response :success
+      context = css_select('#medical-certification-upload-form [data-document-upload-context-value]').sole['data-document-upload-context-value']
+      assert_not_equal other_context, context
+      get document_scans_path, params: { purpose: 'certification', slot: 'medical_certification', context: context }
+      assert_response :success
+      assert_nil response.parsed_body
+
+      get document_scans_path, params: { purpose: 'certification', slot: 'medical_certification', context: other_context }
+      assert_response :success
+      assert_equal scan.id, response.parsed_body.fetch('id')
+      assert_equal scan.blob, ActiveStorage::Blob.find_signed!(response.parsed_body.fetch('signed_id'))
+      assert_not_predicate @application.reload.medical_certification, :attached?
+    end
+
     test 'show binds each document virus scan to its own file separately from review status' do
       @application.update_column(:income_proof_required, true)
       { income_proof: 'clean', residency_proof: 'blocked', id_proof: 'failed', medical_certification: 'pending' }.each do |slot, status|

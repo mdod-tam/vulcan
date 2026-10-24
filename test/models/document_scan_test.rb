@@ -69,6 +69,72 @@ class DocumentScanTest < ActiveSupport::TestCase
     assert_enqueued_with(job: DocumentScanJob, args: [scan.id]) { RecoverDocumentScansJob.perform_now }
   end
 
+  test 'an unrelated uniqueness failure cannot return another uploaders scan without a dedup key' do
+    file = Rack::Test::UploadedFile.new(file_fixture('income_proof.pdf'), 'application/pdf')
+    other_user = create(:constituent)
+    other = DocumentScan.stage!(input: file, user: other_user, purpose: :proof, slot: 'income_proof')
+    other.update!(status: :clean, completed_at: Time.current)
+
+    DocumentScan.stub(:create!, ->(**) { raise ActiveRecord::RecordNotUnique, 'Unrelated unique constraint' }) do
+      assert_no_difference ['DocumentScan.count', 'ActiveStorage::Blob.count'] do
+        assert_raises(ActiveRecord::RecordNotUnique) do
+          DocumentScan.stage!(input: file, user: @user, purpose: :proof, slot: 'income_proof')
+        end
+      end
+    end
+
+    assert_equal other_user.id, other.reload.user_id
+    assert other.blob.service.exist?(other.blob.key)
+    assert_not_equal @user.id, other.user_id
+  end
+
+  test 'a generated storage key collision never deletes the existing uploads bytes' do
+    file = Rack::Test::UploadedFile.new(file_fixture('income_proof.pdf'), 'application/pdf')
+    other = DocumentScan.stage!(input: file, user: create(:constituent), purpose: :proof, slot: 'income_proof')
+    other.update!(status: :clean, completed_at: Time.current)
+    original_bytes = other.blob.download
+
+    ActiveStorage::Blob.stub(:generate_unique_secure_token, other.blob.key) do
+      assert_no_difference ['DocumentScan.count', 'ActiveStorage::Blob.count'] do
+        assert_raises(ActiveRecord::RecordNotUnique) do
+          DocumentScan.stage!(input: file, user: @user, purpose: :proof, slot: 'income_proof')
+        end
+      end
+    end
+
+    assert_equal original_bytes, other.blob.download
+    assert other.reload.clean?
+  end
+
+  test 'resume dispatches ready scans to their pending or unfinished continuation job' do
+    file = Rack::Test::UploadedFile.new(file_fixture('income_proof.pdf'), 'application/pdf')
+    pending = DocumentScan.stage!(input: file, user: @user, purpose: :proof, slot: 'income_proof')
+    assert_enqueued_with(job: DocumentScanJob, args: [pending.id]) { assert_same pending, pending.resume! }
+
+    certification = Rack::Test::UploadedFile.new(file_fixture('medical_certification_valid.pdf'), 'application/pdf')
+    terminal = DocumentScan.stage!(input: certification, purpose: :certification, slot: 'medical_certification', continuation: 'docuseal')
+    %w[clean blocked failed].each do |status|
+      terminal.update!(status: status)
+      assert_enqueued_with(job: DocumentSigning::AcceptScannedDocumentJob, args: [terminal.id]) { assert_same terminal, terminal.resume! }
+    end
+    terminal.update!(continued_at: Time.current)
+    assert_no_enqueued_jobs(only: DocumentSigning::AcceptScannedDocumentJob) { assert_same terminal, terminal.resume! }
+    pending.dismiss!
+    assert_no_enqueued_jobs(only: DocumentScanJob) { assert_same pending, pending.resume! }
+  end
+
+  test 'resume refuses an unfinished snapshot without queuing provider work' do
+    file = Rack::Test::UploadedFile.new(file_fixture('income_proof.pdf'), 'application/pdf')
+    scan = DocumentScan.stage!(input: file, user: @user, purpose: :proof, slot: 'income_proof')
+    scan.update!(next_attempt_at: nil)
+
+    assert_no_enqueued_jobs do
+      assert_raises(DocumentScan::SnapshotNotReady) { scan.resume! }
+    end
+    assert scan.reload.pending?
+    assert_nil scan.next_attempt_at
+  end
+
   test 'client MIME and filename cannot pass the byte gate' do
     Tempfile.create(['payload', '.png']) do |file|
       file.write('unknown bytes' * 100)

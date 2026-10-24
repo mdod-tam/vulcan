@@ -100,7 +100,7 @@ class UploadedDocumentTest < ActiveSupport::TestCase
 
   test 'refuses an unattached blob at the cleanup retention age' do
     blob = stored_blob(3.kilobytes)
-    blob.update_column(:created_at, CleanupUnattachedUploadsJob::RETENTION.ago)
+    blob.update_column(:created_at, DocumentScan::RETENTION.ago)
 
     assert_refused(:expired) { resolve(blob.signed_id) }
   end
@@ -152,7 +152,7 @@ class UploadedDocumentTest < ActiveSupport::TestCase
   test 'restorable returns a still-usable upload and writes nothing' do
     usable = stored_blob(3.kilobytes)
     expired = stored_blob(3.kilobytes)
-    expired.update_column(:created_at, CleanupUnattachedUploadsJob::RETENTION.ago)
+    expired.update_column(:created_at, DocumentScan::RETENTION.ago)
     elsewhere = stored_blob(3.kilobytes)
     create(:application).income_proof.attach(elsewhere)
     missing = stored_blob(3.kilobytes)

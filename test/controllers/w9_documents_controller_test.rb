@@ -51,6 +51,23 @@ class W9DocumentsControllerTest < ActionDispatch::IntegrationTest
     assert_response :not_found
   end
 
+  test 'W9 downloads support full and partial byte responses' do
+    sign_in_as(@vendor)
+    path = vendor_w9_document_path(@vendor, @blob)
+    get path
+    assert_response :success
+    assert_equal 'bytes', response.headers['Accept-Ranges']
+    assert_equal @blob.byte_size.to_s, response.headers['Content-Length']
+
+    get path, headers: { 'Range' => 'bytes=0-10' }
+    assert_response :partial_content
+    assert_equal @blob.download.byteslice(0, 11), response.body
+    assert_equal "bytes 0-10/#{@blob.byte_size}", response.headers['Content-Range']
+    assert_equal '11', response.headers['Content-Length']
+    assert_equal 'bytes', response.headers['Accept-Ranges']
+    assert_includes response.headers['Cache-Control'], 'no-store'
+  end
+
   test 'an administrator can retrieve retained files but the vendor cannot' do
     @blob.with_lock { Vendors::W9Document.protect!(@blob, vendor: @vendor) }
     reference = Vendors::W9Document.reference(@blob, vendor: @vendor)
@@ -74,6 +91,8 @@ class W9DocumentsControllerTest < ActionDispatch::IntegrationTest
     get rails_blob_path(@blob)
     assert_response :not_found
     get rails_storage_proxy_path(@blob)
+    assert_response :not_found
+    get document_attachment_path(@vendor.w9_form.attachment)
     assert_response :not_found
     variation = ActiveStorage::Variation.encode(resize_to_limit: [100, 100])
     get rails_blob_representation_proxy_path(@blob.signed_id, variation, 'w9.png')

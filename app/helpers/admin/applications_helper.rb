@@ -27,19 +27,7 @@ module Admin
     def medical_certification_link(application, style = :link)
       return nil unless application.medical_certification.attached?
 
-      host = if Rails.env.production?
-               # Fail fast if APPLICATION_HOST is not configured in production
-               ENV.fetch('APPLICATION_HOST')
-             else
-               # For non-production environments, use request.host if available
-               Rails.application.routes.default_url_options[:host] || (defined?(request) && request.host)
-             end
-
-      url = Rails.application.routes.url_helpers.rails_blob_path(
-        application.medical_certification,
-        disposition: :inline,
-        host: host
-      )
+      url = document_download_path(application.medical_certification, disposition: :inline)
 
       if style == :button
         # Use classes similar to other full-height buttons in the form

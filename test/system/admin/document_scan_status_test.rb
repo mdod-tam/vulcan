@@ -6,7 +6,38 @@ module Admin
   class DocumentScanStatusTest < ApplicationSystemTestCase
     setup do
       ensure_system_audit_actor!
-      system_test_sign_in(create(:admin))
+      @admin = create(:admin)
+      system_test_sign_in(@admin)
+    end
+
+    test 'certification recovery keeps another applications document out of the form' do
+      application = create(:application, medical_certification_status: :requested)
+      other_application = create(:application, medical_certification_status: :requested)
+      visit admin_application_path(other_application)
+      other_context = find('#medical-certification-upload-form [data-document-upload-context-value]')['data-document-upload-context-value']
+      within '#medical-certification-upload-form' do
+        attach_file 'Certification Document', Rails.root.join('test/fixtures/files/medical_certification_valid.pdf')
+        assert_selector '[data-scan-state="pending"]'
+      end
+      scan = DocumentScan.where(user: @admin, purpose: 'certification', form_context: other_context).sole
+      scan.update!(status: :clean, completed_at: Time.current)
+
+      visit admin_application_path(application)
+      within '#medical-certification-upload-form' do
+        assert_equal "admin/applications:#{application.id}", find('[data-document-upload-context-value]')['data-document-upload-context-value']
+        assert_no_selector 'input[type="hidden"][name="medical_certification"]', visible: :all
+        assert_no_text 'Ready:'
+        assert_field 'Certification Document', type: 'file'
+      end
+      take_screenshot('admin-certification-other-application-empty', html: true, full: true)
+
+      visit admin_application_path(other_application)
+      within '#medical-certification-upload-form' do
+        assert_selector '[data-scan-state="clean"]', text: 'Ready:'
+        receipt = find('input[type="hidden"][name="medical_certification"]', visible: :all).value
+        assert_equal scan.blob, ActiveStorage::Blob.find_signed!(receipt)
+      end
+      take_screenshot('admin-certification-own-application-restored', html: true, full: true)
     end
 
     test 'application documents show scan results separately from staff review at desktop and phone widths' do

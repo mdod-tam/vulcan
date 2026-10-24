@@ -197,7 +197,7 @@ The [CI workflow](.github/workflows/ci.yml) runs Brakeman, RuboCop, and `bin/rai
 
 ### Production essentials
 
-Set `RAILS_MASTER_KEY`, `DATABASE_URL`, and `APPLICATION_HOST` (the public hostname used in generated links and WebAuthn). Use stable Active Record encryption keys in credentials. Production uses HTTPS and S3-backed uploads.
+Set `RAILS_MASTER_KEY`, `DATABASE_URL`, and `APPLICATION_HOST` (the public hostname used in generated links and WebAuthn). Use stable Active Record encryption keys in credentials. Production uses HTTPS and S3-backed uploads. `ATTACHMENT_SCANNER_URL` and `ATTACHMENT_SCANNER_API_TOKEN` are required at production startup, except during asset compilation; provisioning the Heroku add-on supplies both.
 
 `QUEUE_DATABASE_URL`, `CACHE_DATABASE_URL`, and `CABLE_DATABASE_URL` can override the auxiliary database connections; each otherwise falls back to `DATABASE_URL`. See [database.yml](config/database.yml), [Puma configuration](config/puma.rb), and [queue configuration](config/queue.yml) for connection pools and worker sizing.
 
@@ -210,6 +210,9 @@ Set `RAILS_MASTER_KEY`, `DATABASE_URL`, and `APPLICATION_HOST` (the public hostn
 | Twilio | `TWILIO_ACCOUNT_SID`, `TWILIO_AUTH_TOKEN`, `TWILIO_SMS_FROM_NUMBER`, `TWILIO_VERIFY_SERVICE_SID`, and `TWILIO_FAX_FROM_NUMBER` as needed; [initializer](config/initializers/twilio.rb). |
 | Webhooks | Rails credentials `webhook_secret` supply the HMAC key; DocuSeal verifies its timestamped signature, and Twilio fax callbacks use Twilio's signature. See [webhook controllers](app/controllers/webhooks). |
 | S3 uploads | `S3_ACCESS_KEY_ID`, `S3_SECRET_ACCESS_KEY`, `S3_REGION`, `S3_BUCKET`, or their Bucketeer alternatives; [storage guide](docs/infrastructure/active_storage_s3_setup.md). |
+| AttachmentScanner | `ATTACHMENT_SCANNER_URL` and `ATTACHMENT_SCANNER_API_TOKEN`; [scanning, worker queues, and recovery](docs/security/attachment_scanning.md). |
+
+Development boots without scanner credentials. Testing real uploads requires both scanner variables and a running worker; an unavailable scanner leaves uploads blocked. Development application seeds use fixed synthetic fixtures, so browsing those examples does not require a paid scan.
 
 ## Deployment
 
@@ -246,7 +249,7 @@ heroku ps --app "$MAT_APP"
 
 With a separate worker, leave `SOLID_QUEUE_IN_PUMA` unset. To run jobs inside Puma instead, set it and omit the separate worker; the Puma config tests variable presence, so setting it to the string `false` still enables the plugin.
 
-Before opening the environment to users, verify staff sign-in and MFA, a [direct upload and download](docs/infrastructure/active_storage_s3_setup.md#verify-upload-and-retrieval), and a [queued email delivery](docs/infrastructure/email_system.md#postmark). If using DocuSeal, complete its [go-live check](docs/development/docuseal_integration_guide.md#go-live-check).
+Before opening the environment to users, verify staff sign-in and MFA, a [scanned upload and private download](docs/infrastructure/active_storage_s3_setup.md#verify-upload-and-retrieval), and a [queued email delivery](docs/infrastructure/email_system.md#postmark). If using DocuSeal, complete its [go-live check](docs/development/docuseal_integration_guide.md#go-live-check).
 
 For ongoing operations, keep `MAT_APP` set to the intended app:
 

@@ -189,18 +189,18 @@ es:
   documents:
     upload:
       uploaded: "Listo: %{filename}"
-      selected: "Seleccionado: %{filename}"
       uploading: "Subiendo %{filename}…"
       canceled: "Carga cancelada."
       failed: "La carga falló. Elija el archivo de nuevo."
       progress: "Progreso de la carga"
       remove: "Quitar documento"
       cancel: "Cancelar carga"
-      scanning: "Comprobando si %{filename} contiene virus… Puede seguir llenando el formulario."
+      scanning: "Comprobando si %{filename} contiene virus… Esto puede tardar unos minutos."
       blocked: "Este archivo no pasó la comprobación de virus. Elija otro archivo."
       unavailable: "No pudimos comprobar el estado de la carga. Su archivo está guardado. Inténtelo de nuevo."
       wait: "Espere a que termine la comprobación de virus antes de enviar el formulario."
       retry: "Comprobar de nuevo"
+      choose_again: "Elegir archivo de nuevo"
       session_expired: "Su sesión ha caducado. Actualice esta página para iniciar sesión de nuevo."
       javascript_required: "Active JavaScript para comprobar los archivos antes de enviar el formulario."
     scan:
@@ -208,7 +208,7 @@ es:
       clean: "Este archivo pasó la comprobación de virus."
       blocked: "Este archivo no pasó la comprobación de virus. Elija otro archivo."
       failed: "No pudimos terminar la comprobación de virus. Intente subir el archivo de nuevo más tarde."
-      limit_reached: "Se alcanzó el límite de cargas. Inténtelo de nuevo más tarde."
+      limit_reached: "Se alcanzó el límite de cargas. Espere y luego elija el archivo de nuevo para reintentar."
       link_unavailable: "Este enlace de carga ya no está activo. Pida un enlace nuevo a la persona que lo envió."
     refused_document: "%{document}: %{reason}"
     refused:

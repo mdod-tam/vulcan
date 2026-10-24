@@ -28,7 +28,7 @@ module Vendors
 
     def self.reference(blob, vendor:)
       verifier.generate({ 'blob_id' => blob.id, 'vendor_id' => vendor.id },
-                        expires_at: blob.created_at + CleanupUnattachedUploadsJob::RETENTION)
+                        expires_at: blob.created_at + DocumentScan::RETENTION)
     end
 
     def self.resolve_reference(reference, vendor:)
@@ -48,7 +48,7 @@ module Vendors
 
     def self.restorable(reference, vendor:)
       blob = resolve_reference(reference, vendor: vendor)
-      return unless blob && blob.created_at > CleanupUnattachedUploadsJob::RETENTION.ago && blob.service.exist?(blob.key)
+      return unless blob && blob.created_at > DocumentScan::RETENTION.ago && blob.service.exist?(blob.key)
 
       current = vendor.w9_form.blob
       blob if !blob.attachments.exists? || current&.id == blob.id

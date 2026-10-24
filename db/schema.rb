@@ -10,7 +10,7 @@
 #
 # It's strongly recommended that you check this file into your version control system.
 
-ActiveRecord::Schema[8.1].define(version: 2026_10_23_150000) do
+ActiveRecord::Schema[8.1].define(version: 2026_10_22_233100) do
   # These are extensions that must be enabled in order to support this database
   enable_extension "pg_catalog.plpgsql"
 
@@ -196,6 +196,7 @@ ActiveRecord::Schema[8.1].define(version: 2026_10_23_150000) do
     t.string "slot", null: false
     t.string "form_context", default: "", null: false
     t.string "status", default: "pending", null: false
+    t.boolean "synthetic_fixture", default: false, null: false
     t.string "sha256", null: false
     t.string "provider_scan_id"
     t.integer "attempts", default: 0, null: false
@@ -209,13 +210,13 @@ ActiveRecord::Schema[8.1].define(version: 2026_10_23_150000) do
     t.datetime "continued_at"
     t.datetime "dismissed_at"
     t.string "continuation"
+    t.integer "continuation_attempts", default: 0, null: false
+    t.datetime "continuation_next_attempt_at"
+    t.string "continuation_error_code"
     t.string "dedup_key"
     t.text "context"
     t.datetime "created_at", null: false
     t.datetime "updated_at", null: false
-    t.integer "continuation_attempts", default: 0, null: false
-    t.datetime "continuation_next_attempt_at"
-    t.string "continuation_error_code"
     t.index ["blob_id"], name: "index_document_scans_on_blob_id", unique: true
     t.index ["continuation", "continued_at", "continuation_next_attempt_at"], name: "index_document_scans_on_continuation_recovery"
     t.index ["created_at"], name: "index_document_scans_on_created_at"
@@ -225,7 +226,7 @@ ActiveRecord::Schema[8.1].define(version: 2026_10_23_150000) do
     t.index ["user_id", "purpose", "slot", "form_context"], name: "index_document_scans_on_recovery"
     t.index ["user_id"], name: "index_document_scans_on_user_id"
     t.check_constraint "((user_id IS NOT NULL)::integer + (secure_form_id IS NOT NULL)::integer + COALESCE((continuation::text = 'docuseal'::text)::integer, 0)) <= 1", name: "document_scans_owner"
-    t.check_constraint "status::text = ANY (ARRAY['pending'::character varying::text, 'clean'::character varying::text, 'blocked'::character varying::text, 'failed'::character varying::text])", name: "document_scans_status"
+    t.check_constraint "status::text = ANY (ARRAY['pending'::character varying, 'clean'::character varying, 'blocked'::character varying, 'failed'::character varying]::text[])", name: "document_scans_status"
   end
 
   create_table "duplicate_review_case_candidates", force: :cascade do |t|

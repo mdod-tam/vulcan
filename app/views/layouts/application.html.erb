@@ -15,6 +15,9 @@
   </head>
 
   <body class="font-sans antialiased bg-gray-50">
+    <% if (session_deadlines = admin_session_activity_deadlines) %>
+      <%= render 'shared/admin_session_activity', deadlines: session_deadlines %>
+    <% end %>
     <%= render "shared/header" %>
     <div id="flash">
       <%= render "shared/flash" %>

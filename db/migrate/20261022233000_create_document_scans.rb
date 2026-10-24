@@ -10,6 +10,7 @@ class CreateDocumentScans < ActiveRecord::Migration[8.1]
       t.string :slot, null: false
       t.string :form_context, null: false, default: ''
       t.string :status, null: false, default: 'pending'
+      t.boolean :synthetic_fixture, null: false, default: false
       t.string :sha256, null: false
       t.string :provider_scan_id
       t.integer :attempts, null: false, default: 0
@@ -23,11 +24,16 @@ class CreateDocumentScans < ActiveRecord::Migration[8.1]
       t.datetime :continued_at
       t.datetime :dismissed_at
       t.string :continuation
+      t.integer :continuation_attempts, null: false, default: 0
+      t.datetime :continuation_next_attempt_at
+      t.string :continuation_error_code
       t.string :dedup_key
       t.text :context
       t.timestamps
     end
     add_index :document_scans, :dedup_key, unique: true
+    add_index :document_scans, :created_at
+    add_index :document_scans, %i[continuation continued_at continuation_next_attempt_at], name: :index_document_scans_on_continuation_recovery
     add_index :document_scans, %i[status next_attempt_at]
     add_index :document_scans, %i[user_id purpose slot form_context], name: :index_document_scans_on_recovery
     add_check_constraint :document_scans, "status IN ('pending', 'clean', 'blocked', 'failed')", name: :document_scans_status

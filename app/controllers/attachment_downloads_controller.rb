@@ -9,26 +9,26 @@ class AttachmentDownloadsController < ApplicationController
   skip_before_action :authenticate_user!, if: :public_document?
   skip_before_action :check_password_change_required, if: :public_document?
   skip_before_action :enforce_required_mfa_enrollment, if: :public_document?
-  before_action :authorize_document!, only: %i[show representation]
-  before_action :require_cleared_document!, only: %i[show representation]
+  # Unsigned page controls authenticate before resolving the attachment ID.
+  before_action :load_attachment, only: :attachment
+  before_action :authorize_document!, only: %i[show representation attachment]
+  before_action :require_cleared_document!, only: %i[show representation attachment]
 
   rescue_from ActiveRecord::RecordNotFound, ActiveSupport::MessageVerifier::InvalidSignature,
               ActiveStorage::FileNotFoundError, DocumentScan::NotCleared, with: :unavailable
 
   def show
-    response.headers['Accept-Ranges'] = 'bytes'
-    if request.headers['Range'].present?
-      send_blob_byte_range_data(@blob, request.headers['Range'], disposition: disposition)
-    else
-      response.headers['Content-Length'] = @blob.byte_size.to_s
-      send_blob_stream(@blob, disposition: disposition)
-    end
+    stream_private_blob(@blob)
+  end
+
+  def attachment
+    stream_private_blob(@blob)
   end
 
   def representation
     # Authorize the source before processing; derived blob URLs are not a separate permission.
     processed = @blob.representation(params[:variation_key]).processed
-    send_blob_stream(processed, disposition: disposition)
+    send_blob_stream(processed, disposition: attachment_disposition)
   end
 
   private
@@ -42,6 +42,11 @@ class AttachmentDownloadsController < ApplicationController
     @access = AttachmentAccess.new(@blob)
   end
 
+  def load_attachment
+    @blob = ActiveStorage::Attachment.find(params.expect(:attachment_id)).blob
+    @access = AttachmentAccess.new(@blob)
+  end
+
   def public_document? = @access&.public? || false
 
   def authorize_document!
@@ -51,6 +56,4 @@ class AttachmentDownloadsController < ApplicationController
   def require_cleared_document!
     DocumentScan.require_clean!(@blob)
   end
-
-  def disposition = params[:disposition] == 'attachment' ? 'attachment' : 'inline'
 end

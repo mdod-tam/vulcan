@@ -1,4 +1,5 @@
 import { Controller } from "@hotwired/stimulus"
+import { documentUploadBlocker } from "../../utils/document_upload_state"
 
 const REQUIRED_CONTROL_SELECTOR =
   'input[required]:not([type="radio"]):not([type="hidden"]):not([type="submit"]):not([type="button"]):not([type="reset"]), select[required], textarea[required]'
@@ -36,12 +37,13 @@ export default class extends Controller {
     this._syncConditionalRequiredControls()
 
     const hardBlockMessage = this._hardBlockMessage()
+    const uploadBlocker = documentUploadBlocker(this.element, field => this.elementIsVisible(field))
     const disabled = hardBlockMessage !== null ||
       this._incomeExceedsThreshold ||
       this._requiredControlsBlockSubmit() ||
       this._requiredRadioGroupBlocksSubmit() ||
       this._checkboxGroupBlocksSubmit() ||
-      this._documentUploadBlocksSubmit()
+      uploadBlocker !== null
 
     this.submitButtonTargets.forEach((button) => {
       button.disabled = disabled
@@ -54,13 +56,10 @@ export default class extends Controller {
     })
 
     if (this.hasStatusTarget) {
-      if (hardBlockMessage !== null) {
-        this.statusTarget.textContent = hardBlockMessage
-      } else {
-        this.statusTarget.textContent = disabled
+      const message = hardBlockMessage ?? uploadBlocker?.validationMessage ?? (disabled
           ? this._incompleteMessage()
-          : this._readyMessage()
-      }
+          : this._readyMessage())
+      if (this.statusTarget.textContent !== message) this.statusTarget.textContent = message
     }
   }
 
@@ -171,13 +170,6 @@ export default class extends Controller {
           .filter((field) => !field.disabled && this.elementIsVisible(field))
         return checkboxes.length > 0 && !checkboxes.some((field) => field.checked)
       })
-  }
-
-  _documentUploadBlocksSubmit() {
-    return Array.from(this.element.querySelectorAll('[data-scan-state]')).some(widget => {
-      const input = widget.querySelector('input[type="file"]')
-      return input && !input.disabled && this.elementIsVisible(input) && !["idle", "clean"].includes(widget.dataset.scanState)
-    })
   }
 
   _requiredControlsBlockSubmit() {

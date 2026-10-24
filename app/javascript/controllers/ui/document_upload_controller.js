@@ -1,4 +1,5 @@
 import { Controller } from "@hotwired/stimulus"
+import { documentUploadBlocker } from "../../utils/document_upload_state"
 
 const EXTENSION_TO_MIME = {
   pdf: "application/pdf", jpg: "image/jpeg", jpeg: "image/jpeg", png: "image/png",
@@ -13,7 +14,7 @@ export default class extends Controller {
     maxInclusive: Boolean, invalidTypeMessage: String, tooLargeMessage: String,
     uploadingText: String, uploadedText: String, canceledText: String, failedText: String,
     scanningText: String, blockedText: String, unavailableText: String, waitText: String,
-    linkUnavailableText: String, sessionExpiredText: String,
+    linkUnavailableText: String, sessionExpiredText: String, chooseAgainText: String, retryText: String,
     scansUrl: String, purpose: String, slot: String, context: String, secureFormType: String,
     token: String, activeSelector: String, activeValue: String, persistContext: Boolean, pollInterval: { type: Number, default: 2000 }
   }
@@ -26,6 +27,7 @@ export default class extends Controller {
     this.originalRequired = this.inputTarget.dataset.documentUploadOriginallyRequired === "true"
     this.keptName = this.hasRetainedTarget ? this.retainedFilenameValue : null
     this.state = "idle"
+    this.pollAttempts = 0
     this.generation = (this.generation || 0) + 1
     this.discardedGenerations ||= new Set()
     this._syncActive = this.syncActive.bind(this)
@@ -55,7 +57,7 @@ export default class extends Controller {
     const refusal = this.refusalFor(file)
     if (refusal) {
       this.inputTarget.value = ""
-      this.statusTarget.textContent = [refusal, this.keptName ? this.fill(this.uploadedTextValue, this.keptName) : ""].filter(Boolean).join(" ")
+      this.showStatus([refusal, this.keptName ? this.fill(this.uploadedTextValue, this.keptName) : ""].filter(Boolean).join(" "))
       return
     }
 
@@ -63,6 +65,7 @@ export default class extends Controller {
     this.generation += 1
     const generation = this.generation
     clearTimeout(this.pollTimer)
+    this.pollAttempts = 0
     this.previousSelection ||= ["idle", "clean"].includes(this.state) && this.hasRetainedTarget ? {
       signedId: this.retainedTarget.value, filename: this.keptName, scanUrl: this.scanUrl
     } : null
@@ -129,7 +132,12 @@ export default class extends Controller {
   }
 
   async check() {
-    if (!this.scanUrl) return this.restore()
+    clearTimeout(this.pollTimer)
+    if (!this.scanUrl) {
+      this.remove()
+      this.inputTarget.click()
+      return
+    }
     const generation = this.generation
     try {
       const data = await this.fetchJSON(this.scanUrl)
@@ -151,28 +159,43 @@ export default class extends Controller {
     } else if (["pending", "submitted", "scanning"].includes(data.status)) {
       this.setState("pending", this.fill(this.scanningTextValue, this.keptName))
       clearTimeout(this.pollTimer)
-      this.pollTimer = setTimeout(() => this.check(), this.pollIntervalValue)
+      const delay = Math.min(this.pollIntervalValue * (2 ** this.pollAttempts), 15000)
+      this.pollAttempts += 1
+      this.pollTimer = setTimeout(() => this.check(), delay)
+    } else if (data.status === "failed") {
+      this.setState("failed", data.message || this.failedTextValue)
     } else {
       this.setState("blocked", data.message || this.blockedTextValue)
     }
   }
 
   setState(state, message) {
+    const changed = this.state !== state || this.statusTarget.textContent !== message
     this.state = state
     this.element.dataset.scanState = state
-    this.statusTarget.textContent = message
+    this.showStatus(message)
     const waiting = ["uploading", "pending"].includes(state)
     const blocked = !["idle", "clean"].includes(state)
     this.inputTarget.setCustomValidity(blocked ? (waiting ? this.waitTextValue : message || this.waitTextValue) : "")
     this.inputTarget.required = this.originalRequired && state !== "clean"
     this.inputTarget.setAttribute("aria-required", this.inputTarget.required ? "true" : "false")
+    this.inputTarget.setAttribute("aria-invalid", blocked && !waiting ? "true" : "false")
+    this.inputTarget.classList.toggle("border-red-500", blocked && !waiting)
     this.progressTarget.hidden = !waiting
     this.progressTarget.removeAttribute("value")
     this.cancelTarget.hidden = state !== "uploading"
     this.removeTarget.hidden = state === "idle"
     this.removeTarget.disabled = false
-    if (this.hasRetryTarget) this.retryTarget.hidden = state !== "unavailable"
-    this.element.dispatchEvent(new CustomEvent("document-upload:status", { bubbles: true, detail: { state } }))
+    if (this.hasRetryTarget) {
+      this.retryTarget.hidden = state !== "unavailable"
+      const label = this.scanUrl ? this.retryTextValue : this.chooseAgainTextValue
+      if (label && this.retryTarget.textContent !== label) this.retryTarget.textContent = label
+    }
+    if (changed) this.element.dispatchEvent(new CustomEvent("document-upload:status", { bubbles: true, detail: { state } }))
+  }
+
+  showStatus(message) {
+    if (this.statusTarget.textContent !== message) this.statusTarget.textContent = message
   }
 
   syncActive() {
@@ -183,7 +206,7 @@ export default class extends Controller {
   }
 
   guardSubmit(event) {
-    if (this.inputTarget.disabled || ["idle", "clean"].includes(this.state)) return
+    if (!documentUploadBlocker(this.element)) return
     event.preventDefault()
     event.stopImmediatePropagation()
     this.inputTarget.reportValidity()
@@ -201,12 +224,13 @@ export default class extends Controller {
     this.inputTarget.name = this.originalName
     this.scanUrl = null
     this.keptName = null
+    this.pollAttempts = 0
     this.setState("idle", this.canceledTextValue)
   }
 
   remove() {
     this.cancel()
-    this.statusTarget.textContent = ""
+    this.showStatus("")
     this.inputTarget.dispatchEvent(new Event("change", { bubbles: true }))
   }
 

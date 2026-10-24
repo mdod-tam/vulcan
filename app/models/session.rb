@@ -28,6 +28,14 @@ class Session < ApplicationRecord
     expires_at.nil? || expires_at <= at || last_active_at <= at - IDLE_TIMEOUT
   end
 
+  def activity_deadlines
+    {
+      idle_expires_at: (last_active_at + IDLE_TIMEOUT).iso8601,
+      absolute_expires_at: expires_at.iso8601,
+      issued_at: Time.current.iso8601(6)
+    }
+  end
+
   # Recheck under the row lock before refreshing an older timestamp. A stale request
   # must not revive an expired session or move activity backwards.
   def record_activity!

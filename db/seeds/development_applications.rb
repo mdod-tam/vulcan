@@ -28,6 +28,10 @@ module Seeds
     end
 
     def call
+      raise 'Development application fixtures can only run in development' unless Rails.env.development?
+
+      require_relative '../../test/support/document_scan_fixtures'
+
       PROFILES.each_with_index.map do |profile, index|
         applicant = create_applicant(profile, index)
         guardian = create_guardian(applicant, profile) if profile[:guardian]
@@ -107,7 +111,7 @@ module Seeds
       return if stage == :awaiting_dcf
 
       status = stage.in?(%i[certification_received certification_rejected]) ? :received : :approved
-      blob = stage_clean_scan('medical_certification.pdf', purpose: :certification,
+      blob = fixture_document('medical_certification.pdf', purpose: :certification,
                                                            slot: 'medical_certification', owner: @admin)
       MedicalCertificationAttachmentService.attach_certification(
         application: application, blob_or_file: blob, status: status, admin: @admin
@@ -134,7 +138,7 @@ module Seeds
 
     def attach_proof(application, type)
       submission_method = { 'paper' => :paper, 'email' => :email }.fetch(application.submission_method, :web)
-      blob = stage_clean_scan("#{type}_proof.pdf", purpose: :proof, slot: "#{type}_proof", owner: application.user)
+      blob = fixture_document("#{type}_proof.pdf", purpose: :proof, slot: "#{type}_proof", owner: application.user)
       result = ProofAttachmentService.attach_proof(application: application, proof_type: type, blob_or_file: blob,
                                                    submission_method: submission_method, scan_owner: application.user,
                                                    admin: @admin)
@@ -153,15 +157,11 @@ module Seeds
       end
     end
 
-    # The scan gate refuses unstaged uploads. Stage each document through DocumentScan and clear it
-    # as trusted fixture content. Ownership must match the attachment service's scan owner: the
-    # applicant owns proof scans, staff own certification uploads, which also keeps each owner far
-    # below DocumentScan's daily staging limit.
-    def stage_clean_scan(filename, purpose:, slot:, owner:)
+    # Repository fixtures are synthetic examples, not user uploads or paid scans.
+    def fixture_document(filename, purpose:, slot:, owner:)
       with_document(filename) do |upload|
-        scan = DocumentScan.stage!(input: upload, purpose: purpose, slot: slot, user: owner)
-        scan.update!(status: :clean, completed_at: Time.current)
-        scan.blob
+        blob = ActiveStorage::Blob.create_and_upload!(io: upload.tempfile, filename: filename, content_type: 'application/pdf')
+        DocumentScanFixtures.clear!(blob, user: owner, purpose: purpose, slot: slot, fixture: 'medical_certification_valid.pdf')
       end
     end
 

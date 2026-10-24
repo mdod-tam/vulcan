@@ -11,6 +11,18 @@ module PrivateAttachmentStreaming
 
   private
 
+  def stream_private_blob(blob)
+    response.headers['Accept-Ranges'] = 'bytes'
+    if request.headers['Range'].present?
+      send_blob_byte_range_data(blob, request.headers['Range'], disposition: attachment_disposition)
+    else
+      response.headers['Content-Length'] = blob.byte_size.to_s
+      send_blob_stream(blob, disposition: attachment_disposition)
+    end
+  end
+
+  def attachment_disposition = params[:disposition] == 'attachment' ? 'attachment' : 'inline'
+
   # Active Storage's stream error handlers otherwise replace no-store with no-cache.
   def expires_now
     super

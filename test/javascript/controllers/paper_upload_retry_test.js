@@ -60,6 +60,7 @@ describe("paper document decisions and shared virus-check control", () => {
     form = document.querySelector("form")
     widget = form.querySelector('[data-controller="document-upload"]')
     input = widget.querySelector('input[type="file"]')
+    input.getClientRects = () => [{ width: 200, height: 30 }]
     upload = application.getControllerForElementAndIdentifier(widget, "document-upload")
   })
 

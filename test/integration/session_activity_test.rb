@@ -8,6 +8,30 @@ class SessionActivityTest < ActionDispatch::IntegrationTest
     @user = create(:constituent)
   end
 
+  test 'admin session activity does not mount before required MFA enrollment' do
+    admin = create(:admin)
+    post sign_in_path, params: { email: admin.email, password: 'password1234' }
+    assert_redirected_to setup_two_factor_authentication_path
+    assert cookies[:session_token].present?
+
+    get setup_two_factor_authentication_path
+    assert_response :success
+    assert_select '[data-controller~="session-activity"]', count: 0
+  end
+
+  test 'admin session activity does not mount during a required password change' do
+    admin = create(:admin, force_password_change: true)
+    credential = admin.totp_credentials.create!(secret: ROTP::Base32.random_base32, nickname: 'Authenticator')
+    post sign_in_path, params: { email: admin.email, password: 'password1234' }
+    assert_redirected_to verify_method_two_factor_authentication_path(type: 'totp')
+    post process_verification_two_factor_authentication_path(type: 'totp'), params: { code: ROTP::TOTP.new(credential.secret).now }
+    assert cookies[:session_token].present?
+
+    get edit_password_path
+    assert_response :success
+    assert_select '[data-controller~="session-activity"]', count: 0
+  end
+
   test 'real sign-in activity slides idle expiry while retaining absolute expiry' do
     freeze_time do
       post sign_in_path, params: { email: @user.email, password: 'password1234' }
@@ -26,6 +50,66 @@ class SessionActivityTest < ActionDispatch::IntegrationTest
       assert_redirected_to sign_in_path
       assert_equal 'Your session expired; please sign in again.', flash[:alert]
       assert cookies[:session_token].blank?
+    end
+  end
+
+  test 'explicit session activity keeps an active form signed in without moving absolute expiry' do
+    freeze_time do
+      post sign_in_path, params: { email: @user.email, password: 'password1234' }
+      session_record = @user.sessions.last
+      absolute_expiry = session_record.expires_at
+
+      travel 29.minutes
+      post '/session_activity', as: :json
+      assert_response :success
+      assert_equal Time.current, session_record.reload.last_active_at
+      assert_equal absolute_expiry, session_record.expires_at
+      assert_equal (Time.current + Session::IDLE_TIMEOUT).iso8601, response.parsed_body.fetch('idle_expires_at')
+      assert_equal absolute_expiry.iso8601, response.parsed_body.fetch('absolute_expires_at')
+      assert_includes response.headers['Cache-Control'], 'no-store'
+
+      travel 29.minutes
+      post '/session_activity', as: :json
+      assert_response :success
+    end
+  end
+
+  test 'explicit session activity cannot revive an idle or absolutely expired session' do
+    %i[idle absolute].each do |deadline|
+      reset!
+      freeze_time do
+        post sign_in_path, params: { email: @user.email, password: 'password1234' }
+        session_record = @user.sessions.last
+        session_record.update!(expires_at: 5.minutes.from_now) if deadline == :absolute
+        original_activity = session_record.last_active_at
+        travel(deadline == :idle ? 30.minutes : 5.minutes)
+
+        post '/session_activity', as: :json
+        assert_response :unauthorized
+        assert_equal 'authentication_required', response.parsed_body.fetch('error')
+        assert_equal original_activity, session_record.reload.last_active_at
+        assert_includes response.headers['Cache-Control'], 'no-store'
+      end
+    end
+  end
+
+  test 'session deadline checks do not refresh idle activity' do
+    freeze_time do
+      post sign_in_path, params: { email: @user.email, password: 'password1234' }
+      session_record = @user.sessions.last
+      initial_activity = session_record.last_active_at
+      travel 29.minutes
+
+      get '/session_activity', as: :json
+      assert_response :success
+      assert_equal initial_activity, session_record.reload.last_active_at
+      assert_equal (initial_activity + Session::IDLE_TIMEOUT).iso8601, response.parsed_body.fetch('idle_expires_at')
+      travel 1.minute
+
+      get '/session_activity', as: :json
+      assert_response :unauthorized
+      assert_equal initial_activity, session_record.reload.last_active_at
+      assert_includes response.headers['Cache-Control'], 'no-store'
     end
   end
 

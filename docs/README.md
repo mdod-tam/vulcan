@@ -54,6 +54,9 @@ Use the source and test links in the workflow guides to trace the current path. 
 | --- | --- |
 | [Outgoing communications](infrastructure/email_system.md) | All/channel/category/template controls, cancellation, email and SMS, letter release, Postmark tracking, and coordinated rollout. |
 | [Active Storage and S3](infrastructure/active_storage_s3_setup.md) | File-storage configuration and deployment options. |
+| [Attachment scanning](security/attachment_scanning.md) | Antivirus configuration, quarantine, upload limits, worker queues, and recovery. |
+| [Content Security Policy](security/content_security_policy.md) | Browser resource restrictions, reports, and isolated email previews. |
+| [CSV exports](security/csv_exports.md) | Spreadsheet formula protection, export auditing, and personal-data limits. |
 | [Backup and recovery](infrastructure/backup_and_recovery.md) | Required keys/files, settings that must match, and Heroku backup schedules and restores. |
 | [Authentication and MFA](security/authentication_system.md) | Sign-in, sessions, factors, password reset, and recovery. |
 | [PII encryption](security/pii_encryption.md) | Encrypted fields, contact lookup, stable keys, and logging. |

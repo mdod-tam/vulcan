@@ -168,7 +168,7 @@
 
         <% if @application.income_proof.attached? %>
           <% if @application.proof_review_state("income") == :approved_current %>
-            <%= link_to rails_blob_path(@application.income_proof, disposition: :inline),
+            <%= link_to document_download_path(@application.income_proof, disposition: :inline),
                     target: "_blank",
                     class: "inline-flex items-center px-4 py-2 border border-transparent rounded-md shadow-sm text-sm font-medium text-white bg-green-600 hover:bg-green-700 focus:outline-none" do %>
               <svg class="h-5 w-5 mr-2" xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" stroke="currentColor">
@@ -370,7 +370,7 @@
       <div class="mt-4 flex space-x-2">
         <% if @application.residency_proof.attached? %>
           <% if @application.proof_review_state("residency") == :approved_current %>
-            <%= link_to rails_blob_path(@application.residency_proof, disposition: :inline),
+            <%= link_to document_download_path(@application.residency_proof, disposition: :inline),
                     target: "_blank",
                     class: "inline-flex items-center px-4 py-2 border border-transparent rounded-md shadow-sm text-sm font-medium text-white bg-green-600 hover:bg-green-700 focus:outline-none" do %>
               <svg class="h-5 w-5 mr-2" xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" stroke="currentColor">
@@ -571,7 +571,7 @@
       <div class="mt-4 flex space-x-2">
         <% if @application.id_proof.attached? %>
           <% if @application.proof_review_state("id") == :approved_current %>
-            <%= link_to rails_blob_path(@application.id_proof, disposition: :inline),
+            <%= link_to document_download_path(@application.id_proof, disposition: :inline),
                     target: "_blank",
                     class: "inline-flex items-center px-4 py-2 border border-transparent rounded-md shadow-sm text-sm font-medium text-white bg-green-600 hover:bg-green-700 focus:outline-none" do %>
               <svg class="h-5 w-5 mr-2" xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" stroke="currentColor">

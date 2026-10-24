@@ -26,7 +26,7 @@ describe("document upload quarantine and scan control", () => {
            data-document-upload-invalid-type-message-value="Upload a PDF file."
            data-document-upload-too-large-message-value="Upload a smaller file."
            data-document-upload-uploading-text-value="Uploading %{filename}"
-           data-document-upload-scanning-text-value="Checking %{filename} for viruses… You can keep filling out the form."
+           data-document-upload-scanning-text-value="Checking %{filename} for viruses… This may take a few minutes."
            data-document-upload-uploaded-text-value="Ready: %{filename}"
            data-document-upload-failed-text-value="Upload failed. Choose the file again."
            data-document-upload-unavailable-text-value="Your file is saved. Check again."
@@ -34,6 +34,8 @@ describe("document upload quarantine and scan control", () => {
            data-document-upload-canceled-text-value="Upload canceled."
            data-document-upload-link-unavailable-text-value="This upload link expired. Ask for a new link."
            data-document-upload-session-expired-text-value="Refresh this page to sign in again."
+           data-document-upload-choose-again-text-value="Choose file again"
+           data-document-upload-retry-text-value="Check again"
            data-document-upload-wait-text-value="Wait for the virus check.">
         <input type="file" required name="proof_${i}" data-document-upload-target="input" data-action="change->document-upload#select">
         ${retained ? `<input type="hidden" name="proof_${i}_signed_id" value="${retained.signedId}" data-document-upload-target="retained">` : ""}
@@ -48,6 +50,9 @@ describe("document upload quarantine and scan control", () => {
     await flush()
     widget = document.querySelector('[data-controller="document-upload"]')
     input = widget.querySelector('input[type="file"]')
+    document.querySelectorAll('input[type="file"]').forEach(field => {
+      field.getClientRects = () => [{ width: 200, height: 30 }]
+    })
     upload = application.getControllerForElementAndIdentifier(widget, "document-upload")
   }
 
@@ -75,7 +80,7 @@ describe("document upload quarantine and scan control", () => {
     expect(options.body.get("context")).toBe("application:1:2026")
     expect(options.headers["X-CSRF-Token"]).toBe("csrf-value")
     expect(input.name).toBe("")
-    expect(upload.statusTarget.textContent).toBe("Checking proof.pdf for viruses… You can keep filling out the form.")
+    expect(upload.statusTarget.textContent).toBe("Checking proof.pdf for viruses… This may take a few minutes.")
     expect(input.validationMessage).toBe("Wait for the virus check.")
     expect(widget.querySelector('input[type="hidden"]')).toBeNull()
     expect(document.querySelector("form").dispatchEvent(new Event("submit", { cancelable: true }))).toBe(false)
@@ -112,7 +117,7 @@ describe("document upload quarantine and scan control", () => {
     await render()
     for (const status of ["infected", "suspicious", "failed", "unexpected"]) {
       upload.applyStatus({ ...pending, status, message: "File blocked" })
-      expect(upload.state).toBe("blocked")
+      expect(upload.state).toBe(status === "failed" ? "failed" : "blocked")
       expect(widget.querySelector('input[type="hidden"]')).toBeNull()
       expect(input.validationMessage).toBe("File blocked")
     }
@@ -129,6 +134,55 @@ describe("document upload quarantine and scan control", () => {
     await upload.check()
     expect(upload.retryTarget.hidden).toBe(true)
     expect(upload.state).toBe("clean")
+  })
+
+  test.each([422, 429, "network"])("an unsaved %s upload error can reopen the chooser and retry", async status => {
+    await render()
+    if (status === "network") fetch.mockRejectedValueOnce(new Error("network"))
+    else fetch.mockResolvedValueOnce(refusal(status))
+    await choose()
+    const openChooser = jest.spyOn(input, "click").mockImplementation(() => {})
+    expect(upload.state).toBe("unavailable")
+    expect(upload.retryTarget.textContent).toBe("Choose file again")
+    // Clearing a real file input also clears files; our read-only test override must mirror that.
+    Object.defineProperty(input, "files", { value: [], configurable: true })
+    await upload.check()
+    expect(openChooser).toHaveBeenCalledTimes(1)
+    expect(upload.state).toBe("idle")
+    expect(input.name).toBe("proof_0")
+    expect(input.validity.customError).toBe(false)
+    fetch.mockResolvedValueOnce(response(clean))
+    await choose()
+    expect(upload.state).toBe("clean")
+    expect(upload.retainedTarget.value).toBe("clean-receipt")
+  })
+
+  test("unchanged pending polls do not repeat live-region announcements", async () => {
+    await render({ initial: pending })
+    const announcements = jest.fn()
+    const observer = new MutationObserver(announcements)
+    observer.observe(upload.statusTarget, { childList: true, characterData: true, subtree: true })
+    const statuses = jest.fn()
+    widget.addEventListener("document-upload:status", statuses)
+    upload.applyStatus(pending)
+    await flush()
+    expect(announcements).not.toHaveBeenCalled()
+    expect(statuses).not.toHaveBeenCalled()
+    observer.disconnect()
+  })
+
+  test("pending polling backs off to fifteen seconds", async () => {
+    await render()
+    const timers = jest.spyOn(global, "setTimeout")
+    for (let attempt = 0; attempt < 5; attempt += 1) upload.applyStatus(pending)
+    expect(timers.mock.calls.map(([_callback, delay]) => delay)).toEqual([2000, 4000, 8000, 15000, 15000])
+    timers.mockRestore()
+  })
+
+  test("a hidden blocked document does not block the active form", async () => {
+    await render({ initial: pending })
+    widget.hidden = true
+    expect(document.querySelector("form").dispatchEvent(new Event("submit", { cancelable: true }))).toBe(true)
   })
 
   test("an expired secure link explains how to get a new link instead of suggesting a network retry", async () => {

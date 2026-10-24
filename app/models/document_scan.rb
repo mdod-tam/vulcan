@@ -3,6 +3,7 @@
 class DocumentScan < ApplicationRecord
   class NotCleared < StandardError; end
   class LimitExceeded < StandardError; end
+  class SnapshotNotReady < StandardError; end
 
   include DocumentScan::Work
   include DocumentScan::Continuation
@@ -24,10 +25,24 @@ class DocumentScan < ApplicationRecord
   validate :upload_owner_present, on: :create
   validates :continuation, inclusion: { in: ['docuseal'] }, allow_nil: true
 
-  scope :recoverable, -> { where(dismissed_at: nil, created_at: RETENTION.ago..).where.not(blob_id: ActiveStorage::Attachment.select(:blob_id)) }
+  scope :recoverable, lambda {
+    where(status: %w[pending clean], dismissed_at: nil, created_at: RETENTION.ago..)
+      .where.not(blob_id: ActiveStorage::Attachment.select(:blob_id))
+  }
 
   def self.stage!(**attributes)
     DocumentScans::Stager.new(**attributes).call
+  end
+
+  def resume!
+    raise SnapshotNotReady, 'Document upload has not finished' if pending? && next_attempt_at.nil? && lease_token.nil? && provider_scan_id.nil?
+
+    if pending?
+      DocumentScanJob.perform_later(id)
+    elsif continuation == 'docuseal' && continued_at.nil?
+      DocumentSigning::AcceptScannedDocumentJob.perform_later(id)
+    end
+    self
   end
 
   # Missing history is deliberately unavailable, including pre-release seed files.

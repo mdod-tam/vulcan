@@ -39,6 +39,25 @@ class DocumentScansControllerTest < ActionDispatch::IntegrationTest
     assert_nil response.parsed_body
   end
 
+  test 'fresh forms restore pending and clean scans but not blocked or failed scans' do
+    blob = scanned_upload(fixture_file_upload('income_proof.pdf', 'application/pdf'), user: @user)
+    scan = DocumentScan.find_by!(blob: blob)
+    %w[pending clean blocked failed].each do |status|
+      scan.update!(status: status)
+      get document_scans_path, params: { purpose: 'proof', slot: 'income_proof' }
+      assert_response :success
+      if status.in?(%w[pending clean])
+        assert_equal scan.id, response.parsed_body.fetch('id'), status
+      else
+        assert_nil response.parsed_body, status
+      end
+
+      get document_scan_path(scan)
+      assert_response :success
+      assert_equal status, response.parsed_body.fetch('status')
+    end
+  end
+
   test 'role limits purposes and default direct upload allocation is unavailable' do
     post document_scans_path, params: { purpose: 'w9', slot: 'w9_form' }
     assert_response :not_found

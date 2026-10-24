@@ -13,6 +13,7 @@ import EquipmentSelectionController from "./admin/equipment_selection_controller
 import AddCredentialController from "./auth/add_credential_controller"
 import CredentialAuthenticatorController from "./auth/credential_authenticator_controller"
 import TotpFormController from "./auth/totp_form_controller"
+import SessionActivityController from "./auth/session_activity_controller"
 
 // Chart Controllers
 import ChartController from "./charts/chart_controller"
@@ -67,6 +68,7 @@ application.register("equipment-selection", EquipmentSelectionController)
 application.register("add-credential", AddCredentialController)
 application.register("credential-authenticator", CredentialAuthenticatorController)
 application.register("totp-form", TotpFormController)
+application.register("session-activity", SessionActivityController)
 
 // Chart Controllers
 application.register("chart", ChartController)

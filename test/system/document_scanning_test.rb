@@ -97,4 +97,102 @@ class DocumentScanningTest < ApplicationSystemTestCase
     assert_equal 0, page.evaluate_script('Array.from(document.querySelectorAll("*")).flatMap(element => Array.from(element.attributes)).filter(attribute => /^on/.test(attribute.name)).length')
     take_screenshot('document-scan-published-clean', html: true, full: true)
   end
+
+  test 'blocked failed and rate-limited uploads offer a working next choice' do
+    product = create(:product, name: 'Upload retry tablet')
+    visit new_admin_product_product_resource_path(product)
+    fill_in 'Descriptive title (in the resource language)', with: 'Retry guide'
+    select 'English', from: 'Content language'
+    select 'PDF document', from: 'Resource source'
+
+    %w[blocked failed].each do |verdict|
+      attach_file 'PDF document', Rails.root.join('test/fixtures/files/medical_certification_valid.pdf')
+      assert_selector '[data-scan-state="pending"]'
+      scan = DocumentScan.where(user: @admin, purpose: 'product_resource').order(:id).last
+      scan.update!(status: verdict, completed_at: Time.current)
+      assert_selector "[data-scan-state='#{verdict}']", text: I18n.t("documents.scan.#{verdict}"), wait: 20
+      assert_selector '#product_resource_document[aria-invalid="true"].border-red-500'
+      assert_not page.evaluate_script('document.querySelector("form[action*=product_resources]").checkValidity()')
+      assert_no_selector 'input[name="product_resource[document]"][type="hidden"]', visible: :all
+      take_screenshot("document-scan-#{verdict}-next-choice", html: true, full: true)
+      click_button I18n.t('documents.upload.remove')
+    end
+
+    page.execute_script(<<~JS, document_scans_path, I18n.t('documents.scan.limit_reached'))
+      const path = arguments[0], message = arguments[1];
+      const original = window.fetch.bind(window);
+      window.fetch = (url, options) => {
+        if (new URL(url, window.location.origin).pathname === path && options?.method === 'POST') {
+          window.fetch = original;
+          return Promise.resolve(new Response(JSON.stringify({ message }), {
+            status: 429, headers: { 'Content-Type': 'application/json' }
+          }));
+        }
+        return original(url, options);
+      };
+    JS
+    attach_file 'PDF document', Rails.root.join('test/fixtures/files/medical_certification_valid.pdf')
+    assert_selector '[data-scan-state="unavailable"]', text: I18n.t('documents.scan.limit_reached')
+    assert_button I18n.t('documents.upload.choose_again')
+    take_screenshot('document-scan-allocation-refused-next-choice', html: true, full: true)
+    click_button I18n.t('documents.upload.choose_again')
+    assert_selector '[data-scan-state="idle"]'
+    attach_file 'PDF document', Rails.root.join('test/fixtures/files/medical_certification_valid.pdf')
+    assert_selector '[data-scan-state="pending"]'
+    assert_equal 3, DocumentScan.where(user: @admin).count
+    assert_equal [], page.evaluate_script('window.scanPageViolations')
+    take_screenshot('document-scan-retry-staged', html: true, full: true)
+  end
+
+  test 'Spanish secure upload status stays actionable through pending blocked and ready states' do
+    constituent = create(:constituent, locale: 'es')
+    application = create(:application, :in_progress, user: constituent)
+    token = SecureRequestForm.generate_public_token
+    form = create(:secure_request_form, application: application, kind: :income_proof_resubmission, raw_token: token)
+    visit secure_proof_form_path(token: token)
+    assert_selector 'html[lang="es"]'
+    attach_file 'file', Rails.root.join('test/fixtures/files/income_proof.pdf')
+    assert_selector '[data-scan-state="pending"]', text: I18n.t('documents.upload.scanning', filename: 'income_proof.pdf', locale: :es)
+    assert_selector '#file[class~="focus:ring-2"]'
+    assert_not page.evaluate_script('document.querySelector("form").checkValidity()')
+    take_screenshot('document-scan-spanish-secure-pending', html: true, full: true)
+
+    scan = DocumentScan.where(secure_form: form).sole
+    scan.update!(status: 'blocked', completed_at: Time.current)
+    assert_selector '[data-scan-state="blocked"]', text: I18n.t('documents.scan.blocked', locale: :es), wait: 20
+    assert_selector '#file[aria-invalid="true"].border-red-500'
+    take_screenshot('document-scan-spanish-secure-blocked', html: true, full: true)
+    click_button I18n.t('documents.upload.remove', locale: :es)
+    attach_file 'file', Rails.root.join('test/fixtures/files/income_proof.pdf')
+    assert_selector '[data-scan-state="pending"]'
+    replacement = DocumentScan.where(secure_form: form).order(:id).last
+    DocumentScanFixtures.clear!(replacement.blob, user: nil, secure_form: form)
+    assert_selector '[data-scan-state="clean"]', text: I18n.t('documents.upload.uploaded', filename: 'income_proof.pdf', locale: :es), wait: 20
+    assert page.evaluate_script('document.querySelector("form").checkValidity()')
+    assert_not form.reload.status_submitted?
+    assert_equal [], page.evaluate_script('window.scanPageViolations')
+    take_screenshot('document-scan-spanish-secure-ready', html: true, full: true)
+  end
+
+  test 'paper submit stays disabled with the current scan reason' do
+    FeatureFlag.find_or_create_by!(name: 'vouchers_enabled').update!(enabled: false)
+    visit new_admin_paper_application_path
+    choose 'An Adult (applying for themselves)'
+    click_button 'Create New Applicant'
+    choose 'upload_only_income_proof'
+    assert_selector '#income_proof:enabled'
+    attach_file 'income_proof', Rails.root.join('test/fixtures/files/income_proof.pdf')
+    assert_selector '[data-scan-state="pending"]'
+    assert_button 'Submit Paper Application', disabled: true
+    assert_selector '#paper-submit-gate-status', text: I18n.t('documents.upload.wait'), visible: :all
+    take_screenshot('document-scan-paper-pending-submit-reason', html: true, full: true)
+
+    scan = DocumentScan.where(user: @admin, slot: 'income_proof').sole
+    scan.update!(status: 'blocked', completed_at: Time.current)
+    assert_selector '[data-scan-state="blocked"]', wait: 20
+    assert_button 'Submit Paper Application', disabled: true
+    assert_selector '#paper-submit-gate-status', text: I18n.t('documents.scan.blocked'), visible: :all
+    assert_no_selector '#paper-submit-gate-status', text: I18n.t('documents.upload.wait'), visible: :all
+    take_screenshot('document-scan-paper-blocked-submit-reason', html: true, full: true)
+  end
 end

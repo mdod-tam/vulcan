@@ -5,6 +5,27 @@ require 'test_helper'
 class DocumentScanCapacityTest < ActiveSupport::TestCase
   setup { @user = create(:constituent) }
 
+  test 'one public account can stage its three proof files without taking the entire public pending pool' do
+    3.times { existing_scan(user: @user) }
+
+    assert_raises(DocumentScan::LimitExceeded) { stage(user: @user) }
+    assert stage(user: create(:constituent)).pending?
+    DocumentScan.where(user: @user).first!.dismiss!
+    assert stage(user: @user).pending?
+  end
+
+  test 'pending staff and secure form uploads have smaller limits than the program pool' do
+    admin = create(:admin)
+    form = create(:secure_request_form)
+    10.times { existing_scan(user: admin) }
+    2.times { existing_scan(secure_form: form) }
+
+    assert_raises(DocumentScan::LimitExceeded) { stage(user: admin) }
+    assert_raises(DocumentScan::LimitExceeded) { stage(secure_form: form) }
+    assert stage(user: create(:admin)).pending?
+    assert stage(secure_form: create(:secure_request_form)).pending?
+  end
+
   test 'public pending uploads leave capacity for staff and secure forms' do
     10.times { existing_scan(user: @user) }
 
@@ -55,6 +76,28 @@ class DocumentScanCapacityTest < ActiveSupport::TestCase
     end
     stub_const(DocumentScans::Stager, :MAX_PENDING, 1) do
       assert_raises(DocumentScan::LimitExceeded) { stage(user: admin) }
+    end
+  end
+
+  test 'repeated fixture clearances do not consume real upload allocation' do
+    4.times do
+      blob = ActiveStorage::Blob.create_and_upload!(io: StringIO.new(file_fixture('income_proof.pdf').binread),
+                                                    filename: 'seed-proof.pdf', content_type: 'application/pdf')
+      2.times { DocumentScanFixtures.clear!(blob, user: @user) }
+    end
+    assert_equal 4, DocumentScan.where(user: @user, synthetic_fixture: true).count
+
+    stub_const(DocumentScans::Stager, :GLOBAL_DAILY_LIMIT, 2) do
+      first = stage(user: @user)
+      second = stage(user: @user)
+
+      assert first.pending?
+      assert second.pending?
+      assert_not first.synthetic_fixture?
+      assert_not second.synthetic_fixture?
+      assert_no_difference ['DocumentScan.count', 'ActiveStorage::Blob.count'] do
+        assert_raises(DocumentScan::LimitExceeded) { stage(user: @user) }
+      end
     end
   end
 

@@ -2,7 +2,7 @@
 
 class DocumentScanJob < ApplicationJob
   self.enqueue_after_transaction_commit = true
-  queue_as :default
+  queue_as :document_scans
 
   def perform(document_scan_id)
     scan = DocumentScan.find_by(id: document_scan_id)

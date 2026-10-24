@@ -4,7 +4,7 @@ module Authentication
   extend ActiveSupport::Concern
 
   included do
-    helper_method :current_user
+    helper_method :current_user, :admin_session_activity_deadlines
     before_action :authenticate_user!
   end
 
@@ -15,6 +15,13 @@ module Authentication
   end
 
   private
+
+  def admin_session_activity_deadlines
+    return unless current_user&.admin? && current_session&.persisted?
+    return if current_user.force_password_change? || !current_user.second_factor_enabled?
+
+    current_session.activity_deadlines
+  end
 
   def current_user
     return @current_user if defined?(@current_user)

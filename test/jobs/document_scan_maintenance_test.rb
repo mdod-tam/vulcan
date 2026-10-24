@@ -41,7 +41,7 @@ class DocumentScanMaintenanceTest < ActiveSupport::TestCase
     application = create(:application)
     application.income_proof.attach(attached.blob)
 
-    CleanupDocumentScansJob.perform_now
+    CleanupUnattachedUploadsJob.perform_now
 
     assert_not DocumentScan.exists?(abandoned.id)
     [blocked, clean].each do |expired|
@@ -61,7 +61,7 @@ class DocumentScanMaintenanceTest < ActiveSupport::TestCase
     review = create(:w9_review, vendor: vendor, reviewed_blob: retained.blob)
     abandoned = scan(status: 'failed', created_at: 8.days.ago)
 
-    CleanupDocumentScansJob.perform_now
+    CleanupUnattachedUploadsJob.perform_now
 
     assert DocumentScan.exists?(retained.id)
     assert DocumentScan.cleared?(review.reload.reviewed_blob)
@@ -74,6 +74,7 @@ class DocumentScanMaintenanceTest < ActiveSupport::TestCase
   def scan(**attributes)
     bytes = 'private snapshot'
     blob = ActiveStorage::Blob.create_and_upload!(io: StringIO.new(bytes), filename: 'proof.pdf', content_type: 'application/pdf')
+    blob.update!(created_at: attributes[:created_at]) if attributes[:created_at]
     DocumentScan.create!({ blob: blob, user: @user, purpose: 'proof', slot: 'income_proof', sha256: Digest::SHA256.hexdigest(bytes),
                            next_attempt_at: Time.current }.merge(attributes))
   end

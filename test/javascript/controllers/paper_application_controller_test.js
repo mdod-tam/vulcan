@@ -370,7 +370,6 @@ describe("PaperApplicationController", () => {
     Object.defineProperty(directController, "statusTarget", { value: status, configurable: true })
     Object.defineProperty(directController, "hasRejectionButtonTarget", { value: false, configurable: true })
     directController.elementIsVisible = () => true
-    directController._uploading = false
 
     directController._applySubmitGating()
     expect(submitButton.disabled).toBe(true)
@@ -382,9 +381,22 @@ describe("PaperApplicationController", () => {
     expect(status.textContent).toBe("Paper application is ready to submit.")
 
     guardianId.value = ""
-    directController._uploading = true
+    const widget = document.createElement("div")
+    widget.dataset.scanState = "pending"
+    widget.innerHTML = '<input type="file">'
+    widget.querySelector("input").setCustomValidity("Wait for the document virus checks before submitting.")
+    form.append(widget)
     directController._applySubmitGating()
     expect(submitButton.disabled).toBe(true)
     expect(status.textContent).toBe("Wait for the document virus checks before submitting.")
+
+    widget.dataset.scanState = "blocked"
+    widget.querySelector("input").setCustomValidity("This file did not pass. Choose another file.")
+    directController._applySubmitGating()
+    expect(status.textContent).toBe("This file did not pass. Choose another file.")
+
+    widget.hidden = true
+    directController._applySubmitGating()
+    expect(status.textContent).toBe("Select or create a guardian before submitting this dependent's application.")
   })
 })

@@ -147,7 +147,7 @@ class UploadedDocument
   end
 
   def expired_unattached?(blob)
-    !blob.attachments.exists? && blob.created_at <= CleanupUnattachedUploadsJob::RETENTION.ago
+    !blob.attachments.exists? && blob.created_at <= DocumentScan::RETENTION.ago
   end
 
   def attached_elsewhere?(blob)

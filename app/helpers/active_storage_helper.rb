@@ -1,6 +1,12 @@
 # frozen_string_literal: true
 
 module ActiveStorageHelper
+  # Page controls resolve the current attachment through the authenticated reader.
+  def document_download_path(document, **)
+    attachment = document.is_a?(ActiveStorage::Attachment) ? document : document.attachment
+    document_attachment_path(attachment, **)
+  end
+
   # Safely extracts filename from an attachment without triggering unnecessary eager loading
   # of ActiveStorage::Blob association that aren't needed
   def safe_attachment_filename(attachment)

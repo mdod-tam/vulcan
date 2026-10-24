@@ -14,7 +14,8 @@ class AttachmentDownloadsControllerTest < ActionDispatch::IntegrationTest
   test 'unscanned or blocked bytes cannot stream or create a representation' do
     authenticate(@application.user)
     variation = ActiveStorage::Variation.encode(resize_to_limit: [10, 10])
-    paths = [rails_blob_path(@blob), rails_blob_representation_proxy_path(@blob.signed_id, variation, 'proof.png')]
+    paths = [rails_blob_path(@blob), document_attachment_path(@application.income_proof.attachment),
+             rails_blob_representation_proxy_path(@blob.signed_id, variation, 'proof.png')]
     scan = DocumentScan.find_by!(blob_id: @blob.id)
     ActiveStorage::VariantWithRecord.any_instance.expects(:processed).never
     ActiveStorage::Preview.any_instance.expects(:processed).never
@@ -87,6 +88,58 @@ class AttachmentDownloadsControllerTest < ActionDispatch::IntegrationTest
         get path
         assert_response :success
       end
+    end
+  end
+
+  test 'page document controls remain usable after signed URL expiry and recheck current ownership' do
+    freeze_time do
+      authenticate(@application.user)
+      attachment = @application.income_proof.attachment
+      path = "/document_attachments/#{attachment.id}?disposition=inline"
+
+      travel 16.minutes
+      get path
+      assert_response :success
+      assert_equal @blob.download, response.body
+      assert_private_response
+
+      authenticate(create(:constituent))
+      get path
+      assert_response :not_found
+      assert_private_response
+
+      authenticate(@application.user)
+      attachment.destroy!
+      get path
+      assert_response :not_found
+      assert_private_response
+    end
+  end
+
+  test 'page document controls authenticate before looking up an attachment' do
+    [@application.income_proof.attachment.id, 0].each do |id|
+      get "/document_attachments/#{id}"
+      assert_redirected_to sign_in_path
+      assert_private_response
+    end
+  end
+
+  test 'ordinary downloads support full and partial byte responses' do
+    authenticate(@application.user)
+    paths = [rails_blob_path(@blob), "/document_attachments/#{@application.income_proof.attachment.id}"]
+    paths.each do |path|
+      get path
+      assert_response :success
+      assert_equal 'bytes', response.headers['Accept-Ranges']
+      assert_equal @blob.byte_size.to_s, response.headers['Content-Length']
+
+      get path, headers: { 'Range' => 'bytes=0-10' }
+      assert_response :partial_content
+      assert_equal @blob.download.byteslice(0, 11), response.body
+      assert_equal "bytes 0-10/#{@blob.byte_size}", response.headers['Content-Range']
+      assert_equal '11', response.headers['Content-Length']
+      assert_equal 'bytes', response.headers['Accept-Ranges']
+      assert_private_response
     end
   end
 
