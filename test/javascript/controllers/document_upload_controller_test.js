@@ -196,6 +196,24 @@ describe("document upload quarantine and scan control", () => {
     expect(widget.querySelector('input[type="hidden"]')).toBeNull()
   })
 
+  test("a clean polling response arriving after remove cannot restore its receipt", async () => {
+    await render({ initial: pending })
+    let finish
+    fetch.mockReturnValueOnce(new Promise(resolve => { finish = resolve }))
+    const checking = upload.check()
+    fetch.mockResolvedValueOnce({ ok: true, status: 204 })
+    upload.remove()
+    finish(response(clean))
+    await checking
+    await flush()
+    expect(fetch).toHaveBeenCalledWith("/document_scans/7", expect.objectContaining({ method: "DELETE" }))
+    expect(upload.state).toBe("idle")
+    expect(widget.querySelector('input[type="hidden"]')).toBeNull()
+    expect(input.name).toBe("proof_0")
+    expect(input.validity.customError).toBe(false)
+    expect(input.required).toBe(true)
+  })
+
   test("leaving during an upload keeps its eventual saved scan recoverable", async () => {
     await render()
     let finish

@@ -49,6 +49,57 @@ class DocumentScanJobTest < ActiveSupport::TestCase
     end
   end
 
+  test 'dismissed queued scans never reach the provider' do
+    @scan.update!(dismissed_at: Time.current)
+    @client.expects(:submit).never
+    @client.expects(:fetch).never
+
+    assert_no_enqueued_jobs(only: DocumentScanJob) { DocumentScanJob.perform_now(@scan.id) }
+
+    assert @scan.reload.dismissed_at
+    assert_equal 0, @scan.attempts
+    assert_nil @scan.submitted_at
+  end
+
+  test 'dismissal during the provider budget wait prevents the real client from dispatching HTTP' do
+    AttachmentScanner::Client.unstub(:new)
+    configuration = AttachmentScanner::Configuration.new(url: 'https://us-east-1.attachmentscanner.com', token: 'synthetic-token')
+    Rails.application.config.x.stubs(:attachment_scanner).returns(configuration)
+    DocumentScanProviderBudget.expects(:wait_for_slot!).with do
+      DocumentScan.find(@scan.id).dismiss!
+      true
+    end
+    HTTP.expects(:auth).never
+
+    assert_no_enqueued_jobs(only: DocumentScanJob) { DocumentScanJob.perform_now(@scan.id) }
+
+    assert @scan.reload.failed?
+    assert_nil @scan.submitted_at
+    assert_nil @scan.lease_token
+  end
+
+  test 'dismissal during a provider call stops polling and refuses the late result' do
+    before_request = nil
+    AttachmentScanner::Client.stubs(:new).with do |**attributes|
+      before_request = attributes.fetch(:before_request)
+      true
+    end.returns(@client)
+    @client.expects(:submit).with do |**_attributes|
+      assert before_request.call
+      @scan.dismiss!
+      true
+    end.returns(result('ok'))
+
+    assert_no_enqueued_jobs(only: DocumentScanJob) { DocumentScanJob.perform_now(@scan.id) }
+
+    assert @scan.reload.failed?
+    assert @scan.submitted_at
+    assert_equal 1, @scan.attempts
+    assert_nil @scan.provider_scan_id
+    assert_nil @scan.next_attempt_at
+    assert_not DocumentScan.cleared?(@scan.blob)
+  end
+
   private
 
   def result(status)

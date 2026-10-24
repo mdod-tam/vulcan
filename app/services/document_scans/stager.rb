@@ -6,9 +6,12 @@ module DocumentScans
     class SnapshotNotReady < StandardError; end
 
     ACCOUNT_DAILY_LIMIT = 30
+    ADMIN_DAILY_LIMIT = 60
     FORM_DAILY_LIMIT = 10
     GLOBAL_DAILY_LIMIT = 150
     MAX_PENDING = 50
+    PUBLIC_DAILY_LIMIT = 50
+    PUBLIC_PENDING_LIMIT = 10
     ALLOCATION_LOCK = 7_481_924_132
 
     def initialize(input:, purpose:, slot:, user: nil, secure_form: nil, form_context: '', context: {}, continuation: nil, dedup_key: nil) # rubocop:disable Metrics/ParameterLists -- Explicit owner and provider continuation context.
@@ -92,18 +95,25 @@ module DocumentScans
 
     def check_limits!
       recent = DocumentScan.where(created_at: 1.day.ago..)
-      owner_count = if @user
-                      recent.where(user: @user).count
-                    elsif @secure_form
-                      recent.where(secure_form: @secure_form).count
-                    else
-                      0
-                    end
-      owner_limit = @user ? ACCOUNT_DAILY_LIMIT : FORM_DAILY_LIMIT
-      return unless recent.count >= GLOBAL_DAILY_LIMIT || DocumentScan.pending.count >= MAX_PENDING || owner_count >= owner_limit
+      owner_limited = if @user&.admin?
+                        recent.where(user: @user).count >= ADMIN_DAILY_LIMIT
+                      elsif @user
+                        public_scans = public_intake
+                        recent.where(user: @user).count >= ACCOUNT_DAILY_LIMIT ||
+                          recent.merge(public_scans).count >= PUBLIC_DAILY_LIMIT || public_scans.pending.count >= PUBLIC_PENDING_LIMIT
+                      elsif @secure_form
+                        recent.where(secure_form: @secure_form).count >= FORM_DAILY_LIMIT
+                      end
+      return unless owner_limited || recent.count >= GLOBAL_DAILY_LIMIT || DocumentScan.pending.count >= MAX_PENDING
 
       Rails.event.notify('document_scan.allocation_limited', owner_type: @user ? 'account' : 'form')
       raise DocumentScan::LimitExceeded, 'Upload limit reached'
+    end
+
+    def public_intake
+      scope = DocumentScan.where(secure_form_id: nil, continuation: nil)
+      # Deleted accounts remain charged; issued forms and staff retain their reserve.
+      scope.where.not(user_id: User.admins.select(:id)).or(scope.where(user_id: nil))
     end
 
     def enqueue(scan)

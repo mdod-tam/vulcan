@@ -59,7 +59,7 @@ class DocumentSigningWorkflowTest < ActionDispatch::IntegrationTest
     signature = compute_webhook_signature(viewed_payload.to_json)
     post webhooks_docuseal_medical_certification_path,
          params: viewed_payload,
-         headers: { 'X-Webhook-Signature' => signature },
+         headers: { 'X-Docuseal-Signature' => signature },
          as: :json
 
     assert_response :ok
@@ -78,7 +78,7 @@ class DocumentSigningWorkflowTest < ActionDispatch::IntegrationTest
     signature = compute_webhook_signature(started_payload.to_json)
     post webhooks_docuseal_medical_certification_path,
          params: started_payload,
-         headers: { 'X-Webhook-Signature' => signature },
+         headers: { 'X-Docuseal-Signature' => signature },
          as: :json
 
     assert_response :ok
@@ -88,6 +88,7 @@ class DocumentSigningWorkflowTest < ActionDispatch::IntegrationTest
     completed_payload = {
       event_type: 'form.completed',
       data: {
+        'id' => 'submitter_789',
         'submission_id' => 'sub_123456',
         'email' => 'doctor@example.com',
         'documents' => [
@@ -105,7 +106,7 @@ class DocumentSigningWorkflowTest < ActionDispatch::IntegrationTest
     signature = compute_webhook_signature(completed_payload.to_json)
     post webhooks_docuseal_medical_certification_path,
          params: completed_payload,
-         headers: { 'X-Webhook-Signature' => signature },
+         headers: { 'X-Docuseal-Signature' => signature },
          as: :json
 
     assert_response :ok
@@ -147,7 +148,7 @@ class DocumentSigningWorkflowTest < ActionDispatch::IntegrationTest
     signature = compute_webhook_signature(declined_payload.to_json)
     post webhooks_docuseal_medical_certification_path,
          params: declined_payload,
-         headers: { 'X-Webhook-Signature' => signature },
+         headers: { 'X-Docuseal-Signature' => signature },
          as: :json
 
     assert_response :ok
@@ -169,6 +170,7 @@ class DocumentSigningWorkflowTest < ActionDispatch::IntegrationTest
     @application.update!(
       document_signing_service: 'docuseal',
       document_signing_submission_id: 'sub_123456',
+      document_signing_submitter_id: 'submitter_789',
       document_signing_status: :sent,
       document_signing_requested_at: 1.day.ago
     )
@@ -176,6 +178,7 @@ class DocumentSigningWorkflowTest < ActionDispatch::IntegrationTest
     completed_payload = {
       event_type: 'form.completed',
       data: {
+        'id' => 'submitter_789',
         'submission_id' => 'sub_123456',
         'email' => 'doctor@example.com',
         'documents' => [
@@ -193,7 +196,7 @@ class DocumentSigningWorkflowTest < ActionDispatch::IntegrationTest
     signature = compute_webhook_signature(completed_payload.to_json)
     post webhooks_docuseal_medical_certification_path,
          params: completed_payload,
-         headers: { 'X-Webhook-Signature' => signature },
+         headers: { 'X-Docuseal-Signature' => signature },
          as: :json
 
     assert_response :ok
@@ -215,12 +218,14 @@ class DocumentSigningWorkflowTest < ActionDispatch::IntegrationTest
     @application.update!(
       document_signing_service: 'docuseal',
       document_signing_submission_id: 'sub_123456',
+      document_signing_submitter_id: 'submitter_789',
       document_signing_status: :sent
     )
 
     completed_payload = {
       event_type: 'form.completed',
       data: {
+        'id' => 'submitter_789',
         'submission_id' => 'sub_123456',
         'email' => 'doctor@example.com',
         'documents' => [
@@ -236,7 +241,7 @@ class DocumentSigningWorkflowTest < ActionDispatch::IntegrationTest
     signature = compute_webhook_signature(completed_payload.to_json)
     post webhooks_docuseal_medical_certification_path,
          params: completed_payload,
-         headers: { 'X-Webhook-Signature' => signature },
+         headers: { 'X-Docuseal-Signature' => signature },
          as: :json
 
     assert_response :ok
@@ -298,6 +303,8 @@ class DocumentSigningWorkflowTest < ActionDispatch::IntegrationTest
   end
 
   def compute_webhook_signature(payload)
-    OpenSSL::HMAC.hexdigest('SHA256', @webhook_secret, payload)
+    timestamp = Time.current.to_i
+    digest = OpenSSL::HMAC.hexdigest('SHA256', @webhook_secret, "#{timestamp}.#{payload}")
+    "#{timestamp}.#{digest}"
   end
 end

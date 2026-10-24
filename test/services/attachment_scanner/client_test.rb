@@ -15,7 +15,9 @@ class AttachmentScannerClientTest < ActiveSupport::TestCase
 
   setup do
     @configuration = AttachmentScanner::Configuration.new(url: 'https://us-east-1.attachmentscanner.com', token: 'synthetic-token')
-    @client = AttachmentScanner::Client.new(configuration: @configuration)
+    @budget = mock('HTTP request budget')
+    @budget.stubs(:wait_for_slot!)
+    @client = AttachmentScanner::Client.new(configuration: @configuration, budget: @budget)
     @transport = mock('scanner transport')
     HTTP.stubs(:auth).with('Bearer synthetic-token').returns(@transport)
     @transport.stubs(:timeout).with(connect: 5, write: 30, read: 35, global: 45).returns(@transport)
@@ -89,6 +91,28 @@ class AttachmentScannerClientTest < ActiveSupport::TestCase
       error = assert_raises(AttachmentScanner::Client::Failure) { @client.fetch(SCAN_ID) }
       assert_equal 'unsafe_redirect', error.code
     end
+  end
+
+  test 'each redirect reserves another actual request and rechecks active work' do
+    guard = mock('active scan work')
+    guard.expects(:call).times(3).returns(true)
+    @budget.expects(:wait_for_slot!).times(3)
+    client = AttachmentScanner::Client.new(configuration: @configuration, budget: @budget, before_request: guard)
+    @transport.expects(:request).with(:get, "https://us-east-1.attachmentscanner.com/v1.0/scans/#{SCAN_ID}")
+              .yields(Response.new(code: 307, headers: { 'Location' => "https://eu-west-1.attachmentscanner.com/v1.0/scans/#{SCAN_ID}" }, body: []))
+    @transport.expects(:request).with(:get, "https://eu-west-1.attachmentscanner.com/v1.0/scans/#{SCAN_ID}")
+              .yields(Response.new(code: 308, headers: { 'Location' => "https://ap-southeast-2.attachmentscanner.com/v1.0/scans/#{SCAN_ID}" }, body: []))
+    @transport.expects(:request).with(:get, "https://ap-southeast-2.attachmentscanner.com/v1.0/scans/#{SCAN_ID}").yields(response('ok'))
+    assert_equal 'ok', client.fetch(SCAN_ID).status
+  end
+
+  test 'cancellation after pacing prevents the HTTP request' do
+    client = AttachmentScanner::Client.new(configuration: @configuration, budget: @budget, before_request: -> { false })
+    @budget.expects(:wait_for_slot!).once
+    HTTP.expects(:auth).never
+    error = assert_raises(AttachmentScanner::Client::Failure) { client.fetch(SCAN_ID) }
+    assert_equal 'scan_canceled', error.code
+    assert_not error.retryable
   end
 
   private

@@ -30,7 +30,7 @@ class DocumentScansController < ApplicationController
   end
 
   def destroy
-    owned_scans.find(params.expect(:id)).update!(dismissed_at: Time.current)
+    owned_scans.find(params.expect(:id)).dismiss!
     head :no_content
   end
 

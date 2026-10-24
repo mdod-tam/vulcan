@@ -10,7 +10,7 @@
 #
 # It's strongly recommended that you check this file into your version control system.
 
-ActiveRecord::Schema[8.1].define(version: 2026_10_23_140000) do
+ActiveRecord::Schema[8.1].define(version: 2026_10_23_150000) do
   # These are extensions that must be enabled in order to support this database
   enable_extension "pg_catalog.plpgsql"
 
@@ -213,7 +213,11 @@ ActiveRecord::Schema[8.1].define(version: 2026_10_23_140000) do
     t.text "context"
     t.datetime "created_at", null: false
     t.datetime "updated_at", null: false
+    t.integer "continuation_attempts", default: 0, null: false
+    t.datetime "continuation_next_attempt_at"
+    t.string "continuation_error_code"
     t.index ["blob_id"], name: "index_document_scans_on_blob_id", unique: true
+    t.index ["continuation", "continued_at", "continuation_next_attempt_at"], name: "index_document_scans_on_continuation_recovery"
     t.index ["created_at"], name: "index_document_scans_on_created_at"
     t.index ["dedup_key"], name: "index_document_scans_on_dedup_key", unique: true
     t.index ["secure_form_type", "secure_form_id"], name: "index_document_scans_on_secure_form"

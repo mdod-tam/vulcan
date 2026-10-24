@@ -21,10 +21,12 @@ module AttachmentScanner
       end
     end
 
-    def initialize(configuration: Rails.application.config.x.attachment_scanner)
+    def initialize(configuration: Rails.application.config.x.attachment_scanner, budget: DocumentScanProviderBudget, before_request: nil)
       raise Failure, :not_configured unless configuration.configured?
 
       @configuration = configuration
+      @budget = budget
+      @before_request = before_request
     end
 
     def submit(io:, filename:, content_type:)
@@ -43,6 +45,9 @@ module AttachmentScanner
     def request(method, path, form: nil)
       url = "#{@configuration.url.delete_suffix('/')}#{path}"
       3.times do |redirects|
+        @budget.wait_for_slot!
+        raise Failure, :scan_canceled if @before_request && !@before_request.call
+
         result = nil
         HTTP.auth("Bearer #{@configuration.token}").timeout(connect: 5, write: 30, read: 35, global: 45)
             .request(method, url, **(form ? { form: form } : {})) do |received|

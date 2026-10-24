@@ -12,14 +12,14 @@ class DocumentScan
 
     included do
       scope :due_for_work, lambda {
-        pending.where('(next_attempt_at <= :now AND lease_expires_at IS NULL) OR lease_expires_at <= :now', now: Time.current)
+        pending.where(dismissed_at: nil).where('(next_attempt_at <= :now AND lease_expires_at IS NULL) OR lease_expires_at <= :now', now: Time.current)
       }
     end
 
     def claim_work!
       with_lock do
-        if pending? && lease_available?
-          if created_at <= RESOLUTION_WINDOW.ago || (provider_scan_id.nil? && attempts >= MAX_SUBMISSIONS) || poll_count >= MAX_POLLS
+        if pending? && dismissed_at.nil? && lease_available?
+          if resolution_expired? || (provider_scan_id.nil? && attempts >= MAX_SUBMISSIONS) || poll_count >= MAX_POLLS
             finish_scan!('failed', error_code: 'scan_unresolved')
             nil
           elsif (next_attempt_at && next_attempt_at <= Time.current) || lease_expires_at.present?
@@ -31,13 +31,25 @@ class DocumentScan
 
     def expire_unresolved!
       with_lock do
-        finish_scan!('failed', error_code: 'scan_unresolved') if pending? && created_at <= RESOLUTION_WINDOW.ago && lease_available?
+        finish_scan!('failed', error_code: 'scan_unresolved') if pending? && dismissed_at.nil? && resolution_expired? && lease_available?
+      end
+    end
+
+    # The client calls this after pacing, immediately before each HTTP request.
+    def begin_provider_work!(token:)
+      with_lock do
+        if active_work?(token)
+          update!(submitted_at: Time.current) unless submitted_at
+          true
+        else
+          false
+        end
       end
     end
 
     def complete_work!(token:, result:)
       with_lock do
-        if !pending? || lease_token != token
+        if !active_work?(token)
           false
         elsif provider_scan_id && provider_scan_id != result.scan_id
           finish_scan!('failed', error_code: 'scan_identity_mismatch')
@@ -51,9 +63,9 @@ class DocumentScan
 
     def fail_work!(token:, code:, retryable:)
       with_lock do
-        if !pending? || lease_token != token
+        if !active_work?(token)
           false
-        elsif retryable && attempts < MAX_SUBMISSIONS && poll_count < MAX_POLLS && created_at > RESOLUTION_WINDOW.ago
+        elsif retryable && attempts < MAX_SUBMISSIONS && poll_count < MAX_POLLS && !resolution_expired?
           update!(lease_token: nil, lease_expires_at: nil, last_error_code: code, next_attempt_at: Time.current + retry_delay)
           true
         else
@@ -65,22 +77,26 @@ class DocumentScan
 
     private
 
+    def active_work?(token)
+      pending? && dismissed_at.nil? && lease_token == token && lease_expires_at&.future?
+    end
+
     def lease_available?
       lease_expires_at.nil? || lease_expires_at <= Time.current
     end
 
+    def resolution_expired?
+      started_at = submitted_at
+      started_at ||= created_at if next_attempt_at.nil? && lease_token.nil? && provider_scan_id.nil?
+      started_at && started_at <= RESOLUTION_WINDOW.ago
+    end
+
     def claim_available_slot!
-      available_at = DocumentScanProviderBudget.try_reserve!
-      if available_at > Time.current
-        update!(next_attempt_at: available_at)
-        nil
-      else
-        token = SecureRandom.uuid
-        action = provider_scan_id ? :poll : :submit
-        update!(lease_token: token, lease_expires_at: Time.current + LEASE_DURATION, next_attempt_at: nil,
-                attempts: attempts + (action == :submit ? 1 : 0), poll_count: poll_count + (action == :poll ? 1 : 0))
-        WorkItem.new(token: token, action: action, provider_scan_id: provider_scan_id, blob: blob, sha256: sha256, byte_size: blob.byte_size)
-      end
+      token = SecureRandom.uuid
+      action = provider_scan_id ? :poll : :submit
+      update!(lease_token: token, lease_expires_at: Time.current + LEASE_DURATION, next_attempt_at: nil,
+              attempts: attempts + (action == :submit ? 1 : 0), poll_count: poll_count + (action == :poll ? 1 : 0))
+      WorkItem.new(token: token, action: action, provider_scan_id: provider_scan_id, blob: blob, sha256: sha256, byte_size: blob.byte_size)
     end
 
     def apply_provider_result!(result)

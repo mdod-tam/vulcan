@@ -47,7 +47,9 @@ A certification can arrive through DocuSeal or a secure upload link. [`MedicalCe
 
 The request time is the secure form's `sent_at`, or `document_signing_requested_at` for DocuSeal, which is written together with the submission ID the webhook must match. The rejection time is the latest rejected certification status change. A kept document is never discarded: its blob and the submission event record the reason, and the admin certification list shows it as a review note.
 
-A missing URL, failed download, or failed intake returns HTTP 503 so DocuSeal can retry; `document_signing_attachment_failed` records the failure. Pending, blocked, and failed scans do not mark signing complete or attach a document. The continuation ignores a superseded request and recognizes an already attached snapshot by blob ID. Its attachment, signing status, and completion audit commit together. Recovery retries an unfinished clean continuation safely. See [attachment scanning](../security/attachment_scanning.md) for monitoring and terminal-failure recovery.
+Completion callbacks must match the stored submission and submitter. Retries reuse the signing request's scan even when DocuSeal supplies a new download URL. Missing or invalid URLs, refused files and permanent download failures receive HTTP 200; temporary failures receive HTTP 503 so DocuSeal can retry. `document_signing_attachment_failed` records each failure reason once for that request.
+
+Pending, blocked, and failed scans do not mark signing complete or attach a document. The continuation ignores a superseded request and recognizes an already attached snapshot by blob ID. Its attachment, signing status, and completion audit commit together. Recovery allows at most three persisted acceptance attempts. A permanent failure, missing application or actor, or exhausted retry budget records a terminal failure and stops recovery for that scan. Send a new signing request after a terminal failure. See [attachment scanning](../security/attachment_scanning.md) for monitoring and recovery.
 
 ## Configuration
 
@@ -68,9 +70,13 @@ webhook_secret: whsec_YOUR_SIGNING_SECRET  # top level, copied from the DocuSeal
 2. Copy the HMAC signing secret: with the webhook created, open **Security → HMAC** and reveal the masked `whsec_...` value. DocuSeal generates this value; you do not choose it. The adjacent **Secret** tab is a different feature, a static custom header pair, that this receiver does not use.
 3. Store the value as the top-level `webhook_secret` with `EDITOR="vim" bin/rails credentials:edit`, commit the changed `config/credentials.yml.enc`, and deploy. If the webhook is deleted and recreated in the console, DocuSeal generates a new secret: recheck the **Security → HMAC** value after any webhook change and resync credentials when it changed, or callbacks are rejected again.
 
-### Signature contract and current gap
+### Signature contract
 
-DocuSeal (2.5.3 and later) signs each webhook as `X-Docuseal-Signature: [timestamp].[signature]`, where `signature` is the SHA-256 HMAC of `[timestamp].[raw_body]` computed with the `whsec_...` secret, and timestamps older than five minutes are stale. The current receiver instead compares a SHA-256 HMAC of the raw request body alone, in either `X-Webhook-Signature` or `X-DocuSeal-Signature`, with an optional `sha256=` prefix; [`Webhooks::BaseController`](../../app/controllers/webhooks/base_controller.rb) owns the shared calculation. These formats do not match: until the receiver verifies DocuSeal's timestamp format, correctly signed callbacks are still rejected with HTTP 401 and webhook-driven processing cannot go live. Receiver support for the DocuSeal format is planned work.
+[`Webhooks::DocusealController`](../../app/controllers/webhooks/docuseal_controller.rb) verifies `X-Docuseal-Signature: [timestamp].[signature]` using [DocuSeal's documented format](https://www.docuseal.com/resources/use-webhooks). The timestamp is Unix time in seconds; the signature is the hexadecimal HMAC-SHA256 of `[timestamp].[raw_body]`. Use the full `whsec_...` secret as the key, including its prefix, without decoding it. The raw body must be the exact request bytes, not parsed and re-serialized JSON.
+
+The receiver compares signatures in constant time and rejects missing or malformed signatures, changed bodies, and timestamps more than five minutes before or after the server's current time with HTTP 401. Exactly five minutes is accepted, matching [DocuSeal's verifier](https://github.com/docusealco/docuseal/blob/master/lib/webhook_urls/signatures.rb). Keep the server clock accurate. The legacy body-only signature and `X-Webhook-Signature` header are not accepted for this endpoint.
+
+A valid signed callback can be delivered again within that window. Completion handling uses the stored signing request identity to avoid duplicate scans or attachments.
 
 The outbound payload is built in `SubmissionService#create_submission!`, and the automated tests stub the provider API — a live account's template and submission setup, and its webhook authentication, need verifying against the real service. The payload does not yet pass a `template_id` to the create-submission API, so live submissions also need that payload change before they can succeed.
 
@@ -78,7 +84,7 @@ The outbound payload is built in `SubmissionService#create_submission!`, and the
 
 1. Configure the credentials above, provision AttachmentScanner, and apply migrations in the target environment. Production requires `ATTACHMENT_SCANNER_URL` and `ATTACHMENT_SCANNER_API_TOKEN`. Run the Solid Queue worker and recurring recovery jobs described in [attachment scanning](../security/attachment_scanning.md). On Heroku, the release process migrates; inspect with `heroku run bin/rails db:migrate:status --app your-app-name`.
 2. Register the webhook and its signing secret as described under [Webhook setup in the DocuSeal console](#webhook-setup-in-the-docuseal-console): URL `https://<APPLICATION_HOST>/webhooks/docuseal/medical_certification` for `form.viewed`, `form.started`, `form.completed`, and `form.declined`, with the console's `whsec_...` value stored as top-level credentials `webhook_secret`.
-3. Send a request for a fresh, controlled application and provider address, complete signing, and confirm the snapshot stays unavailable while scanning. A clean result should attach the PDF, set signing to `signed`, and set certification status to `received` for this new application. This step requires the receiver's signature-format fix; until it ships, DocuSeal's correctly signed callbacks are still rejected with HTTP 401.
+3. After supplying the signing template in the submission payload, send a request for a fresh, controlled application and provider address, complete signing, and confirm the snapshot stays unavailable while scanning. A clean result should attach the PDF, set signing to `signed`, and set certification status to `received` for this new application. Confirm a callback signed by DocuSeal passes authentication; an unsigned or stale callback should return HTTP 401.
 4. Review that PDF through the normal admin certification controls. If it remains unavailable, inspect the scan status, `document_signing_attachment_failed`, and worker logs before retrying.
 
 ## Changing the public host
@@ -106,7 +112,7 @@ A host change also affects settings outside this integration: existing security 
 | Symptom | Likely cause |
 | --- | --- |
 | Cannot send | Missing provider name or email, API credentials, or the 30-second resend guard. |
-| Webhook rejected | Signature header, secret, exact raw body, missing `event_type`/`data`, or the signature-format gap above. |
+| Webhook rejected | Missing or invalid signature, wrong secret, changed raw body, server clock outside the five-minute tolerance, or missing `event_type`/`data`. |
 | Webhook accepted, nothing changed | Submission ID or `document_signing_service` mismatch — often an older request. |
 | Provider finished, but no document appeared | Pending/blocked/failed scan, intake failure, stopped worker, or a superseded signing request. |
 | Signed, but no new primary document | Additional certification retained because the primary was received, approved, or rejected after this signing request. |

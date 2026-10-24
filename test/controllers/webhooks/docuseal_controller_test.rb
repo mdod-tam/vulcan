@@ -10,10 +10,12 @@ module Webhooks
       @application = create(:application, :in_progress,
                             document_signing_service: 'docuseal',
                             document_signing_submission_id: 'sub_123456',
+                            document_signing_submitter_id: 'signer_42',
+                            document_signing_requested_at: 1.day.ago,
                             document_signing_status: :sent,
                             medical_certification_status: :requested)
 
-      @webhook_secret = 'test_webhook_secret'
+      @webhook_secret = 'whsec_fixture_docuseal_signing_secret'
       Rails.application.credentials.stubs(:webhook_secret).returns(@webhook_secret)
 
       ApplicationController.any_instance.stubs(:authenticate_user!).returns(true)
@@ -38,6 +40,7 @@ module Webhooks
       @completed_payload = {
         event_type: 'form.completed',
         data: {
+          'id' => 'signer_42',
           'submission_id' => 'sub_123456',
           'email' => 'doctor@example.com',
           'documents' => [
@@ -60,68 +63,119 @@ module Webhooks
     end
 
     def make_signed_webhook_request(payload)
-      signature = compute_signature(payload.to_json)
-      post webhooks_docuseal_medical_certification_path,
-           params: payload,
-           headers: webhook_headers(signature),
-           as: :json
+      body = payload.to_json
+      post webhooks_docuseal_medical_certification_path, params: body, headers: webhook_headers(compute_signature(body))
     end
 
-    def make_signed_webhook_request_with_alt_header(payload)
-      signature = compute_signature(payload.to_json)
-      post webhooks_docuseal_medical_certification_path,
-           params: payload,
-           headers: webhook_headers(signature, 'X-DocuSeal-Signature'),
-           as: :json
-    end
-
-    def webhook_headers(signature = nil, header = 'X-Webhook-Signature')
+    def webhook_headers(signature = nil, header = 'X-Docuseal-Signature')
       headers = { 'Content-Type' => 'application/json' }
       headers[header] = signature if signature
       headers
     end
 
-    def compute_signature(payload)
-      OpenSSL::HMAC.hexdigest('SHA256', @webhook_secret, payload)
+    def compute_signature(payload, timestamp: Time.current.to_i, secret: @webhook_secret)
+      digest = OpenSSL::HMAC.hexdigest('SHA256', secret, "#{timestamp}.#{payload}")
+      "#{timestamp}.#{digest}"
+    end
+
+    test 'official DocuSeal HMAC vector authenticates exact UTF8 request bytes' do
+      travel_to Time.utc(2026, 10, 23, 12) do
+        body = "{ \"event_type\": \"form.viewed\", \"data\": { \"submission_id\": \"sub_123456\", \"name\": \"Doctora García\" } }\n"
+        # Fixed vector generated independently with Python's hmac library.
+        signature = '1792756800.5781e90875078478ed9eae3a0d40e657c78d41cfba260e0339072ad8ecba3bb3'
+
+        assert_difference -> { Event.where(action: 'document_signing_viewed', auditable: @application).count }, 1 do
+          post webhooks_docuseal_medical_certification_path, params: body,
+                                                             headers: { 'Content-Type' => 'application/json', 'X-Docuseal-Signature' => signature }
+        end
+        assert_response :ok
+        assert_equal 'opened', @application.reload.document_signing_status
+      end
     end
 
     test 'missing or blank webhook credentials reject completion without changing application or delivery records' do
+      HTTP.expects(:timeout).never
       [nil, '', ' '].each do |secret|
         Rails.application.credentials.stubs(:webhook_secret).returns(secret)
-
         assert_rejected_completion(webhook_headers(compute_signature(@completed_payload.to_json)))
-        assert_rejected_completion(webhook_headers("sha256=#{compute_signature(@completed_payload.to_json)}", 'X-DocuSeal-Signature'))
       end
     end
 
-    test 'missing or invalid webhook signatures reject completion without changing application or delivery records' do
-      [nil, '', 'wrong-signature'].each do |signature|
-        assert_rejected_completion(webhook_headers(signature))
-      end
-      assert_rejected_completion(webhook_headers('wrong-signature', 'X-DocuSeal-Signature'))
+    test 'missing malformed and legacy webhook signatures reject completion without side effects' do
+      HTTP.expects(:timeout).never
+      body = @completed_payload.to_json
+      timestamp = Time.current.to_i
+      digest = compute_signature(body).split('.', 2).last
+      bare = OpenSSL::HMAC.hexdigest('SHA256', @webhook_secret, body)
+      malformed = [nil, '', 'wrong-signature', bare, "sha256=#{bare}", "#{timestamp}.", ".#{digest}",
+                   "not-a-timestamp.#{digest}", "#{timestamp}.#{'g' * 64}", "#{timestamp}.#{'a' * 63}",
+                   "#{timestamp}.#{digest}.extra", "#{timestamp}.0.#{digest}"]
+      malformed.each { |signature| assert_rejected_completion(webhook_headers(signature)) }
+      assert_rejected_completion(webhook_headers(compute_signature(body), 'X-Webhook-Signature'))
     end
 
-    test 'configured secret authenticates supported signature headers and prefixed signatures' do
-      [['X-Webhook-Signature', ''], ['X-DocuSeal-Signature', ''], ['X-DocuSeal-Signature', 'sha256=']].each_with_index do |(header, prefix), index|
-        application = create(:application, :in_progress, user: @application.user,
-                                                         document_signing_service: 'docuseal', document_signing_submission_id: "signature_#{index}",
-                                                         document_signing_status: :sent, medical_certification_status: :requested)
-        payload = @viewed_payload.deep_dup
-        payload[:data]['submission_id'] = application.document_signing_submission_id
-        signature = compute_signature(payload.to_json)
+    test 'official DocuSeal signatures accept the inclusive five minute clock boundaries' do
+      freeze_time do
+        [-300, 0, 300].each_with_index do |offset, index|
+          application = create(:application, :in_progress, user: @application.user,
+                                                           document_signing_service: 'docuseal', document_signing_submission_id: "signature_#{index}",
+                                                           document_signing_status: :sent, medical_certification_status: :requested)
+          payload = @viewed_payload.deep_dup
+          payload[:data]['submission_id'] = application.document_signing_submission_id
+          body = payload.to_json
+          signature = compute_signature(body, timestamp: Time.current.to_i + offset)
 
-        assert_difference -> { Event.where(action: 'document_signing_viewed', auditable: application).count }, 1 do
-          post webhooks_docuseal_medical_certification_path, params: payload, headers: webhook_headers("#{prefix}#{signature}", header), as: :json
+          assert_difference -> { Event.where(action: 'document_signing_viewed', auditable: application).count }, 1 do
+            post webhooks_docuseal_medical_certification_path, params: body, headers: webhook_headers(signature)
+          end
+          assert_response :ok
+          assert_equal 'opened', application.reload.document_signing_status
         end
-
-        assert_response :ok
-        assert_equal 'opened', application.reload.document_signing_status
       end
+    end
+
+    test 'stale and future DocuSeal signatures outside the tolerance reject completion' do
+      HTTP.expects(:timeout).never
+      freeze_time do
+        [-301, 301].each do |offset|
+          signature = compute_signature(@completed_payload.to_json, timestamp: Time.current.to_i + offset)
+          assert_rejected_completion(webhook_headers(signature))
+        end
+      end
+    end
+
+    test 'DocuSeal signatures reject a wrong secret or tampered timestamp and raw body' do
+      HTTP.expects(:timeout).never
+      body = @completed_payload.to_json
+      assert_rejected_completion(webhook_headers(compute_signature(body, secret: 'whsec_wrong_signing_secret')))
+      signature = compute_signature(body)
+      assert_rejected_completion(webhook_headers(signature), body: "#{body} ")
+      assert_rejected_completion(webhook_headers(signature), body: body.sub('doctor@example.com', 'other@example.com'))
+      assert_rejected_completion(webhook_headers("#{Time.current.to_i + 1}.#{signature.split('.', 2).last}"))
+    end
+
+    test 'a freshly signed retry reuses the scan after its original signature expires' do
+      mock_successful_docuseal_download
+      original_signature = compute_signature(@completed_payload.to_json)
+      make_signed_webhook_request(@completed_payload)
+      assert_response :ok
+      scan = DocumentScan.find_by!(continuation: 'docuseal')
+
+      travel 6.minutes do
+        assert_rejected_completion(webhook_headers(original_signature))
+        HTTP.expects(:get).never
+        assert_no_difference ['DocumentScan.count', 'ActiveStorage::Blob.count', 'Event.count'] do
+          make_signed_webhook_request(@completed_payload)
+          assert_response :ok
+        end
+        complete_docuseal_scan!
+      end
+      assert_equal scan.blob_id, @application.reload.medical_certification.blob_id
+      assert_empty @application.additional_medical_certifications
+      assert_equal 1, Event.where(auditable: @application, action: 'document_signing_completed').count
     end
 
     test 'accepts valid form.viewed event' do
-      Webhooks::BaseController.any_instance.stubs(:verify_webhook_signature).returns(true)
-
       make_signed_webhook_request(@viewed_payload)
       assert_response :ok
 
@@ -135,7 +189,6 @@ module Webhooks
     end
 
     test 'accepts valid form.started event' do
-      Webhooks::BaseController.any_instance.stubs(:verify_webhook_signature).returns(true)
       @application.update!(document_signing_status: :opened)
 
       make_signed_webhook_request(@started_payload)
@@ -151,7 +204,6 @@ module Webhooks
 
     test 'handles form.completed event with approved medical cert status' do
       @application.update!(medical_certification_status: :approved)
-      Webhooks::BaseController.any_instance.stubs(:verify_webhook_signature).returns(true)
       mock_successful_docuseal_download
 
       make_signed_webhook_request(@completed_payload)
@@ -207,6 +259,167 @@ module Webhooks
       end
     end
 
+    test 'rotated provider URLs reuse one pending request and produce one completion' do
+      scan = stage_docuseal_scan!
+      @completed_payload[:data]['documents'].first['url'] = 'https://example.com/signed_doc.pdf?token=rotated'
+      HTTP.expects(:get).never
+
+      assert_no_difference ['DocumentScan.count', 'ActiveStorage::Blob.count', 'Event.count'] do
+        make_signed_webhook_request(@completed_payload)
+        assert_response :ok
+      end
+      complete_docuseal_scan!
+      assert_equal scan.blob_id, @application.reload.medical_certification.blob_id
+      assert_empty @application.additional_medical_certifications
+      assert_equal 1, Event.where(auditable: @application, action: 'document_signing_completed').count
+    end
+
+    test 'a refused provider document is acknowledged once without staging or retry audit noise' do
+      mock_successful_docuseal_download(bytes: '<html>not a PDF</html>')
+      assert_difference -> { Event.where(auditable: @application, action: 'document_signing_attachment_failed').count }, 1 do
+        assert_no_difference ['DocumentScan.count', 'ActiveStorage::Attachment.count'] do
+          make_signed_webhook_request(@completed_payload)
+          assert_response :ok
+          travel 6.seconds do
+            make_signed_webhook_request(@completed_payload)
+            assert_response :ok
+          end
+        end
+      end
+      assert_equal 'sent', @application.reload.document_signing_status
+    end
+
+    test 'permanent certification acceptance failures stop recovery and record giving up once' do
+      scan = stage_docuseal_scan!
+      scan.update!(status: :clean)
+      MedicalCertificationAttachmentService.expects(:accept_submission).once.returns(success: false, error: ArgumentError.new('rejected'))
+
+      assert_difference -> { Event.where(action: 'document_signing_attachment_failed').count }, 1 do
+        assert_no_difference 'ActiveStorage::Attachment.count' do
+          DocumentSigning::AcceptScannedDocumentJob.perform_now(scan.id)
+        end
+      end
+      assert scan.reload.continued_at
+      event = Event.where(action: 'document_signing_attachment_failed').order(:id).last!
+      assert_equal 'continuation_gave_up', event.metadata['failure_reason']
+      assert_equal scan.id, event.metadata['document_scan_id']
+      assert_not scan.blob.reload.metadata.key?('source')
+      assert_equal 'sent', @application.reload.document_signing_status
+      assert_no_enqueued_jobs(only: DocumentSigning::AcceptScannedDocumentJob) { RecoverDocumentScansJob.perform_now }
+      assert_no_difference ['Event.count', 'Notification.count', 'ActiveStorage::Attachment.count'] do
+        DocumentSigning::AcceptScannedDocumentJob.perform_now(scan.id)
+      end
+    end
+
+    test 'missing continuation applications or actors are terminal and leave a durable failure record' do
+      %w[application_id actor_id].each do |key|
+        @application.update!(document_signing_requested_at: Time.current)
+        scan = stage_docuseal_scan!
+        scan.update!(status: :clean, context: scan.context.merge(key => -1))
+
+        assert_difference -> { Event.where(action: 'document_signing_attachment_failed').count }, 1 do
+          DocumentSigning::AcceptScannedDocumentJob.perform_now(scan.id)
+        end
+        assert scan.reload.continued_at
+        event = Event.where(action: 'document_signing_attachment_failed').order(:id).last!
+        assert_equal 'continuation_gave_up', event.metadata['failure_reason']
+        assert_equal scan.id, event.metadata['document_scan_id']
+        assert_no_enqueued_jobs(only: DocumentSigning::AcceptScannedDocumentJob) { RecoverDocumentScansJob.perform_now }
+      end
+    end
+
+    test 'a callback for another submitter cannot stage a certification for the stored request' do
+      @completed_payload[:data]['id'] = 'another-signer'
+      HTTP.expects(:get).never
+      assert_no_difference ['DocumentScan.count', 'ActiveStorage::Attachment.count', 'Event.count'] do
+        make_signed_webhook_request(@completed_payload)
+        assert_response :ok
+      end
+      assert_equal 'sent', @application.reload.document_signing_status
+    end
+
+    test 'transient continuation errors back off and stop after three attempts' do
+      scan = stage_docuseal_scan!
+      scan.update!(status: :clean)
+      MedicalCertificationAttachmentService.expects(:accept_submission).times(3).raises(ActiveRecord::Deadlocked)
+
+      DocumentSigning::AcceptScannedDocumentJob.perform_now(scan.id)
+      assert_nil scan.reload.continued_at
+      assert_equal 1, scan.continuation_attempts
+      assert_operator scan.continuation_next_attempt_at, :>, Time.current
+      assert_no_enqueued_jobs(only: DocumentSigning::AcceptScannedDocumentJob) { RecoverDocumentScansJob.perform_now }
+      assert_no_difference('Event.count') { DocumentSigning::AcceptScannedDocumentJob.perform_now(scan.id) }
+      assert_equal 1, scan.reload.continuation_attempts
+
+      travel_to(scan.continuation_next_attempt_at + 1.second) do
+        DocumentSigning::AcceptScannedDocumentJob.perform_now(scan.id)
+      end
+      assert_equal 2, scan.reload.continuation_attempts
+      assert_nil scan.continued_at
+      travel_to(scan.continuation_next_attempt_at + 1.second) do
+        DocumentSigning::AcceptScannedDocumentJob.perform_now(scan.id)
+      end
+      assert scan.reload.continued_at
+      assert_equal 3, scan.continuation_attempts
+      assert_equal 'ActiveRecord::Deadlocked', scan.continuation_error_code
+      assert_equal 'continuation_gave_up', Event.where(action: 'document_signing_attachment_failed').order(:id).last!.metadata['failure_reason']
+      assert_no_enqueued_jobs(only: DocumentSigning::AcceptScannedDocumentJob) { RecoverDocumentScansJob.perform_now }
+    end
+
+    test 'an interrupted final continuation attempt becomes terminal when its lease expires' do
+      scan = stage_docuseal_scan!
+      scan.update!(status: :clean, continuation_attempts: 3, continuation_next_attempt_at: 1.second.ago)
+      DocumentSigning::AcceptScannedDocument.expects(:call).never
+
+      assert_difference -> { Event.where(action: 'document_signing_attachment_failed').count }, 1 do
+        DocumentSigning::AcceptScannedDocumentJob.perform_now(scan.id)
+      end
+      assert scan.reload.continued_at
+      assert_equal 'continuation_worker_interrupted', scan.continuation_error_code
+      assert_no_enqueued_jobs(only: DocumentSigning::AcceptScannedDocumentJob) { RecoverDocumentScansJob.perform_now }
+      assert_no_difference ['Event.count', 'ActiveStorage::Attachment.count'] do
+        DocumentSigning::AcceptScannedDocumentJob.perform_now(scan.id)
+      end
+    end
+
+    test 'a job error after committed continuation does not retry or write a false failure' do
+      scan = stage_docuseal_scan!
+      scan.update!(status: :clean)
+      original = DocumentSigning::AcceptScannedDocument.method(:call)
+      DocumentSigning::AcceptScannedDocument.stub(:call, lambda { |document_scan|
+        original.call(document_scan)
+        raise ActiveRecord::Deadlocked
+      }) do
+        DocumentSigning::AcceptScannedDocumentJob.perform_now(scan.id)
+      end
+      assert scan.reload.continued_at
+      assert @application.reload.medical_certification.attached?
+      assert_equal 1, Event.where(action: 'document_signing_completed', auditable: @application).count
+      assert_not Event.exists?(action: 'document_signing_attachment_failed', auditable: @application)
+      assert_nil scan.continuation_error_code
+      assert_no_enqueued_jobs(only: DocumentSigning::AcceptScannedDocumentJob) { RecoverDocumentScansJob.perform_now }
+    end
+
+    test 'an unverifiable continuation error propagates without a false terminal result' do
+      scan = stage_docuseal_scan!
+      scan.update!(status: :clean)
+      DocumentScan.stubs(:find_by).with(id: scan.id).returns(scan)
+      DocumentSigning::AcceptScannedDocument.expects(:call).raises(ActiveRecord::Deadlocked)
+      reloads = 0
+      scan.define_singleton_method(:reload) do |*args, **options|
+        reloads += 1
+        raise ActiveRecord::ConnectionNotEstablished, 'unavailable' if reloads > 1
+
+        super(*args, **options)
+      end
+
+      assert_no_enqueued_jobs(only: DocumentSigning::AcceptScannedDocumentJob) do
+        assert_raises(ActiveRecord::ConnectionNotEstablished) { DocumentSigning::AcceptScannedDocumentJob.perform_now(scan.id) }
+      end
+      assert_not Event.exists?(action: 'document_signing_attachment_failed', auditable: @application)
+      assert_nil DocumentScan.find(scan.id).continued_at
+    end
+
     test 'pending provider scans cannot complete signing' do
       mock_successful_docuseal_download
       make_signed_webhook_request(@completed_payload)
@@ -248,24 +461,26 @@ module Webhooks
       assert_equal 'unauthorized', event.metadata['failure_details']
     end
 
-    test 'distinct failed DocuSeal snapshots keep separate audits within the dedup window' do
+    test 'distinct signing requests keep separate failure audits within the dedup window' do
       freeze_time do
         create(:admin)
-        first = stage_docuseal_scan!
-        @completed_payload[:data]['documents'].first['url'] = 'https://example.com/second_signed_doc.pdf'
-        second = nil
-        assert_difference 'DocumentScan.count', 1 do
-          second = stage_docuseal_scan!
-        end
-        assert_not_equal first.id, second.id
-        scans = [first, second]
-        scans.each { |scan| scan.update!(status: :blocked, completed_at: Time.current, last_error_code: 'scan_found') }
+        scans = []
 
         assert_difference -> { Event.where(auditable: @application, action: 'document_signing_attachment_failed').count }, 2 do
           assert_difference 'Notification.count', 2 * User.admins.count do
-            scans.each { |scan| DocumentSigning::AcceptScannedDocumentJob.perform_now(scan.id) }
+            2.times do |index|
+              if index.positive?
+                @application.update!(document_signing_requested_at: @application.document_signing_requested_at + 1.second)
+                @completed_payload[:data]['documents'].first['url'] = 'https://example.com/second_signed_doc.pdf'
+              end
+              scan = stage_docuseal_scan!
+              scans << scan
+              scan.update!(status: :blocked, completed_at: Time.current, last_error_code: 'scan_found')
+              DocumentSigning::AcceptScannedDocumentJob.perform_now(scan.id)
+            end
           end
         end
+        assert_equal 2, scans.map(&:id).uniq.size
 
         events = Event.where(auditable: @application, action: 'document_signing_attachment_failed')
         assert_equal scans.map(&:id).sort, events.map { |event| event.metadata['document_scan_id'] }.sort
@@ -391,7 +606,7 @@ module Webhooks
       HTTP.expects(:get).never
       assert_no_difference ['DocumentScan.count', 'ActiveStorage::Blob.count', 'ActiveStorage::Attachment.count'] do
         make_signed_webhook_request(payload)
-        assert_response :service_unavailable
+        assert_response :ok
       end
       assert_equal 'sent', @application.reload.document_signing_status
     end
@@ -401,7 +616,7 @@ module Webhooks
       mock_successful_docuseal_download(bytes: bytes)
       assert_no_difference ['DocumentScan.count', 'ActiveStorage::Blob.count', 'ActiveStorage::Attachment.count'] do
         make_signed_webhook_request(@completed_payload)
-        assert_response :service_unavailable
+        assert_response :ok
       end
       assert_equal 'sent', @application.reload.document_signing_status
     end
@@ -432,7 +647,6 @@ module Webhooks
 
     test 'repeated approved completion adds no events after the document URL is stored' do
       @application.update!(medical_certification_status: :approved)
-      Webhooks::BaseController.any_instance.stubs(:verify_webhook_signature).returns(true)
       mock_successful_docuseal_download
 
       make_signed_webhook_request(@completed_payload)
@@ -451,7 +665,6 @@ module Webhooks
     test 'handles form.completed event with rejected medical cert status' do
       record_certification_rejection(at: 2.days.ago)
       @application.update!(document_signing_requested_at: 1.day.ago)
-      Webhooks::BaseController.any_instance.stubs(:verify_webhook_signature).returns(true)
 
       mock_successful_docuseal_download
 
@@ -469,7 +682,6 @@ module Webhooks
 
     test 'handles form.completed event with requested medical cert status' do
       @application.update!(medical_certification_status: :requested)
-      Webhooks::BaseController.any_instance.stubs(:verify_webhook_signature).returns(true)
 
       mock_successful_docuseal_download
 
@@ -495,7 +707,6 @@ module Webhooks
         auditable: @application,
         action: 'cert_submitted_via_secure_form'
       )
-      Webhooks::BaseController.any_instance.stubs(:verify_webhook_signature).returns(true)
       mock_successful_docuseal_download
 
       make_signed_webhook_request(@completed_payload)
@@ -527,7 +738,6 @@ module Webhooks
         auditable: @application,
         action: 'cert_submitted_via_secure_form'
       )
-      Webhooks::BaseController.any_instance.stubs(:verify_webhook_signature).returns(true)
       mock_successful_docuseal_download
 
       make_signed_webhook_request(@completed_payload)
@@ -550,7 +760,6 @@ module Webhooks
     test 'DocuSeal completion for a request sent before the latest rejection is kept aside' do
       @application.update!(document_signing_requested_at: 3.days.ago)
       record_certification_rejection(at: 1.day.ago)
-      Webhooks::BaseController.any_instance.stubs(:verify_webhook_signature).returns(true)
       mock_successful_docuseal_download
 
       make_signed_webhook_request(@completed_payload)
@@ -575,7 +784,6 @@ module Webhooks
         auditable: @application,
         action: 'cert_submitted_via_secure_form'
       )
-      Webhooks::BaseController.any_instance.stubs(:verify_webhook_signature).returns(true)
       mock_successful_docuseal_download
 
       make_signed_webhook_request(@completed_payload)
@@ -593,8 +801,6 @@ module Webhooks
     end
 
     test 'handles form.declined event' do
-      Webhooks::BaseController.any_instance.stubs(:verify_webhook_signature).returns(true)
-
       make_signed_webhook_request(@declined_payload)
       assert_response :ok
 
@@ -607,8 +813,6 @@ module Webhooks
     end
 
     test 'ignores unknown event types' do
-      Webhooks::BaseController.any_instance.stubs(:verify_webhook_signature).returns(true)
-
       unknown_payload = {
         event_type: 'form.unknown',
         data: { 'submission_id' => 'sub_123456' }
@@ -619,8 +823,6 @@ module Webhooks
     end
 
     test 'acknowledges viewed events for an unknown submission ID' do
-      Webhooks::BaseController.any_instance.stubs(:verify_webhook_signature).returns(true)
-
       payload = @viewed_payload.deep_dup
       payload[:data]['submission_id'] = 'nonexistent_id'
 
@@ -646,38 +848,11 @@ module Webhooks
       assert_response :unprocessable_content
     end
 
-    test 'processes a viewed event with an alternate signature header when verification is stubbed' do
-      Webhooks::BaseController.any_instance.stubs(:verify_webhook_signature).returns(true)
-
-      make_signed_webhook_request_with_alt_header(@viewed_payload)
-      assert_response :ok
-
-      @application.reload
-      assert_equal 'opened', @application.document_signing_status
-    end
-
-    test 'processes a viewed event with a prefixed signature when verification is stubbed' do
-      Webhooks::BaseController.any_instance.stubs(:verify_webhook_signature).returns(true)
-
-      signature = "sha256=#{compute_signature(@viewed_payload.to_json)}"
-
-      post webhooks_docuseal_medical_certification_path,
-           params: @viewed_payload,
-           headers: webhook_headers(signature),
-           as: :json
-
-      assert_response :ok
-
-      @application.reload
-      assert_equal 'opened', @application.document_signing_status
-    end
-
     test 'adds no events for an already signed completion with a document URL' do
       @application.update!(
         document_signing_status: :signed,
         document_signing_document_url: 'https://example.com/signed_doc.pdf'
       )
-      Webhooks::BaseController.any_instance.stubs(:verify_webhook_signature).returns(true)
 
       assert_no_difference 'Event.count' do
         make_signed_webhook_request(@completed_payload)
@@ -687,7 +862,6 @@ module Webhooks
 
     test 'a download exception leaves signing and certification incomplete' do
       @application.update!(medical_certification_status: :requested)
-      Webhooks::BaseController.any_instance.stubs(:verify_webhook_signature).returns(true)
       Rails.logger.stubs(:error)
       Rails.logger.expects(:error).with(regexp_matches(/Document signing intake failed for App/)).once
 
@@ -711,7 +885,6 @@ module Webhooks
 
     test 'does not update medical status when HTTP download returns error status' do
       @application.update!(medical_certification_status: :requested)
-      Webhooks::BaseController.any_instance.stubs(:verify_webhook_signature).returns(true)
 
       mock_response = mock('http_response')
       mock_response.stubs(:status).returns(mock('status'))
@@ -722,7 +895,7 @@ module Webhooks
       HTTP.stubs(:get).returns(mock_response)
 
       make_signed_webhook_request(@completed_payload)
-      assert_response :service_unavailable
+      assert_response :ok
 
       @application.reload
       assert_equal 'sent', @application.document_signing_status
@@ -734,15 +907,47 @@ module Webhooks
       assert_equal 'download_failed', event.metadata['failure_reason']
     end
 
+    test 'provider download status codes distinguish permanent rejection from temporary retry' do
+      codes = { 401 => :ok, 403 => :ok, 404 => :ok, 410 => :ok, 422 => :ok,
+                408 => :service_unavailable, 425 => :service_unavailable, 429 => :service_unavailable,
+                500 => :service_unavailable, 502 => :service_unavailable, 503 => :service_unavailable }
+      codes.each_with_index do |(code, expected), index|
+        @application.update!(document_signing_requested_at: Time.current + index.seconds)
+        response = mock("download_#{code}")
+        status = mock("download_status_#{code}")
+        status.stubs(:success?).returns(false)
+        status.stubs(:code).returns(code)
+        response.stubs(:status).returns(status)
+        response.stubs(:body).returns(HTTP::Response::Body.new(DocumentScanFixtures::ResponseStream.new('')))
+        HTTP.stubs(:timeout).returns(HTTP)
+        HTTP.stubs(:get).returns(response)
+
+        assert_difference -> { Event.where(auditable: @application, action: 'document_signing_attachment_failed').count }, 1 do
+          assert_no_difference ['DocumentScan.count', 'ActiveStorage::Attachment.count'] do
+            make_signed_webhook_request(@completed_payload)
+            assert_response expected
+            travel 6.seconds do
+              make_signed_webhook_request(@completed_payload)
+              assert_response expected
+            end
+          end
+        end
+        event = Event.where(auditable: @application, action: 'document_signing_attachment_failed').order(:id).last!
+        assert_equal expected == :service_unavailable, event.metadata['failure_retryable']
+        assert_equal "HTTP #{code}", event.metadata['failure_details']
+        assert_not_includes event.metadata.to_json, 'https://'
+      end
+      assert_equal 'sent', @application.reload.document_signing_status
+    end
+
     test 'does not update medical status when document URL is missing' do
       @application.update!(medical_certification_status: :requested)
-      Webhooks::BaseController.any_instance.stubs(:verify_webhook_signature).returns(true)
 
       payload_without_docs = @completed_payload.deep_dup
       payload_without_docs[:data].delete('documents')
 
       make_signed_webhook_request(payload_without_docs)
-      assert_response :service_unavailable
+      assert_response :ok
 
       @application.reload
       assert_equal 'sent', @application.document_signing_status
@@ -798,9 +1003,9 @@ module Webhooks
       end
     end
 
-    def assert_rejected_completion(headers)
-      assert_no_difference ['Event.count', 'Notification.count', 'ActiveStorage::Attachment.count', 'ActiveStorage::Blob.count'] do
-        post webhooks_docuseal_medical_certification_path, params: @completed_payload, headers: headers, as: :json
+    def assert_rejected_completion(headers, body: @completed_payload.to_json)
+      assert_no_difference ['DocumentScan.count', 'Event.count', 'Notification.count', 'ActiveStorage::Attachment.count', 'ActiveStorage::Blob.count'] do
+        post webhooks_docuseal_medical_certification_path, params: body, headers: headers
       end
 
       assert_response :unauthorized

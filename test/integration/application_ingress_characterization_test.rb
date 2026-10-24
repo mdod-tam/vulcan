@@ -136,6 +136,8 @@ class ApplicationIngressCharacterizationTest < ActionDispatch::IntegrationTest
       :application,
       document_signing_service: 'docuseal',
       document_signing_submission_id: 'sub_123456',
+      document_signing_submitter_id: 'submitter_789',
+      document_signing_requested_at: 1.day.ago,
       document_signing_status: :sent,
       medical_certification_status: :requested
     )
@@ -151,6 +153,7 @@ class ApplicationIngressCharacterizationTest < ActionDispatch::IntegrationTest
     payload = {
       event_type: 'form.completed',
       data: {
+        'id' => 'submitter_789',
         'submission_id' => 'sub_123456',
         'email' => 'doctor@example.com',
         'documents' => [{ 'url' => 'https://example.com/signed_doc.pdf' }],
@@ -249,9 +252,11 @@ class ApplicationIngressCharacterizationTest < ActionDispatch::IntegrationTest
   end
 
   def webhook_headers(payload)
+    timestamp = Time.current.to_i
+    digest = OpenSSL::HMAC.hexdigest('sha256', @webhook_secret, "#{timestamp}.#{payload.to_json}")
     {
       'Content-Type' => 'application/json',
-      'X-Webhook-Signature' => OpenSSL::HMAC.hexdigest('sha256', @webhook_secret, payload.to_json)
+      'X-Docuseal-Signature' => "#{timestamp}.#{digest}"
     }
   end
 end

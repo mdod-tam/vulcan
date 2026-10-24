@@ -11,7 +11,7 @@ class DocumentScanJob < ApplicationJob
     work = scan.claim_work!
     if work
       begin
-        result = perform_scan(work)
+        result = perform_scan(scan, work)
         scan.complete_work!(token: work.token, result: result)
       rescue AttachmentScanner::Client::Failure => e
         scan.fail_work!(token: work.token, code: e.code, retryable: e.retryable)
@@ -20,13 +20,13 @@ class DocumentScanJob < ApplicationJob
       end
     end
     scan.reload
-    self.class.set(wait_until: scan.next_attempt_at).perform_later(scan.id) if scan.pending? && scan.next_attempt_at
+    self.class.set(wait_until: scan.next_attempt_at).perform_later(scan.id) if scan.pending? && scan.dismissed_at.nil? && scan.next_attempt_at
   end
 
   private
 
-  def perform_scan(work)
-    client = AttachmentScanner::Client.new
+  def perform_scan(scan, work)
+    client = AttachmentScanner::Client.new(before_request: -> { scan.begin_provider_work!(token: work.token) })
     return client.fetch(work.provider_scan_id) if work.action == :poll
 
     work.blob.open do |file|

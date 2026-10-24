@@ -206,9 +206,9 @@ Set `RAILS_MASTER_KEY`, `DATABASE_URL`, and `APPLICATION_HOST` (the public hostn
 | Integration | Configuration owner |
 | --- | --- |
 | Postmark | `postmark_api_token` in Rails credentials; [email and letters guide](docs/infrastructure/email_system.md). |
-| DocuSeal | Credentials `docuseal.api_key` and optional `docuseal.base_url`; register the webhook URL in the DocuSeal console and store its generated `whsec_...` HMAC secret as top-level credentials `webhook_secret`; [setup, signature gap, and host changes](docs/development/docuseal_integration_guide.md). |
+| DocuSeal | Credentials `docuseal.api_key` and optional `docuseal.base_url`; register the webhook URL in the DocuSeal console and store its generated `whsec_...` HMAC secret as top-level credentials `webhook_secret`; [setup, signature verification, and host changes](docs/development/docuseal_integration_guide.md). |
 | Twilio | `TWILIO_ACCOUNT_SID`, `TWILIO_AUTH_TOKEN`, `TWILIO_SMS_FROM_NUMBER`, `TWILIO_VERIFY_SERVICE_SID`, and `TWILIO_FAX_FROM_NUMBER` as needed; [initializer](config/initializers/twilio.rb). |
-| Webhooks | Rails credentials `webhook_secret` for the shared signature verifier; Twilio fax callbacks use Twilio's signature. See [webhook controllers](app/controllers/webhooks). |
+| Webhooks | Rails credentials `webhook_secret` supply the HMAC key; DocuSeal verifies its timestamped signature, and Twilio fax callbacks use Twilio's signature. See [webhook controllers](app/controllers/webhooks). |
 | S3 uploads | `S3_ACCESS_KEY_ID`, `S3_SECRET_ACCESS_KEY`, `S3_REGION`, `S3_BUCKET`, or their Bucketeer alternatives; [storage guide](docs/infrastructure/active_storage_s3_setup.md). |
 
 ## Deployment

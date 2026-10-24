@@ -3,6 +3,19 @@
 module DocumentSigning
   # Accepts cleared provider documents or records their terminal scan failure.
   class AcceptScannedDocument
+    class AcceptanceFailed < StandardError
+      attr_reader :code
+
+      def initialize(error)
+        @code = error&.class&.name || 'acceptance_rejected'
+        super('Certification attachment failed')
+      end
+    end
+
+    def self.give_up(scan, error_code:)
+      new(scan).give_up(error_code: error_code)
+    end
+
     def self.call(scan)
       new(scan).call
     end
@@ -21,8 +34,33 @@ module DocumentSigning
         raise DocumentScan::NotCleared, 'Document scan has not finished' if @scan.pending?
 
         outcome = continue_request(application)
-        @scan.update!(continued_at: Time.current) unless @scan.continued_at
+        @scan.update!(continued_at: Time.current, continuation_next_attempt_at: nil, continuation_error_code: nil) unless @scan.continued_at
         outcome
+      end
+    end
+
+    def give_up(error_code:)
+      application = Application.find_by(id: @context.fetch('application_id'))
+      owner = application || @scan
+      owner.with_lock do
+        @scan.reload
+        next if @scan.continued_at
+
+        if application && !same_request?(application)
+          @scan.update!(continued_at: Time.current, continuation_next_attempt_at: nil, continuation_error_code: 'request_superseded')
+          next :superseded
+        end
+
+        actor = User.find_by(id: @context.fetch('actor_id')) || User.system_user
+        metadata = failure_metadata(reason: 'continuation_gave_up', details: error_code)
+        if actor
+          AuditEventService.log(action: 'document_signing_attachment_failed', actor: actor, auditable: owner, metadata: metadata)
+        else
+          Rails.event.notify('document_scan.continuation_audit_actor_missing', document_scan_id: @scan.id)
+        end
+        @scan.update!(continued_at: Time.current, continuation_next_attempt_at: nil, continuation_error_code: error_code)
+        Rails.event.notify('document_scan.continuation_gave_up', document_scan_id: @scan.id, error_code: error_code)
+        :failed
       end
     end
 
@@ -31,7 +69,7 @@ module DocumentSigning
     def continue_request(application)
       # A newer signing request owns its own status and provider identity.
       return :superseded unless same_request?(application)
-      return @scan.clean? ? :completed : :failed if @scan.continued_at
+      return @scan.clean? && @scan.continuation_error_code.nil? ? :completed : :failed if @scan.continued_at
 
       actor = User.find(@context.fetch('actor_id'))
       @scan.clean? ? accept_document(application, actor) : record_scan_failure(application, actor)
@@ -46,7 +84,7 @@ module DocumentSigning
         application: application, blob: @scan.blob, submission_method: :docuseal,
         requested_at: parsed_time('requested_at'), admin: actor, metadata: document_metadata
       )
-      raise(outcome[:error] || 'Certification attachment failed') unless outcome[:success]
+      raise AcceptanceFailed, outcome[:error] unless outcome[:success]
 
       application.update!(document_signing_status: :signed, document_signing_signed_at: parsed_time('completed_at'),
                           document_signing_document_url: @context.fetch('document_url'), document_signing_audit_url: @context['audit_url'])
@@ -57,12 +95,7 @@ module DocumentSigning
     end
 
     def record_scan_failure(application, actor)
-      metadata = {
-        document_signing_service: 'docuseal', document_signing_submission_id: @context.fetch('submission_id'),
-        operation_id: "docuseal_scan_#{@scan.id}", document_scan_id: @scan.id,
-        scan_status: @scan.status, failure_reason: @scan.blocked? ? 'scan_blocked' : 'scan_failed',
-        failure_details: @scan.last_error_code, failed_at: @scan.completed_at&.iso8601
-      }
+      metadata = failure_metadata(reason: @scan.blocked? ? 'scan_blocked' : 'scan_failed', details: @scan.last_error_code)
       AuditEventService.log(action: 'document_signing_attachment_failed', actor: actor, auditable: application, metadata: metadata)
       User.admins.find_each do |admin|
         notification = NotificationService.create_and_deliver!(type: 'attachment_failure_warning', recipient: admin, actor: actor,
@@ -72,9 +105,20 @@ module DocumentSigning
       :failed
     end
 
+    def failure_metadata(reason:, details:)
+      {
+        document_signing_service: 'docuseal', document_signing_submission_id: @context.fetch('submission_id'),
+        operation_id: "docuseal_scan_#{@scan.id}", document_scan_id: @scan.id,
+        application_id: @context['application_id'], original_actor_id: @context['actor_id'], continuation_attempts: @scan.continuation_attempts,
+        scan_status: @scan.status, failure_reason: reason, failure_details: details,
+        failed_at: Time.current.iso8601
+      }
+    end
+
     def same_request?(application)
       application.document_signing_service == 'docuseal' &&
         application.document_signing_submission_id == @context.fetch('submission_id') &&
+        application.document_signing_submitter_id == @context.fetch('submitter_id') &&
         application.document_signing_requested_at == parsed_time('requested_at') &&
         application.medical_provider_email == @context['provider_email']
     end

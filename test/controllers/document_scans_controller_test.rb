@@ -46,6 +46,25 @@ class DocumentScansControllerTest < ActionDispatch::IntegrationTest
     assert_response :not_found
   end
 
+  test 'canceling a pending upload invalidates its lease and future work' do
+    post document_scans_path, params: { file: fixture_file_upload('income_proof.pdf', 'application/pdf'),
+                                        purpose: 'proof', slot: 'income_proof' }
+    scan = DocumentScan.find(response.parsed_body.fetch('id'))
+    work = scan.claim_work!
+
+    delete document_scan_path(scan)
+    assert_response :no_content
+    assert scan.reload.failed?
+    assert_equal 'scan_canceled', scan.last_error_code
+    assert_nil scan.lease_token
+    assert_nil scan.next_attempt_at
+    assert_not scan.begin_provider_work!(token: work.token)
+    get document_scan_path(scan)
+    assert_nil response.parsed_body['signed_id']
+    get document_scans_path, params: { purpose: 'proof', slot: 'income_proof' }
+    assert_nil response.parsed_body
+  end
+
   test 'secure scans honor the form lifetime and cannot be accepted through another request' do
     application = create(:application, income_proof_required: true)
     token = SecureRequestForm.generate_public_token

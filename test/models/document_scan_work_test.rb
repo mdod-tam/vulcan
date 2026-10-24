@@ -40,8 +40,9 @@ class DocumentScanWorkTest < ActiveSupport::TestCase
     end
   end
 
-  test 'submission and polling share the same paced provider budget' do
+  test 'claiming work leaves HTTP pacing to the client' do
     freeze_time do
+      DocumentScanProviderBudget.expects(:try_reserve!).never
       scan = new_scan
       work = scan.claim_work!
       scan.complete_work!(token: work.token, result: result_for(scan, status: 'pending'))
@@ -49,19 +50,32 @@ class DocumentScanWorkTest < ActiveSupport::TestCase
       assert_equal 30.seconds.from_now, scan.next_attempt_at
 
       competing = new_scan
-      assert_nil competing.claim_work!
-      assert_equal Time.current + DocumentScanProviderBudget::INTERVAL, competing.reload.next_attempt_at
-      assert_nil competing.claim_work!
-      travel DocumentScanProviderBudget::INTERVAL
       assert_equal :submit, competing.claim_work!.action
-      travel 30.seconds - DocumentScanProviderBudget::INTERVAL
       assert_nil scan.claim_work!
-      travel DocumentScanProviderBudget::INTERVAL - (30.seconds - DocumentScanProviderBudget::INTERVAL)
+      travel 30.seconds
       poll = scan.claim_work!
       assert_equal :poll, poll.action
       assert_equal '0e25dd32-2f60-4cec-b449-1eca2fd48f00', poll.provider_scan_id
       scan.complete_work!(token: poll.token, result: result_for(scan))
       assert scan.reload.clean?
+    end
+  end
+
+  test 'queue wait does not consume the provider resolution window' do
+    freeze_time do
+      scan = new_scan
+      travel 2.hours
+      scan.expire_unresolved!
+      assert scan.reload.pending?
+      work = scan.claim_work!
+      assert work
+      assert scan.begin_provider_work!(token: work.token)
+      assert_equal Time.current, scan.reload.submitted_at
+      scan.complete_work!(token: work.token, result: result_for(scan, status: 'pending'))
+      travel 1.hour
+      scan.expire_unresolved!
+      assert scan.reload.failed?
+      assert_equal 'scan_unresolved', scan.last_error_code
     end
   end
 
@@ -94,10 +108,84 @@ class DocumentScanWorkTest < ActiveSupport::TestCase
     end
   end
 
+  test 'dismissal stops queued work and revokes a claimed worker before provider submission' do
+    queued = new_scan
+    queued.dismiss!
+    assert queued.reload.dismissed_at
+    assert queued.failed?
+    assert_equal 'scan_canceled', queued.last_error_code
+    assert_not_includes DocumentScan.due_for_work, queued
+    assert_nil queued.claim_work!
+
+    claimed = new_scan
+    work = claimed.claim_work!
+    DocumentScan.find(claimed.id).dismiss!
+    assert_not claimed.begin_provider_work!(token: work.token)
+    assert_not claimed.complete_work!(token: work.token, result: result_for(claimed))
+    assert_not claimed.fail_work!(token: work.token, code: 'transport_error', retryable: true)
+    assert claimed.reload.failed?
+    assert_nil claimed.submitted_at
+    assert_nil claimed.lease_token
+    assert_nil claimed.next_attempt_at
+    assert_not DocumentScan.cleared?(claimed.blob)
+  end
+
+  test 'dismissal after a provider attempt keeps its cost history and rejects a late verdict' do
+    scan = new_scan
+    work = scan.claim_work!
+    assert scan.begin_provider_work!(token: work.token)
+    started_at = scan.reload.submitted_at
+    assert started_at
+    DocumentScan.find(scan.id).dismiss!
+    assert_not scan.complete_work!(token: work.token, result: result_for(scan))
+    assert_not scan.begin_provider_work!(token: work.token)
+    assert_nil scan.claim_work!
+    assert_equal started_at, scan.reload.submitted_at
+    assert_equal 1, scan.attempts
+    assert_not DocumentScan.cleared?(scan.blob)
+  end
+
+  test 'an expired lease cannot start a provider request or record its cancellation as a verdict' do
+    freeze_time do
+      scan = new_scan
+      work = scan.claim_work!
+      travel DocumentScan::Work::LEASE_DURATION
+      assert_not scan.begin_provider_work!(token: work.token)
+      assert_not scan.fail_work!(token: work.token, code: 'scan_canceled', retryable: false)
+      assert_not scan.complete_work!(token: work.token, result: result_for(scan))
+      assert scan.reload.pending?
+      assert_nil scan.submitted_at
+      assert_includes DocumentScan.due_for_work, scan
+    end
+  end
+
+  test 'dismissing an accepted clean file does not revoke its clearance' do
+    scan = new_scan(status: :clean)
+    application = create(:application, user: @user)
+    application.income_proof.attach(scan.blob)
+    scan.dismiss!
+    assert scan.reload.clean?
+    assert DocumentScan.cleared?(scan.blob)
+    assert_equal scan.blob, UploadedDocument.resolve!(scan.blob.signed_id, record: application, name: :income_proof, scan_owner: @user)
+    assert_nil scan.claim_work!
+  end
+
+  test 'a receipt obtained before removal cannot accept the dismissed snapshot' do
+    scan = new_scan(status: :clean)
+    receipt = scan.blob.signed_id
+    application = create(:application, user: @user)
+    scan.dismiss!
+
+    assert_raises(UploadedDocument::Refused) do
+      UploadedDocument.resolve!(receipt, record: application, name: :income_proof, scan_owner: @user)
+    end
+    assert_not application.reload.income_proof.attached?
+  end
+
   private
 
   def new_scan(**attributes)
-    bytes = 'immutable scanned bytes'
+    bytes = file_fixture('income_proof.pdf').binread
     blob = ActiveStorage::Blob.create_and_upload!(io: StringIO.new(bytes), filename: 'proof.pdf', content_type: 'application/pdf')
     DocumentScan.create!(blob: blob, user: @user, purpose: 'proof', slot: 'income_proof', sha256: Digest::SHA256.hexdigest(bytes),
                          next_attempt_at: Time.current, **attributes)

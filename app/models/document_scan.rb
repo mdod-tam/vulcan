@@ -5,6 +5,7 @@ class DocumentScan < ApplicationRecord
   class LimitExceeded < StandardError; end
 
   include DocumentScan::Work
+  include DocumentScan::Continuation
 
   RETENTION = 7.days
   PURPOSES = ProofUploadFormats::MAX_SIZES.keys.map(&:to_s).freeze
@@ -44,6 +45,15 @@ class DocumentScan < ApplicationRecord
     return false unless owner&.persisted?
 
     owner.is_a?(User) ? user_id == owner.id : secure_form == owner
+  end
+
+  def dismiss!
+    with_lock do
+      now = Time.current
+      attributes = { dismissed_at: dismissed_at || now, lease_token: nil, lease_expires_at: nil, next_attempt_at: nil }
+      attributes.merge!(status: :failed, completed_at: now, last_error_code: 'scan_canceled') if pending?
+      update!(attributes)
+    end
   end
 
   private
