@@ -6,7 +6,7 @@ const minute = 60_000
 // Only genuine interaction renews idle time; background checks only read its deadline.
 export default class extends Controller {
   static targets = ["notice", "message", "renew"]
-  static values = { url: String, state: Object, messages: Object }
+  static values = { url: String, signOutUrl: String, state: Object, messages: Object }
 
   connect() {
     this.lastAttemptAt = Date.now()
@@ -17,6 +17,7 @@ export default class extends Controller {
 
   disconnect() {
     clearInterval(this.timer)
+    document.querySelectorAll("[data-session-activity-expired-notice]").forEach(notice => notice.remove())
   }
 
   recordInteraction(event) {
@@ -108,15 +109,45 @@ export default class extends Controller {
     if (this.messageTarget.textContent !== text) this.messageTarget.textContent = text
     this.noticeTarget.hidden = !text
     this.renewTarget.hidden = expired || absoluteRemaining <= 5 * minute
+    document.querySelectorAll("[data-session-activity-expired-notice]").forEach(notice => {
+      notice.hidden = !expired
+      const message = expired ? text : ""
+      if (notice.textContent !== message) notice.textContent = message
+    })
   }
 
   beforeSubmit(event) {
-    if (!event.target.closest("main") || event.target.method?.toLowerCase() === "get") return
+    const form = event.target
+    const method = (event.submitter?.getAttribute("formmethod") || form.getAttribute("method") || form.method).toLowerCase()
+    if (method === "get" || method === "dialog") return
+    const action = new URL(event.submitter?.getAttribute("formaction") || form.action, document.baseURI)
+    const signOut = this.hasSignOutUrlValue && new URL(this.signOutUrlValue, document.baseURI)
+    if (signOut && method === "post" && action.origin === window.location.origin && action.pathname === signOut.pathname &&
+        form.querySelector('input[name="_method"]')?.value.toLowerCase() === "delete") return
     if (!this.ended && Math.min(this.idleDeadline, this.absoluteDeadline) > Date.now()) return
 
     event.preventDefault()
     event.stopImmediatePropagation()
     this.updateNotice()
-    this.noticeTarget.focus()
+    this.expiredNoticeFor(form).focus()
+  }
+
+  expiredNoticeFor(form) {
+    const dialog = form.closest("dialog[open]")
+    if (!dialog) return this.noticeTarget
+
+    let notice = dialog.querySelector("[data-session-activity-expired-notice]")
+    if (!notice) {
+      // The page banner is inert behind a modal dialog; keep its message inside the top layer.
+      notice = this.noticeTarget.cloneNode(false)
+      notice.removeAttribute("data-session-activity-target")
+      notice.setAttribute("data-session-activity-expired-notice", "")
+      notice.setAttribute("role", "alert")
+      notice.lang = this.element.lang
+      dialog.prepend(notice)
+    }
+    if (notice.textContent !== this.messageTarget.textContent) notice.textContent = this.messageTarget.textContent
+    notice.hidden = false
+    return notice
   }
 }

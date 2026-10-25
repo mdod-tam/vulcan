@@ -21,7 +21,7 @@ module Admin
         redirect_to admin_application_path(@application), alert: result.message.presence || failure_message
       end
     rescue StandardError => e
-      Rails.logger.error("Secure proof resubmission request failed for application #{@application&.id}: #{e.message}")
+      Rails.logger.error("Secure proof resubmission request failed for application #{@application&.id}: #{e.class.name}")
       redirect_to admin_application_path(@application), alert: failure_message
     end
 

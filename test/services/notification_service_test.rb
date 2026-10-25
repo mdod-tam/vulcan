@@ -15,6 +15,53 @@ class NotificationServiceTest < ActiveSupport::TestCase
     Current.reset
   end
 
+  test 'notification creation diagnostics omit private exception details from logs and instrumentation' do
+    invalid_record = User.new
+    invalid_record.errors.add(:base, 'Private Patient private-notification@example.test at 410-555-0199')
+    error = ActiveRecord::RecordInvalid.new(invalid_record)
+    error.set_backtrace(['private-notification@example.test/410-555-0199.rb:1:in failure'])
+    Notification.stubs(:create!).raises(error)
+    messages = []
+    payloads = []
+    subscriber = ->(*args) { payloads << args.last }
+
+    result = ActiveSupport::Notifications.subscribed(subscriber, 'notification_service.error') do
+      Rails.logger.stub(:error, ->(message) { messages << message }) do
+        assert_no_difference ['Notification.count', 'Event.count'] do
+          NotificationService.create_and_deliver!(type: :account_created, recipient: @constituent, actor: @admin,
+                                                  notifiable: @application)
+        end
+      end
+    end
+
+    assert_nil result
+    assert_equal 'ActiveRecord::RecordInvalid', payloads.sole[:error_class]
+    assert_not payloads.sole.key?(:error)
+    [messages.join, payloads.to_json].each do |diagnostics|
+      %w[Private private-notification@example.test 410-555-0199].each do |private_value|
+        assert_not_includes diagnostics, private_value
+      end
+    end
+    assert_includes messages.join, 'ActiveRecord::RecordInvalid'
+  end
+
+  test 'notification builder failure logs use recipient identity without inspecting personal fields' do
+    error = StandardError.new('Private Patient private-builder@example.test at 410-555-0199')
+    NotificationService.stubs(:build_notification_builder).raises(error)
+    messages = []
+
+    result = Rails.logger.stub(:error, ->(message) { messages << message }) do
+      NotificationService.create_and_deliver!(type: :account_created, recipient: @constituent)
+    end
+
+    assert_nil result
+    assert_includes messages.join, "recipient_id: #{@constituent.id}"
+    assert_includes messages.join, 'StandardError'
+    ['Private Patient', 'private-builder@example.test', '410-555-0199', @constituent.email, @constituent.phone].each do |private_value|
+      assert_not_includes messages.join, private_value
+    end
+  end
+
   test 'create_and_deliver! creates a notification and enqueues an email job for deliverable actions' do
     assert_enqueued_jobs 1, only: EmailDelivery::MailDeliveryJob do
       notification = nil

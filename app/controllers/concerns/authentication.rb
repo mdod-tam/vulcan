@@ -133,6 +133,10 @@ module Authentication
 
   def clear_expired_session
     @expired_session_locale = public_request_locale_param || @current_session&.user&.effective_message_locale || I18n.default_locale
+    clear_session_authentication
+  end
+
+  def clear_session_authentication
     @current_session = nil
     @current_user = nil
     Current.user = nil

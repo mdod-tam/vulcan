@@ -46,14 +46,14 @@ module Vendors
 
       success(message(:request_created), result_data(delivery.secure_request_form, delivery.raw_token))
     rescue ActiveRecord::RecordNotUnique, ActiveRecord::RecordInvalid => e
-      Rails.logger.warn("W9 resubmission request failed for vendor #{vendor.id}: #{e.message}")
+      Rails.logger.warn("W9 resubmission request failed for vendor #{vendor.id}: #{e.class.name}")
       failure(message(:request_conflict))
     rescue CooldownActive => e
       return success(message(:resent)) if public_recovery
 
       failure(e.message)
     rescue StandardError => e
-      Rails.logger.warn("W9 resubmission request failed for vendor #{vendor.id}: #{sanitize_secure_error_message(e.message)}")
+      Rails.logger.warn("W9 resubmission request failed for vendor #{vendor.id}: #{e.class.name}")
       failure(message(:delivery_failed))
     end
 

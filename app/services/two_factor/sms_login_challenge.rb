@@ -123,7 +123,7 @@ module TwoFactor
       Rails.logger.info("[SMS] Sent verification code to user #{user.id} via Twilio Verify")
       :sent
     rescue StandardError => e
-      Rails.logger.error("[SMS] Error: #{e.message}")
+      Rails.logger.error("[SMS] Error: #{e.class.name}")
       false
     end
 

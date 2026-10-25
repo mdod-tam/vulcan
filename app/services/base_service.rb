@@ -49,15 +49,14 @@ class BaseService
   # Log an error with optional context and add to errors array
   def log_error(exception, context = nil)
     error_message = if context.is_a?(String)
-                      "#{self.class.name}: #{context} - #{exception.message}"
+                      "#{self.class.name}: #{context} - #{exception.class.name}"
                     elsif context.is_a?(Hash)
-                      "#{self.class.name}: #{exception.message} | Context: #{context.inspect}"
+                      "#{self.class.name}: #{exception.class.name} | Context: #{context.inspect}"
                     else
-                      "#{self.class.name}: #{exception.message}"
+                      "#{self.class.name}: #{exception.class.name}"
                     end
 
     Rails.logger.error error_message
-    Rails.logger.error exception.backtrace.join("\n") if exception.backtrace
 
     add_error(exception.message)
   end

@@ -142,9 +142,10 @@ class MedicalProviderNotifierTest < ActiveSupport::TestCase
     assert_not result[:success]
     assert_equal :failed, result[:outcome]
     notification.reload
-    assert_equal 'SMTP rejected message containing [REDACTED_URL]',
+    assert_equal 'Provider notification could not be sent.',
                  notification.metadata.fetch('provider_notification_error')
-    assert_includes log_output.string, '[REDACTED_URL]'
+    assert_equal 'SMTP rejected message containing [REDACTED_URL]', result[:error]
+    assert_includes log_output.string, 'StandardError'
     assert_not_includes log_output.string, secure_upload_url
     assert_not_includes log_output.string, 'raw-secret-token'
   end
@@ -161,7 +162,7 @@ class MedicalProviderNotifierTest < ActiveSupport::TestCase
     assert_not result[:success]
     assert_equal :failed, result[:outcome]
     assert_nil notification.reload.metadata['fax_sid']
-    assert_equal 'smtp timeout', notification.metadata['provider_notification_error']
+    assert_equal 'Provider notification could not be sent.', notification.metadata['provider_notification_error']
   end
 
   test 'fax-only provider gets an explicit unavailable result' do
@@ -173,7 +174,8 @@ class MedicalProviderNotifierTest < ActiveSupport::TestCase
     )
     assert_not result[:success]
     assert_equal :unavailable, result[:outcome]
-    assert_equal FaxService::UNAVAILABLE_MESSAGE, notification.reload.metadata['provider_notification_error']
+    assert_equal FaxService::UNAVAILABLE_MESSAGE, result[:error]
+    assert_equal 'Provider notification could not be sent.', notification.reload.metadata['provider_notification_error']
   end
 
   %i[queued deferred suppressed configuration_error enqueue_failed].each do |outcome|

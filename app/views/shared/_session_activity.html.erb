@@ -1,9 +1,10 @@
 <%# locals: (deadlines:, locale:) %>
 <div lang="<%= locale %>" data-controller="session-activity"
      data-session-activity-url-value="<%= session_activity_path %>"
+     data-session-activity-sign-out-url-value="<%= sign_out_path %>"
      data-session-activity-state-value="<%= deadlines.to_json %>"
      data-session-activity-messages-value="<%= t('sessions.activity.messages', locale:).to_json %>"
-     data-action="input@document->session-activity#recordInteraction change@document->session-activity#recordInteraction keydown@document->session-activity#recordInteraction pointerdown@document->session-activity#recordInteraction submit@document->session-activity#beforeSubmit focus@window->session-activity#checkStatus visibilitychange@document->session-activity#checkStatus">
+     data-action="input@document->session-activity#recordInteraction change@document->session-activity#recordInteraction keydown@document->session-activity#recordInteraction pointerdown@document->session-activity#recordInteraction submit@document->session-activity#beforeSubmit:capture focus@window->session-activity#checkStatus visibilitychange@document->session-activity#checkStatus">
   <aside hidden tabindex="-1"
          class="mx-auto max-w-7xl rounded-md border border-amber-300 bg-amber-50 p-4 text-amber-900"
          aria-label="<%= t('sessions.activity.label', locale:) %>"

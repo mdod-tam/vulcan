@@ -27,10 +27,10 @@ Signing updates arrive at `POST /webhooks/docuseal/medical_certification` ([cont
 
 | Event | Effect |
 | --- | --- |
-| `form.viewed` | Signing set to `opened`, audit event recorded. |
+| `form.viewed` | Signing moves from `sent` to `opened`, audit event recorded. |
 | `form.started` | Audit event recorded. |
 | `form.completed` | PDF queued for scanning; signing becomes `signed` only after clean-file acceptance under the retention rules below. |
-| `form.declined` | Signing set to `declined`, reason recorded in the audit event. |
+| `form.declined` | Unsigned requests move to `declined`, reason recorded in the audit event. |
 
 Unknown event types and unmatched submission IDs change nothing, and the receiver still answers 200 — so a successful webhook response is not evidence that a document was attached.
 
@@ -75,6 +75,8 @@ webhook_secret: whsec_YOUR_SIGNING_SECRET  # top level, copied from the DocuSeal
 [`Webhooks::DocusealController`](../../app/controllers/webhooks/docuseal_controller.rb) verifies `X-Docuseal-Signature: [timestamp].[signature]` using [DocuSeal's documented format](https://www.docuseal.com/resources/use-webhooks). The timestamp is Unix time in seconds; the signature is the hexadecimal HMAC-SHA256 of `[timestamp].[raw_body]`. Use the full `whsec_...` secret as the key, including its prefix, without decoding it. The raw body must be the exact request bytes, not parsed and re-serialized JSON.
 
 The receiver compares signatures in constant time and rejects missing or malformed signatures, changed bodies, and timestamps more than five minutes before or after the server's current time with HTTP 401. Exactly five minutes is accepted, matching [DocuSeal's verifier](https://github.com/docusealco/docuseal/blob/master/lib/webhook_urls/signatures.rb). Keep the server clock accurate. The legacy body-only signature and `X-Webhook-Signature` header are not accepted for this endpoint.
+
+For `form.viewed`, `form.started`, and `form.declined`, the receiver requires the [documented event timestamp and submitter identity](https://www.docuseal.com/docs/api#form-webhook): top-level `timestamp`, `data.id` and `data.submission_id`. Retries of the same event write one audit event for the current signing request, even with a fresh signature or changed download URLs. Separate event timestamps preserve separate history. Missing or malformed identity receives HTTP 422; callbacks for a superseded request are acknowledged without changes. Delayed activity cannot move a signed or declined request back to opened, and a delayed decline cannot replace a signed result.
 
 A valid signed callback can be delivered again within that window. Completion handling uses the stored signing request identity to avoid duplicate scans or attachments.
 

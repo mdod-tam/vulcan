@@ -58,8 +58,8 @@ module ProofManageable
     status_attr = "#{proof_type}_proof_status"
     update!(status_attr => :rejected)
 
-    Rails.logger.info "Rejected #{proof_type} proof for app #{id} by #{admin&.id || 'system'} (#{reason})"
-    Rails.logger.debug { "Rejection notes: #{notes}" } if notes.present?
+    Rails.logger.info "Rejected #{proof_type} proof for app #{id} by #{admin&.id || 'system'} " \
+                      "(reason_present=#{reason.present?}, notes_present=#{notes.present?})"
 
     true
   end
@@ -80,7 +80,7 @@ module ProofManageable
     end
     true
   rescue StandardError => e
-    Rails.logger.error "Failed to purge proofs: #{e.message}"
+    Rails.logger.error "Failed to purge proofs for application #{id}: #{e.class.name}"
     false
   end
 
@@ -154,7 +154,7 @@ module ProofManageable
       update!(needs_review_since: Time.current)
       Rails.logger.info "Set needs_review_since for application #{id}"
     rescue StandardError => e
-      Rails.logger.error "Error setting needs_review_since: #{e.message}"
+      Rails.logger.error "Error setting needs_review_since for application #{id}: #{e.class.name}"
     ensure
       @setting_review_timestamp = false
     end

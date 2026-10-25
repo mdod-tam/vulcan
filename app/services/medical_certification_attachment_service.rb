@@ -230,8 +230,7 @@ class MedicalCertificationAttachmentService
   end
 
   def self.record_failure(application, error, admin, submission_method, _metadata)
-    Rails.logger.error "Disability certification attachment error: #{error.message}"
-    Rails.logger.error error.backtrace.join("\n")
+    Rails.logger.error "Disability certification attachment error for application #{application.id}: #{error.class.name}"
 
     begin
       AuditEventService.log(
@@ -240,16 +239,15 @@ class MedicalCertificationAttachmentService
         auditable: application,
         metadata: {
           error_class: error.class.name,
-          error_message: error.message,
           submission_method: submission_method.to_s
         }
       )
     rescue StandardError => e
       # Failure reporting must not replace the original error.
-      Rails.logger.error "Failed to record audit for failure: #{e.message}"
+      Rails.logger.error "Failed to record audit for failure: #{e.class.name}"
     end
   rescue StandardError => e
-    Rails.logger.error "Failed to record disability certification failure: #{e.message}"
+    Rails.logger.error "Failed to record disability certification failure: #{e.class.name}"
   end
 
   def self.record_metrics(result, status)
@@ -257,7 +255,7 @@ class MedicalCertificationAttachmentService
     context = build_metrics_context(result, status)
     log_metrics(context)
   rescue StandardError => e
-    Rails.logger.error "Failed to record disability certification metrics: #{e.message}"
+    Rails.logger.error "Failed to record disability certification metrics: #{e.class.name}"
   end
 
   def self.execute_with_timing(status)
@@ -400,7 +398,7 @@ class MedicalCertificationAttachmentService
     if result[:success]
       Rails.logger.info "Medical certification #{status} completed in #{result[:duration_ms]}ms"
     else
-      Rails.logger.error "Medical certification #{status} failed in #{result[:duration_ms]}ms: #{result[:error]&.message}"
+      Rails.logger.error "Medical certification #{status} failed in #{result[:duration_ms]}ms: #{result[:error]&.class&.name}"
     end
   end
 
@@ -419,8 +417,6 @@ class MedicalCertificationAttachmentService
 
   def self.add_error_context(context, error)
     context[:error_class] = error.class.name
-    context[:error_message] = error.message
-    context[:error_backtrace] = error.backtrace.first(3) if error.backtrace
   end
 
   def self.perform_attachment(application, attachment_param)
@@ -430,7 +426,7 @@ class MedicalCertificationAttachmentService
     fresh_application.medical_certification.attach(attachment_param)
 
     # Verify the persisted attachment rather than relying on attach's return value.
-    Rails.logger.error "Failed to attach certification: #{fresh_application.errors.full_messages.join(', ')}" unless fresh_application.medical_certification.attached?
+    Rails.logger.error "Failed to attach certification for application #{fresh_application.id}" unless fresh_application.medical_certification.attached?
 
     reloaded_app = Application.unscoped.find(application.id)
     raise 'Failed to verify attachment: medical_certification not attached after direct attachment' unless attachment_verified?(reloaded_app)

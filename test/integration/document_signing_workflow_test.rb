@@ -50,7 +50,9 @@ class DocumentSigningWorkflowTest < ActionDispatch::IntegrationTest
     # Viewed webhook
     viewed_payload = {
       event_type: 'form.viewed',
+      timestamp: Time.current.utc.iso8601(6),
       data: {
+        'id' => 'submitter_789',
         'submission_id' => 'sub_123456',
         'email' => 'doctor@example.com'
       }
@@ -69,7 +71,9 @@ class DocumentSigningWorkflowTest < ActionDispatch::IntegrationTest
     # Started webhook
     started_payload = {
       event_type: 'form.started',
+      timestamp: Time.current.utc.iso8601(6),
       data: {
+        'id' => 'submitter_789',
         'submission_id' => 'sub_123456',
         'email' => 'doctor@example.com'
       }
@@ -139,7 +143,9 @@ class DocumentSigningWorkflowTest < ActionDispatch::IntegrationTest
 
     declined_payload = {
       event_type: 'form.declined',
+      timestamp: Time.current.utc.iso8601(6),
       data: {
+        'id' => 'submitter_789',
         'submission_id' => 'sub_123456',
         'email' => 'doctor@example.com'
       }

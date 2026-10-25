@@ -32,7 +32,7 @@ class ProofAttachmentValidator
   rescue ValidationError
     raise
   rescue StandardError => e
-    Rails.logger.error("Unexpected error in document content inspection: #{e.message}")
+    Rails.logger.error("Unexpected error in document content inspection: #{e.class.name}")
     raise ValidationError.new(:unreadable, 'The file could not be read')
   end
 

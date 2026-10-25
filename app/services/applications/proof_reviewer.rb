@@ -37,8 +37,7 @@ module Applications
 
       true
     rescue StandardError => e
-      Rails.logger.error "Proof review failed: #{e.class.name}"
-      Rails.logger.error e.backtrace&.join("\n")
+      Rails.logger.error "Proof review failed: #{e.class.name} for application #{@application.id}"
 
       case review_commit_state
       when :committed

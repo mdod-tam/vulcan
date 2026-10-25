@@ -53,7 +53,7 @@ class User < ApplicationRecord
     # Rails encryption supports this ordinary find_by query.
     User.find_by(email: normalized_email)
   rescue StandardError => e
-    Rails.logger.warn "find_by_email failed: #{e.message}"
+    Rails.logger.warn "find_by_email failed: #{e.class.name}"
     nil
   end
 
@@ -63,7 +63,7 @@ class User < ApplicationRecord
 
     User.find_by(phone: normalized_phone)
   rescue StandardError => e
-    Rails.logger.warn "find_by_phone failed: #{e.message}"
+    Rails.logger.warn "find_by_phone failed: #{e.class.name}"
     nil
   end
 
@@ -141,7 +141,7 @@ class User < ApplicationRecord
     query = query.where.not(id: excluding_id) if excluding_id
     query.exists?
   rescue StandardError => e
-    Rails.logger.warn "exists_with_email? failed: #{e.message}"
+    Rails.logger.warn "exists_with_email? failed: #{e.class.name}"
     false
   end
 
@@ -153,7 +153,7 @@ class User < ApplicationRecord
     query = query.where.not(id: excluding_id) if excluding_id
     query.exists?
   rescue StandardError => e
-    Rails.logger.warn "exists_with_phone? failed: #{e.message}"
+    Rails.logger.warn "exists_with_phone? failed: #{e.class.name}"
     false
   end
 

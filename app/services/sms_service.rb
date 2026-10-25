@@ -55,7 +55,6 @@ class SmsService
     raise
   rescue StandardError => e
     log_sms_error('SMS delivery failed', e)
-    log_sms_backtrace(e)
     raise
   end
 
@@ -89,14 +88,7 @@ class SmsService
   private_class_method :safe_context
 
   def self.log_sms_error(prefix, error)
-    Rails.logger.error("#{prefix}: #{sanitize_secure_error_message(error.message)}")
+    Rails.logger.error("#{prefix}: #{error.class.name}")
   end
   private_class_method :log_sms_error
-
-  def self.log_sms_backtrace(error)
-    return if error.backtrace.blank?
-
-    Rails.logger.error("SMS error backtrace: #{sanitize_secure_error_message(error.backtrace.first(5).join("\n"))}")
-  end
-  private_class_method :log_sms_backtrace
 end

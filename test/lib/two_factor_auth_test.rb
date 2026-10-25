@@ -137,12 +137,22 @@ class TwoFactorAuthTest < ActiveSupport::TestCase
   end
 
   test 'logging methods record success and failure with context' do
-    # Verify that the methods can be called without raising exceptions
-    TwoFactorAuth.log_verification_success(@user.id, :webauthn, { credential_id: 123 })
-    TwoFactorAuth.log_verification_failure(@user.id, :totp, 'Invalid code', { credential_ids: [456, 789] })
+    messages = []
+    Rails.logger.stub(:info, ->(message) { messages << message }) do
+      Rails.logger.stub(:warn, ->(message) { messages << message }) do
+        TwoFactorAuth.log_verification_success(@user.id, :webauthn, credential_id: 123)
+        error = StandardError.new('Private Patient private-auth@example.test at 410-555-0199')
+        TwoFactorAuth.log_verification_failure(
+          @user.id, :totp, credential_ids: [456, 789], reason: :invalid_code, error_class: error.class.name
+        )
+      end
+    end
 
-    # If we got here without exceptions, the test passes
-    assert true
+    assert_includes messages.join, "user #{@user.id}"
+    assert_includes messages.join, 'Reason: invalid_code'
+    assert_includes messages.join, 'Error class: StandardError'
+    assert_includes messages.join, 'Attempted Credential IDs: [456, 789]'
+    %w[Private private-auth@example.test 410-555-0199].each { |private_value| assert_not_includes messages.join, private_value }
   end
 
   private

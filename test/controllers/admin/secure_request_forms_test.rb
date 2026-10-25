@@ -664,6 +664,29 @@ module Admin
       assert_equal I18n.t('applications.certification_upload.messages.provider_email_required'), flash[:alert]
     end
 
+    test 'certification request failure logs omit personal validation details' do
+      application = create(:application)
+      invalid_record = User.new
+      invalid_record.errors.add(:base, 'Contact private-certification@example.test at 410-555-0199')
+      error = ActiveRecord::RecordInvalid.new(invalid_record)
+      Applications::RequestCertificationUpload.any_instance.stubs(:call).raises(error)
+      messages = []
+
+      Rails.logger.stub(:error, ->(message) { messages << message }) do
+        assert_no_difference ['MedicalProviderSecureRequestForm.count', 'Notification.count', 'Event.count'] do
+          post admin_application_certification_upload_request_path(application)
+        end
+      end
+
+      assert_redirected_to admin_application_path(application)
+      assert_response :see_other
+      assert_equal I18n.t('admin.applications.certification_upload_requests.create.failure'), flash[:alert]
+      assert_not_includes messages.join, 'private-certification@example.test'
+      assert_not_includes messages.join, '410-555-0199'
+      assert_includes messages.join, 'ActiveRecord::RecordInvalid'
+      assert_includes messages.join, application.id.to_s
+    end
+
     test 'secure proof resubmission request redirects with service success message' do
       application = create(:application, :in_progress, income_proof_status: :rejected)
       result = BaseService::Result.new(success: true, message: 'Secure proof upload request sent.', data: {})
@@ -684,6 +707,27 @@ module Admin
 
       assert_redirected_to admin_application_path(application)
       assert_equal 'Secure proof upload request sent.', flash[:notice]
+    end
+
+    test 'proof resubmission request failure logs omit personal validation details' do
+      application = create(:application, :in_progress, income_proof_status: :rejected)
+      invalid_record = User.new
+      invalid_record.errors.add(:base, 'Contact private-proof@example.test at 202-555-0198')
+      Applications::RequestProofResubmission.any_instance.stubs(:call).raises(ActiveRecord::RecordInvalid.new(invalid_record))
+      messages = []
+
+      Rails.logger.stub(:error, ->(message) { messages << message }) do
+        assert_no_difference ['SecureRequestForm.count', 'Notification.count', 'Event.count'] do
+          post admin_application_proof_resubmission_request_path(application), params: { proof_type: :income }
+        end
+      end
+
+      assert_redirected_to admin_application_path(application)
+      assert_equal I18n.t('admin.applications.proof_resubmission_requests.create.failure'), flash[:alert]
+      assert_not_includes messages.join, 'private-proof@example.test'
+      assert_not_includes messages.join, '202-555-0198'
+      assert_includes messages.join, 'ActiveRecord::RecordInvalid'
+      assert_includes messages.join, application.id.to_s
     end
 
     test 'secure proof resubmission request passes selected recipients and channel overrides to service' do
@@ -739,6 +783,30 @@ module Admin
       event = Event.find_by!(auditable: application, action: 'cert_upload_request_revoked')
       assert_equal secure_request_form.id, event.metadata.fetch('medical_provider_secure_request_form_id')
       assert_equal 'manual_revocation', event.metadata.fetch('reason')
+    end
+
+    test 'certification revocation failure logs omit personal validation details' do
+      application = create(:application)
+      form = create(:medical_provider_secure_request_form, application: application)
+      invalid_record = User.new
+      invalid_record.errors.add(:base, 'Contact private-certification@example.test at 410-555-0199')
+      MedicalProviderSecureRequestForm.any_instance.stubs(:revoke!).raises(ActiveRecord::RecordInvalid.new(invalid_record))
+      messages = []
+
+      Rails.logger.stub(:error, ->(message) { messages << message }) do
+        assert_no_difference 'Event.count' do
+          post admin_application_medical_provider_secure_request_form_revocation_path(application, form)
+        end
+      end
+
+      assert_redirected_to admin_application_path(application)
+      assert_response :see_other
+      assert_equal I18n.t('admin.applications.medical_provider_secure_request_form_revocations.create.failure'), flash[:alert]
+      assert_predicate form.reload, :active?
+      assert_not_includes messages.join, 'private-certification@example.test'
+      assert_not_includes messages.join, '410-555-0199'
+      assert_includes messages.join, 'ActiveRecord::RecordInvalid'
+      assert_includes messages.join, application.id.to_s
     end
 
     test 'show page offers batch revoke when active sibling links share a request batch' do

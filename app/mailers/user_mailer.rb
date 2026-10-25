@@ -19,7 +19,7 @@ class UserMailer < ApplicationMailer
 
     send_email(user.email, text_template, variables, { message_stream: 'outbound' })
   rescue ActiveRecord::RecordNotFound => e
-    Rails.logger.error "Missing EmailTemplate (text format) for #{template_name}: #{e.message}"
+    Rails.logger.error "Missing EmailTemplate (text format) for #{template_name}: #{e.class.name}"
     raise "Email template (text format) not found for #{template_name}"
   rescue StandardError => e
     log_mail_error(e, user, template_name)

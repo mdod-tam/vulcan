@@ -15,7 +15,7 @@ class ProofAttachmentFallbackTest < ActiveSupport::TestCase
 
   test 'record_failure logs event with missing submission_method gracefully' do
     Rails.logger.stubs(:error)
-    Rails.logger.expects(:error).with(regexp_matches(/\[TEST_ATTACHMENT\] Proof attachment error: Test error/)).once
+    Rails.logger.expects(:error).with("[TEST_ATTACHMENT] Proof attachment error for application #{@application.id}: StandardError").once
 
     # Generate a test-specific proof type to avoid conflicts
     proof_type = "income_#{Time.now.to_i}"
@@ -44,14 +44,15 @@ class ProofAttachmentFallbackTest < ActiveSupport::TestCase
     assert_equal @application.id, event.auditable_id
     assert_equal 'Application', event.auditable_type
     assert_equal @admin.id, event.user_id
-    assert_equal 'Test error', event.metadata['error_message']
+    assert_not event.metadata.key?('error_message')
+    assert_not event.metadata.key?('error_backtrace')
     assert_equal 'StandardError', event.metadata['error_class']
     assert_equal 'unknown', event.metadata['submission_method'] # Default fallback
   end
 
   test 'record_failure logs event with invalid submission_method gracefully' do
     Rails.logger.stubs(:error)
-    Rails.logger.expects(:error).with(regexp_matches(/\[TEST_ATTACHMENT\] Proof attachment error: Test error/)).once
+    Rails.logger.expects(:error).with("[TEST_ATTACHMENT] Proof attachment error for application #{@application.id}: StandardError").once
 
     # Generate a test-specific proof type to avoid conflicts
     proof_type = "residency_#{Time.now.to_i}"
@@ -80,7 +81,8 @@ class ProofAttachmentFallbackTest < ActiveSupport::TestCase
     assert_equal @application.id, event.auditable_id
     assert_equal 'Application', event.auditable_type
     assert_equal @admin.id, event.user_id
-    assert_equal 'Test error', event.metadata['error_message']
+    assert_not event.metadata.key?('error_message')
+    assert_not event.metadata.key?('error_backtrace')
     assert_equal 'StandardError', event.metadata['error_class']
     assert_equal 'invalid_method', event.metadata['submission_method'] # Should use the provided invalid method
   end

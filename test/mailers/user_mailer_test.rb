@@ -119,7 +119,7 @@ class UserMailerTest < ActionMailer::TestCase
     assert_includes email.body.to_s, user.email
   end
 
-  test 'password_reset mailer error audit metadata redacts reset URLs' do
+  test 'password_reset mailer error audit metadata omits exception text' do
     user = create(:user)
     raw_url = 'http://example.com/password/edit?token=secret-token'
 
@@ -133,10 +133,11 @@ class UserMailerTest < ActionMailer::TestCase
 
     event = Event.where(action: 'email_delivery_error', auditable: user).last
 
-    assert_includes event.metadata.fetch('error_message'), '[REDACTED_URL]'
-    assert_includes event.metadata.fetch('error_message'), '[REDACTED_EMAIL]'
-    assert_not_includes event.metadata.fetch('error_message'), raw_url
-    assert_not_includes event.metadata.fetch('error_message'), user.email
+    assert_equal 'StandardError', event.metadata.fetch('error_class')
+    assert_not event.metadata.key?('error_message')
+    assert_not event.metadata.key?('backtrace')
+    assert_not_includes event.metadata.to_json, raw_url
+    assert_not_includes event.metadata.to_json, user.email
     assert_not event.metadata.key?('variables')
   end
 end

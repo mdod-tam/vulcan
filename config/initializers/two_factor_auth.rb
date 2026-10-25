@@ -103,8 +103,10 @@ module TwoFactorAuth
   end
 
   # Updated to accept optional context hash
-  def self.log_verification_failure(user_id, type, error, context = {})
-    log_message = "[2FA] Failed verification for user #{user_id} with #{type}: #{error}"
+  def self.log_verification_failure(user_id, type, context = {})
+    log_message = "[2FA] Failed verification for user #{user_id} with #{type}"
+    log_message += " (Reason: #{context[:reason]})" if context[:reason]
+    log_message += " (Error class: #{context[:error_class]})" if context[:error_class]
     log_message += " (Credential ID: #{context[:credential_id]})" if context[:credential_id]
     log_message += " (Attempted Credential IDs: #{context[:credential_ids]})" if context[:credential_ids]
     Rails.logger.warn(log_message) # Use warn level for failures

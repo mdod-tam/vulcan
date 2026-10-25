@@ -66,7 +66,7 @@ module Admin
       @recovery_request.reload if result == :notification_failed
       result
     rescue StandardError => e
-      Rails.logger.error "Failed to approve recovery request #{@recovery_request.id}: #{e.message}"
+      Rails.logger.error "Failed to approve recovery request #{@recovery_request.id}: #{e.class.name}"
       @recovery_request.reload
       :notification_failed
     end

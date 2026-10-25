@@ -51,7 +51,7 @@ export default class extends Controller {
         this.reasonFieldTarget.value = ""
         this._lockReasonField()
       }
-      this._setSelectedReasonButton(event.currentTarget)
+      this._resetReasonSelection()
       this._hideLanguageNotice()
       this._updateReasonGroupsVisibility(proofType)
     }

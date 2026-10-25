@@ -8,7 +8,7 @@ class MedicalCertificationFormsController < ApplicationController
   rescue Errno::ENOENT
     head :not_found
   rescue StandardError => e
-    Rails.logger.error("Failed to deliver medical certification form: #{e.message}")
+    Rails.logger.error("Failed to deliver medical certification form: #{e.class.name}")
     head :unprocessable_entity
   end
 

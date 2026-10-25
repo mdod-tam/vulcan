@@ -40,7 +40,7 @@ class SmsServiceSensitiveLoggingTest < ActiveSupport::TestCase
     )
   end
 
-  test 'sensitive SMS failure logging redacts account access reset URLs from provider errors' do
+  test 'sensitive SMS failure logging omits provider exception text' do
     reset_url = 'https://example.test/password/edit?token=secret-reset-token'
     formatted_phone = '410-555-0199'
     e164_phone = '+14105550199'
@@ -63,8 +63,8 @@ class SmsServiceSensitiveLoggingTest < ActiveSupport::TestCase
       end
     end
 
-    assert_includes logs, '[REDACTED_URL]'
-    assert_includes logs, '[REDACTED_PHONE]'
+    assert_includes logs, 'StandardError'
+    assert_not_includes logs, 'provider echoed'
     assert_not_includes logs, reset_url
     assert_not_includes logs, 'secret-reset-token'
     assert_not_includes logs, formatted_phone

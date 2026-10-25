@@ -76,7 +76,7 @@ module Applications
       return result if result.success?
 
       Rails.logger.warn(
-        "Secure cert upload form not sent for rejected certification on application #{application.id}: #{result.message}"
+        "Secure cert upload form not sent for rejected certification on application #{application.id}"
       )
       result
     rescue StandardError => e
@@ -94,7 +94,7 @@ module Applications
         secure_upload_url: secure_upload_url
       )
     rescue StandardError => e
-      Rails.logger.error("Provider notification failed for application #{application.id}: #{sanitize_secure_error_message(e.message)}")
+      Rails.logger.error("Provider notification failed for application #{application.id}: #{e.class.name}")
       { success: false, outcome: :failed, error: e.class.name, tracking_status: :failed }
     end
 

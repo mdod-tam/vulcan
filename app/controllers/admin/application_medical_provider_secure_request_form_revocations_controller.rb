@@ -20,7 +20,7 @@ module Admin
       end
     rescue StandardError => e
       Rails.logger.error(
-        "Cert upload form revocation failed for application #{@application&.id}: #{e.message}"
+        "Cert upload form revocation failed for application #{@application&.id}: #{e.class.name}"
       )
       redirect_to admin_application_path(@application),
                   status: :see_other,

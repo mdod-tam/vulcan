@@ -901,7 +901,7 @@ class ApplicationNotificationsMailerTest < ActionMailer::TestCase
     assert_nil result
   end
 
-  test 'with_mailer_error_handling redacts secure URLs from logs' do
+  test 'with_mailer_error_handling omits exception text from logs' do
     mailer = ApplicationNotificationsMailer.new
     production_env = ActiveSupport::StringInquirer.new('production')
     original_logger = Rails.logger
@@ -916,7 +916,8 @@ class ApplicationNotificationsMailerTest < ActionMailer::TestCase
     end
 
     log_message = log_output.string
-    assert_includes log_message, '[REDACTED_URL]'
+    assert_includes log_message, 'StandardError'
+    assert_not_includes log_message, 'render failed for'
     assert_not_includes log_message, raw_url
     assert_not_includes log_message, 'secret-token'
   ensure

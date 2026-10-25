@@ -22,7 +22,7 @@ class DeliveryErrorAuditTest < ActiveSupport::TestCase
 
       metadata = Event.where(action: 'email_delivery_error').order(:id).last.metadata
       assert_not metadata.key?('variables')
-      assert_equal %w[__service_generated backtrace error_class error_message ip_address mail_action template_name user_agent], metadata.keys.sort
+      assert_equal %w[__service_generated error_class ip_address mail_action template_name user_agent], metadata.keys.sort
       %w[secret-value someone@example.test +12025550199 https://example.test/private].each do |sensitive|
         assert_not_includes metadata.to_json, sensitive
       end

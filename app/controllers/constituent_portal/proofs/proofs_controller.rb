@@ -48,7 +48,7 @@ module ConstituentPortal
       def redirect_if_missing_application_id(application_id)
         return false if application_id.present?
 
-        Rails.logger.error "Application ID is nil or empty in params: #{params.inspect}"
+        Rails.logger.error "Application ID is nil or empty for user #{current_user.id}"
         redirect_to constituent_portal_dashboard_path, alert: 'Application not found'
         true
       end
@@ -112,7 +112,7 @@ module ConstituentPortal
         return if result[:success]
         return render_refused_upload(result[:error]) if result[:error].is_a?(UploadedDocument::Refused)
 
-        Rails.logger.error "Failed to attach proof: #{result[:error]&.message}"
+        Rails.logger.error "Failed to attach proof for application #{@application.id}: #{result[:error]&.class&.name}"
         raise "Failed to attach proof: #{result[:error]&.message}"
       end
 
@@ -169,8 +169,7 @@ module ConstituentPortal
       def handle_submission_error(error)
         return if Rails.env.test?
 
-        Rails.logger.error "ERROR IN RESUBMIT: #{error.class.name}: #{error.message}"
-        Rails.logger.error error.backtrace.join("\n")
+        Rails.logger.error "ERROR IN RESUBMIT for application #{@application&.id}: #{error.class.name}"
       end
 
       def track_submission

@@ -24,11 +24,9 @@ module Webhooks
       data       = params[:data] || {}
 
       case event_type
-      when 'form.viewed'   then handle_viewed(data)
-      when 'form.started'  then handle_started(data)
+      when 'form.viewed', 'form.started', 'form.declined' then handle_form_event(event_type, data)
       when 'form.completed'
         return head :service_unavailable if handle_completed(data) == false
-      when 'form.declined' then handle_declined(data)
       else
         Rails.logger.warn "Unknown DocuSeal event: #{event_type}"
       end
@@ -67,38 +65,53 @@ module Webhooks
       )
     end
 
-    def handle_viewed(data)
+    def handle_form_event(event_type, data)
+      occurred_at = form_event_timestamp(data)
       app = find_application(data['submission_id'])
       return unless app
 
-      app.update!(document_signing_status: :opened)
-      AuditEventService.log(
-        action: 'document_signing_viewed',
-        actor: @system_actor,
-        auditable: app,
-        metadata: {
-          document_signing_service: 'docuseal',
-          document_signing_submission_id: data['submission_id'],
-          provider_email: data['email'],
-          viewed_at: Time.current.iso8601
+      app.with_lock do
+        next unless app.document_signing_service == 'docuseal' &&
+                    app.document_signing_submission_id == data['submission_id'].to_s &&
+                    app.document_signing_submitter_id.present? && app.document_signing_submitter_id == data['id'].to_s
+
+        action = event_type.sub('form.', 'document_signing_')
+        # DocuSeal's event timestamp survives retries; the signature timestamp and serialized URLs can change.
+        key = Digest::SHA256.hexdigest([app.id, app.document_signing_submission_id, app.document_signing_submitter_id,
+                                        app.document_signing_requested_at&.utc&.iso8601(6), event_type, occurred_at].to_json)
+        operation_id = "docuseal_event_#{key}"
+        next if Event.where(auditable: app, action: action).with_metadata('operation_id', operation_id).exists?
+
+        metadata = {
+          document_signing_service: 'docuseal', document_signing_submission_id: app.document_signing_submission_id,
+          document_signing_submitter_id: app.document_signing_submitter_id, operation_id: operation_id,
+          "#{event_type.delete_prefix('form.')}_at" => occurred_at
         }
-      )
+        metadata[:provider_email] = data['email'] if event_type == 'form.viewed'
+        metadata[:decline_reason] = data['decline_reason'] if event_type == 'form.declined'
+        advance_signing_status(app, event_type)
+        AuditEventService.log(action: action, actor: @system_actor, auditable: app, metadata: metadata)
+      end
     end
 
-    def handle_started(data)
-      app = find_application(data['submission_id'])
-      return unless app
+    def advance_signing_status(app, event_type)
+      case event_type
+      when 'form.viewed'
+        app.update!(document_signing_status: :opened) if app.document_signing_status_sent?
+      when 'form.declined'
+        app.update!(document_signing_status: :declined) unless app.document_signing_status.in?(%w[signed declined])
+      end
+    end
 
-      AuditEventService.log(
-        action: 'document_signing_started',
-        actor: @system_actor,
-        auditable: app,
-        metadata: {
-          document_signing_service: 'docuseal',
-          document_signing_submission_id: data['submission_id'],
-          started_at: Time.current.iso8601
-        }
-      )
+    def form_event_timestamp(data)
+      %w[id submission_id].each do |field|
+        identifier = data[field] if data.respond_to?(:key?)
+        raise InvalidPayloadError unless (identifier.is_a?(String) || identifier.is_a?(Integer)) && identifier.present?
+      end
+
+      Time.iso8601(params[:timestamp]).utc.iso8601(6)
+    rescue ArgumentError, TypeError
+      raise InvalidPayloadError
     end
 
     def handle_completed(data)
@@ -128,24 +141,6 @@ module Webhooks
       Rails.logger.error("Document signing intake failed for App ##{app.id} (#{e.class.name})")
       log_attachment_failure(app, 'intake_failed', e.class.name, context: context, retryable: true)
       false
-    end
-
-    def handle_declined(data)
-      app = find_application(data['submission_id'])
-      return unless app
-
-      app.update!(document_signing_status: :declined)
-      AuditEventService.log(
-        action: 'document_signing_declined',
-        actor: @system_actor,
-        auditable: app,
-        metadata: {
-          document_signing_service: 'docuseal',
-          document_signing_submission_id: data['submission_id'],
-          decline_reason: data['decline_reason'],
-          declined_at: Time.current.iso8601
-        }
-      )
     end
 
     def completion_context(app, data)

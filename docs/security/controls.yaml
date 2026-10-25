@@ -46,8 +46,8 @@ controls:
       priority: { label: "High", value: 2 }
       owner: "@david"
       implementation:
-        summary: "Signed HttpOnly login cookie, Secure in production and SameSite=Lax. Idle expiry is 30 minutes; absolute expiry remains 24 hours. Activity writes are limited to once per minute. Shared sign-in/registration completion resets browser session state after commit."
-        files: ["app/models/session.rb", "app/controllers/concerns/authentication.rb", "app/controllers/application_controller.rb"]
+        summary: "Signed HttpOnly login cookie, Secure in production and SameSite=Lax. Idle expiry is 30 minutes; absolute expiry remains 24 hours. Activity writes are limited to once per minute. Password changes revoke existing login sessions atomically; authenticated changes issue a fresh session. Shared session creation resets browser state after commit."
+        files: ["app/models/session.rb", "app/models/concerns/user_authentication.rb", "app/controllers/concerns/authentication.rb", "app/controllers/application_controller.rb", "app/controllers/passwords_controller.rb"]
 
   data_protection:
     - id: "DATA-001"

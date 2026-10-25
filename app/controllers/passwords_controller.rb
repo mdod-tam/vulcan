@@ -1,8 +1,6 @@
 # frozen_string_literal: true
 
 class PasswordsController < ApplicationController
-  include SecureErrorSanitizer
-
   skip_before_action :authenticate_user!
   skip_before_action :enforce_required_mfa_enrollment
   before_action :set_user_from_token, only: %i[edit]
@@ -51,26 +49,34 @@ class PasswordsController < ApplicationController
   end
 
   def handle_successful_password_update(result, forced_password_change:)
+    session_record = _create_and_set_session_cookie(
+      current_user,
+      submitted_login_identifier: current_user.email,
+      submitted_password: params[:password]
+    )
+    redirect_path = if session_record
+                      password_update_redirect_path(user: session_record.user, forced_password_change: forced_password_change)
+                    else
+                      clear_session_authentication
+                      sign_in_path
+                    end
     flash[:notice] = result.message
-    respond_to_password_update_success(forced_password_change: forced_password_change)
+    respond_to_password_update_success(redirect_path: redirect_path)
   end
 
-  def respond_to_password_update_success(forced_password_change:)
-    redirect_path = password_update_redirect_path(forced_password_change: forced_password_change)
-
+  def respond_to_password_update_success(redirect_path:)
     respond_to do |format|
       format.turbo_stream { redirect_to redirect_path, status: :see_other, notice: flash[:notice] }
       format.html { redirect_to redirect_path, notice: flash[:notice] }
     end
   end
 
-  def password_update_redirect_path(forced_password_change:)
-    return sign_in_path unless current_user
-    return _dashboard_for(current_user) if current_user.second_factor_enabled?
-    return setup_two_factor_authentication_path if mfa_required_for_current_user?
+  def password_update_redirect_path(user:, forced_password_change:)
+    return _dashboard_for(user) if user.second_factor_enabled?
+    return setup_two_factor_authentication_path if mfa_required_for_role?(user)
     return welcome_path if forced_password_change
 
-    _dashboard_for(current_user)
+    _dashboard_for(user)
   end
 
   def handle_failed_password_update(result)
@@ -160,7 +166,7 @@ class PasswordsController < ApplicationController
       )
     )
   rescue StandardError => e
-    Rails.logger.warn("Unable to audit account access request for user #{user.id}: #{e.message}")
+    Rails.logger.warn("Unable to audit account access request for user #{user.id}: #{e.class}")
   end
 
   def log_public_account_access_rate_limit(rate_limit_scope)
@@ -219,7 +225,7 @@ class PasswordsController < ApplicationController
   rescue StandardError => e
     log_account_access_attempt(user, delivery_method, 'delivery_failed')
     Rails.logger.warn(
-      "Unable to send account access instructions for user #{user.id}: #{e.class}: #{sanitize_secure_error_message(e.message)}"
+      "Unable to send account access instructions for user #{user.id}: #{e.class}"
     )
     false
   end
@@ -281,6 +287,7 @@ class PasswordsController < ApplicationController
     return redirect_to new_password_path, alert: 'Invalid or expired reset link.' unless eligible
 
     if update_succeeded
+      clear_session_authentication if current_user&.id == @user.id
       redirect_to sign_in_path, notice: 'Password successfully updated.'
     else
       flash.now[:alert] = Users::PasswordUpdateService.failure_message(@user)

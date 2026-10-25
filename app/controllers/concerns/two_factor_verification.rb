@@ -23,8 +23,8 @@ module TwoFactorVerification
     TwoFactorAuth.log_verification_success(user_id, type, context)
   end
 
-  def log_verification_failure(user_id, type, error, context = {})
-    TwoFactorAuth.log_verification_failure(user_id, type, error, context)
+  def log_verification_failure(user_id, type, context = {})
+    TwoFactorAuth.log_verification_failure(user_id, type, context)
   end
 
   # Returns [success, message_or_error_code]. On failure, handle_failed_verification
@@ -81,13 +81,13 @@ module TwoFactorVerification
     webauthn_credential = WebAuthn::Credential.from_get(params)
     stored_credential = user.webauthn_credentials.find_by(external_id: webauthn_credential.id)
     unless stored_credential
-      log_verification_failure(user.id, :webauthn, 'Credential not found')
+      log_verification_failure(user.id, :webauthn, reason: :credential_not_found)
       return [false, :verification_failed]
     end
 
     perform_webauthn_verification(webauthn_credential, stored_credential, user)
   rescue WebAuthn::Error, OpenSSL::PKey::PKeyError => e
-    log_verification_failure(user.id, :webauthn, e.class.name, credential_id: stored_credential&.id)
+    log_verification_failure(user.id, :webauthn, credential_id: stored_credential&.id, error_class: e.class.name)
     [false, :verification_failed]
   end
 
@@ -114,7 +114,7 @@ module TwoFactorVerification
       return [true, 'Verification successful'] # The controller completes sign-in.
     end
 
-    log_verification_failure(user.id, :totp, 'Invalid code', credential_ids: user.totp_credentials.pluck(:id))
+    log_verification_failure(user.id, :totp, credential_ids: user.totp_credentials.pluck(:id), reason: :invalid_code)
     [false, t('two_factor_verification.errors.invalid_code')]
   end
 
@@ -144,12 +144,10 @@ module TwoFactorVerification
       [true, 'Verification successful'] # The controller completes sign-in.
     elsif result[:success]
       challenge.clear! if challenge.terminal_status?(result[:status])
-      error_msg = result[:error] || 'Invalid code'
-      log_verification_failure(user_for_2fa.id, :sms, error_msg, credential_id: credential.id)
+      log_verification_failure(user_for_2fa.id, :sms, credential_id: credential.id, reason: :invalid_code)
       [false, sms_verification_error_message(result[:status])]
     else
-      error_msg = result[:error] || 'Verification service unavailable'
-      log_verification_failure(user_for_2fa.id, :sms, error_msg, credential_id: credential.id)
+      log_verification_failure(user_for_2fa.id, :sms, credential_id: credential.id, reason: :provider_unavailable)
       [false, t('two_factor_verification.errors.verification_service_unavailable')]
     end
   end

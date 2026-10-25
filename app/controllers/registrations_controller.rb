@@ -60,7 +60,7 @@ class RegistrationsController < ApplicationController
     ).call
     return result.data if result.success?
 
-    Rails.logger.warn("Registration duplicate detection failed: #{result.message}")
+    Rails.logger.warn('Registration duplicate detection failed')
     DuplicateDetectionService::Result.new([], 0.0, [], false, :allow, :proceed)
   end
 
@@ -77,7 +77,7 @@ class RegistrationsController < ApplicationController
     Rails.logger.warn('Registration rolled back because duplicate review case could not be opened')
     false
   rescue ActiveRecord::ActiveRecordError => e
-    Rails.logger.warn("Registration rolled back because duplicate review case failed: #{e.message}")
+    Rails.logger.warn("Registration rolled back because duplicate review case failed: #{e.class.name}")
     @user.errors.add(:base, t('portal_self_service.registrations.registration_blocked_heading')) if @user.errors.empty?
     false
   end
@@ -120,7 +120,7 @@ class RegistrationsController < ApplicationController
       metadata: { intake_context: 'registration' }
     ).call
     if result.failure?
-      Rails.logger.warn("Registration duplicate review case failed: #{result.message}")
+      Rails.logger.warn("Registration duplicate review case failed for user #{@user.id}")
       return false
     end
 
@@ -147,7 +147,7 @@ class RegistrationsController < ApplicationController
 
     return if result.success?
 
-    Rails.logger.error("Registration confirmation failed: #{result.message}")
+    Rails.logger.error("Registration confirmation failed for user #{@user.id}")
   end
 
   def registration_params

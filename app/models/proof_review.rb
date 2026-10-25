@@ -93,7 +93,7 @@ class ProofReview < ApplicationRecord
       process_rejection_flow
       send_status_notification
     rescue StandardError => e
-      Rails.logger.error "Failed to process proof review actions: #{e.message}\n#{e.backtrace.join("\n")}"
+      Rails.logger.error "Failed to process proof review #{id} actions for application #{application_id}: #{e.class.name}"
       raise
     end
   end
@@ -149,7 +149,7 @@ class ProofReview < ApplicationRecord
     Rails.logger.warn("Proof resubmission request failed for ProofReview #{id}: #{result.message}")
     log_resubmission_request_failure(result.message, delivery_suppressed: result.data.is_a?(Hash) && result.data[:delivery_suppressed])
   rescue StandardError => e
-    Rails.logger.error "Failed to request proof resubmission: #{e.message}"
+    Rails.logger.error "Failed to request proof resubmission for ProofReview #{id}: #{e.class.name}"
     log_resubmission_request_failure(e.class.name)
   end
 
@@ -165,7 +165,7 @@ class ProofReview < ApplicationRecord
                   delivery_suppressed: delivery_suppressed.presence }.compact
     )
   rescue StandardError => e
-    Rails.logger.error "Failed to record proof resubmission request failure: #{e.message}"
+    Rails.logger.error "Failed to record proof resubmission request failure for ProofReview #{id}: #{e.class.name}"
   end
 
   def log_rejection_audit_event
@@ -203,7 +203,7 @@ class ProofReview < ApplicationRecord
       deliver: false
     )
   rescue StandardError => e
-    Rails.logger.error "Failed to send proof_approved notification via NotificationService: #{e.message}"
+    Rails.logger.error "Failed to send proof_approved notification for ProofReview #{id} via NotificationService: #{e.class.name}"
     # A notification error must not fail the review.
   end
 
@@ -220,7 +220,7 @@ class ProofReview < ApplicationRecord
       application.save!
     end
   rescue StandardError => e
-    Rails.logger.error "ProofReview#increment_rejections_if_rejected failed for application #{application.id}: #{e.class} #{e.message}"
+    Rails.logger.error "ProofReview#increment_rejections_if_rejected failed for application #{application.id}: #{e.class.name}"
     errors.add(:base, "Failed to update rejection count. Please try again. Status: #{e.message}")
     raise ActiveRecord::Rollback
   end
@@ -231,7 +231,7 @@ class ProofReview < ApplicationRecord
       archive_application_if_exceeded if application.total_rejections > 8
     end
   rescue StandardError => e
-    Rails.logger.error "ProofReview#check_max_rejections failed for application #{application.id}: #{e.class} #{e.message}"
+    Rails.logger.error "ProofReview#check_max_rejections failed for application #{application.id}: #{e.class.name}"
     errors.add(:base, 'Failed to process rejection limits')
     raise ActiveRecord::Rollback
   end

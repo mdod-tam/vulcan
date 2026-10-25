@@ -32,7 +32,7 @@ class MedicalProviderMailer < ApplicationMailer
 
     send_email(params[:application].medical_provider_email, template, variables, provider_mail_options)
   rescue StandardError => e
-    log_certification_error('certification_approved', params[:application]&.medical_provider_email, e)
+    log_certification_error('certification_approved', params[:application]&.id, e)
     raise e
   end
 
@@ -49,7 +49,7 @@ class MedicalProviderMailer < ApplicationMailer
     send_email(provider_recipient_email(params[:application]), template, variables,
                provider_mail_options(required_delivery: params[:secure_upload_url].present?))
   rescue StandardError => e
-    log_certification_error('certification_rejected', params[:application]&.medical_provider_email, e)
+    log_certification_error('certification_rejected', params[:application]&.id, e)
     raise e
   end
 
@@ -65,7 +65,7 @@ class MedicalProviderMailer < ApplicationMailer
     mail_options = provider_mail_options(required_delivery: params[:secure_upload_url].present?)
     send_email(provider_recipient_email(params[:application]), template, variables, mail_options)
   rescue StandardError => e
-    log_certification_error('request_certification', params[:application]&.medical_provider_email, e)
+    log_certification_error('request_certification', params[:application]&.id, e)
     raise e
   end
 
@@ -233,8 +233,7 @@ class MedicalProviderMailer < ApplicationMailer
     Policy.get('support_email') || 'mat.program1@maryland.gov'
   end
 
-  def log_certification_error(context, recipient, error)
-    Rails.logger.error("Failed to send #{context} email to #{recipient}: #{sanitize_secure_error_message(error.message)}")
-    Rails.logger.error(sanitize_secure_error_message(error.backtrace&.join("\n")))
+  def log_certification_error(context, application_id, error)
+    Rails.logger.error("Failed to send #{context} email for application #{application_id}: #{error.class.name}")
   end
 end

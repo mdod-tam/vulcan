@@ -227,7 +227,7 @@ module UserProfile
 
     errors.add(:email, 'has already been taken')
   rescue StandardError => e
-    Rails.logger.warn "Email uniqueness check failed: #{e.message}"
+    Rails.logger.warn "Email uniqueness check failed: #{e.class.name}"
   end
 
   def phone_must_be_unique
@@ -239,7 +239,7 @@ module UserProfile
 
     errors.add(:phone, 'has already been taken')
   rescue StandardError => e
-    Rails.logger.warn "Phone uniqueness check failed: #{e.message}"
+    Rails.logger.warn "Phone uniqueness check failed: #{e.class.name}"
   end
 
   def paper_context_no_email?

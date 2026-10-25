@@ -23,7 +23,9 @@ module Webhooks
 
       @viewed_payload = {
         event_type: 'form.viewed',
+        timestamp: 1.hour.ago.utc.iso8601(6),
         data: {
+          'id' => 'signer_42',
           'submission_id' => 'sub_123456',
           'email' => 'doctor@example.com'
         }
@@ -31,7 +33,9 @@ module Webhooks
 
       @started_payload = {
         event_type: 'form.started',
+        timestamp: 1.hour.ago.utc.iso8601(6),
         data: {
+          'id' => 'signer_42',
           'submission_id' => 'sub_123456',
           'email' => 'doctor@example.com'
         }
@@ -55,7 +59,9 @@ module Webhooks
 
       @declined_payload = {
         event_type: 'form.declined',
+        timestamp: 1.hour.ago.utc.iso8601(6),
         data: {
+          'id' => 'signer_42',
           'submission_id' => 'sub_123456',
           'email' => 'doctor@example.com'
         }
@@ -80,9 +86,9 @@ module Webhooks
 
     test 'official DocuSeal HMAC vector authenticates exact UTF8 request bytes' do
       travel_to Time.utc(2026, 10, 23, 12) do
-        body = "{ \"event_type\": \"form.viewed\", \"data\": { \"submission_id\": \"sub_123456\", \"name\": \"Doctora García\" } }\n"
+        body = "{ \"event_type\": \"form.viewed\", \"timestamp\": \"2026-10-23T11:59:00Z\", \"data\": { \"id\": \"signer_42\", \"submission_id\": \"sub_123456\", \"name\": \"Doctora García\" } }\n"
         # Fixed vector generated independently with Python's hmac library.
-        signature = '1792756800.5781e90875078478ed9eae3a0d40e657c78d41cfba260e0339072ad8ecba3bb3'
+        signature = '1792756800.4166bae5e9fe205c0a72895f22c565f11f54d051e323bd01a8c19e683c363b99'
 
         assert_difference -> { Event.where(action: 'document_signing_viewed', auditable: @application).count }, 1 do
           post webhooks_docuseal_medical_certification_path, params: body,
@@ -119,6 +125,7 @@ module Webhooks
         [-300, 0, 300].each_with_index do |offset, index|
           application = create(:application, :in_progress, user: @application.user,
                                                            document_signing_service: 'docuseal', document_signing_submission_id: "signature_#{index}",
+                                                           document_signing_submitter_id: 'signer_42', document_signing_requested_at: 1.day.ago,
                                                            document_signing_status: :sent, medical_certification_status: :requested)
           payload = @viewed_payload.deep_dup
           payload[:data]['submission_id'] = application.document_signing_submission_id
@@ -186,6 +193,8 @@ module Webhooks
       assert_not_nil event
       assert_equal @application, event.auditable
       assert_equal 'sub_123456', event.metadata['document_signing_submission_id']
+      assert_equal @system_user.id, event.user_id
+      assert_equal @viewed_payload[:timestamp], event.metadata['viewed_at']
     end
 
     test 'accepts valid form.started event' do
@@ -200,6 +209,150 @@ module Webhooks
       event = Event.where(action: 'document_signing_started').last
       assert_not_nil event
       assert_equal @application, event.auditable
+    end
+
+    %w[viewed started declined].each do |activity|
+      test "an exact signed #{activity} replay after the audit window creates no second event" do
+        payload = instance_variable_get("@#{activity}_payload")
+        body = payload.to_json
+        signature = compute_signature(body)
+        action = "document_signing_#{activity}"
+
+        assert_difference -> { Event.where(auditable: @application, action: action).count }, 1 do
+          post webhooks_docuseal_medical_certification_path, params: body, headers: webhook_headers(signature)
+          assert_response :ok
+        end
+        first_event = Event.find_by!(auditable: @application, action: action)
+        first_update = @application.reload.updated_at
+
+        travel 6.seconds do
+          assert_no_difference ['Event.count', 'Notification.count', 'ApplicationStatusChange.count'] do
+            post webhooks_docuseal_medical_certification_path, params: body, headers: webhook_headers(signature)
+            assert_response :ok
+          end
+        end
+        assert_equal first_update, @application.reload.updated_at
+        assert_equal @system_user.id, first_event.user_id
+        assert_equal payload[:timestamp], first_event.metadata["#{activity}_at"]
+      end
+
+      test "a freshly signed #{activity} retry keeps its identity when provider data and URLs change" do
+        payload = instance_variable_get("@#{activity}_payload")
+        make_signed_webhook_request(payload)
+        assert_response :ok
+
+        retry_payload = payload.deep_dup
+        retry_payload[:data].merge!('status' => 'completed', 'updated_at' => Time.current.iso8601,
+                                    'documents' => [{ 'url' => 'https://example.com/document.pdf?token=rotated' }],
+                                    'audit_log_url' => 'https://example.com/audit.pdf?token=rotated')
+        travel 6.minutes do
+          assert_no_difference ['Event.count', 'Notification.count'] do
+            make_signed_webhook_request(retry_payload)
+            assert_response :ok
+          end
+        end
+      end
+
+      test "separate #{activity} events within the audit window retain separate history" do
+        payload = instance_variable_get("@#{activity}_payload")
+        later_payload = payload.deep_dup
+        later_payload[:timestamp] = (Time.iso8601(payload[:timestamp]) + 1.second).iso8601(6)
+
+        freeze_time do
+          assert_difference -> { Event.where(auditable: @application, action: "document_signing_#{activity}").count }, 2 do
+            [payload, later_payload].each do |event_payload|
+              make_signed_webhook_request(event_payload)
+              assert_response :ok
+            end
+          end
+        end
+        events = Event.where(auditable: @application, action: "document_signing_#{activity}").order(:id)
+        assert_equal([payload[:timestamp], later_payload[:timestamp]], events.map { |event| event.metadata["#{activity}_at"] })
+        assert_equal 2, events.map { |event| event.metadata['operation_id'] }.uniq.size
+      end
+
+      test "a new signing request can record #{activity} with the same provider event timestamp" do
+        payload = instance_variable_get("@#{activity}_payload")
+        assert_difference -> { Event.where(auditable: @application, action: "document_signing_#{activity}").count }, 2 do
+          make_signed_webhook_request(payload)
+          assert_response :ok
+          @application.update!(document_signing_requested_at: @application.document_signing_requested_at + 1.second)
+          make_signed_webhook_request(payload)
+          assert_response :ok
+        end
+      end
+
+      test "#{activity} ignores a different submitter and a superseded submission" do
+        payload = instance_variable_get("@#{activity}_payload").deep_dup
+        payload[:data]['id'] = 'other_signer'
+        assert_no_difference 'Event.count' do
+          make_signed_webhook_request(payload)
+          assert_response :ok
+        end
+        assert_equal 'sent', @application.reload.document_signing_status
+
+        stale_application = Application.find(@application.id)
+        @application.update!(document_signing_submission_id: 'new_submission')
+        DocusealController.any_instance.stubs(:find_application).returns(stale_application)
+        assert_no_difference 'Event.count' do
+          make_signed_webhook_request(instance_variable_get("@#{activity}_payload"))
+          assert_response :ok
+        end
+        assert_equal 'sent', @application.reload.document_signing_status
+      end
+
+      test "#{activity} rejects missing or malformed event identity without side effects" do
+        payload = instance_variable_get("@#{activity}_payload")
+        invalid_payloads = [nil, '', 'not-a-timestamp', 123, []].map { |timestamp| payload.merge(timestamp: timestamp) }
+        invalid_payloads << payload.except(:timestamp)
+        %w[id submission_id].each do |field|
+          invalid_payloads.concat([nil, '', [], {}].map do |identifier|
+            payload.deep_dup.tap { |invalid| invalid[:data][field] = identifier }
+          end)
+          invalid_payloads << payload.deep_dup.tap { |invalid| invalid[:data].delete(field) }
+        end
+
+        invalid_payloads.each do |invalid|
+          assert_no_difference ['Event.count', 'Notification.count', 'ApplicationStatusChange.count'] do
+            make_signed_webhook_request(invalid)
+            assert_response :unprocessable_content
+          end
+          assert_equal 'sent', @application.reload.document_signing_status
+        end
+      end
+
+      test "delayed #{activity} preserves signed and declined request states" do
+        signed_at = 10.minutes.ago.change(usec: 0)
+        %i[signed declined].each do |state|
+          @application.update!(document_signing_status: state, document_signing_signed_at: signed_at,
+                               document_signing_document_url: 'https://example.com/signed.pdf', medical_certification_status: :received)
+          payload = instance_variable_get("@#{activity}_payload").deep_dup
+          payload[:timestamp] = (Time.iso8601(payload[:timestamp]) + (state == :signed ? 1 : 2).seconds).iso8601(6)
+
+          assert_difference -> { Event.where(auditable: @application, action: "document_signing_#{activity}").count }, 1 do
+            make_signed_webhook_request(payload)
+            assert_response :ok
+          end
+          @application.reload
+          assert_equal state.to_s, @application.document_signing_status
+          assert_equal signed_at, @application.document_signing_signed_at
+          assert_equal 'https://example.com/signed.pdf', @application.document_signing_document_url
+          assert_equal 'received', @application.medical_certification_status
+        end
+      end
+    end
+
+    %w[viewed declined].each do |activity|
+      test "a #{activity} audit failure rolls back the signing status" do
+        AuditEventService.expects(:log).with(action: "document_signing_#{activity}", actor: @system_user,
+                                             auditable: anything, metadata: anything).raises(ActiveRecord::RecordInvalid)
+
+        assert_no_difference 'Event.count' do
+          make_signed_webhook_request(instance_variable_get("@#{activity}_payload"))
+          assert_response :unprocessable_content
+        end
+        assert_equal 'sent', @application.reload.document_signing_status
+      end
     end
 
     test 'handles form.completed event with approved medical cert status' do

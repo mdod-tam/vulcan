@@ -97,9 +97,7 @@ module Applications
     end
 
     def reportable_delivery_error(error)
-      StandardError.new(sanitize_secure_error_message(error.message)).tap do |reportable_error|
-        reportable_error.set_backtrace(Array(error.backtrace).map { |line| sanitize_secure_error_message(line) })
-      end
+      StandardError.new(error.class.name)
     end
 
     def revoke_failed_deliveries(deliveries, error)
@@ -117,7 +115,7 @@ module Applications
         persist_delivery_failure(delivery, error)
       rescue StandardError => e
         Rails.logger.error(
-          "Secure request delivery failure cleanup failed: #{sanitize_secure_error_message(e.message)}"
+          "Secure request delivery failure cleanup failed: #{e.class.name}"
         )
       ensure
         after_delivery_not_sent(delivery) if configuration_error
