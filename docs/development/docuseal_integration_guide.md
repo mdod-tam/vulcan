@@ -49,6 +49,8 @@ The request time is the secure form's `sent_at`, or `document_signing_requested_
 
 Completion callbacks must match the stored submission and submitter. Retries reuse the signing request's scan even when DocuSeal supplies a new download URL. Missing or invalid URLs, refused files and permanent download failures receive HTTP 200; temporary failures receive HTTP 503 so DocuSeal can retry. `document_signing_attachment_failed` records each failure reason once for that request.
 
+PDF downloads require HTTPS and an exact host match: `docuseal.com`, `docuseal.eu`, or the host of the configured DocuSeal API URL. Other hosts, URL credentials, and redirects are refused before a document is staged. The cloud hosts match [DocuSeal's document links](https://www.docuseal.com/guides/download-signed-documents); a self-hosted instance uses the configured `base_url` host.
+
 Pending, blocked, and failed scans do not mark signing complete or attach a document. The continuation ignores a superseded request and recognizes an already attached snapshot by blob ID. Its attachment, signing status, and completion audit commit together. Recovery allows at most three persisted acceptance attempts. A permanent failure, missing application or actor, or exhausted retry budget records a terminal failure and stops recovery for that scan. Send a new signing request after a terminal failure. See [attachment scanning](../security/attachment_scanning.md) for monitoring and recovery.
 
 ## Configuration
@@ -64,6 +66,8 @@ webhook_secret: whsec_YOUR_SIGNING_SECRET  # top level, copied from the DocuSeal
 
 `base_url` is optional and defaults to the value shown. Keep `webhook_secret` at the top level, never nested under `docuseal`: the receiver reads `credentials.webhook_secret` directly. A missing or blank secret rejects every request with HTTP 401; there is no fallback secret, and the stored value must match DocuSeal exactly.
 
+For a DocuSeal EU account, use `base_url: https://api.docuseal.eu`.
+
 ### Webhook setup in the DocuSeal console
 
 1. In the DocuSeal console (**Console → Webhooks → New Webhook**), register `https://<APPLICATION_HOST>/webhooks/docuseal/medical_certification` and select `form.viewed`, `form.started`, `form.completed`, and `form.declined`. The host is the deployed app's public `APPLICATION_HOST`, served over HTTPS. An unsigned `POST` to the URL should answer 401 (not 404) once the app is deployed there; that proves the route exists, not that signature verification will pass.
@@ -75,6 +79,8 @@ webhook_secret: whsec_YOUR_SIGNING_SECRET  # top level, copied from the DocuSeal
 [`Webhooks::DocusealController`](../../app/controllers/webhooks/docuseal_controller.rb) verifies `X-Docuseal-Signature: [timestamp].[signature]` using [DocuSeal's documented format](https://www.docuseal.com/resources/use-webhooks). The timestamp is Unix time in seconds; the signature is the hexadecimal HMAC-SHA256 of `[timestamp].[raw_body]`. Use the full `whsec_...` secret as the key, including its prefix, without decoding it. The raw body must be the exact request bytes, not parsed and re-serialized JSON.
 
 The receiver compares signatures in constant time and rejects missing or malformed signatures, changed bodies, and timestamps more than five minutes before or after the server's current time with HTTP 401. Exactly five minutes is accepted, matching [DocuSeal's verifier](https://github.com/docusealco/docuseal/blob/master/lib/webhook_urls/signatures.rb). Keep the server clock accurate. The legacy body-only signature and `X-Webhook-Signature` header are not accepted for this endpoint.
+
+Payload validation, event handling, and replay identity read only the signed request body. Query parameters cannot supply or override `event_type`, `data`, or the provider's event `timestamp`.
 
 For `form.viewed`, `form.started`, and `form.declined`, the receiver requires the [documented event timestamp and submitter identity](https://www.docuseal.com/docs/api#form-webhook): top-level `timestamp`, `data.id` and `data.submission_id`. Retries of the same event write one audit event for the current signing request, even with a fresh signature or changed download URLs. Separate event timestamps preserve separate history. Missing or malformed identity receives HTTP 422; callbacks for a superseded request are acknowledged without changes. Delayed activity cannot move a signed or declined request back to opened, and a delayed decline cannot replace a signed result.
 

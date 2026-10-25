@@ -29,24 +29,40 @@ class SessionActivitySystemTest < ApplicationSystemTestCase
     restore_browser_clock
   end
 
-  test 'Spanish constituent can renew from the localized idle warning' do
+  test 'Spanish constituent can renew from a localized warning while scrolled down a narrow form' do
     user = create(:constituent, locale: :es)
     sign_in_constituent(user)
     page.current_window.resize_to(390, 844)
-    assert_selector 'html[lang="es"]', visible: :all
+    visit edit_profile_path(locale: :es)
+    assert_selector '[data-controller~="session-activity"][lang="es"]', visible: :all
+    field = find('input[name="users_constituent[first_name]"]')
+    field.set('Trabajo pendiente')
+    assert_selector '[data-session-activity-target="status"]', visible: :all, text: '', exact_text: true
+    assert page.evaluate_script('!document.querySelector("[data-session-activity-target=status]").closest("[hidden]")')
+    take_screenshot('spanish-profile-before-session-warning', html: true, full: true)
+    page.execute_script('window.scrollTo(0, document.documentElement.scrollHeight)')
+    assert_operator page.evaluate_script('window.scrollY'), :>, 100
     session_record, old_activity, absolute_expiry = age_session(user)
 
     assert_selector '[data-session-activity-target="notice"]', visible: true
     assert_text 'Su sesión vence en 1 minuto.'
     assert_button 'Seguir trabajando'
     assert_equal old_activity, session_record.reload.last_active_at
+    assert_equal 'Trabajo pendiente', field.value
     assert page.evaluate_script('document.documentElement.scrollWidth <= window.innerWidth'), 'Spanish warning must fit a narrow screen'
-    take_screenshot('spanish-session-warning', html: true, full: true)
+    assert page.evaluate_script(<<~JS), 'The warning and renewal action must stay within the scrolled viewport'
+      (() => {
+        const notice = document.querySelector('[data-session-activity-target="notice"]').getBoundingClientRect();
+        return window.scrollY > 100 && notice.top >= 0 && notice.bottom <= window.innerHeight;
+      })()
+    JS
+    take_screenshot('spanish-session-warning-scrolled', html: true, full: true)
 
     click_button 'Seguir trabajando'
     wait_until { session_record.reload.last_active_at > old_activity }
-    assert_current_path constituent_portal_dashboard_path, ignore_query: true
+    assert_current_path edit_profile_path, ignore_query: true
     assert_equal absolute_expiry, session_record.reload.expires_at
+    assert_equal 'Trabajo pendiente', field.value
     assert_no_selector '[data-session-activity-target="notice"]', visible: true
     take_screenshot('spanish-session-renewed', html: true, full: true)
   ensure

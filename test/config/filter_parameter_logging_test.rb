@@ -82,12 +82,14 @@ class FilterParameterLoggingTest < ActiveSupport::TestCase
     filtered = filter.filter(
       'contact' => '410-555-0198',
       'password' => 'password1234',
+      'two_factor_sign_in_token' => 'private-pending-sign-in',
       'controller' => 'sessions',
       'action' => 'create'
     )
 
     assert_equal '[FILTERED]', filtered['contact']
     assert_equal '[FILTERED]', filtered['password']
+    assert_equal '[FILTERED]', filtered['two_factor_sign_in_token']
     assert_equal 'sessions', filtered['controller']
     assert_equal 'create', filtered['action']
   end

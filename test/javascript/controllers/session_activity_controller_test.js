@@ -41,8 +41,9 @@ describe("signed-in form session activity", () => {
       data-session-activity-state-value='${JSON.stringify(initial)}'
       data-session-activity-messages-value="${JSON.stringify(messages[locale]).replaceAll('"', '&quot;')}"
       data-action="input@document->session-activity#recordInteraction change@document->session-activity#recordInteraction keydown@document->session-activity#recordInteraction pointerdown@document->session-activity#recordInteraction submit@document->session-activity#beforeSubmit:capture">
+      <p class="sr-only" role="status" aria-live="polite" aria-atomic="true" data-session-activity-target="status"></p>
       <aside hidden data-session-activity-target="notice" tabindex="-1">
-        <p role="status" data-session-activity-target="message"></p>
+        <p data-session-activity-target="message"></p>
         <button type="button" data-session-activity-target="renew" data-action="session-activity#renew">${locale === "es" ? "Seguir trabajando" : "Keep working"}</button>
       </aside>
     </div><main><form method="post"><input name="first_name" value="Unfinished work"><button>Submit</button></form></main>`
@@ -78,6 +79,32 @@ describe("signed-in form session activity", () => {
     expect(posts()).toHaveLength(0)
     expect(controller.noticeTarget.hidden).toBe(false)
     expect(controller.messageTarget.textContent).toContain("Your session expires in 4 minutes")
+  })
+
+  test("the mounted live region stays exposed and updates only when the countdown changes", async () => {
+    await render()
+    const status = document.querySelector('[role="status"]')
+    expect(status.closest("[hidden]")).toBeNull()
+    expect(status).toBeEmptyDOMElement()
+    expect(controller.noticeTarget.hidden).toBe(true)
+
+    jest.advanceTimersByTime(26 * minute)
+    await flush()
+    expect(document.querySelector('[role="status"]')).toBe(status)
+    expect(status.textContent).toBe(messages.en.idle_other.replace("%{minutes}", "4"))
+    const changed = jest.fn()
+    const observer = new MutationObserver(changed)
+    observer.observe(status, { childList: true })
+    jest.advanceTimersByTime(2000)
+    await flush()
+    expect(changed).not.toHaveBeenCalled()
+    observer.disconnect()
+
+    controller.renewTarget.click()
+    await flush()
+    expect(status).toBeEmptyDOMElement()
+    expect(status.closest("[hidden]")).toBeNull()
+    expect(controller.noticeTarget.hidden).toBe(true)
   })
 
   test("genuine visible interactions renew no more than once a minute", async () => {

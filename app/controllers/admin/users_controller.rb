@@ -450,7 +450,7 @@ module Admin
           action: 'admin_user_deletion_failed',
           actor: current_user,
           auditable: @user,
-          metadata: metadata.merge(error_class: e.class.name, error_message: e.message)
+          metadata: metadata.merge(error_class: e.class.name)
         )
 
         redirect_to admin_user_path(@user),

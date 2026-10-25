@@ -57,11 +57,6 @@ module DocumentScans
           return existing.resume!
         end
         @blob.upload_without_unfurling(io.tap(&:rewind))
-        ActiveRecord::Base.current_transaction.after_rollback do
-          @blob.service.delete(@blob.key)
-        rescue StandardError => e
-          Rails.event.notify('document_scan.cleanup_failed', error_class: e.class.name)
-        end
       end
       @scan.update!(next_attempt_at: Time.current)
       @snapshot_ready = true

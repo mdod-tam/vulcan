@@ -92,7 +92,7 @@ class SessionsControllerConcurrencyTest < ActiveSupport::TestCase
     cleanup_duplicate_review_test_data!(admin, canonical, duplicate)
   end
 
-  test 'password-only sign-in commits first: the session is valid and the later password change succeeds' do
+  test 'password-only sign-in commits first: the later password change revokes the winning session' do
     user = create(
       :constituent,
       email: "signin-wins-#{SecureRandom.hex(4)}@example.com",
@@ -130,7 +130,7 @@ class SessionsControllerConcurrencyTest < ActiveSupport::TestCase
     assert_equal 'Signed in successfully', sign_in_response[:notice]
     assert sign_in_response[:session_cookie].present?, 'the winning sign-in must set its signed session cookie'
     assert password_result.success?, "expected the later password change to succeed: #{password_result.message}"
-    assert_equal 1, user.reload.sessions.count
+    assert_equal 0, user.reload.sessions.count, 'the committed password change must revoke the earlier sign-in'
     assert user.authenticate('ChangedPassword123!')
     assert user.last_sign_in_at.present?, 'the winning sign-in must retain its normal sign-in audit fields'
   ensure

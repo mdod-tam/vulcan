@@ -49,11 +49,11 @@ module Webhooks
           'email' => 'doctor@example.com',
           'documents' => [
             {
-              'url' => 'https://example.com/signed_doc.pdf',
+              'url' => 'https://docuseal.com/signed_doc.pdf',
               'filename' => 'medical_cert.pdf'
             }
           ],
-          'audit_log_url' => 'https://example.com/audit_log'
+          'audit_log_url' => 'https://docuseal.com/audit_log'
         }
       }
 
@@ -161,6 +161,110 @@ module Webhooks
       assert_rejected_completion(webhook_headers("#{Time.current.to_i + 1}.#{signature.split('.', 2).last}"))
     end
 
+    test 'unsigned query fields cannot change a signed event or select another application or document' do
+      other_application = create(:application, :in_progress,
+                                 document_signing_service: 'docuseal', document_signing_submission_id: 'other_submission',
+                                 document_signing_submitter_id: 'other_signer', document_signing_requested_at: 1.day.ago,
+                                 document_signing_status: :sent, medical_certification_status: :requested)
+      body = @viewed_payload.to_json
+      overrides = {
+        event_type: 'form.completed', timestamp: Time.current.utc.iso8601(6),
+        data: { id: 'other_signer', submission_id: 'other_submission',
+                documents: [{ url: 'https://attacker.invalid/forged.pdf' }] }
+      }
+      HTTP.expects(:timeout).never
+
+      assert_difference -> { Event.where(auditable: @application, action: 'document_signing_viewed').count }, 1 do
+        assert_no_difference ['DocumentScan.count', 'ActiveStorage::Blob.count', 'ActiveStorage::Attachment.count',
+                              -> { Event.where(auditable: other_application).count }] do
+          path = "#{webhooks_docuseal_medical_certification_path}?#{overrides.to_query}"
+          post path, params: body, headers: webhook_headers(compute_signature(body))
+          assert_response :ok
+        end
+      end
+      assert_equal 'opened', @application.reload.document_signing_status
+      assert_equal 'sent', other_application.reload.document_signing_status
+      assert_equal 'requested', other_application.medical_certification_status
+      event = Event.find_by!(auditable: @application, action: 'document_signing_viewed')
+      assert_equal @viewed_payload[:timestamp], event.metadata['viewed_at']
+    end
+
+    test 'unsigned query timestamps cannot bypass signed activity deduplication' do
+      body = @viewed_payload.to_json
+      signature = compute_signature(body)
+      make_signed_webhook_request(@viewed_payload)
+      assert_response :ok
+
+      travel 6.seconds do
+        overrides = { event_type: 'form.declined', timestamp: Time.current.utc.iso8601(6) }
+        assert_no_difference ['Event.count', 'Notification.count', 'DocumentScan.count'] do
+          path = "#{webhooks_docuseal_medical_certification_path}?#{overrides.to_query}"
+          post path, params: body, headers: webhook_headers(signature)
+          assert_response :ok
+        end
+      end
+      assert_equal 'opened', @application.reload.document_signing_status
+    end
+
+    test 'unsigned query fields cannot supply missing signed payload fields' do
+      body = {}.to_json
+      HTTP.expects(:timeout).never
+
+      assert_no_difference ['Event.count', 'DocumentScan.count', 'ActiveStorage::Blob.count'] do
+        path = "#{webhooks_docuseal_medical_certification_path}?#{@completed_payload.to_query}"
+        post path, params: body, headers: webhook_headers(compute_signature(body))
+        assert_response :unprocessable_content
+      end
+      assert_equal 'sent', @application.reload.document_signing_status
+    end
+
+    test 'signed completions reject untrusted document hosts without making an HTTP request' do
+      urls = ['https://attacker.invalid/signed.pdf', 'https://docuseal.com.attacker.invalid/signed.pdf',
+              'https://notdocuseal.com/signed.pdf', 'https://127.0.0.1/signed.pdf',
+              'https://169.254.169.254/signed.pdf', 'https://docuseal.com@attacker.invalid/signed.pdf']
+      HTTP.expects(:timeout).never
+
+      urls.each_with_index do |url, index|
+        @application.update!(document_signing_requested_at: Time.current + index.seconds)
+        payload = @completed_payload.deep_dup
+        payload[:data]['documents'].first['url'] = url
+
+        assert_no_difference ['DocumentScan.count', 'ActiveStorage::Blob.count', 'ActiveStorage::Attachment.count'] do
+          assert_difference -> { Event.where(auditable: @application, action: 'document_signing_attachment_failed').count }, 1 do
+            make_signed_webhook_request(payload)
+            assert_response :ok
+          end
+        end
+        event = Event.where(auditable: @application, action: 'document_signing_attachment_failed').order(:id).last!
+        assert_equal 'invalid_document_url', event.metadata['failure_reason']
+        assert_not event.metadata['failure_retryable']
+        assert_equal 'sent', @application.reload.document_signing_status
+        assert_equal 'requested', @application.medical_certification_status
+      end
+    end
+
+    test 'signed completions can stage files from cloud regions and the configured DocuSeal host' do
+      ::Docuseal.stubs(:url).returns('https://signing.program.example')
+
+      %w[docuseal.com docuseal.eu signing.program.example].each_with_index do |host, index|
+        @application.update!(document_signing_requested_at: Time.current + index.seconds)
+        url = "https://#{host}/blobs/proxy/document.pdf"
+        payload = @completed_payload.deep_dup
+        payload[:data]['documents'].first['url'] = url
+        response = mock_successful_docuseal_download
+        HTTP.expects(:get).with(url).returns(response)
+
+        assert_difference 'DocumentScan.count', 1 do
+          make_signed_webhook_request(payload)
+          assert_response :ok
+        end
+        scan = DocumentScan.order(:id).last!
+        assert_equal url, scan.context['document_url']
+        assert_equal 'pending', scan.status
+        assert_not @application.reload.medical_certification.attached?
+      end
+    end
+
     test 'a freshly signed retry reuses the scan after its original signature expires' do
       mock_successful_docuseal_download
       original_signature = compute_signature(@completed_payload.to_json)
@@ -243,8 +347,8 @@ module Webhooks
 
         retry_payload = payload.deep_dup
         retry_payload[:data].merge!('status' => 'completed', 'updated_at' => Time.current.iso8601,
-                                    'documents' => [{ 'url' => 'https://example.com/document.pdf?token=rotated' }],
-                                    'audit_log_url' => 'https://example.com/audit.pdf?token=rotated')
+                                    'documents' => [{ 'url' => 'https://docuseal.com/document.pdf?token=rotated' }],
+                                    'audit_log_url' => 'https://docuseal.com/audit.pdf?token=rotated')
         travel 6.minutes do
           assert_no_difference ['Event.count', 'Notification.count'] do
             make_signed_webhook_request(retry_payload)
@@ -325,7 +429,7 @@ module Webhooks
         signed_at = 10.minutes.ago.change(usec: 0)
         %i[signed declined].each do |state|
           @application.update!(document_signing_status: state, document_signing_signed_at: signed_at,
-                               document_signing_document_url: 'https://example.com/signed.pdf', medical_certification_status: :received)
+                               document_signing_document_url: 'https://docuseal.com/signed.pdf', medical_certification_status: :received)
           payload = instance_variable_get("@#{activity}_payload").deep_dup
           payload[:timestamp] = (Time.iso8601(payload[:timestamp]) + (state == :signed ? 1 : 2).seconds).iso8601(6)
 
@@ -336,7 +440,7 @@ module Webhooks
           @application.reload
           assert_equal state.to_s, @application.document_signing_status
           assert_equal signed_at, @application.document_signing_signed_at
-          assert_equal 'https://example.com/signed.pdf', @application.document_signing_document_url
+          assert_equal 'https://docuseal.com/signed.pdf', @application.document_signing_document_url
           assert_equal 'received', @application.medical_certification_status
         end
       end
@@ -371,8 +475,8 @@ module Webhooks
       assert_not @application.medical_certification.attached?
       assert_equal 1, @application.additional_medical_certifications.count
       assert_equal 'certification_approved', @application.additional_medical_certifications.first.blob.metadata['retention_reason']
-      assert_equal 'https://example.com/signed_doc.pdf', @application.document_signing_document_url
-      assert_equal 'https://example.com/audit_log', @application.document_signing_audit_url
+      assert_equal 'https://docuseal.com/signed_doc.pdf', @application.document_signing_document_url
+      assert_equal 'https://docuseal.com/audit_log', @application.document_signing_audit_url
 
       event = Event.where(action: 'document_signing_completed').last
       assert_not_nil event
@@ -414,7 +518,7 @@ module Webhooks
 
     test 'rotated provider URLs reuse one pending request and produce one completion' do
       scan = stage_docuseal_scan!
-      @completed_payload[:data]['documents'].first['url'] = 'https://example.com/signed_doc.pdf?token=rotated'
+      @completed_payload[:data]['documents'].first['url'] = 'https://docuseal.com/signed_doc.pdf?token=rotated'
       HTTP.expects(:get).never
 
       assert_no_difference ['DocumentScan.count', 'ActiveStorage::Blob.count', 'Event.count'] do
@@ -624,7 +728,7 @@ module Webhooks
             2.times do |index|
               if index.positive?
                 @application.update!(document_signing_requested_at: @application.document_signing_requested_at + 1.second)
-                @completed_payload[:data]['documents'].first['url'] = 'https://example.com/second_signed_doc.pdf'
+                @completed_payload[:data]['documents'].first['url'] = 'https://docuseal.com/second_signed_doc.pdf'
               end
               scan = stage_docuseal_scan!
               scans << scan
@@ -807,7 +911,7 @@ module Webhooks
       complete_docuseal_scan!
 
       @application.reload
-      assert_equal 'https://example.com/signed_doc.pdf', @application.document_signing_document_url
+      assert_equal 'https://docuseal.com/signed_doc.pdf', @application.document_signing_document_url
 
       assert_no_difference 'Event.count' do
         make_signed_webhook_request(@completed_payload)
@@ -830,7 +934,7 @@ module Webhooks
       assert_not_nil @application.document_signing_signed_at
       assert_equal 'received', @application.medical_certification_status
       assert @application.medical_certification.attached?
-      assert_equal 'https://example.com/audit_log', @application.document_signing_audit_url
+      assert_equal 'https://docuseal.com/audit_log', @application.document_signing_audit_url
     end
 
     test 'handles form.completed event with requested medical cert status' do
@@ -1004,7 +1108,7 @@ module Webhooks
     test 'adds no events for an already signed completion with a document URL' do
       @application.update!(
         document_signing_status: :signed,
-        document_signing_document_url: 'https://example.com/signed_doc.pdf'
+        document_signing_document_url: 'https://docuseal.com/signed_doc.pdf'
       )
 
       assert_no_difference 'Event.count' do
@@ -1061,7 +1165,7 @@ module Webhooks
     end
 
     test 'provider download status codes distinguish permanent rejection from temporary retry' do
-      codes = { 401 => :ok, 403 => :ok, 404 => :ok, 410 => :ok, 422 => :ok,
+      codes = { 302 => :ok, 401 => :ok, 403 => :ok, 404 => :ok, 410 => :ok, 422 => :ok,
                 408 => :service_unavailable, 425 => :service_unavailable, 429 => :service_unavailable,
                 500 => :service_unavailable, 502 => :service_unavailable, 503 => :service_unavailable }
       codes.each_with_index do |(code, expected), index|

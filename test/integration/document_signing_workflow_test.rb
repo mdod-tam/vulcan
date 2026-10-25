@@ -97,11 +97,11 @@ class DocumentSigningWorkflowTest < ActionDispatch::IntegrationTest
         'email' => 'doctor@example.com',
         'documents' => [
           {
-            'url' => 'https://example.com/signed_doc.pdf',
+            'url' => 'https://docuseal.com/signed_doc.pdf',
             'filename' => 'medical_cert.pdf'
           }
         ],
-        'audit_log_url' => 'https://example.com/audit_log'
+        'audit_log_url' => 'https://docuseal.com/audit_log'
       }
     }
 
@@ -121,7 +121,7 @@ class DocumentSigningWorkflowTest < ActionDispatch::IntegrationTest
     assert_equal 'received', @application.medical_certification_status
     assert_not_nil @application.document_signing_signed_at
     assert @application.medical_certification.attached?
-    assert_equal 'https://example.com/audit_log', @application.document_signing_audit_url
+    assert_equal 'https://docuseal.com/audit_log', @application.document_signing_audit_url
 
     # Review queue
     get admin_applications_path(filter: 'digitally_signed_needs_review')
@@ -189,11 +189,11 @@ class DocumentSigningWorkflowTest < ActionDispatch::IntegrationTest
         'email' => 'doctor@example.com',
         'documents' => [
           {
-            'url' => 'https://example.com/signed_doc.pdf',
+            'url' => 'https://docuseal.com/signed_doc.pdf',
             'filename' => 'medical_cert.pdf'
           }
         ],
-        'audit_log_url' => 'https://example.com/audit_log'
+        'audit_log_url' => 'https://docuseal.com/audit_log'
       }
     }
 
@@ -236,10 +236,10 @@ class DocumentSigningWorkflowTest < ActionDispatch::IntegrationTest
         'email' => 'doctor@example.com',
         'documents' => [
           {
-            'url' => 'https://example.com/signed_doc.pdf'
+            'url' => 'https://docuseal.com/signed_doc.pdf'
           }
         ],
-        'audit_log_url' => 'https://example.com/audit_log'
+        'audit_log_url' => 'https://docuseal.com/audit_log'
       }
     }
 

@@ -25,6 +25,9 @@ class SessionActivityTest < ActionDispatch::IntegrationTest
 
       assert_response :success
       assert_select '[data-controller~="session-activity"]', count: 1
+      assert_select '[data-controller~="session-activity"] > [role="status"].sr-only', text: '', count: 1
+      assert_select '[hidden] [role="status"]', count: 0
+      assert_select '[data-session-activity-target="notice"][hidden]', count: 1
     end
   end
 

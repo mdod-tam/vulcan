@@ -299,15 +299,17 @@ class TwoFactorAuthenticationsController < ApplicationController
     format.json do
       # The JSON response supplies a redirect URL instead of an HTTP redirect.
       stored_location = TwoFactorAuth.get_return_path(session) || session.delete(:return_to)
-      TwoFactorAuth.complete_authentication(session)
-      session_record = _create_and_set_session_cookie(@user)
+      session_record = _create_and_set_session_cookie(
+        @user, two_factor_sign_in_token: session[TwoFactorAuth::SESSION_KEYS[:sign_in_token]]
+      )
 
       if session_record
         # Clear the challenge only after session creation succeeds.
-        TwoFactorAuth.clear_challenge(session)
+        TwoFactorAuth.complete_authentication_with_challenge_clear(session)
         return_to = stored_location || _dashboard_for(@user)
         render json: { status: 'success', redirect_url: return_to }
       else
+        TwoFactorAuth.abort_authentication(session)
         render json: { error: t('security_key_verification.feedback.session_failed'), error_code: 'session_failed' },
                status: :unprocessable_content
       end
@@ -393,20 +395,12 @@ class TwoFactorAuthenticationsController < ApplicationController
     session[TwoFactorAuth::SESSION_KEYS[:temp_user_id]].present?
   end
 
-  # Reject accounts retired by a merge or otherwise not login-active.
-  # Verification and SMS send/resend use this access boundary.
-  def find_user_for_two_factor
-    user_id = session[TwoFactorAuth::SESSION_KEYS[:temp_user_id]]
-    return nil unless user_id
-
-    user = User.find_by(id: user_id)
-    user if user&.public_login_active?
-  end
-
   def ensure_two_factor_initiated_unless_skipped
-    return if session[:skip_2fa]
+    return if session[:skip_2fa] || two_factor_authentication_initiated?
+    return ensure_two_factor_initiated unless action_name == 'process_verification'
 
-    ensure_two_factor_initiated
+    @type = params[:type]
+    respond_to { |format| handle_failed_verification(format, :user_session) }
   end
 
   def resolve_sms_credential_for_resend(user)

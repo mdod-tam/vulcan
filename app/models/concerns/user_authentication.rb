@@ -25,6 +25,11 @@ module UserAuthentication
       password_reset_token_fingerprint
     end
 
+    # Match Rails' password-reset salt binding without storing the password digest in the browser.
+    generates_token_for :two_factor_sign_in do
+      password_salt&.last(10)
+    end
+
     has_many :sessions, dependent: :destroy
     after_update :revoke_sessions_after_password_change, if: :saved_change_to_password_digest?
 

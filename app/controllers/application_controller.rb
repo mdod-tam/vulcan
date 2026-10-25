@@ -162,7 +162,7 @@ class ApplicationController < ActionController::Base
   # Password sign-in resolves the exact submitted identifier and authenticates the submitted password under the same lock.
   # A merge can reassign the identifier. A password change can invalidate the password while this request waits.
   # Authentication before the lock must not authorize a session after either change.
-  def _create_and_set_session_cookie(user, submitted_login_identifier: nil, submitted_password: nil)
+  def _create_and_set_session_cookie(user, submitted_login_identifier: nil, submitted_password: nil, two_factor_sign_in_token: nil)
     return unless user
 
     session_record = nil
@@ -175,6 +175,9 @@ class ApplicationController < ActionController::Base
         next unless resolved_user&.id == locked_user.id
         next unless locked_user.authenticate(submitted_password)
       end
+
+      next if two_factor_sign_in_token.present? &&
+              User.find_by_token_for(:two_factor_sign_in, two_factor_sign_in_token) != locked_user
 
       session_record = locked_user.sessions.new(
         user_agent: request.user_agent,
@@ -220,14 +223,13 @@ class ApplicationController < ActionController::Base
     # Read the return path before 2FA completion removes it.
     stored_location = TwoFactorAuth.get_return_path(session) || session.delete(:return_to)
 
-    # Preserve the challenge until session creation succeeds.
-    TwoFactorAuth.complete_authentication(session)
-
-    session_record = _create_and_set_session_cookie(user)
+    session_record = _create_and_set_session_cookie(
+      user, two_factor_sign_in_token: session[TwoFactorAuth::SESSION_KEYS[:sign_in_token]]
+    )
 
     if session_record
       # Clear the challenge only after session creation succeeds.
-      TwoFactorAuth.clear_challenge(session)
+      TwoFactorAuth.complete_authentication_with_challenge_clear(session)
       redirect_to stored_location || _dashboard_for(user), notice: t('controllers.application.complete_two_factor_authentication.signin_pass_2fa')
     else
       # A rejected session must clear temporary 2FA state, including the challenge, to prevent replay.
@@ -240,14 +242,14 @@ class ApplicationController < ActionController::Base
     TwoFactorAuth.get_temp_user_id(session).present?
   end
 
-  # A pending 2FA user must remain login-active: not merged, inactive, or suspended.
+  # The password accepted before 2FA must still be current, and the account must remain login-active.
   def find_user_for_two_factor
     user_id = TwoFactorAuth.get_temp_user_id(session)
-    return nil unless user_id
+    token = session[TwoFactorAuth::SESSION_KEYS[:sign_in_token]]
+    user = User.find_by_token_for(:two_factor_sign_in, token) if token.present?
+    return user if user&.id.to_s == user_id.to_s && user&.public_login_active?
 
-    user = User.find(user_id)
-    user if user.public_login_active?
-  rescue ActiveRecord::RecordNotFound
+    TwoFactorAuth.abort_authentication(session)
     nil
   end
 

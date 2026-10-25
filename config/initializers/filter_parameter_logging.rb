@@ -48,7 +48,7 @@ Rails.application.config.filter_parameters += [
   /_encrypted\z/, /_encrypted_iv\z/,
 
   # Authentication credential secrets
-  :secret, /\A(?:HTTP_)?Authorization\z/i,
+  :secret, :two_factor_sign_in_token, /\A(?:HTTP_)?Authorization\z/i,
   # The legacy /_key\z/ filter also matches public_key.
 
   # Legacy filters also match names outside the explicit lists.

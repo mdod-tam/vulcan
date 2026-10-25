@@ -117,7 +117,8 @@ class TwoFactorAuthTest < ActiveSupport::TestCase
   end
 
   test 'abort_authentication clears temporary two factor state' do
-    @session[TwoFactorAuth::SESSION_KEYS[:temp_user_id]] = @user.id
+    TwoFactorAuth.start_authentication(@session, @user)
+    assert_equal @user, User.find_by_token_for(:two_factor_sign_in, @session[TwoFactorAuth::SESSION_KEYS[:sign_in_token]])
     @session[TwoFactorAuth::SESSION_KEYS[:available_methods]] = %w[sms totp]
     @session[TwoFactorAuth::SESSION_KEYS[:return_path]] = '/dashboard'
     @session[TwoFactorAuth::SESSION_KEYS[:verified_at]] = Time.current.to_i
@@ -128,6 +129,7 @@ class TwoFactorAuthTest < ActiveSupport::TestCase
     TwoFactorAuth.abort_authentication(@session)
 
     assert_nil @session[TwoFactorAuth::SESSION_KEYS[:temp_user_id]]
+    assert_nil @session[TwoFactorAuth::SESSION_KEYS[:sign_in_token]]
     assert_nil @session[TwoFactorAuth::SESSION_KEYS[:available_methods]]
     assert_nil @session[TwoFactorAuth::SESSION_KEYS[:return_path]]
     assert_nil @session[TwoFactorAuth::SESSION_KEYS[:verified_at]]

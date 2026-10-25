@@ -20,8 +20,8 @@ module Webhooks
       @system_actor = User.system_user
       return head :service_unavailable unless @system_actor
 
-      event_type = params[:event_type]
-      data       = params[:data] || {}
+      event_type = request.request_parameters['event_type']
+      data       = request.request_parameters['data']
 
       case event_type
       when 'form.viewed', 'form.started', 'form.declined' then handle_form_event(event_type, data)
@@ -37,7 +37,9 @@ module Webhooks
     private
 
     def valid_payload?
-      params[:event_type].present? && params[:data].present?
+      # Query parameters are not covered by the webhook signature.
+      body = request.request_parameters
+      body['event_type'].is_a?(String) && body['event_type'].present? && body['data'].is_a?(Hash) && body['data'].present?
     end
 
     def verify_webhook_signature
@@ -109,7 +111,7 @@ module Webhooks
         raise InvalidPayloadError unless (identifier.is_a?(String) || identifier.is_a?(Integer)) && identifier.present?
       end
 
-      Time.iso8601(params[:timestamp]).utc.iso8601(6)
+      Time.iso8601(request.request_parameters['timestamp']).utc.iso8601(6)
     rescue ArgumentError, TypeError
       raise InvalidPayloadError
     end
@@ -213,6 +215,9 @@ module Webhooks
       uri = URI.parse(url)
       valid = uri.is_a?(URI::HTTPS) && uri.host.present? && uri.userinfo.nil?
       raise PermanentIntakeFailure.new('invalid_document_url', 'Document URL must use HTTPS') unless valid
+
+      allowed_hosts = ['docuseal.com', 'docuseal.eu', URI.parse(::Docuseal.url).host].compact.map(&:downcase)
+      raise PermanentIntakeFailure.new('invalid_document_url', 'Document URL must use a DocuSeal host') unless uri.host.downcase.in?(allowed_hosts)
 
       uri
     rescue URI::InvalidURIError

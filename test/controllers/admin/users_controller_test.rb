@@ -216,6 +216,29 @@ module Admin
       assert_equal 'ActiveRecord::DeleteRestrictionError', event.metadata['error_class']
     end
 
+    test 'admin deletion failure excludes sensitive exception details from diagnostics' do
+      user = create(:admin)
+      private_email = 'private-deletion@example.test'
+      private_phone = '410-555-0199'
+      user.errors.add(:base, "Contact #{private_email} at #{private_phone}")
+      error = ActiveRecord::RecordInvalid.new(user)
+      User.any_instance.stubs(:destroy!).raises(error)
+      log_output = StringIO.new
+      logger = ActiveSupport::TaggedLogging.new(ActiveSupport::Logger.new(log_output))
+
+      Rails.stub(:logger, logger) { delete admin_user_path(user) }
+
+      assert_redirected_to admin_user_path(user)
+      assert User.exists?(user.id)
+      event = Event.find_by!(action: 'admin_user_deletion_failed', auditable: user)
+      assert_equal 'ActiveRecord::RecordInvalid', event.metadata['error_class']
+      assert_not event.metadata.key?('error_message')
+      [event.metadata.to_json, log_output.string, flash[:alert]].each do |diagnostics|
+        assert_not_includes diagnostics, private_email
+        assert_not_includes diagnostics, private_phone
+      end
+    end
+
     test 'admin deletion failure logs voucher blockers for constituent applications' do
       user = create(:constituent)
       application = create(:application, :completed, user: user)

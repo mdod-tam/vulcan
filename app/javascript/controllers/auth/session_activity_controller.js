@@ -5,7 +5,7 @@ const minute = 60_000
 
 // Only genuine interaction renews idle time; background checks only read its deadline.
 export default class extends Controller {
-  static targets = ["notice", "message", "renew"]
+  static targets = ["notice", "message", "status", "renew"]
   static values = { url: String, signOutUrl: String, state: Object, messages: Object }
 
   connect() {
@@ -107,6 +107,7 @@ export default class extends Controller {
       text = template.replace("%{minutes}", minutes)
     }
     if (this.messageTarget.textContent !== text) this.messageTarget.textContent = text
+    if (this.statusTarget.textContent !== text) this.statusTarget.textContent = text
     this.noticeTarget.hidden = !text
     this.renewTarget.hidden = expired || absoluteRemaining <= 5 * minute
     document.querySelectorAll("[data-session-activity-expired-notice]").forEach(notice => {

@@ -137,6 +137,7 @@ module TwoFactorVerification
     return [false, t('two_factor_verification.errors.expired_code')] unless result
 
     user_for_2fa = find_user_for_two_factor
+    return [false, :user_session] unless user_for_2fa
 
     if result[:success] && result[:status] == 'approved'
       challenge.clear!

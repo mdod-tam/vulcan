@@ -40,18 +40,6 @@ class UploadedDocumentTest < ActiveSupport::TestCase
     assert_not ActiveStorage::Blob.exists?(key: written_key)
   end
 
-  test 'a caller rollback after a successful write deletes the stored object' do
-    blob = nil
-    ApplicationRecord.transaction do
-      blob = DocumentScan.stage!(input: pdf_upload(1.kilobyte), user: @application.user, purpose: :proof, slot: 'income_proof').blob
-      assert ActiveStorage::Blob.service.exist?(blob.key)
-      raise ActiveRecord::Rollback
-    end
-
-    assert_not ActiveStorage::Blob.service.exist?(blob.key)
-    assert_not ActiveStorage::Blob.exists?(key: blob.key)
-  end
-
   test 'refuses a multipart upload one byte over the limit before storing it' do
     assert_no_difference 'ActiveStorage::Blob.count' do
       assert_refused(:too_large) { resolve(pdf_upload(@max + 1)) }
