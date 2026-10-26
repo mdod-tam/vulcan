@@ -31,7 +31,7 @@ jobs:
           bundler-cache: true
           
       - name: Run Brakeman security scan
-        #running bundle exec over bin/ until gemfile is updated to latest brakeman version
+        # Runs through bundle exec instead of bin/brakeman.
         run: bundle exec brakeman --no-pager
 
   lint:
@@ -56,7 +56,7 @@ jobs:
     runs-on: ubuntu-latest
     services:
       postgres:
-        image: postgres:17
+        image: postgres:18
         env:
           POSTGRES_DB: ${{ env.POSTGRES_DB }}
           POSTGRES_USER: ${{ env.POSTGRES_USER }}
