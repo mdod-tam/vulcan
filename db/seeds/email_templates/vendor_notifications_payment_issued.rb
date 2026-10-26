@@ -1,7 +1,5 @@
 # frozen_string_literal: true
 
-# Seed File for "vendor_notifications_payment_issued"
-# --------------------------------------------------
 EmailTemplate.create_or_find_by!(name: 'vendor_notifications_payment_issued', format: :text, locale: 'en') do |template|
   template.subject = 'Payment Issued'
   template.description = 'Sent to a vendor when their invoice payment has been issued by the General Accounting Department (GAD).'

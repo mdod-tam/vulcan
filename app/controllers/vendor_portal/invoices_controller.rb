@@ -12,9 +12,7 @@ module VendorPortal
     end
 
     # GET /vendor/invoices/:id
-    def show
-      # @invoice is set by set_invoice
-    end
+    def show; end
 
     private
 

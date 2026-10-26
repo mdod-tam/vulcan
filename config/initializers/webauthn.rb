@@ -43,6 +43,6 @@ WebAuthn.configure do |config|
     config.rp_id = application_uri.host
   end
 
-  # Optional: Configure timeout for credential creation/authentication
-  config.credential_options_timeout = 120_000 # Milliseconds
+  # Timeout for credential creation and authentication, in milliseconds.
+  config.credential_options_timeout = 120_000
 end

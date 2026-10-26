@@ -16,7 +16,6 @@
 
 <div class="rounded-lg border border-gray-200 bg-gray-50 p-4" data-testid="<%= type %>-assignment-section">
   <% if entity.present? %>
-    <!-- Display assigned person information -->
     <div class="flex flex-col gap-4 md:flex-row md:items-center md:justify-between">
       <div>
         <h3 class="text-sm font-semibold text-gray-900">Current <%= type.titleize %></h3>
@@ -28,6 +27,11 @@
           <% end %>
           <%= send(status_badge_method, entity) %>
         </div>
+        <% if assigned_person.present? && !assigned_person.public_send("assignable_#{type}?") %>
+          <p class="mt-2 text-sm font-medium text-danger-700" data-testid="<%= type %>-ineligible-notice">
+            <%= assigned_person.full_name %> can no longer take <%= type %> assignments. Reassign this work to an eligible <%= type %>.
+          </p>
+        <% end %>
         <% if local_assigns[:scheduled_date].present? %>
           <p class="text-sm text-gray-500 mt-1">
             Scheduled for: <%= scheduled_date.strftime("%B %d, %Y" + (scheduled_time ? " at %I:%M %p" : "")) %>
@@ -38,12 +42,12 @@
         <div class="flex flex-col gap-2 sm:flex-row">
           <%= link_to("View Details",
               view_path,
-              class: "inline-flex h-10 items-center justify-center rounded-md border border-indigo-300 bg-indigo-50 px-4 py-2 text-sm font-medium text-indigo-700 shadow-sm hover:bg-indigo-100 focus:outline-none focus:ring-2 focus:ring-indigo-500 focus:ring-offset-2",
+              class: "btn btn-secondary h-10",
               data: { turbo_frame: "_top" }) %>
           <% if local_assigns[:unassign_form_path].present? %>
             <% unassign_dialog_id = "#{type}-unassign-confirm-dialog" %>
             <button type="button"
-                    class="inline-flex h-10 items-center justify-center rounded-md border border-red-300 bg-white px-4 py-2 text-sm font-medium text-red-700 shadow-sm hover:bg-red-50 focus:outline-none focus:ring-2 focus:ring-red-500 focus:ring-offset-2"
+                    class="btn btn-danger-outline h-10"
                     data-controller="modal"
                     data-action="click->modal#open"
                     data-modal-id="<%= unassign_dialog_id %>"
@@ -52,7 +56,7 @@
             </button>
 
             <dialog id="<%= unassign_dialog_id %>"
-                    class="backdrop:bg-gray-500 backdrop:bg-opacity-75 bg-white rounded-lg max-w-md w-full shadow-xl p-0"
+                    class="backdrop:bg-gray-500 backdrop:bg-opacity-75 bg-white rounded-lg max-w-md w-full shadow-elevation-4 p-0"
                     data-controller="modal"
                     data-action="click->modal#clickOutside close->modal#onClose"
                     aria-labelledby="<%= unassign_dialog_id %>-heading"
@@ -66,7 +70,7 @@
                 </p>
                 <div class="mt-6 flex flex-col-reverse gap-3 sm:flex-row sm:justify-end">
                   <button type="button"
-                          class="inline-flex min-h-10 w-full items-center justify-center rounded-md border border-gray-300 bg-white px-4 py-2 text-center text-sm font-medium text-gray-700 shadow-sm hover:bg-gray-50 focus:outline-none focus:ring-2 focus:ring-indigo-500 focus:ring-offset-2 sm:w-auto"
+                          class="btn btn-outline min-h-10 w-full text-center sm:w-auto"
                           data-action="click->modal#close">
                     <%= local_assigns[:unassign_confirm_no_label].presence || "No" %>
                   </button>
@@ -74,7 +78,7 @@
                       unassign_form_path,
                       method: :post,
                       form_class: "w-full sm:w-auto",
-                      class: "inline-flex min-h-10 w-full items-center justify-center rounded-md border border-transparent bg-red-600 px-4 py-2 text-center text-sm font-medium text-white shadow-sm hover:bg-red-700 focus:outline-none focus:ring-2 focus:ring-red-500 focus:ring-offset-2 sm:w-auto" %>
+                      class: "btn btn-danger min-h-10 w-full text-center sm:w-auto" %>
                 </div>
               </div>
             </dialog>
@@ -83,13 +87,17 @@
       <% end %>
     </div>
     <% if local_assigns[:reassign_form_path].present? && !entity.status_completed? %>
-      <%= render 'evaluator_reassignment_form',
+      <%= render 'reassignment_form',
+                 type: type,
                  reassign_form_path: reassign_form_path,
-                 assigned_person: assigned_person,
-                 available_assignees: available_assignees.where.not(id: assigned_person&.id) %>
+                 assigned_people: [assigned_person].compact,
+                 available_assignees: available_assignees.where.not(id: assigned_person&.id),
+                 summary: "Transfer this evaluation to another evaluator. The appointment and existing notes will be preserved. " \
+                          "The new evaluator must confirm the arrangements with the application's contact person.",
+                 confirmation: "Transfer this evaluation to the evaluator selected below? The appointment and existing notes will be preserved. " \
+                               "This transfers responsibility for scheduling and report submission." %>
     <% end %>
   <% else %>
-    <!-- Dropdown assignment: one select, one submit -->
     <h3 class="text-sm font-semibold text-gray-900 mb-3"><%= local_assigns[:assignment_heading].presence || "Assign #{type.titleize}" %></h3>
     <% if available_assignees.blank? %>
       <p class="text-sm text-gray-500">No <%= type.pluralize %> are currently available for assignment.</p>
@@ -100,11 +108,11 @@
           <%= select_tag assign_param,
                          options_from_collection_for_select(available_assignees, :id, ->(person) { practitioner_assignment_option_label(person) }),
                          include_blank: "Select a #{type}…",
-                         class: 'block h-10 w-full rounded-md border-gray-300 text-sm shadow-sm focus:border-indigo-500 focus:ring-indigo-500',
+                         class: 'form-input h-10 text-sm',
                          required: true %>
         </div>
         <%= submit_tag local_assigns[:assignment_submit_label].presence || "Assign #{type.titleize}",
-            class: "inline-flex h-10 items-center justify-center rounded-md border border-transparent bg-indigo-600 px-4 py-2 text-sm font-medium text-white shadow-sm hover:bg-indigo-700 focus:outline-none focus:ring-2 focus:ring-indigo-500 focus:ring-offset-2" %>
+            class: "btn btn-primary h-10" %>
       <% end %>
     <% end %>
   <% end %>

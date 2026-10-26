@@ -2,7 +2,6 @@
 
 FactoryBot.define do
   factory :recovery_request do
-    # Create a unique user to avoid conflicts
     user factory: %i[user], email: "recovery-user-#{SecureRandom.hex(4)}@example.com"
     status { 'pending' }
     details { 'Lost my security key during travel' }

@@ -2,7 +2,7 @@
 <% scan = document_scan_for(document) # rubocop:disable Lint/UselessAssignment -- Used by later ERB fragments. %>
 <div class="mt-2 flex flex-wrap items-center gap-2 text-sm" data-testid="document-scan-status" data-scan-status="<%= scan&.status || 'not_scanned' %>">
   <span class="text-gray-600">Virus scan</span>
-  <span class="inline-flex rounded-full px-2 py-0.5 text-xs font-medium <%= badge_class_for(:document_scan, scan&.status) %>">
+  <span class="<%= badge_class_for(:document_scan, scan&.status) %>">
     <%= badge_label_for(:document_scan, scan&.status) %>
   </span>
   <% if scan&.completed_at %>

@@ -1,12 +1,10 @@
-<%# Medical Certification Section Content
-     This partial is rendered inside #medical-certification-section and can be
-     updated via Turbo Stream for a smooth UX without full page reload. %>
+<%# Rendered inside #medical-certification-section, whose contents Turbo Stream updates replace. %>
 <% preload_document_scans([@application.medical_certification, *@application.additional_medical_certifications.attachments]) %>
 <div class="flex justify-between items-start">
   <div class="flex items-center gap-3">
     <h2 id="certification-title" class="text-xl font-semibold text-gray-900">Disability Certification</h2>
     <% if @application.medical_certification_status == 'not_requested' %>
-      <span class="inline-flex items-center px-2.5 py-0.5 rounded-md text-sm font-medium bg-gray-100 text-gray-700">
+      <span class="badge badge-neutral">
         Not Requested
       </span>
     <% end %>
@@ -18,14 +16,12 @@
 </div>
 
 <% if @application.dcf_auto_request_not_sent? %>
-  <p role="status" class="mt-4 rounded bg-amber-50 p-4 text-amber-900">Auto-send not sent — request manually. Check the provider email and communication settings before sending the request below.</p>
+  <p role="status" class="mt-4 rounded bg-warning-50 p-4 text-warning-900">Auto-send not sent — request manually. Check the provider email and communication settings before sending the request below.</p>
 <% end %>
 
 <div class="mt-6 space-y-4">
-  <!-- Disability Certification Upload Form (hidden while a certification awaits review or is approved) -->
   <%= render 'medical_certification_upload' %>
 
-  <!-- Medical Certification -->
   <% if @application.medical_certification.attached? %>
     <div class="mb-4" data-testid="medical-certification">
       <h3 class="text-sm font-medium text-gray-700 mb-2">Medical Certification</h3>
@@ -41,7 +37,7 @@
             <%= render 'shared/document_scan_status', document: @application.medical_certification %>
           </div>
           <a href="<%= document_download_path(@application.medical_certification, disposition: 'attachment') %>"
-             class="inline-flex items-center px-3 py-1 border border-transparent rounded-md shadow-sm text-sm font-medium text-white bg-indigo-600 hover:bg-indigo-700"
+             class="btn btn-primary btn-sm"
              download>
             Download
           </a>
@@ -66,7 +62,7 @@
               <%= render 'shared/document_scan_status', document: certification %>
             </div>
             <a href="<%= document_download_path(certification, disposition: 'attachment') %>"
-               class="shrink-0 ml-3 inline-flex items-center px-3 py-1 border border-transparent rounded-md shadow-sm text-sm font-medium text-white bg-indigo-600 hover:bg-indigo-700"
+               class="btn btn-primary btn-sm ml-3 shrink-0"
                download>
               Download
             </a>
@@ -76,7 +72,6 @@
     </div>
   <% end %>
 
-  <!-- Provider Information -->
   <% if @application.medical_provider_info_present? %>
     <div class="mb-4" data-testid="provider-information">
       <h3 class="text-sm font-medium text-gray-700 mb-2">Provider Information</h3>
@@ -104,22 +99,17 @@
 
   <%= render 'medical_provider_secure_request_forms_panel' %>
 
-  <!-- Action Buttons -->
   <div class="mt-6">
     <%# RuboCop checks each ERB fragment separately; the local is read below. %>
     <% certification_action_state = medical_certification_action_state(@application, secure_request_forms: @medical_provider_secure_request_forms) %> <%# erb_lint:disable Rubocop %>
 
     <% if show_medical_certification_request_buttons?(@application) && !@application.document_signing_status_signed? %>
       <div class="flex flex-wrap gap-2">
-        <!-- DocuSeal Button (Default) -->
       <% if FeatureFlag.enabled?(:docusign_enabled, default: true) %>
         <% if certification_action_state.provider_ready_for_docuseal %>
           <%= button_to send_document_signing_request_admin_application_path(@application),
                         method: :post,
-                        class: [
-                          'inline-flex items-center px-4 py-2 border border-transparent rounded-md shadow-sm text-sm font-medium text-white',
-                          'bg-indigo-600 hover:bg-indigo-700 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-indigo-500'
-                        ],
+                        class: 'btn btn-primary',
                         form: {
                           data: {
                             turbo_confirm: certification_action_state.docuseal_confirm,
@@ -136,7 +126,7 @@
           <button disabled
                   aria-disabled="true"
                   aria-describedby="docuseal-disabled-reason"
-                  class="inline-flex items-center px-4 py-2 border border-gray-300 rounded-md shadow-sm text-sm font-medium text-gray-400 bg-gray-100 cursor-not-allowed">
+                  class="btn btn-outline">
             <%= certification_action_state.docuseal_text %>
           </button>
           <p id="docuseal-disabled-reason" class="w-full text-sm text-gray-600">Provider name and email required for DocuSeal</p>
@@ -145,10 +135,7 @@
         <%= button_to queue_medical_certification_form_admin_application_path(@application),
                       method: :post,
                       params: { operation_id: SecureRandom.uuid },
-                      class: [
-                        'inline-flex items-center px-4 py-2 border border-gray-300 rounded-md shadow-sm text-sm font-medium text-gray-700 bg-white',
-                        'hover:bg-gray-50 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-indigo-500'
-                      ],
+                      class: 'btn btn-outline',
                       data: {
                         disable_with: 'Queuing...',
                         turbo_confirm: 'Add Disability Certification Form to the print queue?'
@@ -165,7 +152,7 @@
       <button type="button"
             data-action="click->modal#open"
             data-modal-id="medicalCertificationReviewModal"
-            class="inline-flex items-center px-4 py-2 border border-transparent rounded-md shadow-sm text-sm font-medium text-white bg-blue-600 hover:bg-blue-700 focus:outline-none">
+            class="btn btn-primary">
         Review Disability Certification
       </button>
     <% end %>
@@ -175,10 +162,7 @@
         <% if @application.medical_provider_email.present? %>
           <%= button_to admin_application_certification_upload_request_path(@application),
                         method: :post,
-                        class: [
-                          'inline-flex items-center px-4 py-2 border border-gray-300 rounded-md shadow-sm text-sm font-medium text-gray-700',
-                          'bg-white hover:bg-gray-50 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-indigo-500'
-                        ],
+                        class: 'btn btn-outline',
                         form: {
                           data: {
                             turbo_confirm: certification_action_state.secure_cert_upload_confirm,
@@ -195,7 +179,7 @@
           <button disabled
                   aria-disabled="true"
                   aria-describedby="secure-cert-upload-disabled-reason"
-                  class="inline-flex items-center px-4 py-2 border border-gray-300 rounded-md shadow-sm text-sm font-medium text-gray-400 bg-gray-100 cursor-not-allowed">
+                  class="btn btn-outline">
             Send Secure Cert Upload Link
           </button>
           <p id="secure-cert-upload-disabled-reason" class="w-full text-sm text-gray-600" data-testid="secure-cert-upload-disabled-reason">

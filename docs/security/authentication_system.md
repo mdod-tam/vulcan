@@ -100,7 +100,7 @@ A JSON caller that silently retries will just fail again. If the page holds sele
 
 [`AuthRateLimit`](../../app/services/auth_rate_limit.rb) owns failed sign-in, account-access, and recovery throttles. Its limits are backed by policy. Its keys and audit metadata hold identifier digests rather than raw identifiers. [`PublicAuditActor`](../../app/services/public_audit_actor.rb) attributes unauthenticated events to the configured system user. If that user is missing, it skips the event with a warning.
 
-Provision `system@mdmat.org` during [initial account setup](../infrastructure/setup_and_maintenance.md#initial-accounts). Public requests do not create it. A registration that needs a duplicate-review case also depends on this actor and rolls back if it is absent.
+`bin/rails db:bootstrap` provisions `system@mdmat.org` ([bootstrapping an environment](../infrastructure/setup_and_maintenance.md#bootstrapping-an-environment)). Public requests do not create it. A registration that needs a duplicate-review case also depends on this actor and rolls back if it is absent.
 
 MFA verification mostly writes Rails logs through `TwoFactorAuth` rather than `Event` rows. Attempt history is therefore not in the audit trail.
 

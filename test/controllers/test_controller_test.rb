@@ -4,7 +4,7 @@ require 'test_helper'
 
 class TestControllerTest < ActionDispatch::IntegrationTest
   setup do
-    @admin = create(:admin) # Or any user type appropriate for testing this endpoint
+    @admin = create(:admin)
   end
 
   test 'auth_status should return unauthenticated when not signed in' do

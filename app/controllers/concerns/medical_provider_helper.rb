@@ -1,7 +1,7 @@
 # frozen_string_literal: true
 
-# Provides standardized methods for handling medical provider data across controllers
-# Uses ApplicationDataStructures::MedicalProviderInfo for consistent provider creation
+# Builds ApplicationDataStructures::MedicalProviderInfo objects from an application or from parameters,
+# and validates them.
 module MedicalProviderHelper
   extend ActiveSupport::Concern
 

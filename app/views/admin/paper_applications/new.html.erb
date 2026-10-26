@@ -1,14 +1,14 @@
 <div class="min-h-screen bg-gradient-to-br from-slate-50 to-slate-100 py-8" data-controller="paper-application">
   <div class="max-w-4xl mx-auto px-4 sm:px-6 lg:px-8">
-    <div class="bg-white rounded-lg shadow-sm border border-slate-200 mb-6">
+    <div class="card border border-slate-200 mb-6">
       <div class="px-6 py-4 border-b border-slate-200">
         <div class="flex justify-between items-center">
           <div>
             <h1 class="text-2xl font-bold text-slate-900">Apply for Constituent</h1>
             <p class="mt-1 text-sm text-slate-600">Enter information from a handwritten application form</p>
-            <p class="text-l text-gray-900"><span class="text-[#ff0000]">*</span> Indicates a required field</p>
+            <p class="text-base text-gray-900"><span class="text-danger-700">*</span> Indicates a required field</p>
           </div>
-          <%= link_to admin_applications_path, class: "inline-flex items-center gap-2 px-4 py-2 border border-slate-300 rounded-md shadow-sm text-sm font-medium text-slate-700 bg-white hover:bg-slate-50 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-indigo-500 transition-colors", data: { turbo_frame: "_top" }, aria: { label: "Return to applications dashboard" } do %>
+          <%= link_to admin_applications_path, class: "btn btn-outline", data: { turbo_frame: "_top" }, aria: { label: "Return to applications dashboard" } do %>
             <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24" aria-hidden="true">
               <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M10 19l-7-7m0 0l7-7m-7 7h18"/>
             </svg>
@@ -62,13 +62,13 @@
       data: paper_form_data) do |form| %>
 
       <% if @restored_from_submission %>
-        <div class="rounded-md bg-amber-50 border border-amber-300 p-4" role="status">
-          <h2 class="text-sm font-semibold text-amber-900">Your entries were restored</h2>
-          <p class="mt-1 text-sm text-amber-800">
+        <div class="rounded-md bg-warning-50 border border-warning-300 p-4" role="status">
+          <h2 class="text-sm font-semibold text-warning-900">Your entries were restored</h2>
+          <p class="mt-1 text-sm text-warning-800">
             Review the message above, make any corrections, and submit again. Uploaded documents are listed by filename below.
           </p>
           <% if @proofs_needing_reattachment.present? %>
-            <p class="mt-2 text-sm text-amber-800">
+            <p class="mt-2 text-sm text-warning-800">
               Based on the selections restored above, reattach:
               <strong><%= @proofs_needing_reattachment.to_sentence %></strong>.
             </p>
@@ -76,10 +76,10 @@
         </div>
       <% end %>
 
-      <section class="bg-white rounded-lg shadow-sm border border-slate-200 overflow-hidden">
-        <div class="px-6 py-4 bg-indigo-50 border-b border-indigo-100">
-          <h2 id="step1-heading" class="text-lg font-semibold text-indigo-900 flex items-center gap-2">
-            <span class="flex items-center justify-center w-7 h-7 rounded-full bg-indigo-600 text-white text-sm font-bold">1</span>
+      <section class="card border border-slate-200 overflow-hidden">
+        <div class="px-6 py-4 bg-primary-50 border-b border-primary-100">
+          <h2 id="step1-heading" class="text-lg font-semibold text-primary-900 flex items-center gap-2">
+            <span class="flex items-center justify-center w-7 h-7 rounded-full bg-primary-600 text-white text-sm font-bold">1</span>
             Who is this application for?
           </h2>
         </div>
@@ -90,12 +90,12 @@
             <legend class="sr-only">Applicant type</legend>
             <p id="applicant-type-help" class="text-sm text-gray-600 mb-4">Select who this application is for.</p>
             <div class="space-y-4">
-              <label class="flex items-start p-4 border-2 rounded-lg cursor-pointer transition-all hover:border-indigo-300 has-[:checked]:border-indigo-500 has-[:checked]:bg-indigo-50">
+              <label class="flex items-start p-4 border-2 rounded-lg cursor-pointer transition-all hover:border-primary-300 has-[:checked]:border-primary-500 has-[:checked]:bg-primary-50">
                 <input type="radio"
                        id="applicant_is_adult"
                        name="applicant_type"
                        value="self"
-                       class="mt-1 h-4 w-4 text-indigo-600 focus:ring-indigo-500 border-gray-300"
+                       class="mt-1 h-4 w-4 text-primary-600 border-gray-300"
                        <%= 'checked' unless @applicant_type == 'dependent' %>
                        data-applicant-type-target="radio">
                 <span class="ml-3">
@@ -104,12 +104,12 @@
                 </span>
               </label>
 
-              <label class="flex items-start p-4 border-2 rounded-lg cursor-pointer transition-all hover:border-indigo-300 has-[:checked]:border-indigo-500 has-[:checked]:bg-indigo-50">
+              <label class="flex items-start p-4 border-2 rounded-lg cursor-pointer transition-all hover:border-primary-300 has-[:checked]:border-primary-500 has-[:checked]:bg-primary-50">
                 <input type="radio"
                        id="applicant_is_minor"
                        name="applicant_type"
                        value="dependent"
-                       class="mt-1 h-4 w-4 text-indigo-600 focus:ring-indigo-500 border-gray-300"
+                       class="mt-1 h-4 w-4 text-primary-600 border-gray-300"
                        <%= 'checked' if @applicant_type == 'dependent' %>
                        data-applicant-type-target="radio"
                        data-guardian-picker-target="applicantTypeRadioDependent">
@@ -132,7 +132,7 @@
       <div class="contents" data-controller="adult-picker"
            data-adult-picker-restored-value="<%= @restored_from_submission ? 'true' : 'false' %>">
       <section id="adult-search-section"
-               class="bg-white rounded-lg shadow-sm border border-slate-200 overflow-hidden hidden"
+               class="card border border-slate-200 overflow-hidden hidden"
                data-applicant-type-target="adultSearchSection">
         <div class="px-6 py-4 bg-blue-50 border-b border-blue-100">
           <h2 id="step2-adult-search-heading" class="text-lg font-semibold text-blue-900 flex items-center gap-2">
@@ -153,13 +153,13 @@
                   <label for="adult_search_q" class="sr-only">Search by name or email</label>
                   <div class="relative">
                     <div class="absolute inset-y-0 left-0 pl-3 flex items-center pointer-events-none">
-                      <svg class="h-5 w-5 text-gray-400" fill="none" stroke="currentColor" viewBox="0 0 24 24" aria-hidden="true">
+                      <svg class="h-5 w-5 text-gray-500" fill="none" stroke="currentColor" viewBox="0 0 24 24" aria-hidden="true">
                         <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M21 21l-6-6m2-5a7 7 0 11-14 0 7 7 0 0114 0z"/>
                       </svg>
                     </div>
                     <input id="adult_search_q"
                            placeholder="Search by name or email"
-                           class="block w-full pl-10 pr-3 py-2 rounded-md border-gray-300 shadow-sm focus:border-indigo-500 focus:ring-indigo-500 sm:text-sm"
+                           class="form-input pl-10"
                            data-action="input->admin-user-search#performSearch"
                            data-admin-user-search-target="searchInput"
                            type="text"
@@ -168,7 +168,7 @@
                   </div>
                 </div>
                 <button type="button"
-                        class="inline-flex items-center px-4 py-2 border border-gray-300 rounded-md shadow-sm text-sm font-medium text-gray-700 bg-white hover:bg-gray-50 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-indigo-500"
+                        class="btn btn-outline"
                         data-action="click->admin-user-search#clearSearchAndShowForm">
                   Clear
                 </button>
@@ -182,7 +182,7 @@
 
               <div class="mt-4 pt-4 border-t border-gray-200">
                 <button type="button"
-                        class="inline-flex items-center gap-2 text-sm font-medium text-indigo-600 hover:text-indigo-500"
+                        class="inline-flex items-center gap-2 text-sm font-medium text-primary-600 hover:text-primary-500"
                         data-action="adult-picker#createNewApplicant">
                   <svg class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24" aria-hidden="true">
                     <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 6v6m0 0v6m0-6h6m-6 0H6"/>
@@ -194,12 +194,12 @@
           </div>
 
           <div data-adult-picker-target="selectedPane" class="hidden">
-            <div class="p-4 border-2 border-green-200 bg-green-50 rounded-lg">
+            <div class="p-4 border-2 border-success-200 bg-success-50 rounded-lg">
               <div class="flex justify-between items-start">
                 <div class="flex-grow">
                   <h3 id="adult-picker-selected-heading" tabindex="-1"
                       data-adult-picker-target="selectedHeading"
-                      class="text-sm font-semibold text-green-800 mb-2 flex items-center gap-2">
+                      class="text-sm font-semibold text-success-800 mb-2 flex items-center gap-2">
                     <svg class="w-5 h-5" fill="currentColor" viewBox="0 0 20 20" aria-hidden="true">
                       <path fill-rule="evenodd" d="M10 18a8 8 0 100-16 8 8 0 000 16zm3.707-9.293a1 1 0 00-1.414-1.414L9 10.586 7.707 9.293a1 1 0 00-1.414 1.414l2 2a1 1 0 001.414 0l4-4z" clip-rule="evenodd"/>
                     </svg>
@@ -208,7 +208,7 @@
                   <div class="text-sm adult-details-container"></div>
                 </div>
                 <button type="button"
-                        class="inline-flex items-center gap-1 px-3 py-1.5 text-xs font-medium text-gray-600 hover:text-gray-800 bg-white border border-gray-300 rounded-md hover:bg-gray-50"
+                        class="btn btn-outline btn-sm"
                         data-action="adult-picker#clearSelection">
                   <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24" aria-hidden="true">
                     <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M4 4v5h.582m15.356 2A8.001 8.001 0 004.582 9m0 0H9m11 11v-5h-.581m0 0a8.003 8.003 0 01-15.357-2m15.357 2H15"/>
@@ -224,7 +224,7 @@
         </div>
       </section>
 
-      <section class="bg-white rounded-lg shadow-sm border border-slate-200 overflow-hidden"
+      <section class="card border border-slate-200 overflow-hidden"
                id="self-info-section"
                data-applicant-type-target="adultSection">
         <div class="px-6 py-4 bg-blue-50 border-b border-blue-100">
@@ -236,8 +236,8 @@
         </div>
         <div class="p-6">
           <div data-adult-picker-target="onFileSummary" class="hidden mb-6">
-            <div class="p-4 border-2 border-green-200 bg-green-50 rounded-lg">
-              <h4 class="text-sm font-semibold text-green-800 mb-2 flex items-center gap-2">
+            <div class="p-4 border-2 border-success-200 bg-success-50 rounded-lg">
+              <h4 class="text-sm font-semibold text-success-800 mb-2 flex items-center gap-2">
                 <svg class="w-5 h-5" fill="currentColor" viewBox="0 0 20 20" aria-hidden="true">
                   <path fill-rule="evenodd" d="M10 18a8 8 0 100-16 8 8 0 000 16zm3.707-9.293a1 1 0 00-1.414-1.414L9 10.586 7.707 9.293a1 1 0 00-1.414 1.414l2 2a1 1 0 001.414 0l4-4z" clip-rule="evenodd"/>
                 </svg>
@@ -246,13 +246,13 @@
               <div data-adult-picker-target="onFileSummaryContent" class="text-sm text-gray-700"></div>
               <div class="mt-4 flex flex-wrap gap-2">
                 <button type="button"
-                        class="hidden inline-flex items-center px-3 py-1.5 text-xs font-medium text-blue-700 bg-white border border-blue-200 rounded-md hover:bg-blue-100"
+                        class="hidden inline-flex items-center px-3 py-1.5 text-xs font-medium text-info-700 bg-white border border-info-200 rounded-md hover:bg-info-100"
                         data-adult-picker-target="incomeCopyButton"
                         data-action="adult-picker#useLastApplicationIncomeInfo">
                   Use last application household and income
                 </button>
                 <button type="button"
-                        class="hidden inline-flex items-center px-3 py-1.5 text-xs font-medium text-blue-700 bg-white border border-blue-200 rounded-md hover:bg-blue-100"
+                        class="hidden inline-flex items-center px-3 py-1.5 text-xs font-medium text-info-700 bg-white border border-info-200 rounded-md hover:bg-info-100"
                         data-adult-picker-target="medicalCopyButton"
                         data-action="adult-picker#useLastApplicationMedicalProvider">
                   Use last application medical provider
@@ -262,27 +262,27 @@
           </div>
 
           <div data-adult-picker-target="contactModeSection" class="hidden mb-6">
-            <fieldset class="p-4 bg-amber-50 border border-amber-200 rounded-lg">
-              <legend class="text-sm font-semibold text-amber-900 px-2">Contact Information Mode</legend>
-              <p class="text-xs text-amber-700 mb-3">Choose how to handle contact information for this applicant</p>
+            <fieldset class="p-4 bg-warning-50 border border-warning-200 rounded-lg">
+              <legend class="text-sm font-semibold text-warning-900 px-2">Contact Information Mode</legend>
+              <p class="text-xs text-warning-700 mb-3">Choose how to handle contact information for this applicant</p>
               <div class="flex flex-wrap gap-6">
                 <label class="flex items-start cursor-pointer">
                   <input type="radio" name="contact_info_mode" value="update" <%= "checked" if contact_info_mode != "on_file" %>
-                         class="mt-1 h-4 w-4 text-indigo-600 focus:ring-indigo-500 border-gray-300"
+                         class="mt-1 h-4 w-4 text-primary-600 border-gray-300"
                          data-adult-picker-target="contactModeRadio"
                          data-action="change->adult-picker#contactModeChanged">
                   <span class="ml-2">
-                    <span class="block text-sm font-medium text-gray-700">Update from paper form</span>
+                    <span class="form-label">Update from paper form</span>
                     <span class="block text-xs text-gray-500">Fields are prefilled and editable. Changes will be saved.</span>
                   </span>
                 </label>
                 <label class="flex items-start cursor-pointer">
                   <input type="radio" name="contact_info_mode" value="on_file" <%= "checked" if contact_info_mode == "on_file" %>
-                         class="mt-1 h-4 w-4 text-indigo-600 focus:ring-indigo-500 border-gray-300"
+                         class="mt-1 h-4 w-4 text-primary-600 border-gray-300"
                          data-adult-picker-target="contactModeRadio"
                          data-action="change->adult-picker#contactModeChanged">
                   <span class="ml-2">
-                    <span class="block text-sm font-medium text-gray-700">Use on-file contact info</span>
+                    <span class="form-label">Use on-file contact info</span>
                     <span class="block text-xs text-gray-500">Contact fields will be read-only. No changes saved.</span>
                   </span>
                 </label>
@@ -293,15 +293,15 @@
           <%= render 'self_application_fields' %>
 
           <div data-adult-picker-target="verificationSection" class="hidden mt-6">
-            <div class="p-4 bg-blue-50 border border-blue-200 rounded-lg">
+            <div class="p-4 bg-info-50 border border-info-200 rounded-lg">
               <label class="flex items-start cursor-pointer">
                 <%= hidden_field_tag :contact_info_verified, "0", id: nil %>
                 <input type="checkbox" name="contact_info_verified" value="1" <%= "checked" if contact_info_verified %>
-                       class="mt-1 h-4 w-4 text-indigo-600 focus:ring-indigo-500 border-gray-300 rounded"
+                       class="mt-1 h-4 w-4 text-primary-600 border-gray-300 rounded"
                        data-adult-picker-target="verificationCheckbox"
                        data-action="change->adult-picker#verificationChanged">
                 <span class="ml-3">
-                  <span class="block text-sm font-medium text-gray-700">I verified contact info against the paper application</span>
+                  <span class="form-label">I verified contact info against the paper application</span>
                   <span class="block text-xs text-gray-500 mt-1">Required when selecting an existing applicant</span>
                 </span>
               </label>
@@ -312,7 +312,7 @@
       </div>
 
       <fieldset id="guardian-info-section"
-               class="bg-white rounded-lg shadow-sm border border-slate-200 overflow-hidden hidden"
+               class="card border border-slate-200 overflow-hidden hidden"
                data-controller="guardian-picker"
                data-applicant-type-target="guardianSection">
         <legend id="step2-guardian-heading" class="px-6 py-4 bg-amber-50 border-b border-amber-100 w-full block">
@@ -336,13 +336,13 @@
                   <label for="guardian_search_q" class="sr-only">Search by name or email</label>
                   <div class="relative">
                     <div class="absolute inset-y-0 left-0 pl-3 flex items-center pointer-events-none">
-                      <svg class="h-5 w-5 text-gray-400" fill="none" stroke="currentColor" viewBox="0 0 24 24" aria-hidden="true">
+                      <svg class="h-5 w-5 text-gray-500" fill="none" stroke="currentColor" viewBox="0 0 24 24" aria-hidden="true">
                         <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M21 21l-6-6m2-5a7 7 0 11-14 0 7 7 0 0114 0z"/>
                       </svg>
                     </div>
                     <input id="guardian_search_q"
                            placeholder="Search by name or email"
-                           class="block w-full pl-10 pr-3 py-2 rounded-md border-gray-300 shadow-sm focus:border-indigo-500 focus:ring-indigo-500 sm:text-sm"
+                           class="form-input pl-10"
                            data-action="input->admin-user-search#performSearch"
                            data-admin-user-search-target="searchInput"
                            type="text"
@@ -351,7 +351,7 @@
                   </div>
                 </div>
                 <button type="button"
-                        class="inline-flex items-center px-4 py-2 border border-gray-300 rounded-md shadow-sm text-sm font-medium text-gray-700 bg-white hover:bg-gray-50 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-indigo-500"
+                        class="btn btn-outline"
                         data-action="click->admin-user-search#clearSearchAndShowForm">
                   Clear
                 </button>
@@ -368,7 +368,7 @@
 
               <div class="mt-4 pt-4 border-t border-gray-200">
                 <%= link_to new_admin_paper_application_path(show_create_guardian_form: true),
-                    class: "inline-flex items-center gap-2 text-sm font-medium text-indigo-600 hover:text-indigo-500" do %>
+                    class: "inline-flex items-center gap-2 text-sm font-medium text-primary-600 hover:text-primary-500" do %>
                   <svg class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24" aria-hidden="true">
                     <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 6v6m0 0v6m0-6h6m-6 0H6"/>
                   </svg>
@@ -383,10 +383,10 @@
           </div>
 
           <div data-guardian-picker-target="selectedPane" class="hidden">
-            <div class="p-4 border-2 border-green-200 bg-green-50 rounded-lg">
+            <div class="p-4 border-2 border-success-200 bg-success-50 rounded-lg">
               <div class="flex justify-between items-start">
                 <div class="flex-grow">
-                  <h3 class="text-sm font-semibold text-green-800 mb-2 flex items-center gap-2">
+                  <h3 class="text-sm font-semibold text-success-800 mb-2 flex items-center gap-2">
                     <svg class="w-5 h-5" fill="currentColor" viewBox="0 0 20 20" aria-hidden="true">
                       <path fill-rule="evenodd" d="M10 18a8 8 0 100-16 8 8 0 000 16zm3.707-9.293a1 1 0 00-1.414-1.414L9 10.586 7.707 9.293a1 1 0 00-1.414 1.414l2 2a1 1 0 001.414 0l4-4z" clip-rule="evenodd"/>
                     </svg>
@@ -402,21 +402,21 @@
                   <%# The labeled frame receives focus if Change Dependent runs before its chooser renders. %>
                   <%= turbo_frame_tag "guardian_dependents", target: "_top", "data-guardian-picker-target": "dependentsFrame", class: "mt-3 block", tabindex: "-1", "aria-label": "Dependents on file for the selected guardian" do %>
                   <% end %>
-                  <div data-guardian-picker-target="lastApplicationSummary" class="hidden mt-4 rounded-md bg-blue-50 p-3">
-                    <p class="text-sm text-blue-700">
+                  <div data-guardian-picker-target="lastApplicationSummary" class="hidden mt-4 rounded-md bg-info-50 p-3">
+                    <p class="text-sm text-info-700">
                       <span class="font-medium">Last application on file:</span>
                       <span data-guardian-picker-target="lastApplicationSource"></span>
                     </p>
-                    <p data-guardian-picker-target="lastApplicationDetails" class="mt-2 text-xs text-blue-700"></p>
+                    <p data-guardian-picker-target="lastApplicationDetails" class="mt-2 text-xs text-info-700"></p>
                     <div class="mt-3 flex flex-wrap gap-2">
                       <button type="button"
-                              class="hidden inline-flex items-center px-3 py-1.5 text-xs font-medium text-blue-700 bg-white border border-blue-200 rounded-md hover:bg-blue-100"
+                              class="hidden inline-flex items-center px-3 py-1.5 text-xs font-medium text-info-700 bg-white border border-info-200 rounded-md hover:bg-info-100"
                               data-guardian-picker-target="incomeCopyButton"
                               data-action="guardian-picker#useLastApplicationIncomeInfo">
                         Use last application household and income
                       </button>
                       <button type="button"
-                              class="hidden inline-flex items-center px-3 py-1.5 text-xs font-medium text-blue-700 bg-white border border-blue-200 rounded-md hover:bg-blue-100"
+                              class="hidden inline-flex items-center px-3 py-1.5 text-xs font-medium text-info-700 bg-white border border-info-200 rounded-md hover:bg-info-100"
                               data-guardian-picker-target="medicalCopyButton"
                               data-action="guardian-picker#useLastApplicationMedicalProvider">
                         Use last application medical provider
@@ -425,7 +425,7 @@
                   </div>
                 </div>
                 <button type="button"
-                        class="inline-flex items-center gap-1 px-3 py-1.5 text-xs font-medium text-gray-600 hover:text-gray-800 bg-white border border-gray-300 rounded-md hover:bg-gray-50"
+                        class="btn btn-outline btn-sm"
                         data-action="guardian-picker#clearSelection">
                   <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24" aria-hidden="true">
                     <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M4 4v5h.582m15.356 2A8.001 8.001 0 004.582 9m0 0H9m11 11v-5h-.581m0 0a8.003 8.003 0 01-15.357-2m15.357 2H15"/>
@@ -443,7 +443,7 @@
       </fieldset>
 
       <div class="hidden" data-applicant-type-target="sectionsForDependentWithGuardian">
-        <section class="bg-white rounded-lg shadow-sm border border-slate-200 overflow-hidden">
+        <section class="card border border-slate-200 overflow-hidden">
           <div class="px-6 py-4 bg-teal-50 border-b border-teal-100">
             <h2 id="step3-dependent-heading" class="text-lg font-semibold text-teal-900 flex items-center gap-2">
               <span class="flex items-center justify-center w-7 h-7 rounded-full bg-teal-600 text-white text-sm font-bold">3</span>
@@ -467,7 +467,7 @@
 
       <div data-applicant-type-target="commonSections" class="hidden space-y-6">
 
-        <section class="bg-white rounded-lg shadow-sm border border-slate-200 overflow-hidden">
+        <section class="card border border-slate-200 overflow-hidden">
           <div class="px-6 py-4 bg-purple-50 border-b border-purple-100">
             <h2 id="disability-heading" class="text-lg font-semibold text-purple-900 flex items-center gap-2">
               <span class="flex items-center justify-center w-7 h-7 rounded-full bg-purple-600 text-white text-sm font-bold" data-applicant-type-target="stepNumber">3</span>
@@ -489,12 +489,12 @@
                   <%= check_box_tag "applicant_attributes[self_certify_disability]", "1",
                       @paper_application[:application]&.self_certify_disability,
                       id: "applicant_attributes_self_certify_disability",
-                      class: "mt-1 h-4 w-4 text-indigo-600 focus:ring-indigo-500 border-gray-300 rounded",
+                      class: "mt-1 h-4 w-4 text-primary-600 border-gray-300 rounded",
                       required: true,
                       "aria-required": "true",
                       "aria-describedby": "self_certify_hint" %>
                   <label for="applicant_attributes_self_certify_disability" class="ml-3">
-                    <span class="block text-sm font-medium text-gray-700">The applicant certifies that they have a disability that affects their ability to access telecommunications services</span>
+                    <span class="form-label">The applicant certifies that they have a disability that affects their ability to access telecommunications services</span>
                     <span id="self_certify_hint" class="block text-xs text-gray-500 mt-1">Required for program eligibility</span>
                   </label>
                 </div>
@@ -505,7 +505,7 @@
                   <div class="grid grid-cols-2 md:grid-cols-3 gap-3">
                     <% %i[hearing vision speech mobility cognition].each do |disability| %>
                       <label class="flex items-center p-3 bg-white border border-gray-200 rounded-lg hover:bg-gray-50 cursor-pointer">
-                        <%= app_f.check_box "#{disability}_disability", class: "h-4 w-4 text-indigo-600 focus:ring-indigo-500 border-gray-300 rounded" %>
+                        <%= app_f.check_box "#{disability}_disability", class: "h-4 w-4 text-primary-600 border-gray-300 rounded" %>
                         <span class="ml-2 text-sm text-gray-700"><%= disability.to_s.titleize %></span>
                       </label>
                     <% end %>
@@ -523,7 +523,7 @@
                         nil,
                         ActiveModel::Type::Boolean.new.cast(submitted_params[:no_medical_provider_information]),
                         id: "no_medical_provider_information",
-                        class: "h-4 w-4 rounded border-gray-300 text-indigo-600 shadow-sm focus:border-indigo-500 focus:ring-indigo-500 cursor-pointer",
+                        class: "h-4 w-4 rounded border-gray-300 text-primary-600 shadow-elevation-1 cursor-pointer",
                         data: {
                           "action": "change->paper-application#toggleMedicalProvider"
                         } %>
@@ -533,39 +533,39 @@
               <%= fields_for :application, @paper_application[:application] do |a| %>
                 <div class="grid grid-cols-1 md:grid-cols-2 gap-4">
                   <div class="md:col-span-2">
-                    <%= a.label :medical_provider_name, "Provider Name", class: "block text-sm font-medium text-gray-700 required-label" %>
+                    <%= a.label :medical_provider_name, "Provider Name", class: "form-label required-label" %>
                     <%= a.text_field :medical_provider_name,
                         required: true,
-                        class: "mt-1 block w-full rounded-md border-gray-300 shadow-sm focus:border-indigo-500 focus:ring-indigo-500 sm:text-sm",
+                        class: "form-input mt-1",
                         "aria-required": "true" %>
                   </div>
                   <div>
-                    <%= a.label :medical_provider_phone, "Phone", class: "block text-sm font-medium text-gray-700 required-label" %>
+                    <%= a.label :medical_provider_phone, "Phone", class: "form-label required-label" %>
                     <%= a.telephone_field :medical_provider_phone,
                         required: true,
                         placeholder: "XXX-XXX-XXXX",
-                        class: "mt-1 block w-full rounded-md border-gray-300 shadow-sm focus:border-indigo-500 focus:ring-indigo-500 sm:text-sm",
+                        class: "form-input mt-1",
                         "aria-required": "true" %>
                   </div>
                   <div>
-                    <%= a.label :medical_provider_email, "Email", class: "block text-sm font-medium text-gray-700 required-label" %>
+                    <%= a.label :medical_provider_email, "Email", class: "form-label required-label" %>
                     <%= a.email_field :medical_provider_email,
                         required: true,
-                        class: "mt-1 block w-full rounded-md border-gray-300 shadow-sm focus:border-indigo-500 focus:ring-indigo-500 sm:text-sm",
+                        class: "form-input mt-1",
                         "aria-required": "true" %>
                   </div>
                   <div class="md:col-span-2">
-                    <%= a.label :medical_provider_fax, "Fax (Optional)", class: "block text-sm font-medium text-gray-700" %>
+                    <%= a.label :medical_provider_fax, "Fax (Optional)", class: "form-label" %>
                     <%= a.text_field :medical_provider_fax,
-                        class: "mt-1 block w-full rounded-md border-gray-300 shadow-sm focus:border-indigo-500 focus:ring-indigo-500 sm:text-sm" %>
+                        class: "form-input mt-1" %>
                   </div>
                 </div>
 
                 <div class="mt-6 flex items-start">
                   <%= a.check_box :medical_release_authorized,
-                      { required: true, class: "mt-1 h-4 w-4 text-indigo-600 focus:ring-indigo-500 border-gray-300 rounded" } %>
+                      { required: true, class: "mt-1 h-4 w-4 text-primary-600 border-gray-300 rounded" } %>
                   <label for="application_medical_release_authorized" class="ml-3">
-                    <span class="block text-sm font-medium text-gray-700 required-label">I authorize medical release</span>
+                    <span class="form-label required-label">I authorize medical release</span>
                     <span class="block text-xs text-gray-500 mt-1">I authorize the program to contact this provider to verify my disability certification</span>
                   </label>
                 </div>
@@ -574,58 +574,57 @@
               <div data-controller="document-proof-handler" class="mt-6 pt-6 border-t border-gray-200">
                 <h4 class="text-sm font-semibold text-gray-900 mb-4">Disability Certification</h4>
 
-	                <fieldset class="mb-4">
-	                  <legend class="text-sm font-medium text-gray-700 mb-2">Disability Certification Action</legend>
-	                  <div class="flex flex-wrap gap-4">
-	                    <label class="flex items-center p-3 bg-blue-50 border border-blue-200 rounded-lg cursor-pointer hover:bg-blue-100 has-[:checked]:ring-2 has-[:checked]:ring-blue-500">
-	                      <input type="radio"
-	                             id="upload_only_medical_certification"
-	                             name="medical_certification_action"
-	                             value="upload_only"
-	                             <%= 'checked' if submitted_params[:medical_certification_action] == 'upload_only' %>
-	                             class="h-4 w-4 text-blue-600 focus:ring-blue-500 border-gray-300"
-	                             data-action="change->document-proof-handler#toggleProofAction"
-	                             data-document-proof-handler-target="uploadOnlyRadio">
-	                      <span class="ml-2 text-sm font-medium text-blue-800">Upload for later review</span>
-	                    </label>
-	                    <label class="flex items-center p-3 bg-green-50 border border-green-200 rounded-lg cursor-pointer hover:bg-green-100 has-[:checked]:ring-2 has-[:checked]:ring-green-500">
-	                      <input type="radio"
-	                             id="accept_medical_certification"
+                <fieldset class="mb-4">
+                  <legend class="text-sm font-medium text-gray-700 mb-2">Disability Certification Action</legend>
+                  <div class="flex flex-wrap gap-4">
+                    <label class="flex items-center p-3 bg-info-50 border border-info-200 rounded-lg cursor-pointer hover:bg-info-100 has-[:checked]:ring-2 has-[:checked]:ring-info-500">
+                      <input type="radio"
+                             id="upload_only_medical_certification"
+                             name="medical_certification_action"
+                             value="upload_only"
+                             <%= 'checked' if submitted_params[:medical_certification_action] == 'upload_only' %>
+                             class="h-4 w-4 text-info-600 border-gray-300"
+                             data-action="change->document-proof-handler#toggleProofAction"
+                             data-document-proof-handler-target="uploadOnlyRadio">
+                      <span class="ml-2 text-sm font-medium text-info-800">Upload for later review</span>
+                    </label>
+                    <label class="flex items-center p-3 bg-success-50 border border-success-200 rounded-lg cursor-pointer hover:bg-success-100 has-[:checked]:ring-2 has-[:checked]:ring-success-500">
+                      <input type="radio"
+                             id="accept_medical_certification"
                              name="medical_certification_action"
                              value="approved"
-                                     <%# Default to approval only when no submission exists. A retry with a missing action must
-                                         require a choice. Multiple checked radios would let the last one override the restored
-                                         choice. %>
-	                             <%= 'checked' if submitted_params[:medical_certification_action] == 'approved' || submitted_params.blank? %>
-                             class="h-4 w-4 text-green-600 focus:ring-green-500 border-gray-300"
+                             <%# Default to approval only when no submission exists. A retry with a missing action must
+                                 require a choice. Multiple checked radios would let the last one override the restored
+                                 choice. %>
+                             <%= 'checked' if submitted_params[:medical_certification_action] == 'approved' || submitted_params.blank? %>
+                             class="h-4 w-4 text-success-600 border-gray-300"
                              data-action="change->document-proof-handler#toggleProofAction"
                              data-document-proof-handler-target="acceptRadio">
-                      <span class="ml-2 text-sm font-medium text-green-800">Accept & Upload</span>
+                      <span class="ml-2 text-sm font-medium text-success-800">Accept & Upload</span>
                     </label>
-                    <label class="flex items-center p-3 bg-red-50 border border-red-200 rounded-lg cursor-pointer hover:bg-red-100 has-[:checked]:ring-2 has-[:checked]:ring-red-500">
+                    <label class="flex items-center p-3 bg-danger-50 border border-danger-200 rounded-lg cursor-pointer hover:bg-danger-100 has-[:checked]:ring-2 has-[:checked]:ring-danger-500">
                       <input type="radio"
                              id="reject_medical_certification"
                              name="medical_certification_action"
                              value="rejected"
                              <%= 'checked' if submitted_params[:medical_certification_action] == 'rejected' %>
-                             class="h-4 w-4 text-red-600 focus:ring-red-500 border-gray-300"
+                             class="h-4 w-4 text-danger-600 border-gray-300"
                              data-action="change->document-proof-handler#toggleProofAction"
                              data-document-proof-handler-target="rejectRadio">
-                      <span class="ml-2 text-sm font-medium text-red-800">Reject</span>
+                      <span class="ml-2 text-sm font-medium text-danger-800">Reject</span>
                     </label>
                     <button type="button"
                             id="no_medical_certification_provided"
-                            class="flex items-center p-3 bg-gray-50 border border-gray-200 rounded-lg cursor-pointer hover:bg-gray-100 focus:outline-none focus:ring-2 focus:ring-gray-500 focus:ring-offset-0"
+                            class="flex items-center p-3 bg-gray-50 border border-gray-200 rounded-lg cursor-pointer hover:bg-gray-100"
                             data-action="click->document-proof-handler#handleNoneProvided"
                             data-document-proof-handler-target="noneButton">
-                      <span class="text-lg">📄</span>
-                      <span class="ml-2 text-sm font-medium text-gray-800">None Provided</span>
+                      <span class="text-sm font-medium text-gray-800">None Provided</span>
                     </button>
                   </div>
                 </fieldset>
 
                 <div id="medical_certification_upload" class="mb-4" data-document-proof-handler-target="uploadSection">
-                  <label for="medical_certification" class="block text-sm font-medium text-gray-700 mb-1 required-label">Upload Medical Certification</label>
+                  <label for="medical_certification" class="form-label mb-1 required-label">Upload Medical Certification</label>
                   <%= render 'shared/document_upload',
                              form: form, field: 'medical_certification', model: Application,
                              blob: @uploaded_proofs&.dig('medical_certification'),
@@ -640,10 +639,10 @@
                 <div id="medical_certification_rejection" class="hidden mb-4" data-document-proof-handler-target="rejectionSection">
                   <div class="space-y-4">
                     <div>
-                      <label for="medical_certification_rejection_reason" class="block text-sm font-medium text-gray-700 mb-1">Rejection Reason</label>
+                      <label for="medical_certification_rejection_reason" class="form-label mb-1">Rejection Reason</label>
                       <select id="medical_certification_rejection_reason"
                               name="medical_certification_rejection_reason"
-                              class="block w-full rounded-md border-gray-300 bg-white shadow-sm ring-1 ring-inset ring-gray-300 focus:border-indigo-500 focus:ring-2 focus:ring-indigo-500 sm:text-sm"
+                              class="form-input"
                               data-action="change->document-proof-handler#handleReasonSelectionChanged"
                               data-document-proof-handler-target="rejectionReasonSelect">
                         <option value="">Select a reason</option>
@@ -659,11 +658,11 @@
                     <div id="medical_certification_reason_preview" class="p-3 bg-gray-50 border border-gray-200 rounded-md text-sm text-gray-700 hidden" role="status" aria-live="polite" aria-atomic="true" data-document-proof-handler-target="reasonPreview"></div>
                     <p class="text-xs text-gray-500">
                       Predefined reasons are read-only in this form. To edit that wording, use
-                      <%= link_to "Rejection Reasons", admin_rejection_reasons_path, class: "text-indigo-700 underline hover:text-indigo-900" %>.
+                      <%= link_to "Rejection Reasons", admin_rejection_reasons_path, class: "text-primary-700 underline hover:text-primary-900" %>.
                     </p>
                     <div class="hidden" data-document-proof-handler-target="customReasonSection">
-                      <label for="medical_certification_custom_rejection_reason" class="block text-sm font-medium text-gray-700 mb-1">Custom Rejection Reason</label>
-                      <div class="rounded-md border border-amber-200 bg-amber-50 px-3 py-2 text-sm text-amber-900 mb-2" data-document-proof-handler-target="languageNotice">
+                      <label for="medical_certification_custom_rejection_reason" class="form-label mb-1">Custom Rejection Reason</label>
+                      <div class="rounded-md border border-warning-200 bg-warning-50 px-3 py-2 text-sm text-warning-900 mb-2" data-document-proof-handler-target="languageNotice">
                         Disability certification communications are sent to the certificate signer in English.
                       </div>
                       <textarea id="medical_certification_custom_rejection_reason"
@@ -671,7 +670,7 @@
                                 rows="3"
                                 disabled
                                 placeholder="Enter the rejection reason that will be sent to the certifying professional"
-                                class="block w-full rounded-md border-gray-300 bg-white shadow-sm ring-1 ring-inset ring-gray-300 focus:border-indigo-500 focus:ring-2 focus:ring-indigo-500 sm:text-sm"
+                                class="form-input"
                                 data-document-proof-handler-target="customReasonField"><%= submitted_params[:medical_certification_custom_rejection_reason] %></textarea>
                     </div>
                   </div>
@@ -681,7 +680,7 @@
           </div>
         </section>
 
-        <section class="bg-white rounded-lg shadow-sm border border-slate-200 overflow-hidden">
+        <section class="card border border-slate-200 overflow-hidden">
           <div class="px-6 py-4 bg-slate-50 border-b border-slate-200">
             <h2 id="alternate-contact-heading" class="text-lg font-semibold text-slate-900 flex items-center gap-2">
               <span class="flex items-center justify-center w-7 h-7 rounded-full bg-slate-600 text-white text-sm font-bold" data-applicant-type-target="stepNumber">4</span>
@@ -695,13 +694,13 @@
             <%= fields_for :application, @paper_application[:application] do |a| %>
               <div class="grid grid-cols-1 md:grid-cols-4 gap-4">
                 <div>
-                  <%= a.label :alternate_contact_name, "Name", class: "block text-sm font-medium text-gray-700" %>
+                  <%= a.label :alternate_contact_name, "Name", class: "form-label" %>
                   <%= a.text_field :alternate_contact_name,
                       autocomplete: "name",
-                      class: "mt-1 block w-full rounded-md border-gray-300 shadow-sm focus:border-indigo-500 focus:ring-indigo-500 sm:text-sm" %>
+                      class: "form-input mt-1" %>
                 </div>
                 <div>
-                  <%= a.label :alternate_contact_relationship_type, "Relationship", class: "block text-sm font-medium text-gray-700" %>
+                  <%= a.label :alternate_contact_relationship_type, "Relationship", class: "form-label" %>
                   <%= a.select :alternate_contact_relationship_type,
                       options_for_select([
                         ["Select", ""],
@@ -716,27 +715,27 @@
                       # options_for_select needs the selected value explicitly to preserve the relationship on retry.
                       a.object&.alternate_contact_relationship_type),
                       { include_blank: false },
-                      class: "mt-1 block w-full rounded-md border-gray-300 shadow-sm focus:border-indigo-500 focus:ring-indigo-500 sm:text-sm" %>
+                      class: "form-input mt-1" %>
                 </div>
                 <div>
-                  <%= a.label :alternate_contact_phone, "Phone", class: "block text-sm font-medium text-gray-700" %>
+                  <%= a.label :alternate_contact_phone, "Phone", class: "form-label" %>
                   <%= a.telephone_field :alternate_contact_phone,
                       autocomplete: "tel",
                       placeholder: "XXX-XXX-XXXX",
-                      class: "mt-1 block w-full rounded-md border-gray-300 shadow-sm focus:border-indigo-500 focus:ring-indigo-500 sm:text-sm" %>
+                      class: "form-input mt-1" %>
                 </div>
                 <div>
-                  <%= a.label :alternate_contact_email, "Email", class: "block text-sm font-medium text-gray-700" %>
+                  <%= a.label :alternate_contact_email, "Email", class: "form-label" %>
                   <%= a.email_field :alternate_contact_email,
                       autocomplete: "email",
-                      class: "mt-1 block w-full rounded-md border-gray-300 shadow-sm focus:border-indigo-500 focus:ring-indigo-500 sm:text-sm" %>
+                      class: "form-input mt-1" %>
                 </div>
               </div>
             <% end %>
           </div>
         </section>
 
-        <section class="bg-white rounded-lg shadow-sm border border-slate-200 overflow-hidden">
+        <section class="card border border-slate-200 overflow-hidden">
           <div class="px-6 py-4 bg-emerald-50 border-b border-emerald-100">
             <h2 id="proof-heading" class="text-lg font-semibold text-emerald-900 flex items-center gap-2 w-full">
               <span class="flex items-center justify-center w-7 h-7 rounded-full bg-emerald-600 text-white text-sm font-bold" data-applicant-type-target="stepNumber">5</span>
@@ -758,55 +757,54 @@
               <fieldset class="mb-4">
                 <legend class="text-sm font-medium text-gray-700 mb-2">Income Proof Action</legend>
                 <div class="flex flex-wrap gap-4">
-                  <label class="flex items-center p-3 bg-blue-50 border border-blue-200 rounded-lg cursor-pointer hover:bg-blue-100 has-[:checked]:ring-2 has-[:checked]:ring-blue-500">
+                  <label class="flex items-center p-3 bg-info-50 border border-info-200 rounded-lg cursor-pointer hover:bg-info-100 has-[:checked]:ring-2 has-[:checked]:ring-info-500">
                     <input type="radio"
                            id="upload_only_income_proof"
                            name="income_proof_action"
                            value="upload_only"
                            <%= 'checked' if submitted_params[:income_proof_action] == 'upload_only' %>
-                           class="h-4 w-4 text-blue-600 focus:ring-blue-500 border-gray-300"
+                           class="h-4 w-4 text-info-600 border-gray-300"
                            required
                            data-action="change->document-proof-handler#toggleProofAction change->income-validation#toggleIncomeRequirement"
                            data-document-proof-handler-target="uploadOnlyRadio">
-                    <span class="ml-2 text-sm font-medium text-blue-800">Upload for later review</span>
+                    <span class="ml-2 text-sm font-medium text-info-800">Upload for later review</span>
                   </label>
-                  <label class="flex items-center p-3 bg-green-50 border border-green-200 rounded-lg cursor-pointer hover:bg-green-100 has-[:checked]:ring-2 has-[:checked]:ring-green-500">
+                  <label class="flex items-center p-3 bg-success-50 border border-success-200 rounded-lg cursor-pointer hover:bg-success-100 has-[:checked]:ring-2 has-[:checked]:ring-success-500">
                     <input type="radio"
                            id="accept_income_proof"
                            name="income_proof_action"
                            value="accept"
                            <%= 'checked' if submitted_params[:income_proof_action] == 'accept' %>
-                           class="h-4 w-4 text-green-600 focus:ring-green-500 border-gray-300"
+                           class="h-4 w-4 text-success-600 border-gray-300"
                            required
                            data-action="change->document-proof-handler#toggleProofAction change->income-validation#toggleIncomeRequirement"
                            data-document-proof-handler-target="acceptRadio">
-                    <span class="ml-2 text-sm font-medium text-green-800">Accept & Upload</span>
+                    <span class="ml-2 text-sm font-medium text-success-800">Accept & Upload</span>
                   </label>
-                  <label class="flex items-center p-3 bg-red-50 border border-red-200 rounded-lg cursor-pointer hover:bg-red-100 has-[:checked]:ring-2 has-[:checked]:ring-red-500">
+                  <label class="flex items-center p-3 bg-danger-50 border border-danger-200 rounded-lg cursor-pointer hover:bg-danger-100 has-[:checked]:ring-2 has-[:checked]:ring-danger-500">
                     <input type="radio"
                            id="reject_income_proof"
                            name="income_proof_action"
                            value="reject"
                            <%= 'checked' if submitted_params[:income_proof_action] == 'reject' %>
-                           class="h-4 w-4 text-red-600 focus:ring-red-500 border-gray-300"
+                           class="h-4 w-4 text-danger-600 border-gray-300"
                            required
                            data-action="change->document-proof-handler#toggleProofAction change->income-validation#toggleIncomeRequirement"
                            data-document-proof-handler-target="rejectRadio">
-                    <span class="ml-2 text-sm font-medium text-red-800">Reject</span>
+                    <span class="ml-2 text-sm font-medium text-danger-800">Reject</span>
                   </label>
                   <button type="button"
                           id="no_income_proof_provided"
-                          class="flex items-center p-3 bg-gray-50 border border-gray-200 rounded-lg cursor-pointer hover:bg-gray-100 focus:outline-none focus:ring-2 focus:ring-gray-500 focus:ring-offset-0"
+                          class="flex items-center p-3 bg-gray-50 border border-gray-200 rounded-lg cursor-pointer hover:bg-gray-100"
                           data-action="click->document-proof-handler#handleNoneProvided"
                           data-document-proof-handler-target="noneButton">
-                    <span class="text-lg">📂</span>
-                    <span class="ml-2 text-sm font-medium text-gray-800">None Provided</span>
+                    <span class="text-sm font-medium text-gray-800">None Provided</span>
                   </button>
                 </div>
               </fieldset>
 
               <div id="income_proof_upload" class="mb-4" data-document-proof-handler-target="uploadSection">
-                <label for="income_proof" class="block text-sm font-medium text-gray-700 mb-1 required-label">Upload Income Proof Document</label>
+                <label for="income_proof" class="form-label mb-1 required-label">Upload Income Proof Document</label>
                 <%= render 'shared/document_upload',
                            form: form, field: 'income_proof', model: Application,
                            blob: @uploaded_proofs&.dig('income_proof'), described_by: 'income_proof_help',
@@ -821,7 +819,7 @@
                   <%= check_box_tag :no_income_information,
                       nil,
                       ActiveModel::Type::Boolean.new.cast(submitted_params[:no_income_information]),
-                      class: "mt-1 rounded border-gray-300 text-indigo-600 shadow-sm focus:border-indigo-500 focus:ring-indigo-500",
+                      class: "mt-1 rounded border-gray-300 text-primary-600 shadow-elevation-1",
                       data: {
                         "income-validation-target": "noIncomeProvided",
                         "action": "change->income-validation#toggleIncome"
@@ -833,24 +831,24 @@
                       data-income-validation-target="incomeFieldsContainer">
                     <div class="grid grid-cols-1 md:grid-cols-2 gap-4">
                       <div>
-                        <%= a.label :household_size, "Household Size", class: "block text-sm font-medium text-gray-700" %>
+                        <%= a.label :household_size, "Household Size", class: "form-label" %>
                         <%= a.number_field :household_size,
                             min: 1,
-                            class: "mt-1 block w-full rounded-md border-gray-300 shadow-sm focus:border-indigo-500 focus:ring-indigo-500 sm:text-sm",
+                            class: "form-input mt-1",
                             data: {
                               "income-validation-target": "householdSize",
                               "action": "input->income-validation#validateAction change->income-validation#validateAction"
                             } %>
                       </div>
                       <div>
-                        <%= a.label :annual_income, "Annual Income", class: "block text-sm font-medium text-gray-700" %>
-                        <div class="mt-1 relative rounded-md shadow-sm">
+                        <%= a.label :annual_income, "Annual Income", class: "form-label" %>
+                        <div class="mt-1 relative rounded-md shadow-elevation-1">
                           <div class="absolute inset-y-0 left-0 pl-3 flex items-center pointer-events-none">
                             <span class="text-gray-500 sm:text-sm">$</span>
                           </div>
                           <%= a.number_field :annual_income,
                               step: "0.01",
-                              class: "pl-7 block w-full rounded-md border-gray-300 shadow-sm focus:border-indigo-500 focus:ring-indigo-500 sm:text-sm",
+                              class: "form-input pl-7",
                               data: {
                                 "income-validation-target": "annualIncome",
                                 "action": "input->income-validation#validateAction change->income-validation#validateAction"
@@ -868,10 +866,10 @@
               <div id="income_proof_rejection" class="hidden mb-4" data-document-proof-handler-target="rejectionSection">
                 <div class="space-y-4">
                   <div>
-                    <label for="income_proof_rejection_reason" class="block text-sm font-medium text-gray-700 mb-1">Rejection Reason</label>
+                    <label for="income_proof_rejection_reason" class="form-label mb-1">Rejection Reason</label>
                     <select id="income_proof_rejection_reason"
                             name="income_proof_rejection_reason"
-                            class="block w-full rounded-md border-gray-300 bg-white shadow-sm ring-1 ring-inset ring-gray-300 focus:border-indigo-500 focus:ring-2 focus:ring-indigo-500 sm:text-sm"
+                            class="form-input"
                             data-action="change->document-proof-handler#handleReasonSelectionChanged"
                             data-document-proof-handler-target="rejectionReasonSelect">
                       <option value="">Select a reason</option>
@@ -887,11 +885,11 @@
                   <div id="income_proof_reason_preview" class="p-3 bg-gray-50 border border-gray-200 rounded-md text-sm text-gray-700 hidden" role="status" aria-live="polite" aria-atomic="true" data-document-proof-handler-target="reasonPreview"></div>
                   <p class="text-xs text-gray-500">
                     Predefined reasons are read-only in this form. To edit that wording, use
-                    <%= link_to "Rejection Reasons", admin_rejection_reasons_path, class: "text-indigo-700 underline hover:text-indigo-900" %>.
+                    <%= link_to "Rejection Reasons", admin_rejection_reasons_path, class: "text-primary-700 underline hover:text-primary-900" %>.
                   </p>
                   <div class="hidden" data-document-proof-handler-target="customReasonSection">
-                    <label for="income_proof_custom_rejection_reason" class="block text-sm font-medium text-gray-700 mb-1">Custom Rejection Reason</label>
-                    <div class="rounded-md border border-amber-200 bg-amber-50 px-3 py-2 text-sm text-amber-900 mb-2" data-document-proof-handler-target="languageNotice" data-paper-application-target="languagePreferenceNotice">
+                    <label for="income_proof_custom_rejection_reason" class="form-label mb-1">Custom Rejection Reason</label>
+                    <div class="rounded-md border border-warning-200 bg-warning-50 px-3 py-2 text-sm text-warning-900 mb-2" data-document-proof-handler-target="languageNotice" data-paper-application-target="languagePreferenceNotice">
                       Applicant prefers to receive English communications.
                     </div>
                     <textarea id="income_proof_custom_rejection_reason"
@@ -899,7 +897,7 @@
                               rows="3"
                               disabled
                               placeholder="Enter the rejection reason that will be sent to the constituent"
-                              class="block w-full rounded-md border-gray-300 bg-white shadow-sm ring-1 ring-inset ring-gray-300 focus:border-indigo-500 focus:ring-2 focus:ring-indigo-500 sm:text-sm"
+                              class="form-input"
                               data-document-proof-handler-target="customReasonField"><%= submitted_params[:income_proof_custom_rejection_reason] %></textarea>
                   </div>
                 </div>
@@ -919,14 +917,14 @@
               </h3>
 
               <%= fields_for :application, @paper_application[:application] do |a| %>
-                <div class="mb-4 p-3 bg-blue-50 border border-blue-200 rounded-lg">
+                <div class="mb-4 p-3 bg-info-50 border border-info-200 rounded-lg">
                   <div class="flex items-start">
                     <%= a.check_box :maryland_resident,
-                        class: "mt-1 h-4 w-4 text-indigo-600 focus:ring-indigo-500 border-gray-300 rounded",
+                        class: "mt-1 h-4 w-4 text-primary-600 border-gray-300 rounded",
                         required: true,
                         "aria-required": "true" %>
                     <label for="application_maryland_resident" class="ml-3">
-                      <span class="block text-sm font-medium text-gray-700 required-label">The applicant has marked that they are a resident of Maryland</span>
+                      <span class="form-label required-label">The applicant has marked that they are a resident of Maryland</span>
                       <span class="block text-xs text-gray-500 mt-1">This will be verified through the residency proof process</span>
                     </label>
                   </div>
@@ -936,55 +934,54 @@
               <fieldset class="mb-4">
                 <legend class="text-sm font-medium text-gray-700 mb-2">Residency Proof Action</legend>
                 <div class="flex flex-wrap gap-4">
-                  <label class="flex items-center p-3 bg-blue-50 border border-blue-200 rounded-lg cursor-pointer hover:bg-blue-100 has-[:checked]:ring-2 has-[:checked]:ring-blue-500">
+                  <label class="flex items-center p-3 bg-info-50 border border-info-200 rounded-lg cursor-pointer hover:bg-info-100 has-[:checked]:ring-2 has-[:checked]:ring-info-500">
                     <input type="radio"
                            id="upload_only_residency_proof"
                            name="residency_proof_action"
                            value="upload_only"
                            <%= 'checked' if submitted_params[:residency_proof_action] == 'upload_only' %>
-                           class="h-4 w-4 text-blue-600 focus:ring-blue-500 border-gray-300"
+                           class="h-4 w-4 text-info-600 border-gray-300"
                            required
                            data-action="change->document-proof-handler#toggleProofAction"
                            data-document-proof-handler-target="uploadOnlyRadio">
-                    <span class="ml-2 text-sm font-medium text-blue-800">Upload for later review</span>
+                    <span class="ml-2 text-sm font-medium text-info-800">Upload for later review</span>
                   </label>
-                  <label class="flex items-center p-3 bg-green-50 border border-green-200 rounded-lg cursor-pointer hover:bg-green-100 has-[:checked]:ring-2 has-[:checked]:ring-green-500">
+                  <label class="flex items-center p-3 bg-success-50 border border-success-200 rounded-lg cursor-pointer hover:bg-success-100 has-[:checked]:ring-2 has-[:checked]:ring-success-500">
                     <input type="radio"
                            id="accept_residency_proof"
                            name="residency_proof_action"
                            value="accept"
                            <%= 'checked' if submitted_params[:residency_proof_action] == 'accept' %>
-                           class="h-4 w-4 text-green-600 focus:ring-green-500 border-gray-300"
+                           class="h-4 w-4 text-success-600 border-gray-300"
                            required
                            data-action="change->document-proof-handler#toggleProofAction"
                            data-document-proof-handler-target="acceptRadio">
-                    <span class="ml-2 text-sm font-medium text-green-800">Accept & Upload</span>
+                    <span class="ml-2 text-sm font-medium text-success-800">Accept & Upload</span>
                   </label>
-                  <label class="flex items-center p-3 bg-red-50 border border-red-200 rounded-lg cursor-pointer hover:bg-red-100 has-[:checked]:ring-2 has-[:checked]:ring-red-500">
+                  <label class="flex items-center p-3 bg-danger-50 border border-danger-200 rounded-lg cursor-pointer hover:bg-danger-100 has-[:checked]:ring-2 has-[:checked]:ring-danger-500">
                     <input type="radio"
                            id="reject_residency_proof"
                            name="residency_proof_action"
                            value="reject"
                            <%= 'checked' if submitted_params[:residency_proof_action] == 'reject' %>
-                           class="h-4 w-4 text-red-600 focus:ring-red-500 border-gray-300"
+                           class="h-4 w-4 text-danger-600 border-gray-300"
                            required
                            data-action="change->document-proof-handler#toggleProofAction"
                            data-document-proof-handler-target="rejectRadio">
-                    <span class="ml-2 text-sm font-medium text-red-800">Reject</span>
+                    <span class="ml-2 text-sm font-medium text-danger-800">Reject</span>
                   </label>
                   <button type="button"
                           id="no_residency_proof_provided"
-                          class="flex items-center p-3 bg-gray-50 border border-gray-200 rounded-lg cursor-pointer hover:bg-gray-100 focus:outline-none focus:ring-2 focus:ring-gray-500 focus:ring-offset-0"
+                          class="flex items-center p-3 bg-gray-50 border border-gray-200 rounded-lg cursor-pointer hover:bg-gray-100"
                           data-action="click->document-proof-handler#handleNoneProvided"
                           data-document-proof-handler-target="noneButton">
-                    <span class="text-lg">📂</span>
-                    <span class="ml-2 text-sm font-medium text-gray-800">None Provided</span>
+                    <span class="text-sm font-medium text-gray-800">None Provided</span>
                   </button>
                 </div>
               </fieldset>
 
               <div id="residency_proof_upload" class="mb-4" data-document-proof-handler-target="uploadSection">
-                <label for="residency_proof" class="block text-sm font-medium text-gray-700 mb-1 required-label">Upload Residency Proof Document</label>
+                <label for="residency_proof" class="form-label mb-1 required-label">Upload Residency Proof Document</label>
                 <%= render 'shared/document_upload',
                            form: form, field: 'residency_proof', model: Application,
                            blob: @uploaded_proofs&.dig('residency_proof'), described_by: 'residency_proof_help',
@@ -999,10 +996,10 @@
               <div id="residency_proof_rejection" class="hidden mb-4" data-document-proof-handler-target="rejectionSection">
                 <div class="space-y-4">
                   <div>
-                    <label for="residency_proof_rejection_reason" class="block text-sm font-medium text-gray-700 mb-1">Rejection Reason</label>
+                    <label for="residency_proof_rejection_reason" class="form-label mb-1">Rejection Reason</label>
                     <select id="residency_proof_rejection_reason"
                             name="residency_proof_rejection_reason"
-                            class="block w-full rounded-md border-gray-300 bg-white shadow-sm ring-1 ring-inset ring-gray-300 focus:border-indigo-500 focus:ring-2 focus:ring-indigo-500 sm:text-sm"
+                            class="form-input"
                             data-action="change->document-proof-handler#handleReasonSelectionChanged"
                             data-document-proof-handler-target="rejectionReasonSelect">
                       <option value="">Select a reason</option>
@@ -1018,11 +1015,11 @@
                   <div id="residency_proof_reason_preview" class="p-3 bg-gray-50 border border-gray-200 rounded-md text-sm text-gray-700 hidden" role="status" aria-live="polite" aria-atomic="true" data-document-proof-handler-target="reasonPreview"></div>
                   <p class="text-xs text-gray-500">
                     Predefined reasons are read-only in this form. To edit that wording, use
-                    <%= link_to "Rejection Reasons", admin_rejection_reasons_path, class: "text-indigo-700 underline hover:text-indigo-900" %>.
+                    <%= link_to "Rejection Reasons", admin_rejection_reasons_path, class: "text-primary-700 underline hover:text-primary-900" %>.
                   </p>
                   <div class="hidden" data-document-proof-handler-target="customReasonSection">
-                    <label for="residency_proof_custom_rejection_reason" class="block text-sm font-medium text-gray-700 mb-1">Custom Rejection Reason</label>
-                    <div class="rounded-md border border-amber-200 bg-amber-50 px-3 py-2 text-sm text-amber-900 mb-2" data-document-proof-handler-target="languageNotice" data-paper-application-target="languagePreferenceNotice">
+                    <label for="residency_proof_custom_rejection_reason" class="form-label mb-1">Custom Rejection Reason</label>
+                    <div class="rounded-md border border-warning-200 bg-warning-50 px-3 py-2 text-sm text-warning-900 mb-2" data-document-proof-handler-target="languageNotice" data-paper-application-target="languagePreferenceNotice">
                       Applicant prefers to receive English communications.
                     </div>
                     <textarea id="residency_proof_custom_rejection_reason"
@@ -1030,7 +1027,7 @@
                               rows="3"
                               disabled
                               placeholder="Enter the rejection reason that will be sent to the constituent"
-                              class="block w-full rounded-md border-gray-300 bg-white shadow-sm ring-1 ring-inset ring-gray-300 focus:border-indigo-500 focus:ring-2 focus:ring-indigo-500 sm:text-sm"
+                              class="form-input"
                               data-document-proof-handler-target="customReasonField"><%= submitted_params[:residency_proof_custom_rejection_reason] %></textarea>
                   </div>
                 </div>
@@ -1051,55 +1048,54 @@
             <fieldset class="mb-4 border-0">
               <legend class="text-sm font-medium text-gray-700 mb-2">ID Proof Action</legend>
               <div class="flex flex-wrap gap-4">
-                <label class="flex items-center p-3 bg-blue-50 border border-blue-200 rounded-lg cursor-pointer hover:bg-blue-100 has-[:checked]:ring-2 has-[:checked]:ring-blue-500">
+                <label class="flex items-center p-3 bg-info-50 border border-info-200 rounded-lg cursor-pointer hover:bg-info-100 has-[:checked]:ring-2 has-[:checked]:ring-info-500">
                   <input type="radio"
                          id="upload_only_id_proof"
                          name="id_proof_action"
                          value="upload_only"
                          <%= 'checked' if submitted_params[:id_proof_action] == 'upload_only' %>
-                         class="h-4 w-4 text-blue-600 focus:ring-blue-500 border-gray-300"
+                         class="h-4 w-4 text-info-600 border-gray-300"
                          required
                          data-action="change->document-proof-handler#toggleProofAction"
                          data-document-proof-handler-target="uploadOnlyRadio">
-                  <span class="ml-2 text-sm font-medium text-blue-800">Upload for later review</span>
+                  <span class="ml-2 text-sm font-medium text-info-800">Upload for later review</span>
                 </label>
-                <label class="flex items-center p-3 bg-green-50 border border-green-200 rounded-lg cursor-pointer hover:bg-green-100 has-[:checked]:ring-2 has-[:checked]:ring-green-500">
+                <label class="flex items-center p-3 bg-success-50 border border-success-200 rounded-lg cursor-pointer hover:bg-success-100 has-[:checked]:ring-2 has-[:checked]:ring-success-500">
                   <input type="radio"
                          id="accept_id_proof"
                          name="id_proof_action"
                          value="accept"
                          <%= 'checked' if submitted_params[:id_proof_action] == 'accept' %>
-                         class="h-4 w-4 text-green-600 focus:ring-green-500 border-gray-300"
+                         class="h-4 w-4 text-success-600 border-gray-300"
                          required
                          data-action="change->document-proof-handler#toggleProofAction"
                          data-document-proof-handler-target="acceptRadio">
-                  <span class="ml-2 text-sm font-medium text-green-800">Accept & Upload</span>
+                  <span class="ml-2 text-sm font-medium text-success-800">Accept & Upload</span>
                 </label>
-                <label class="flex items-center p-3 bg-red-50 border border-red-200 rounded-lg cursor-pointer hover:bg-red-100 has-[:checked]:ring-2 has-[:checked]:ring-red-500">
+                <label class="flex items-center p-3 bg-danger-50 border border-danger-200 rounded-lg cursor-pointer hover:bg-danger-100 has-[:checked]:ring-2 has-[:checked]:ring-danger-500">
                   <input type="radio"
                          id="reject_id_proof"
                          name="id_proof_action"
                          value="reject"
                          <%= 'checked' if submitted_params[:id_proof_action] == 'reject' %>
-                         class="h-4 w-4 text-red-600 focus:ring-red-500 border-gray-300"
+                         class="h-4 w-4 text-danger-600 border-gray-300"
                          required
                          data-action="change->document-proof-handler#toggleProofAction"
                          data-document-proof-handler-target="rejectRadio">
-                  <span class="ml-2 text-sm font-medium text-red-800">Reject</span>
+                  <span class="ml-2 text-sm font-medium text-danger-800">Reject</span>
                 </label>
                 <button type="button"
                         id="no_id_proof_provided"
-                        class="flex items-center p-3 bg-gray-50 border border-gray-200 rounded-lg cursor-pointer hover:bg-gray-100 focus:outline-none focus:ring-2 focus:ring-gray-500 focus:ring-offset-0"
+                        class="flex items-center p-3 bg-gray-50 border border-gray-200 rounded-lg cursor-pointer hover:bg-gray-100"
                         data-action="click->document-proof-handler#handleNoneProvided"
                         data-document-proof-handler-target="noneButton">
-                  <span class="text-lg">📂</span>
-                  <span class="ml-2 text-sm font-medium text-gray-800">None Provided</span>
+                  <span class="text-sm font-medium text-gray-800">None Provided</span>
                 </button>
               </div>
             </fieldset>
 
             <div id="id_proof_upload" class="mb-4" data-document-proof-handler-target="uploadSection">
-              <label for="id_proof" class="block text-sm font-medium text-gray-700 mb-1 required-label">Upload ID Proof Document</label>
+              <label for="id_proof" class="form-label mb-1 required-label">Upload ID Proof Document</label>
               <%= render 'shared/document_upload',
                          form: form, field: 'id_proof', model: Application, blob: @uploaded_proofs&.dig('id_proof'),
                          described_by: 'id_proof_help', input_data: { document_proof_handler_target: 'fileInput' } %>
@@ -1112,10 +1108,10 @@
             <div id="id_proof_rejection" class="hidden mb-4" data-document-proof-handler-target="rejectionSection">
               <div class="space-y-4">
                 <div>
-                  <label for="id_proof_rejection_reason" class="block text-sm font-medium text-gray-700 mb-1">Rejection Reason</label>
+                  <label for="id_proof_rejection_reason" class="form-label mb-1">Rejection Reason</label>
                   <select id="id_proof_rejection_reason"
                           name="id_proof_rejection_reason"
-                          class="block w-full rounded-md border-gray-300 bg-white shadow-sm ring-1 ring-inset ring-gray-300 focus:border-indigo-500 focus:ring-2 focus:ring-indigo-500 sm:text-sm"
+                          class="form-input"
                           data-action="change->document-proof-handler#handleReasonSelectionChanged"
                           data-document-proof-handler-target="rejectionReasonSelect">
                     <option value="">Select a reason</option>
@@ -1131,11 +1127,11 @@
                 <div id="id_proof_reason_preview" class="p-3 bg-gray-50 border border-gray-200 rounded-md text-sm text-gray-700 hidden" role="status" aria-live="polite" aria-atomic="true" data-document-proof-handler-target="reasonPreview"></div>
                 <p class="text-xs text-gray-500">
                   Predefined reasons are read-only in this form. To edit that wording, use
-                  <%= link_to "Rejection Reasons", admin_rejection_reasons_path, class: "text-indigo-700 underline hover:text-indigo-900" %>.
+                  <%= link_to "Rejection Reasons", admin_rejection_reasons_path, class: "text-primary-700 underline hover:text-primary-900" %>.
                 </p>
                 <div class="hidden" data-document-proof-handler-target="customReasonSection">
-                  <label for="id_proof_custom_rejection_reason" class="block text-sm font-medium text-gray-700 mb-1">Custom Rejection Reason</label>
-                  <div class="rounded-md border border-amber-200 bg-amber-50 px-3 py-2 text-sm text-amber-900 mb-2" data-document-proof-handler-target="languageNotice" data-paper-application-target="languagePreferenceNotice">
+                  <label for="id_proof_custom_rejection_reason" class="form-label mb-1">Custom Rejection Reason</label>
+                  <div class="rounded-md border border-warning-200 bg-warning-50 px-3 py-2 text-sm text-warning-900 mb-2" data-document-proof-handler-target="languageNotice" data-paper-application-target="languagePreferenceNotice">
                     Applicant prefers to receive English communications.
                   </div>
                   <textarea id="id_proof_custom_rejection_reason"
@@ -1143,7 +1139,7 @@
                             rows="3"
                             disabled
                             placeholder="Enter the rejection reason that will be sent to the constituent"
-                            class="block w-full rounded-md border-gray-300 bg-white shadow-sm ring-1 ring-inset ring-gray-300 focus:border-indigo-500 focus:ring-2 focus:ring-indigo-500 sm:text-sm"
+                            class="form-input"
                             data-document-proof-handler-target="customReasonField"><%= submitted_params[:id_proof_custom_rejection_reason] %></textarea>
                 </div>
               </div>
@@ -1151,13 +1147,13 @@
           </div>
         </section>
 
-      <div class="bg-white rounded-lg shadow-sm border border-slate-200 p-6">
+      <div class="card border border-slate-200 p-6">
         <%= fields_for :application, @paper_application[:application] do |a| %>
           <div class="mb-6 flex items-start">
             <%= a.check_box :information_verified,
-                { required: true, class: "mt-1 h-4 w-4 text-indigo-600 focus:ring-indigo-500 border-gray-300 rounded" } %>
+                { required: true, class: "mt-1 h-4 w-4 text-primary-600 border-gray-300 rounded" } %>
             <label for="application_information_verified" class="ml-3">
-              <span class="block text-sm font-medium text-gray-700 required-label">I verify that the information entered from the paper application is accurate and complete</span>
+              <span class="form-label required-label">I verify that the information entered from the paper application is accurate and complete</span>
             </label>
           </div>
         <% end %>
@@ -1165,12 +1161,12 @@
         <p id="paper-submit-gate-status" class="sr-only" aria-live="polite" data-paper-application-target="status"></p>
         <div class="flex flex-col sm:flex-row justify-end gap-3">
           <%= link_to "Cancel", admin_applications_path,
-              class: "inline-flex justify-center items-center px-4 py-2 border border-gray-300 rounded-md shadow-sm text-sm font-medium text-gray-700 bg-white hover:bg-gray-50 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-indigo-500" %>
+              class: "btn btn-outline" %>
 
           <% if FeatureFlag.income_proof_required? %>
           <%= button_tag type: "button",
               id: "rejection-button",
-              class: "hidden inline-flex justify-center items-center px-4 py-2 border border-transparent rounded-md shadow-sm text-sm font-medium text-white bg-red-600 hover:bg-red-700 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-red-500",
+              class: "hidden btn btn-danger",
               data: { action: "click->paper-application#openRejectionModal", "paper-application-target": "rejectionButton" } do %>
             <svg class="w-4 h-4 mr-2" fill="none" stroke="currentColor" viewBox="0 0 24 24" aria-hidden="true">
               <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M6 18L18 6M6 6l12 12"/>
@@ -1185,7 +1181,7 @@
               value: @identity_review&.selected? ? @identity_review.selected_user.id : "Submit Paper Application",
               id: "submit-button",
               disabled: true,
-              class: "inline-flex justify-center items-center px-6 py-2 border border-transparent rounded-md shadow-sm text-sm font-medium text-white bg-indigo-600 hover:bg-indigo-700 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-indigo-500 disabled:opacity-50 disabled:cursor-not-allowed",
+              class: "btn btn-primary",
               data: { paper_application_target: "submitButton" },
               aria: { describedby: "paper-submit-gate-status" } %>
         </div>
@@ -1195,13 +1191,13 @@
 
 <% if FeatureFlag.income_proof_required? %>
 <dialog id="rejection-modal"
-        class="backdrop:bg-gray-500 backdrop:bg-opacity-75 bg-white rounded-lg max-w-lg w-full shadow-xl p-0"
+        class="backdrop:bg-gray-500 backdrop:bg-opacity-75 bg-white rounded-lg max-w-lg w-full shadow-elevation-4 p-0"
         data-controller="modal"
         data-action="click->modal#clickOutside"
         aria-labelledby="rejection-modal-heading">
   <div class="p-6">
     <h3 id="rejection-modal-heading" class="text-lg font-semibold text-gray-900 mb-4 flex items-center gap-2">
-      <svg class="w-6 h-6 text-red-500" fill="none" stroke="currentColor" viewBox="0 0 24 24" aria-hidden="true">
+      <svg class="w-6 h-6 text-danger-500" fill="none" stroke="currentColor" viewBox="0 0 24 24" aria-hidden="true">
         <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 9v2m0 4h.01m-6.938 4h13.856c1.54 0 2.502-1.667 1.732-3L13.732 4c-.77-1.333-2.694-1.333-3.464 0L3.34 16c-.77 1.333.192 3 1.732 3z"/>
       </svg>
       Send Rejection Notification
@@ -1217,17 +1213,17 @@
       <%= form.hidden_field :household_size, id: "rejection_modal_household_size", data: { "paper-application-target": "rejectionHouseholdSize" } %>
       <%= form.hidden_field :annual_income, id: "rejection_modal_annual_income", data: { "paper-application-target": "rejectionAnnualIncome" } %>
 
-      <div class="mb-4 p-3 bg-red-50 border border-red-200 rounded-md">
-        <p class="text-sm text-red-800">
+      <div class="mb-4 p-3 bg-danger-50 border border-danger-200 rounded-md">
+        <p class="text-sm text-danger-800">
           A notification will be sent informing the applicant that their income exceeds the maximum threshold for their household size.
         </p>
       </div>
 
-      <div class="mb-4 hidden rounded-md border border-blue-200 bg-blue-50 p-3"
+      <div class="mb-4 hidden rounded-md border border-info-200 bg-info-50 p-3"
            data-paper-application-target="rejectionExistingPreferenceNotice"
            role="status"
            aria-live="polite">
-        <p class="text-sm text-blue-900">
+        <p class="text-sm text-info-900">
           Existing profile preference:
           <span class="font-semibold" data-paper-application-target="rejectionExistingPreferenceValue"></span>.
           You may override this for this notification.
@@ -1235,32 +1231,32 @@
       </div>
 
       <fieldset class="mb-4">
-        <legend class="block text-sm font-medium text-gray-700 mb-1">Notification Method</legend>
+        <legend class="form-label mb-1">Notification Method</legend>
         <p class="mb-2 text-xs text-gray-500">This choice applies to this rejection notice only.</p>
         <div class="flex flex-wrap gap-4">
           <label class="flex items-center">
-            <%= form.radio_button :communication_preference, "email", checked: true, class: "h-4 w-4 text-indigo-600 focus:ring-indigo-500 border-gray-300" %>
+            <%= form.radio_button :communication_preference, "email", checked: true, class: "h-4 w-4 text-primary-600 border-gray-300" %>
             <span class="ml-2 text-sm text-gray-700">Email</span>
           </label>
           <label class="flex items-center">
-            <%= form.radio_button :communication_preference, "letter", class: "h-4 w-4 text-indigo-600 focus:ring-indigo-500 border-gray-300" %>
+            <%= form.radio_button :communication_preference, "letter", class: "h-4 w-4 text-primary-600 border-gray-300" %>
             <span class="ml-2 text-sm text-gray-700">Printed Letter</span>
           </label>
         </div>
       </fieldset>
 
       <div class="mb-6">
-        <%= form.label :additional_notes, "Additional Notes (Optional)", class: "block text-sm font-medium text-gray-700 mb-1" %>
-        <%= form.text_area :additional_notes, rows: 3, class: "block w-full rounded-md border-gray-300 shadow-sm focus:border-indigo-500 focus:ring-indigo-500 sm:text-sm" %>
+        <%= form.label :additional_notes, "Additional Notes (Optional)", class: "form-label mb-1" %>
+        <%= form.text_area :additional_notes, rows: 3, class: "form-input" %>
       </div>
 
       <div class="flex justify-end gap-3">
         <button type="button"
-                class="px-4 py-2 border border-gray-300 rounded-md shadow-sm text-sm font-medium text-gray-700 bg-white hover:bg-gray-50 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-indigo-500"
+                class="btn btn-outline"
                 data-action="click->modal#close">
           Cancel
         </button>
-        <%= form.submit "Send Notification", class: "px-4 py-2 border border-transparent rounded-md shadow-sm text-sm font-medium text-white bg-red-600 hover:bg-red-700 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-red-500" %>
+        <%= form.submit "Send Notification", class: "btn btn-danger" %>
       </div>
     <% end %>
   </div>

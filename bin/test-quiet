@@ -1,16 +1,12 @@
 #!/usr/bin/env bash
 
-# Run tests with minimal noise (default behavior)
+# Runs tests with minimal output.
 # Usage: ./bin/test-quiet [test_file_or_pattern]
 
-# Ensure VERBOSE_TESTS is not set (for minimal output)
 unset VERBOSE_TESTS
 
-# Run the test with minimal output
 if [ $# -eq 0 ]; then
-  # No arguments - run all tests
   bin/rails test
 else
-  # Run specific test file(s)
   bin/rails test "$@"
 fi 

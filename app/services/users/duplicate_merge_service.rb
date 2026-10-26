@@ -436,9 +436,9 @@ module Users
       participant_ids = [@canonical_user.id, @duplicate_user.id]
       candidate_case_ids = DuplicateReviewCaseCandidate.where(candidate_user_id: participant_ids)
                                                        .select(:duplicate_review_case_id)
-      DuplicateReviewCase.open_cases
+      DuplicateReviewCase.open
                          .where(subject_user_id: participant_ids)
-                         .or(DuplicateReviewCase.open_cases.where(id: candidate_case_ids))
+                         .or(DuplicateReviewCase.open.where(id: candidate_case_ids))
                          .pluck(:id)
     end
 

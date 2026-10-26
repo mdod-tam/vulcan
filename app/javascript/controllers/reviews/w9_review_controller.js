@@ -1,7 +1,7 @@
 import { Controller } from "@hotwired/stimulus"
 import { setVisible } from "../../utils/visibility"
 
-// This controller handles the W9 review form submission logic
+// Submits the W9 review form as approved, or as rejected once a reason code and explanation are given.
 class W9ReviewController extends Controller {
   static targets = ["form", "status", "rejectionReason", "approveButton", "rejectButton"]
 
@@ -26,18 +26,15 @@ class W9ReviewController extends Controller {
       return;
     }
 
-    // If rejection fields are not visible, show them and change button text
+    // The first click reveals the rejection fields; the second submits.
     const isHidden = this.rejectionReasonTarget.classList.contains('hidden')
     
     if (isHidden) {
       setVisible(this.rejectionReasonTarget, true)
       this.rejectButtonTarget.textContent = 'Confirm Reject'
-      
-      // Optionally, focus the first radio button
       const firstRadio = this.rejectionReasonTarget.querySelector('input[type="radio"]')
       if (firstRadio) { firstRadio.focus() }
     } else {
-      // Validate rejection fields
       const reasonCodeSelected = Array.from(
         this.rejectionReasonTarget.querySelectorAll('input[name="w9_review[rejection_reason_code]"]')
       ).some(radio => radio.checked)
@@ -47,7 +44,7 @@ class W9ReviewController extends Controller {
       if (!reasonCodeSelected || reasonText === '') {
         const errorMessage = 'Please select a rejection reason and provide a detailed explanation.'
         console.error(errorMessage)
-        alert(errorMessage) // Use alert for immediate user feedback since this is form validation
+        alert(errorMessage)
       } else {
         this.statusTarget.value = 'rejected'
         this.formTarget.requestSubmit()

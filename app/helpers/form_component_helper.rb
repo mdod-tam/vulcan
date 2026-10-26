@@ -2,7 +2,7 @@
 
 module FormComponentHelper
   def error_field_class(form, field)
-    form.object.errors[field].present? ? 'border-red-500' : 'border-gray-300'
+    form.object.errors[field].present? ? 'border-danger-500' : 'border-gray-300'
   end
 
   def form_section(title:, &)

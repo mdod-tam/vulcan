@@ -9,7 +9,6 @@ class ProofUploadsTest < ApplicationSystemTestCase
     @user = create(:constituent, email_verified: true, verified: true)
     @valid_pdf = file_fixture('income_proof.pdf')
 
-    # Create application with rejected proofs using factory
     @application = create(
       :application,
       :in_progress_with_rejected_proofs,
@@ -17,7 +16,6 @@ class ProofUploadsTest < ApplicationSystemTestCase
       status: :awaiting_proof
     )
 
-    # Verify prerequisites
     assert @application.income_proof.attached?, 'Income proof must be attached'
     assert @application.income_proof_status_rejected?, 'Income proof status must be rejected'
     assert_equal @application.user_id, @user.id, 'Application should belong to test user'
@@ -26,7 +24,6 @@ class ProofUploadsTest < ApplicationSystemTestCase
     Policy.find_or_create_by!(key: 'proof_submission_rate_limit_web') { |p| p.value = 10 }
     Policy.find_or_create_by!(key: 'proof_submission_rate_period') { |p| p.value = 24 }
 
-    # Sign in using documented pattern
     system_test_sign_in(@user)
     assert_authenticated_as(@user)
   end
@@ -83,10 +80,8 @@ class ProofUploadsTest < ApplicationSystemTestCase
     click_button 'Submit Document'
     wait_for_turbo
 
-    # Should redirect to success page or dashboard
     assert_success_message('Proof submitted successfully')
 
-    # Verify proof was attached
     assert @application.reload.income_proof.attached?
   end
 
@@ -150,9 +145,8 @@ class ProofUploadsTest < ApplicationSystemTestCase
   end
 
   test 'shows error for oversized file' do
-    # Create a large file temporarily for this test
     large_file = Tempfile.new(['large_proof', '.pdf'])
-    large_file.write('x' * 6.megabytes) # Create 6MB file (over 5MB limit)
+    large_file.write('x' * 6.megabytes) # Over the 5MB limit
     large_file.close
 
     visit constituent_portal_application_new_proof_path(@application, proof_type: 'income')
@@ -162,6 +156,6 @@ class ProofUploadsTest < ApplicationSystemTestCase
 
     assert_text I18n.t('documents.refused.too_large', max_size: 5)
 
-    large_file.unlink # Clean up
+    large_file.unlink
   end
 end

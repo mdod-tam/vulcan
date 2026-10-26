@@ -21,6 +21,9 @@ module StatusManagement
     scope :completed_sessions, -> { where(status: :completed) }
     scope :needing_followup, -> { where(status: %i[no_show cancelled]) }
     scope :requested_sessions, -> { where(status: :requested) }
+    # The one definition of open assigned work for access changes and recovery queues. Unlike +active+ and
+    # +assigned_or_scheduled+, it includes requested, no-show, and rescheduled rows.
+    scope :open_assigned, -> { where.not(status: %i[completed cancelled]) }
   end
 
   def active?
@@ -58,7 +61,6 @@ module StatusManagement
   def rescheduling?
     return false unless persisted?
 
-    # Get the date field name for this model
     date_field = self.class.status_management_date_field
     return false unless date_field
 

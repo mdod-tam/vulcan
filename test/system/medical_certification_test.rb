@@ -124,7 +124,7 @@ class MedicalCertificationTest < ApplicationSystemTestCase
     wait_for_network_idle(timeout: 10) if respond_to?(:wait_for_network_idle)
 
     # The secure-upload request action is unavailable without a provider email.
-    assert_text 'Secure cert upload form cannot be sent - provider email is missing.', wait: 10
+    assert_text 'A secure certification upload link cannot be sent because the provider email is missing.', wait: 10
     assert_no_button 'Send Secure Cert Upload Link', wait: 5
     assert_no_button 'Send Email', wait: 5
 

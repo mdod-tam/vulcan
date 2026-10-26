@@ -5,7 +5,7 @@ require 'application_system_test_case'
 class WebauthnSignInTest < ApplicationSystemTestCase
   include SystemTestAuthentication
 
-  # Browser cleanup workaround.
+  # Teardown can raise NoMethodError during browser cleanup; the error is logged instead of failing the test.
   def teardown
     super
   rescue NoMethodError => e
@@ -42,7 +42,7 @@ class WebauthnSignInTest < ApplicationSystemTestCase
     click_link 'Skip and Continue to Dashboard'
     assert_current_path constituent_portal_dashboard_path
 
-    assert_selector '.bg-amber-100', text: /Secure Account/i
+    assert_selector '.bg-warning-100', text: /Secure Account/i
   end
 
   test 'user with WebAuthn gets redirected to verification page' do
@@ -123,7 +123,7 @@ class WebauthnSignInTest < ApplicationSystemTestCase
 
     visit welcome_path
     assert_current_path constituent_portal_dashboard_path
-    assert_selector '.bg-amber-100', text: /Secure Account/i
+    assert_selector '.bg-warning-100', text: /Secure Account/i
   end
 
   test 'WebAuthn verification page displays correctly with proper UI elements' do

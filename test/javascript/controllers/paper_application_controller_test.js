@@ -11,7 +11,6 @@ describe("PaperApplicationController", () => {
   let residencyProofSignedId
   
   beforeEach(() => {
-    // Set up DOM
     document.body.innerHTML = `
       <form data-controller="paper-application">
         <!-- Income proof radio buttons -->
@@ -61,7 +60,6 @@ describe("PaperApplicationController", () => {
       </form>
     `
 
-    // Set up Stimulus controller
     application = Application.start()
     application.register("paper-application", PaperApplicationController)
 
@@ -71,7 +69,6 @@ describe("PaperApplicationController", () => {
     incomeProofSignedId = document.querySelector("input[name='income_proof_signed_id']")
     residencyProofSignedId = document.querySelector("input[name='residency_proof_signed_id']")
     
-    // Initialize controller
     controller = application.getControllerForElementAndIdentifier(element, "paper-application")
   })
 

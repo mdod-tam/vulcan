@@ -1,4 +1,4 @@
-import { setVisible, legacyToggleHidden, show, hide, toggle, _resetLegacyWarnings } from 'utils/visibility'
+import { setVisible, show, hide, toggle } from 'utils/visibility'
 
 describe('Visibility Utility', () => {
   let element
@@ -10,8 +10,6 @@ describe('Visibility Utility', () => {
     document.body.appendChild(element)
     
     consoleWarnSpy = jest.spyOn(console, 'warn').mockImplementation(() => {})
-    
-    _resetLegacyWarnings()
   })
 
   afterEach(() => {
@@ -117,45 +115,6 @@ describe('Visibility Utility', () => {
       document.body.removeChild(input)
       document.body.removeChild(div)
       document.body.removeChild(select)
-    })
-  })
-
-  describe('legacyToggleHidden', () => {
-    test('shows element when shouldHide is false', () => {
-      element.classList.add('hidden')
-      
-      legacyToggleHidden(element, false)
-      
-      expect(element).not.toHaveClass('hidden')
-    })
-
-    test('hides element when shouldHide is true', () => {
-      legacyToggleHidden(element, true)
-      
-      expect(element).toHaveClass('hidden')
-    })
-
-    test('shows deprecation warning', () => {
-      legacyToggleHidden(element, false)
-      
-      expect(consoleWarnSpy).toHaveBeenCalledWith(
-        expect.stringContaining('legacyToggleHidden is deprecated. Use setVisible() instead.'),
-        expect.any(String)
-      )
-    })
-
-    test('shows one deprecation warning across repeated calls', () => {
-      legacyToggleHidden(element, false)
-      legacyToggleHidden(element, true)
-      
-      expect(consoleWarnSpy).toHaveBeenCalledTimes(1)
-    })
-
-    test('passes options correctly', () => {
-      legacyToggleHidden(element, true, { required: true })
-      
-      expect(element).toHaveClass('hidden')
-      expect(element.hasAttribute('required')).toBe(false)
     })
   })
 

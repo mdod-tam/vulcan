@@ -370,7 +370,7 @@ class TrainingNotificationDeliveryTest < ActiveSupport::TestCase
     end
 
     assert notice.reload.suppressed_delivery_status?
-    assert_equal 'trainer_coverage_changed', notice.metadata.dig('delivery_suppressed', 'reason')
+    assert_equal 'assignment_superseded', notice.metadata.dig('delivery_suppressed', 'reason')
     assert_equal 'none', notice.metadata['actual_delivery_channel']
     assert_equal 1, Event.where(action: EmailDelivery::Outcome::SUPPRESSED).with_metadata(:request_id, old_assignment_job.dig('email_delivery_context', 'request_id')).count
   end
@@ -430,6 +430,72 @@ class TrainingNotificationDeliveryTest < ActiveSupport::TestCase
     end
     assert_equal [@trainer.email], ActionMailer::Base.deliveries.last.to
     assert_not PrintQueueItem.exists?(application: @application)
+  end
+
+  test 'a reassignment tells the new trainer and the constituent that the appointment still stands' do
+    load_seeded_email_templates('training_session_notifications_trainer_reassigned', 'training_session_notifications_trainer_changed')
+    session = create(:training_session, :scheduled, application: @application, trainer: @trainer, location: 'Agreed library room')
+    @replacement_trainer = create(:trainer)
+
+    assert reassign_training(@replacement_trainer)
+    assert_equal 2, mail_jobs.length
+    mail_jobs.dup.each { |job| ActiveJob::Base.execute(job) }
+
+    to_trainer, to_constituent = ActionMailer::Base.deliveries.sort_by { |mail| mail.to.first == @replacement_trainer.email ? 0 : 1 }
+    assert_equal [@replacement_trainer.email], to_trainer.to
+    assert_includes to_trainer.body.decoded, 'Any appointment already scheduled has not changed'
+    assert_equal [@constituent.email], to_constituent.to
+    assert_includes to_constituent.body.decoded, @replacement_trainer.full_name
+    assert_includes to_constituent.body.decoded, 'Agreed library room'
+    assert_equal @replacement_trainer.id, session.reload.trainer_id
+  end
+
+  test 'only the latest of several transfers is delivered, even when the work returns to a former recipient' do
+    load_seeded_email_templates('training_session_notifications_trainer_reassigned', 'training_session_notifications_trainer_changed')
+    create(:training_session, :scheduled, application: @application, trainer: @trainer)
+    @replacement_trainer = create(:trainer)
+
+    [@replacement_trainer, @trainer, @replacement_trainer].each { |trainer| assert reassign_training(trainer) }
+    assert_equal 6, mail_jobs.length
+    mail_jobs.dup.each { |job| ActiveJob::Base.execute(job) }
+
+    assert_equal [@replacement_trainer.email, @constituent.email].sort, ActionMailer::Base.deliveries.flat_map(&:to).sort
+    superseded = Notification.where(action: %w[trainer_reassigned training_trainer_changed]).select(&:suppressed_delivery_status?)
+    assert_equal 4, superseded.length
+    assert_equal ['assignment_superseded'], superseded.map { |notice| notice.metadata.dig('delivery_suppressed', 'reason') }.uniq
+  end
+
+  test 'a transfer notice is not sent to a recipient who lost trainer access before delivery' do
+    load_seeded_email_templates('training_session_notifications_trainer_reassigned', 'training_session_notifications_trainer_changed')
+    create(:training_session, :scheduled, application: @application, trainer: @trainer)
+    @replacement_trainer = create(:trainer)
+    assert reassign_training(@replacement_trainer)
+    trainer_job = mail_jobs.find { |job| job[:args][1] == 'trainer_reassigned' }
+
+    @replacement_trainer.update_columns(status: User.statuses[:suspended])
+    assert_no_difference -> { ActionMailer::Base.deliveries.count } do
+      ActiveJob::Base.execute(trainer_job)
+    end
+    assert_equal 'assignment_superseded', notification(@application.latest_training_session, 'trainer_reassigned').metadata.dig('delivery_suppressed', 'reason')
+
+    Users::Trainer.where(id: @replacement_trainer.id).update_all(type: 'Users::Constituent')
+    assert_nothing_raised { ActiveJob::Base.execute(trainer_job) }
+    assert_empty ActionMailer::Base.deliveries
+  end
+
+  test 'a transfer notice whose assignment no longer exists is recorded as not sent, not retried' do
+    load_seeded_email_templates('training_session_notifications_trainer_reassigned', 'training_session_notifications_trainer_changed')
+    session = create(:training_session, :scheduled, application: @application, trainer: @trainer)
+    @replacement_trainer = create(:trainer)
+    assert reassign_training(@replacement_trainer)
+    jobs = mail_jobs.dup
+    TrainingSession.where(id: session.id).delete_all
+
+    assert_no_difference -> { ActionMailer::Base.deliveries.count } do
+      assert_difference -> { Event.where(action: EmailDelivery::Outcome::SUPPRESSED).count }, jobs.length do
+        jobs.each { |job| assert_nothing_raised { ActiveJob::Base.execute(job) } }
+      end
+    end
   end
 
   private
@@ -501,6 +567,10 @@ class TrainingNotificationDeliveryTest < ActiveSupport::TestCase
   def completion_params(actual_time)
     { completed_at: actual_time, constituent_summary: 'We practised using captions.', summary_locale: 'en',
       duration_hours: '1.5', product_trained_on_id: @product.id }
+  end
+
+  def reassign_training(trainer)
+    @application.reload.reassign_trainer!(trainer, actor: @admin, expected_version: @application.training_assignment_version)
   end
 
   def notification(session, action)

@@ -12,17 +12,17 @@
       <h4 class="text-base font-semibold text-gray-900"><%= user.full_name %> <span class="text-xs font-normal text-gray-500">Constituent ID <%= user.id %></span></h4>
       <div class="mt-1 flex flex-wrap gap-1 text-xs" data-testid="record-comparison-badges">
         <% if newer_record %>
-          <span class="rounded-full bg-indigo-50 px-2 py-0.5 text-indigo-700">Newer record</span>
+          <span class="badge badge-primary">Newer record</span>
         <% end %>
         <% if most_recent_login %>
-          <span class="rounded-full bg-indigo-50 px-2 py-0.5 text-indigo-700">Most recent login</span>
+          <span class="badge badge-primary">Most recent login</span>
         <% end %>
-        <span class="rounded-full bg-gray-100 px-2 py-0.5 text-gray-700">
+        <span class="badge badge-neutral">
           <%= history[:application_count].zero? ? 'No applications' : pluralize(history[:application_count], 'application') %>
         </span>
       </div>
     </div>
-    <%= link_to 'Open profile', admin_user_path(user), class: 'text-xs text-indigo-600 hover:text-indigo-900', target: '_blank', rel: 'noopener' %>
+    <%= link_to 'Open profile', admin_user_path(user), class: 'text-xs text-primary-600 hover:text-primary-900', target: '_blank', rel: 'noopener' %>
   </div>
 
   <dl class="space-y-3 text-sm">
@@ -57,7 +57,7 @@
     </div>
 
     <div>
-      <dt class="font-medium text-gray-700">Record truth</dt>
+      <dt class="font-medium text-gray-700">Stored details</dt>
       <dd class="text-gray-600">
         Date of birth: <span data-testid="record-date-of-birth"><%= date_of_birth&.strftime('%m/%d/%Y') || 'Not on file' %></span><br>
         Email: <%= stored_email_display(user) %><br>
@@ -90,7 +90,7 @@
     </div>
 
     <div>
-      <dt class="font-medium text-gray-700">Auth artifacts</dt>
+      <dt class="font-medium text-gray-700">Sign-in methods and activity</dt>
       <dd class="text-gray-600">
         WebAuthn: <%= user.webauthn_credentials.count %> ·
         TOTP: <%= user.totp_credentials.count %> ·

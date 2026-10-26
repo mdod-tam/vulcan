@@ -1,10 +1,9 @@
-<a href="#main-content" class="sr-only focus:not-sr-only focus:absolute focus:top-2 focus:left-2 focus:p-2 focus:bg-indigo-600 focus:text-white focus:z-50 focus:rounded">
+<a href="#main-content" class="skip-link">
   <%= t('trainer_workflow.list.skip') %>
 </a>
 <div id="main-content" tabindex="-1" class="container mx-auto px-4 py-8">
   <% trainer_filter_params = @trainer_filter.present? ? { trainer_id: @trainer_filter.id } : {} # rubocop:disable Lint/UselessAssignment %>
 
-  <!-- Header with context-aware title -->
   <div class="flex flex-wrap justify-between items-center gap-4 mb-6">
     <h1 id="sessions-list-heading" class="text-2xl font-bold">
       <% if @current_status == 'requested' %>
@@ -32,27 +31,24 @@
 
     <div>
       <%= link_to t('trainer_workflow.list.back'), trainers_dashboard_path,
-                  class: 'bg-gray-200 hover:bg-gray-300 text-gray-800 font-semibold py-2 px-4 rounded inline-flex items-center' %>
+                  class: 'btn btn-outline' %>
     </div>
   </div>
 
-  <!-- Unified filter bar -->
   <div class="mb-6 flex flex-wrap gap-4">
-    <!-- Scope selection (for admins only) -->
     <% if current_user.admin? %>
       <div class="flex items-center gap-2 bg-gray-100 p-1 rounded-lg">
         <span class="text-xs font-semibold text-gray-500 px-2"><%= t('trainer_workflow.list.filters.view') %>:</span>
         <%= link_to t('trainer_workflow.list.scopes.all_trainers'), filtered_trainers_training_sessions_path(scope: 'all', status: @current_status),
-                    class: [@current_scope == 'all' ? 'bg-white shadow-sm text-blue-600' : 'text-gray-700 hover:bg-gray-200',
+                    class: [@current_scope == 'all' ? 'bg-white shadow-elevation-1 text-primary-600' : 'text-gray-700 hover:bg-gray-200',
                             'px-4 py-2 rounded-md font-medium transition-colors duration-200'] %>
 
         <%= link_to t('trainer_workflow.list.scopes.my_sessions'), filtered_trainers_training_sessions_path(scope: 'mine', status: @current_status),
-                    class: [@current_scope == 'mine' ? 'bg-white shadow-sm text-blue-600' : 'text-gray-700 hover:bg-gray-200',
+                    class: [@current_scope == 'mine' ? 'bg-white shadow-elevation-1 text-primary-600' : 'text-gray-700 hover:bg-gray-200',
                             'px-4 py-2 rounded-md font-medium transition-colors duration-200'] %>
       </div>
     <% end %>
 
-    <!-- Status filter pills -->
     <div class="flex flex-wrap items-center gap-2 bg-gray-100 p-1 rounded-lg" role="group" aria-labelledby="training-status-filter-label">
       <span id="training-status-filter-label" class="text-xs font-semibold text-gray-500 px-2"><%= t('trainer_workflow.list.filters.status') %>:</span>
       <%= link_to t('trainer_workflow.list.filters.all'),
@@ -61,7 +57,7 @@
                   else
                     trainers_training_sessions_path
                   end,
-                  class: [@current_status.blank? ? 'bg-white shadow-sm text-blue-600' : 'text-gray-700 hover:bg-gray-200',
+                  class: [@current_status.blank? ? 'bg-white shadow-elevation-1 text-primary-600' : 'text-gray-700 hover:bg-gray-200',
                           'px-4 py-2 rounded-md font-medium transition-colors duration-200'],
                   aria: { current: (@current_status.blank? ? 'true' : nil) } %>
 
@@ -71,7 +67,7 @@
                   else
                     requested_trainers_training_sessions_path
                   end,
-                  class: [@current_status == 'requested' ? 'bg-white shadow-sm text-blue-600' : 'text-gray-700 hover:bg-gray-200',
+                  class: [@current_status == 'requested' ? 'bg-white shadow-elevation-1 text-primary-600' : 'text-gray-700 hover:bg-gray-200',
                           'px-4 py-2 rounded-md font-medium transition-colors duration-200'],
                   aria: { current: (@current_status == 'requested' ? 'true' : nil) } %>
 
@@ -81,7 +77,7 @@
                   else
                     scheduled_trainers_training_sessions_path
                   end,
-                  class: [@current_status == 'scheduled' ? 'bg-white shadow-sm text-blue-600' : 'text-gray-700 hover:bg-gray-200',
+                  class: [@current_status == 'scheduled' ? 'bg-white shadow-elevation-1 text-primary-600' : 'text-gray-700 hover:bg-gray-200',
                           'px-4 py-2 rounded-md font-medium transition-colors duration-200'],
                   aria: { current: (@current_status == 'scheduled' ? 'true' : nil) } %>
 
@@ -91,7 +87,7 @@
                   else
                     completed_trainers_training_sessions_path
                   end,
-                  class: [@current_status == 'completed' ? 'bg-white shadow-sm text-blue-600' : 'text-gray-700 hover:bg-gray-200',
+                  class: [@current_status == 'completed' ? 'bg-white shadow-elevation-1 text-primary-600' : 'text-gray-700 hover:bg-gray-200',
                           'px-4 py-2 rounded-md font-medium transition-colors duration-200'],
                   aria: { current: (@current_status == 'completed' ? 'true' : nil) } %>
 
@@ -103,7 +99,7 @@
                   end,
                   class: "#{if %w[needs_followup cancelled
                                   no_show].include?(@current_status)
-                              'bg-white shadow-sm text-blue-600'
+                              'bg-white shadow-elevation-1 text-primary-600'
                             else
                               'text-gray-700 hover:bg-gray-200'
                             end} px-4 py-2 rounded-md font-medium transition-colors duration-200",
@@ -111,9 +107,8 @@
     </div>
   </div>
 
-  <!-- Sessions Table -->
   <% if @training_sessions.any? %>
-    <div class="overflow-x-auto rounded-lg bg-white shadow" role="region" aria-labelledby="sessions-list-heading" tabindex="0">
+    <div class="overflow-x-auto card" role="region" aria-labelledby="sessions-list-heading" tabindex="0">
       <table class="min-w-full divide-y divide-gray-200" aria-labelledby="sessions-list-heading">
         <thead class="bg-gray-50">
           <tr>
@@ -142,17 +137,7 @@
                 <p class="text-xs text-gray-600"><%= t('trainer_workflow.list.session', number: session.appointment_number) %></p>
               </td>
               <td class="px-6 py-4 whitespace-nowrap">
-                <!-- Status badge with color coding -->
-                <% status_classes = case session.status # rubocop:disable Lint/UselessAssignment
-                                    when 'scheduled' then 'bg-blue-100 text-blue-800'
-                                    when 'confirmed' then 'bg-green-100 text-green-800'
-                                    when 'completed' then 'bg-purple-100 text-purple-800'
-                                    when 'cancelled' then 'bg-yellow-100 text-yellow-800'
-                                    when 'no_show' then 'bg-red-100 text-red-800'
-                                    else 'bg-gray-100 text-gray-800'
-                                    end %>
-
-                <span class="px-2 inline-flex text-xs leading-5 font-semibold rounded-full <%= status_classes %>">
+                <span class="<%= badge_class_for(:training_session, session.status) %>">
                   <span class="sr-only"><%= t('trainer_workflow.list.columns.status') %>: </span>
                   <% if session.status == 'requested' %>
                     <%= t('trainer_workflow.list.filters.requested') %>
@@ -167,19 +152,19 @@
               <td class="px-6 py-4 whitespace-nowrap text-sm font-medium">
                 <% if session.status == 'requested' %>
                   <%= link_to t('trainer_workflow.list.actions.view_schedule'), trainers_training_session_path(session),
-                              class: 'bg-indigo-600 hover:bg-indigo-700 text-white py-1 px-3 rounded-md inline-block transition-colors duration-200',
+                              class: 'btn btn-primary btn-sm',
                               aria: { label: t('trainer_workflow.list.action_name', action: t('trainer_workflow.list.actions.view_schedule'),
                                                                                     name: session.application.constituent_full_name,
                                                                                     number: session.appointment_number) } %>
                 <% elsif session.status_scheduled? || session.status_confirmed? %>
                   <%= link_to t('trainer_workflow.list.actions.complete_report'), trainers_training_session_path(session),
-                              class: 'bg-indigo-600 hover:bg-indigo-700 text-white py-1 px-3 rounded-md inline-block transition-colors duration-200',
+                              class: 'btn btn-primary btn-sm',
                               aria: { label: t('trainer_workflow.list.action_name', action: t('trainer_workflow.list.actions.complete_report'),
                                                                                     name: session.application.constituent_full_name,
                                                                                     number: session.appointment_number) } %>
                 <% else %>
                   <%= link_to t('trainer_workflow.list.actions.view_details'), trainers_training_session_path(session),
-                              class: 'bg-indigo-600 hover:bg-indigo-700 text-white py-1 px-3 rounded-md inline-block transition-colors duration-200',
+                              class: 'btn btn-primary btn-sm',
                               aria: { label: t('trainer_workflow.list.action_name', action: t('trainer_workflow.list.actions.view_details'),
                                                                                     name: session.application.constituent_full_name,
                                                                                     number: session.appointment_number) } %>
@@ -191,12 +176,11 @@
       </table>
     </div>
 
-    <!-- Pagination -->
     <div class="py-4">
       <%== pagy_nav(@pagy) if defined?(@pagy) %>
     </div>
   <% else %>
-    <div class="bg-white shadow sm:rounded-lg p-6 text-center">
+    <div class="bg-white shadow-elevation-2 sm:rounded-lg p-6 text-center">
       <p class="text-gray-500"><%= t('trainer_workflow.list.empty') %></p>
     </div>
   <% end %>

@@ -1,8 +1,5 @@
 # frozen_string_literal: true
 
-# Seed File for "vendor_notifications_w9_approved"
-# (Suggest saving as db/seeds/email_templates/vendor_notifications_w9_approved.rb)
-# --------------------------------------------------
 EmailTemplate.find_or_create_by!(name: 'vendor_notifications_w9_approved', format: :text, locale: 'es') do |template|
   template.subject = 'Formulario W9 Aprobado'
   template.description = 'Enviado a un proveedor cuando su formulario W9 enviado ha sido revisado y aprobado. La autorización del programa es un paso separado.'

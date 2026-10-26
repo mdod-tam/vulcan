@@ -1,6 +1,6 @@
 <%# locals: (review:, submitted:, guardian: false) %>
 <% if review && review.candidates.any? %>
-  <section class="rounded-md border border-amber-300 bg-amber-50 p-4 my-4" aria-labelledby="<%= guardian ? 'guardian-review-heading' : 'identity-review-heading' %>">
+  <section class="rounded-md border border-warning-300 bg-warning-50 p-4 my-4" aria-labelledby="<%= guardian ? 'guardian-review-heading' : 'identity-review-heading' %>">
     <h3 id="<%= guardian ? 'guardian-review-heading' : 'identity-review-heading' %>" class="font-semibold" tabindex="-1">Review possible matches</h3>
     <p class="mt-2">Select the existing person, or explain why these are different people.</p>
     <% if review.blocked? %>
@@ -10,7 +10,7 @@
     <% if review.confirmed? %>
       <%= hidden_field_tag guardian ? :guardian_identity_determination : :identity_determination, 'keep_separate' %>
     <% end %>
-    <ul class="divide-y divide-amber-200">
+    <ul class="divide-y divide-warning-200">
       <% review.presented_candidates.each do |candidate| %>
         <li class="py-3">
           <span class="font-medium"><%= candidate[:name] %></span>
@@ -19,7 +19,7 @@
             <%= button_tag(
                   'Select this person',
                   name: guardian ? :selected_candidate_id : :identity_candidate_id, value: candidate[:id],
-                  type: guardian ? 'button' : 'submit', class: 'ml-3 text-indigo-700 underline',
+                  type: guardian ? 'button' : 'submit', class: 'ml-3 text-primary-700 underline',
                   data: (guardian ? { action: 'click->admin-user-search#createGuardian' } : {})
                 ) %>
           <% else %>
@@ -32,7 +32,7 @@
     <%= text_area_tag(
           guardian ? :guardian_identity_rationale : :identity_rationale, submitted[:identity_rationale],
           id: guardian ? :guardian_identity_rationale : :identity_rationale,
-          class: 'block w-full rounded-md border-gray-300', required: true
+          class: 'form-input', required: true
         ) %>
     <% if review.selected? && !guardian && review.context == :self_applicant %>
       <div class="mt-3">
@@ -47,7 +47,7 @@
       <%= button_tag(
             'These are different people — create a new person',
             name: :identity_determination, value: 'keep_separate',
-            type: guardian ? 'button' : 'submit', class: 'mt-3 rounded border border-amber-400 bg-white px-3 py-2',
+            type: guardian ? 'button' : 'submit', class: 'btn btn-outline mt-3',
             data: (guardian ? { action: 'click->admin-user-search#createGuardian' } : {})
           ) %>
     <% end %>

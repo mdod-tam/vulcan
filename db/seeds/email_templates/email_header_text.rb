@@ -1,6 +1,5 @@
 # frozen_string_literal: true
 
-# Seed File for "email_header_text"
 EmailTemplate.create_or_find_by!(name: 'email_header_text', format: :text, locale: 'en') do |template|
   template.subject = 'Email Header Text'
   template.description = 'Standard text header used in all email templates'

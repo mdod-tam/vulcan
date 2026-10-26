@@ -8,14 +8,13 @@ class SmsService
     EmailDelivery.verify!(action, context: delivery_context, channel: 'sms')
     delivery_phone_number = format_phone_to_e164(phone_number)
 
-    # Log the SMS attempt
     if sensitive
       Rails.logger.info("SMS delivery requested: #{safe_context(context).merge(phone: masked_phone(phone_number)).inspect}")
     else
       Rails.logger.info("SMS to #{delivery_phone_number}: #{message}")
     end
 
-    # In test/development without Twilio credentials, just log and return success
+    # Without Twilio credentials, local environments record the handoff and return; other environments raise.
     unless twilio_configured?
       if Rails.env.local?
         EmailDelivery::Outcome.record_essential_handoff(context: delivery_context, channel: :sms)
@@ -25,7 +24,6 @@ class SmsService
       raise EmailDelivery::ConfigurationError.new(reason: 'sms_provider_unconfigured')
     end
 
-    # Send via Twilio in production with proper credentials
     begin
       client = Twilio::REST::Client.new(
         Rails.application.config.twilio[:account_sid],

@@ -44,7 +44,7 @@ en:
       title: "Account Access"
       submit: "Send Account Access Link"
       back_to_sign_in: "Back to Sign In"
-      confirmation: "If this matches an email-backed portal account, access instructions may have been sent. Need help? Contact the MAT Team at %{support_email} or %{support_phone}."
+      confirmation: "If this matches a portal account with an email address, access instructions may have been sent. Need help? Contact the MAT Team at %{support_email} or %{support_phone}."
     account_recovery:
       title: "Security Key Recovery"
       note_label: "Note:"
@@ -314,7 +314,7 @@ en:
         no_longer_needed: "This document no longer needs to be uploaded. Contact the program if you have questions."
     certification_upload:
       messages:
-        provider_email_required: "Secure cert upload form cannot be sent - provider email is missing. Send a provider info form to the constituent/guardian to collect updated certifying professional contact information."
+        provider_email_required: "A secure certification upload link cannot be sent because the provider email is missing. Send a provider information link to the constituent or guardian to collect the contact information of the certifying professional."
         unsupported_channel: "Secure certification upload links can only be sent by email."
         cooldown_active: "A secure certification upload link was sent recently. Please wait %{minutes} minutes before sending another one."
         request_created: "Secure certification upload request created."
@@ -342,10 +342,10 @@ en:
       admin_help: "Alternate contacts are informational only and do not receive secure workflow links or workflow notifications."
       admin_authorization_help: "Alternate contacts are informational only. They are not authorized application recipients and do not receive secure workflow links or workflow notifications."
     dependent_contact:
-      strategy_help: "Use guardian contact information when secure workflow communications for this dependent should default to the guardian. Provide separate dependent contact information when secure workflow communications may go to the dependent/applicant."
-      guardian_email_help: "Secure workflow communications for the dependent will default to the guardian email path."
+      strategy_help: "Use guardian contact information when secure workflow communications for this dependent should go to the guardian by default. Provide separate dependent contact information when those communications may go to the dependent/applicant."
+      guardian_email_help: "Secure workflow communications for the dependent will go to the guardian's email address by default."
       dependent_email_help: "This email will be used for communications about the dependent's benefits. Secure workflow communications may default to the dependent/applicant when this email is separate from the guardian email."
-      guardian_phone_help: "Calls or texts for the dependent will use the guardian phone path."
+      guardian_phone_help: "Calls or texts for the dependent will use the guardian's phone number."
   trainers:
     training_sessions:
       flash:
@@ -396,32 +396,32 @@ en:
     complete:
       success: "Training session completed successfully."
       invalid_status: "Only scheduled or confirmed training sessions can be completed."
-      notes_required: "notes is required"
-      product_required: "product_trained_on_id is required"
-      duration_hours_required: "duration_hours is required"
+      notes_required: "Notes are required."
+      product_required: "Select the product the training covered."
+      duration_hours_required: "Enter the training duration in hours."
     cancel:
       success: "Training session cancelled successfully."
       invalid_status: "Only requested, scheduled, or confirmed training sessions can be cancelled."
-      reason_required: "cancellation_reason is required"
+      reason_required: "A cancellation reason is required."
     reschedule:
       wrong_status: "Only scheduled or confirmed training sessions can be rescheduled."
     schedule_follow_up:
       success: "Follow-up training session scheduled successfully."
       invalid_source: "Only cancelled or no-show training sessions can have a follow-up scheduled."
-      missing_required_fields: "scheduled_for and reschedule_reason are required"
+      missing_required_fields: "A new date and time and a reason for the follow-up are required."
       service_window_closed: "Training is no longer available for this application."
       quota_exhausted: "This constituent has used all available training sessions."
-      invalid_scheduled_for: "scheduled_for must be a valid date and time"
-      scheduled_for_in_future: "scheduled_for must be in the future"
+      invalid_scheduled_for: "Enter a valid date and time."
+      scheduled_for_in_future: "The date and time must be in the future."
       unexpected_error: "An unexpected error occurred: %{message}"
     schedule_additional:
       success: "Additional training session scheduled successfully."
       invalid_source: "Additional appointments require the latest completed training session."
-      missing_scheduled_for: "scheduled_for is required"
+      missing_scheduled_for: "A date and time is required."
       service_window_closed: "Training is no longer available for this application."
       quota_exhausted: "This constituent has used all available training sessions."
-      invalid_scheduled_for: "scheduled_for must be a valid date and time"
-      scheduled_for_in_future: "scheduled_for must be in the future"
+      invalid_scheduled_for: "Enter a valid date and time."
+      scheduled_for_in_future: "The date and time must be in the future."
       unexpected_error: "An unexpected error occurred: %{message}"
   application_notifications:
     provider_info_requested:
@@ -746,6 +746,9 @@ en:
       assign_trainer:
         trainer_assign_pass: "Trainer successfully assigned."
         trainer_assign_fail: "Failed to assign trainer."
+      reassign_trainer:
+        trainer_reassign_pass: "Open training reassigned. Appointment details have been preserved."
+        trainer_reassign_fail: "Failed to reassign training."
       unassign_trainer:
         trainer_unassign_pass: "Trainer assignment removed."
         trainer_unassign_fail: "Failed to remove trainer assignment."
@@ -778,7 +781,7 @@ en:
         create:
           success: "Secure certification upload link sent successfully."
           failure: "Failed to send secure certification upload link."
-          provider_email_required: "Secure cert upload form cannot be sent - provider email is missing. Send a provider info form to the constituent/guardian to collect updated certifying professional contact information."
+          provider_email_required: "A secure certification upload link cannot be sent because the provider email is missing. Send a provider information link to the constituent or guardian to collect the contact information of the certifying professional."
       send_document_signing_request:
         d_sign_request_pass: "Document signing request sent successfully."
       assign_voucher:
@@ -869,7 +872,7 @@ en:
         success: "All email templates have been enabled."
     guardian_relationships:
       create:
-        dependent_not_found: "Email template not found"
+        dependent_not_found: "Dependent not found"
         relationship_create_pass: "Guardian relationship created successfully."
         relationship_create_fail: "Failed to create guardian relationship."
       destroy:
@@ -891,7 +894,7 @@ en:
       redirect_empty_letters:
         no_selected_letters: "No letters selected for download"
       handle_zip_error:
-        download_error: "An error occured while preparing the download"
+        download_error: "An error occurred while preparing the download"
     products:
       create:
         product_created_pass: "Product successfully created."
@@ -925,7 +928,7 @@ en:
     w9_reviews:
       create:
         w9_review_complete: "W9 review completed successfully"
-        w9_save_fail: "W9 review faled to save"
+        w9_save_fail: "W9 review failed to save"
       set_vendor:
         vendor_not_found: "Vendor not found"
     vendors:
@@ -983,6 +986,7 @@ en:
       page_number: "Page %{page} of %{total}"
       titles:
         training_session_notifications_training_completed: "Your Training Report Is Ready"
+        training_session_notifications_trainer_changed: "Your Trainer Has Changed"
         application_notifications_account_created: "We Received Your Maryland Accessible Telecommunications Application"
         application_notifications_registration_confirmation: "Welcome to the Maryland Accessible Telecommunications Program"
         application_notifications_proof_rejected: "Document Verification Follow-up Required"

@@ -8,7 +8,7 @@
         </li>
         <li>
           <div class="flex items-center">
-            <svg class="h-5 w-5 text-gray-400" fill="currentColor" viewBox="0 0 20 20">
+            <svg class="h-5 w-5 text-gray-500" fill="currentColor" viewBox="0 0 20 20">
               <path fill-rule="evenodd" d="M7.293 14.707a1 1 0 010-1.414L10.586 10 7.293 6.707a1 1 0 011.414-1.414l4 4a1 1 0 010 1.414l-4 4a1 1 0 01-1.414 0z" clip-rule="evenodd" />
             </svg>
             <%= link_to "Application ##{@application.id}", 
@@ -18,7 +18,7 @@
         </li>
         <li>
           <div class="flex items-center">
-            <svg class="h-5 w-5 text-gray-400" fill="currentColor" viewBox="0 0 20 20">
+            <svg class="h-5 w-5 text-gray-500" fill="currentColor" viewBox="0 0 20 20">
               <path fill-rule="evenodd" d="M7.293 14.707a1 1 0 010-1.414L10.586 10 7.293 6.707a1 1 0 011.414-1.414l4 4a1 1 0 010 1.414l-4 4a1 1 0 01-1.414 0z" clip-rule="evenodd" />
             </svg>
             <span class="text-gray-700" aria-current="page">
@@ -28,7 +28,7 @@
         </li>
       </ol>
     </nav>
-    <div class="bg-white shadow rounded-lg">
+    <div class="card">
       <div class="px-4 py-5 border-b border-gray-200 sm:px-6">
         <h1 class="text-lg font-medium text-gray-900">
           Reviewing <%= @proof_type.titleize %> Proof for Application #<%= @application.id %>
@@ -36,7 +36,7 @@
         
         <% if remaining = (8 - @application.total_rejections) %>
           <% if remaining <= 3 %>
-            <div class="mt-2 text-sm <%= remaining.zero? ? 'text-red-600' : 'text-yellow-600' %>">
+            <div class="mt-2 text-sm <%= remaining.zero? ? 'text-danger-600' : 'text-warning-700' %>">
               <%= remaining.zero? ? 
                   "This application has reached the maximum number of rejections" :
                   "#{remaining} #{pluralize(remaining, 'rejection')} remaining" %>
@@ -47,7 +47,6 @@
 
       <div class="px-4 py-5 sm:p-6">
         <div class="grid grid-cols-1 lg:grid-cols-2 gap-6">
-          <%# Proof Preview Section %>
           <div class="bg-gray-50 p-4 rounded-lg">
             <h2 class="text-lg font-medium text-gray-900 mb-4">Proof Preview</h2>
             <%= render 'shared/document_scan_status', document: @proof %>
@@ -58,7 +57,7 @@
             <% else %>
               <div class="flex items-center justify-center bg-gray-100 rounded-lg p-8">
                 <%= link_to document_download_path(@proof),
-                    class: "inline-flex items-center px-4 py-2 border border-transparent text-sm font-medium rounded-md text-white bg-indigo-600 hover:bg-indigo-700",
+                    class: "btn btn-primary",
                     target: "_blank",
                     rel: "noopener" do %>
                   <%= proof_file_icon(@proof) %>
@@ -68,7 +67,6 @@
             <% end %>
           </div>
 
-          <%# Review Form Section %>
           <div>
             <h2 class="text-lg font-medium text-gray-900 mb-4">Review Decision</h2>
             <%= form_with(model: @proof_review,
@@ -84,15 +82,15 @@
                   <div class="space-y-4">
                     <div class="flex items-center">
                       <%= f.radio_button :status, :approved,
-                                         class: 'h-4 w-4 text-indigo-600 focus:ring-indigo-500 border-gray-300' %>
+                                         class: 'h-4 w-4 text-primary-600 border-gray-300' %>
                       <%= f.label :status_approved, "Approve", 
-                          class: "ml-3 block text-sm font-medium text-gray-700" %>
+                          class: "form-label ml-3" %>
                     </div>
                     <div class="flex items-center">
                       <%= f.radio_button :status, :rejected,
-                                         class: 'h-4 w-4 text-indigo-600 focus:ring-indigo-500 border-gray-300' %>
+                                         class: 'h-4 w-4 text-primary-600 border-gray-300' %>
                       <%= f.label :status_rejected, "Reject", 
-                          class: "ml-3 block text-sm font-medium text-gray-700" %>
+                          class: "form-label ml-3" %>
                     </div>
                   </div>
                 </fieldset>
@@ -101,11 +99,11 @@
               <div>
                 <div class="mt-6">
                   <%= f.label :rejection_reason, 'Reason for Rejection (required when rejecting)',
-                              class: 'block text-sm font-medium text-gray-700' %>
+                              class: 'form-label' %>
                   <div class="mt-1">
                     <%= f.text_area :rejection_reason,
                                     rows: 4,
-                                    class: 'shadow-sm focus:ring-indigo-500 focus:border-indigo-500 block w-full sm:text-sm border-gray-300 rounded-md',
+                                    class: 'form-input',
                                     aria: { describedby: 'proof_review_rejection_reason_help' },
                                     placeholder: 'Please provide a clear explanation for why this proof is being rejected...' %>
                   </div>
@@ -118,11 +116,11 @@
               <div class="flex justify-between">
                 <%= link_to "Cancel Review", 
                     admin_application_path(@application),
-                    class: "inline-flex items-center px-4 py-2 border border-gray-300 shadow-sm text-sm font-medium rounded-md text-gray-700 bg-white hover:bg-gray-50 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-indigo-500" %>
+                    class: "btn btn-outline" %>
                 
                 <div class="flex space-x-3">
                   <%= f.submit "Submit & Exit",
-                      class: "inline-flex items-center px-4 py-2 border border-transparent text-sm font-medium rounded-md shadow-sm text-white bg-indigo-600 hover:bg-indigo-700 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-indigo-500" %>
+                      class: "btn btn-primary" %>
                 </div>
               </div>
             <% end %>

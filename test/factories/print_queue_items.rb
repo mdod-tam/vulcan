@@ -8,7 +8,7 @@ FactoryBot.define do
     # Create unique users to avoid email/phone conflicts
     constituent do
       unique_id = SecureRandom.hex(6)
-      # Generate a valid 10-digit phone number: 555-XXX-XXXX format
+      # 10-digit phone number starting with 555.
       phone_suffix = (unique_id.to_i(16) % 10_000_000).to_s.rjust(7, '0')
       create(:constituent,
              email: "pqi_constituent_#{unique_id}@example.com",
@@ -17,7 +17,7 @@ FactoryBot.define do
 
     application do
       unique_id = SecureRandom.hex(6)
-      # Generate a valid 10-digit phone number: 555-XXX-XXXX format
+      # 10-digit phone number starting with 555.
       phone_suffix = (unique_id.to_i(16) % 10_000_000).to_s.rjust(7, '0')
       create(:application,
              user: create(:constituent,
@@ -27,7 +27,7 @@ FactoryBot.define do
 
     admin do
       unique_id = SecureRandom.hex(6)
-      # Generate a valid 10-digit phone number: 555-XXX-XXXX format
+      # 10-digit phone number starting with 555.
       phone_suffix = (unique_id.to_i(16) % 10_000_000).to_s.rjust(7, '0')
       create(:admin,
              email: "pqi_admin_#{unique_id}@example.com",

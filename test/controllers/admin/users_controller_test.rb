@@ -5,7 +5,7 @@ require 'test_helper'
 module Admin
   class UsersControllerTest < ActionDispatch::IntegrationTest
     setup do
-      @admin = create(:admin) # Use FactoryBot to create an admin user
+      @admin = create(:admin)
       sign_in_for_integration_test @admin
     end
 
@@ -17,16 +17,13 @@ module Admin
 
       assert_no_difference ['User.count', 'RoleCapability.count', 'Event.count'] do
         Rails.stub(:logger, ActiveSupport::Logger.new(log)) do
-          patch update_role_admin_user_path(user), params: { role: submitted_role }, as: :json
+          patch update_role_admin_user_path(user), params: { role: submitted_role }, headers: { 'Accept' => Mime[:turbo_stream].to_s }
         end
       end
 
       assert_response :unprocessable_content
-      assert_equal({ 'success' => false,
-                     'message' => "Invalid role specified: '#{submitted_role}'. Please select a valid role." }, response.parsed_body)
+      assert_includes response.body, ERB::Util.html_escape("Invalid role specified: '#{submitted_role}'. Please select a valid role.")
       assert_equal original_type, user.reload.type
-      assert_includes log.string, "Received role update for user_id: #{user.id}"
-      assert_includes log.string, "Invalid role for user_id: #{user.id}"
       %w[private-role-sentinel person@example.test private-role-token].each do |value|
         assert_not_includes log.string, value
       end

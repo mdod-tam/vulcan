@@ -2,15 +2,14 @@
 
 FactoryBot.define do
   factory :training_session do
-    # Required associations
-    trainer
+    # Required associations. The trainer must be persisted, even when the session itself is only built.
+    trainer factory: %i[trainer], strategy: :create
     application { association(:application, :approved, :with_all_proofs, application_date: Date.current, assigned_trainer: trainer) }
 
-    # Default status
     status { :requested } # Matches schema default 0
+    assignment_operation_id { SecureRandom.uuid }
     created_at { 2.days.ago }
 
-    # Optional attributes (often set via traits)
     scheduled_for { nil }
     completed_at { nil }
     internal_notes { nil }
@@ -22,7 +21,6 @@ FactoryBot.define do
     cancellation_reason { nil }
     no_show_notes { nil }
 
-    # Traits for different statuses
     trait :requested do
       status { :requested }
     end
@@ -64,7 +62,5 @@ FactoryBot.define do
       reschedule_reason { 'Training session rescheduled reason.' }
       # Original scheduled_for would be set on the instance before rescheduling
     end
-
-    # Add other traits as needed for specific test scenarios
   end
 end

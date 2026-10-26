@@ -1,6 +1,5 @@
-<%# Add a Security Key View %>
 <div class="max-w-4xl mx-auto px-4 py-8">
-  <section aria-labelledby="add-key-heading" class="bg-white rounded-lg shadow-md p-8">
+  <section aria-labelledby="add-key-heading" class="card p-8">
     <header id="add-key-heading" class="text-center mb-8">
       <h1 class="text-3xl font-bold text-gray-800">Set up Device or Security Key</h1>
       <p class="mt-3 text-gray-600">
@@ -13,8 +12,8 @@
       <ol role="list" class="flex items-center space-x-4">
         <li aria-current="step">
           <div class="flex flex-col items-center">
-            <div class="w-8 h-8 rounded-full bg-indigo-600 flex items-center justify-center text-white font-semibold">1</div>
-            <span class="mt-2 text-sm text-indigo-600 font-medium">Setup</span>
+            <div class="w-8 h-8 rounded-full bg-primary-600 flex items-center justify-center text-white font-semibold">1</div>
+            <span class="mt-2 text-sm text-primary-600 font-medium">Setup</span>
           </div>
         </li>
         <li class="w-16 h-1 bg-gray-200" aria-hidden="true"></li>
@@ -40,21 +39,21 @@
           <h2 class="text-xl font-semibold text-gray-800 mb-4">Quick steps</h2>
           <ol class="space-y-4 text-gray-700" role="list">
             <li class="flex">
-              <span class="flex-shrink-0 h-6 w-6 rounded-full bg-indigo-100 text-indigo-800 flex items-center justify-center font-medium text-sm mr-3">1</span>
+              <span class="flex-shrink-0 h-6 w-6 rounded-full bg-primary-100 text-primary-800 flex items-center justify-center font-medium text-sm mr-3">1</span>
               <div>
                 <p class="font-medium">Give your device or key a name</p>
                 <p class="text-sm text-gray-600 mt-1">This helps you recognize it later.</p>
               </div>
             </li>
             <li class="flex">
-              <span class="flex-shrink-0 h-6 w-6 rounded-full bg-indigo-100 text-indigo-800 flex items-center justify-center font-medium text-sm mr-3">2</span>
+              <span class="flex-shrink-0 h-6 w-6 rounded-full bg-primary-100 text-primary-800 flex items-center justify-center font-medium text-sm mr-3">2</span>
               <div>
                 <p class="font-medium">Click "Continue to Key Activation"</p>
                 <p class="text-sm text-gray-600 mt-1">Your browser will open a prompt.</p>
               </div>
             </li>
             <li class="flex">
-              <span class="flex-shrink-0 h-6 w-6 rounded-full bg-indigo-100 text-indigo-800 flex items-center justify-center font-medium text-sm mr-3">3</span>
+              <span class="flex-shrink-0 h-6 w-6 rounded-full bg-primary-100 text-primary-800 flex items-center justify-center font-medium text-sm mr-3">3</span>
               <div>
                 <p class="font-medium">Follow the prompt</p>
                 <p class="text-sm text-gray-600 mt-1">Use fingerprint, face, PIN, or tap your security key.</p>
@@ -88,11 +87,11 @@
                               "add-credential-callback-url-value": create_credential_two_factor_authentication_path(type: 'webauthn'),
                               turbo: false } do |form| %>
             <div>
-              <label for="webauthn_credential_nickname" class="block text-sm font-medium text-gray-700 mb-1">Name for this device or key</label>
+              <label for="webauthn_credential_nickname" class="form-label mb-1">Name for this device or key</label>
               <div class="mt-1">
                 <%= form.text_field :nickname,
                       id: "webauthn_credential_nickname",
-                      class: "shadow-sm focus:ring-indigo-500 focus:border-indigo-500 block w-full sm:text-sm border-gray-400 rounded-md py-3", # Updated border class
+                      class: "form-input py-3",
                       placeholder: "e.g., My Laptop Fingerprint, Office YubiKey",
                       required: true,
                       aria: { describedby: "nickname-help" },
@@ -103,16 +102,16 @@
               </p>
             </div>
             <div aria-live="polite">
-              <div class="hidden text-sm text-red-700 mt-2" role="alert" data-add-credential-target="statusMessage"></div>
+              <div class="hidden text-sm text-danger-700 mt-2" role="alert" data-add-credential-target="statusMessage"></div>
             </div>
             <div class="flex items-center justify-between">
               <%= link_to setup_two_factor_authentication_path,
-                  class: "text-indigo-600 hover:text-indigo-900 text-sm font-medium",
+                  class: "text-primary-600 hover:text-primary-900 text-sm font-medium",
                   aria: { label: "Back to authentication options" } do %>
                 &larr; Back to options
               <% end %>
               <%= form.submit "Continue to Key Activation",
-                    class: "inline-flex justify-center py-2 px-4 border border-transparent shadow-sm text-sm font-medium rounded-md text-white bg-indigo-600 hover:bg-indigo-700 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-indigo-500",
+                    class: "btn btn-primary",
                     data: { "add-credential-target": "submitButton" } %>
             </div>
           <% end %>
@@ -121,10 +120,10 @@
     </div>
 
     <aside aria-labelledby="troubleshooting-heading" class="mt-8">
-      <section id="troubleshooting-heading" class="bg-yellow-50 border border-yellow-200 rounded-lg p-4">
-        <h2 class="text-sm font-medium text-yellow-800">Troubleshooting</h2>
-        <div class="mt-2 text-sm text-yellow-700">
-          <p>If you encounter issues, make sure your browser supports WebAuthn and your device or key is compatible.</p>
+      <section id="troubleshooting-heading" class="bg-warning-50 border border-warning-200 rounded-lg p-4">
+        <h2 class="text-sm font-medium text-warning-800">Troubleshooting</h2>
+        <div class="mt-2 text-sm text-warning-700">
+          <p>If you have trouble, check that your browser supports security keys and device sign-in, and that your device or key is compatible.</p>
         </div>
       </section>
     </aside>

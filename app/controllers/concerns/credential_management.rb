@@ -17,20 +17,16 @@ module CredentialManagement
   end
 
   # GET /:credential_type_credentials/create_success
-  def create_success
-    # Just renders the success view
-  end
+  def create_success; end
 
   protected
 
-  # Methods to be implemented in including controllers
+  # Including controllers implement this and return :webauthn, :totp, or :sms.
   def credential_type
-    # Should return symbol like :webauthn, :totp, or :sms
     raise NotImplementedError, 'Controllers must implement credential_type'
   end
 
   def credential_type_name
-    # Human-readable name, like 'Security key', 'Authenticator app', or 'SMS verification'
     case credential_type
     when :webauthn then 'Security key'
     when :totp then 'Authenticator app'

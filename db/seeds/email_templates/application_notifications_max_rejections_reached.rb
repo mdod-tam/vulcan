@@ -1,7 +1,5 @@
 # frozen_string_literal: true
 
-# Seed File for "application_notifications_max_rejections_reached"
-# --------------------------------------------------
 EmailTemplate.create_or_find_by!(name: 'application_notifications_max_rejections_reached', format: :text, locale: 'en') do |template|
   template.subject = 'Important Application Status Update'
   template.description = 'Sent when an application is archived because the maximum number of document revision attempts has been reached.'

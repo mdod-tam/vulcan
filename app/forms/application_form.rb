@@ -5,7 +5,17 @@ class ApplicationForm
   include ActiveModel::Model
   include ActiveModel::Attributes
   include ActiveModel::Validations
-  include ParamCasting
+
+  # Request inputs written straight to the typed attributes above. Strong parameters drop arrays and
+  # hashes, so a malformed value never reaches a boolean or integer writer as a truthy object.
+  SCALAR_APPLICATION_PARAMS = %i[
+    annual_income household_size maryland_resident self_certify_disability
+    hearing_disability vision_disability speech_disability mobility_disability cognition_disability
+    terms_accepted information_verified medical_release_authorized use_guardian_address
+    user_id managing_guardian_id residency_proof income_proof id_proof
+    physical_address_1 physical_address_2 city state zip_code
+    alternate_contact_name alternate_contact_phone alternate_contact_email alternate_contact_relationship_type
+  ].freeze
 
   attribute :annual_income, :string
   attribute :status, :string, default: 'draft'
@@ -113,98 +123,27 @@ class ApplicationForm
     candidate.to_sym if I18n.available_locales.include?(candidate.to_sym)
   end
 
-  def cast_boolean_params_for(params)
-    return if params[:application].blank?
-
-    cast_boolean_fields(params[:application], ParamCasting::APPLICATION_BOOLEAN_FIELDS)
-    cast_boolean_fields(params[:application], ParamCasting::USER_DISABILITY_FIELDS)
-  end
-
-  def cast_boolean_fields(app_params, fields)
-    fields.each do |field|
-      field_sym = field.to_sym
-      next unless app_params.key?(field_sym)
-
-      value = app_params[field_sym]
-      value = value.last if value.is_a?(Array) && value.size == 2 && value.first.blank?
-      app_params[field_sym] = to_boolean(value)
-    end
-  end
-
   def populate_from_params(params)
     self.autosave_context = params[:autosave_context]
     self.autosave_revision = params[:autosave_revision]
     return if params[:application].blank?
 
     app_params = params[:application]
+    scalars = scalar_params(app_params, *SCALAR_APPLICATION_PARAMS)
 
-    cast_boolean_params_for(params)
+    assign_attributes(scalars)
+    self.annual_income = annual_income&.gsub(/[^\d.]/, '') if scalars.key?(:annual_income)
 
-    assign_core_attributes(app_params)
-    assign_file_attachments(app_params)
-    assign_disability_attributes(app_params)
-
-    self.terms_accepted = app_params[:terms_accepted] if app_params.key?(:terms_accepted)
-    self.information_verified = app_params[:information_verified] if app_params.key?(:information_verified)
-    self.medical_release_authorized = app_params[:medical_release_authorized] if app_params.key?(:medical_release_authorized)
-
-    extract_address_attributes(app_params)
-    extract_guardian_address_strategy(params, app_params)
+    # A top-level checkbox takes precedence over the nested one.
+    assign_attributes(scalar_params(params, :use_guardian_address))
     extract_locale_attribute(params, app_params)
     extract_medical_provider_attributes(params)
-    extract_alternate_contact_attributes(app_params)
 
     self.is_submission = params[:submit_application].present?
   end
 
-  def assign_core_attributes(app_params)
-    assign_transformed_attributes(app_params)
-    assign_simple_attributes(app_params, %i[maryland_resident self_certify_disability])
-    assign_integer_attributes(app_params, %i[user_id managing_guardian_id])
-  end
-
-  def assign_transformed_attributes(app_params)
-    self.annual_income = app_params[:annual_income]&.gsub(/[^\d.]/, '') if app_params[:annual_income]
-    self.household_size = app_params[:household_size]&.to_i if app_params[:household_size]
-  end
-
-  def assign_simple_attributes(app_params, fields)
-    fields.each do |field|
-      send("#{field}=", app_params[field]) if app_params.key?(field)
-    end
-  end
-
-  def assign_integer_attributes(app_params, fields)
-    fields.each do |field|
-      value = app_params[field]
-      send("#{field}=", value.presence&.to_i) if app_params.key?(field)
-    end
-  end
-
-  def assign_file_attachments(app_params)
-    self.residency_proof = app_params[:residency_proof] if app_params[:residency_proof]
-    self.income_proof = app_params[:income_proof] if app_params[:income_proof]
-    self.id_proof = app_params[:id_proof] if app_params[:id_proof]
-  end
-
-  def assign_disability_attributes(app_params)
-    ParamCasting::USER_DISABILITY_FIELDS.each do |field|
-      send("#{field}=", app_params[field]) if app_params.key?(field)
-    end
-  end
-
-  def extract_address_attributes(app_params)
-    self.physical_address_1 = app_params[:physical_address_1] if app_params[:physical_address_1]
-    self.physical_address_2 = app_params[:physical_address_2] if app_params[:physical_address_2]
-    self.city = app_params[:city] if app_params[:city]
-    self.state = app_params[:state] if app_params[:state]
-    self.zip_code = app_params[:zip_code] if app_params[:zip_code]
-  end
-
-  def extract_guardian_address_strategy(params, app_params)
-    raw_value = params[:use_guardian_address]
-    raw_value = app_params[:use_guardian_address] if raw_value.nil? && app_params.key?(:use_guardian_address)
-    self.use_guardian_address = to_boolean(raw_value) unless raw_value.nil?
+  def scalar_params(source, *keys)
+    source.slice(*keys).permit(*keys)
   end
 
   def extract_locale_attribute(params, app_params)
@@ -227,13 +166,6 @@ class ApplicationForm
     self.medical_provider_phone = mp_attrs[:phone] if mp_attrs[:phone]
     self.medical_provider_fax = mp_attrs[:fax] if mp_attrs[:fax]
     self.medical_provider_email = mp_attrs[:email] if mp_attrs[:email]
-  end
-
-  def extract_alternate_contact_attributes(app_params)
-    self.alternate_contact_name = app_params[:alternate_contact_name] if app_params.key?(:alternate_contact_name)
-    self.alternate_contact_phone = app_params[:alternate_contact_phone] if app_params.key?(:alternate_contact_phone)
-    self.alternate_contact_email = app_params[:alternate_contact_email] if app_params.key?(:alternate_contact_email)
-    self.alternate_contact_relationship_type = app_params[:alternate_contact_relationship_type] if app_params.key?(:alternate_contact_relationship_type)
   end
 
   def determine_applicant_user

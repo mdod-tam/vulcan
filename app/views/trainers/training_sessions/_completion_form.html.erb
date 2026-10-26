@@ -8,9 +8,9 @@
     <%= render 'shared/action_errors', action: :complete, form: f, form_errors: @training_form_errors,
                                        heading: t('trainer_workflow.error_heading') %>
     <div>
-      <p id="complete-time-help" class="text-sm text-gray-600"><%= t('trainer_workflow.forms.completed_at_help') %>
+      <p id="complete-time-help" class="form-hint"><%= t('trainer_workflow.forms.completed_at_help') %>
         <%= t('date_time_input.hint', zone: Time.zone.name) %></p>
-      <%= f.label :completed_at, training_required_label(t('trainer_workflow.fields.completed_at', zone: Time.zone.name)), class: 'block font-medium' %>
+      <%= f.label :completed_at, training_required_label(t('trainer_workflow.fields.completed_at', zone: Time.zone.name)), class: 'form-label' %>
       <%= f.datetime_local_field :completed_at,
                                  value: training_form_value(:complete,
                                                             :completed_at,
@@ -18,7 +18,7 @@
                                                             form_values: @training_form_values),
                                  required: true,
 
-                                 class: 'mt-1 w-full rounded-md border-gray-300',
+                                 class: 'form-input mt-1',
                                  aria: training_form_aria(:complete,
                                                           :completed_at,
                                                           describedby: 'complete-time-help',
@@ -26,8 +26,8 @@
       <%= render 'shared/field_errors', action: :complete, attribute: :completed_at, form_errors: @training_form_errors %>
     </div>
     <div>
-      <%= f.label :product_trained_on_id, training_required_label(t('trainer_workflow.fields.product')), class: 'block font-medium' %>
-      <p id="complete-product-help" class="text-sm text-gray-600"><%= t('trainer_workflow.forms.product_help') %></p>
+      <%= f.label :product_trained_on_id, training_required_label(t('trainer_workflow.fields.product')), class: 'form-label' %>
+      <p id="complete-product-help" class="form-hint"><%= t('trainer_workflow.forms.product_help') %></p>
       <%= f.collection_select :product_trained_on_id,
                               @available_products,
                               :id,
@@ -38,7 +38,7 @@
                                                               training_session.product_trained_on_id,
                                                               form_values: @training_form_values) },
                               { required: true,
-                                class: 'mt-1 w-full rounded-md border-gray-300',
+                                class: 'form-input mt-1',
                                 aria: training_form_aria(:complete,
                                                          :product_trained_on_id,
                                                          describedby: 'complete-product-help',
@@ -46,7 +46,7 @@
       <%= render 'shared/field_errors', action: :complete, attribute: :product_trained_on_id, form_errors: @training_form_errors %>
     </div>
     <div>
-      <%= f.label :duration_hours, training_required_label(t('trainer_workflow.fields.duration')), class: 'block font-medium' %>
+      <%= f.label :duration_hours, training_required_label(t('trainer_workflow.fields.duration')), class: 'form-label' %>
       <%= f.number_field :duration_hours, data: { training_duration_confirmation_target: 'duration' },
                                           value: training_form_value(:complete,
                                                                      :duration_hours,
@@ -56,17 +56,17 @@
                                           step: 0.01,
 
                                           required: true,
-                                          class: 'mt-1 w-full rounded-md border-gray-300',
+                                          class: 'form-input mt-1',
                                           aria: training_form_aria(:complete,
                                                                    :duration_hours,
                                                                    describedby: 'duration_hours_hint',
                                                                    form_errors: @training_form_errors) %>
-      <p id="duration_hours_hint" class="text-sm text-gray-600"><%= t('trainer_workflow.forms.duration_help') %></p>
+      <p id="duration_hours_hint" class="form-hint"><%= t('trainer_workflow.forms.duration_help') %></p>
       <%= render 'shared/field_errors', action: :complete, attribute: :duration_hours, form_errors: @training_form_errors %>
     </div>
     <div>
-      <%= f.label :constituent_summary, training_required_label(t('trainer_workflow.fields.summary')), class: 'block font-medium' %>
-      <p id="complete-summary-help" class="text-sm text-gray-600"><%= t('trainer_workflow.forms.summary_help') %></p>
+      <%= f.label :constituent_summary, training_required_label(t('trainer_workflow.fields.summary')), class: 'form-label' %>
+      <p id="complete-summary-help" class="form-hint"><%= t('trainer_workflow.forms.summary_help') %></p>
       <%= f.text_area :constituent_summary,
                       value: training_form_value(:complete,
                                                  :constituent_summary,
@@ -74,7 +74,7 @@
                       rows: 5,
                       required: true,
 
-                      class: 'mt-1 w-full rounded-md border-gray-300',
+                      class: 'form-input mt-1',
                       aria: training_form_aria(:complete,
                                                :constituent_summary,
                                                describedby: 'complete-summary-help',
@@ -82,8 +82,8 @@
       <%= render 'shared/field_errors', action: :complete, attribute: :constituent_summary, form_errors: @training_form_errors %>
     </div>
     <div>
-      <p id="complete-summary-language-help" class="text-sm text-gray-600"><%= t('trainer_workflow.forms.summary_language_help') %></p>
-      <%= f.label :summary_locale, training_required_label(t('trainer_workflow.fields.summary_locale')), class: 'block font-medium' %>
+      <p id="complete-summary-language-help" class="form-hint"><%= t('trainer_workflow.forms.summary_language_help') %></p>
+      <%= f.label :summary_locale, training_required_label(t('trainer_workflow.fields.summary_locale')), class: 'form-label' %>
       <%= f.select :summary_locale,
                    I18n.available_locales.map { |locale|
                      [t("trainer_workflow.languages.#{locale}"),
@@ -95,7 +95,7 @@
                                                    @contact_context.locale,
                                                    form_values: @training_form_values) },
                    { required: true,
-                     class: 'mt-1 w-full rounded-md border-gray-300',
+                     class: 'form-input mt-1',
                      aria: training_form_aria(:complete,
                                               :summary_locale,
                                               describedby: 'complete-summary-language-help',
@@ -103,8 +103,8 @@
       <%= render 'shared/field_errors', action: :complete, attribute: :summary_locale, form_errors: @training_form_errors %>
     </div>
     <div>
-      <%= f.label :internal_notes, t('trainer_workflow.fields.observations'), class: 'block font-medium' %>
-      <p id="complete-observations-help" class="text-sm text-gray-600"><%= t('trainer_workflow.forms.observations_help') %></p>
+      <%= f.label :internal_notes, t('trainer_workflow.fields.observations'), class: 'form-label' %>
+      <p id="complete-observations-help" class="form-hint"><%= t('trainer_workflow.forms.observations_help') %></p>
       <%= f.text_area :internal_notes,
                       value: training_form_value(:complete,
                                                  :internal_notes,
@@ -112,29 +112,29 @@
                                                  form_values: @training_form_values),
 
                       rows: 4,
-                      class: 'mt-1 w-full rounded-md border-gray-300',
+                      class: 'form-input mt-1',
                       aria: training_form_aria(:complete,
                                                :internal_notes,
                                                describedby: 'complete-observations-help',
                                                form_errors: @training_form_errors) %>
       <%= render 'shared/field_errors', action: :complete, attribute: :internal_notes, form_errors: @training_form_errors %>
     </div>
-      <dialog class="max-w-[calc(100%_-_2rem)] rounded-lg bg-white p-0 shadow-xl backdrop:bg-gray-500 backdrop:bg-opacity-75" aria-labelledby="training-duration-confirmation-title" aria-describedby="training-duration-confirmation-message" data-training-duration-confirmation-target="dialog" data-action="cancel->training-duration-confirmation#cancel">
+      <dialog class="max-w-[calc(100%_-_2rem)] rounded-lg bg-white p-0 shadow-elevation-4 backdrop:bg-gray-500 backdrop:bg-opacity-75" aria-labelledby="training-duration-confirmation-title" aria-describedby="training-duration-confirmation-message" data-training-duration-confirmation-target="dialog" data-action="cancel->training-duration-confirmation#cancel">
         <div class="max-w-md p-6">
           <h4 id="training-duration-confirmation-title" class="text-lg font-semibold text-gray-900"><%= t('trainer_workflow.confirmation.title') %></h4>
           <p id="training-duration-confirmation-message" class="mt-3 text-sm text-gray-700" data-training-duration-confirmation-target="message"></p>
           <div class="mt-6 flex flex-col gap-3 sm:flex-row sm:justify-end">
-            <button type="button" class="inline-flex min-h-[44px] items-center justify-center rounded-md border border-gray-300 bg-white px-4 py-2 text-sm font-medium text-gray-700 shadow-sm hover:bg-gray-50 focus:outline-none focus:ring-2 focus:ring-indigo-500 focus:ring-offset-2" data-training-duration-confirmation-target="noButton" data-action="training-duration-confirmation#cancel">
+            <button type="button" class="btn btn-outline min-h-[44px]" data-training-duration-confirmation-target="noButton" data-action="training-duration-confirmation#cancel">
               <%= t('trainer_workflow.confirmation.no') %>
             </button>
-            <button type="button" class="inline-flex min-h-[44px] items-center justify-center rounded-md border border-transparent bg-indigo-600 px-4 py-2 text-sm font-medium text-white shadow-sm hover:bg-indigo-700 focus:outline-none focus:ring-2 focus:ring-indigo-500 focus:ring-offset-2" data-training-duration-confirmation-target="yesButton" data-action="training-duration-confirmation#proceed">
+            <button type="button" class="btn btn-primary min-h-[44px]" data-training-duration-confirmation-target="yesButton" data-action="training-duration-confirmation#proceed">
               <%= t('trainer_workflow.confirmation.yes') %>
             </button>
           </div>
         </div>
       </dialog>
     <%= f.submit t('trainer_workflow.forms.save_report'),
-                 id: 'complete_submit', class: 'rounded-md bg-green-700 px-4 py-3 font-medium text-white',
+                 id: 'complete_submit', class: 'btn btn-success',
                  data: { turbo_submits_with: t('trainer_workflow.forms.saving_report'), training_duration_confirmation_target: 'submitButton' } %>
   <% end %>
 </div>

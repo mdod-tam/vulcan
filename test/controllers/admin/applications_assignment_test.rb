@@ -15,8 +15,6 @@ module Admin
                             user: create(:constituent, speech_disability: true), application_date: Date.current)
     end
 
-    # --- dropdown rendering ---
-
     test 'admin application show renders dropdown assignment (no per-practitioner buttons)' do
       create(:trainer)
       create(:evaluator)
@@ -27,7 +25,7 @@ module Admin
       assert_select 'form[data-testid="trainer-assignment-form"] select[name=trainer_id]'
       assert_select 'form[data-testid="trainer-assignment-form"] input[type=submit]'
 
-      # No "Assign <Full Name>" one-button-per-practitioner pattern remains.
+      # The page has no "Assign <Full Name>" button per practitioner.
       assert_select 'button', text: /Assign Test Trainer/, count: 0
     end
 
@@ -66,13 +64,18 @@ module Admin
       assert_select "select[name=evaluator_id] option[value='#{suspended_admin.id}']", count: 0
     end
 
-    test 'evaluator dropdown excludes trainers with explicit can_evaluate capability' do
-      trainer = create(:trainer, first_name: 'Cross', last_name: 'Trainer')
-      create(:role_capability, user: trainer, capability: 'can_evaluate')
+    test 'dropdowns offer staff granted the other discipline and no one else' do
+      granted_evaluator = create(:trainer, first_name: 'Cross', last_name: 'Trainer')
+      create(:role_capability, user: granted_evaluator, capability: 'can_evaluate')
+      granted_trainer = create(:evaluator, first_name: 'Cross', last_name: 'Evaluator')
+      create(:role_capability, user: granted_trainer, capability: 'can_train')
+      ungranted = create(:trainer, first_name: 'Plain', last_name: 'Trainer')
 
       get admin_application_path(@application)
 
-      assert_select "select[name=evaluator_id] option[value='#{trainer.id}']", count: 0
+      assert_select "select[name=evaluator_id] option[value='#{granted_evaluator.id}']"
+      assert_select "select[name=evaluator_id] option[value='#{ungranted.id}']", count: 0
+      assert_select "select[name=trainer_id] option[value='#{granted_trainer.id}']"
     end
 
     test 'assignment dropdowns distinguish practitioners with the same full name by account email' do
@@ -174,7 +177,6 @@ module Admin
       eligible = create(:evaluator)
       inactive = create(:evaluator, status: :inactive)
       wrong_role = create(:trainer)
-      create(:role_capability, user: wrong_role, capability: 'can_evaluate')
       deleted = create(:evaluator)
       deleted_id = deleted.id
       deleted.destroy!
@@ -213,7 +215,6 @@ module Admin
       @application.update!(application_date: Date.current)
       eligible = create(:trainer)
       wrong_role = create(:evaluator)
-      create(:role_capability, user: wrong_role, capability: 'can_train')
       deleted = create(:trainer)
       deleted_id = deleted.id
       deleted.destroy!
@@ -341,7 +342,8 @@ module Admin
       assert_nil @application.evaluation_requested_at
 
       assert_difference -> { Event.where(action: 'evaluation_requested', auditable: @application).count }, 1 do
-        post request_evaluation_admin_application_path(@application)
+        post request_evaluation_admin_application_path(@application),
+             headers: { 'User-Agent' => 'Request metadata probe' }, env: { 'REMOTE_ADDR' => '203.0.113.7' }
       end
 
       assert_redirected_to admin_application_path(@application)
@@ -352,6 +354,8 @@ module Admin
       event = Event.where(action: 'evaluation_requested', auditable: @application).last
       assert_equal @admin, event.user
       assert_equal @application.id, event.metadata['application_id']
+      assert_equal 'Request metadata probe', event.user_agent
+      assert_equal '203.0.113.7', event.ip_address.to_s
     end
 
     test 'request_evaluation is idempotent while a request is already pending' do
@@ -372,6 +376,93 @@ module Admin
 
       assert_redirected_to admin_application_path(draft_app)
       assert_nil draft_app.reload.evaluation_requested_at
+    end
+
+    test 'reassignment moves every open training row to the selected trainer and keeps the appointment' do
+      trainer = current_coverage
+      replacement = create(:trainer)
+      no_show = create(:training_session, :no_show, application: @application, trainer: trainer)
+      scheduled = create(:training_session, :scheduled, application: @application, trainer: trainer, location: 'Agreed library room')
+
+      assert_difference -> { Event.where(action: 'trainer_reassigned', auditable: @application).count }, 1 do
+        post reassign_trainer_admin_application_path(@application),
+             params: { trainer_id: replacement.id, expected_version: @application.training_assignment_version }
+      end
+
+      assert_redirected_to admin_application_path(@application)
+      assert_equal 'Open training reassigned. Appointment details have been preserved.', flash[:notice]
+      assert_equal replacement.id, @application.reload.assigned_trainer_id
+      assert_equal [replacement.id], [no_show, scheduled].map { |session| session.reload.trainer_id }.uniq
+      assert_equal 'Agreed library room', scheduled.location
+    end
+
+    test 'reassignment with a stale reviewed version or an unavailable trainer changes nothing' do
+      trainer = current_coverage
+      replacement = create(:trainer)
+      session = create(:training_session, :scheduled, application: @application, trainer: trainer)
+      stale = @application.training_assignment_version
+      create(:training_session, :no_show, application: @application, trainer: trainer)
+
+      [[replacement.id, stale], [create(:evaluator).id, @application.training_assignment_version], ['', @application.training_assignment_version]].each do |id, version|
+        assert_no_difference ['Event.count', 'Notification.count'] do
+          post reassign_trainer_admin_application_path(@application), params: { trainer_id: id, expected_version: version }
+        end
+        assert_redirected_to admin_application_path(@application)
+        assert flash[:alert].present?
+      end
+
+      assert_equal trainer.id, session.reload.trainer_id
+      assert_equal trainer.id, @application.reload.assigned_trainer_id
+    end
+
+    test 'only administrators can reassign a trainer' do
+      trainer = current_coverage
+      session = create(:training_session, :scheduled, application: @application, trainer: trainer)
+      sign_in_for_integration_test(trainer)
+
+      assert_no_difference -> { Event.where(action: 'trainer_reassigned').count } do
+        post reassign_trainer_admin_application_path(@application),
+             params: { trainer_id: create(:trainer).id, expected_version: @application.training_assignment_version }
+      end
+
+      assert_equal trainer.id, session.reload.trainer_id
+      assert_equal trainer.id, @application.reload.assigned_trainer_id
+    end
+
+    test 'show offers reassignment of the reviewed open training and flags an ineligible trainer' do
+      trainer = current_coverage
+      create(:training_session, :scheduled, application: @application, trainer: trainer)
+      replacement = create(:trainer)
+      trainer.update_columns(status: User.statuses[:suspended])
+
+      get admin_application_path(@application)
+
+      assert_select '[data-testid="trainer-ineligible-notice"]', text: /#{Regexp.escape(trainer.full_name)} can no longer take training assignments/
+      assert_select "form[action='#{reassign_trainer_admin_application_path(@application)}']" do
+        assert_select "input[name=expected_version][value='#{@application.reload.training_assignment_version}']"
+        assert_select "select[name=trainer_id] option[value='#{replacement.id}']"
+      end
+    end
+
+    test 'show explains that an expired service window blocks the transfer' do
+      trainer = current_coverage
+      create(:training_session, :scheduled, application: @application, trainer: trainer)
+      @application.update_columns(application_date: 4.years.ago.to_date)
+
+      get admin_application_path(@application)
+
+      assert_select '[data-testid="training-reassignment-unavailable"]', text: /service window .* has ended/
+      assert_select "form[action='#{reassign_trainer_admin_application_path(@application)}']", count: 0
+    end
+
+    test 'show flags an evaluator who can no longer take evaluator assignments' do
+      evaluator = create(:evaluator)
+      create(:evaluation, application: @application, constituent: @application.user, evaluator: evaluator, status: :scheduled)
+      evaluator.update_columns(status: User.statuses[:suspended])
+
+      get admin_application_path(@application)
+
+      assert_select '[data-testid="evaluator-ineligible-notice"]', text: /#{Regexp.escape(evaluator.full_name)} can no longer take evaluator assignments/
     end
 
     private

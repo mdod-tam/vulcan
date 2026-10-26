@@ -232,7 +232,7 @@ module ConstituentPortal
     #
     # Returns the original relationship for unchanged input, :conflict for changed input,
     # or nil for an absent or unused key.
-    # A legacy form without a key still passes through the identity guard.
+    # A form without a key still passes through the identity guard.
     def replayed_dependent_creation(guardian, _dependent_attrs)
       key = submitted_portal_creation_key
       return nil if key.blank?

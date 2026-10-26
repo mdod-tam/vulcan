@@ -1,4 +1,3 @@
-<%# app/views/admin/users/_user_search_results_list.html.erb %>
 <%# This partial is rendered inside a turbo_frame_tag (e.g., "guardian_search_results") %>
 <%# It receives `users` and `role` (e.g., "guardian", "dependent", "constituent") as local variables. %>
 
@@ -33,11 +32,7 @@
           data-user-last-app-date="<%= user.last_app_date %>"
           data-user-products="<%= user.last_received_products.join(', ') %>"
           <% end %>
-          <% if role == 'guardian' && user.respond_to?(:dependents_count) %>
-          data-user-dependents-count="<%= user.dependents_count %>"
-          <% else %>
-          data-user-dependents-count="0"
-          <% end %>
+          data-user-dependents-count="<%= role == 'guardian' ? user.guardian_relationships_as_guardian.size : 0 %>"
           <% if ineligible %>
           data-user-ineligible="true"
           aria-disabled="true"
@@ -47,9 +42,9 @@
             <div class="font-medium text-sm text-gray-900"><%= user.full_name %></div>
             <% if is_constituent_search && user.respond_to?(:eligible_now) %>
               <% if user.eligible_now %>
-                <span class="inline-flex items-center px-2 py-0.5 rounded text-xs font-medium bg-green-100 text-green-800">Eligible</span>
+                <span class="badge badge-success">Eligible</span>
               <% else %>
-                <span class="inline-flex items-center px-2 py-0.5 rounded text-xs font-medium bg-red-100 text-red-800">Ineligible</span>
+                <span class="badge badge-danger">Ineligible</span>
               <% end %>
             <% end %>
           </div>
@@ -74,7 +69,7 @@
           <% end %>
 
           <% if is_constituent_search && user.respond_to?(:ineligible_reason) && user.ineligible_reason.present? %>
-            <div class="text-xs text-red-600 mt-1"><%= user.ineligible_reason %></div>
+            <div class="text-xs text-danger-600 mt-1"><%= user.ineligible_reason %></div>
           <% elsif is_constituent_search && user.respond_to?(:last_received_products) && user.last_received_products.any? %>
             <div class="text-xs text-gray-500 mt-1">Last products: <%= user.last_received_products.join(', ') %></div>
           <% end %>
@@ -82,19 +77,15 @@
           <% unless is_constituent_search %>
             <div class="text-xs text-gray-500 mt-1">
               Role: <%= user.type.demodulize if user.type %>
-              <% if role == 'guardian' && user.respond_to?(:dependents_count) %>
-                <% if user.dependents_count > 0 %>
-                  <span class="inline-flex items-center ml-2 px-2 py-0.5 rounded text-xs font-medium bg-green-100 text-green-800">
-                    <%= pluralize(user.dependents_count, 'dependent') %>
-                  </span>
-                <% end %>
+              <% if role == 'guardian' && user.guardian? %>
+                <span class="badge badge-success ml-2">
+                  <%= pluralize(user.guardian_relationships_as_guardian.size, 'dependent') %>
+                </span>
               <% end %>
-              <% if role == 'dependent' && user.respond_to?(:has_guardian?) %>
-                <% if user.has_guardian? %>
-                  <span class="inline-flex items-center ml-2 px-2 py-0.5 rounded text-xs font-medium bg-blue-100 text-blue-800">
-                    Has guardian
-                  </span>
-                <% end %>
+              <% if role == 'dependent' && user.dependent? %>
+                <span class="badge badge-info ml-2">
+                  Has guardian
+                </span>
               <% end %>
             </div>
           <% end %>

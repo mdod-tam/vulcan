@@ -1,7 +1,5 @@
 # frozen_string_literal: true
 
-# Seed File for "evaluator_mailer_evaluation_submission_confirmation"
-# --------------------------------------------------
 template = EmailTemplate.find_or_initialize_by(name: 'evaluator_mailer_evaluation_submission_confirmation', format: :text, locale: 'es')
 template.update!(
   subject: 'Confirmación de Envío de Evaluación',

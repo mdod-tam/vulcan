@@ -170,7 +170,7 @@ class UserEncryptedValidationTest < ActiveSupport::TestCase
     assert_equal false, Rails.application.config.active_record.encryption.support_unencrypted_data,
                  'Encrypted attributes must reject plaintext storage values'
 
-    puts '✓ Encryption configuration verified'
+    puts 'Encryption configuration verified'
   end
 
   test 'declares the expected encrypted attributes' do
@@ -182,7 +182,7 @@ class UserEncryptedValidationTest < ActiveSupport::TestCase
       assert_includes encrypted_attrs, attr, "#{attr} should be declared as encrypted"
     end
 
-    puts "✓ All expected attributes declared as encrypted: #{encrypted_attrs.join(', ')}"
+    puts "All expected attributes declared as encrypted: #{encrypted_attrs.join(', ')}"
   end
 
   test 'encrypted data is queryable with standard Rails methods' do

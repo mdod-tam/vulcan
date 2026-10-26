@@ -1,8 +1,10 @@
 import { Controller } from "@hotwired/stimulus"
-import { railsRequest } from "../../services/rails_request"
 
+// Submits a user's access form through Turbo for each role or capability change. The server either applies the
+// change or answers with a confirmation dialog, so this controller only builds the request and restores the
+// controls when that dialog is dismissed.
 class RoleSelectController extends Controller {
-  static targets = ["select", "capability"]
+  static targets = ["select", "capability", "operation", "role", "capabilityField", "enabled"]
 
   static values = {
     userId: String,
@@ -13,16 +15,6 @@ class RoleSelectController extends Controller {
     conversionWarning: String
   }
 
-  connect() {
-    // Request key for tracking
-    this.requestKey = `role-select-${this.identifier}-${Date.now()}`
-  }
-
-  disconnect() {
-    // Cancel any pending requests
-    railsRequest.cancel(this.requestKey)
-  }
-
   roleChanged(event) {
     const role = event.target.value
 
@@ -31,59 +23,46 @@ class RoleSelectController extends Controller {
       return
     }
 
-    this.saveChanges('role', { role })
+    this.submit(this.updateRoleUrlValue, { role, capability: "", enabled: "" })
   }
 
   toggleCapability(event) {
-    const data = {
+    this.submit(this.updateCapabilitiesUrlValue, {
+      role: "",
       capability: event.target.dataset.capability,
       enabled: event.target.checked
-    }
-
-    // Store reference for potential revert on error
-    this.lastToggleData = {
-      element: event.target,
-      capability: data.capability,
-      previousState: !data.enabled
-    }
-
-    this.saveChanges('capability', data)
+    })
   }
 
-  // Rails 8 request with centralized service
-  async saveChanges(changeType, data) {
-    // Use Stimulus values for URLs instead of hardcoded paths
-    const url = changeType === 'role' ? this.updateRoleUrlValue : this.updateCapabilitiesUrlValue
+  submit(url, fields) {
+    this.element.action = url
+    this.operationTarget.value = this.newOperationId()
+    this.roleTarget.value = fields.role
+    this.capabilityFieldTarget.value = fields.capability
+    this.enabledTarget.value = fields.enabled
+    this.element.requestSubmit()
+  }
 
-    try {
-      // Use centralized rails request service
-      const result = await railsRequest.perform({
-        method: 'patch',
-        url: url,
-        body: data,
-        key: this.requestKey
-      })
+  // Turbo marks the form busy for the whole request, so the controls cannot start a second change meanwhile.
+  lock() {
+    this.controls().forEach((control) => { control.disabled = true })
+  }
 
-      if (result.success) {
-        // Reload to show the server-rendered role and capability state.
-        window.location.reload()
-      }
-    } catch (error) {
-      console.error("Rails 8 request failed", {
-        error: error,
-        message: error.message,
-        changeType: changeType,
-        data: data
-      })
+  unlock() {
+    this.controls().forEach((control) => { control.disabled = control.dataset.fromRole === "true" })
+  }
 
-      // Revert UI changes on error (for capability toggles)
-      if (changeType === 'capability' && this.lastToggleData) {
-        const { element, previousState } = this.lastToggleData
-        if (element) {
-          element.checked = previousState
-        }
-      }
-    }
+  // The confirmation dialog for this user closed without applying the change.
+  restore(event) {
+    if (event.detail.dialog.dataset.userId === this.userIdValue) this.element.reset()
+  }
+
+  controls() {
+    return [...this.selectTargets, ...this.capabilityTargets]
+  }
+
+  newOperationId() {
+    return globalThis.crypto?.randomUUID?.() ?? `${Date.now()}-${Math.random().toString(16).slice(2)}`
   }
 }
 

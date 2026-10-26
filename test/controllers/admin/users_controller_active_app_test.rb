@@ -14,18 +14,14 @@ module Admin
     end
 
     test 'should correctly identify active app status for rejected application' do
-      # We set application_date to 5 years ago so that if has_active_app were false,
-      # eligible_now would be true (assuming 3 year waiting period).
+      # The application is five years old, past the three-year waiting period. If has_active_app were
+      # false, eligible_now would be true.
       create(:application, user: @dependent, status: :rejected, application_date: 5.years.ago)
 
       get dependents_admin_user_path(@guardian)
       assert_response :success
 
-      # Since app date is 5 years ago, eligible_now should be true.
-      # We should see the "Select" button, or at least NOT see "active application exists".
-
       assert_no_match 'Not eligible: active application exists', response.body
-      # Assuming the view renders "Select" when eligible_now is true
       assert_match 'Select', response.body
     end
 

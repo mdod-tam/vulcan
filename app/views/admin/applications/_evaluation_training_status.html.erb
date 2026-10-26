@@ -1,4 +1,4 @@
-<section class="bg-white rounded-lg shadow p-6 mb-6" aria-labelledby="evaluation-status-title">
+<section class="card p-6 mb-6" aria-labelledby="evaluation-status-title">
   <div class="mb-6">
     <h2 id="evaluation-status-title" class="text-xl font-semibold text-gray-900">
       Evaluation and Training Status
@@ -30,7 +30,7 @@
           assign_form_path: assign_evaluator_admin_application_path(@application),
           reassign_form_path: @application.service_window_active? ? reassign_evaluator_admin_application_path(@application) : nil,
           assign_param: :evaluator_id,
-          available_assignees: Users::Evaluator.available
+          available_assignees: User.assignable_for(:can_evaluate)
         %>
       </div>
     <% elsif @application.voucher_fulfillment? %>
@@ -47,12 +47,12 @@
             <%= button_to 'Mark Evaluation Needed',
                 request_evaluation_admin_application_path(@application),
                 method: :post,
-                class: "inline-flex h-10 items-center justify-center rounded-md border border-transparent bg-indigo-600 px-4 py-2 text-sm font-medium text-white shadow-sm hover:bg-indigo-700 focus:outline-none focus:ring-2 focus:ring-indigo-500 focus:ring-offset-2",
+                class: "btn btn-primary h-10",
                 data: { turbo_confirm: 'Voucher applications do not require evaluation by default. Mark this application as needing evaluator support?' } %>
           </div>
         <% elsif latest_evaluation.blank? && @application.evaluation_request_pending? %>
-          <div class="mb-3 rounded-lg border border-blue-200 bg-blue-50 p-4" data-testid="evaluation-request-pending">
-            <p class="text-sm text-blue-800">
+          <div class="mb-3 rounded-lg border border-info-200 bg-info-50 p-4" data-testid="evaluation-request-pending">
+            <p class="text-sm text-info-800">
               Evaluation requested on <%= @application.evaluation_requested_at.strftime("%B %d, %Y") %>. Assign an evaluator below.
             </p>
           </div>
@@ -67,7 +67,7 @@
             assign_form_path: assign_evaluator_admin_application_path(@application),
             reassign_form_path: @application.service_window_active? ? reassign_evaluator_admin_application_path(@application) : nil,
             assign_param: :evaluator_id,
-            available_assignees: Users::Evaluator.available
+            available_assignees: User.assignable_for(:can_evaluate)
           %>
         <% else %>
           <%= render "assignment_section",
@@ -81,7 +81,7 @@
             assign_form_path: assign_evaluator_admin_application_path(@application),
             reassign_form_path: @application.service_window_active? ? reassign_evaluator_admin_application_path(@application) : nil,
             assign_param: :evaluator_id,
-            available_assignees: Users::Evaluator.available
+            available_assignees: User.assignable_for(:can_evaluate)
           %>
         <% end %>
       </div>
@@ -104,14 +104,38 @@
           <% if @application.latest_training_session %>
             <%= link_to(
                   'View Details', trainers_training_session_path(@application.latest_training_session),
-                  class: 'mt-3 inline-block text-indigo-700 underline', data: { turbo_frame: '_top' }
+                  class: 'mt-3 inline-block text-primary-700 underline', data: { turbo_frame: '_top' }
                 ) %>
           <% end %>
           <%= button_to(
                 'Unassign Trainer', unassign_trainer_admin_application_path(@application),
-                class: 'mt-3 rounded-md border border-red-300 px-4 py-2 text-red-700',
+                class: 'btn btn-danger-outline mt-3',
                 form: { data: { turbo_confirm: 'Remove trainer coverage and cancel any open appointment? Completed reports remain available.' } }
               ) %>
+          <% unless @application.assigned_trainer.assignable_trainer? %>
+            <p class="mt-3 text-sm font-medium text-danger-700" data-testid="trainer-ineligible-notice">
+              <%= @application.assigned_trainer.full_name %> can no longer take training assignments. Reassign the open training to an eligible trainer.
+            </p>
+          <% end %>
+          <% open_sessions = @application.open_training_assignments.includes(:trainer).to_a %>
+          <% if open_sessions.any? && !@application.service_window_active? %>
+            <p class="mt-3 text-sm text-gray-600" data-testid="training-reassignment-unavailable">
+              The service window for this application has ended, so open training cannot be transferred.
+            </p>
+          <% elsif open_sessions.any? %>
+            <% others = User.assignable_for(:can_train) %>
+            <% others = others.where.not(id: @application.assigned_trainer_id) if open_sessions.all? { |session| session.trainer_id == @application.assigned_trainer_id } %>
+            <%= render 'reassignment_form',
+                       type: 'trainer',
+                       reassign_form_path: reassign_trainer_admin_application_path(@application),
+                       assigned_people: open_sessions.map(&:trainer).uniq,
+                       available_assignees: others,
+                       expected_version: @application.training_assignment_version(open_sessions),
+                       summary: 'Transfer open training to another trainer. Schedules, locations, notes and outcomes are preserved, ' \
+                                'and completed sessions stay with their trainers.',
+                       confirmation: "Transfer #{open_sessions.size} open training #{'session'.pluralize(open_sessions.size)} to the trainer selected below? " \
+                                     'Appointments are preserved. The new trainer and the constituent are notified.' %>
+          <% end %>
         </div>
       <% elsif @remaining_training_sessions.positive? && @application.service_window_active? %>
         <%= render(
@@ -119,7 +143,7 @@
               type: 'trainer', entity: nil, assigned_person: nil,
               status_badge_method: :training_session_status_badge, view_path: nil,
               assign_form_path: assign_trainer_admin_application_path(@application), assign_param: :trainer_id,
-              available_assignees: Users::Trainer.available
+              available_assignees: User.assignable_for(:can_train)
             ) %>
       <% else %>
         <p class="mt-3">New training assignment is unavailable because capacity or the service window has ended.</p>
@@ -162,7 +186,7 @@
       <% end %>
       <%= link_to 'View Full Evaluation',
           evaluators_evaluation_path(latest_completed_evaluation),
-          class: "inline-flex items-center px-4 py-2 border border-indigo-300 rounded-md shadow-sm text-sm font-medium text-indigo-700 bg-indigo-50 hover:bg-indigo-100",
+          class: "btn btn-secondary",
           data: { turbo_frame: "_top" } %>
     </div>
   <% end %>
@@ -173,7 +197,7 @@
       <% if @training_history.any? %>
         <div class="space-y-4">
           <% @training_history.each do |session| %>
-            <div class="bg-gray-50 p-4 rounded-md shadow-sm flex flex-col md:flex-row justify-between items-start md:items-center">
+            <div class="bg-gray-50 p-4 rounded-md shadow-elevation-1 flex flex-col md:flex-row justify-between items-start md:items-center">
               <div class="flex items-center space-x-4">
                 <p class="text-sm font-medium text-gray-900">Session #<%= session.appointment_number %> — <%= session.trainer.full_name %></p>
                 <%= training_session_status_badge(session) %>
@@ -181,7 +205,7 @@
               <div class="flex space-x-2 mt-2 md:mt-0">
                 <%= link_to "View Session",
                     trainers_training_session_path(session),
-                    class: "inline-flex items-center px-4 py-2 border border-indigo-300 rounded-md shadow-sm text-sm font-medium text-indigo-700 bg-indigo-50 hover:bg-indigo-100 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-indigo-500",
+                    class: "btn btn-secondary",
                     data: { turbo_frame: "_top" } %>
                 <% if session.status_completed? %>
                   <span class="text-sm text-gray-600">

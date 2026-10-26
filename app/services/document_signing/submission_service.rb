@@ -1,8 +1,7 @@
 # frozen_string_literal: true
 
 module DocumentSigning
-  # Service to handle document signing submissions via DocuSeal or other providers
-  # Reuses existing service patterns and audit mechanisms
+  # Asks the certifying provider to sign the medical certification form through DocuSeal and records the request.
   class SubmissionService < BaseService
     EMAIL_ACTION = 'DocuSeal#signing_request'
 
@@ -20,7 +19,7 @@ module DocumentSigning
       return failure('Medical provider name is required')  if @application.medical_provider_name.blank?
       return failure('Actor is required') if @actor.blank?
 
-      # Prevent duplicate requests within 30 seconds
+      # A second request within 30 seconds is refused as a duplicate.
       if @application.document_signing_requested_at.present? &&
          @application.document_signing_requested_at > 30.seconds.ago
         return failure('Request sent too recently. Please wait before sending another.')
@@ -44,12 +43,11 @@ module DocumentSigning
           document_signing_submitter_id: submitter&.dig('id').to_s,
           document_signing_status: :sent,
           document_signing_requested_at: Time.current,
-          # Also update medical certification tracking
           medical_certification_status: :requested,
           medical_certification_requested_at: Time.current
         )
 
-        # Use increment! for atomic counter updates
+        # increment! updates each counter in the database, not from the loaded value.
         # rubocop:disable Rails/SkipsModelValidations -- Preserve existing atomic counter behavior.
         @application.increment!(:document_signing_request_count)
         @application.increment!(:medical_certification_request_count)
@@ -99,9 +97,7 @@ module DocumentSigning
         )
       }
 
-      # Use DocuSeal gem to create submission
-      # Note: This assumes template-based submission. If using HTML, the implementation
-      # would call ::Docuseal.create_submission_from_html instead
+      # Creates the submission from a DocuSeal template.
       ::Docuseal.create_submission(data)
     end
 

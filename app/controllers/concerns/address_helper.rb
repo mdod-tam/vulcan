@@ -1,7 +1,6 @@
 # frozen_string_literal: true
 
-# Provides standardized methods for handling address data across controllers
-# Uses ApplicationDataStructures::Address for consistent address creation
+# Builds ApplicationDataStructures::Address objects from a user or from parameters, and validates them.
 module AddressHelper
   extend ActiveSupport::Concern
 

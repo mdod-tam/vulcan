@@ -15,7 +15,7 @@
           <%= pagination_link(pagy, item) %>
         <% elsif item.is_a?(String) %>
           <span aria-current="page" aria-label="<%= t('pagination.current_page', page: item) %>"
-                class="inline-flex min-h-11 min-w-11 items-center justify-center rounded-md bg-indigo-600 px-3 text-sm font-semibold text-white"><%= item %></span>
+                class="inline-flex min-h-11 min-w-11 items-center justify-center rounded-md bg-primary-600 px-3 text-sm font-semibold text-white"><%= item %></span>
         <% elsif item == :gap %>
           <span class="px-1 text-gray-500" aria-hidden="true">&hellip;</span>
         <% end %>

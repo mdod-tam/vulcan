@@ -7,7 +7,7 @@ module Admin
     before_action :set_review_case, only: %i[show resolve merge]
 
     def index
-      @open_cases = DuplicateReviewCase.open_cases
+      @open_cases = DuplicateReviewCase.open
                                        .includes(:subject_user, duplicate_review_case_candidates: :candidate_user)
                                        .order(opened_at: :desc)
       population_pairs = DuplicateReconciliation::Population.new.pairs
@@ -17,7 +17,7 @@ module Admin
 
           [review_case.subject_user_id, candidate.candidate_user_id].sort
         end
-      end
+      end.to_set
       @unreviewed_pairs = population_pairs.select do |pair|
         pair.state == :unreviewed && open_pair_keys.exclude?(pair.ids)
       end

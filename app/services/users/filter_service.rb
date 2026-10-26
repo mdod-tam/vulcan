@@ -2,12 +2,6 @@
 
 module Users
   # Admin user filters with name/email-token search and an allowlist of sort columns.
-  #
-  # Usage:
-  #   result = Users::FilterService.new(User.all, params).apply_filters
-  #   if result.success?
-  #     @users = result.data
-  #   end
   class FilterService < BaseService
     attr_reader :scope, :params
 

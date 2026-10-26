@@ -6,10 +6,9 @@ module Letters
   class TextTemplateToPdfServiceTest < ActiveSupport::TestCase
     setup do
       @user = create(:constituent, email: "test-template-#{SecureRandom.hex(4)}@example.com")
-      # Find existing template to avoid "Name has already been taken" error
+      # Remove any seeded template of this name so the create below passes the uniqueness check.
       EmailTemplate.where(name: 'application_notifications_account_created').destroy_all
 
-      # Create template with all required variables
       @template = create(:email_template,
                          name: 'application_notifications_account_created',
                          subject: 'We Received Your Maryland Accessible Telecommunications Application',
@@ -43,27 +42,22 @@ module Letters
 
       pdf_file = service.generate_pdf
 
-      # Basic checks that the PDF was generated
       assert pdf_file.is_a?(Tempfile)
       assert_match '%PDF', pdf_file.read[0, 10] # PDF files start with %PDF
 
-      # Close the file to prevent resource leaks
       pdf_file.close
       pdf_file.unlink
     end
 
     test 'correctly substitutes variables in template' do
-      # Create a service with the real template
       service = TextTemplateToPdfService.new(
         template_name: 'application_notifications_account_created',
         recipient: @user,
         variables: @variables
       )
 
-      # Call the method under test
       result = service.send(:render_template_with_variables)
 
-      # Verify that all variables were substituted
       assert_includes result, "Hello #{@user.first_name},"
       assert_includes result, 'Questions? Contact mat.program1@maryland.gov.'
       assert_includes result, "Program website: #{ProgramContact.website_url}."
@@ -72,7 +66,6 @@ module Letters
       assert_not_includes result, 'SecurePassword123'
       assert_not_includes result, 'sign_in'
 
-      # Verify there are no remaining placeholders
       assert_no_match(/%<\w+>s/, result)
     end
 
@@ -235,8 +228,7 @@ module Letters
     end
 
     test 'correctly queues item for printing' do
-      # Skip this test as it requires accessing private methods or stubbing PrintQueueItem
-      # which varies between testing frameworks
+      # Covered by integration tests.
       skip 'Tested through integration tests'
     end
   end

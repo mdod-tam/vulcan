@@ -59,19 +59,22 @@ module Applications
     end
 
     def build_tempfile_from_path(path)
-      Tempfile.create(['dcf', '.pdf']).tap do |tf|
-        tf.binmode
-        File.open(path, 'rb') { |f| IO.copy_stream(f, tf) }
-        tf.rewind
-      end
+      File.open(path, 'rb') { |source| copy_to_anonymous_file(source) }
     end
 
     def build_tempfile_from_io(io)
-      Tempfile.create(['dcf', '.pdf']).tap do |tf|
-        tf.binmode
-        IO.copy_stream(io, tf)
-        tf.rewind
-      end
+      copy_to_anonymous_file(io)
+    end
+
+    # Letters::Delivery closes the returned handle after storing the blob. A copy failure closes it here.
+    def copy_to_anonymous_file(source)
+      copy = Tempfile.create(anonymous: true, binmode: true)
+      IO.copy_stream(source, copy)
+      copy.rewind
+      copy
+    rescue StandardError
+      copy&.close
+      raise
     end
 
     def generate_pdf

@@ -1,15 +1,12 @@
 # frozen_string_literal: true
 
 class ApplicationNote < ApplicationRecord
-  # Associations
   belongs_to :application
   belongs_to :admin, -> { where(type: 'Users::Administrator') }, class_name: 'User'
   belongs_to :assigned_to, class_name: 'User', optional: true
 
-  # Validations
   validates :content, presence: true
 
-  # Scopes
   scope :recent_first, -> { order(created_at: :desc) }
   scope :public_notes, -> { where(internal_only: false) }
   scope :internal_notes, -> { where(internal_only: true) }
@@ -19,7 +16,6 @@ class ApplicationNote < ApplicationRecord
   scope :incomplete, -> { where(completed_at: nil) }
   scope :completed, -> { where.not(completed_at: nil) }
 
-  # Assignment Methods
   def assign_to!(user)
     with_lock do
       update!(assigned_to: user)

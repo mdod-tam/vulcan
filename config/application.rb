@@ -3,15 +3,13 @@
 require_relative 'boot'
 require 'rails/all'
 
-# Fix for Rails 8.0.2 compatibility issue
+# Loaded ahead of Bundler.require; originally added to work around a Rails 8.0.2 load-order error.
 require 'action_dispatch/routing/url_for'
 
 # Require the gems listed in Gemfile
 Bundler.require(*Rails.groups)
 
-# define the MatVulcan
 module MatVulcan
-  # define the Application class
   class Application < Rails::Application
     # Initialize configuration defaults for originally generated Rails version.
     config.load_defaults 8.0

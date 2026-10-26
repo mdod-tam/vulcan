@@ -17,7 +17,7 @@ class EvaluatorMailerContactTest < ActionMailer::TestCase
     end
     evaluation = evaluation_for(applicant)
 
-    email = EvaluatorMailer.with(evaluation: evaluation).new_evaluation_assigned.message
+    email = EvaluatorMailer.with(assignment_notice_params(evaluation, evaluation.evaluator)).new_evaluation_assigned.message
 
     assert_equal [evaluation.evaluator.email], email.to
     assert_includes decoded_text_part(email), "- Phone: #{applicant.phone}"
@@ -31,7 +31,7 @@ class EvaluatorMailerContactTest < ActionMailer::TestCase
     end
     evaluation = evaluation_for(applicant)
 
-    email = EvaluatorMailer.with(evaluation: evaluation).new_evaluation_assigned.message
+    email = EvaluatorMailer.with(assignment_notice_params(evaluation, evaluation.evaluator)).new_evaluation_assigned.message
 
     assert_equal [evaluation.evaluator.email], email.to
     assert_includes decoded_text_part(email), '- Phone: Not Provided'
@@ -45,7 +45,7 @@ class EvaluatorMailerContactTest < ActionMailer::TestCase
     applicant = guardian_contact_applicant(guardian, first_guardian: first_guardian)
     evaluation = evaluation_for(applicant, guardian: guardian)
 
-    body = decoded_text_part(EvaluatorMailer.with(evaluation: evaluation).new_evaluation_assigned.message)
+    body = decoded_text_part(EvaluatorMailer.with(assignment_notice_params(evaluation, evaluation.evaluator)).new_evaluation_assigned.message)
 
     assert_includes body, "- Phone: #{guardian.phone}"
     assert_includes body, "- Email: #{guardian.email}"

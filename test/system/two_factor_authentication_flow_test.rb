@@ -90,20 +90,58 @@ class TwoFactorAuthenticationFlowTest < ApplicationSystemTestCase
     assert @user.totp_credentials.exists?(nickname: 'My Auth App')
   end
 
-  test 'user cannot submit TOTP setup form twice' do
-    known_secret = 'JBSWY3DPEHPK3PXP'
-    ROTP::Base32.stubs(:random).returns(known_secret)
-    system_test_sign_in(@user)
-    visit new_credential_two_factor_authentication_path(type: 'totp')
-    totp = ROTP::TOTP.new(known_secret)
-    valid_code = totp.now
-    find_field('Verification Code').set(valid_code)
-    find_field('Nickname').set('My Resilient Auth App')
-    click_button 'Verify & Complete Setup'
-    assert_current_path credential_success_two_factor_authentication_path(type: 'totp')
-    assert_text 'Authenticator app registered successfully'
-    assert_no_button 'Verify & Complete Setup'
+  test 'a rapid double activation sends one TOTP enrollment request while Turbo holds the submitter disabled' do
+    known_secret = begin_totp_enrollment
+
+    with_slow_totp_enrollment do |requests|
+      find_field('Verification Code').set(ROTP::TOTP.new(known_secret).now)
+      find_field('Nickname').set('My Resilient Auth App')
+      find_button('Verify & Complete Setup').double_click
+
+      assert_button 'Verify & Complete Setup', disabled: true
+      assert_current_path credential_success_two_factor_authentication_path(type: 'totp')
+      assert_text 'Authenticator app registered successfully'
+      assert_equal 1, requests.value
+    end
     assert_equal 1, @user.reload.totp_credentials.count, 'Should not create duplicate credentials'
+  end
+
+  test 'pressing Enter repeatedly sends one TOTP enrollment request while it is pending' do
+    known_secret = begin_totp_enrollment
+
+    with_slow_totp_enrollment do |requests|
+      code_field = find_field('Verification Code')
+      code_field.set(ROTP::TOTP.new(known_secret).now)
+      code_field.send_keys(:enter, :enter)
+
+      assert_button 'Verify & Complete Setup', disabled: true
+      assert_text 'Authenticator app registered successfully'
+      assert_equal 1, requests.value
+    end
+    assert_equal 1, @user.reload.totp_credentials.count
+  end
+
+  test 'an invalid TOTP enrollment code keeps the form, values, and focus, and the corrected code succeeds' do
+    known_secret = begin_totp_enrollment
+
+    code_field = find_field('Verification Code')
+    code_field.set('000000')
+    find_field('Nickname').set('Retry Auth App')
+    code_field.send_keys(:enter)
+
+    assert_selector '[role="alert"]', text: I18n.t('two_factor_verification.errors.invalid_code')
+    assert_current_path new_credential_two_factor_authentication_path(type: 'totp'), ignore_query: true
+    assert_field 'Verification Code', with: '000000'
+    assert_field 'Nickname', with: 'Retry Auth App'
+    assert_equal 'code', page.evaluate_script('document.activeElement.id')
+    assert_button 'Verify & Complete Setup', disabled: false
+    assert_empty @user.reload.totp_credentials
+
+    find_field('Verification Code').set(ROTP::TOTP.new(known_secret).now)
+    click_button 'Verify & Complete Setup'
+
+    assert_text 'Authenticator app registered successfully'
+    assert_equal ['Retry Auth App'], @user.reload.totp_credentials.pluck(:nickname)
   end
 
   test 'user logs in successfully using TOTP' do
@@ -368,5 +406,30 @@ class TwoFactorAuthenticationFlowTest < ApplicationSystemTestCase
     )
 
     take_screenshot('2fa-10-redirect-protection')
+  end
+
+  private
+
+  def begin_totp_enrollment
+    # A fixed secret lets the test generate a code without reading the session cookie.
+    known_secret = 'JBSWY3DPEHPK3PXP'
+    ROTP::Base32.stubs(:random).returns(known_secret)
+    system_test_sign_in(@user)
+    visit new_credential_two_factor_authentication_path(type: 'totp')
+    assert_text 'Set up Authenticator App'
+    known_secret
+  end
+
+  # Keeps each enrollment request pending on the server so a second activation can arrive meanwhile,
+  # and counts the requests the server actually received.
+  def with_slow_totp_enrollment(delay: 1.5)
+    requests = Concurrent::AtomicFixnum.new
+    callback = lambda do |*, payload|
+      next unless payload[:controller] == 'TwoFactorCredentialsController' && payload[:action] == 'create_credential'
+
+      requests.increment
+      sleep delay
+    end
+    ActiveSupport::Notifications.subscribed(callback, 'start_processing.action_controller') { yield requests }
   end
 end

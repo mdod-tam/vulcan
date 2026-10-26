@@ -26,8 +26,8 @@ module DuplicateReviewCases
       assert_equal 'keep_separate', event.metadata['resolution_determination']
     end
 
-    # `resolution_action` had no reader, so new events omit it. Old events keep their value.
-    test 'the resolution audit event no longer carries resolution_action' do
+    # `resolution_action` has no reader, so the audit event omits it.
+    test 'the resolution audit event does not carry resolution_action' do
       resolve
 
       event = Event.where(action: 'duplicate_review_case_resolved').order(:id).last
@@ -64,7 +64,7 @@ module DuplicateReviewCases
                    'a non-merge resolution moves no contact facts'
     end
 
-    # The model keeps `resolved_approved` for old rows, but nothing writes it.
+    # `resolved_approved` is still a model status, but nothing writes it.
     test 'nothing records resolved_approved' do
       assert_equal :resolved_ignored, ResolutionService::NON_MERGE_STATUS
       resolve

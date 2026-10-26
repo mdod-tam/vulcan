@@ -11,7 +11,6 @@ module Admin
     end
 
     setup do
-      # Ensure we start with clean database state
       DatabaseCleaner.clean if defined?(DatabaseCleaner)
 
       @admin = create(:admin)
@@ -19,24 +18,22 @@ module Admin
       html_name  = "test_template_html_#{unique_id}"
       text_name  = "test_template_text_#{unique_id}"
 
-      # Create template records *after* constant is ready
       @template_html = create(:email_template, :html, name: html_name, subject: 'HTML Subject',
                                                       body: '<p>HTML Body %<name>s</p>')
       @template_text = create(:email_template, :text, name: text_name, subject: 'Text Subject', body: 'Text Body %<name>s')
 
-      # Also patch the controller to use a fast mock for view_context
+      # Stub view_context with a lightweight sample-data provider.
       Admin::EmailTemplatesController.any_instance.stubs(:view_context).returns(
         MockViewContext.new
       )
     end
 
     teardown do
-      # Clear deliveries
       ActionMailer::Base.deliveries.clear
     end
 
     test 'sending a test email' do
-      # Test that the mail delivery works without going through the UI to validate the core functionality
+      # Delivers through the mailer directly, without the UI.
 
       sample_data = { 'name' => 'System Test User Text' }
       rendered_subject, rendered_body = @template_text.render(**sample_data.symbolize_keys)
@@ -54,12 +51,9 @@ module Admin
 
       last_email = ActionMailer::Base.deliveries.last
       assert_not_nil last_email, 'No email was delivered'
-      # Verify subject includes the specific template name
       assert_equal "[TEST] Text Subject (Template: #{@template_text.name})", last_email.subject
       assert_equal [@admin.email], last_email.to
 
-      # Verify body uses the stubbed data for the text template
-      # Check the body content properly based on email structure
       email_body = if last_email.multipart? && last_email.text_part
                      last_email.text_part.body.to_s
                    else
@@ -69,14 +63,12 @@ module Admin
     end
 
     test 'previewing a template with variables' do
-      # Test direct rendering to verify variable substitution works
       sample_data = { 'name' => 'System Test User HTML' }
       _rendered_subject, rendered_body = @template_html.render(**sample_data)
       assert_match 'HTML Body System Test User HTML', rendered_body
     end
 
     test 'validate_variables_in_body rejects unauthorized variables' do
-      # Test that adding an unauthorized variable causes validation to fail
       @template_text.body = 'Hello %<name>s, here is an unauthorized variable: %<unauthorized_var>s'
 
       assert_not @template_text.valid?, 'Template should be invalid with unauthorized variables'
@@ -86,7 +78,6 @@ module Admin
     end
 
     test 'validate_variables_in_body allows optional variables' do
-      # Test that optional variables are allowed
       optional_vars = @template_text.optional_variables
 
       if optional_vars.any?
@@ -99,7 +90,6 @@ module Admin
     end
 
     test 'validate_variables_in_body allows required variables' do
-      # Test that required variables are allowed
       required_vars = @template_text.required_variables
 
       if required_vars.any?
@@ -112,7 +102,6 @@ module Admin
     end
 
     test 'validate_variables_in_body rejects multiple unauthorized variables' do
-      # Test that multiple unauthorized variables are all reported
       @template_text.body = 'Hello %<name>s, bad1: %<bad_var_1>s, bad2: %<bad_var_2>s'
 
       assert_not @template_text.valid?, 'Template should be invalid'

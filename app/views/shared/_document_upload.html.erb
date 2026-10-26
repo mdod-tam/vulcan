@@ -15,12 +15,11 @@
         id: input_id, accept: accept, required: required,
         aria: input_aria.merge(describedby: [described_by, input_aria[:describedby], "#{input_id}_status"].compact.flat_map(&:split).uniq.join(' ')),
         class: class_names(
-          'block w-full rounded-md border border-gray-300 bg-white text-sm text-gray-700 shadow-sm',
-          'focus:border-indigo-500 focus:outline-none focus:ring-2 focus:ring-indigo-500 focus:ring-offset-2',
-          'file:mr-4 file:rounded-l-md file:border-0 file:bg-indigo-50 file:px-4 file:py-2',
-          'file:text-sm file:font-semibold file:text-indigo-700 hover:file:bg-indigo-100',
+          'form-input border bg-white text-sm text-gray-700',
+          'file:mr-4 file:rounded-l-md file:border-0 file:bg-primary-50 file:px-4 file:py-2',
+          'file:text-sm file:font-semibold file:text-primary-700 hover:file:bg-primary-100',
           (error_field_class(form, field) if form.object),
-          input_class, 'border-red-500': input_aria[:invalid] == 'true'
+          input_class, 'border-danger-500': input_aria[:invalid] == 'true'
         ),
         data: { document_upload_target: 'input', action: 'change->document-upload#select' }.merge(input_data)
       ) %>
@@ -33,15 +32,15 @@
   <noscript><p class="mt-2 text-sm"><%= t('documents.upload.javascript_required') %></p></noscript>
   <progress hidden max="100" class="mt-2 w-full" aria-label="<%= t('documents.upload.progress') %>" data-document-upload-target="progress"></progress>
   <div class="mt-2 flex gap-4">
-    <button type="button" <%= 'hidden' unless blob %> class="text-sm text-indigo-700 underline"
+    <button type="button" <%= 'hidden' unless blob %> class="text-sm text-primary-700 underline"
             data-action="document-upload#remove" data-document-upload-target="remove">
       <%= t('documents.upload.remove') %>
     </button>
-    <button type="button" hidden class="text-sm text-indigo-700 underline"
+    <button type="button" hidden class="text-sm text-primary-700 underline"
             data-action="document-upload#cancel" data-document-upload-target="cancel">
       <%= t('documents.upload.cancel') %>
     </button>
-    <button type="button" hidden class="text-sm text-indigo-700 underline"
+    <button type="button" hidden class="text-sm text-primary-700 underline"
             data-action="document-upload#check" data-document-upload-target="retry">
       <%= t('documents.upload.retry') %>
     </button>

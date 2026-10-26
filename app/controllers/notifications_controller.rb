@@ -1,6 +1,6 @@
 # frozen_string_literal: true
 
-# NotificationsController handles actions related to email notifications.
+# In-app notifications: list, mark as read, and (admins only) refresh email delivery status.
 class NotificationsController < ApplicationController
   include Pagy::Backend
   include NotificationPreloading
@@ -10,12 +10,11 @@ class NotificationsController < ApplicationController
   before_action :set_notification, only: %i[check_email_status mark_as_read]
 
   def index
-    # Default to showing "mine" for regular users, "all" for admins
+    # Admins see all notifications by default; everyone else sees their own.
     scope = params[:scope] || (current_user.admin? ? 'all' : 'mine')
 
-    # Get notifications based on scope
     notifications = if scope == 'all' && current_user.admin?
-                      # Preload notifiable for Notification#message, actor for view display
+                      # Preload notifiable for Notification#message and actor for the view.
                       Notification.includes(:notifiable, :actor).order(created_at: :desc)
                     else
                       current_user.received_notifications.includes(:notifiable, :actor).order(created_at: :desc)

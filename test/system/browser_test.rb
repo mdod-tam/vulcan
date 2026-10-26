@@ -4,10 +4,8 @@ require 'application_system_test_case'
 
 class BrowserTest < ApplicationSystemTestCase
   test 'Chrome for Testing is correctly configured' do
-    # Visit the home page to check if Chrome for Testing works
     visit root_path
 
-    # Take a screenshot to verify the browser is running
     screenshot_path = take_screenshot('browser-home', html: true)
     sidecar = screenshot_sidecar_for(screenshot_path)
 
@@ -17,11 +15,10 @@ class BrowserTest < ApplicationSystemTestCase
     assert_path_exists sidecar.fetch('screenshot_path')
     assert_path_exists sidecar.fetch('html_path')
 
-    # If we got this far, Chrome for Testing is working!
     assert true, 'Chrome for Testing is configured correctly'
   end
 
-  test 'blank browser screenshots are marked unusable for LLM QA' do
+  test 'blank browser screenshots are marked unusable' do
     visit 'about:blank'
 
     screenshot_path = take_screenshot('about-blank-check')

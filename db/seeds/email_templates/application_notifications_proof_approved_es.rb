@@ -1,7 +1,5 @@
 # frozen_string_literal: true
 
-# Seed File for "application_notifications_proof_approved"
-# --------------------------------------------------
 EmailTemplate.create_or_find_by!(name: 'application_notifications_proof_approved', format: :text, locale: 'es') do |template|
   template.subject = 'Actualización de Revisión de Documentos'
   template.description = 'Enviado cuando se ha aprobado un documento específico enviado por el solicitante.'

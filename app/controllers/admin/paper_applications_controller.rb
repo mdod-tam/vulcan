@@ -559,7 +559,7 @@ module Admin
       raw = 'dependent' if raw.blank? && submitted_guardian_attributes_present?(permitted)
       raw ||= 'self'
 
-      # The legacy guardian value represents self when guardian and dependent IDs are absent.
+      # An applicant type of 'guardian' with no guardian or dependent ID means self.
       return 'self' if raw == 'guardian' && permitted[:guardian_id].blank? && permitted[:dependent_id].blank?
 
       raw

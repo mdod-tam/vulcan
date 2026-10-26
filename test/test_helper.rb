@@ -18,7 +18,7 @@ begin
   require 'database_cleaner/active_record'
   DatabaseCleaner.clean_with(:truncation)
 rescue LoadError
-  warn "⚠️  DatabaseCleaner not found.  Add `gem 'database_cleaner-active_record', group: :test`."
+  warn "DatabaseCleaner not found. Add `gem 'database_cleaner-active_record', group: :test`."
 end
 
 # SEEDS_LOADED guards seed loading within this process.
@@ -180,11 +180,8 @@ module ActiveSupport
 
     attr_reader :product
 
-    # Disable parallel tests due to pg gem segfault with Ruby 3.4.5-3.4.7 (maybe due to ARM compilation issue?)
-    # TODO: Re-enable after addressing segfault by restoring:
-    # system_test_workers = ENV.fetch('SYSTEM_TEST_WORKERS', 4).to_i
-    # parallel_workers = ENV.fetch('PARALLEL_WORKERS', :number_of_processors)
-    # parallelize(workers: parallel_workers, with: :processes)
+    # Parallel tests are off: the pg gem segfaults on Ruby 3.4.5-3.4.7 (possibly an ARM build issue).
+    # To re-enable, use parallelize(workers: ENV.fetch('PARALLEL_WORKERS', :number_of_processors), with: :processes).
     parallelize(workers: 1)
 
     if defined?(DatabaseCleaner)

@@ -1,6 +1,5 @@
 # frozen_string_literal: true
 
-# Seed File for "application_notifications_medical_certification_not_provided"
 EmailTemplate.create_or_find_by!(name: 'application_notifications_medical_certification_not_provided', format: :text, locale: 'en') do |template|
   template.subject = 'Disability Certification Required for Your Application'
   template.description = 'Sent to a constituent when they submit an application without providing disability ' \
@@ -19,7 +18,7 @@ EmailTemplate.create_or_find_by!(name: 'application_notifications_medical_certif
 
     1. Email our team at mat.program1@maryland.gov.
     2. Provide either:
-       - A qualifying provider contact information (name, email, phone, fax), OR
+       - Contact information for a qualifying provider (name, email, phone, fax), OR
        - Upload a completed disability certification form
 
     3. Our team will then contact your medical provider to request the necessary certification.

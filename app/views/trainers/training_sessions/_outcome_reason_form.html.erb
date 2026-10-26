@@ -1,9 +1,9 @@
 <%# locals: (action:, training_session:) -%>
-<section class="mb-6 mt-4 rounded-lg bg-white p-6 shadow" aria-labelledby="<%= action %>-heading">
+<section class="mb-6 mt-4 card p-6" aria-labelledby="<%= action %>-heading">
   <h3 id="<%= action %>-heading" class="text-lg font-semibold">
     <%= t(training_session.status_requested? ? 'trainer_workflow.actions.cancel_requested' : "trainer_workflow.actions.#{action}") %>
   </h3>
-  <p id="<%= action %>-reason-help" class="mt-2 text-sm text-gray-600">
+  <p id="<%= action %>-reason-help" class="form-hint">
     <%= t(training_session.status_requested? ? 'trainer_workflow.forms.requested_cancel_help' : 'trainer_workflow.forms.outcome_help') %>
   </p>
   <%= form_with url: training_action_url(action, training_session), namespace: action, class: 'mt-4 space-y-4',
@@ -11,7 +11,7 @@
     <%= render 'shared/action_errors', action: action, form: f, form_errors: @training_form_errors,
                                        heading: t('trainer_workflow.error_heading') %>
     <% if action == :cancel %>
-      <div><%= f.label :cancellation_initiator, training_required_label(t('trainer_workflow.fields.who_cancelled')), class: 'block font-medium' %>
+      <div><%= f.label :cancellation_initiator, training_required_label(t('trainer_workflow.fields.who_cancelled')), class: 'form-label' %>
         <%= f.select :cancellation_initiator,
                      [[t('trainer_workflow.cancellers.constituent'), 'constituent'],
                       [t('trainer_workflow.cancellers.trainer'), 'trainer'],
@@ -21,13 +21,13 @@
                                                      :cancellation_initiator,
                                                      form_values: @training_form_values) },
                      { required: true,
-                       class: 'mt-1 w-full rounded-md border-gray-300',
+                       class: 'form-input mt-1',
                        aria: training_form_aria(action,
                                                 :cancellation_initiator,
                                                 form_errors: @training_form_errors) } %>
         <%= render 'shared/field_errors', action: action, attribute: :cancellation_initiator, form_errors: @training_form_errors %>
       </div>
-      <div><%= f.label :cancellation_reason, training_required_label(t('trainer_workflow.fields.cancellation_reason')), class: 'block font-medium' %>
+      <div><%= f.label :cancellation_reason, training_required_label(t('trainer_workflow.fields.cancellation_reason')), class: 'form-label' %>
         <%= f.text_area :cancellation_reason,
                         value: training_form_value(action,
                                                    :cancellation_reason,
@@ -35,7 +35,7 @@
                         required: true,
                         rows: 3,
 
-                        class: 'mt-1 w-full rounded-md border-gray-300',
+                        class: 'form-input mt-1',
                         aria: training_form_aria(action,
                                                  :cancellation_reason,
                                                  describedby: "#{action}-reason-help",
@@ -43,7 +43,7 @@
         <%= render 'shared/field_errors', action: action, attribute: :cancellation_reason, form_errors: @training_form_errors %>
       </div>
     <% else %>
-      <div><%= f.label :no_show_notes, training_required_label(t('trainer_workflow.fields.no_show_reason')), class: 'block font-medium' %>
+      <div><%= f.label :no_show_notes, training_required_label(t('trainer_workflow.fields.no_show_reason')), class: 'form-label' %>
         <%= f.text_area :no_show_notes,
                         value: training_form_value(action,
                                                    :no_show_notes,
@@ -51,7 +51,7 @@
                         required: true,
                         rows: 3,
 
-                        class: 'mt-1 w-full rounded-md border-gray-300',
+                        class: 'form-input mt-1',
                         aria: training_form_aria(action,
                                                  :no_show_notes,
                                                  describedby: "#{action}-reason-help",
@@ -60,7 +60,7 @@
       </div>
     <% end %>
     <%= f.submit t(training_session.status_requested? ? 'trainer_workflow.actions.cancel_requested' : "trainer_workflow.actions.#{action}"),
-                 class: 'rounded-md border border-gray-500 bg-white px-4 py-3 font-medium text-gray-800',
+                 class: 'btn btn-outline',
                  data: { turbo_submits_with: t('trainer_workflow.forms.saving_outcome') } %>
   <% end %>
 </section>

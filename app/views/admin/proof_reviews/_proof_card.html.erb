@@ -1,4 +1,4 @@
-<div class="bg-white overflow-hidden shadow rounded-lg">
+<div class="card overflow-hidden">
   <div class="px-4 py-5 sm:p-6">
     <div class="flex items-center justify-between">
       <div>
@@ -13,9 +13,7 @@
         <% if proof&.attached? %>
           <%= application_status_badge(application) %>
         <% else %>
-          <span class="bg-gray-100 text-gray-800 px-2 py-1 rounded-full text-xs">
-            Not Uploaded
-          </span>
+          <%= badge("Not Uploaded", :neutral) %>
         <% end %>
       </div>
     </div>
@@ -23,7 +21,7 @@
     <% if proof&.attached? %>
       <div class="mt-4 flex items-center space-x-4">
         <%= link_to document_download_path(proof),
-            class: "text-sm text-indigo-600 hover:text-indigo-500",
+            class: "text-sm text-primary-600 hover:text-primary-500",
             target: "_blank",
             rel: "noopener" do %>
           <%= proof_file_icon(proof) %>
@@ -32,7 +30,7 @@
 
         <% if status == "not_reviewed" %>
           <%= link_to new_admin_application_proof_review_path(application, proof_type: proof_type),
-              class: "text-sm text-indigo-600 hover:text-indigo-500" do %>
+              class: "text-sm text-primary-600 hover:text-primary-500" do %>
             <svg class="inline-block w-4 h-4 mr-1" fill="none" stroke="currentColor" viewBox="0 0 24 24">
               <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2"
                     d="M15 12a3 3 0 11-6 0 3 3 0 016 0z" />

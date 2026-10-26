@@ -1,10 +1,5 @@
-// Import Jest DOM matchers
 import '@testing-library/jest-dom';
 
-// Mock document.createElement for canvas
-document.createElement.originalFn = document.createElement;
-
-// Add custom matchers
 expect.extend({
   toHaveClass(received, className) {
     const pass = received.classList.contains(className);
@@ -22,7 +17,7 @@ expect.extend({
   },
 });
 
-// Mock console methods to avoid cluttering test output
+// Keep console output out of the test log.
 global.console = {
   ...console,
   log: jest.fn(),

@@ -29,7 +29,8 @@ module Letters
       'voucher_notifications_voucher_assigned' => 'Your Accessibility Equipment Voucher',
       'voucher_notifications_voucher_redeemed' => 'Voucher Redemption Confirmation',
       'evaluator_mailer_evaluation_submission_confirmation' => 'Evaluation Submission Confirmation',
-      'training_session_notifications_training_completed' => 'Your Training Report Is Ready'
+      'training_session_notifications_training_completed' => 'Your Training Report Is Ready',
+      'training_session_notifications_trainer_changed' => 'Your Trainer Has Changed'
     }.freeze
 
     attr_reader :template_name, :format, :template, :variables, :recipient, :letter_type_override

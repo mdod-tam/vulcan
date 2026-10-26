@@ -7,12 +7,12 @@
      data-action="input@document->session-activity#recordInteraction change@document->session-activity#recordInteraction keydown@document->session-activity#recordInteraction pointerdown@document->session-activity#recordInteraction submit@document->session-activity#beforeSubmit:capture focus@window->session-activity#checkStatus visibilitychange@document->session-activity#checkStatus">
   <p class="sr-only" role="status" aria-live="polite" aria-atomic="true" data-session-activity-target="status"></p>
   <aside hidden tabindex="-1"
-         class="mx-auto max-w-7xl rounded-md border border-amber-300 bg-amber-50 p-4 text-amber-900"
+         class="mx-auto max-w-7xl rounded-md border border-warning-300 bg-warning-50 p-4 text-warning-900"
          aria-label="<%= t('sessions.activity.label', locale:) %>"
          data-session-activity-target="notice">
     <p data-session-activity-target="message"></p>
     <button type="button"
-            class="mt-2 rounded-md bg-amber-900 px-3 py-2 text-sm font-medium text-white hover:bg-amber-800 focus:outline-none focus-visible:ring-2 focus-visible:ring-amber-900 focus-visible:ring-offset-2"
+            class="mt-2 rounded-md bg-warning-900 px-3 py-2 text-sm font-medium text-white hover:bg-warning-800"
             data-session-activity-target="renew"
             data-action="session-activity#renew"><%= t('sessions.activity.keep_working', locale:) %></button>
   </aside>

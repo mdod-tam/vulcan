@@ -3,9 +3,7 @@
 require 'test_helper'
 
 class MessageStreamTest < ActionMailer::TestCase
-  # Set up the mock template for account_created
   setup do
-    # Create mock template for application_notifications_account_created
     @account_created_template = mock('EmailTemplate')
     @account_created_template.stubs(:subject).returns('Welcome to the System')
     @account_created_template.stubs(:render_subject).returns('Welcome to the System')
@@ -13,7 +11,6 @@ class MessageStreamTest < ActionMailer::TestCase
     EmailTemplate.stubs(:find_by!).with(name: 'application_notifications_account_created', format: :text, locale: 'en').returns(@account_created_template)
     @account_created_template.stubs(:enabled?).returns(true)
 
-    # Create mock template for user_mailer_password_reset
     @password_reset_template = mock('EmailTemplate')
     @password_reset_template.stubs(:enabled?).returns(true)
     @password_reset_template.stubs(:subject).returns('Reset Your Password')
@@ -23,7 +20,6 @@ class MessageStreamTest < ActionMailer::TestCase
   end
 
   test 'notifications mailer uses correct message stream' do
-    # Create a constituent user and application using FactoryBot
     application = create(:application, :completed)
     constituent = application.user
 
@@ -33,10 +29,8 @@ class MessageStreamTest < ActionMailer::TestCase
   end
 
   test 'transactional mailer uses correct message stream' do
-    # Create an admin user using FactoryBot
     admin = create(:admin)
 
-    # Use capture_emails to get the email
     email = nil
     assert_emails 1 do
       email = UserMailer.with(user: admin).password_reset

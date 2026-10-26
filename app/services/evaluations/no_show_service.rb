@@ -10,15 +10,13 @@ module Evaluations
     end
 
     def call
-      @evaluation.application.with_lock do
-        @evaluation.with_lock do
-          validate_transition!
-          @evaluation.update!(
-            status: :no_show,
-            notes: no_show_notes
-          )
-          create_event!
-        end
+      @evaluation.with_actor_and_application_lock(@actor) do
+        validate_transition!
+        @evaluation.update!(
+          status: :no_show,
+          notes: no_show_notes
+        )
+        create_event!
       end
 
       success('Evaluation marked as no-show.', { evaluation: @evaluation })

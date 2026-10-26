@@ -96,7 +96,8 @@ module Applications
       when 'proof_resubmission_request_failed'
         metadata['proof_review_id'].to_s
       when 'shipment_added', 'shipment_corrected', 'fulfillment_mode_changed',
-           'evaluator_reassigned', 'evaluation_working_notes_updated'
+           'evaluator_reassigned', 'evaluation_working_notes_updated',
+           'capability_granted', 'capability_removed', 'trainer_access_removed', 'evaluator_access_removed', 'trainer_reassigned'
         # Distinct operation IDs retain real changes made in the same minute.
         metadata['operation_id'].presence || event.id.to_s
       end

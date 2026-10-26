@@ -162,7 +162,7 @@ module Authentication
   end
 
   def require_evaluator!
-    return if current_user.evaluator? || current_user.admin?
+    return if current_user&.assignable_evaluator?
 
     redirect_to root_path, alert: 'Unauthorized access'
   end

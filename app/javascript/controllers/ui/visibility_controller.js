@@ -4,7 +4,7 @@ export default class extends Controller {
   static targets = ["field", "fieldConfirmation", "icon", "status"]
 
   static values = {
-    timeout: { type: Number, default: 5000 }, // 5 seconds timeout
+    timeout: { type: Number, default: 5000 }, // milliseconds
     hiddenStatus: { type: String, default: "Password is hidden" },
     visibleStatus: { type: String, default: "Password is visible" },
     showLabel: { type: String, default: "Show password" },
@@ -14,10 +14,8 @@ export default class extends Controller {
   initialize() {
     this.visibilityTimeout = null;
 
-    // Ensure we always have a valid timeout value
-    // Priority: Stimulus value > default fallback
     if (!this.hasTimeoutValue) {
-      this.timeoutValue = 5000; // Fallback default
+      this.timeoutValue = 5000;
     }
 
   }
@@ -62,9 +60,6 @@ export default class extends Controller {
     button.setAttribute("aria-pressed", newVisibility);
     button.setAttribute("aria-label", newVisibility ? this.hideLabelValue : this.showLabelValue);
 
-    button.classList.toggle("eye-open", newVisibility);
-    button.classList.toggle("eye-closed", !newVisibility);
-
     const statusElement = this.hasStatusTarget ? this.statusTarget :
                           document.getElementById(passwordField.getAttribute("aria-describedby"));
 
@@ -72,16 +67,13 @@ export default class extends Controller {
       statusElement.textContent = newVisibility ? this.visibleStatusValue : this.hiddenStatusValue;
     }
 
-    // Security: Auto-hide after timeout (ensure timeoutValue is valid)
+    // A visible password hides again after the timeout.
     if (newVisibility && this.timeoutValue > 0) {
       clearTimeout(this.visibilityTimeout);
       this.visibilityTimeout = setTimeout(() => {
         passwordField.type = "password";
         button.setAttribute("aria-pressed", "false");
         button.setAttribute("aria-label", this.showLabelValue);
-        button.classList.remove("eye-open");
-        button.classList.add("eye-closed");
-
         if (statusElement) {
           statusElement.textContent = this.hiddenStatusValue;
         }

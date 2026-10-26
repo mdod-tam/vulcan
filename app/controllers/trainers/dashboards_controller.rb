@@ -14,10 +14,7 @@ module Trainers
     ].freeze
 
     def show
-      # Load base training sessions first
       load_training_sessions
-
-      # Load display data (always needed)
       load_display_data
       load_recent_activity
     end
@@ -51,7 +48,6 @@ module Trainers
       @followup_sessions_count = @followup_sessions.count
       @my_scheduled_sessions_count = current_user.admin? ? @my_scheduled_sessions.count : 0
 
-      # Get all scheduled training sessions for the upcoming section
       @upcoming_sessions = @scheduled_sessions.where('scheduled_for > ?', now).order(:scheduled_for, :id)
                                               .includes(application: :user)
       @my_upcoming_sessions = @my_scheduled_sessions.where('scheduled_for > ?', now)
@@ -126,10 +122,10 @@ module Trainers
 
     def training_sessions
       @training_sessions ||= if current_user.admin?
-                               # Show all training sessions for admins
+                               # Admins see every training session.
                                TrainingSession.includes(application: :user)
                              else
-                               # Show only the trainer's own sessions for trainers
+                               # Trainers see their own sessions. After a reassignment only the completed ones stay visible.
                                TrainingSession.where(trainer_id: current_user.id).joins(:application)
                                               .where('applications.assigned_trainer_id = :trainer OR training_sessions.status = :completed',
                                                      trainer: current_user.id, completed: TrainingSession.statuses.fetch('completed'))

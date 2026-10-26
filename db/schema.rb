@@ -10,7 +10,7 @@
 #
 # It's strongly recommended that you check this file into your version control system.
 
-ActiveRecord::Schema[8.1].define(version: 2026_10_22_233100) do
+ActiveRecord::Schema[8.1].define(version: 2026_10_25_120000) do
   # These are extensions that must be enabled in order to support this database
   enable_extension "pg_catalog.plpgsql"
 
@@ -409,6 +409,7 @@ ActiveRecord::Schema[8.1].define(version: 2026_10_22_233100) do
     t.text "recommendation_notes"
     t.text "working_notes"
     t.string "assessment_source", default: "direct_assessment", null: false
+    t.string "assignment_operation_id"
     t.index ["application_id"], name: "index_evaluations_on_application_id"
     t.index ["constituent_id"], name: "index_evaluations_on_constituent_id"
     t.index ["evaluator_id"], name: "index_evaluations_on_evaluator_id"
@@ -951,6 +952,7 @@ ActiveRecord::Schema[8.1].define(version: 2026_10_22_233100) do
     t.text "constituent_summary"
     t.string "summary_locale"
     t.datetime "report_submitted_at"
+    t.string "assignment_operation_id"
     t.index ["application_id"], name: "index_training_sessions_on_application_id"
     t.index ["application_id"], name: "index_training_sessions_one_open_per_application", unique: true, where: "(status = ANY (ARRAY[0, 1, 2]))"
     t.index ["product_trained_on_id"], name: "index_training_sessions_on_product_trained_on_id"

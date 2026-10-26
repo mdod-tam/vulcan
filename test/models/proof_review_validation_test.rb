@@ -4,10 +4,8 @@ require 'test_helper'
 
 class ProofReviewValidationTest < ActiveSupport::TestCase
   def setup
-    # Create an application with proofs attached
     @application = create(:application, :in_progress, skip_proofs: true)
 
-    # Manually attach proofs using direct methods
     @application.income_proof.attach(
       io: StringIO.new('income proof content'),
       filename: 'income.pdf',

@@ -10,7 +10,6 @@ module Admin
     end
 
     test 'should get pain_points' do
-      # Create some test data
       create(:application, status: :draft, last_visited_step: 'step_1')
       create(:application, status: :draft, last_visited_step: 'step_1')
       create(:application, status: :draft, last_visited_step: 'step_2')

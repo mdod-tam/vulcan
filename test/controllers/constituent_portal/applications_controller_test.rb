@@ -724,7 +724,7 @@ module ConstituentPortal
         locale: 'en'
       )
       assert_equal expected, flash[:alert]
-      assert_match expected, response.body
+      assert_equal [expected], css_select('#error-summary li').map(&:text)
     end
 
     test 'should not submit application without provider info when preferred language is Spanish' do
@@ -764,7 +764,46 @@ module ConstituentPortal
         locale: 'es'
       )
       assert_equal expected, flash[:alert]
-      assert_match expected, response.body
+      assert_equal [expected], css_select('#error-summary li').map(&:text)
+    end
+
+    test 'form errors for income, disability, dependent, and provider reach the localized error summary' do
+      stranger = create(:constituent)
+      {
+        { annual_income: '' } => "Annual income can't be blank",
+        { hearing_disability: checkbox_params(false) } =>
+          'At least one disability must be selected for the applicant before submitting an application.',
+        { user_id: stranger.id.to_s } => 'User is not a valid dependent.'
+      }.each do |overrides, expected|
+        params = pending_review_submission_params
+        params[:application] = params[:application].merge(overrides)
+
+        assert_no_difference('Application.count') { post constituent_portal_applications_path, params: params }
+
+        assert_response :unprocessable_content
+        assert_includes css_select('#error-summary li').map(&:text), expected
+      end
+
+      params = pending_review_submission_params.merge(constituent: { locale: 'es' })
+      params[:application] = params[:application].merge(annual_income: '')
+      post constituent_portal_applications_path, params: params
+
+      expected = I18n.with_locale(:es) { "#{Application.human_attribute_name(:annual_income)} #{I18n.t('errors.messages.blank')}" }
+      assert_includes css_select('#error-summary li').map(&:text), expected
+    end
+
+    test 'a blank household size stays blank on the retry form in English and Spanish' do
+      %w[en es].each do |locale|
+        params = pending_review_submission_params.merge(constituent: { locale: locale })
+        params[:application] = params[:application].merge(
+          household_size: '', medical_provider_attributes: { name: '', phone: '', email: '' }
+        )
+
+        assert_no_difference('Application.count') { post constituent_portal_applications_path, params: params }
+
+        assert_response :unprocessable_content
+        assert_equal '', css_select("input[name='application[household_size]']").first['value'].to_s
+      end
     end
 
     test 'guardian should create application for a dependent' do
@@ -1029,6 +1068,21 @@ module ConstituentPortal
       assert_equal 54_150, thresholds['8']
 
       assert_equal 400, modifier
+    end
+
+    test 'new, edit, and a blocked submission render the FPL policy as a JSON object for the income controller' do
+      setup_fpl_policies
+
+      get new_constituent_portal_application_path
+      assert_fpl_policy_object
+
+      get edit_constituent_portal_application_path(create(:application, :draft, user: @user))
+      assert_fpl_policy_object
+
+      open_soft_match_case_for(@user)
+      post constituent_portal_applications_path, params: pending_review_submission_params
+      assert_response :unprocessable_content
+      assert_fpl_policy_object
     end
 
     test 'should maintain user association during update' do
@@ -1308,6 +1362,11 @@ module ConstituentPortal
     end
 
     private
+
+    def assert_fpl_policy_object
+      attribute = css_select('[data-income-validation-fpl-thresholds-value]').sole['data-income-validation-fpl-thresholds-value']
+      assert_equal (1..8).map(&:to_s), JSON.parse(attribute).keys.sort
+    end
 
     def cleared_proof(upload, slot)
       @cleared_proofs ||= {}

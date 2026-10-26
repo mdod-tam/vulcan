@@ -30,6 +30,7 @@ class Application < ApplicationRecord
   include VoucherManagement
   include TrainingManagement
   include EvaluationManagement
+  include PractitionerAssignment
   include Applications::EquipmentFulfillment
   include ContactChangeAudit
 
@@ -233,10 +234,12 @@ class Application < ApplicationRecord
   }
 
   # An explicit request timestamp drives this queue. Fulfillment type alone does not create a request.
-  # An evaluation created at or after the request closes it, regardless of evaluation status.
+  # An evaluation created at or after the request closes it, regardless of evaluation status, and so does any
+  # open evaluation, however old.
   scope :with_pending_evaluation_request, lambda {
     where(status: :approved)
       .where.not(evaluation_requested_at: nil)
+      .where.not(id: Evaluation.open_assigned.select(:application_id))
       .where(<<~SQL.squish)
         NOT EXISTS (
           SELECT 1
@@ -245,6 +248,14 @@ class Application < ApplicationRecord
             AND evaluations.created_at >= applications.evaluation_requested_at
         )
       SQL
+  }
+
+  # Open work whose assignee no longer holds the capability. Membership follows the data; no flag is stored.
+  scope :needing_trainer_reassignment, lambda {
+    where(id: TrainingSession.open_assigned.where.not(trainer_id: User.assignable_for(:can_train).select(:id)).select(:application_id))
+  }
+  scope :needing_evaluator_reassignment, lambda {
+    where(id: Evaluation.open_assigned.where.not(evaluator_id: User.assignable_for(:can_evaluate).select(:id)).select(:application_id))
   }
 
   scope :with_pending_training, lambda {
@@ -474,10 +485,6 @@ class Application < ApplicationRecord
     end
   end
 
-  def proof_review_button_class(proof_type)
-    proof_review_state(proof_type) == :rejected ? 'bg-red-600 hover:bg-red-700' : 'bg-blue-600 hover:bg-blue-700'
-  end
-
   # @param proof_type [String] The proof type ("income", "residency", or "id")
   # @return [Array] The latest review and submission audit event, in that order
   def latest_review_and_audit(proof_type)
@@ -546,7 +553,8 @@ class Application < ApplicationRecord
   # Any evaluation created at or after the request closes it, regardless of evaluation status.
   def evaluation_request_pending?
     evaluation_requested_at.present? &&
-      evaluations.where(created_at: evaluation_requested_at..).none?
+      evaluations.where(created_at: evaluation_requested_at..).none? &&
+      evaluations.open_assigned.none?
   end
 
   def request_evaluation!(actor:)

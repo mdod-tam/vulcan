@@ -50,7 +50,7 @@ describe("ContactFeedbackController", () => {
     const feedback = controller._buildContactFeedback('text')
 
     expect(feedback.html).toContain('Please enter a phone number above')
-    expect(feedback.className).toContain('bg-amber-50')
+    expect(feedback.className).toContain('bg-warning-50')
   })
 
   it("syncNoContactCheckboxState applies toggle when checkbox is pre-checked", () => {

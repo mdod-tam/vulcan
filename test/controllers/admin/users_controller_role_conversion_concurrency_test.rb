@@ -3,18 +3,10 @@
 require 'test_helper'
 
 module Admin
-  # Focused concurrency evidence for the STI role-conversion boundary (plan section 4):
-  # Admin::UsersController#handle_role_change and the merge service must serialize through
-  # User.lock_for_merge_integrity! on the target user, closing the previous gap where
-  # converted_user.save(validate: false) could silently rewrite a retired duplicate's `type`
-  # column (validate: false bypasses the merged_record_immutable validation entirely).
-  #
-  # Exercises the real, private controller method directly (via a minimal
-  # ActionDispatch::TestRequest/TestResponse pair, using set_request!/set_response! rather
-  # than the public request=/response= setters -- see passwords_controller_concurrency_test.rb
-  # for why: Metal#response= deliberately forces performed? to true, which would make the
-  # first real `render json:` call raise DoubleRenderError). Both sides of every race are real
-  # production code.
+  # Focused concurrency evidence for the STI role-conversion boundary: Users::CapabilityWriter and the merge
+  # service must serialize through User.lock_for_merge_integrity! on the target user, so a role conversion cannot
+  # rewrite a retired duplicate's `type` column (the conversion saves without validation, which bypasses
+  # merged_record_immutable). Both sides of every race are real production code.
   class UsersControllerRoleConversionConcurrencyTest < ActiveSupport::TestCase
     self.use_transactional_tests = false
 
@@ -42,7 +34,7 @@ module Admin
       conversion_response = nil
       contender_thread = on_own_connection do
         contender_pid_queue << backend_pid
-        conversion_response = run_role_conversion(duplicate)
+        conversion_response = run_role_conversion(admin, duplicate)
       end
 
       confirm_blocked_then_release(
@@ -69,7 +61,7 @@ module Admin
       holder_thread = on_own_connection do
         holder_pid_queue << backend_pid
         ActiveRecord::Base.transaction do
-          conversion_response = run_role_conversion(duplicate)
+          conversion_response = run_role_conversion(admin, duplicate)
           holder_ready << true
           release_holder.pop
         end
@@ -93,8 +85,8 @@ module Admin
       # User.find (not duplicate.reload): the in-memory `duplicate` is still typed
       # Users::Constituent, and reloading through that STI subclass would add an implicit
       # `type = 'Users::Constituent'` predicate that no longer matches the row now that the
-      # holder converted it -- the same class-vs-base-class gotcha user_merge_integrity.rb's
-      # currently_merged_in_database? had to guard against.
+      # holder converted it. user_merge_integrity.rb's currently_merged_in_database? guards against
+      # the same class-versus-base-class pitfall.
       assert_equal 'Users::Administrator', User.find(duplicate.id).type
       assert merge_result.failure?, 'expected the merge to fail closed once the duplicate was no longer a constituent'
       assert_match(/only constituent records/i, merge_result.message)
@@ -143,15 +135,12 @@ module Admin
       ).call
     end
 
-    def run_role_conversion(user)
-      controller = Admin::UsersController.new
-      controller.set_request!(ActionDispatch::TestRequest.create)
-      controller.set_response!(ActionDispatch::TestResponse.new)
-      controller.params = ActionController::Parameters.new
-
-      controller.send(:handle_role_change, User.find(user.id), 'Users::Administrator')
-
-      JSON.parse(controller.response.body, symbolize_names: true)
+    def run_role_conversion(admin, user)
+      result = Users::CapabilityWriter.call(
+        actor: User.find(admin.id), user: User.find(user.id), operation_id: SecureRandom.uuid,
+        intent: Users::CapabilityWriter::Intent.change_role(Users::Administrator)
+      )
+      { success: result.changed?, message: result.message }
     end
   end
 end

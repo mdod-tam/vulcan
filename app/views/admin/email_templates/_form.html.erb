@@ -29,22 +29,23 @@
   <%= hidden_field_tag :locale, current_locale, id: locale_field_id %>
 
   <% if email_template.locale_needs_sync? %>
-    <div class="rounded-md bg-amber-50 border border-amber-300 p-4" role="alert">
+    <div class="rounded-md bg-warning-50 border border-warning-300 p-4" role="alert">
       <div class="flex">
         <div class="flex-shrink-0">
-          <svg class="h-5 w-5 text-amber-500" viewBox="0 0 20 20" fill="currentColor" aria-hidden="true">
+          <svg class="h-5 w-5 text-warning-500" viewBox="0 0 20 20" fill="currentColor" aria-hidden="true">
             <path fill-rule="evenodd" d="M8.485 2.495c.673-1.167 2.357-1.167 3.03 0l6.28 10.875c.673 1.167-.17 2.625-1.516 2.625H3.72c-1.347 0-2.189-1.458-1.515-2.625L8.485 2.495zM10 5a.75.75 0 01.75.75v3.5a.75.75 0 01-1.5 0v-3.5A.75.75 0 0110 5zm0 9a1 1 0 100-2 1 1 0 000 2z" clip-rule="evenodd" />
           </svg>
         </div>
         <div class="ml-3 flex-1 md:flex md:justify-between md:items-start">
-          <p class="text-sm text-amber-800">
+          <p class="text-sm text-warning-800">
             <strong>Out of sync.</strong>
             Another locale variant of this template was updated. Update the body or subject below to resolve this.
           </p>
           <div class="mt-3 md:mt-0 md:ml-6 flex-shrink-0">
             <%= link_to "Mark Synced", mark_synced_admin_email_template_path(email_template),
                   data: { turbo_method: :patch, turbo_confirm: "Mark this template as synced without making changes?" },
-                  class: "inline-flex items-center rounded-md border border-amber-400 bg-amber-100 px-3 py-1.5 text-sm font-medium text-amber-900 hover:bg-amber-200 focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-amber-600",
+                  class: "inline-flex items-center rounded-md border border-warning-400 bg-warning-100 px-3 py-1.5 " \
+                         "text-sm font-medium text-warning-900 hover:bg-warning-200",
                   role: "button" %>
           </div>
         </div>
@@ -53,9 +54,9 @@
   <% end %>
 
   <% if email_template.errors.any? %>
-    <div id="error_explanation_<%= locale_code.downcase %>" class="bg-red-100 border border-red-400 text-red-700 px-4 py-3 rounded relative" role="alert">
+    <div id="error_explanation_<%= locale_code.downcase %>" class="bg-danger-100 border border-danger-400 text-danger-700 px-4 py-3 rounded relative" role="alert">
       <strong class="font-bold">Please review.</strong>
-      <span class="block sm:inline"><%= pluralize(email_template.errors.count, "error") %> prohibited this email_template from being saved:</span>
+      <span class="block sm:inline"><%= pluralize(email_template.errors.count, "error") %> prohibited this email template from being saved:</span>
       <ul class="mt-3 list-disc list-inside text-sm">
         <% template_validation_error_messages(email_template.errors.full_messages).each do |message| %>
           <li><%= message %></li>
@@ -65,29 +66,29 @@
   <% end %>
 
   <div>
-    <%= form.label :description, "Template Purpose (#{locale_code})", for: description_field_id, class: "block text-sm font-medium text-gray-700" %>
+    <%= form.label :description, "Template Purpose (#{locale_code})", for: description_field_id, class: "form-label" %>
     <%= form.text_area :description,
         rows: 2,
         id: description_field_id,
-        class: "mt-1 block w-full rounded-md border-gray-300 shadow-sm focus:border-indigo-500 focus:ring-indigo-500 sm:text-sm",
+        class: "form-input mt-1",
         placeholder: "Brief description of when this email is sent" %>
-    <p class="mt-2 text-sm text-gray-500">
+    <p class="form-hint">
       Explain when and why this email is sent (e.g., "Sent when a constituent registers a new account").
     </p>
   </div>
 
   <div>
-    <%= form.label :subject, "Email Subject (#{locale_code})", for: subject_field_id, class: "block text-sm font-medium text-gray-700" %>
+    <%= form.label :subject, "Email Subject (#{locale_code})", for: subject_field_id, class: "form-label" %>
     <%= form.text_field :subject,
         id: subject_field_id,
-        class: "mt-1 block w-full rounded-md border-gray-300 shadow-sm focus:border-indigo-500 focus:ring-indigo-500 sm:text-sm",
+        class: "form-input mt-1",
         data: { "protected-variables-target": "subjectInput" } %>
     <div class="mt-2 max-w-sm">
-      <label for="<%= subject_variable_select_id %>" class="block text-sm font-medium text-gray-700 mb-2">
+      <label for="<%= subject_variable_select_id %>" class="form-label mb-2">
         Insert Variable in Subject
       </label>
       <select id="<%= subject_variable_select_id %>"
-              class="block w-full px-3 py-2 border border-gray-300 rounded-md shadow-sm focus:border-indigo-500 focus:ring-indigo-500 focus:ring-1 text-sm"
+              class="form-input text-sm"
               data-protected-variables-target="subjectVariableSelect">
         <option value="">-- Select a variable to insert --</option>
         <% if required_vars.any? %>
@@ -121,12 +122,12 @@
   </div>
 
   <div>
-    <%= form.label :syntax, "Placeholder Style (#{locale_code})", for: syntax_field_id, class: "block text-sm font-medium text-gray-700" %>
+    <%= form.label :syntax, "Placeholder Style (#{locale_code})", for: syntax_field_id, class: "form-label" %>
     <%= form.select :syntax,
         options_for_select(email_template_syntax_options(email_template), email_template.render_syntax),
         {},
         id: syntax_field_id,
-        class: "mt-1 block w-full rounded-md border-gray-300 shadow-sm focus:border-indigo-500 focus:ring-indigo-500 sm:text-sm",
+        class: "form-input mt-1",
         aria: { describedby: syntax_describedby },
         data: { "protected-variables-target": "syntaxSelect" } %>
     <div class="mt-2 space-y-2">
@@ -150,7 +151,7 @@
       </div>
     </div>
     <% if !email_template.text? %>
-      <p class="mt-1 text-sm text-gray-500">Liquid is only available for text templates.</p>
+      <p class="form-hint">Liquid is only available for text templates.</p>
     <% end %>
     <% if email_template.text? %>
       <div class="mt-3 hidden" data-protected-variables-target="convertPanel">
@@ -159,7 +160,7 @@
                 data-action="protected-variables#convertStandardPlaceholders">
           Convert Standard Placeholders
         </button>
-        <p class="mt-1 text-sm text-gray-500">
+        <p class="form-hint">
           Replaces matching Standard placeholders in the subject and body with Liquid placeholders.
         </p>
       </div>
@@ -167,20 +168,18 @@
   </div>
 
   <div>
-    <%= form.label :body, "Body (#{locale_code})", id: editor_label_id, class: "block text-sm font-medium text-gray-700" %>
+    <%= form.label :body, "Body (#{locale_code})", id: editor_label_id, class: "form-label" %>
     
-    <!-- Hidden textarea that stores actual data -->
     <%= form.text_area :body, 
         rows: 20, 
         id: body_textarea_id,
         class: "hidden",
         data: { "protected-variables-target": "textarea" } %>
     
-    <!-- Visible editable div -->
     <div 
       id="<%= editor_field_id %>"
       data-protected-variables-target="editor"
-      class="mt-1 block w-full rounded-md border border-gray-300 shadow-sm focus:border-indigo-500 focus:ring-indigo-500 sm:text-sm font-mono p-3 min-h-96 bg-white whitespace-pre-wrap break-words outline-none"
+      class="mt-1 block w-full rounded-md border border-gray-300 shadow-elevation-1 sm:text-sm font-mono p-3 min-h-96 bg-white whitespace-pre-wrap break-words"
       contenteditable="true"
       role="textbox"
       aria-multiline="true"
@@ -191,11 +190,10 @@
     
     <div class="mt-2 space-y-2">
       <div class="max-w-sm">
-        <!-- Insert Variable Dropdown -->
-        <label for="<%= variable_select_id %>" class="block text-sm font-medium text-gray-700 mb-2">
+        <label for="<%= variable_select_id %>" class="form-label mb-2">
           Insert Variable into Body
         </label>
-        <select id="<%= variable_select_id %>" class="block w-full px-3 py-2 border border-gray-300 rounded-md shadow-sm focus:border-indigo-500 focus:ring-indigo-500 focus:ring-1 text-sm" data-protected-variables-target="variableSelect">
+        <select id="<%= variable_select_id %>" class="form-input text-sm" data-protected-variables-target="variableSelect">
         <option value="">-- Select a variable to insert --</option>
         <% if required_vars.any? %>
           <optgroup label="Required Variables">
@@ -225,7 +223,6 @@
         <% end %>
       </select>
       </div>
-      <!-- Variable Help text -->
       <div id="<%= variable_help_id %>" class="rounded-md border border-gray-200 bg-gray-50 px-3 py-2 text-sm text-gray-600">
         <p>Inserted body variables are highlighted and cannot be edited.</p>
         <p class="mt-1">Liquid disables optional choices because sends may omit them.</p>
@@ -239,7 +236,7 @@
         <% end %>
       </div>
     </div>
-    <p id="<%= editor_help_id %>" class="mt-2 text-sm text-gray-500">
+    <p id="<%= editor_help_id %>" class="form-hint">
       Edit message text in the body editor. Paste plain text when possible.
     </p>
   </div>
@@ -251,8 +248,8 @@
     <%= form.submit "Preview Draft",
         formaction: preview_admin_email_template_path(email_template),
         formtarget: email_template.html? ? "#{preview_frame_id}-document" : nil,
-        class: "inline-flex justify-center py-2 px-4 border border-indigo-300 shadow-sm text-sm font-medium rounded-md text-indigo-700 bg-indigo-50 hover:bg-indigo-100 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-indigo-500",
+        class: "btn btn-secondary",
         data: email_template.html? ? {} : { turbo_frame: preview_frame_id } %>
-    <%= form.submit submit_label, class: "inline-flex justify-center py-2 px-4 border border-transparent shadow-sm text-sm font-medium rounded-md text-white bg-indigo-600 hover:bg-indigo-700 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-indigo-500" %>
+    <%= form.submit submit_label, class: "btn btn-primary" %>
   </div>
 <% end %>

@@ -1,7 +1,6 @@
 <div class="space-y-4">
   <% 
-    # Using PostgreSQL JSONB operators to correctly query the metadata field
-    # metadata->>'application_id' for string comparison with application ID
+    # Voucher events carry the application id in their metadata.
     application_id_string = @application.id.to_s
     application_id_json = { application_id: @application.id }.to_json
     
@@ -13,19 +12,13 @@
       application_id_json
     ).order(created_at: :desc)
     
-    # Also find voucher transactions for fallback - helps with existing transactions
-    # before events were implemented, and also provides redundancy
-    if @application.vouchers.any?
-      voucher_ids = @application.vouchers.pluck(:id)
-      voucher_codes = @application.vouchers.pluck(:code)
-    end
+    voucher_ids = @application.vouchers.pluck(:id) if @application.vouchers.any?
   %>
 
   <% if events.any? || @application.vouchers.any? %>
     <div class="flow-root">
       <ul role="list" class="-mb-8">
         <% 
-          # Create activity items for all events
           activity_items = events.map do |event|
             {
               type: :event,
@@ -36,17 +29,14 @@
             }
           end
           
-          # Add transactions data if we have vouchers
           if @application.vouchers.any?
-            # Get all transactions for these vouchers
             transactions = VoucherTransaction.where(voucher_id: voucher_ids)
                              .where(transaction_type: :redemption)
                              .includes(:vendor)
                              .order(processed_at: :desc)
             
-            # Only add transactions that don't already have events
+            # Redemptions already recorded as events are not listed twice.
             transaction_items = transactions.map do |txn|
-              # Check if there's already an event for this transaction
               unless events.any? { |e| e.metadata['transaction_id'].to_s == txn.id.to_s }
                 {
                   type: :transaction,
@@ -60,14 +50,11 @@
               end
             end.compact
             
-            # Combine all activity items
             activity_items.concat(transaction_items)
           end
           
-          # Sort by timestamp descending
           activity_items.sort_by! { |item| item[:timestamp] }.reverse!
           
-          # Render each activity item
           activity_items.each_with_index do |item, index|
             is_last = index == activity_items.length - 1 
         %>
@@ -80,10 +67,10 @@
                 <div>
                   <span class="h-8 w-8 rounded-full flex items-center justify-center ring-8 ring-white
                     <%= case item[:action]
-                      when "voucher_assigned" then "bg-green-500"
-                      when "voucher_redeemed" then "bg-blue-500"
-                      when "voucher_expired" then "bg-yellow-500"
-                      when "voucher_cancelled" then "bg-red-500"
+                      when "voucher_assigned" then "bg-success-500"
+                      when "voucher_redeemed" then "bg-info-500"
+                      when "voucher_expired" then "bg-warning-500"
+                      when "voucher_cancelled" then "bg-danger-500"
                       end %>">
                     <svg class="h-5 w-5 text-white" xmlns="http://www.w3.org/2000/svg" viewBox="0 0 20 20" fill="currentColor">
                       <path fill-rule="evenodd" d="M4 2a2 2 0 00-2 2v12a2 2 0 002 2h12a2 2 0 002-2V4a2 2 0 00-2-2H4zm2 4a1 1 0 011-1h6a1 1 0 110 2H7a1 1 0 01-1-1zm0 4a1 1 0 011-1h6a1 1 0 110 2H7a1 1 0 01-1-1zm0 4a1 1 0 011-1h6a1 1 0 110 2H7a1 1 0 01-1-1z" clip-rule="evenodd" />

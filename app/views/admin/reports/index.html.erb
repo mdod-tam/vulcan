@@ -1,6 +1,6 @@
 <main class="container mx-auto px-4 py-8" role="main" id="main-content">
   <div class="max-w-7xl mx-auto">
-    <a href="#main-content" class="sr-only focus:not-sr-only focus:absolute focus:p-4 focus:bg-white focus:z-50">
+    <a href="#main-content" class="skip-link">
       Skip to main content
     </a>
 
@@ -9,7 +9,7 @@
         <h1 class="text-3xl font-bold" id="page-title">System Reports</h1>
         <div class="flex gap-3">
         <a href="<%= admin_application_analytics_pain_points_path %>"
-           class="inline-flex items-center px-4 py-2 border border-gray-300 rounded-md shadow-sm text-sm font-medium text-gray-700 bg-white hover:bg-gray-50 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-indigo-500"
+           class="btn btn-outline"
            aria-label="View pain point analysis">
           Pain Point Analysis
         </a>
@@ -35,7 +35,7 @@
       </ul>
     </nav>
 
-    <section aria-labelledby="applications-overview-heading" class="bg-white rounded-lg shadow p-6 mb-8">
+    <section aria-labelledby="applications-overview-heading" class="card p-6 mb-8">
       <h2 id="applications-overview-heading" class="text-xl font-bold mb-4">Applications Overview</h2>
       <p class="text-sm text-gray-500 mb-4">
         Operational counts: applications <strong>created</strong> in each fiscal year. This is not MFR.
@@ -220,7 +220,7 @@
                error_message: @equipment_by_type_error %>
 
     <% if @vouchers_enabled %>
-      <section aria-labelledby="voucher-statistics-heading" class="bg-white rounded-lg shadow p-6 mb-8">
+      <section aria-labelledby="voucher-statistics-heading" class="card p-6 mb-8">
       <h2 id="voucher-statistics-heading" class="text-xl font-bold mb-4">Voucher Statistics</h2>
       <div class="grid grid-cols-1 md:grid-cols-2 gap-4 mb-4">
         <div class="bg-gray-50 rounded p-4">
@@ -350,7 +350,7 @@
       </section>
     <% end %>
 
-    <section aria-labelledby="services-overview-heading" class="bg-white rounded-lg shadow p-6 mb-8">
+    <section aria-labelledby="services-overview-heading" class="card p-6 mb-8">
       <h2 id="services-overview-heading" class="text-xl font-bold mb-4">Services Overview</h2>
       <div class="grid grid-cols-1 md:grid-cols-2 gap-4 mb-4">
         <div class="bg-gray-50 rounded p-4">
@@ -483,7 +483,7 @@
         <h4 class="font-medium text-gray-700 mb-2">Services Comparison</h4>
         <div class="flex flex-wrap justify-between mb-4">
           <div class="flex items-center mr-4">
-            <span class="inline-block w-3 h-3 bg-indigo-600 rounded-full mr-1" aria-hidden="true"></span>
+            <span class="inline-block w-3 h-3 bg-primary-600 rounded-full mr-1" aria-hidden="true"></span>
             <span class="text-sm text-gray-700">Current FY</span>
           </div>
           <div class="flex items-center">
@@ -506,7 +506,7 @@
     </section>
 
     <% if @vouchers_enabled %>
-      <section aria-labelledby="vendor-activity-heading" class="bg-white rounded-lg shadow p-6 mb-8">
+      <section aria-labelledby="vendor-activity-heading" class="card p-6 mb-8">
       <h2 id="vendor-activity-heading" class="text-xl font-bold mb-4">Vendor Activity</h2>
       <div class="grid grid-cols-1 md:grid-cols-2 gap-4 mb-4">
         <div class="bg-gray-50 rounded p-4">
@@ -549,7 +549,7 @@
 
           <div class="flex flex-col space-y-2">
             <div class="flex items-center">
-              <span class="inline-block w-3 h-3 bg-indigo-600 rounded-full mr-2" aria-hidden="true"></span>
+              <span class="inline-block w-3 h-3 bg-primary-600 rounded-full mr-2" aria-hidden="true"></span>
               <span class="text-sm text-gray-700">Active Vendors (Last 30 Days): <%= @recent_active_vendors %></span>
             </div>
             <div class="flex items-center">
@@ -564,7 +564,7 @@
 
     <%= render 'mfr_section' %>
 
-    <section aria-labelledby="referral-origin-heading" class="bg-white rounded-lg shadow p-6 mb-4">
+    <section aria-labelledby="referral-origin-heading" class="card p-6 mb-4">
       <h2 id="referral-origin-heading" class="text-xl font-bold mb-4">Referral Origin</h2>
       <p class="text-sm text-gray-500 mb-4">
         How applicants heard about the program, broken down by time period.

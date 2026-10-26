@@ -1,17 +1,14 @@
 # frozen_string_literal: true
 
 module Admin
-  # Controller for the admin dashboard
-  # Displays dashboard metrics, quick action buttons, and recent activity
+  # Admin dashboard: metrics, recent notifications, and the current admin's open notes.
   class DashboardsController < BaseController
     include DashboardMetricsLoading
 
     def show
-      # Load comprehensive dashboard metrics
       @metrics = load_dashboard_metrics
 
-      # Load recent notifications to avoid N+1 queries
-      # Preload notifiable for Notification#message, actor for view display
+      # Preload notifiable for Notification#message and actor for the view.
       @recent_notifications = Notification
                               .includes(:actor, :notifiable)
                               .includes(notifiable: :application)
@@ -21,7 +18,7 @@ module Admin
 
       preload_notification_message_dependencies(@recent_notifications)
 
-      # Load incomplete notes assigned to current user with pagination (3 per page)
+      # Incomplete notes assigned to the current admin, three per page.
       @pagy_assigned_notes, @assigned_notes = pagy(
         ApplicationNote
           .where(assigned_to: current_user)

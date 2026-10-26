@@ -13,18 +13,11 @@ class IncomeValidationController extends Controller {
 
   static outlets = ["flash"]
   static values = {
-    fplThresholds: String,  // Server-rendered JSON of base FPL amounts.
+    fplThresholds: Object,  // Server-rendered base FPL amounts by household size.
     modifier: Number // Policy percentage of base FPL.
   }
 
   connect() {
-    try {
-      this.fplThresholds = JSON.parse(this.fplThresholdsValue)
-    } catch (error) {
-      console.error("Failed to parse FPL thresholds:", error)
-      this.fplThresholds = {}
-    }
-    
     // Reuse this bound listener during disconnect.
     this._validate = this.validateIncomeThreshold.bind(this)
 
@@ -153,9 +146,7 @@ class IncomeValidationController extends Controller {
       5: 37650, 6: 43150, 7: 48650, 8: 54150
     }
 
-    const baseFplBySize = (this.fplThresholds && typeof this.fplThresholds === 'object' && Object.keys(this.fplThresholds).length > 0)
-      ? this.fplThresholds
-      : fallbackFpl
+    const baseFplBySize = Object.keys(this.fplThresholdsValue).length > 0 ? this.fplThresholdsValue : fallbackFpl
 
     const modifierPercent = (typeof this.modifierValue === 'number' && !Number.isNaN(this.modifierValue))
       ? this.modifierValue
@@ -204,7 +195,7 @@ class IncomeValidationController extends Controller {
     })
 
     return `
-      <div class="bg-red-600 border-2 border-red-700 text-white font-bold p-4 rounded-md">
+      <div class="bg-danger-600 border-2 border-danger-700 text-white font-bold p-4 rounded-md">
         <h3 class="font-bold text-lg">Income Exceeds Threshold</h3>
         <p>Your annual income exceeds the maximum threshold of ${formattedThreshold} for your household size.</p>
         <p>Applications with income above the threshold are not eligible for this program.</p>
@@ -234,14 +225,14 @@ class IncomeValidationController extends Controller {
     const container = this.incomeFieldsContainerTarget
     container.classList.remove(
       'bg-gray-50', 'border-gray-200',
-      'bg-green-50', 'border-green-300',
-      'bg-red-50', 'border-red-300'
+      'bg-success-50', 'border-success-300',
+      'bg-danger-50', 'border-danger-300'
     )
 
     if (exceedsThreshold) {
-      container.classList.add('bg-red-50', 'border-red-300')
+      container.classList.add('bg-danger-50', 'border-danger-300')
     } else {
-      container.classList.add('bg-green-50', 'border-green-300')
+      container.classList.add('bg-success-50', 'border-success-300')
     }
   }
 
@@ -250,8 +241,8 @@ class IncomeValidationController extends Controller {
 
     const container = this.incomeFieldsContainerTarget
     container.classList.remove(
-      'bg-green-50', 'border-green-300',
-      'bg-red-50', 'border-red-300'
+      'bg-success-50', 'border-success-300',
+      'bg-danger-50', 'border-danger-300'
     )
     container.classList.add('bg-gray-50', 'border-gray-200')
   }

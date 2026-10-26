@@ -1,14 +1,12 @@
 # frozen_string_literal: true
 
-# Seed File for "user_mailer_email_verification.rb"
-# --------------------------------------------------
 EmailTemplate.create_or_find_by!(name: 'user_mailer_email_verification', format: :text, locale: 'en') do |template|
   template.subject = 'Please confirm your email address'
   template.description = 'Sent to a user to verify their email address using the verification link.'
   template.body = <<~TEXT
     Hey there,
 
-    This is to confirm that %<user_email>s is the email you've chosen use on your account. If you ever lose your password, that's where we'll email a reset link.
+    This is to confirm that %<user_email>s is the email you've chosen to use on your account. If you ever lose your password, that's where we'll email a reset link.
 
     Use the email verification link to confirm that you received this email.
 

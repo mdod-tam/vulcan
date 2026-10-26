@@ -13,7 +13,7 @@ class UserDateOfBirthTest < ActiveSupport::TestCase
     end
   end
 
-  # The old reader fell back to Date.parse and answered 2009-09-26 for this.
+  # Date.parse would read '9/9/26' as 2009-09-26.
   test 'rejected input is never stored or read back as a different date' do
     user = Users::Constituent.new(date_of_birth: '9/9/26')
 

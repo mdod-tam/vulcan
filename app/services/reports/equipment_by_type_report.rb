@@ -81,8 +81,7 @@ module Reports
       when 'current_month'
         current_date.beginning_of_month.beginning_of_day..current_date.end_of_month.end_of_day
       when 'current_quarter'
-        FiscalYear.quarter_start_date(current_date).beginning_of_day..
-          FiscalYear.quarter_end_date(current_date).end_of_day
+        current_date.in_time_zone.all_quarter
       else
         FiscalYear.time_range(
           FiscalYear.start_date_for(current_fiscal_year),

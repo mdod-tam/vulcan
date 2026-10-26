@@ -194,7 +194,7 @@ module Evaluators
       @evaluation = if current_user.admin?
                       Evaluation.find(params[:id])
                     else
-                      current_user.evaluations.find(params[:id])
+                      current_user.assigned_evaluations.find(params[:id])
                     end
     rescue ActiveRecord::RecordNotFound
       redirect_to evaluators_evaluations_path, alert: 'Evaluation not found.'
@@ -226,12 +226,6 @@ module Evaluators
 
     def reschedule_params
       params.expect(evaluation: %i[evaluation_date location reschedule_reason])
-    end
-
-    def require_evaluator!
-      return if current_user&.evaluator? || current_user&.admin?
-
-      redirect_to root_path, alert: 'Not authorized'
     end
 
     def authorize_evaluation_mutation!

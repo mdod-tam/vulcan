@@ -1,7 +1,6 @@
-@layer components{
-    .required-label::after{
-        content: "*";
-        @apply  pl-1 text-red-500;
-    }
+@layer components {
+  .required-label::after {
+    content: "*";
+    @apply pl-1 text-danger-700;
+  }
 }
-    

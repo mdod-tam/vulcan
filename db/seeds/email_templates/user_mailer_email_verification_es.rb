@@ -1,7 +1,5 @@
 # frozen_string_literal: true
 
-# Seed File for "user_mailer_email_verification.rb"
-# --------------------------------------------------
 EmailTemplate.create_or_find_by!(name: 'user_mailer_email_verification', format: :text, locale: 'es') do |template|
   template.subject = 'Por favor confirme su dirección de correo electrónico'
   template.description = 'Enviado a un usuario para verificar su dirección de correo electrónico usando el enlace de verificación.'

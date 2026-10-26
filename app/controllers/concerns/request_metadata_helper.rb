@@ -1,7 +1,6 @@
 # frozen_string_literal: true
 
-# Provides standardized methods for building request metadata across controllers
-# Reduces duplication of common metadata patterns like IP address extraction
+# Builds request metadata (IP address, user agent, controller, action) for audit events and logs.
 module RequestMetadataHelper
   extend ActiveSupport::Concern
 

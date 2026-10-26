@@ -224,16 +224,6 @@ export default class extends Controller {
   }
 
   /**
-   * Temporary no-op for income-validation calls.
-   * TODO: Replace with proper income-validation controller setup.
-   */
-  validateIncomeThreshold() {
-    if (process.env.NODE_ENV !== 'production') {
-      console.warn('validateIncomeThreshold called on paper-application controller - this should be handled by income-validation controller');
-    }
-  }
-
-  /**
    * Copies form values into the rejection modal and opens it.
    * Native <dialog> uses showModal() for modal focus behavior.
    */

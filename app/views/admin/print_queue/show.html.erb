@@ -1,7 +1,7 @@
 <main class="container mx-auto px-4 py-8">
-  <%= link_to 'Back to print queue', admin_print_queue_index_path, class: 'text-indigo-700 underline' %>
+  <%= link_to 'Back to print queue', admin_print_queue_index_path, class: 'text-primary-700 underline' %>
   <h1 class="mt-4 text-2xl font-bold">Letter #<%= @letter.id %></h1>
-  <div class="mt-4 rounded-lg bg-white p-6 shadow">
+  <div class="card mt-4 p-6">
     <dl class="space-y-2">
       <div><dt class="inline font-semibold">Recipient:</dt> <dd class="inline"><%= @letter.constituent.full_name %></dd></div>
       <div><dt class="inline font-semibold">Type:</dt> <dd class="inline"><%= @letter.letter_type.humanize %></dd></div>
@@ -19,10 +19,10 @@
         <%= button_to(@letter.released_at ? 'Download PDF again' : 'Release and download PDF',
                       release_admin_print_queue_path(@letter),
                       method: :post, form: { data: { turbo: false } },
-                      class: 'rounded bg-blue-700 px-4 py-2 text-white focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2') %>
+                      class: 'btn btn-primary') %>
         <% if @letter.pending? && @letter.released_at %>
           <%= button_to 'Mark as Printed', mark_as_printed_admin_print_queue_path(@letter), method: :post,
-                                                                                            class: 'rounded bg-green-700 px-4 py-2 text-white' %>
+                                                                                            class: 'btn btn-success' %>
         <% end %>
       </div>
     <% end %>

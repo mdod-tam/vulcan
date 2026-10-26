@@ -1,34 +1,28 @@
 # frozen_string_literal: true
 
-# Current attributes for request-scoped state management
-# Replaces Thread-local variables with Rails' built-in CurrentAttributes pattern
-# This ensures proper state isolation across requests and better testability
+# Request-scoped state. Rails resets these attributes at the start and end of every request and job.
 class Current < ActiveSupport::CurrentAttributes
-  # Paper application context - used to bypass certain validations during admin paper application processing
+  # Set while an admin paper application is processed. Several proof validations are skipped in this context.
   attribute :paper_context
 
-  # Skip proof validation flag - used in tests and specific service contexts
+  # Skips the proof validations. Set by services that manage proof state themselves, and by tests.
   attribute :skip_proof_validation
 
-  # Current user for request context
+  # The signed-in user.
   attribute :user
 
-  # Request ID for tracking and debugging
   attribute :request_id
 
-  # Force notifications flag for testing scenarios
   attribute :force_notifications
 
-  # Single proof review flag for targeted review operations
+  # Set during a single-proof admin review. The reviewer validates the selected proof, so the all-proofs checks are skipped.
   attribute :reviewing_single_proof
 
-  # Test user ID for testing scenarios (replaces Thread.current[:test_user_id])
+  # Test environment only: the authentication concern signs this user in.
   attribute :test_user_id
 
-  # ProofAttachmentService context - used to prevent duplicate events from ProofManageable concern
+  # Set by ProofAttachmentService so ProofManageable does not record a second event for the same attachment.
   attribute :proof_attachment_service_context
-
-  # Convenience methods for boolean checks
 
   def paper_context?
     paper_context.present?
@@ -50,14 +44,6 @@ class Current < ActiveSupport::CurrentAttributes
     proof_attachment_service_context.present?
   end
 
-  # Legacy attributes that were in the class
+  # Request metadata, set only by Admin::BaseController for audit, template, and mailer readers
   attribute :user_agent, :ip_address
-
-  class << self
-    def set(request, user)
-      self.user_agent = request.user_agent
-      self.ip_address = request.remote_ip
-      self.user = user
-    end
-  end
 end

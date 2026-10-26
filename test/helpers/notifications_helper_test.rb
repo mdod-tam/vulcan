@@ -15,7 +15,7 @@ class NotificationsHelperTest < ActionView::TestCase
       metadata: { 'proof_type' => 'income', 'proof_request_display_mode' => 'rejected' }
     )
 
-    assert_equal 'bg-red-100 text-red-500', notification_icon_classes(notification)
+    assert_equal 'bg-danger-100 text-danger-700', notification_icon_classes(notification)
     assert_equal :rejected, notification_icon_type(notification)
   end
 
@@ -29,7 +29,7 @@ class NotificationsHelperTest < ActionView::TestCase
       metadata: { 'proof_type' => 'income', 'proof_request_display_mode' => 'requested' }
     )
 
-    assert_equal 'bg-yellow-100 text-yellow-500', notification_icon_classes(notification)
+    assert_equal 'bg-warning-100 text-warning-700', notification_icon_classes(notification)
     assert_equal :documents, notification_icon_type(notification)
   end
 end

@@ -5,6 +5,8 @@ require 'test_helper'
 module Admin
   # A vendor converted to another role keeps no vendor-only data, and the conversion saves.
   class UserRoleConversionTest < ActionDispatch::IntegrationTest
+    TURBO = { 'Accept' => Mime[:turbo_stream].to_s }.freeze
+
     setup do
       sign_in_for_integration_test(create(:admin))
     end
@@ -13,7 +15,7 @@ module Admin
       vendor = vendor_with_vendor_fields
       vendor.update_column(:date_of_birth, '1980-09-10')
 
-      patch update_role_admin_user_path(vendor), params: { role: 'Constituent' }, as: :json
+      patch update_role_admin_user_path(vendor), params: { role: 'Constituent' }, headers: TURBO
 
       assert_response :success
       assert_vendor_fields_reset(User.find(vendor.id), 'Users::Constituent')
@@ -22,7 +24,7 @@ module Admin
     test 'a vendor becomes a trainer with every vendor-only field reset' do
       vendor = vendor_with_vendor_fields
 
-      patch update_role_admin_user_path(vendor), params: { role: 'Trainer' }, as: :json
+      patch update_role_admin_user_path(vendor), params: { role: 'Trainer' }, headers: TURBO
 
       assert_response :success
       assert_vendor_fields_reset(User.find(vendor.id), 'Users::Trainer')

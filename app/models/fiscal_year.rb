@@ -2,13 +2,6 @@
 
 # Fiscal year utilities (July 1 – June 30).
 class FiscalYear
-  FISCAL_QUARTERS = {
-    1 => { months: [7, 8, 9], start: [0, 7, 1], end: [0, 9, 30] },
-    2 => { months: [10, 11, 12], start: [0, 10, 1], end: [0, 12, 31] },
-    3 => { months: [1, 2, 3], start: [1, 1, 1], end: [1, 3, 31] },
-    4 => { months: [4, 5, 6], start: [1, 4, 1], end: [1, 6, 30] }
-  }.freeze
-
   def self.current_start_year(on: Date.current)
     on.month >= 7 ? on.year : on.year - 1
   end
@@ -30,18 +23,11 @@ class FiscalYear
     "FY#{(start_year + 1).to_s[-2..]}"
   end
 
+  # July-start fiscal quarters begin in the same months as calendar quarters (January, April, July,
+  # October); only the numbering is rotated, so callers take quarter boundaries from the calendar quarter.
+  # This does not hold for an arbitrary fiscal start month.
   def self.quarter_for(date)
-    FISCAL_QUARTERS.find { |_, quarter| quarter[:months].include?(date.month) }.first
-  end
-
-  def self.quarter_start_date(date)
-    year_offset, month, day = FISCAL_QUARTERS.fetch(quarter_for(date)).fetch(:start)
-    Date.new(current_start_year(on: date) + year_offset, month, day)
-  end
-
-  def self.quarter_end_date(date)
-    year_offset, month, day = FISCAL_QUARTERS.fetch(quarter_for(date)).fetch(:end)
-    Date.new(current_start_year(on: date) + year_offset, month, day)
+    ((date.quarter + 1) % 4) + 1
   end
 
   def self.cohort_range_label(start_year:, cohort_end_date:)

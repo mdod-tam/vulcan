@@ -16,7 +16,6 @@ module Admin
     end
 
     def create
-      # Find dependent user
       dependent_user_id = params[:guardian_relationship][:dependent_id]
       dependent_user = User.find_by(id: dependent_user_id)
 
@@ -26,8 +25,6 @@ module Admin
         return
       end
 
-      # Using UserServiceIntegration concern for consistent relationship creation
-      # Flow: create_guardian_relationship_with_service -> handles validation and creation
       if create_guardian_relationship_with_service(@guardian, dependent_user, params[:guardian_relationship][:relationship_type])
         redirect_to admin_user_path(@guardian), notice: t('.relationship_create_pass')
       else

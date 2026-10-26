@@ -8,9 +8,9 @@
       <div class="flex space-x-4">
         <%= link_to "Edit",
             edit_admin_application_path(@application),
-            class: "inline-flex items-center px-4 py-2 border border-indigo-300 rounded-md shadow-sm text-sm font-medium text-indigo-700 bg-indigo-50 hover:bg-indigo-100 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-indigo-500" %>
+            class: "btn btn-secondary" %>
         <%= link_to admin_applications_path,
-            class: "inline-flex items-center px-4 py-2 border border-gray-300 rounded-md shadow-sm text-sm font-medium text-gray-700 bg-white hover:bg-gray-50 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-indigo-500",
+            class: "btn btn-outline",
             aria: { label: "Return to applications list" } do %>
           <span>Back to List</span>
         <% end %>
@@ -18,7 +18,7 @@
     </div>
 
     <%= turbo_frame_tag(turbo_frame_request_id || "application_show_#{@application.id}", target: (turbo_frame_request_id ? nil : '_top')) do %>
-    <div class="bg-white rounded-lg shadow p-6 mb-6">
+    <div class="card p-6 mb-6">
       <div class="flex flex-col md:flex-row items-start md:items-center justify-between">
         <div class="flex items-center space-x-2">
           <%= application_status_badge(@application) %>
@@ -28,20 +28,17 @@
             Last Updated: <%= @application.updated_at.strftime("%B %d, %Y at %I:%M %p") %>
           </p>
         </div>
-        <div class="flex space-x-2 mt-4 md:mt-0">
-          <!-- Approve/Reject buttons removed -->
-        </div>
       </div>
     </div>
 
-    <section class="bg-white rounded-lg shadow p-6 mb-6" aria-labelledby="applicant-guardian-details-title">
+    <section class="card p-6 mb-6" aria-labelledby="applicant-guardian-details-title">
       <h2 id="applicant-guardian-details-title" class="text-xl font-semibold text-gray-900 mb-4">Applicant and Managing Guardian Details</h2>
       <dl class="grid grid-cols-1 md:grid-cols-2 gap-6">
         <div>
           <dt class="text-sm font-medium text-gray-500">Applicant</dt>
           <dd class="mt-1 text-sm text-gray-900">
             <% if @application.user.present? %>
-              <%= link_to @application.user.full_name, admin_user_path(@application.user), class: "text-indigo-600 hover:text-indigo-500", data: { turbo_frame: "_top" } %>
+              <%= link_to @application.user.full_name, admin_user_path(@application.user), class: "text-primary-600 hover:text-primary-500", data: { turbo_frame: "_top" } %>
               <span class="text-gray-500">(ID: <%= @application.user.id %>)</span>
             <% else %>
               Unknown Applicant
@@ -52,7 +49,10 @@
           <div>
             <dt class="text-sm font-medium text-gray-500">Managed By</dt>
             <dd class="mt-1 text-sm text-gray-900">
-              <%= link_to @application.managing_guardian.full_name, admin_user_path(@application.managing_guardian), class: "text-indigo-600 hover:text-indigo-500", data: { turbo_frame: "_top" } %>
+              <%= link_to @application.managing_guardian.full_name,
+                          admin_user_path(@application.managing_guardian),
+                          class: "text-primary-600 hover:text-primary-500",
+                          data: { turbo_frame: "_top" } %>
               <span class="text-gray-500">(ID: <%= @application.managing_guardian.id %>)</span>
               <% guardian_relationship = GuardianRelationship.find_by(guardian_id: @application.managing_guardian.id, dependent_id: @application.user.id) %>
               <% if guardian_relationship %>
@@ -64,7 +64,7 @@
       </dl>
     </section>
 
-    <section class="bg-white rounded-lg shadow p-6 mb-6" aria-labelledby="applicant-info-title">
+    <section class="card p-6 mb-6" aria-labelledby="applicant-info-title">
       <h2 id="applicant-info-title" class="text-xl font-semibold text-gray-900 mb-4">Applicant Information</h2>
       <dl class="grid grid-cols-1 md:grid-cols-2 gap-6">
         <div>
@@ -81,7 +81,7 @@
             <% if @application.user.present? %>
               <% email_display = display_contact_email(@application.user) %>
               <% if displayable_contact_email?(@application.user) %>
-                <%= mail_to email_display, email_display, class: "text-indigo-600 hover:text-indigo-500" %>
+                <%= mail_to email_display, email_display, class: "text-primary-600 hover:text-primary-500" %>
               <% else %>
                 <%= email_display %>
               <% end %>
@@ -139,7 +139,7 @@
       </dl>
     </section>
 
-    <section class="bg-white rounded-lg shadow p-6 mb-6" aria-labelledby="application-details-title">
+    <section class="card p-6 mb-6" aria-labelledby="application-details-title">
       <h2 id="application-details-title" class="text-xl font-semibold text-gray-900 mb-4">Application Details</h2>
       <dl class="grid grid-cols-1 md:grid-cols-2 gap-6">
         <div>
@@ -175,7 +175,7 @@
     <%= render "admin_notes" %>
 
     <% if @application.income_proof_required? || @application.household_size.present? || @application.annual_income.present? %>
-    <section class="bg-white rounded-lg shadow p-6 mb-6" aria-labelledby="financial-info-title">
+    <section class="card p-6 mb-6" aria-labelledby="financial-info-title">
       <h2 id="financial-info-title" class="text-xl font-semibold text-gray-900 mb-4">Financial Information</h2>
       <dl class="grid grid-cols-1 md:grid-cols-2 gap-6">
         <% if @application.household_size.present? %>
@@ -204,7 +204,7 @@
     </section>
     <% end %>
 
-    <section class="bg-white rounded-lg shadow p-6 mb-6" aria-labelledby="alternate-contact-info-title">
+    <section class="card p-6 mb-6" aria-labelledby="alternate-contact-info-title">
       <h2 id="alternate-contact-info-title" class="text-xl font-semibold text-gray-900 mb-4">Alternate Contact Information</h2>
       <p class="text-sm text-gray-600 mb-4"><%= t("applications.alternate_contact.admin_authorization_help") %></p>
       <% if @application.alternate_contact_name.present? || @application.alternate_contact_phone.present? || @application.alternate_contact_email.present? || @application.alternate_contact_relationship_type.present? %>
@@ -230,7 +230,7 @@
           <% if @application.alternate_contact_email.present? %>
             <div>
               <dt class="text-sm font-medium text-gray-500">Email</dt>
-              <dd class="mt-1 text-sm text-gray-900"><%= mail_to @application.alternate_contact_email, class: "text-indigo-600 hover:text-indigo-500" %></dd>
+              <dd class="mt-1 text-sm text-gray-900"><%= mail_to @application.alternate_contact_email, class: "text-primary-600 hover:text-primary-500" %></dd>
             </div>
           <% end %>
         </dl>
@@ -239,17 +239,17 @@
       <% end %>
     </section>
 
-    <section class="bg-white rounded-lg shadow p-6 mb-6" aria-labelledby="certification-title" id="medical-certification-section" data-testid="medical-certification-section">
+    <section class="card p-6 mb-6" aria-labelledby="certification-title" id="medical-certification-section" data-testid="medical-certification-section">
       <%= render "medical_certification_section" %>
     </section>
 
     <% if @application.provider_info_requests_visible? %>
-      <section class="bg-white rounded-lg shadow p-6 mb-6" aria-labelledby="secure-request-forms-title" id="secure-request-forms-section">
+      <section class="card p-6 mb-6" aria-labelledby="secure-request-forms-title" id="secure-request-forms-section">
         <%= render "secure_request_forms" %>
       </section>
     <% end %>
 
-    <section class="bg-white rounded-lg shadow p-6 mb-6" aria-labelledby="attachments-title" id="attachments-section">
+    <section class="card p-6 mb-6" aria-labelledby="attachments-title" id="attachments-section">
       <h2 id="attachments-title" class="text-xl font-semibold text-gray-900 mb-4">Attachments</h2>
       <%= render "attachments" %>
     </section>

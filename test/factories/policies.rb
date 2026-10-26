@@ -5,7 +5,6 @@ FactoryBot.define do
     sequence(:key) { |n| "policy_key_#{n}" }
     value { 50 }
 
-    # Traits for common policy types
     trait :rate_limit do
       sequence(:key) { |n| "proof_submission_rate_limit_web_#{n}" }
       value { 10 }
@@ -16,7 +15,6 @@ FactoryBot.define do
       value { 500 }
     end
 
-    # Rate limiting traits
     trait :proof_submission_rate_limit_web do
       key { 'proof_submission_rate_limit_web' }
       value { 10 } # Allow 10 submissions via web

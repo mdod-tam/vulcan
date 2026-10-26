@@ -51,6 +51,29 @@ class TwoFactorAuthenticationCredentialTest < ActionDispatch::IntegrationTest
     assert_empty @user.totp_credentials
   end
 
+  test 'TOTP enrollment over Turbo answers an invalid code with only a flash stream, then accepts the corrected code' do
+    get new_credential_two_factor_authentication_path(type: 'totp')
+    secret = css_select('input[name="secret"]').sole['value']
+    headers = { 'Accept' => Mime[:turbo_stream].to_s }
+
+    post create_credential_two_factor_authentication_path(type: 'totp'),
+         params: { code: '000000', secret: secret, nickname: 'Retry app' }, headers: headers
+
+    assert_equal Mime[:turbo_stream].to_s, response.media_type
+    streams = Nokogiri::HTML5.fragment(response.body).css('turbo-stream')
+    assert_equal(['update'], streams.pluck('action'))
+    assert_equal(['flash'], streams.pluck('target'))
+    assert_includes response.body, I18n.t('two_factor_verification.errors.invalid_code')
+    assert_empty @user.totp_credentials
+
+    post create_credential_two_factor_authentication_path(type: 'totp'),
+         params: { code: ROTP::TOTP.new(secret).now, secret: secret, nickname: 'Retry app' }, headers: headers
+
+    assert_redirected_to credential_success_two_factor_authentication_path(type: 'totp')
+    assert_response :see_other
+    assert_equal ['Retry app'], @user.totp_credentials.pluck(:nickname)
+  end
+
   test 'webauthn credential form starts registration on submit' do
     get new_credential_two_factor_authentication_path(type: 'webauthn')
 
@@ -213,7 +236,6 @@ class TwoFactorAuthenticationCredentialTest < ActionDispatch::IntegrationTest
   end
 
   test 'should handle invalid attestation' do
-    # This skip assumes tests of invalid attestation need complex mocks.
     skip 'WebAuthn creation tests should focus on higher-level interactions per documentation'
 
     post webauthn_creation_options_two_factor_authentication_path, xhr: true

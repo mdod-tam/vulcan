@@ -5,12 +5,11 @@ require 'test_helper'
 module ConstituentPortal
   class ActivityTest < ActiveSupport::TestCase
     setup do
-      # Use factory instead of fixture, skip default proof attachments
       @application = create(:application, skip_proofs: true)
     end
 
     test 'deduplicate_submissions removes duplicate submissions within the same minute' do
-      # Create multiple events with same proof type and very close timestamps using AuditEventService
+      # Several submissions of one proof type within the same minute.
       time_base = Time.current.beginning_of_minute
 
       submission1 = Event.create!(
@@ -70,18 +69,14 @@ module ConstituentPortal
       assert income_first_minute.created_at >= submission1.created_at, 'Should keep a submission from the correct time range'
       assert income_first_minute.created_at <= submission3.created_at, 'Should keep a submission from the correct time range'
 
-      # The residency proof should still be there
       assert result.include?(submission4)
 
-      # The income proof from the second minute should still be there
       assert result.include?(submission5)
     end
 
     test 'from_events returns activities in chronological order' do
-      # Clear events before the test
       Event.delete_all
 
-      # Create a proof submission and review
       time_base = Time.current
       admin_user = create(:admin)
 
@@ -113,13 +108,11 @@ module ConstituentPortal
 
       activities = Activity.from_events(@application)
 
-      # Check order is chronological
       assert_equal 3, activities.size
       assert_equal submission.created_at, activities.first.created_at
       assert_equal review.created_at, activities.second.created_at
       assert_equal resubmission.created_at, activities.third.created_at
 
-      # Verify activity types
       assert_equal :submission, activities.first.activity_type
       assert_equal :rejection, activities.second.activity_type
       assert_equal :resubmission, activities.third.activity_type

@@ -31,7 +31,7 @@ module EquipmentHelper
 
     link_to 'Track package', url, target: '_blank', rel: 'noopener noreferrer', referrerpolicy: 'no-referrer',
                                   aria: { label: "Track package with #{EquipmentItem::CARRIERS.fetch(item.carrier)} (opens in a new tab)" },
-                                  class: 'text-indigo-700 underline'
+                                  class: 'text-primary-700 underline'
   end
 
   def equipment_return_path(context)
@@ -42,7 +42,7 @@ module EquipmentHelper
     labels = { 'needs_ordering' => 'Previously ordered device awaiting reorder', 'ordered' => 'Ordered',
                'shipped' => 'Shipped', 'withdrawn' => 'Withdrawn' }
     state = item.queue_status
-    tag.span(labels.fetch(state), class: "rounded px-2 py-1 text-sm font-medium #{badge_class_for(:equipment, state)}")
+    status_badge(:equipment, state, label: labels.fetch(state))
   end
 
   def equipment_impact_value(field, value, products: [], purchase_orders: [], vendors: [], new_purchase_order: nil)

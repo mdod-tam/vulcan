@@ -1,8 +1,3 @@
-<%
-  # Use application instance variable to avoid repeating queries
-  request_count = @application.medical_certification_request_count || 0
-%>
-
 <div class="certification-history mt-2 pl-4 border-l-2 border-gray-200">
   <% if @certification_requests.any? %>
     <% @certification_requests.each do |request| %>
@@ -17,7 +12,7 @@
   <% else %>
     <div class="request-item mb-2">
       <p class="text-sm text-gray-600 mb-1">
-        <span class="text-yellow-500">Note:</span> No detailed request history available.
+        <span class="text-gray-500">Note:</span> No detailed request history available.
         <% if @application.medical_certification_requested_at.present? %>
           Last request sent on <%= @application.medical_certification_requested_at.strftime("%B %d, %Y at %I:%M %p") %>
         <% end %>

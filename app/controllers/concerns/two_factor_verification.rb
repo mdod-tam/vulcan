@@ -171,8 +171,8 @@ module TwoFactorVerification
     phone.present? && phone.gsub(/\D/, '').length >= 10
   end
 
-  # Returns nil unless the secret is Base32. The secret goes into HTML and URLs, so
-  # the character limit prevents XSS.
+  # Returns nil unless the secret is Base32 (A-Z and 2-7). The secret is rendered into HTML and a
+  # provisioning URL, so only those characters pass.
   def validate_base32_secret(secret)
     return nil if secret.blank?
 

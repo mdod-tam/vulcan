@@ -1,6 +1,5 @@
 # frozen_string_literal: true
 
-# Seed File for "medical_provider_certification_approved"
 EmailTemplate.create_or_find_by!(name: 'medical_provider_certification_approved', format: :text, locale: 'en') do |template|
   template.subject = 'Signed Disability Certification Received and Approved'
   template.description = 'Sent to the signer when their signed disability certification copy is received and approved.'

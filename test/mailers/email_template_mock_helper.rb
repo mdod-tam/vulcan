@@ -1,12 +1,10 @@
 # frozen_string_literal: true
 
 module EmailTemplateMockHelper
-  # Helper to create mock templates that performs interpolation
-  # Mimics the behavior of EmailTemplate.render() which uses gsub for substitution
+  # Builds a mock template whose render interpolates variables with gsub, as EmailTemplate#render does.
   def mock_template(subject_format, body_format)
     template = mock('email_template')
 
-    # Stub render to perform gsub-based interpolation matching the real EmailTemplate.render behavior
     template.define_singleton_method(:render) do |**vars|
       rendered_body = body.dup
       rendered_subject = subject.dup
@@ -23,7 +21,6 @@ module EmailTemplateMockHelper
     end
     template.define_singleton_method(:render_subject) { |**vars| render(**vars).first }
 
-    # Stub subject and body for inspection if needed
     template.stubs(:subject).returns(subject_format)
     template.stubs(:body).returns(body_format)
 

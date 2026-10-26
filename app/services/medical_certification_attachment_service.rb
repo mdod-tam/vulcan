@@ -299,7 +299,6 @@ class MedicalCertificationAttachmentService
     end
   end
 
-  # Rejection helper methods
   def self.update_rejection_status(params)
     old_status = params[:application].medical_certification_status || 'requested'
     params[:old_status] = old_status
@@ -393,7 +392,6 @@ class MedicalCertificationAttachmentService
     )
   end
 
-  # Metrics helper methods
   def self.log_operation_result(result, status)
     if result[:success]
       Rails.logger.info "Medical certification #{status} completed in #{result[:duration_ms]}ms"

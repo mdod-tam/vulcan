@@ -6,7 +6,7 @@ module DashboardMetricsLoading # rubocop:disable Metrics/ModuleLength
   # Returns metrics as a hash. Errors return default metric values.
   def load_dashboard_metrics
     # Cache metrics for five minutes to reduce queries.
-    # Keep print_queue_pending_count outside the cache so each request reads the current count.
+    # Keep print_queue_pending_count and the reassignment counts outside the cache so each request reads current counts.
     cached = Rails.cache.fetch('admin_dashboard_metrics', expires_in: 5.minutes) do
       metrics = {}
 
@@ -39,7 +39,9 @@ module DashboardMetricsLoading # rubocop:disable Metrics/ModuleLength
       metrics
     end
 
-    cached.merge(print_queue_pending_count: PrintQueueItem.unreleased.count)
+    cached.merge(print_queue_pending_count: PrintQueueItem.unreleased.count,
+                 evaluations_needing_reassignment_count: Application.needing_evaluator_reassignment.count,
+                 training_needing_reassignment_count: Application.needing_trainer_reassignment.count)
   rescue StandardError => e
     Rails.logger.error "Dashboard metric error: #{e.class.name}"
     default_metric_values_hash
@@ -255,7 +257,7 @@ module DashboardMetricsLoading # rubocop:disable Metrics/ModuleLength
 
     time_periods = {
       month: { start: current_date.beginning_of_month, end: current_date.end_of_month },
-      quarter: { start: FiscalYear.quarter_start_date(current_date), end: FiscalYear.quarter_end_date(current_date) },
+      quarter: { start: current_date.beginning_of_quarter, end: current_date.end_of_quarter },
       ytd: { start: @current_fy_start, end: current_date },
       prior_year: { start: @previous_fy_start, end: @previous_fy_end }
     }
@@ -341,6 +343,8 @@ module DashboardMetricsLoading # rubocop:disable Metrics/ModuleLength
       digitally_signed_needs_review_count: 0,
       training_requests_count: 0,
       evaluation_requests_count: 0,
+      evaluations_needing_reassignment_count: 0,
+      training_needing_reassignment_count: 0,
       print_queue_pending_count: 0,
       current_fiscal_year: current_fiscal_year
     }

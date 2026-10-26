@@ -24,7 +24,6 @@ module Applications
       end
 
       # The attachment stub leaves certification status unchanged. This test covers the reviewer result.
-      # assert_equal('rejected', @application.reload.medical_certification_status) # Remove this for now
     end
 
     test 'passes rejection notification id to medical provider notifier' do
@@ -105,7 +104,6 @@ module Applications
       end
 
       note = @application.application_notes.last
-      # assert_equal('medical_certification', note.note_type) # Removed assertion for non-existent attribute
       assert_match(/Follow up required/, note.content)
     end
 
@@ -113,7 +111,6 @@ module Applications
       # MedicalCertificationAttachmentService owns the status history.
       # Its success stub leaves the count unchanged.
       MedicalCertificationAttachmentService.stub(:reject_certification, ->(**_args) { { success: true } }) do
-        # Additional tests for status history can exercise the attachment service directly.
         assert_difference(lambda {
           ApplicationStatusChange.count
         }, 0, 'ApplicationStatusChange should be created by the attachment service, not reviewer') do

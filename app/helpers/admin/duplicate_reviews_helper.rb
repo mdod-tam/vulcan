@@ -23,8 +23,7 @@ module Admin
       'manual_review' => 'Manual review'
     }.freeze
 
-    # resolved_ignored includes keep-separate decisions. Use a label that does not imply staff ignored the case.
-    # Preserve the Approved label for legacy resolved_approved rows.
+    # resolved_ignored includes keep-separate decisions, so its label does not imply staff ignored the case.
     STATUS_LABELS = {
       'open' => 'Open',
       'resolved_approved' => 'Approved',
@@ -65,8 +64,8 @@ module Admin
       value ? 'Yes' : 'No'
     end
 
-    # Keep case participants together to distinguish cases that share a subject.
-    # Retain stored IDs as historical context when a linked user no longer exists.
+    # Lists the subject and candidates together so cases that share a subject can be told apart.
+    # A stored ID is kept for a participant whose user no longer exists.
     def duplicate_review_case_participants(review_case)
       subject = { user: review_case.subject_user, constituent_id: review_case.subject_user_id }
       candidates = review_case.duplicate_review_case_candidates.map do |candidate|
@@ -154,7 +153,7 @@ module Admin
 
     # Entry point from a user page: open case detail when one exists, otherwise the queue.
     def admin_duplicate_review_entry_path(user)
-      open_case = DuplicateReviewCase.open_cases.for_participant(user).order(opened_at: :desc).first
+      open_case = DuplicateReviewCase.open.for_participant(user).order(opened_at: :desc).first
       open_case ? admin_duplicate_review_path(open_case) : admin_duplicate_reviews_path
     end
 
@@ -165,8 +164,7 @@ module Admin
 
       link_to 'Duplicate review pending',
               admin_duplicate_review_entry_path(flagged_user),
-              class: 'px-3 py-2 text-sm font-medium rounded-full whitespace-nowrap inline-flex items-center ' \
-                     'justify-center bg-yellow-100 text-yellow-800 hover:bg-yellow-200',
+              class: class_names(badge_classes(:warning, size: :lg), 'hover:bg-warning-200'),
               data: { testid: 'duplicate-review-pending-badge' }
     end
 

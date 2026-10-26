@@ -1,0 +1,11 @@
+<%# locals: (user:) %>
+<div id="<%= access_dom_id(user, :badges) %>" class="text-sm text-gray-600 flex flex-wrap gap-2">
+  <span class="badge badge-info">
+    <%= user.role_type %>
+  </span>
+  <% user.effective_capabilities.each do |capability| %>
+    <span class="badge badge-accent">
+      <%= capability.titleize %>
+    </span>
+  <% end %>
+</div>

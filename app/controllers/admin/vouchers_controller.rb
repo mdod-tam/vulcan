@@ -87,9 +87,6 @@ module Admin
     end
 
     def load_status_counts
-      # SafeInstanceVariables concern: Provides safe_assign method for setting instance variables
-      # Flow: safe_assign(key, value) -> sanitizes key and sets @key = value
-      # Benefits: Prevents XSS attacks, ensures valid Ruby variable names, consistent error handling
       safe_assign(:active_vouchers_count, Voucher.where(status: :active).count)
       safe_assign(:expiring_soon_count, Voucher.expiring_soon.count)
       safe_assign(:redeemed_vouchers_count, Voucher.where(status: :redeemed).count)

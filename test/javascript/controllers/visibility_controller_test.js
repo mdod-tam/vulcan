@@ -65,7 +65,6 @@ describe("VisibilityController", () => {
     expect(passwordField.type).toBe("text")
     expect(toggleButton.getAttribute("aria-pressed")).toBe("true")
     expect(toggleButton.getAttribute("aria-label")).toBe("Hide password")
-    expect(toggleButton.classList.contains("eye-open")).toBe(true)
   })
   
   test("toggles confirmation password visibility when button is clicked", () => {
@@ -79,7 +78,6 @@ describe("VisibilityController", () => {
     expect(confirmationField.type).toBe("text")
     expect(confirmationToggleButton.getAttribute("aria-pressed")).toBe("true")
     expect(confirmationToggleButton.getAttribute("aria-label")).toBe("Hide password")
-    expect(confirmationToggleButton.classList.contains("eye-open")).toBe(true)
   })
   
   test("automatically hides password after timeout", () => {
@@ -95,7 +93,6 @@ describe("VisibilityController", () => {
     expect(passwordField.type).toBe("password")
     expect(toggleButton.getAttribute("aria-pressed")).toBe("false")
     expect(toggleButton.getAttribute("aria-label")).toBe("Show password")
-    expect(toggleButton.classList.contains("eye-closed")).toBe(true)
     expect(statusElement.textContent.trim()).toBe("Password is hidden")
   })
   

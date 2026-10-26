@@ -24,10 +24,27 @@ class TrainingSessionTest < ActiveSupport::TestCase
   test 'trainer capability is required while administrators can train' do
     session = build(:training_session, trainer: create(:evaluator))
     assert_not session.valid?
-    assert_includes session.errors[:trainer], 'must be a trainer'
+    assert_includes session.errors[:trainer], 'must be an active staff member with training capability'
 
     session.trainer = create(:admin)
     assert session.valid?, session.errors.full_messages.to_sentence
+
+    granted = create(:evaluator)
+    create(:role_capability, user: granted, capability: 'can_train')
+    session.trainer = granted
+    assert session.valid?, session.errors.full_messages.to_sentence
+  end
+
+  test 'a former trainer who lost eligibility keeps unrelated edits and cancellation but cannot be newly assigned' do
+    trainer = create(:trainer)
+    session = create(:training_session, trainer: trainer)
+    trainer.update!(status: :inactive)
+
+    assert session.reload.update(internal_notes: 'Unrelated note'), -> { session.errors.full_messages.join(', ') }
+
+    other = create(:training_session)
+    assert_not other.update(trainer: trainer)
+    assert_includes other.errors[:trainer], 'must be an active staff member with training capability'
   end
 
   test 'completion requires a deliberate summary language product actual time and positive duration' do

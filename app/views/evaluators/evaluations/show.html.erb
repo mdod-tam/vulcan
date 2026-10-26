@@ -1,4 +1,4 @@
-<a href="#main-content" class="sr-only focus:not-sr-only focus:absolute focus:top-2 focus:left-2 focus:p-2 focus:bg-indigo-600 focus:text-white focus:z-50 focus:rounded">
+<a href="#main-content" class="skip-link">
   Skip to main content
 </a>
 
@@ -7,11 +7,11 @@
     <h1 class="text-2xl font-bold mb-2 sm:mb-0" id="page-heading">Evaluation Details</h1>
 
     <div class="flex items-center space-x-4">
-      <%= link_to "Back to Evaluations", evaluators_evaluations_path, class: "bg-gray-200 hover:bg-gray-300 text-gray-800 font-semibold py-2 px-4 rounded inline-flex items-center" %>
+      <%= link_to "Back to Evaluations", evaluators_evaluations_path, class: 'btn btn-outline' %>
     </div>
   </div>
 
-  <section aria-labelledby="evaluation-details-heading" class="bg-white shadow overflow-hidden sm:rounded-lg">
+  <section aria-labelledby="evaluation-details-heading" class="bg-white shadow-elevation-2 overflow-hidden sm:rounded-lg">
     <div class="px-4 py-5 sm:px-6 flex justify-between items-center">
       <div>
         <h2 id="evaluation-details-heading" class="text-lg leading-6 font-medium text-gray-900">
@@ -22,7 +22,7 @@
         </p>
         <%= link_to current_user.admin? ? 'View Full Application Details' : t('application_contact.link'),
                     current_user.admin? ? admin_application_path(@evaluation.application) : application_details_evaluators_evaluation_path(@evaluation),
-                    class: "mt-1 inline-block text-sm text-indigo-600 hover:text-indigo-900" %>
+                    class: 'mt-1 inline-block text-sm text-primary-600 hover:text-primary-900' %>
       </div>
 
       <%= evaluation_status_badge(@evaluation) %>
@@ -54,9 +54,9 @@
             </div>
           <% end %>
         <% elsif @evaluation.status_requested? && @evaluation.evaluation_date.blank? %>
-          <div class="bg-blue-50 px-4 py-5 sm:grid sm:grid-cols-3 sm:gap-4 sm:px-6">
-            <dt class="text-sm font-medium text-blue-900">Next Step</dt>
-            <dd class="mt-1 text-sm text-blue-900 sm:mt-0 sm:col-span-2">
+          <div class="bg-info-50 px-4 py-5 sm:grid sm:grid-cols-3 sm:gap-4 sm:px-6">
+            <dt class="text-sm font-medium text-info-900">Next Step</dt>
+            <dd class="mt-1 text-sm text-info-900 sm:mt-0 sm:col-span-2">
               <p class="font-semibold">This evaluation has not been scheduled yet.</p>
               <p class="mt-1">
                 <% if @can_manage_evaluation %>
@@ -96,7 +96,7 @@
           <dd class="mt-1 text-sm text-gray-900 sm:mt-0 sm:col-span-2">
             <%= link_to @evaluation.evaluator.full_name,
                         evaluators_evaluations_path(scope: current_user.admin? ? "all" : "mine"),
-                        class: "text-indigo-600 hover:text-indigo-900" %>
+                        class: 'text-primary-600 hover:text-primary-900' %>
           </dd>
         </div>
 
@@ -220,7 +220,7 @@
         <% end %>
       </div>
     <% elsif visible_form_actions.include?(:no_show) %>
-      <div class="bg-blue-50 border border-blue-200 rounded-lg p-4 text-sm text-blue-900 mb-6">
+      <div class="bg-info-50 border border-info-200 rounded-lg p-4 text-sm text-info-900 mb-6">
         <p class="font-semibold">This evaluation needs an outcome.</p>
         <p class="mt-1">The scheduled time for this evaluation has passed. Record the evaluation outcome, or use a secondary action if the evaluation did not happen as planned.</p>
       </div>

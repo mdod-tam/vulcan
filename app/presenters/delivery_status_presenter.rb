@@ -86,15 +86,15 @@ class DeliveryStatusPresenter
   def opened_at = attempt&.opened_at
   def bounce_category = attempt&.bounce_category && text("bounce_categories.#{attempt.bounce_category}", default: text('bounce_categories.Other'))
 
-  def badge_class
-    return 'bg-red-100 text-red-800' if %w[bounced complained failed].include?(status)
-    return 'bg-green-100 text-green-800' if %w[delivered letter_printed].include?(status)
-    return 'bg-amber-100 text-amber-900' if %w[delayed suppressed].include?(status)
+  # The badge color group for the current status. BadgeHelper documents the grouping.
+  def badge_variant = badge_helpers.badge_variant_for(:delivery, status)
 
-    'bg-gray-100 text-gray-800'
-  end
+  # The complete badge class string, for example "badge badge-success".
+  def badge_class = badge_helpers.badge_class_for(:delivery, status)
 
   private
+
+  def badge_helpers = ApplicationController.helpers
 
   def notification
     record.is_a?(Notification) ? record : (record.delivery_notification if record.respond_to?(:delivery_notification))

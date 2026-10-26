@@ -70,10 +70,6 @@ FactoryBot.define do
       sequence(:email) { |n| "trainer_#{n}_#{SecureRandom.hex(4)}@example.com" }
       first_name { 'Test' }
       last_name { 'Trainer' }
-
-      after(:create) do |trainer|
-        create(:role_capability, user: trainer, capability: 'can_train')
-      end
     end
 
     factory :admin, class: 'Users::Administrator' do
@@ -116,10 +112,6 @@ FactoryBot.define do
       first_name { 'Test' }
       last_name { 'Trainer' }
       status { :active }
-
-      after(:create) do |trainer|
-        create(:role_capability, user: trainer, capability: 'can_train')
-      end
     end
 
     factory :constituent, class: 'Users::Constituent' do

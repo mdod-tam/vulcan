@@ -869,6 +869,28 @@ module Admin
              time: I18n.l(time.to_date, format: :month_day))
     end
 
+    test 'queueing the certification form attaches the pregenerated PDF and leaves no named temporary file' do
+      ensure_system_audit_actor!
+      pregenerated = Rails.root.join('app/assets/pdfs/medical_certification_form.pdf')
+
+      Dir.mktmpdir('dcf-queue') do |tmpdir|
+        original_tmpdir = ENV.fetch('TMPDIR', nil)
+        ENV['TMPDIR'] = tmpdir
+        assert_difference 'PrintQueueItem.count', 1 do
+          post queue_medical_certification_form_admin_application_path(@application),
+               params: { operation_id: SecureRandom.uuid }, as: :turbo_stream
+        end
+        assert_response :success
+        assert_empty Dir.children(tmpdir)
+      ensure
+        ENV['TMPDIR'] = original_tmpdir
+      end
+
+      item = PrintQueueItem.order(:id).last
+      assert_equal @application, item.application
+      assert_equal File.binread(pregenerated), item.pdf_letter.download
+    end
+
     test 'refuses a certification with active content without attaching it' do
       script_pdf = Tempfile.new(['certification', '.pdf'])
       script_pdf.binmode

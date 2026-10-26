@@ -33,8 +33,7 @@ steven_voucher:
   issued_at: <%= Time.current %>
   last_used_at: null
   
-# The following fixtures are referenced in voucher_transactions.yml but were missing,
-# causing foreign key constraint violations
+# Referenced by voucher_transactions.yml.
 
 # Referenced by voucher_transaction 'one'
 one:

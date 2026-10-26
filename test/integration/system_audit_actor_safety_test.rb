@@ -111,7 +111,7 @@ class SystemAuditActorSafetyTest < ActionDispatch::IntegrationTest
 
   test 'policy seeding with no system actor stops before changing policies' do
     Rake::Task.define_task(:environment)
-    load Rails.root.join('lib/tasks/seed_policies.rake') unless Rake::Task.task_defined?('db:seed_policies')
+    load Rails.root.join('lib/tasks/baseline.rake') unless Rake::Task.task_defined?('db:seed_policies')
     task = Rake::Task['db:seed_policies']
     task.reenable
     original_policies = Policy.order(:id).pluck(:id, :value)

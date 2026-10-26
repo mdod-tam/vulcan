@@ -64,6 +64,8 @@ module EmailDelivery
       'MedicalProviderMailer#requested' => [:certification, :email_only, 'medical_provider_request_certification'],
       'TrainingSessionNotificationsMailer#no_show_notification' => [:training, :preference, 'training_session_notifications_training_no_show'],
       'TrainingSessionNotificationsMailer#trainer_assigned' => [:training, :email_only, 'training_session_notifications_trainer_assigned'],
+      'TrainingSessionNotificationsMailer#trainer_reassigned' => [:training, :email_only, 'training_session_notifications_trainer_reassigned'],
+      'TrainingSessionNotificationsMailer#trainer_changed' => [:training, :preference, 'training_session_notifications_trainer_changed'],
       'TrainingSessionNotificationsMailer#training_completed' => [:training, :preference, 'training_session_notifications_training_completed'],
       'TrainingSessionNotificationsMailer#training_cancelled' => [:training, :preference, 'training_session_notifications_training_cancelled'],
       'TrainingSessionNotificationsMailer#training_rescheduled' => [:training, :preference, 'training_session_notifications_training_rescheduled'],
@@ -115,7 +117,9 @@ module EmailDelivery
       'residency_proof_attached' => PROOF_ATTACHED,
       'w9_approved' => ['VendorNotificationsMailer#w9_approved', :vendor_params, :email],
       'training_requested' => ['ApplicationNotificationsMailer#training_requested', :notifiable_and_notification, :preference],
-      'trainer_assigned' => ['TrainingSessionNotificationsMailer#trainer_assigned', :notifiable, :email_only],
+      'trainer_assigned' => ['TrainingSessionNotificationsMailer#trainer_assigned', :assignment, :email_only],
+      'trainer_reassigned' => ['TrainingSessionNotificationsMailer#trainer_reassigned', :assignment, :email_only],
+      'training_trainer_changed' => ['TrainingSessionNotificationsMailer#trainer_changed', :assignment, :preference],
       'training_scheduled' => ['TrainingSessionNotificationsMailer#training_scheduled', :notifiable_and_notification, :preference],
       'training_rescheduled' => ['TrainingSessionNotificationsMailer#training_rescheduled', :notifiable_and_notification, :preference],
       'training_cancelled' => ['TrainingSessionNotificationsMailer#training_cancelled', :notifiable_and_notification, :preference],
@@ -187,7 +191,7 @@ module EmailDelivery
       end
     end
 
-    # Compatibility views for NotificationService and the template audit.
+    # Views derived from the tables above for NotificationService and the template audit.
     def mailer_map
       NOTIFICATION_ACTIONS.values.reject(&:audit_only?).to_h do |entry|
         mailer, method = entry.mail_action.split('#')

@@ -24,13 +24,11 @@ module Evaluations
     end
 
     def call
-      @evaluation.application.with_lock do
-        @evaluation.with_lock do
-          prepare_evaluation
-          save_evaluation!
-          EquipmentNeeds::Writer.initialize_from!(@evaluation, actor: @actor)
-          create_event!
-        end
+      @evaluation.with_actor_and_application_lock(@actor) do
+        prepare_evaluation
+        save_evaluation!
+        EquipmentNeeds::Writer.initialize_from!(@evaluation, actor: @actor)
+        create_event!
       end
 
       # The submission is committed; a confirmation that cannot be queued does not undo it.

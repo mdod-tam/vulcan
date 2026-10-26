@@ -4,57 +4,48 @@
 module UserRolesAndCapabilities
   extend ActiveSupport::Concern
 
-  # Constants
   VALID_ROLES = %w[admin constituent evaluator vendor trainer].freeze
 
+  # The staff capability policy. A role provides some capabilities and may be granted others; every other role has
+  # neither. Keys are STI class basenames, so Users::Trainer and the older Trainer spelling resolve alike.
+  CAPABILITY_MATRIX = {
+    'Administrator' => { provides: %w[can_train can_evaluate].freeze, grantable: [].freeze }.freeze,
+    'Evaluator' => { provides: %w[can_evaluate].freeze, grantable: %w[can_train].freeze }.freeze,
+    'Trainer' => { provides: %w[can_train].freeze, grantable: %w[can_evaluate].freeze }.freeze
+  }.freeze
+
   included do
-    # Associations
     has_many :role_capabilities, dependent: :destroy
 
-    # Scopes
     scope :admins, -> { where(type: 'Users::Administrator') }
     scope :vendors, -> { where(type: 'Users::Vendor') }
   end
 
-  # Class methods
   class_methods do
-    def capable_types_for(capability)
-      case capability
-      when 'can_train'
-        %w[Users::Administrator Users::Trainer]
-      when 'can_evaluate'
-        %w[Users::Administrator Users::Evaluator]
-      else
-        []
-      end
+    # Persisted staff who can take work needing the capability now: login-active, not merged, and holding it through
+    # their role or an explicit grant their role allows. Pickers and recovery queries share this relation.
+    def assignable_for(capability)
+      capability = capability.to_s
+      providers = roles_with(:provides, capability)
+      grantees = roles_with(:grantable, capability)
+      granted = RoleCapability.where(capability: capability).select(:user_id)
+
+      holders = where(type: sti_types(providers)).or(where(type: sti_types(grantees), id: granted))
+      holders.where(merged_into_user_id: nil)
+             .where('users.status IS NULL OR users.status NOT IN (?)', User.statuses.values_at(:inactive, :suspended))
     end
 
-    # Get available capabilities for a user type (for display/assignment)
-    # This returns the capabilities that can be assigned to this user type
-    def available_capabilities_for_type(user_type)
-      case user_type
-      when 'Users::Administrator', 'Users::Constituent' then %w[can_train can_evaluate]
-      when 'Users::Evaluator' then %w[can_evaluate]
-      when 'Users::Trainer' then %w[can_train]
-      else
-        []
-      end
+    private
+
+    def roles_with(kind, capability)
+      CAPABILITY_MATRIX.select { |_role, policy| policy[kind].include?(capability) }.keys
     end
 
-    # Get inherent capabilities for a user type
-    # This returns the capabilities that come automatically with the role
-    def inherent_capabilities_for_type(user_type)
-      case user_type
-      when 'Users::Administrator' then %w[can_train can_evaluate]
-      when 'Users::Evaluator' then %w[can_evaluate]
-      when 'Users::Trainer' then %w[can_train]
-      else
-        []
-      end
+    def sti_types(roles)
+      roles.flat_map { |role| ["Users::#{role}", role] }
     end
   end
 
-  # Role methods
   def admin?
     is_a?(Users::Administrator)
   end
@@ -71,24 +62,33 @@ module UserRolesAndCapabilities
   end
 
   def role_type
-    type.to_s.underscore.humanize
+    type.to_s.demodulize.presence || 'Unknown'
   end
 
-  def inherent_capabilities
-    role_capabilities.pluck(:capability)
+  def role_provided_capabilities
+    CAPABILITY_MATRIX.dig(type.to_s.demodulize, :provides) || []
   end
 
-  def available_capabilities
-    RoleCapability::CAPABILITIES
+  def grantable_capabilities
+    CAPABILITY_MATRIX.dig(type.to_s.demodulize, :grantable) || []
   end
 
-  def capability?(capability)
+  # A stored grant counts only while the role allows it, so a forbidden or redundant row confers nothing.
+  # Reads the loaded association when present, so a preloaded page costs no query per row.
+  def explicit_grant?(capability)
+    capability = capability.to_s
+    return false unless grantable_capabilities.include?(capability)
+    return role_capabilities.any? { |grant| grant.capability == capability } if role_capabilities.loaded?
+
     role_capabilities.exists?(capability: capability)
   end
 
   def effective_capability?(capability)
-    self.class.inherent_capabilities_for_type(type).include?(capability.to_s) ||
-      capability?(capability)
+    role_provided_capabilities.include?(capability.to_s) || explicit_grant?(capability)
+  end
+
+  def effective_capabilities
+    RoleCapability::CAPABILITIES.select { |capability| effective_capability?(capability) }
   end
 
   def can_evaluate?
@@ -100,49 +100,14 @@ module UserRolesAndCapabilities
   end
 
   def assignable_evaluator?
-    (evaluator? || admin?) && can_evaluate?
+    persisted? && public_login_active? && can_evaluate?
   end
 
   def assignable_trainer?
-    (trainer? || admin?) && can_train?
+    persisted? && public_login_active? && can_train?
   end
 
   def prevent_self_role_update?(current_user, new_role)
     !(self == current_user && type != new_role)
-  end
-
-  def add_capability(capability)
-    return true if capability?(capability)
-
-    new_capability = role_capabilities.new(capability: capability)
-    if new_capability.save
-      Rails.logger.info "Successfully added capability #{capability} to user #{id}"
-      reset_all_caches
-    else
-      Rails.logger.error "Failed to add capability to user #{id}: validation_failed attributes=#{new_capability.errors.attribute_names.join(',')}"
-    end
-    new_capability
-  end
-
-  def remove_capability(capability)
-    return true unless capability?(capability)
-
-    role_capabilities.find_by(capability: capability)&.destroy
-  end
-
-  private
-
-  def available_capabilities_list
-    base = RoleCapability::CAPABILITIES.dup
-    base -= ['can_evaluate'] if evaluator? || admin?
-    base -= ['can_train'] if trainer? || admin?
-    base
-  end
-
-  def inherent_capabilities_list
-    caps = []
-    caps << 'can_evaluate' if evaluator? || admin?
-    caps << 'can_train' if trainer? || admin?
-    caps
   end
 end

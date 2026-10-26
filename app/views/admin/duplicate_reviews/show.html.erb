@@ -1,20 +1,20 @@
 <div class="container mx-auto px-4 sm:px-6 lg:px-8 py-8" data-testid="duplicate-review-detail">
   <div class="flex items-center justify-between mb-6">
     <h1 class="text-2xl font-semibold">Duplicate Review Case #<%= @review_case.id %></h1>
-    <%= link_to 'Back to queue', admin_duplicate_reviews_path, class: 'text-indigo-600 hover:text-indigo-900 text-sm' %>
+    <%= link_to 'Back to queue', admin_duplicate_reviews_path, class: 'text-primary-600 hover:text-primary-900 text-sm' %>
   </div>
 
-  <section class="bg-white shadow sm:rounded-md p-4 mb-6">
+  <section class="card p-4 mb-6">
     <div class="flex flex-wrap gap-2 text-xs mb-2">
-      <span class="inline-flex items-center px-2 py-0.5 rounded-full bg-blue-100 text-blue-800"><%= duplicate_review_source_label(@review_case.source) %></span>
-      <span class="inline-flex items-center px-2 py-0.5 rounded-full bg-gray-100 text-gray-700"><%= duplicate_review_status_label(@review_case.status) %></span>
+      <span class="badge badge-info"><%= duplicate_review_source_label(@review_case.source) %></span>
+      <span class="badge badge-neutral"><%= duplicate_review_status_label(@review_case.status) %></span>
       <% Array(@review_case.metadata['reason_codes']).each do |code| %>
-        <span class="inline-flex items-center px-2 py-0.5 rounded-full bg-gray-100 text-gray-700"><%= duplicate_review_reason_label(code) %></span>
+        <span class="badge badge-neutral"><%= duplicate_review_reason_label(code) %></span>
       <% end %>
     </div>
     <p class="text-sm text-gray-600">Opened <%= @review_case.opened_at.strftime('%B %d, %Y at %I:%M %p') %></p>
     <% if @review_case.inline_intake? && @review_case.metadata['application_id'] %>
-      <%= link_to 'View paper application', admin_application_path(@review_case.metadata['application_id']), class: 'text-indigo-700 underline' %>
+      <%= link_to 'View paper application', admin_application_path(@review_case.metadata['application_id']), class: 'text-primary-700 underline' %>
     <% end %>
     <% if @review_case.resolved_selected? %>
       <p class="mt-2">Staff selected an existing person for this <%= @review_case.metadata['intake_role'].humanize.downcase %> intake. No duplicate person was created.</p>
@@ -24,7 +24,7 @@
         <% end %>
       <% end %>
     <% elsif @subject.nil? %>
-      <p class="text-sm text-red-600 mt-2">The subject record is no longer attached to this case.</p>
+      <p class="text-sm text-danger-600 mt-2">The subject record is no longer attached to this case.</p>
     <% end %>
   </section>
 
@@ -35,17 +35,17 @@
       </h2>
 
       <% if @candidates.empty? %>
-        <div class="bg-white shadow sm:rounded-md p-4 mb-6">
+        <div class="card p-4 mb-6">
           <%= render 'record_facts', user: @subject, role_label: 'Subject', comparison_user: nil %>
           <p class="mt-3 text-sm text-gray-500">No candidate records were recorded for this case.</p>
         </div>
       <% end %>
 
       <% @candidates.each do |candidate| %>
-        <article class="bg-white shadow sm:rounded-md p-4 mb-6" data-testid="candidate-comparison">
+        <article class="card p-4 mb-6" data-testid="candidate-comparison">
           <div class="flex items-center gap-2 mb-3 text-xs">
-            <span class="inline-flex items-center px-2 py-0.5 rounded-full bg-gray-100 text-gray-700"><%= duplicate_review_reason_label(candidate.match_reason) %></span>
-            <span class="inline-flex items-center px-2 py-0.5 rounded-full bg-gray-100 text-gray-600"><%= candidate_link_state_label(candidate) %></span>
+            <span class="badge badge-neutral"><%= duplicate_review_reason_label(candidate.match_reason) %></span>
+            <span class="badge badge-neutral"><%= candidate_link_state_label(candidate) %></span>
           </div>
 
           <% if candidate.candidate_user.present? && !candidate.candidate_user.merged? %>
@@ -55,7 +55,7 @@
             </div>
             <% if @review_case.open? && Users::DuplicateMergeService::MERGE_ELIGIBLE_SOURCES.include?(@review_case.source) %>
               <details class="border-t border-gray-100 pt-3">
-                <summary class="cursor-pointer text-sm font-medium text-red-700">Merge these two records</summary>
+                <summary class="cursor-pointer text-sm font-medium text-danger-700">Merge these two records</summary>
                 <div class="mt-3">
                   <%= render 'merge_form',
                              review_case: @review_case,
@@ -81,12 +81,12 @@
   <% end %>
 
   <% if @review_case.open? %>
-    <section class="bg-white shadow sm:rounded-md p-4 mt-8" aria-labelledby="resolve-heading">
+    <section class="card p-4 mt-8" aria-labelledby="resolve-heading">
       <h2 id="resolve-heading" class="text-lg font-medium text-gray-900 mb-3">Resolve without merging</h2>
       <%= render 'resolve_form', review_case: @review_case %>
     </section>
   <% else %>
-    <section class="bg-white shadow sm:rounded-md p-4 mt-8" aria-labelledby="resolution-heading" data-testid="resolution-summary">
+    <section class="card p-4 mt-8" aria-labelledby="resolution-heading" data-testid="resolution-summary">
       <h2 id="resolution-heading" class="text-lg font-medium text-gray-900 mb-3">Resolution</h2>
       <dl class="grid grid-cols-1 sm:grid-cols-2 gap-3 text-sm">
         <div>

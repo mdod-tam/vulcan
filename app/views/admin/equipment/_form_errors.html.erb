@@ -1,7 +1,7 @@
 <%# locals: (errors:, id:, title: nil, review_path: nil, conflicts: [], return_context: {}) -%>
 <% if errors.present? %>
   <div id="<%= id %>" role="alert" tabindex="-1" data-controller="error-summary"
-       class="rounded border border-red-300 bg-red-50 p-4 mb-4 text-red-900 focus:outline-none focus:ring-2 focus:ring-red-500">
+       class="rounded border border-danger-300 bg-danger-50 p-4 mb-4 text-danger-900">
     <% if title %><h2 class="font-semibold"><%= title %></h2><% end %>
     <ul class="list-disc pl-5"><% errors.each do |error| %><li><%= error %></li><% end %></ul>
     <% conflicts.uniq.each do |conflict| %>

@@ -1,7 +1,6 @@
 <main class="container mx-auto px-4 py-8" role="main" id="main-content">
   <div class="max-w-7xl mx-auto">
-    <%# Skip to content link for keyboard users %>
-    <a href="#main-content" class="sr-only focus:not-sr-only focus:absolute focus:p-4 focus:bg-white focus:z-50">
+    <a href="#main-content" class="skip-link">
       Skip to main content
     </a>
     
@@ -13,7 +12,7 @@
       
       <div class="mt-4 flex md:mt-0 md:ml-4 space-x-4">
         <a href="<%= current_user.admin? ? admin_applications_path : constituent_portal_dashboard_path %>"
-           class="inline-flex items-center px-4 py-2 border border-gray-300 rounded-md shadow-sm text-sm font-medium text-gray-700 bg-white hover:bg-gray-50 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-indigo-500"
+           class="btn btn-outline"
            data-turbo-frame="_top"
            aria-label="Return to applications dashboard">
           Back to Dashboard
@@ -22,16 +21,16 @@
         <% if current_user.admin? %>
           <div class="flex space-x-2">
             <%= link_to "My Notifications", notifications_path(scope: 'mine'), 
-                class: "px-4 py-2 rounded-md text-sm font-medium #{@current_scope == 'mine' ? 'bg-indigo-600 text-white' : 'text-gray-700 bg-white hover:bg-gray-50 border border-gray-300'}" %>
+                class: class_names('btn', @current_scope == 'mine' ? 'btn-primary' : 'btn-outline') %>
             
             <%= link_to "All Notifications", notifications_path(scope: 'all'), 
-                class: "px-4 py-2 rounded-md text-sm font-medium #{@current_scope == 'all' ? 'bg-indigo-600 text-white' : 'text-gray-700 bg-white hover:bg-gray-50 border border-gray-300'}" %>
+                class: class_names('btn', @current_scope == 'all' ? 'btn-primary' : 'btn-outline') %>
           </div>
         <% end %>
       </div>
     </div>
 
-    <section aria-labelledby="notifications-list-heading" class="bg-white rounded-lg shadow mb-6">
+    <section aria-labelledby="notifications-list-heading" class="card mb-6">
       <div class="p-4 border-b">
         <h2 id="notifications-list-heading" class="text-lg font-medium text-gray-900">All Notifications</h2>
       </div>
@@ -43,7 +42,6 @@
           <% end %>
         </ul>
         
-        <%# Pagination %>
         <% if @pagy.pages > 1 %>
           <div class="p-4 border-t">
             <%== pagy_nav(@pagy) %>

@@ -1,42 +1,21 @@
 # frozen_string_literal: true
 
 module VoucherHelper
-  # Masks the voucher code, showing only the last 3 characters
+  # Masks the voucher code, showing only the last 3 characters.
   def masked_voucher_code(code)
     return nil if code.blank?
 
-    # Keep only the last 3 characters visible
     ('*' * (code.length - 3)) + code[-3..]
   end
 
   def voucher_status_badge(voucher)
-    case voucher.status
-    when 'active'
-      badge_tag('Active', :success)
-    when 'expired'
-      badge_tag('Expired', :danger)
-    when 'redeemed'
-      badge_tag('Redeemed', :info)
-    when 'cancelled'
-      badge_tag('Cancelled', :warning)
-    else
-      badge_tag(voucher.status.titleize, :default)
-    end
+    status_badge(:voucher, voucher.status, label: voucher.status.titleize, size: nil)
   end
 
   def voucher_transaction_status_badge(transaction)
-    case transaction.status
-    when 'transaction_completed'
-      badge_tag('Completed', :success)
-    when 'transaction_pending'
-      badge_tag('Pending', :warning)
-    when 'transaction_failed'
-      badge_tag('Failed', :danger)
-    when 'transaction_cancelled'
-      badge_tag('Cancelled', :warning)
-    else
-      badge_tag(transaction.status.titleize, :default)
-    end
+    labels = { 'transaction_completed' => 'Completed', 'transaction_pending' => 'Pending',
+               'transaction_failed' => 'Failed', 'transaction_cancelled' => 'Cancelled' }
+    status_badge(:voucher_transaction, transaction.status, label: labels.fetch(transaction.status, transaction.status.titleize), size: nil)
   end
 
   # How a purchase's fulfillment reads to its vendor, its constituent, and staff. It says only that
@@ -63,28 +42,10 @@ module VoucherHelper
 
   def fulfillment_status_badge(transaction)
     label = fulfillment_status_label(transaction)
-    badge_tag(label, transaction.needs_shipping_details? ? :warning : :info) if label
+    badge(label, transaction.needs_shipping_details? ? :warning : :info) if label
   end
 
   private
-
-  def badge_tag(text, style)
-    classes = case style
-              when :success
-                'bg-green-100 text-green-800'
-              when :danger
-                'bg-red-100 text-red-800'
-              when :warning
-                'bg-yellow-100 text-yellow-800'
-              when :info
-                'bg-blue-100 text-blue-800'
-              else
-                'bg-gray-100 text-gray-800'
-              end
-
-    content_tag(:span, text,
-                class: "inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium #{classes}")
-  end
 
   def voucher_amount_class(amount)
     if amount >= 1000
@@ -96,8 +57,8 @@ module VoucherHelper
     end
   end
 
+  # Groups a code into blocks of four: XXXX-XXXX-XXXX.
   def format_voucher_code(code)
-    # Format as XXXX-XXXX-XXXX
     code.scan(/.{4}/).join('-')
   end
 
@@ -105,13 +66,12 @@ module VoucherHelper
     return unless voucher.voucher_active?
     return unless voucher.expiration_date
 
-    # Convert to Date objects to ensure compatible types for subtraction
     expiration_as_date = voucher.expiration_date.to_date
     days_until_expiry = (expiration_as_date - Date.current).to_i
 
     return unless days_until_expiry <= 7
 
-    content_tag(:div, class: 'mt-1 text-sm text-red-600') do
+    content_tag(:div, class: 'mt-1 text-sm text-danger-600') do
       if days_until_expiry <= 1
         'Expires today!'
       else
@@ -130,11 +90,11 @@ module VoucherHelper
   def voucher_usage_bar(voucher)
     percentage = voucher_usage_percentage(voucher)
     color_class = if percentage >= 90
-                    '[&::-webkit-progress-value]:bg-red-600 [&::-moz-progress-bar]:bg-red-600'
+                    '[&::-webkit-progress-value]:bg-danger-600 [&::-moz-progress-bar]:bg-danger-600'
                   elsif percentage >= 70
-                    '[&::-webkit-progress-value]:bg-yellow-600 [&::-moz-progress-bar]:bg-yellow-600'
+                    '[&::-webkit-progress-value]:bg-warning-600 [&::-moz-progress-bar]:bg-warning-600'
                   else
-                    '[&::-webkit-progress-value]:bg-green-600 [&::-moz-progress-bar]:bg-green-600'
+                    '[&::-webkit-progress-value]:bg-success-600 [&::-moz-progress-bar]:bg-success-600'
                   end
 
     classes = [

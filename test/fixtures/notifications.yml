@@ -1,3 +1,1 @@
-# This is an empty fixture file to prevent the test from trying to load non-existent notifications
-# The error was: insert or update on table "notifications" violates foreign key constraint "fk_rails_4aea6afa11"
-# We're creating this empty file to prevent the test runner from trying to load notifications that don't exist
+# Intentionally empty. Notifications are created by tests; fixture rows for them violate a foreign key constraint.

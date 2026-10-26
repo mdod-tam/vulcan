@@ -29,20 +29,17 @@ class UsersControllerTest < ActionDispatch::IntegrationTest
     assert_redirected_to constituent_portal_dashboard_path
     assert_equal 'Profile successfully updated', flash[:notice]
 
-    # Verify user was updated
     @user.reload
     assert_equal 'Updated First', @user.first_name
     assert_equal 'Updated Last', @user.last_name
     assert_equal 'updated@example.com', @user.email
 
-    # Verify audit log was created correctly
     event = Event.last
     assert_equal 'profile_updated', event.action
     assert_equal @user.id, event.user_id
     assert_equal @user.id, event.metadata['user_id']
     assert_equal @user.id, event.metadata['updated_by']
 
-    # Verify changes are recorded
     changes = event.field_changes
     assert_equal 'U*** F***', changes['first_name']['new']
     assert_equal 'U*** L***', changes['last_name']['new']
@@ -62,7 +59,6 @@ class UsersControllerTest < ActionDispatch::IntegrationTest
   end
 
   test 'should set Current.user before update' do
-    # Verify Current.user is set during the request
     UsersController.any_instance.expects(:set_current_user).once
 
     patch profile_path, params: {
@@ -83,7 +79,7 @@ class UsersControllerTest < ActionDispatch::IntegrationTest
     end
 
     assert_response :unprocessable_content
-    assert_select '.bg-red-50', text: /error/i # Error message should be displayed
+    assert_select '.bg-danger-50', text: /error/i
   end
 
   test 'constituent cannot clear portal email from profile while keeping phone' do
@@ -164,12 +160,11 @@ class UsersControllerTest < ActionDispatch::IntegrationTest
   end
 
   test 'should only allow permitted parameters' do
-    # Try to update a field that shouldn't be allowed
     patch profile_path, params: {
       user: {
         first_name: 'Allowed Update',
-        type: 'Users::Administrator', # Should not be allowed
-        status: 'suspended' # Should not be allowed
+        type: 'Users::Administrator',
+        status: 'suspended'
       }
     }
 

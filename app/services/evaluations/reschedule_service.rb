@@ -10,13 +10,11 @@ module Evaluations
     end
 
     def call
-      @evaluation.application.with_lock do
-        @evaluation.with_lock do
-          validate_params!
-          old_evaluation_date = @evaluation.evaluation_date
-          reschedule_evaluation!
-          create_event!(old_evaluation_date)
-        end
+      @evaluation.with_actor_and_application_lock(@actor) do
+        validate_params!
+        old_evaluation_date = @evaluation.evaluation_date
+        reschedule_evaluation!
+        create_event!(old_evaluation_date)
       end
 
       success('Evaluation rescheduled successfully.', { evaluation: @evaluation })

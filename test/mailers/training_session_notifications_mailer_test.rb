@@ -42,6 +42,7 @@ class TrainingSessionNotificationsMailerTest < ActionMailer::TestCase
                       email: "jane.smith.#{SecureRandom.hex(6)}@example.com")
     @application = create(:application, :in_progress, user: @constituent, assigned_trainer: @trainer)
 
+    @assigned_session = create(:training_session, application: @application, trainer: @trainer)
     @scheduled_for = 1.week.from_now
     @training_session = Struct.new(
       :application, :trainer, :constituent, :scheduled_for, :completed_at, :status, :id, :location
@@ -81,7 +82,7 @@ class TrainingSessionNotificationsMailerTest < ActionMailer::TestCase
                  .returns(trainer_assigned_template)
 
     emails = capture_emails do
-      TrainingSessionNotificationsMailer.trainer_assigned(@training_session).deliver_now
+      TrainingSessionNotificationsMailer.with(assignment_notice_params(@assigned_session, @trainer)).trainer_assigned.deliver_now
     end
 
     assert_equal 1, emails.size
@@ -104,7 +105,7 @@ class TrainingSessionNotificationsMailerTest < ActionMailer::TestCase
     EmailTemplate.unstub(:find_by!)
     load_seeded_email_templates('training_session_notifications_trainer_assigned')
 
-    email = TrainingSessionNotificationsMailer.trainer_assigned(@training_session).deliver_now
+    email = TrainingSessionNotificationsMailer.with(assignment_notice_params(@assigned_session, @trainer)).trainer_assigned.deliver_now
 
     assert_equal [@trainer.email], email.to
     assert_equal 'Nueva asignación de capacitación', email.subject
@@ -129,7 +130,7 @@ class TrainingSessionNotificationsMailerTest < ActionMailer::TestCase
     application = create(:application, user: applicant, managing_guardian: manager, assigned_trainer: @trainer)
     training_session = create(:training_session, application: application, trainer: @trainer)
 
-    email = TrainingSessionNotificationsMailer.trainer_assigned(training_session).deliver_now
+    email = TrainingSessionNotificationsMailer.with(assignment_notice_params(training_session, training_session.trainer)).trainer_assigned.deliver_now
     body = email.body.decoded
 
     assert_equal [@trainer.email], email.to
@@ -158,7 +159,7 @@ class TrainingSessionNotificationsMailerTest < ActionMailer::TestCase
     application = create(:application, user: applicant, assigned_trainer: @trainer)
     training_session = create(:training_session, application: application, trainer: @trainer)
 
-    email = TrainingSessionNotificationsMailer.trainer_assigned(training_session).deliver_now
+    email = TrainingSessionNotificationsMailer.with(assignment_notice_params(training_session, training_session.trainer)).trainer_assigned.deliver_now
     body = email.body.decoded
 
     assert_equal [@trainer.email], email.to
@@ -200,7 +201,7 @@ class TrainingSessionNotificationsMailerTest < ActionMailer::TestCase
     Policy.stubs(:get).with('support_email').returns('mat.program1@maryland.gov')
     Policy.stubs(:get).with('organization_name').returns(nil)
 
-    email = TrainingSessionNotificationsMailer.trainer_assigned(@training_session).deliver_now
+    email = TrainingSessionNotificationsMailer.with(assignment_notice_params(@assigned_session, @trainer)).trainer_assigned.deliver_now
 
     assert_includes email.body.to_s, @trainer.full_name
     assert_includes email.body.to_s, 'Spanish'

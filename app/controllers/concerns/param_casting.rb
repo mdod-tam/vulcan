@@ -42,12 +42,6 @@ module ParamCasting
     use_guardian_address
   ].freeze
 
-  def cast_boolean_params
-    return unless params[:application]
-
-    cast_boolean_for(params[:application], APPLICATION_BOOLEAN_FIELDS + USER_DISABILITY_FIELDS)
-  end
-
   def cast_complex_boolean_params
     cast_application_booleans
     cast_nested_user_booleans

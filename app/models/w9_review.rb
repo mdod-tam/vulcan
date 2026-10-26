@@ -1,14 +1,12 @@
 # frozen_string_literal: true
 
 class W9Review < ApplicationRecord
-  # Associations
   belongs_to :vendor, class_name: 'User'
   belongs_to :reviewed_blob, class_name: 'ActiveStorage::Blob', optional: true
   attr_readonly :reviewed_blob_id
   validates :reviewed_blob, presence: true, on: :create
   belongs_to :admin, -> { where(type: 'Users::Administrator') }, class_name: 'User'
 
-  # Enums
   enum :status, { approved: 0, rejected: 1 }, prefix: true
   enum :rejection_reason_code, {
     address_mismatch: 0,
@@ -16,7 +14,6 @@ class W9Review < ApplicationRecord
     other: 2
   }, prefix: true
 
-  # Validations
   validates :status, presence: true
   validates :reviewed_at, presence: true
   validates :rejection_reason, presence: true, if: -> { status_rejected? }
@@ -25,10 +22,8 @@ class W9Review < ApplicationRecord
   validate :validate_rejection_fields
   validate :admin_must_be_admin_type
 
-  # Callbacks
   before_validation :set_reviewed_at, on: :create
 
-  # Scopes
   scope :recent, -> { order(created_at: :desc) }
   scope :by_admin, ->(admin_id) { where(admin_id: admin_id) }
   scope :rejections, -> { where(status: :rejected) }

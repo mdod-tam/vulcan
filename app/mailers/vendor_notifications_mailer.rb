@@ -2,9 +2,8 @@
 
 class VendorNotificationsMailer < ApplicationMailer
   include Rails.application.routes.url_helpers
-  include ActionView::Helpers::NumberHelper # For number_to_currency
-  # Include helpers for rendering shared partials (e.g., status boxes for W9)
-  include Mailers::SharedPartialHelpers # Use the extracted shared helper module
+  include ActionView::Helpers::NumberHelper
+  include Mailers::SharedPartialHelpers
 
   def self.default_url_options
     Rails.application.config.action_mailer.default_url_options

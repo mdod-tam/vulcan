@@ -40,7 +40,7 @@
             <tr id="<%= dom_id(form) %>">
               <td class="px-3 py-3 text-gray-700">
                 <%= link_to secure_request_issued_recipient_label(form), admin_user_path(form.recipient),
-                            class: 'text-indigo-700 underline', data: { turbo_frame: '_top' } %>
+                            class: 'text-primary-700 underline', data: { turbo_frame: '_top' } %>
                 <% if (owner_text = secure_request_original_delivery_owner_text(form)) %>
                   <span class="block text-xs font-normal text-gray-600"><%= owner_text %></span>
                 <% end %>
@@ -66,7 +66,7 @@
                         },
                         'aria-label': secure_link_row_action_label(t('admin.applications.proof_secure_request_forms.table.revoke'), form,
                                                                    recipient: secure_request_issued_recipient_label(form)),
-                        class: 'inline-flex items-center rounded-md border border-red-300 bg-white px-2.5 py-1.5 text-sm font-medium text-red-700 hover:bg-red-50 focus:outline-none focus:ring-2 focus:ring-red-600 focus:ring-offset-2'
+                        class: 'btn btn-danger-outline btn-sm'
                       ) %>
                 <% else %>
                   <span class="text-gray-500">

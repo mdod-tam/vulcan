@@ -3,17 +3,27 @@ import { Controller } from "@hotwired/stimulus"
 class ModalController extends Controller {
   static targets = ["container"]
 
+  // A dialog rendered by the server on this element opens itself when it connects.
+  static values = { autoOpen: Boolean }
+
   connect() {
+    this._handleTurboSubmitStart = this.handleTurboSubmitStart.bind(this)
     this._handleTurboSubmitEnd = this.handleTurboSubmitEnd.bind(this)
     
+    this.element.addEventListener("turbo:submit-start", this._handleTurboSubmitStart)
     this.element.addEventListener("turbo:submit-end", this._handleTurboSubmitEnd)
 
+    if (this.autoOpenValue && this.element.tagName === "DIALOG" && !this.element.open) {
+      this.element.showModal()
+    }
+
     if (process.env.NODE_ENV !== 'production') {
-      console.log("Modal controller connected (Dialog version)")
+      console.log("Modal controller connected")
     }
   }
 
   disconnect() {
+    this.element.removeEventListener("turbo:submit-start", this._handleTurboSubmitStart)
     this.element.removeEventListener("turbo:submit-end", this._handleTurboSubmitEnd)
   }
 
@@ -35,43 +45,53 @@ class ModalController extends Controller {
     if (dialog.tagName === "DIALOG") {
       dialog.showModal()
       this._loadIframes(dialog)
-      
-      // Test hook. No current test reads it.
-      dialog.setAttribute('data-test-modal-ready', 'true')
     } else {
       console.warn("Modal target is not a <dialog> element:", dialog)
     }
   }
 
+  // A dialog stays open while its form is submitting, so a dismissal cannot hide an unfinished request.
   close(event) {
     event?.preventDefault()
     const dialog = event.target.closest("dialog")
-    if (dialog) {
+    if (dialog && !dialog.dataset.busy) {
       dialog.close()
-      dialog.removeAttribute('data-test-modal-ready')
     }
   }
 
   clickOutside(event) {
-    if (event.target === event.currentTarget) {
+    if (event.target === event.currentTarget && !event.currentTarget.dataset.busy) {
       event.currentTarget.close()
     }
   }
+
+  // Escape fires a cancel event first.
+  guardCancel(event) {
+    if (event.currentTarget.dataset.busy) event.preventDefault()
+  }
   
   onClose(event) {
-      // showModal() makes the page inert and close() restores it, so this handler only clears the test hook.
+      // Tells listeners the dialog closed, whether by Escape, the backdrop, or close().
       const dialog = event.target
-      dialog.removeAttribute('data-test-modal-ready')
+      window.dispatchEvent(new CustomEvent("modal:closed", { detail: { dialog } }))
+  }
+
+  handleTurboSubmitStart(event) {
+    const dialog = event.target.closest("dialog")
+    if (dialog) dialog.dataset.busy = "true"
   }
 
   handleTurboSubmitEnd(event) {
+    const dialog = event.target.closest("dialog")
+    if (dialog) delete dialog.dataset.busy
+
     if (event.detail.success) {
-      const form = event.target
-      const dialog = form.closest("dialog")
       if (dialog) {
         dialog.close()
-        dialog.removeAttribute('data-test-modal-ready')
       }
+    } else if (dialog && !event.detail.fetchResponse) {
+      // No response arrived, so the server may or may not have applied the request.
+      dialog.querySelector("[data-modal-unknown-outcome]")?.removeAttribute("hidden")
     }
   }
 

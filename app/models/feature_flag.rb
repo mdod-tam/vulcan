@@ -11,7 +11,6 @@ class FeatureFlag < ApplicationRecord
 
   validate :email_control_changed_through_writer, on: :update
 
-  # Class methods for checking flags
   class << self
     # A stored false stays false; the default applies only when no row exists.
     def enabled?(feature_name, default: false)

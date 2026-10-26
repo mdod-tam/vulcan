@@ -1,8 +1,7 @@
 <% status = local_assigns.fetch(:status, :info).to_sym %>
 <% title = local_assigns.fetch(:title, status.to_s.capitalize) %>
 
-<% 
-  # Define icon based on status
+<%
   icon = case status
     when :success then "✓"
     when :warning then "⚠"

@@ -43,7 +43,7 @@ class TrainingSession < ApplicationRecord
 
   validates :scheduled_for, presence: true, if: -> { status_scheduled? || status_confirmed? || will_be_scheduled? }
   validates :reschedule_reason, presence: true, if: :rescheduling?
-  validate :trainer_must_be_trainer_type
+  validate :trainer_must_be_trainer_type, if: -> { new_record? || will_save_change_to_trainer_id? }
   validate :scheduled_time_must_be_future
   validate :recorded_outcome_cannot_change
   validate :training_session_capacity_available, if: :entering_open_status?
@@ -105,19 +105,28 @@ class TrainingSession < ApplicationRecord
                .count
   end
 
+  # Locks the acting user, then the application, then this session, the order access changes use.
   def with_current_trainer_lock(actor)
-    application.with_lock do
-      with_lock do
-        errors.clear
-        raise TrainingSessions::OperationError, I18n.t('training_rules.current_trainer_change') unless application.current_trainer?(actor) && trainer_id == actor&.id
+    transaction do
+      User.lock_for_merge_integrity!(actor) if actor&.persisted?
+      application.with_lock do
+        with_lock do
+          errors.clear
+          raise TrainingSessions::OperationError, I18n.t('training_rules.current_trainer_change') unless application.current_trainer?(actor) && trainer_id == actor&.id
 
-        yield
+          yield
+        end
       end
     end
   end
 
   def open_status?
     OPEN_STATUSES.include?(status&.to_sym)
+  end
+
+  # True while the person still holds this row, as the application's covering trainer, and may take trainer work.
+  def assigned_to?(user)
+    user.present? && trainer_id == user.id && application.current_trainer?(user) && user.assignable_trainer?
   end
 
   private
@@ -157,12 +166,13 @@ class TrainingSession < ApplicationRecord
     end
   end
 
+  # Checked for a new or changed assignee only, so a former assignee who lost eligibility can still be cancelled or edited.
   def trainer_must_be_trainer_type
     return unless trainer
 
     return if trainer.assignable_trainer?
 
-    errors.add(:trainer, 'must be a trainer')
+    errors.add(:trainer, 'must be an active staff member with training capability')
   end
 
   def scheduled_time_must_be_future

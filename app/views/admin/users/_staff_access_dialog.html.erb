@@ -1,0 +1,36 @@
+<%# locals: (result:, intent:, operation_id:) %>
+<% user = result.user %>
+<% action_path = intent.kind == :role ? update_role_admin_user_path(user) : update_capabilities_admin_user_path(user) %>
+<dialog id="staff_access_dialog_<%= user.id %>" data-controller="modal" data-modal-auto-open-value="true" data-user-id="<%= user.id %>"
+        data-action="click->modal#clickOutside cancel->modal#guardCancel close->modal#onClose"
+        aria-labelledby="staff_access_title" aria-describedby="staff_access_impact"
+        class="rounded-lg p-0 shadow-elevation-4 backdrop:bg-gray-900/50 w-full max-w-lg">
+  <%= form_with url: action_path, method: :patch, class: "p-6 space-y-4" do %>
+    <%= hidden_field_tag :operation_id, operation_id, id: nil %>
+    <%= hidden_field_tag :confirmation, result.token, id: nil %>
+    <% if intent.kind == :role %>
+      <%= hidden_field_tag :role, intent.role.name, id: nil %>
+    <% else %>
+      <%= hidden_field_tag :capability, intent.capability, id: nil %>
+      <%= hidden_field_tag :enabled, intent.kind == :grant, id: nil %>
+    <% end %>
+
+    <h2 id="staff_access_title" class="text-lg font-semibold text-gray-900">Remove access?</h2>
+    <div id="staff_access_impact" class="space-y-2 text-sm text-gray-700">
+      <% access_impact_sentences(user, result.impact).each do |sentence| %>
+        <p><%= sentence %></p>
+      <% end %>
+      <p>Their assignments stay in place and are listed for reassignment. Continue?</p>
+    </div>
+
+    <div id="staff_access_error" role="alert" class="text-sm text-danger-700"><%= result.message if result.status == :stale %></div>
+    <p hidden data-modal-unknown-outcome role="alert" class="text-sm text-danger-700">
+      We could not confirm whether this change was saved. Reload the page to check before trying again.
+    </p>
+
+    <div class="flex justify-end gap-3">
+      <button type="button" data-action="modal#close" autofocus class="btn btn-outline">Cancel</button>
+      <%= button_tag "Continue", type: "submit", class: "btn btn-primary" %>
+    </div>
+  <% end %>
+</dialog>

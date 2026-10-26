@@ -13,7 +13,7 @@ module Admin
     # change by someone else is not silently reversed, and an operation id, so a resubmitted
     # form is applied once.
     def email_control_button(label:, url:, enabled:, version:, extra_params: {})
-      return tag.p(email_delivery_t('missing_control_help'), class: 'text-sm text-red-800 max-w-prose') if enabled.nil?
+      return tag.p(email_delivery_t('missing_control_help'), class: 'text-sm text-danger-800 max-w-prose') if enabled.nil?
 
       target = !enabled
       key = target ? 'turn_on' : 'turn_off'
@@ -37,8 +37,7 @@ module Admin
     end
 
     def email_bulk_button_class(turning_on)
-      base = 'px-4 py-2 text-white rounded-md text-sm font-medium focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2'
-      "#{base} #{email_button_colors(turning_on)}"
+      "btn #{email_button_colors(turning_on)}"
     end
 
     def email_control_flash(result, label:)
@@ -56,7 +55,7 @@ module Admin
     end
 
     def email_template_link_class
-      'text-indigo-700 hover:text-indigo-900 focus-visible:outline focus-visible:outline-2 focus-visible:outline-indigo-700 text-sm'
+      'text-sm text-primary-700 hover:text-primary-900'
     end
 
     private
@@ -67,28 +66,31 @@ module Admin
               else
                 saved_enabled ? 'state_on' : 'state_off'
               end
-      text = email_delivery_t(state)
-      colors = saved_enabled ? 'bg-green-100 text-green-800' : 'bg-red-100 text-red-800'
-      badge = tag.span(text, class: "inline-flex items-center rounded-full px-2.5 py-0.5 font-medium #{colors}")
-      return badge unless mixed
+      variant = if saved_enabled.nil?
+                  :attention
+                else
+                  saved_enabled ? :success : :danger
+                end
+      state_badge = badge(email_delivery_t(state), variant)
+      return state_badge unless mixed
 
-      safe_join([badge, tag.span(email_delivery_t('pair_mixed'), class: 'text-amber-800')], ' ')
+      safe_join([state_badge, tag.span(email_delivery_t('pair_mixed'), class: 'text-warning-800')], ' ')
     end
 
     def suppression_note(saved_enabled, suppressed_by, category)
       return unless saved_enabled && suppressed_by
 
       reason = EmailDelivery::ControlPanel.reason_text(suppressed_by, category: category)
-      tag.span(email_delivery_t('suppressed_prefix', reason: reason), class: 'text-amber-800')
+      tag.span(email_delivery_t('suppressed_prefix', reason: reason), class: 'text-warning-800')
     end
 
     def email_control_button_class(target)
-      base = 'px-3 py-1.5 rounded-md text-sm font-medium focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2'
-      "#{base} text-white #{email_button_colors(target)}"
+      "btn btn-sm #{email_button_colors(target)}"
     end
 
+    # Turning a control on is a success action and turning it off is a danger action.
     def email_button_colors(turning_on)
-      turning_on ? 'bg-green-700 hover:bg-green-800 focus-visible:outline-green-700' : 'bg-red-700 hover:bg-red-800 focus-visible:outline-red-700'
+      turning_on ? 'btn-success' : 'btn-danger'
     end
   end
 end

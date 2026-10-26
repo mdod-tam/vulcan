@@ -1,7 +1,7 @@
 # frozen_string_literal: true
 
 module VendorPortal
-  # Controller for managing vendor transactions
+  # A vendor's purchases: list, CSV export, detail, and fulfillment mode.
   class TransactionsController < BaseController
     include Pagy::Backend
     include PurchasePage

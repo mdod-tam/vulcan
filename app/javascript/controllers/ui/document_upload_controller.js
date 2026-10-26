@@ -180,7 +180,7 @@ export default class extends Controller {
     this.inputTarget.required = this.originalRequired && state !== "clean"
     this.inputTarget.setAttribute("aria-required", this.inputTarget.required ? "true" : "false")
     this.inputTarget.setAttribute("aria-invalid", blocked && !waiting ? "true" : "false")
-    this.inputTarget.classList.toggle("border-red-500", blocked && !waiting)
+    this.inputTarget.classList.toggle("border-danger-500", blocked && !waiting)
     this.progressTarget.hidden = !waiting
     this.progressTarget.removeAttribute("value")
     this.cancelTarget.hidden = state !== "uploading"

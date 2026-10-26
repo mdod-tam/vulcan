@@ -21,7 +21,7 @@ module ConstituentPortal
 
       get constituent_portal_dashboard_path
       assert_response :success
-      assert_select 'div.flex.items-center span.rounded-full', text: 'In progress'
+      assert_select 'div.flex.items-center span.badge', text: 'In progress'
     end
 
     test 'dashboard shows awaiting-proof status and details link' do
@@ -29,7 +29,7 @@ module ConstituentPortal
 
       get constituent_portal_dashboard_path
       assert_response :success
-      assert_select 'div.flex.items-center span.rounded-full', text: 'Awaiting proof'
+      assert_select 'div.flex.items-center span.badge', text: 'Awaiting proof'
       assert_select 'a', text: 'View Application Details'
     end
 

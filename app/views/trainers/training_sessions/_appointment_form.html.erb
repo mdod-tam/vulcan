@@ -1,21 +1,21 @@
 <%# locals: (action:, training_session:) -%>
-<section class="mb-6 rounded-lg bg-white p-6 shadow" aria-labelledby="<%= action %>-heading">
+<section class="mb-6 card p-6" aria-labelledby="<%= action %>-heading">
   <h3 id="<%= action %>-heading" class="text-lg font-semibold"><%= t("trainer_workflow.actions.#{action}") %></h3>
   <% if action == :reschedule %><p class="mt-2"><%= t('trainer_workflow.forms.reschedule_help') %></p><% end %>
-  <p id="<%= action %>-time-help" class="mt-2 text-sm text-gray-600"><%= t('trainer_workflow.forms.appointment_help', zone: Time.zone.name) %>
+  <p id="<%= action %>-time-help" class="form-hint"><%= t('trainer_workflow.forms.appointment_help', zone: Time.zone.name) %>
     <%= t('date_time_input.hint', zone: Time.zone.name) %></p>
   <%= form_with url: training_action_url(action, training_session), namespace: action, class: 'mt-4 space-y-4' do |f| %>
     <%= render 'shared/action_errors', action: action, form: f, form_errors: @training_form_errors,
                                        heading: t('trainer_workflow.error_heading') %>
     <div>
-      <%= f.label :scheduled_for, training_required_label(t('trainer_workflow.fields.scheduled_for')), class: 'block font-medium' %>
+      <%= f.label :scheduled_for, training_required_label(t('trainer_workflow.fields.scheduled_for')), class: 'form-label' %>
       <%= f.datetime_local_field :scheduled_for,
                                  value: training_form_value(action,
                                                             :scheduled_for,
                                                             form_values: @training_form_values),
                                  required: true,
 
-                                 class: 'mt-1 w-full rounded-md border-gray-300',
+                                 class: 'form-input mt-1',
                                  aria: training_form_aria(action,
                                                           :scheduled_for,
                                                           describedby: "#{action}-time-help",
@@ -23,15 +23,15 @@
       <%= render 'shared/field_errors', action: action, attribute: :scheduled_for, form_errors: @training_form_errors %>
     </div>
     <div>
-      <%= f.label :location, t('trainer_workflow.fields.location'), class: 'block font-medium' %>
-      <p id="<%= action %>-location-help" class="text-sm text-gray-600"><%= t('trainer_workflow.forms.location_help') %></p>
+      <%= f.label :location, t('trainer_workflow.fields.location'), class: 'form-label' %>
+      <p id="<%= action %>-location-help" class="form-hint"><%= t('trainer_workflow.forms.location_help') %></p>
       <%= f.text_field :location,
                        value: training_form_value(action,
                                                   :location,
                                                   training_session.location,
                                                   form_values: @training_form_values),
 
-                       class: 'mt-1 w-full rounded-md border-gray-300',
+                       class: 'form-input mt-1',
                        aria: training_form_aria(action,
                                                 :location,
                                                 describedby: "#{action}-location-help",
@@ -42,7 +42,7 @@
       <div>
         <%= f.label :reschedule_reason,
                     training_required_label(t(action == :reschedule ? 'trainer_workflow.fields.reschedule_reason' : 'trainer_workflow.fields.follow_up_reason')),
-                    class: 'block font-medium' %>
+                    class: 'form-label' %>
         <%= f.text_area :reschedule_reason,
                         value: training_form_value(action,
                                                    :reschedule_reason,
@@ -50,7 +50,7 @@
                         required: true,
                         rows: 3,
 
-                        class: 'mt-1 w-full rounded-md border-gray-300',
+                        class: 'form-input mt-1',
                         aria: training_form_aria(action,
                                                  :reschedule_reason,
                                                  form_errors: @training_form_errors) %>
@@ -59,15 +59,15 @@
     <% end %>
     <% unless action == :reschedule %>
       <div>
-        <%= f.label :internal_notes, t('trainer_workflow.fields.private_notes_optional'), class: 'block font-medium' %>
-        <p id="<%= action %>-private-notes-help" class="text-sm text-gray-600"><%= t('trainer_workflow.forms.private_notes_help') %></p>
+        <%= f.label :internal_notes, t('trainer_workflow.fields.private_notes_optional'), class: 'form-label' %>
+        <p id="<%= action %>-private-notes-help" class="form-hint"><%= t('trainer_workflow.forms.private_notes_help') %></p>
         <%= f.text_area :internal_notes,
                         value: training_form_value(action,
                                                    :internal_notes,
                                                    action == :schedule ? training_session.internal_notes : nil,
                                                    form_values: @training_form_values),
                         rows: 3,
-                        class: 'mt-1 w-full rounded-md border-gray-300',
+                        class: 'form-input mt-1',
                         aria: training_form_aria(action,
                                                  :internal_notes,
                                                  describedby: "#{action}-private-notes-help",
@@ -75,7 +75,7 @@
         <%= render 'shared/field_errors', action: action, attribute: :internal_notes, form_errors: @training_form_errors %>
       </div>
     <% end %>
-    <%= f.submit t("trainer_workflow.actions.#{action}"), class: 'rounded-md bg-indigo-600 px-4 py-3 font-medium text-white',
+    <%= f.submit t("trainer_workflow.actions.#{action}"), class: 'btn btn-primary',
                                                           data: { turbo_submits_with: t('trainer_workflow.forms.saving_appointment') } %>
   <% end %>
 </section>

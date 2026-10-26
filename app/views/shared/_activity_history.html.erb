@@ -1,11 +1,11 @@
-<section class="min-w-0 bg-white shadow rounded-lg p-6 mb-8" aria-labelledby="activity-history-heading">
+<section class="min-w-0 card p-6 mb-8" aria-labelledby="activity-history-heading">
   <h2 id="activity-history-heading" class="text-xl font-semibold text-gray-900 mb-4">
     <%= local_assigns.fetch(:title, t('activity_history.table.title')) %>
   </h2>
 
   <% show_subject = local_assigns.fetch(:show_subject, false) %>
 
-  <div class="max-w-full overflow-x-auto focus:outline-none focus:ring-2 focus:ring-indigo-500" role="region" aria-label="<%= t('activity_history.table.scroll_region') %>" tabindex="0" data-activity-history-scroll>
+  <div class="max-w-full overflow-x-auto" role="region" aria-label="<%= t('activity_history.table.scroll_region') %>" tabindex="0" data-activity-history-scroll>
     <table class="min-w-full divide-y divide-gray-200" aria-labelledby="activity-history-heading">
       <thead class="bg-gray-50">
         <tr>
@@ -29,7 +29,7 @@
                 <div class="flex flex-col gap-1">
                   <span class="text-sm font-medium text-gray-900"><%= activity_label(event) %></span>
                   <% if activity_source_label(event).present? %>
-                    <span class="w-fit rounded bg-indigo-50 px-2 py-0.5 text-xs font-medium text-indigo-700">
+                    <span class="w-fit rounded bg-primary-50 px-2 py-0.5 text-xs font-medium text-primary-700">
                       <%= activity_source_label(event) %>
                     </span>
                   <% end %>

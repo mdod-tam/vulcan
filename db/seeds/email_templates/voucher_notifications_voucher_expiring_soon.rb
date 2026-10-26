@@ -1,10 +1,8 @@
 # frozen_string_literal: true
 
-# Seed File for "voucher_notifications_voucher_expiring_soon"
-# --------------------------------------------------
 EmailTemplate.create_or_find_by!(name: 'voucher_notifications_voucher_expiring_soon', format: :text, locale: 'en') do |template|
   template.subject = 'Important: Your Voucher Will Expire Soon'
-  template.description = 'Sent to the vendor as a reminder that their voucher is nearing its expiration date.'
+  template.description = 'Sent to the constituent as a reminder that their voucher is nearing its expiration date.'
   template.body = <<~TEXT
     Important: Your Voucher Will Expire Soon
 

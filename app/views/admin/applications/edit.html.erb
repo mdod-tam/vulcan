@@ -5,7 +5,7 @@
   <%= form_with(model: [:admin, @application], local: true, class: "space-y-6", data: { turbo_frame: turbo_frame_request_id || "_top" }) do |form| %>
     <%= hidden_field_tag :modal, params[:modal] if params[:modal].present? %>
     <% if @application.errors.any? %>
-      <div id="error_explanation" class="bg-red-100 border border-red-400 text-red-700 px-4 py-3 rounded relative" role="alert">
+      <div id="error_explanation" class="bg-danger-100 border border-danger-400 text-danger-700 px-4 py-3 rounded relative" role="alert">
         <strong class="font-bold"><%= pluralize(@application.errors.count, "error") %> prohibited this application from being saved:</strong>
         <ul class="mt-2 list-disc list-inside">
           <% @application.errors.full_messages.each do |message| %>
@@ -18,29 +18,29 @@
     <div class="grid grid-cols-1 md:grid-cols-2 gap-6">
       <% if @application.income_proof_required? %>
         <div>
-          <%= form.label :household_size, class: "block text-sm font-medium text-gray-700" %>
-          <%= form.number_field :household_size, class: "mt-1 block w-full rounded-md border-gray-300 shadow-sm focus:border-indigo-500 focus:ring-indigo-500 sm:text-sm" %>
+          <%= form.label :household_size, class: "form-label" %>
+          <%= form.number_field :household_size, class: "form-input mt-1" %>
         </div>
 
         <div>
-          <%= form.label :annual_income, class: "block text-sm font-medium text-gray-700" %>
-          <div class="mt-1 relative rounded-md shadow-sm">
+          <%= form.label :annual_income, class: "form-label" %>
+          <div class="mt-1 relative rounded-md shadow-elevation-1">
             <div class="absolute inset-y-0 left-0 pl-3 flex items-center pointer-events-none">
               <span class="text-gray-500 sm:text-sm">$</span>
             </div>
-            <%= form.number_field :annual_income, step: "0.01", class: "pl-7 block w-full rounded-md border-gray-300 shadow-sm focus:border-indigo-500 focus:ring-indigo-500 sm:text-sm" %>
+            <%= form.number_field :annual_income, step: "0.01", class: "form-input pl-7" %>
           </div>
         </div>
       <% end %>
 
       <div>
-        <%= form.label :application_type, class: "block text-sm font-medium text-gray-700" %>
-        <%= form.select :application_type, options_for_select(application_type_options, @application.application_type), {}, class: "mt-1 block w-full py-2 px-3 border border-gray-300 bg-white rounded-md shadow-sm focus:outline-none focus:ring-indigo-500 focus:border-indigo-500 sm:text-sm" %>
+        <%= form.label :application_type, class: "form-label" %>
+        <%= form.select :application_type, options_for_select(application_type_options, @application.application_type), {}, class: "form-input mt-1" %>
       </div>
 
       <div>
-        <%= form.label :submission_method, class: "block text-sm font-medium text-gray-700" %>
-        <%= form.select :submission_method, options_for_select(submission_method_options, @application.submission_method), {}, class: "mt-1 block w-full py-2 px-3 border border-gray-300 bg-white rounded-md shadow-sm focus:outline-none focus:ring-indigo-500 focus:border-indigo-500 sm:text-sm" %>
+        <%= form.label :submission_method, class: "form-label" %>
+        <%= form.select :submission_method, options_for_select(submission_method_options, @application.submission_method), {}, class: "form-input mt-1" %>
       </div>
     </div>
 
@@ -48,20 +48,20 @@
       <legend class="text-lg font-medium text-gray-900 mb-2">Certifying Professional Information</legend>
       <div class="grid grid-cols-1 md:grid-cols-2 gap-6">
         <div>
-          <%= form.label :medical_provider_name, "Name", class: "block text-sm font-medium text-gray-700" %>
-          <%= form.text_field :medical_provider_name, class: "mt-1 block w-full rounded-md border-gray-300 shadow-sm focus:border-indigo-500 focus:ring-indigo-500 sm:text-sm" %>
+          <%= form.label :medical_provider_name, "Name", class: "form-label" %>
+          <%= form.text_field :medical_provider_name, class: "form-input mt-1" %>
         </div>
         <div>
-          <%= form.label :medical_provider_phone, "Phone", class: "block text-sm font-medium text-gray-700" %>
-          <%= form.telephone_field :medical_provider_phone, class: "mt-1 block w-full rounded-md border-gray-300 shadow-sm focus:border-indigo-500 focus:ring-indigo-500 sm:text-sm" %>
+          <%= form.label :medical_provider_phone, "Phone", class: "form-label" %>
+          <%= form.telephone_field :medical_provider_phone, class: "form-input mt-1" %>
         </div>
         <div>
-          <%= form.label :medical_provider_fax, "Fax (Optional)", class: "block text-sm font-medium text-gray-700" %>
-          <%= form.telephone_field :medical_provider_fax, class: "mt-1 block w-full rounded-md border-gray-300 shadow-sm focus:border-indigo-500 focus:ring-indigo-500 sm:text-sm" %>
+          <%= form.label :medical_provider_fax, "Fax (Optional)", class: "form-label" %>
+          <%= form.telephone_field :medical_provider_fax, class: "form-input mt-1" %>
         </div>
         <div>
-          <%= form.label :medical_provider_email, "Email", class: "block text-sm font-medium text-gray-700" %>
-          <%= form.email_field :medical_provider_email, class: "mt-1 block w-full rounded-md border-gray-300 shadow-sm focus:border-indigo-500 focus:ring-indigo-500 sm:text-sm" %>
+          <%= form.label :medical_provider_email, "Email", class: "form-label" %>
+          <%= form.email_field :medical_provider_email, class: "form-input mt-1" %>
         </div>
       </div>
     </fieldset>
@@ -71,11 +71,11 @@
       <p class="text-sm text-gray-600 mb-4"><%= t("applications.alternate_contact.admin_help") %></p>
       <div class="grid grid-cols-1 md:grid-cols-2 gap-6">
         <div>
-          <%= form.label :alternate_contact_name, "Name", class: "block text-sm font-medium text-gray-700" %>
-          <%= form.text_field :alternate_contact_name, class: "mt-1 block w-full rounded-md border-gray-300 shadow-sm focus:border-indigo-500 focus:ring-indigo-500 sm:text-sm" %>
+          <%= form.label :alternate_contact_name, "Name", class: "form-label" %>
+          <%= form.text_field :alternate_contact_name, class: "form-input mt-1" %>
         </div>
         <div>
-          <%= form.label :alternate_contact_relationship_type, "Relationship", class: "block text-sm font-medium text-gray-700" %>
+          <%= form.label :alternate_contact_relationship_type, "Relationship", class: "form-label" %>
           <%= form.select :alternate_contact_relationship_type,
               options_for_select([
                 ["Select a relationship", ""],
@@ -88,23 +88,23 @@
                 ["Other", "other"]
               ], @application.alternate_contact_relationship_type),
               { include_blank: false },
-              class: "mt-1 block w-full rounded-md border-gray-300 shadow-sm focus:border-indigo-500 focus:ring-indigo-500 sm:text-sm" %>
+              class: "form-input mt-1" %>
         </div>
         <div>
-          <%= form.label :alternate_contact_phone, "Phone", class: "block text-sm font-medium text-gray-700" %>
-          <%= form.telephone_field :alternate_contact_phone, class: "mt-1 block w-full rounded-md border-gray-300 shadow-sm focus:border-indigo-500 focus:ring-indigo-500 sm:text-sm" %>
+          <%= form.label :alternate_contact_phone, "Phone", class: "form-label" %>
+          <%= form.telephone_field :alternate_contact_phone, class: "form-input mt-1" %>
         </div>
         <div>
-          <%= form.label :alternate_contact_email, "Email", class: "block text-sm font-medium text-gray-700" %>
-          <%= form.email_field :alternate_contact_email, class: "mt-1 block w-full rounded-md border-gray-300 shadow-sm focus:border-indigo-500 focus:ring-indigo-500 sm:text-sm" %>
+          <%= form.label :alternate_contact_email, "Email", class: "form-label" %>
+          <%= form.email_field :alternate_contact_email, class: "form-input mt-1" %>
         </div>
       </div>
     </fieldset>
 
     <div class="flex justify-end space-x-3">
       <%= link_to "Cancel", admin_application_path(@application),
-          class: "px-4 py-2 border border-gray-300 rounded-md shadow-sm text-sm font-medium text-gray-700 bg-white hover:bg-gray-50 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-indigo-500" %>
-      <%= form.submit "Update Application", class: "px-4 py-2 border border-transparent rounded-md shadow-sm text-sm font-medium text-white bg-indigo-600 hover:bg-indigo-700 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-indigo-500" %>
+          class: "btn btn-outline" %>
+      <%= form.submit "Update Application", class: "btn btn-primary" %>
     </div>
   <% end %>
 </div>

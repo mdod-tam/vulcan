@@ -36,7 +36,7 @@
             <td class="px-3 py-3 text-gray-900">
               <%= link_to row_recipient,
                           admin_user_path(secure_request_form.recipient),
-                          class: 'text-indigo-700 underline', data: { turbo_frame: '_top' } %>
+                          class: 'text-primary-700 underline', data: { turbo_frame: '_top' } %>
               <%# The row preserves the owner at issuance. Resends resolve the current contact. %>
               <% if secure_request_form.delivery_owner.present? && secure_request_form.delivery_owner_id != secure_request_form.recipient_id %>
                 <span class="block text-xs font-normal text-gray-600">
@@ -63,7 +63,7 @@
                                         } },
                                 'aria-label': secure_link_row_action_label(t('admin.applications.secure_request_forms.table.revoke'),
                                                                            secure_request_form, recipient: row_recipient),
-                                class: "inline-flex items-center rounded-md border border-red-300 bg-white px-2.5 py-1.5 text-sm font-medium text-red-700 hover:bg-red-50 focus:outline-none focus:ring-2 focus:ring-red-600 focus:ring-offset-2" %>
+                                class: "btn btn-danger-outline btn-sm" %>
                   <% if active_batch_count > 1 %>
                     <%= button_to t('admin.applications.secure_request_forms.table.revoke_batch'),
                                   admin_application_secure_request_form_batch_revocations_path(@application),
@@ -74,7 +74,7 @@
                                             turbo_confirm: t('admin.applications.secure_request_forms.table.revoke_batch_confirm'),
                                             turbo_frame: '_top'
                                           } },
-                                  class: "inline-flex items-center rounded-md border border-red-300 bg-white px-2.5 py-1.5 text-sm font-medium text-red-700 hover:bg-red-50 focus:outline-none focus:ring-2 focus:ring-red-600 focus:ring-offset-2" %>
+                                  class: "btn btn-danger-outline btn-sm" %>
                   <% end %>
                   <% if provider_info_missing %>
                     <%# Resending revokes the active link, so it confirms like Revoke. %>
@@ -85,7 +85,7 @@
                       <%= submit_tag t('admin.applications.secure_request_forms.table.resend'),
                                      'aria-label': secure_link_row_action_label(t('admin.applications.secure_request_forms.table.resend'),
                                                                                 secure_request_form, recipient: row_recipient),
-                                     class: 'text-sm font-medium text-indigo-700 hover:text-indigo-900' %>
+                                     class: 'text-sm font-medium text-primary-700 hover:text-primary-900' %>
                     <% end %>
                   <% end %>
                 <% elsif provider_info_missing && secure_request_form.status_sent? && secure_request_form.expired? %>
@@ -95,7 +95,7 @@
                     <%= submit_tag t('admin.applications.secure_request_forms.table.send_new_link'),
                                    'aria-label': secure_link_row_action_label(t('admin.applications.secure_request_forms.table.send_new_link'),
                                                                               secure_request_form, recipient: row_recipient),
-                                   class: "text-sm font-medium text-indigo-700 hover:text-indigo-900" %>
+                                   class: "text-sm font-medium text-primary-700 hover:text-primary-900" %>
                   <% end %>
                 <% else %>
                   <span class="text-gray-500"><%= t('admin.applications.secure_request_forms.table.no_actions') %></span>

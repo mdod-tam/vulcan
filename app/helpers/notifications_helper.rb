@@ -9,21 +9,23 @@ module NotificationsHelper
     medical_certification_rejected
   ].freeze
 
+  # Icon colors: danger for rejections, success for approvals, info for requests in progress, warning for
+  # missing documents, purple for review requests, and the brand color for everything else.
   def notification_icon_classes(notification)
-    return 'bg-red-100 text-red-500' if REJECTED_NOTIFICATION_ACTIONS.include?(notification.action)
+    return 'bg-danger-100 text-danger-700' if REJECTED_NOTIFICATION_ACTIONS.include?(notification.action)
 
     if notification.action == 'proof_resubmission_requested'
-      proof_resubmission_rejected_notification?(notification) ? 'bg-red-100 text-red-500' : 'bg-yellow-100 text-yellow-500'
+      proof_resubmission_rejected_notification?(notification) ? 'bg-danger-100 text-danger-700' : 'bg-warning-100 text-warning-700'
     elsif %w[trainer_assigned proof_approved medical_certification_approved].include?(notification.action)
-      'bg-green-100 text-green-500'
+      'bg-success-100 text-success-700'
     elsif %w[training_requested medical_certification_requested medical_certification_received].include?(notification.action)
-      'bg-blue-100 text-blue-500'
+      'bg-info-100 text-info-700'
     elsif notification.action == 'documents_requested'
-      'bg-yellow-100 text-yellow-500'
+      'bg-warning-100 text-warning-700'
     elsif notification.action == 'review_requested'
-      'bg-purple-100 text-purple-500'
+      'bg-purple-100 text-purple-700'
     else
-      'bg-indigo-100 text-indigo-500'
+      'bg-primary-100 text-primary-700'
     end
   end
 

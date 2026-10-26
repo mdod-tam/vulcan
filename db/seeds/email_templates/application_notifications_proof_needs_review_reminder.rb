@@ -1,7 +1,5 @@
 # frozen_string_literal: true
 
-# Seed File for "application_notifications_proof_needs_review_reminder"
-# --------------------------------------------------
 EmailTemplate.create_or_find_by!(name: 'application_notifications_proof_needs_review_reminder', format: :text, locale: 'en') do |template|
   template.subject = 'Applications Awaiting Review'
   template.description = 'Sent to administrators summarizing applications that have been awaiting review for too long (e.g., > 3 days).'

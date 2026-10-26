@@ -2,15 +2,15 @@
 
 require 'test_helper'
 
-# Concurrency evidence for the sign-in boundary: password-only sign-in racing a
-# contact-changing merge. SessionsController#create (via the shared
-# ApplicationController#_create_and_set_session_cookie chokepoint) and the merge service
-# must serialize through User.lock_for_merge_integrity! on the target user.
+# Concurrency tests for the sign-in boundary: password-only sign-in racing a contact-changing
+# merge. SessionsController#create (via the shared
+# ApplicationController#_create_and_set_session_cookie chokepoint) and the merge service must
+# serialize through User.lock_for_merge_integrity! on the target user.
 #
-# Exercising the real, private controller method directly (via a minimal
-# ActionDispatch::TestRequest/TestResponse pair, using set_request!/set_response! -- see
-# passwords_controller_concurrency_test.rb for why) rather than through routing. Both sides
-# of every race are real production code.
+# The tests call the real controller method directly with a minimal
+# ActionDispatch::TestRequest/TestResponse pair (set_request!/set_response!; see
+# passwords_controller_concurrency_test.rb for why) instead of dispatching through routing. Both
+# sides of every race are production code.
 class SessionsControllerConcurrencyTest < ActiveSupport::TestCase
   self.use_transactional_tests = false
 

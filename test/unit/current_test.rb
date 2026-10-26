@@ -4,12 +4,10 @@ require 'test_helper'
 
 class CurrentTest < ActiveSupport::TestCase
   def setup
-    # Ensure clean state before each test
     Current.reset
   end
 
   def teardown
-    # Ensure clean state after each test
     Current.reset
   end
 
@@ -99,9 +97,42 @@ class CurrentTest < ActiveSupport::TestCase
     assert_not Current.skip_proof_validation?
   end
 
+  test 'set scopes nil, false, and true values to its block and restores each one' do
+    [nil, false, true].each do |outer|
+      Current.paper_context = outer
+      Current.set(paper_context: true) do
+        assert Current.paper_context?
+        Current.set(paper_context: false) { assert_not Current.paper_context? }
+        assert Current.paper_context?
+      end
+      assert_equal outer, Current.paper_context
+    end
+  end
+
+  test 'set restores on an early return or exception and leaves unrelated attributes alone' do
+    actor = Object.new
+    Current.user = actor
+    Current.ip_address = '203.0.113.9'
+
+    early_return = lambda do
+      Current.set(paper_context: true) { return :early }
+    end
+    assert_equal :early, early_return.call
+    assert_nil Current.paper_context
+
+    assert_raises(RuntimeError) { Current.set(reviewing_single_proof: true) { raise 'boom' } }
+    assert_nil Current.reviewing_single_proof
+
+    Current.set(paper_context: true, reviewing_single_proof: true) { assert_same actor, Current.user }
+    assert_same actor, Current.user
+    assert_equal '203.0.113.9', Current.ip_address
+  end
+
+  test 'set returns the value of its block' do
+    assert_equal :result, Current.set(paper_context: true) { :result }
+  end
+
   test 'attributes are isolated between test runs' do
-    # This test verifies that Current attributes don't leak between tests
-    # The setup/teardown should ensure this, but let's verify
     assert_nil Current.paper_context
     assert_nil Current.skip_proof_validation
     assert_nil Current.test_user_id

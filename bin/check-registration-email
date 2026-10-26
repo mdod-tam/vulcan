@@ -1,16 +1,14 @@
 #!/usr/bin/env ruby
 # frozen_string_literal: true
 
-# This script demonstrates that the registration confirmation email works correctly
+# Delivers the registration confirmation email for an unsaved user and prints its parts, to check the template.
 # Run with: RAILS_ENV=development bin/check-registration-email
 
 require File.expand_path('../config/environment', __dir__)
 require 'active_job'
 
-# Reset email deliveries to ensure clean slate
 ActionMailer::Base.deliveries.clear
 
-# Create a test user (not saved to DB)
 user = Constituent.new(
   first_name: 'Test',
   last_name: 'User',
@@ -20,7 +18,6 @@ user = Constituent.new(
 
 puts 'Starting email demonstration for registration confirmation...'
 
-# Generate and deliver the email
 email = ApplicationNotificationsMailer.registration_confirmation(user).deliver_now
 
 puts "\n========== EMAIL DETAILS ==========\n"
@@ -35,7 +32,6 @@ text_part = email.parts.find { |part| part.content_type.include?('text/plain') }
 
 puts "\n========== HTML CONTENT PREVIEW ==========\n"
 if html_part
-  # Show first 500 characters of HTML content
   preview = html_part.body.to_s[0..500]
   puts "#{preview}...[truncated]"
   puts "\nHTML content contains personalization: #{html_part.body.to_s.include?('Dear Test,') ? 'YES' : 'NO'}"
@@ -47,7 +43,6 @@ end
 
 puts "\n========== TEXT CONTENT PREVIEW ==========\n"
 if text_part
-  # Show first 500 characters of Text content
   preview = text_part.body.to_s[0..500]
   puts "#{preview}...[truncated]"
   puts "\nText content contains personalization: #{text_part.body.to_s.include?('Dear Test,') ? 'YES' : 'NO'}"

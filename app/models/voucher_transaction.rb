@@ -68,7 +68,6 @@ class VoucherTransaction < ApplicationRecord
     where(processed_at: start_date.beginning_of_day..end_date.end_of_day)
   }
 
-  # Class methods for reporting
   def self.total_amount_for_vendor(vendor_id, start_date = nil, end_date = nil)
     scope = completed.for_vendor(vendor_id)
     scope = scope.in_date_range(start_date, end_date) if start_date && end_date

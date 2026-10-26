@@ -36,7 +36,7 @@ module ApplicationSubmissionEligibility
     def identity_review_pending_for?(applicant)
       return false if applicant.blank?
 
-      DuplicateReviewCase.open_cases
+      DuplicateReviewCase.open
                          .for_subject(applicant)
                          .exists?(source: :registration_soft_match)
     end

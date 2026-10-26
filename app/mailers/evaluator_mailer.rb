@@ -9,18 +9,23 @@ class EvaluatorMailer < ApplicationMailer
     Rails.application.config.action_mailer.default_url_options
   end
 
-  # Expects evaluation passed via .with(evaluation: ...)
+  # Expects .with(evaluation:, recipient:, operation_id:). The recipient is the evaluator the notice was
+  # written for, never whoever holds the evaluation when the job runs.
   def new_evaluation_assigned
     evaluation = params[:evaluation]
+    evaluator = params[:recipient]
+    superseded = superseded_assignment_delivery(evaluation, operation_id: params[:operation_id], recipient: evaluator)
+    return superseded if superseded
+
     template_name = 'evaluator_mailer_new_evaluation_assigned'
     # The assignment template has only an English seed.
     locale = 'en'
 
     text_template = load_email_template(template_name, locale: locale)
-    variables = build_new_evaluation_variables(evaluation, template: text_template, locale: locale)
-    send_email(recipient_email_for(evaluation.evaluator), text_template, variables)
+    variables = build_new_evaluation_variables(evaluation, evaluator, template: text_template, locale: locale)
+    send_email(recipient_email_for(evaluator), text_template, variables)
   rescue StandardError => e
-    log_mail_error(e, evaluation&.evaluator, template_name)
+    log_mail_error(e, evaluator, template_name)
     raise
   end
 
@@ -51,8 +56,7 @@ class EvaluatorMailer < ApplicationMailer
     raise "Email templates not found for #{template_name}"
   end
 
-  def build_new_evaluation_variables(evaluation, template:, locale: nil)
-    evaluator = evaluation.evaluator
+  def build_new_evaluation_variables(evaluation, evaluator, template:, locale: nil)
     constituent = evaluation.constituent
     application = evaluation.application
     contact = Applications::ContactContext.new(application: application)

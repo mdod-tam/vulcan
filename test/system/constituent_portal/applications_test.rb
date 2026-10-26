@@ -51,8 +51,6 @@ class ApplicationsSystemTest < ApplicationSystemTestCase
 
     visit new_constituent_portal_application_path
 
-    # TODO: Fill and submit the current form before asserting success.
-
     assert_success_message('Application submitted successfully', wait: 5)
   end
 
@@ -336,15 +334,11 @@ class ApplicationsSystemTest < ApplicationSystemTestCase
 
     visit new_constituent_portal_application_path
 
-    # TODO: Submit an incomplete form through the current UI.
-
     assert_error_message("can't be blank", wait: 5)
   end
 
   test 'dashboard shows correct application status after submission' do
     skip 'This test needs to be updated to match the actual application UI'
-
-    # TODO: Rewrite this test for the current application flow.
 
     assert_text 'Application Status'
   end
@@ -353,8 +347,6 @@ class ApplicationsSystemTest < ApplicationSystemTestCase
     skip 'This test needs to be updated to match the actual application UI'
 
     visit new_constituent_portal_application_path
-
-    # TODO: Exercise the current controls and keyboard navigation.
   end
 
   test 'can save a draft application' do

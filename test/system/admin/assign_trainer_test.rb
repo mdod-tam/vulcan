@@ -6,13 +6,11 @@ class AssignTrainerTest < ApplicationSystemTestCase
   setup do
     @admin = create(:admin)
     Policy.find_or_create_by(key: 'waiting_period_years').update!(value: 3)
-    @application = create(:application, :completed, application_date: 2.years.ago.to_date)
+    @application = create(:application, :completed, :with_all_proofs, application_date: 2.years.ago.to_date)
     @trainer = create(:user, :trainer, first_name: 'Jane', last_name: 'Trainer')
 
-    # Set up policy to allow training sessions
     Policy.find_or_create_by(key: 'max_training_sessions').update(value: 2)
 
-    # Sign in as admin via system test helper for reliability
     system_test_sign_in(@admin)
   end
 
@@ -28,11 +26,11 @@ class AssignTrainerTest < ApplicationSystemTestCase
       click_button 'Assign Trainer'
     end
 
-    assert_equal @trainer.id, @application.reload.active_training_session&.trainer_id
-
     within '[data-testid="trainer-assignment-section"]' do
       assert_text 'Current Trainer'
       assert_text @trainer.full_name
     end
+
+    assert_equal @trainer.id, @application.reload.active_training_session&.trainer_id
   end
 end

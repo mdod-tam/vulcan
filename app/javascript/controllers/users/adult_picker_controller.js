@@ -181,7 +181,7 @@ export default class extends Controller {
 
       const changed = el.value !== (this._onFileData[key] || "")
       el.classList.toggle("border-l-4", changed)
-      el.classList.toggle("border-amber-400", changed)
+      el.classList.toggle("border-warning-400", changed)
       el.classList.toggle("pl-2", changed)
     })
   }
@@ -392,7 +392,7 @@ export default class extends Controller {
       if (el) {
         el.value = ''
         el.readOnly = false
-        el.classList.remove("bg-gray-100", "text-gray-500", "border-l-4", "border-amber-400", "pl-2")
+        el.classList.remove("bg-gray-100", "text-gray-500", "border-l-4", "border-warning-400", "pl-2")
       }
     })
 

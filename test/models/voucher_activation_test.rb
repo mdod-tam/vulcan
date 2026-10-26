@@ -27,7 +27,6 @@ class VoucherActivationTest < ActiveSupport::TestCase
     voucher.activate_if_valid!
 
     assert_equal 'active', voucher.status
-    # Ensure the record wasn't updated
     assert_equal original_updated_at, voucher.reload.updated_at
   end
 
@@ -38,7 +37,6 @@ class VoucherActivationTest < ActiveSupport::TestCase
     voucher.activate_if_valid!
 
     assert_equal 'redeemed', voucher.status
-    # Ensure the record wasn't updated
     assert_equal original_updated_at, voucher.reload.updated_at
   end
 
@@ -49,7 +47,6 @@ class VoucherActivationTest < ActiveSupport::TestCase
     voucher.activate_if_valid!
 
     assert_equal 'cancelled', voucher.status
-    # Ensure the record wasn't updated
     assert_equal original_updated_at, voucher.reload.updated_at
   end
 end

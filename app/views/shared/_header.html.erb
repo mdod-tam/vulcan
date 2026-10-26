@@ -1,15 +1,8 @@
 <%
-  # Cache the current_user and derive all values once to avoid multiple DB queries
+  # Values shared by the desktop and mobile navigation.
   user = current_user
-
-  # Set up navigation links once
   navigation_links = []
 
-    #Saving this for later incase we want to add it back to navbar
-    #["About", "/about"],
-    #["Contact", "/contact"]
-
-  # Determine dashboard path and logo link once if user is logged in
   if user
     dashboard_path = if user.admin?
                        admin_dashboard_path
@@ -25,11 +18,14 @@
                        admin_dashboard_path
                      end
 
+    # Staff granted the other discipline reach its dashboard from the navigation.
+    navigation_links << ['Training sessions', trainers_dashboard_path] if user.evaluator? && user.can_train?
+    navigation_links << ['Evaluations', evaluators_dashboard_path] if user.trainer? && user.can_evaluate?
+
     logo_link_path = dashboard_path
     logo_aria_label = "Go to your dashboard"
     logo_sr_text = "TAM Logo - Go to Dashboard"
 
-    # Check if user has any enrolled 2FA method set up
     has_second_factor = user.second_factor_enabled?
   else
     logo_link_path = sign_in_path(locale: public_request_locale_param)
@@ -39,13 +35,13 @@
 %>
 
 <header data-controller="mobile-menu" class="relative z-30">
-  <nav class="bg-white shadow" role="navigation" <%= tag.attributes(aria: { label: t("shared.header.main_navigation") }) %>>
+  <nav class="bg-white shadow-elevation-2" role="navigation" <%= tag.attributes(aria: { label: t("shared.header.main_navigation") }) %>>
     <div class="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
       <div class="flex items-center justify-between h-16">
         <!-- Logo -->
         <div class="flex items-center">
           <%= link_to logo_link_path,
-              class: "focus:outline-none focus:ring-2 focus:ring-indigo-500 rounded-md",
+              class: "rounded-md",
               aria: { label: logo_aria_label } do %>
             <img src="<%= asset_path("TAM_color.png") %>"
                  alt="TAM Logo"
@@ -59,7 +55,7 @@
         <button type="button"
                 data-mobile-menu-target="button"
                 data-action="mobile-menu#toggle"
-                class="inline-flex items-center justify-center p-3 rounded-md text-gray-400 md:hidden hover:text-gray-500 hover:bg-gray-100 focus:outline-none focus:ring-2 focus:ring-indigo-500"
+                class="inline-flex items-center justify-center p-3 rounded-md text-gray-500 md:hidden hover:text-gray-700 hover:bg-gray-100"
                 aria-controls="mobile-menu"
                 aria-expanded="false"
                 aria-haspopup="true">
@@ -86,7 +82,7 @@
                 <li role="none">
                   <%= link_to text,
                       path,
-                      class: "text-gray-700 hover:text-gray-900 px-4 py-3 rounded-md text-sm font-medium focus:outline-none focus:ring-2 focus:ring-indigo-500",
+                      class: "text-gray-700 hover:text-gray-900 px-4 py-3 rounded-md text-sm font-medium",
                       role: "menuitem" %>
                 </li>
               <% end %>
@@ -102,7 +98,7 @@
 
               <% unless has_second_factor %>
                 <%= link_to setup_two_factor_authentication_path,
-                    class: "flex items-center px-4 py-2 rounded-md text-sm font-medium text-amber-800 bg-amber-100 hover:bg-amber-200 focus:outline-none focus:ring-2 focus:ring-amber-500",
+                    class: "flex items-center px-4 py-2 rounded-md text-sm font-medium text-warning-800 bg-warning-100 hover:bg-warning-200",
                     aria: { label: "Set up two-factor authentication for your account" } do %>
                     <svg class="w-4 h-4 mr-2" fill="none" stroke="currentColor" viewBox="0 0 24 24" xmlns="http://www.w3.org/2000/svg">
                       <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 15v2m-6 4h12a2 2 0 002-2v-6a2 2 0 00-2-2H6a2 2 0 00-2 2v6a2 2 0 002 2zm10-10V7a4 4 0 00-8 0v4h8z"></path>
@@ -110,8 +106,8 @@
                     Secure Account
                   <% end %>
                 <% else %>
-                  <%= link_to edit_profile_path, # Use correct helper: edit_profile_path
-                      class: "flex items-center px-4 py-2 rounded-md text-sm font-medium text-amber-800 bg-amber-100 hover:bg-amber-200 focus:outline-none focus:ring-2 focus:ring-amber-500",
+                  <%= link_to edit_profile_path,
+                      class: "flex items-center px-4 py-2 rounded-md text-sm font-medium text-warning-800 bg-warning-100 hover:bg-warning-200",
                       aria: { label: "Edit your account settings" } do %>
                     <svg class="w-4 h-4 mr-2" fill="none" stroke="currentColor" viewBox="0 0 24 24" xmlns="http://www.w3.org/2000/svg">
                       <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 15v2m-6 4h12a2 2 0 002-2v-6a2 2 0 00-2-2H6a2 2 0 00-2 2v6a2 2 0 002 2zm10-10V7a4 4 0 00-8 0v4h8z"></path>
@@ -121,7 +117,7 @@
                 <% end %>
 
                 <%= link_to dashboard_path,
-                    class: "px-4 py-2 rounded-md text-sm font-medium text-white bg-indigo-600 hover:bg-indigo-700 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-indigo-500",
+                    class: "btn btn-primary",
                     aria: { label: "Go to your dashboard" } do %>
                   Dashboard
                 <% end %>
@@ -129,17 +125,17 @@
                     sign_out_path,
                     method: :delete,
                     data: { turbo: false },
-                    class: "px-4 py-2 rounded-md text-sm font-medium text-white bg-indigo-600 hover:bg-indigo-700 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-indigo-500",
+                    class: "btn btn-primary",
                     aria: { label: "Sign out of your account" } %>
             <% elsif !@hide_public_auth_links %>
               <div class="flex space-x-4">
                 <%= link_to t("shared.header.sign_in"),
                     sign_in_path(locale: public_request_locale_param),
-                    class: "px-4 py-2 rounded-md text-sm font-medium text-white bg-indigo-600 hover:bg-indigo-700 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-indigo-500",
+                    class: "btn btn-primary",
                     aria: { label: t("shared.header.sign_in_aria") } %>
                 <%= link_to t("shared.header.sign_up"),
                     sign_up_path(locale: public_request_locale_param),
-                    class: "px-4 py-2 rounded-md text-sm font-medium text-white bg-green-600 hover:bg-green-700 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-green-500",
+                    class: "btn btn-success",
                     aria: { label: t("shared.header.sign_up_aria") } %>
               </div>
             <% end %>
@@ -159,7 +155,7 @@
         <% navigation_links.each do |text, path| %>
           <%= link_to text,
               path,
-              class: "block w-full text-center px-4 py-3 text-base font-medium text-gray-700 hover:text-gray-900 hover:bg-gray-50 focus:outline-none focus:ring-2 focus:ring-indigo-500 rounded-md",
+              class: "block w-full text-center px-4 py-3 text-base font-medium text-gray-700 hover:text-gray-900 hover:bg-gray-50 rounded-md",
               role: "menuitem" %>
         <% end %>
       </div>
@@ -173,38 +169,38 @@
 
             <% unless has_second_factor %>
               <%= link_to setup_two_factor_authentication_path,
-                  class: "mt-2 flex items-center justify-center w-full px-4 py-2 rounded-md text-sm font-medium text-amber-800 bg-amber-100 hover:bg-amber-200 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-amber-500",
+                  class: "mt-2 flex items-center justify-center w-full px-4 py-2 rounded-md text-sm font-medium text-warning-800 bg-warning-100 hover:bg-warning-200",
                   role: "menuitem",
                     aria: { label: "Set up two-factor authentication for your account" } do %>
                 <svg class="w-4 h-4 mr-2" fill="none" stroke="currentColor" viewBox="0 0 24 24" xmlns="http://www.w3.org/2000/svg">
                   <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 15v2m-6 4h12a2 2 0 002-2v-6a2 2 0 00-2-2H6a2 2 0 00-2 2v6a2 2 0 002 2zm10-10V7a4 4 0 00-8 0v4h8z"></path>
                 </svg>
-                Secure Account <%# Standardized text %>
+                Secure Account
               <% end %>
             <% end %>
 
             <%= link_to "Dashboard",
                 dashboard_path,
-                class: "mt-2 block w-full text-center px-4 py-2 rounded-md text-sm font-medium text-white bg-indigo-600 hover:bg-indigo-700 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-indigo-500",
+                class: "btn btn-primary mt-2 w-full",
                 role: "menuitem",
                 aria: { label: "Go to your dashboard" } %>
             <%= button_to "Sign Out",
                 sign_out_path,
                 method: :delete,
                 data: { turbo: false },
-                class: "mt-1 block w-full px-4 py-2 rounded-md text-sm font-medium text-white bg-indigo-600 hover:bg-indigo-700 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-indigo-500",
+                class: "btn btn-primary mt-1 w-full",
                 aria: { label: "Sign out of your account" } %>
           </div>
         <% elsif !@hide_public_auth_links %>
           <div class="px-4 space-y-1">
             <%= link_to t("shared.header.sign_in"),
                 sign_in_path(locale: public_request_locale_param),
-                class: "block w-full px-4 py-3 text-base text-center font-medium text-gray-700 hover:text-gray-900 hover:bg-gray-50 focus:outline-none focus:ring-2 focus:ring-indigo-500 rounded-md",
+                class: "block w-full px-4 py-3 text-base text-center font-medium text-gray-700 hover:text-gray-900 hover:bg-gray-50 rounded-md",
                 role: "menuitem",
                 aria: { label: t("shared.header.sign_in_aria") } %>
             <%= link_to t("shared.header.sign_up"),
                 sign_up_path(locale: public_request_locale_param),
-                class: "block w-full px-4 py-3 text-base text-center font-medium text-gray-700 hover:text-gray-900 hover:bg-gray-50 focus:outline-none focus:ring-2 focus:ring-indigo-500 rounded-md",
+                class: "block w-full px-4 py-3 text-base text-center font-medium text-gray-700 hover:text-gray-900 hover:bg-gray-50 rounded-md",
                 role: "menuitem",
                 aria: { label: t("shared.header.sign_up_aria") } %>
           </div>

@@ -83,6 +83,10 @@ module Applications
       when 'evaluation_requests'
         # Only explicit evaluation requests enter this queue. Equipment approval alone does not create a request.
         scope.with_pending_evaluation_request
+      when 'evaluations_needing_reassignment'
+        scope.needing_evaluator_reassignment
+      when 'training_needing_reassignment'
+        scope.needing_trainer_reassignment
       when 'dependent_applications'
         scope.where.not(managing_guardian_id: nil)
       when 'digitally_signed_needs_review'

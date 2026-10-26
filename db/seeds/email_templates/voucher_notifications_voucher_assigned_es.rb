@@ -1,7 +1,5 @@
 # frozen_string_literal: true
 
-# Seed File for "voucher_notifications_voucher_assigned"
-# --------------------------------------------------
 EmailTemplate.create_or_find_by!(name: 'voucher_notifications_voucher_assigned', format: :text, locale: 'es') do |template|
   template.subject = 'Su Vale Ha Sido Asignado'
   template.description = 'Enviado al constituyente cuando se ha generado y asignado un vale a su solicitud aprobada.'

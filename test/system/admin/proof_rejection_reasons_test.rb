@@ -77,19 +77,19 @@ module Admin
       puts "Current URL: #{current_url}"
 
       if current_path == sign_in_path
-        puts '❌ REDIRECTED TO SIGN-IN PAGE - AUTHENTICATION LOST'
+        puts 'REDIRECTED TO SIGN-IN PAGE - AUTHENTICATION LOST'
         flunk 'Authentication was lost after navigation - redirected to sign-in page'
       end
 
       # This diagnostic restores Current.user if navigation leaves it unset.
       if Current.user.nil?
-        puts '⚠️  Current.user is nil after navigation, attempting to restore from session'
+        puts 'Current.user is nil after navigation, attempting to restore from session'
         session = Session.joins(:user).where(users: { id: @admin.id }).order(created_at: :desc).first
         if session
           Current.user = session.user
-          puts "✅ Restored Current.user from session: #{Current.user.id}"
+          puts "Restored Current.user from session: #{Current.user.id}"
         else
-          puts '❌ No session found for admin user'
+          puts 'No session found for admin user'
           flunk 'No session found for admin user'
         end
       end
@@ -162,7 +162,7 @@ module Admin
          page_html.include?('The page you were looking for doesn\'t exist') ||
          page_html.include?('500 Internal Server Error') ||
          page_html.include?('404 Not Found')
-        puts '❌ RAILS ERROR DETECTED IN PAGE'
+        puts 'RAILS ERROR DETECTED IN PAGE'
         puts "Error page HTML: #{page_html[0, 1000]}"
         flunk 'Rails error detected on page'
       end

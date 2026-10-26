@@ -26,11 +26,11 @@ namespace :email_templates do
     end
 
     if report[:staff_only_es_rows].any?
-      puts 'Note: staff-only es rows are informational until PR 2 copy/locale cleanup (not included in exit status).'
+      puts 'Note: staff-only templates are maintained in English only. Their es rows are informational and do not affect the exit status.'
       puts
     end
 
-    blocking_findings = report[:missing_from_db].any? || report[:unexpected_in_db].any?
+    blocking_findings = EmailTemplates::Audit.blocking?(report)
     puts blocking_findings ? 'Audit finished with findings (exit 1).' : 'Audit finished: OK.'
     exit(1) if blocking_findings
   end

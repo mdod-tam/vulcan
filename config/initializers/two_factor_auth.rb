@@ -4,20 +4,19 @@
 module TwoFactorAuth
   # Session keys used across different 2FA methods
   SESSION_KEYS = {
-    # Existing authentication keys
+    # Challenge state
     challenge: :two_factor_challenge,
     type: :two_factor_type,
     metadata: :two_factor_metadata,
     verified_at: :two_factor_verified_at,
 
-    # Authentication flow keys
+    # Sign-in flow state
     temp_user_id: :two_factor_user_id,
     sign_in_token: :two_factor_sign_in_token,
     available_methods: :two_factor_available_methods,
     return_path: :two_factor_return_path
   }.freeze
 
-  # helper methods for session management
   def self.start_authentication(session, user)
     session[SESSION_KEYS[:temp_user_id]] = user.id
     session[SESSION_KEYS[:sign_in_token]] = user.generate_token_for(:two_factor_sign_in)
@@ -68,7 +67,7 @@ module TwoFactorAuth
     session.delete(SESSION_KEYS[:sign_in_token])
     session.delete(SESSION_KEYS[:available_methods])
     session.delete(SESSION_KEYS[:return_path])
-    # NOTE: Challenge is NOT cleared here - it should be cleared after successful sign_in
+    # The challenge stays in the session until sign-in succeeds; complete_authentication_with_challenge_clear removes it.
     mark_verified(session)
     Rails.logger.info('[2FA] Authentication completed and session marked as verified (challenge preserved)')
   end
@@ -93,26 +92,21 @@ module TwoFactorAuth
     verified_at = session[SESSION_KEYS[:verified_at]]
     return false unless verified_at
 
-    # You could add expiry logic here if needed
-    # return false if verified_at < 24.hours.ago.to_i
-
     true
   end
 
-  # Updated to accept optional context hash
   def self.log_verification_success(user_id, type, context = {})
     log_message = "[2FA] Successful verification for user #{user_id} with #{type}"
     log_message += " (Credential ID: #{context[:credential_id]})" if context[:credential_id]
     Rails.logger.info(log_message)
   end
 
-  # Updated to accept optional context hash
   def self.log_verification_failure(user_id, type, context = {})
     log_message = "[2FA] Failed verification for user #{user_id} with #{type}"
     log_message += " (Reason: #{context[:reason]})" if context[:reason]
     log_message += " (Error class: #{context[:error_class]})" if context[:error_class]
     log_message += " (Credential ID: #{context[:credential_id]})" if context[:credential_id]
     log_message += " (Attempted Credential IDs: #{context[:credential_ids]})" if context[:credential_ids]
-    Rails.logger.warn(log_message) # Use warn level for failures
+    Rails.logger.warn(log_message)
   end
 end

@@ -14,7 +14,7 @@ module SystemTestAuthentication
     rescue Ferrum::DeadBrowserError, Ferrum::BrowserError, Ferrum::NodeNotFoundError, Ferrum::TimeoutError => e
       raise if (tries += 1) > max_retries
 
-      warn "🔄 #{e.class} - restarting browser session (attempt #{tries})"
+      warn "#{e.class} - restarting browser session (attempt #{tries})"
 
       if respond_to?(:force_browser_restart, true)
         force_browser_restart("authentication_rescue_#{tries}")
@@ -44,7 +44,7 @@ module SystemTestAuthentication
       force_browser_restart('sign_in_timeout_recovery') if respond_to?(:force_browser_restart)
     rescue StandardError => e
       debug_authentication_corruption('SIGN_IN_CHECK_ERROR', e, user)
-      debug_puts "⚠️  Authentication state check failed (#{e.class}: #{e.message}) but browser appears responsive. " \
+      debug_puts "Authentication state check failed (#{e.class}: #{e.message}) but browser appears responsive. " \
                  'This likely indicates a stale node reference or timing issue. Proceeding with fresh sign-in attempt ' \
                  "for #{user.email} after visiting #{sign_in_path}. Current URL: #{begin
                    page.current_url
@@ -86,7 +86,7 @@ module SystemTestAuthentication
         # The dashboard is already open.
       elsif page.has_text?(I18n.t('controllers.sessions.invalid_credentials'), wait: 2)
         take_screenshot
-        raise "❌ Sign-in failed for #{user.email} - invalid credentials detected."
+        raise "Sign-in failed for #{user.email} - invalid credentials detected."
       elsif page.has_css?('.flash-message, [role="alert"], .alert, .notice', wait: 2)
         flash_text = page.find('.flash-message, [role="alert"], .alert, .notice', wait: 1).text
 
@@ -94,18 +94,18 @@ module SystemTestAuthentication
           page.has_current_path?(expected_dashboard_path, wait: 5)
         else
           take_screenshot
-          raise "❌ Sign-in failed for #{user.email} - error in flash message: #{flash_text}"
+          raise "Sign-in failed for #{user.email} - error in flash message: #{flash_text}"
         end
       elsif current_path == sign_in_path
         take_screenshot
-        raise "❌ Sign-in failed for #{user.email} - still on sign-in page after waiting for redirect."
+        raise "Sign-in failed for #{user.email} - still on sign-in page after waiting for redirect."
       end
     rescue Capybara::ElementNotFound => e
       if current_path == expected_dashboard_path
         debug_puts 'Authentication successful despite Capybara timeout - on correct dashboard'
       else
         take_screenshot
-        raise "❌ Sign-in failed for #{user.email} - timeout waiting for redirect. Current path: #{current_path}"
+        raise "Sign-in failed for #{user.email} - timeout waiting for redirect. Current path: #{current_path}"
       end
     end
 

@@ -1,8 +1,7 @@
 # frozen_string_literal: true
 
-# Enhanced debugging for Postmark client formatting differences.
-# Payload logging is opt-in and redacted because Postmark bodies can contain
-# password reset and verification links.
+# Normalizes the payload of Postmark /email requests. Payload logging is opt-in (POSTMARK_DEBUG_PAYLOADS=true) and
+# redacted because Postmark bodies can contain password reset and verification links.
 
 module PostmarkDebugger
   BODY_KEYS = %w[Body HtmlBody TextBody Attachments].freeze
@@ -24,11 +23,9 @@ module PostmarkDebugger
 
     log_postmark_payload('MODIFIED', data)
 
-    # Call the original method
     super
   end
 
-  # Simple error logging without trying to inspect the response type
   def handle_response(response)
     result = super
     Rails.logger.info 'POSTMARK SUCCESS: Email sent successfully'
@@ -41,25 +38,23 @@ module PostmarkDebugger
   private
 
   def normalize_postmark_email_payload(data)
-    # Ensure MessageStream is a top-level parameter, not a header
+    # Postmark takes the message stream as a top-level field, not as a header.
     if data['Headers']&.any? { |h| h['Name'] == 'X-PM-Message-Stream' }
       stream_header = data['Headers'].find { |h| h['Name'] == 'X-PM-Message-Stream' }
       data['MessageStream'] = stream_header['Value'] if stream_header
       data['Headers'].delete_if { |h| h['Name'] == 'X-PM-Message-Stream' }
     end
 
-    # Always remove ReplyTo field to match our successful curl request
+    # ReplyTo is not sent.
     data.delete('ReplyTo')
 
-    # Simplify Headers to match our curl request
     return unless data['Headers']&.any?
 
-    # Keep only essential headers
+    # Only Message-ID and Content-Type are sent as custom headers.
     data['Headers'].select! do |header|
       %w[Message-ID Content-Type].include?(header['Name'])
     end
 
-    # Remove Headers entirely if empty
     data.delete('Headers') if data['Headers'].empty?
   end
 

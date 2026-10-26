@@ -1086,6 +1086,13 @@ module Admin
       assert_equal 400, modifier
     end
 
+    test 'the paper form renders the FPL policy as a JSON object for the income controller' do
+      get new_admin_paper_application_path, headers: default_headers
+
+      attribute = css_select('[data-income-validation-fpl-thresholds-value]').sole['data-income-validation-fpl-thresholds-value']
+      assert_equal (1..8).map(&:to_s), JSON.parse(attribute).keys.sort
+    end
+
     test 'should send rejection notification' do
       def @controller.redirect_to(*args)
         flash[:notice] = 'Rejection notification has been sent'

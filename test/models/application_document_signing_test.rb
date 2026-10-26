@@ -57,11 +57,9 @@ class ApplicationDocumentSigningTest < ActiveSupport::TestCase
     url = 'https://api.docuseal.com/audit/12345'
     @application.update!(document_signing_audit_url: url)
 
-    # The encrypted value should be different from the plain text
     encrypted_value = @application.read_attribute_before_type_cast(:document_signing_audit_url)
     assert_not_equal url, encrypted_value
 
-    # But decryption should return the original value
     assert_equal url, @application.document_signing_audit_url
   end
 
@@ -69,11 +67,9 @@ class ApplicationDocumentSigningTest < ActiveSupport::TestCase
     url = 'https://api.docuseal.com/document/67890'
     @application.update!(document_signing_document_url: url)
 
-    # The encrypted value should be different from the plain text
     encrypted_value = @application.read_attribute_before_type_cast(:document_signing_document_url)
     assert_not_equal url, encrypted_value
 
-    # But decryption should return the original value
     assert_equal url, @application.document_signing_document_url
   end
 
@@ -159,7 +155,6 @@ class ApplicationDocumentSigningTest < ActiveSupport::TestCase
     @application.update!(document_signing_status: :sent)
     @application.update!(document_signing_status: :declined)
 
-    # All transitions should be successful
     assert_equal 'declined', @application.document_signing_status
   end
 end

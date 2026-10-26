@@ -1,51 +1,57 @@
 # Setup and maintenance
 
-The [project README](../../README.md#installation) covers prerequisites, credentials, local databases, and starting the app. This guide covers environment initialization and command-line operations.
+The [project README](../../README.md#installation) covers prerequisites, credentials, local databases, and starting the app. This guide covers environment initialization on PostgreSQL 18 and command-line operations.
 
 `bin/setup` currently passes the unsupported Yarn 1 `--check-files` option and ignores its failure. Use the README's installation and database commands until that script is updated.
 
-## Baseline seeds
+## Bootstrapping an environment
 
-These tasks initialize the baseline records for a new environment. Run them after migrations and [initial account setup](#initial-accounts), in the intended Rails environment; for a standalone production install, prefix each command with `RAILS_ENV=production`. The [Heroku sequence](#heroku-deployment-and-operations) runs them against the selected app.
+`bin/rails db:bootstrap` initializes an empty environment, or one you are deliberately resetting. It is separate from an ordinary release, which only migrates (`release: bin/rails db:migrate`), and from a restore: never rerun it to recover data, because it overwrites staff-edited baseline records.
+
+Provide the human administrator as deployment secrets or configuration, never as repository files:
+
+| Variable | Purpose |
+| --- | --- |
+| `BOOTSTRAP_ADMIN_EMAIL` | Administrator sign-in address; must differ from the system audit address `system@mdmat.org`. |
+| `BOOTSTRAP_ADMIN_FIRST_NAME`, `BOOTSTRAP_ADMIN_LAST_NAME` | Profile name. |
+| `BOOTSTRAP_ADMIN_PASSWORD` | Initial password, stored only as a hash. It is never printed or logged. |
+
+The command also needs the normal [production configuration](../../README.md#production-essentials), including persistent Active Record encryption keys in credentials. It never generates or replaces encryption keys, credentials, or `secret_key_base`, and it never accepts the temporary keys that disposable tests use, even with `SECRET_KEY_BASE_DUMMY=1` set. Missing or partial keys stop it before it writes anything.
+
+It runs these steps in order:
+
+1. Validate the administrator inputs before any write.
+2. Run the native `db:migrate` for every configured database.
+3. In one primary-database transaction: provision the system audit administrator, provision the human administrator, reset the baseline records below, and check that every required record exists, including a clean `email_templates:audit`.
+4. After the commit, read everything back with fresh queries and print a completion summary.
+
+| Baseline record | What a run does |
+| --- | --- |
+| Policies | Sets every [default](../../app/services/baseline/policies.rb) back to its checked-in value, recording a policy change for each difference. |
+| Feature flags | Resets `vouchers_enabled` and `dcf_auto_request_certification` to disabled and every communication control to enabled, through `EmailDelivery::ControlWriter` so row identities and cancellation generations are kept. |
+| Rejection reasons | Sets the English and Spanish bodies of every [catalog reason](../../app/services/baseline/rejection_reasons.rb) by `(code, proof_type, locale)`, keeping version history, and leaves each pair synchronized. Reasons staff added under other codes are untouched. |
+| Email templates | Deletes every template and imports the [checked-in files](../../db/seeds/email_templates) in the same transaction, then audits them. The new rows have new ids, so messages captured under the old rows are refused, and pending letters are reconciled after commit. Staff-edited template copy is lost. |
+
+Accounts follow different rules. The system audit administrator gets a random password that is never shown, only when it is first created. An existing administrator with the configured address, including its password, MFA factors, sessions, and profile, is left exactly as it is, so repeating the command is not a credential rotation. An address that belongs to a constituent, a legacy-typed user, or an inactive, suspended, or merged account stops the run with a conflict; nothing is promoted or reactivated, so resolve it manually and rerun. The new administrator follows the normal first-sign-in [MFA enrollment](../security/authentication_system.md#second-factors); the command creates no factor, invitation, or reset message. `User.system_user` remains lookup-only.
+
+Any failure before the commit rolls back the accounts and baseline changes, though migrations that already ran stay applied; fix the cause and rerun. A failure in the final readback exits nonzero with a message that the changes committed and were not rolled back; rerun the command or run `bin/rails email_templates:audit`. Pause delivery processes first when rerunning against an environment that is already sending: the transaction cannot retract a message already handed to a provider. `db:prepare` alone does not seed, and the container entrypoint only migrates, so a failed attempt is retried through `db:bootstrap`.
+
+## Baseline tasks
+
+Each task runs in one transaction as the system audit administrator and reapplies its checked-in values every time, including when run again in the same process. They need the system audit account that `db:bootstrap` provisions.
 
 | Task | Effect |
 | --- | --- |
-| `bin/rails db:seed_policies` | Initializes program policy defaults: income thresholds, waiting periods, training limits, throttles, secure-link timing, and voucher settings. |
-| `bin/rails db:seed_feature_flags` | Creates missing flags; `vouchers_enabled` defaults to disabled. |
-| `bin/rails db:seed_manual_email_templates` | Loads the checked-in email and letter templates; deletes existing `EmailTemplate` rows first. |
-| `bin/rails db:seed_rejection_reasons` | Adds missing proof/certification rejection reasons. |
+| `bin/rails db:seed_policies` | Resets program policies: income thresholds, waiting periods, training limits, throttles, secure-link timing, and voucher settings. |
+| `bin/rails db:seed_feature_flags` | Resets feature flags and communication controls. |
+| `bin/rails db:seed_manual_email_templates` | Replaces every template with the checked-in templates. |
+| `bin/rails db:seed_rejection_reasons` | Resets catalog rejection-reason bodies. |
 
-Review [policy defaults](../../lib/tasks/seed_policies.rake) during initialization. If rows already exist, this task updates differing values; routine policy changes belong in the [policy-management workflow](../features/application_workflow_guide.md#program-policies). Rerunning the template seed replaces staff-edited copy. The general `db:seed` task is for development/test, depends on FactoryBot, and skips its main seed body in production.
+These tasks overwrite staff changes. Routine policy changes belong in the [policy-management workflow](../features/application_workflow_guide.md#program-policies). The general `db:seed` task is the development and test demo seed: it needs FactoryBot and deletes existing records. In production it loads the same initialization as `db:bootstrap`, without the earlier input check or migration, so use `db:bootstrap`.
 
 Products come from [products.yml](../../test/fixtures/products.yml) in the demo seed. There is no standalone product seed task; production products can be entered through the admin product workflow.
 
-## Initial accounts
-
-In the target environment's Rails console (`RAILS_ENV=production bin/rails console`, or `heroku run bin/rails console --app your-app-name`), provision the system audit account and the first staff administrator:
-
-```ruby
-system_actor = User.find_by(email: PublicAuditActor::SYSTEM_AUDIT_EMAIL)
-raise 'System audit address belongs to a non-admin; resolve the conflict manually' if system_actor && !system_actor.admin?
-
-system_actor ||= Users::Administrator.create!(
-  email: PublicAuditActor::SYSTEM_AUDIT_EMAIL,
-  password: SecureRandom.hex(32),
-  first_name: 'System',
-  last_name: 'User',
-  verified: true
-)
-raise 'System audit account missing' unless PublicAuditActor.system_audit_actor
-
-Users::Administrator.create!(
-  email: 'admin@example.org',
-  password: 'replace-with-a-secure-password',
-  first_name: 'Admin',
-  last_name: 'User',
-  email_verified: true
-)
-```
-
-The explicit command above provisions `system@mdmat.org` for audit attribution and refuses to promote a conflicting account. `User.system_user` only looks up an existing administrator; runtime requests and jobs never provision it. Without it, public audit events and metrics alerts are skipped, expiration audits remain pending, secure-link recovery cannot issue a replacement without its original requester, certification uploads fail before storage, and DocuSeal callbacks return HTTP 503 for retry. Registrations requiring duplicate review roll back. Policy seeding stops before making changes. The staff administrator is a separate account and must [enroll in MFA](../security/authentication_system.md#second-factors) on first sign-in.
+The system audit account is required at runtime: without it, public audit events and metrics alerts are skipped, expiration audits remain pending, secure-link recovery cannot issue a replacement without its original requester, certification uploads fail before storage, and DocuSeal callbacks return HTTP 503 for retry. Registrations requiring duplicate review roll back.
 
 ## Heroku deployment and operations
 
@@ -64,13 +70,13 @@ git push heroku HEAD:main
 heroku releases --app "$MAT_APP"
 ```
 
-The [release phase](https://devcenter.heroku.com/articles/release-phase) runs `bin/rails db:migrate`; check that it succeeded, then use `heroku run bin/rails console --app "$MAT_APP"` for [initial account setup](#initial-accounts). Provision the system audit account before seeding or starting web and worker processes. For the first deployment, run the remaining initialization commands:
+The [release phase](https://devcenter.heroku.com/articles/release-phase) runs `bin/rails db:migrate`; check that it succeeded. For the first deployment of an empty database, set the administrator inputs and run the bootstrap once, before starting web and worker processes:
 
 ```bash
-heroku run bin/rails db:seed_policies --app "$MAT_APP"
-heroku run bin/rails db:seed_feature_flags --app "$MAT_APP"
-heroku run bin/rails db:seed_manual_email_templates --app "$MAT_APP"
-heroku run bin/rails db:seed_rejection_reasons --app "$MAT_APP"
+heroku config:set BOOTSTRAP_ADMIN_EMAIL=... BOOTSTRAP_ADMIN_FIRST_NAME=... BOOTSTRAP_ADMIN_LAST_NAME=... --app "$MAT_APP"
+heroku config:set BOOTSTRAP_ADMIN_PASSWORD=... --app "$MAT_APP"
+heroku run bin/rails db:bootstrap --app "$MAT_APP"
+heroku config:unset BOOTSTRAP_ADMIN_PASSWORD --app "$MAT_APP"
 ```
 
 Then check the baseline data and start the web and worker processes:
@@ -82,7 +88,7 @@ heroku ps:scale web=1 worker=1 --app "$MAT_APP"
 heroku ps --app "$MAT_APP"
 ```
 
-With a separate worker, leave `SOLID_QUEUE_IN_PUMA` unset. To run jobs inside Puma instead, set it and omit the separate worker; the Puma config tests variable presence, so setting it to the string `false` still enables the plugin.
+With a separate worker, leave `SOLID_QUEUE_IN_PUMA` unset. To run jobs inside Puma instead, set it to `true` and omit the separate worker.
 
 Check both scan and general job backlogs after deployment. The default worker configuration reserves one thread for document scans and one for general work, including mail; see [scan workers and monitoring](../security/attachment_scanning.md).
 
@@ -100,4 +106,4 @@ For ongoing operations, keep `MAT_APP` set to the intended app:
 | Database status | `heroku pg:info --app "$MAT_APP"` |
 | Capture a database backup | `heroku pg:backups:capture DATABASE_URL --app "$MAT_APP"` |
 
-Capture a backup before data repairs or a deliberate template replacement. The [backup and recovery guide](backup_and_recovery.md) covers scheduling, retention, restoration on Heroku, and which secrets/settings must match. A database dump excludes uploaded files and encryption keys. Restoring an existing environment does not require initialization seeds; rerunning them can replace recovered policies and edited templates.
+Capture a backup before data repairs or a deliberate template replacement. The [backup and recovery guide](backup_and_recovery.md) covers scheduling, retention, restoration on Heroku, and which secrets/settings must match. A database dump excludes uploaded files and encryption keys. Restoring an existing environment does not require `db:bootstrap`; rerunning it replaces recovered policies, flags, rejection reasons, and edited templates.

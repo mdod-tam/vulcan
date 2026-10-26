@@ -3,7 +3,7 @@
     <h1 class="text-2xl font-bold">Vendors</h1>
     <div>
       <a href="<%= admin_applications_path %>" 
-         class="inline-flex items-center px-4 py-2 border border-gray-300 rounded-md shadow-sm text-sm font-medium text-gray-700 bg-white hover:bg-gray-50 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-indigo-500"
+         class="btn btn-outline"
          data-turbo-frame="_top"
          aria-label="Return to applications dashboard">
         Back to Dashboard
@@ -14,17 +14,17 @@
   <div class="p-4 border-b mb-6">
     <div class="flex flex-wrap items-center gap-4">
       <div class="flex items-center gap-2">
-        <label class="text-sm font-medium text-gray-700">W9 Status:</label>
-        <%= link_to "All", admin_vendors_path, class: "inline-flex items-center px-3 py-2 border border-gray-300 shadow-sm text-sm font-medium rounded-md text-gray-700 bg-white hover:bg-gray-50" %>
-        <%= link_to "Not Submitted", admin_vendors_path(w9_status: :not_submitted), class: "inline-flex items-center px-3 py-2 border border-gray-300 shadow-sm text-sm font-medium rounded-md text-gray-700 bg-white hover:bg-gray-50" %>
-        <%= link_to "Pending Review", admin_vendors_path(w9_status: :pending_review), class: "inline-flex items-center px-3 py-2 border border-gray-300 shadow-sm text-sm font-medium rounded-md text-gray-700 bg-white hover:bg-gray-50" %>
-        <%= link_to "Approved", admin_vendors_path(w9_status: :approved), class: "inline-flex items-center px-3 py-2 border border-gray-300 shadow-sm text-sm font-medium rounded-md text-gray-700 bg-white hover:bg-gray-50" %>
-        <%= link_to "Rejected", admin_vendors_path(w9_status: :rejected), class: "inline-flex items-center px-3 py-2 border border-gray-300 shadow-sm text-sm font-medium rounded-md text-gray-700 bg-white hover:bg-gray-50" %>
+        <span class="text-sm font-medium text-gray-700">W9 Status:</span>
+        <%= link_to "All", admin_vendors_path, class: "btn btn-outline" %>
+        <%= link_to "Not Submitted", admin_vendors_path(w9_status: :not_submitted), class: "btn btn-outline" %>
+        <%= link_to "Pending Review", admin_vendors_path(w9_status: :pending_review), class: "btn btn-outline" %>
+        <%= link_to "Approved", admin_vendors_path(w9_status: :approved), class: "btn btn-outline" %>
+        <%= link_to "Rejected", admin_vendors_path(w9_status: :rejected), class: "btn btn-outline" %>
       </div>
     </div>
   </div>
 
-  <div class="bg-white shadow overflow-hidden rounded-lg">
+  <div class="card overflow-hidden">
     <div class="overflow-x-auto">
     <table class="min-w-full divide-y divide-gray-200">
       <thead class="bg-gray-50">
@@ -47,29 +47,22 @@
               <div class="text-sm text-gray-900"><%= vendor.masked_business_tax_id %></div>
             </td>
             <td class="px-6 py-4 whitespace-nowrap">
-              <span class="px-2 inline-flex text-xs leading-5 font-semibold rounded-full
-                <%= vendor.vendor_approved? ? 'bg-green-100 text-green-800' :
-                    vendor.vendor_pending? ? 'bg-yellow-100 text-yellow-800' :
-                    'bg-red-100 text-red-800' %>">
+              <span class="badge <%= vendor.vendor_approved? ? 'badge-success' : vendor.vendor_pending? ? 'badge-warning' : 'badge-danger' %>">
                 <%= vendor.vendor_authorization_status.titleize %>
               </span>
             </td>
             <td class="px-6 py-4 whitespace-nowrap">
-              <span class="px-2 inline-flex text-xs leading-5 font-semibold rounded-full
-                <%= vendor.w9_status_approved? ? 'bg-green-100 text-green-800' :
-                    vendor.w9_status_pending_review? ? 'bg-yellow-100 text-yellow-800' :
-                    vendor.w9_status_rejected? ? 'bg-red-100 text-red-800' :
-                    'bg-gray-100 text-gray-800' %>">
+              <span class="<%= badge_class_for(:w9, vendor.w9_status) %>">
                 <%= vendor.w9_status.to_s.titleize %>
               </span>
               <% if vendor.w9_status_pending_review? %>
-                <span class="ml-2 text-xs text-red-600 font-medium">Needs Review</span>
+                <span class="ml-2 text-xs text-danger-600 font-medium">Needs Review</span>
               <% end %>
             </td>
             <td class="px-6 py-4 whitespace-nowrap text-sm font-medium">
-              <%= link_to "View", admin_vendor_path(vendor), class: "text-indigo-600 hover:text-indigo-900 mr-3" %>
+              <%= link_to "View", admin_vendor_path(vendor), class: "text-primary-600 hover:text-primary-900 mr-3" %>
               <% if vendor.w9_status_pending_review? && vendor.w9_form.attached? %>
-                <%= link_to "Review W9", new_admin_vendor_w9_review_path(vendor), class: "text-green-600 hover:text-green-900" %>
+                <%= link_to "Review W9", new_admin_vendor_w9_review_path(vendor), class: "text-success-600 hover:text-success-900" %>
               <% end %>
             </td>
           </tr>

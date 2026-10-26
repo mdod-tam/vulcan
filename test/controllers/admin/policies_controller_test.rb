@@ -7,24 +7,22 @@ module Admin
     def setup
       @admin = create(:admin)
       @policy = Policy.find_or_create_by!(key: 'max_training_sessions') { |p| p.value = 3 }
-      sign_in_as(@admin) # Use standard helper
+      sign_in_as(@admin)
     end
 
     def test_should_get_index
       get admin_policies_path
       assert_response :success
       assert_select 'h1', text: 'System Policies'
-      # PHASE 5 FIX: The form action is different from what the test expected
-      # The actual form uses bulk_update_admin_policies_path, not just /admin/policies
+      # The form posts to bulk_update_admin_policies_path.
       assert_select "form[action*='admin/policies'][method='post']"
     end
 
     def test_should_see_edit_form_on_index
-      # Policies are edited directly on the index page
+      # Policies are edited on the index page.
       get admin_policies_path
       assert_response :success
-      # PHASE 5 FIX: The form action is different from what the test expected,
-      # and there are multiple forms on the page (one for each policy section)
+      # Each policy section has its own form.
       assert_select "form[action*='admin/policies'][method='post']", { minimum: 1 },
                     'Should have at least one form for policies'
     end

@@ -125,8 +125,7 @@ class Notification < ApplicationRecord
     record_delivery_failure!(error, channel: channel, route: "#{channel}_delivery_failed", message: message, details: details)
   end
 
-  # Generate a human-readable message for the notification by delegating to the NotificationComposer.
-  # This ensures all message logic is centralized and consistent.
+  # The human-readable message for this notification, composed by NotificationComposer.
   def message(viewer = nil)
     NotificationComposer.generate(action, notifiable, actor, metadata, viewer: viewer)
   end

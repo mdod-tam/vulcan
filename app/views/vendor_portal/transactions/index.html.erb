@@ -6,8 +6,7 @@
       </div>
       <div class="mt-4 flex flex-wrap gap-4 md:mt-0 md:ml-4">
         <%= link_to vendor_portal_transactions_path(format: :csv, **request.query_parameters.except('page')),
-                    class: 'inline-flex items-center px-4 py-2 border border-gray-300 rounded-md shadow-sm text-sm font-medium ' \
-                           'text-gray-700 bg-white hover:bg-gray-50 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-indigo-500' do %>
+                    class: 'btn btn-outline' do %>
           <svg class="-ml-1 mr-2 h-5 w-5 text-gray-500" fill="none" viewBox="0 0 24 24" stroke="currentColor">
             <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 10v6m0 0l-3-3m3 3l3-3m2 8H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z" />
           </svg>
@@ -15,21 +14,19 @@
         <% end %>
 
         <%= link_to vendor_portal_dashboard_path,
-                    class: 'inline-flex items-center px-4 py-2 border border-gray-300 rounded-md shadow-sm text-sm font-medium ' \
-                           'text-gray-700 bg-white hover:bg-gray-50 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-indigo-500' do %>
+                    class: 'btn btn-outline' do %>
           Back to Dashboard
         <% end %>
       </div>
     </div>
 
-    <!-- Filters -->
-    <div class="bg-white shadow rounded-lg mb-8">
+    <div class="card mb-8">
       <div class="px-4 py-5 sm:p-6">
         <%= form_with url: vendor_portal_transactions_path, method: :get, class: 'space-y-6', data: { controller: 'date-range' },
                       aria: { describedby: 'transaction-date-hint' } do |f| %>
-          <p id="transaction-date-hint" class="text-sm text-gray-600"><%= t('.date_hint') %></p>
+          <p id="transaction-date-hint" class="form-hint"><%= t('.date_hint') %></p>
           <% if @filter_errors.any? %>
-            <div id="transaction-filter-errors" role="alert" class="rounded-md border border-red-300 bg-red-50 p-4 text-sm text-red-800">
+            <div id="transaction-filter-errors" role="alert" class="rounded-md border border-danger-300 bg-danger-50 p-4 text-sm text-danger-800">
               <h2 class="font-semibold"><%= t('.filter_errors') %></h2>
               <ul class="mt-2 list-disc pl-5">
                 <% @filter_errors.each do |error| %>
@@ -40,7 +37,7 @@
           <% end %>
           <div class="grid grid-cols-1 gap-y-6 gap-x-4 sm:grid-cols-6">
             <div class="sm:col-span-2">
-              <%= f.label :period, 'Time Period', class: 'block text-sm font-medium text-gray-700' %>
+              <%= f.label :period, 'Time Period', class: 'form-label' %>
               <div class="mt-1">
                 <%= f.select :period,
                              options_for_select([
@@ -51,30 +48,30 @@
                                                   [t('.periods.custom'), 'custom']
                                                 ], params[:period]),
                              {},
-                             class: 'shadow-sm focus:ring-indigo-500 focus:border-indigo-500 block w-full sm:text-sm border-gray-300 rounded-md',
+                             class: 'form-input',
                              data: { action: 'change->date-range#toggleCustomRange' } %>
               </div>
             </div>
 
             <div class="sm:col-span-2 <%= 'hidden' unless params[:period] == 'custom' %>" data-date-range-target="customRange">
-              <%= f.label :start_date, 'Start Date', class: 'block text-sm font-medium text-gray-700' %>
+              <%= f.label :start_date, 'Start Date', class: 'form-label' %>
               <div class="mt-1">
                 <%= f.text_field :start_date,
                                  value: accessible_date_value(params[:start_date]),
                                  **typed_date_field_options(aria: { describedby: "transaction-date-hint#{' transaction-filter-errors' if @filter_errors.any?}",
                                                                     invalid: @filter_errors.any? }),
-                                 class: 'shadow-sm focus:ring-indigo-500 focus:border-indigo-500 block w-full sm:text-sm border-gray-300 rounded-md' %>
+                                 class: 'form-input' %>
               </div>
             </div>
 
             <div class="sm:col-span-2 <%= 'hidden' unless params[:period] == 'custom' %>" data-date-range-target="customRange">
-              <%= f.label :end_date, 'End Date', class: 'block text-sm font-medium text-gray-700' %>
+              <%= f.label :end_date, 'End Date', class: 'form-label' %>
               <div class="mt-1">
                 <%= f.text_field :end_date,
                                  value: accessible_date_value(params[:end_date]),
                                  **typed_date_field_options(aria: { describedby: "transaction-date-hint#{' transaction-filter-errors' if @filter_errors.any?}",
                                                                     invalid: @filter_errors.any? }),
-                                 class: 'shadow-sm focus:ring-indigo-500 focus:border-indigo-500 block w-full sm:text-sm border-gray-300 rounded-md' %>
+                                 class: 'form-input' %>
               </div>
             </div>
           </div>
@@ -82,14 +79,13 @@
           <div class="flex items-center">
             <%= f.check_box :needs_shipping_details,
                             { checked: params[:needs_shipping_details] == '1',
-                              class: 'h-4 w-4 text-indigo-600 border-gray-300 rounded focus:ring-indigo-500' }, '1', nil %>
+                              class: 'h-4 w-4 text-primary-600 border-gray-300 rounded' }, '1', nil %>
             <%= f.label :needs_shipping_details, 'Only purchases that need shipping details', class: 'ml-2 text-sm text-gray-700' %>
           </div>
 
           <div class="flex justify-end">
             <%= f.submit 'Apply Filters',
-                         class: 'inline-flex justify-center py-2 px-4 border border-transparent shadow-sm text-sm font-medium rounded-md ' \
-                                'text-white bg-indigo-600 hover:bg-indigo-700 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-indigo-500' %>
+                         class: 'btn btn-primary' %>
           </div>
         <% end %>
       </div>
@@ -97,8 +93,7 @@
 
     <p class="mb-4 text-sm font-medium text-gray-700"><%= t('.summary', count: @transaction_count, amount: number_to_currency(@total_amount)) %></p>
 
-    <!-- Transactions Table -->
-    <div class="bg-white shadow rounded-lg overflow-hidden">
+    <div class="card overflow-hidden">
       <div class="overflow-x-auto">
         <table class="min-w-full divide-y divide-gray-200">
           <thead class="bg-gray-50">
@@ -129,15 +124,15 @@
                 </td>
                 <td class="px-6 py-4 whitespace-nowrap text-sm text-gray-500">
                   <%= link_to transaction.reference_number, vendor_portal_transaction_path(transaction),
-                              class: 'text-indigo-600 hover:text-indigo-900',
+                              class: 'text-primary-600 hover:text-primary-900',
                               aria: { label: "View purchase #{transaction.reference_number}" } %>
                 </td>
                 <td class="px-6 py-4 whitespace-nowrap text-sm text-gray-500">
                   <% if transaction.invoice %>
                     <%= link_to transaction.invoice.invoice_number, vendor_portal_invoice_path(transaction.invoice),
-                                class: 'text-indigo-600 hover:text-indigo-900' %>
+                                class: 'text-primary-600 hover:text-primary-900' %>
                   <% elsif transaction.on_billing_hold? %>
-                    <span class="text-amber-800">On hold — contact the program</span>
+                    <span class="text-warning-800">On hold — contact the program</span>
                   <% else %>
                     <span class="text-gray-500">Not yet invoiced</span>
                   <% end %>

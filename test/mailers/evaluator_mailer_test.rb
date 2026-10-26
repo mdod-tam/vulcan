@@ -7,9 +7,7 @@ class EvaluatorMailerTest < ActionMailer::TestCase
   include EmailTemplateMockHelper
 
   setup do
-    # Stored templates remain text-only until explicit HTML template support is added.
-
-    # Create specific mock templates for each mailer method
+    # Stored templates are text-only, so only the text format is stubbed.
     new_evaluation_assigned_mock = mock_template(
       'New Evaluation Assigned',
       'Text body for evaluation assigned to %<evaluator_full_name>s for %<constituent_full_name>s. Contact: %<constituent_contact_method>s. Language: %<constituent_preferred_language>s. Modality: %<constituent_communication_modality>s. Delivery: %<constituent_delivery_preference>s. %<status_box_text>s %<footer_text>s'
@@ -20,7 +18,6 @@ class EvaluatorMailerTest < ActionMailer::TestCase
       'Recommended products: %<recommended_products_text_list>s. %<footer_text>s'
     )
 
-    # Stub EmailTemplate.find_by! for text format only
     EmailTemplate.stubs(:find_by!)
                  .with(name: 'evaluator_mailer_new_evaluation_assigned', format: :text, locale: 'en')
                  .returns(new_evaluation_assigned_mock)
@@ -29,7 +26,6 @@ class EvaluatorMailerTest < ActionMailer::TestCase
                  .with(name: 'evaluator_mailer_evaluation_submission_confirmation', format: :text, locale: 'en')
                  .returns(evaluation_submission_mock)
 
-    # Create test data using FactoryBot
     @evaluation = create(:evaluation)
     @evaluator = @evaluation.evaluator
     @constituent = @evaluation.constituent
@@ -41,12 +37,10 @@ class EvaluatorMailerTest < ActionMailer::TestCase
   end
 
   test 'new_evaluation_assigned' do
-    # Using Rails 7.1.0+ capture_emails helper
     emails = capture_emails do
-      EvaluatorMailer.with(evaluation: @evaluation).new_evaluation_assigned.deliver_now
+      EvaluatorMailer.with(assignment_notice_params(@evaluation, @evaluation.evaluator)).new_evaluation_assigned.deliver_now
     end
 
-    # Verify we captured an email
     assert_equal 1, emails.size
     email = emails.first
 
@@ -54,7 +48,6 @@ class EvaluatorMailerTest < ActionMailer::TestCase
     assert_equal [@evaluator.email], email.to
     assert_equal 'New Evaluation Assigned', email.subject
 
-    # Check that the email body contains expected text
     body = decoded_text_part(email)
     expected_text = "Text body for evaluation assigned to #{@evaluator.full_name} for #{@constituent.full_name}"
     assert_includes body, expected_text
@@ -68,7 +61,7 @@ class EvaluatorMailerTest < ActionMailer::TestCase
     @evaluator.update!(locale: 'es')
 
     emails = capture_emails do
-      EvaluatorMailer.with(evaluation: @evaluation).new_evaluation_assigned.deliver_now
+      EvaluatorMailer.with(assignment_notice_params(@evaluation, @evaluation.evaluator)).new_evaluation_assigned.deliver_now
     end
 
     assert_equal 1, emails.size
@@ -78,12 +71,10 @@ class EvaluatorMailerTest < ActionMailer::TestCase
   end
 
   test 'evaluation_submission_confirmation' do
-    # Using Rails 7.1.0+ capture_emails helper
     emails = capture_emails do
       EvaluatorMailer.with(evaluation: @evaluation).evaluation_submission_confirmation.deliver_now
     end
 
-    # Verify we captured an email
     assert_equal 1, emails.size
     email = emails.first
 
@@ -91,7 +82,6 @@ class EvaluatorMailerTest < ActionMailer::TestCase
     assert_equal [@constituent.email], email.to
     assert_equal 'Evaluation has been Submitted', email.subject
 
-    # Check that the email body contains expected content from the mock
     body = decoded_text_part(email)
     assert_includes body, "#{@alpha_product.name}\n#{@zeta_product.name}"
     assert_not_includes body, "- #{@alpha_product.name}"
@@ -99,16 +89,13 @@ class EvaluatorMailerTest < ActionMailer::TestCase
   end
 
   test 'evaluation_submission_confirmation generates letter when preference is letter' do
-    # Set constituent communication preference to 'letter'
     @constituent.update!(communication_preference: 'letter')
 
-    # Expect TextTemplateToPdfService to be called
     Letters::TextTemplateToPdfService.any_instance.expects(:queue_for_printing).once
 
-    # Call the mailer method
     email = EvaluatorMailer.with(evaluation: @evaluation).evaluation_submission_confirmation
 
-    # Letter-routing returns noop delivery object; no outbound email should be sent.
+    # Letter routing returns a no-op delivery object, so no email is sent.
     assert_no_emails do
       email.deliver_later
     end

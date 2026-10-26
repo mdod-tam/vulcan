@@ -23,7 +23,7 @@
     <% if report.recommendation_notes.present? %>
       <div class="mt-2 text-sm text-gray-700"><%= simple_format(report.recommendation_notes) %></div>
     <% end %>
-    <%= link_to 'View original evaluation report', evaluators_evaluation_path(report), class: 'text-sm text-indigo-600 underline', data: { turbo_frame: '_top' } %>
+    <%= link_to 'View original evaluation report', evaluators_evaluation_path(report), class: 'text-sm text-primary-600 underline', data: { turbo_frame: '_top' } %>
   <% else %>
     <p class="text-sm text-gray-600">No completed evaluation report is available.</p>
   <% end %>

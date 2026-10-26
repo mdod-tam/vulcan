@@ -90,11 +90,10 @@ module DuplicateReviewCases
       assert @user.reload.needs_duplicate_review
     end
 
-    # The review-round finding this regresses: a lock does not validate a stale decision. If
-    # the user became merged (or otherwise ineligible) while this request waited for the
-    # lock, `locked_user.update!` would trip the merged-record immutability guard and raise
-    # ActiveRecord::RecordInvalid as an *uncaught* exception -- a 500 -- instead of the clean
-    # failure result every other blocker in this service returns.
+    # A lock does not validate a stale decision. If the user became merged (or otherwise ineligible)
+    # while this request waited for the lock, `locked_user.update!` would trip the merged-record
+    # immutability guard and raise ActiveRecord::RecordInvalid, an uncaught exception that returns a 500,
+    # instead of the failure result every other blocker in this service returns.
     test 'fails closed with a result, not an exception, when the user became merged under lock' do
       canonical = create(:constituent, email: "canonical-#{SecureRandom.hex(3)}@example.com")
       @user.update!(merged_into_user: canonical, merged_at: Time.current, status: :inactive)

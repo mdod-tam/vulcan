@@ -5,36 +5,36 @@
   <%= render 'shared/action_errors', action: :save_resource, form: form, form_errors: form_errors,
                                      field_targets: { base: 'product_resource_source', document: 'product_resource_document' } %>
   <div>
-    <%= form.label :title, 'Descriptive title (in the resource language)', class: 'block font-medium' %>
-    <%= form.text_field :title, required: true, class: 'mt-1 block w-full rounded border-gray-300',
+    <%= form.label :title, 'Descriptive title (in the resource language)', class: 'form-label' %>
+    <%= form.text_field :title, required: true, class: 'form-input mt-1',
                                 aria: action_form_field_aria(:save_resource, :title, form_errors: form_errors) %>
     <%= render 'shared/field_errors', action: :save_resource, attribute: :title, form_errors: form_errors %>
   </div>
   <div>
-    <%= form.label :locale, 'Content language', class: 'block font-medium' %>
+    <%= form.label :locale, 'Content language', class: 'form-label' %>
     <%= form.select :locale, I18n.available_locales.map { |locale| [product_resource_language(locale), locale] },
-                    { include_blank: 'Choose a language' }, required: true, class: 'mt-1 block w-full rounded border-gray-300',
+                    { include_blank: 'Choose a language' }, required: true, class: 'form-input mt-1',
                                                             aria: action_form_field_aria(:save_resource, :locale, form_errors: form_errors) %>
     <%= render 'shared/field_errors', action: :save_resource, attribute: :locale, form_errors: form_errors %>
   </div>
   <div>
-    <%= label_tag 'product_resource_source', 'Resource source', class: 'block font-medium' %>
+    <%= label_tag 'product_resource_source', 'Resource source', class: 'form-label' %>
     <%= select_tag 'product_resource[source]', options_for_select([['External link', 'url'], ['PDF document', 'pdf']], @source),
-                   id: 'product_resource_source', class: 'mt-1 block w-full rounded border-gray-300',
+                   id: 'product_resource_source', class: 'form-input mt-1',
                    aria: action_form_field_aria(:save_resource, :base, form_errors: form_errors, describedby: 'source-help') %>
-    <p id="source-help" class="mt-1 text-sm text-gray-600">Choose the source to save. Selecting an external link replaces the saved PDF after a successful save; selecting PDF replaces the saved link. Only the selected source is saved.</p>
+    <p id="source-help" class="form-hint">Choose the source to save. Selecting an external link replaces the saved PDF after a successful save; selecting PDF replaces the saved link. Only the selected source is saved.</p>
     <%= render 'shared/field_errors', action: :save_resource, attribute: :base, form_errors: form_errors %>
   </div>
   <div>
-    <%= form.label :url, 'External URL', class: 'block font-medium' %>
-    <%= form.text_field :url, value: @attempted_url, inputmode: 'url', class: 'mt-1 block w-full rounded border-gray-300',
+    <%= form.label :url, 'External URL', class: 'form-label' %>
+    <%= form.text_field :url, value: @attempted_url, inputmode: 'url', class: 'form-input mt-1',
                               aria: action_form_field_aria(:save_resource, :url, form_errors: form_errors, describedby: 'url-help') %>
-    <p id="url-help" class="mt-1 text-sm text-gray-600">An absolute HTTP or HTTPS URL without credentials. Hosted videos open as external links.</p>
+    <p id="url-help" class="form-hint">An absolute HTTP or HTTPS URL without credentials. Hosted videos open as external links.</p>
     <%= render 'shared/field_errors', action: :save_resource, attribute: :url, form_errors: form_errors %>
   </div>
   <div>
-    <%= form.label :document, 'PDF document', class: 'block font-medium' %>
-    <p id="pdf-help" class="mb-2 text-sm text-gray-600">PDF only, up to and including 10 MB. Select a replacement or remove the selected upload before choosing another.</p>
+    <%= form.label :document, 'PDF document', class: 'form-label' %>
+    <p id="pdf-help" class="form-hint mb-2">PDF only, up to and including 10 MB. Select a replacement or remove the selected upload before choosing another.</p>
     <%= render 'shared/document_upload', form: form, model: @resource, field: :document, input_id: 'product_resource_document',
                                          input_aria: action_form_field_aria(:save_resource, :document, form_errors: form_errors, describedby: 'pdf-help'),
                                          blob: @retained_document, accept: '.pdf,application/pdf',
@@ -42,7 +42,7 @@
     <%= render 'shared/field_errors', action: :save_resource, attribute: :document, form_errors: form_errors %>
   </div>
   <div class="flex flex-wrap items-center gap-4">
-    <%= form.submit 'Save public resource', class: 'rounded bg-indigo-600 px-4 py-2 text-white', data: { turbo_submits_with: 'Saving…' } %>
-    <%= link_to 'Cancel', admin_product_path(@product), class: 'text-indigo-700 underline' %>
+    <%= form.submit 'Save public resource', class: 'btn btn-primary', data: { turbo_submits_with: 'Saving…' } %>
+    <%= link_to 'Cancel', admin_product_path(@product), class: 'text-primary-700 underline' %>
   </div>
 <% end %>

@@ -31,10 +31,7 @@ class ApplicationProviderInfoRequestsTest < ActiveSupport::TestCase
     assert_includes result, matching_application
   end
 
-  # -----------------------------------------------------------------------
-  # pending_provider_info alignment regression coverage
   # The scope must stay aligned with Application#required_proofs_approved?.
-  # -----------------------------------------------------------------------
 
   # Application model callbacks recalculate income_proof_required from income/household
   # data on save. Use update_columns after creation (as the existing test does) to set

@@ -9,12 +9,12 @@
       </p>
     </div>
 
-    <section class="bg-white rounded-lg shadow mb-6" aria-labelledby="reason-groups-heading">
+    <section class="card mb-6" aria-labelledby="reason-groups-heading">
       <h2 id="reason-groups-heading" class="sr-only">Rejection reason groups</h2>
 
       <div class="overflow-x-auto">
         <% if @reason_groups.present? %>
-          <div class="hidden md:block"> <%# Desktop version %>
+          <div class="hidden md:block">
             <table class="min-w-full table-fixed divide-y divide-gray-200" aria-label="Rejection reasons">
               <thead class="bg-gray-50">
                 <tr>
@@ -51,19 +51,19 @@
                     </td>
                     <td class="px-6 py-4 whitespace-nowrap text-sm text-gray-600">
                       <% if group[:en] %>
-                        <span class="inline-flex items-center rounded-md bg-gray-100 px-2.5 py-0.5 text-xs font-medium text-gray-800">EN</span>
+                        <span class="badge badge-neutral">EN</span>
                       <% end %>
                       <% if group[:es] %>
-                        <span class="inline-flex items-center rounded-md bg-gray-100 px-2.5 py-0.5 text-xs font-medium text-gray-800 ml-1">ES</span>
+                        <span class="badge badge-neutral ml-1">ES</span>
                       <% end %>
                     </td>
                     <td class="px-6 py-4 whitespace-nowrap text-sm">
                       <% if group[:en]&.needs_sync? || group[:es]&.needs_sync? %>
-                        <span class="inline-flex items-center rounded-full bg-amber-100 px-3 py-1 text-xs font-medium text-amber-800">
+                        <span class="badge badge-warning">
                           Needs Sync
                         </span>
                       <% else %>
-                        <span class="inline-flex items-center rounded-full bg-green-100 px-3 py-1 text-xs font-medium text-green-800">
+                        <span class="badge badge-success">
                           In sync
                         </span>
                       <% end %>
@@ -72,7 +72,7 @@
                       <%= time_ago_in_words(active_reason.updated_at) %> ago
                     </td>
                     <td class="px-6 py-4 whitespace-nowrap text-right text-sm font-medium space-x-2">
-                      <%= link_to 'Edit', edit_admin_rejection_reason_path(active_reason), class: "text-indigo-600 hover:text-indigo-900 focus-visible:outline focus-visible:outline-2 focus-visible:outline-indigo-600" %>
+                      <%= link_to 'Edit', edit_admin_rejection_reason_path(active_reason), class: "text-primary-600 hover:text-primary-900" %>
                     </td>
                   </tr>
                 <% end %>
@@ -80,7 +80,6 @@
             </table>
           </div>
 
-          <%# Mobile-friendly card layout %>
           <div class="md:hidden">
             <ul role="list" class="divide-y divide-gray-200 space-y-4">
               <% @reason_groups.each do |group| %>
@@ -98,17 +97,17 @@
                     <div class="flex justify-between items-center text-xs text-gray-600 mb-2">
                       <span>Locales: <%= [group[:en] ? 'EN' : nil, group[:es] ? 'ES' : nil].compact.join(', ') %> · Updated <%= time_ago_in_words(active_reason.updated_at) %> ago</span>
                       <% if group[:en]&.needs_sync? || group[:es]&.needs_sync? %>
-                        <span class="inline-flex items-center rounded-full bg-amber-100 px-2 py-1 text-xs font-medium text-amber-800">
+                        <span class="badge badge-warning">
                           Needs Sync
                         </span>
                       <% else %>
-                        <span class="inline-flex items-center rounded-full bg-green-100 px-2 py-1 text-xs font-medium text-green-800">
+                        <span class="badge badge-success">
                           In sync
                         </span>
                       <% end %>
                     </div>
                     <div class="flex justify-end items-center gap-2">
-                      <%= link_to 'Edit', edit_admin_rejection_reason_path(active_reason), class: "text-indigo-600 hover:text-indigo-900 focus-visible:outline focus-visible:outline-2 focus-visible:outline-indigo-600 text-sm" %>
+                      <%= link_to 'Edit', edit_admin_rejection_reason_path(active_reason), class: "text-primary-600 hover:text-primary-900 text-sm" %>
                     </div>
                   </div>
                 </li>
@@ -117,7 +116,7 @@
           </div>
         <% else %>
           <div class="p-6 text-center text-sm text-gray-600">
-            No rejection reasons found. Run seeds to populate baseline records.
+            No rejection reasons have been set up yet.
           </div>
         <% end %>
       </div>

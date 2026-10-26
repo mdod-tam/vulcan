@@ -1,8 +1,5 @@
 # frozen_string_literal: true
 
-# Seed File for "application_notifications_proof_rejected"
-# (Suggest saving as db/seeds/email_templates/application_notifications_proof_rejected.rb)
-# --------------------------------------------------
 template = EmailTemplate.find_or_initialize_by(name: 'application_notifications_proof_rejected', format: :text, locale: 'es')
 template.subject = 'Acción requerida: envíe un documento corregido'
 template.description = 'Enviado cuando se ha rechazado un documento específico enviado por el solicitante.'

@@ -10,15 +10,13 @@ module Evaluations
     end
 
     def call
-      @evaluation.application.with_lock do
-        @evaluation.with_lock do
-          validate_params!
-          @evaluation.update!(
-            status: :cancelled,
-            notes: cancellation_reason
-          )
-          create_event!
-        end
+      @evaluation.with_actor_and_application_lock(@actor) do
+        validate_params!
+        @evaluation.update!(
+          status: :cancelled,
+          notes: cancellation_reason
+        )
+        create_event!
       end
 
       success('Evaluation cancelled successfully.', { evaluation: @evaluation })

@@ -1,5 +1,11 @@
 # frozen_string_literal: true
 
+# Production initializes through bin/rails db:bootstrap. This file's demo data needs FactoryBot and deletes existing records.
+if Rails.env.production?
+  load Rails.root.join('db/seeds/production.rb')
+  return
+end
+
 # Prevent payment notification callback during seeding
 begin
   Invoice.skip_callback(:save, :after, :send_payment_notification)
@@ -61,7 +67,7 @@ def attach_proof_file(app, attachment, proof_type, file_path, filename, indent)
       content_type: 'application/pdf'
     )
     app.save
-    seed_success "#{indent}✓ #{proof_type.to_s.humanize} attached"
+    seed_success "#{indent}#{proof_type.to_s.humanize} attached"
   else
     seed_error "#{proof_type.to_s.humanize} file not found at #{full_file_path}"
   end
@@ -133,64 +139,8 @@ def create_products_from_fixtures
   end
 end
 
-def create_policies
-  seed_puts 'Creating policies...'
-  # IMPORTANT: All policy keys used in the application MUST be defined here
-  # If a policy is missing from this list, Policy.get('key') will return nil
-  # This causes unexpected behavior in mailboxes, controllers, and other logic
-  # Common missing policies that cause test failures:
-  # - proof_submission_rate_limit_* (used by rate limiting)
-  # - support_email (NOTE: Cannot be stored here - integers only!)
-  policies = {
-    'fpl_modifier_percentage' => 400,
-    'fpl_1_person' => 15_650,
-    'fpl_2_person' => 21_150,
-    'fpl_3_person' => 26_650,
-    'fpl_4_person' => 32_150,
-    'fpl_5_person' => 37_650,
-    'fpl_6_person' => 43_150,
-    'fpl_7_person' => 48_650,
-    'fpl_8_person' => 54_150,
-    'max_training_sessions' => 3,
-    'waiting_period_years' => 3,
-    'proof_submission_rate_limit_web' => 10,
-    'proof_submission_rate_limit_email' => 5,
-    'proof_submission_rate_period' => 24,
-    'sign_in_attempt_rate_limit_ip' => 20,
-    'sign_in_attempt_rate_period' => 1,
-    'account_access_rate_limit_ip' => 5,
-    'account_access_rate_limit_contact_ip' => 5,
-    'account_access_rate_limit_user_ip' => 5,
-    'account_access_rate_period' => 1,
-    'account_recovery_rate_limit_contact_ip' => 5,
-    'account_recovery_rate_limit_user_ip' => 3,
-    'account_recovery_rate_limit_ip' => 5,
-    'account_recovery_rate_period' => 1,
-    'max_proof_rejections' => 3,
-    'secure_form_link_expiration_hours' => 48,
-    'secure_form_resend_cooldown_hours' => 1,
-    'voucher_value_hearing_disability' => 500,
-    'voucher_value_vision_disability' => 500,
-    'voucher_value_speech_disability' => 500,
-    'voucher_value_mobility_disability' => 500,
-    'voucher_value_cognition_disability' => 500,
-    'voucher_validity_period_months' => 6,
-    'voucher_minimum_redemption_amount' => 10
-  }
-
-  policies.each do |key, value|
-    policy = Policy.find_or_create_by!(key: key) do |p|
-      p.value = value
-    end
-    raise "Failed to create policy #{key}" unless policy.persisted?
-    raise "Policy #{key} ID not generated" if policy.id.blank?
-    raise "Policy #{key} has wrong value" unless policy.value == value
-  end
-end
-
-def load_fixtures_data
+def load_fixtures_data(users_map)
   seed_puts 'Loading fixtures in order...'
-  users_map = create_users_with_factories
   load_applications_fixture(Rails.root.join('test/fixtures'), users_map)
   load_invoices_fixture(Rails.root.join('test/fixtures'), users_map)
 end
@@ -227,7 +177,7 @@ end
 def create_user_with_factory(factory_name, *traits, **attributes)
   seed_puts "  Creating user with factory #{factory_name}..."
   user = FactoryBot.create(factory_name, *traits, **attributes)
-  seed_success "  ✓ Created #{user.type || 'User'} #{user.email}"
+  seed_success "  Created #{user.type || 'User'} #{user.email}"
   user
 rescue StandardError => e
   seed_error "Failed to create user with factory #{factory_name}: #{e.message}"
@@ -302,30 +252,6 @@ def load_invoices_fixture(fixtures_path, users_map)
   end
 end
 
-def seed_email_templates
-  seed_puts 'Seeding email templates...'
-  # Directly load the helper first, then all other individual email template seed files.
-  # This is more robust than loading a single manifest file.
-  load Rails.root.join('db/seeds/email_templates/email_template_helper.rb')
-  Rails.root.glob('db/seeds/email_templates/*.rb').each do |seed_file|
-    load seed_file unless seed_file.to_s.end_with?('email_template_helper.rb')
-  end
-  Rails.logger.debug 'Finished seeding email templates.' if ENV['VERBOSE_TESTS'] || Rails.env.development?
-
-  # Ensure the registration confirmation template exists, as it's critical for sign-up.
-  # This is a common source of errors if the main email_templates.rb seed file is missed or incomplete.
-  # NOTE: Ideally, this would be in `db/seeds/email_templates.rb`, but adding it here for robustness.
-
-  reg_confirm_name = 'application_notifications_registration_confirmation'
-
-  EmailTemplate.find_or_create_by!(name: reg_confirm_name, format: :text) do |template|
-    template.subject = 'Welcome to Maryland Accessible Telecommunications!'
-    template.body = "Hello %<user_full_name>s,\n\nWelcome! Your account has been created successfully.\n\nThank you for joining."
-    template.description = 'Sent to a new user upon successful registration.'
-    template.variables = %w[user_full_name]
-  end
-end
-
 def ensure_storage_directory
   seed_puts 'Ensuring storage directory exists...'
   storage_dir = Rails.root.join('storage')
@@ -368,7 +294,7 @@ def attach_rex_income_proof(rex_app)
     )
     # Validation still runs. On failure, save returns false and save! raises an exception.
     rex_app.save
-    seed_success '  ✓ Income proof attached successfully'
+    seed_success '  Income proof attached successfully'
   else
     seed_error "Income proof file not found at #{income_file_path}"
   end
@@ -387,7 +313,7 @@ def attach_rex_residency_proof(rex_app)
     )
     # Validation still runs. On failure, save returns false and save! raises an exception.
     rex_app.save
-    seed_success '  ✓ Residency proof attached successfully'
+    seed_success '  Residency proof attached successfully'
   else
     seed_error "Residency proof file not found at #{residency_file_path}"
   end
@@ -440,70 +366,69 @@ def verify_and_fix_missing_files
     verify_and_fix_attachment(app, :residency_proof, :residency_proof, 'residency_proof.pdf', fixed_files)
     verify_and_fix_attachment(app, :medical_certification, :medical_certification, 'medical_certification_valid.pdf', fixed_files)
 
-    seed_success "  ✓ Fixed #{fixed_files.size} missing files for Application ##{app.id}: #{fixed_files.join(', ')}" if fixed_files.any?
+    seed_success "  Fixed #{fixed_files.size} missing files for Application ##{app.id}: #{fixed_files.join(', ')}" if fixed_files.any?
   end
 end
 
-if Rails.env.production?
-  Rails.logger.debug 'Production environment detected. Seeding skipped to prevent data override.'
-else
-  seed_puts "🌱 SEEDING STARTED at #{Time.current}"
-  begin
-    ActiveRecord::Base.transaction do
-      seed_puts '🧹 Clearing existing data...'
-      clear_existing_data
+seed_puts "SEEDING STARTED at #{Time.current}"
+begin
+  ActiveRecord::Base.transaction do
+    seed_puts 'Clearing existing data...'
+    clear_existing_data
 
-      seed_puts '📦 Creating products from fixtures...'
-      create_products_from_fixtures
+    seed_puts 'Creating products from fixtures...'
+    create_products_from_fixtures
 
-      seed_puts '📋 Creating policies...'
-      create_policies
+    seed_puts 'Creating users with factories...'
+    users_map = create_users_with_factories
 
-      seed_puts '� Seeding feature flags...'
-      load Rails.root.join('db/seeds/feature_flags.rb')
+    # Tests create the system audit administrator themselves, so the seeded administrator owns the baseline records there.
+    baseline_actor = Rails.env.test? ? users_map['admin'] : Baseline::Accounts.provision_system_audit_actor!
 
-      seed_puts '� Loading fixture data (users, applications, invoices)...'
-      load_fixtures_data
+    seed_puts 'Creating policies and feature flags...'
+    Baseline::Policies.reset!(actor: baseline_actor)
+    Baseline::FeatureFlags.reset!(actor: baseline_actor)
 
-      seed_puts '📧 Seeding email templates...'
-      seed_email_templates
+    seed_puts 'Loading fixture data (applications, invoices)...'
+    load_fixtures_data(users_map)
 
-      seed_puts '🚫 Seeding rejection reasons...'
-      load Rails.root.join('db/seeds/rejection_reasons.rb')
-      seed_rejection_reasons
+    seed_puts 'Seeding email templates...'
+    EmailTemplates::Catalog.replace!(actor: baseline_actor)
 
-      seed_puts '📁 Ensuring storage directory exists...'
-      ensure_storage_directory
+    seed_puts 'Seeding rejection reasons...'
+    Baseline::RejectionReasons.reset!(actor: baseline_actor)
 
-      seed_puts '📎 Attaching files to applications...'
-      attach_files_to_applications
+    seed_puts 'Ensuring storage directory exists...'
+    ensure_storage_directory
 
-      seed_puts '🔍 Verifying and fixing missing files...'
-      verify_and_fix_missing_files
+    seed_puts 'Attaching files to applications...'
+    attach_files_to_applications
 
-      if Rails.env.development?
-        seed_puts '👥 Creating varied development applications...'
-        require_relative 'seeds/development_applications'
-        Seeds::DevelopmentApplications.new(admin: User.find_by_email('admin@example.com')).call
-      end
+    seed_puts 'Verifying and fixing missing files...'
+    verify_and_fix_missing_files
+
+    if Rails.env.development?
+      seed_puts 'Creating varied development applications...'
+      require_relative 'seeds/development_applications'
+      Seeds::DevelopmentApplications.new(admin: User.find_by_email('admin@example.com')).call
     end
-  rescue StandardError => e
-    Rails.logger.debug { "❌ SEEDING FAILED: #{e.message}" }
-    seed_error "Seeding failed: #{e.message}"
-    Rails.logger.debug 'Backtrace:'
-    e.backtrace.first(10).each { |line| Rails.logger.debug line }
-    raise e
-  else
-    seed_puts '📊 SEEDING SUMMARY:'
-    seed_puts "   Users: #{User.count}"
-    seed_puts "   Applications: #{Application.count}"
-    seed_puts "   Products: #{Product.count}"
-    seed_puts "   Policies: #{Policy.count}"
-    seed_puts "   Feature Flags: #{FeatureFlag.count}"
-    seed_puts "   Email Templates: #{EmailTemplate.count}"
-    seed_puts "   Rejection Reasons: #{RejectionReason.count}"
-    seed_puts "   Invoices: #{Invoice.count}"
-    seed_puts "✅ SEEDING COMPLETED SUCCESSFULLY at #{Time.current}!"
-    Rails.logger.debug 'Seeding completed successfully!' unless Rails.env.production?
   end
+rescue StandardError => e
+  Rails.logger.debug { "SEEDING FAILED: #{e.message}" }
+  seed_error "Seeding failed: #{e.message}"
+  Rails.logger.debug 'Backtrace:'
+  e.backtrace.first(10).each { |line| Rails.logger.debug line }
+  raise e
+else
+  seed_puts 'SEEDING SUMMARY:'
+  seed_puts "   Users: #{User.count}"
+  seed_puts "   Applications: #{Application.count}"
+  seed_puts "   Products: #{Product.count}"
+  seed_puts "   Policies: #{Policy.count}"
+  seed_puts "   Feature Flags: #{FeatureFlag.count}"
+  seed_puts "   Email Templates: #{EmailTemplate.count}"
+  seed_puts "   Rejection Reasons: #{RejectionReason.count}"
+  seed_puts "   Invoices: #{Invoice.count}"
+  seed_puts "SEEDING COMPLETED SUCCESSFULLY at #{Time.current}!"
+  Rails.logger.debug 'Seeding completed successfully!'
 end

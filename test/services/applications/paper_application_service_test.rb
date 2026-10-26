@@ -1523,6 +1523,48 @@ module Applications
       assert_not_includes service.errors, 'Proof upload failed'
     end
 
+    test 'create applies paper context to the transaction writes only and leaves the caller its own context' do
+      [nil, false, true].each do |outer|
+        Current.paper_context = outer
+        params = base_paper_params
+        params[:constituent] = params[:constituent].merge(last_name: "Context#{outer.inspect}")
+        service = paper_service_with_proofs(params)
+        seen = record_paper_context(service, :process_constituent, :create_application, :process_proof_uploads,
+                                    :send_notifications, :reconcile_after_paper_write)
+
+        assert service.create, service.errors.inspect
+
+        assert_equal({ process_constituent: true, create_application: true, process_proof_uploads: true,
+                       send_notifications: outer, reconcile_after_paper_write: outer }, seen)
+        assert_equal outer, Current.paper_context
+      end
+    end
+
+    test 'update applies paper context to the transaction writes only and leaves the caller its own context' do
+      application = create(:application, user: create(:constituent))
+
+      [nil, false, true].each do |outer|
+        Current.paper_context = outer
+        service = paper_service_with_proofs({ application: {} })
+        seen = record_paper_context(service, :update_application_attributes, :process_proof_uploads,
+                                    :reconcile_after_paper_write)
+
+        assert service.update(application), service.errors.inspect
+
+        assert_equal({ update_application_attributes: true, process_proof_uploads: true,
+                       reconcile_after_paper_write: outer }, seen)
+        assert_equal outer, Current.paper_context
+      end
+    end
+
+    test 'a failed create restores the caller paper context' do
+      Current.paper_context = false
+      service = paper_service_with_proofs(base_paper_params.merge(application: {}))
+
+      assert_not service.create
+      assert_equal false, Current.paper_context
+    end
+
     # ProofReview invokes post-review actions after commit. Failure then must not invite a duplicate submission.
     test 'a post-commit callback failure reports success with a warning, not failure' do
       ProofReview.any_instance.stubs(:handle_post_review_actions).raises(StandardError, 'after commit exploded')
@@ -1785,6 +1827,19 @@ module Applications
     end
 
     private
+
+    # Records Current.paper_context as each private step begins.
+    def record_paper_context(service, *steps)
+      seen = {}
+      steps.each do |step|
+        original = service.method(step)
+        service.define_singleton_method(step) do |*args|
+          seen[step] = Current.paper_context
+          original.call(*args)
+        end
+      end
+      seen
+    end
 
     def paper_service(params)
       PaperApplicationService.new(params: params, admin: @admin, skip_proof_processing: true)

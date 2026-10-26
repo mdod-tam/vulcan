@@ -4,7 +4,6 @@
 module TestCaseConfig
   # Sets up the destination root for generators test cases
   def self.configure_generator_test_case(klass)
-    # Create and ensure directory exists
     root_path = File.expand_path('tmp/generator_test_root', Rails.root)
     FileUtils.mkdir_p(root_path)
 
@@ -19,7 +18,6 @@ module TestCaseConfig
         true
       end
 
-      # Setup method still sets the instance variable for consistency
       setup do
         @destination_root = root_path
       end

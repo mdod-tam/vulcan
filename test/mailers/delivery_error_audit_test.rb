@@ -7,7 +7,8 @@ class DeliveryErrorAuditTest < ActiveSupport::TestCase
     test "#{mailer_class} records sanitized diagnostics without template variables" do
       delivery = case mailer_class.name
                  when 'EvaluatorMailer'
-                   EvaluatorMailer.with(evaluation: create(:evaluation)).new_evaluation_assigned
+                   evaluation = create(:evaluation)
+                   EvaluatorMailer.with(assignment_notice_params(evaluation, evaluation.evaluator)).new_evaluation_assigned
                  when 'TrainingSessionNotificationsMailer'
                    TrainingSessionNotificationsMailer.training_scheduled(create(:training_session, :scheduled))
                  when 'VoucherNotificationsMailer'

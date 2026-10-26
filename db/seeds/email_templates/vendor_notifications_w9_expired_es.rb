@@ -1,8 +1,5 @@
 # frozen_string_literal: true
 
-# Seed File for "vendor_notifications_w9_expired"
-# (Suggest saving as db/seeds/email_templates/vendor_notifications_w9_expired.rb)
-# --------------------------------------------------
 EmailTemplate.create_or_find_by!(name: 'vendor_notifications_w9_expired', format: :text, locale: 'es') do |template|
   template.subject = 'El Formulario W9 ha Expirado'
   template.description = 'Enviado a un proveedor cuando su formulario W9 archivado ha caducado, requiriendo que suba uno nuevo para continuar recibiendo pagos.'

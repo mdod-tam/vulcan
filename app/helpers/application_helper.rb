@@ -9,58 +9,24 @@ module ApplicationHelper
   include DateInputHelper
   include ConstituentCommunicationLabelsHelper
 
-  def flash_class_for(flash_type)
-    case flash_type.to_s
-    when 'notice', 'success' then 'bg-green-100 border border-green-400 text-green-700'
-    when 'alert', 'error' then 'bg-red-100 border border-red-400 text-red-700'
-    when 'warning' then 'bg-yellow-100 border border-yellow-400 text-yellow-700'
-    when 'info' then 'bg-blue-100 border border-blue-400 text-blue-700'
-    else 'bg-gray-100 border border-gray-400 text-gray-700'
-    end
-  end
-
   def application_status_badge(application)
-    content_tag(:span,
-                badge_label_for(:application, application.status),
-                class: "px-3 py-2 text-sm font-medium rounded-full whitespace-nowrap inline-flex items-center justify-center #{badge_class_for(
-                  :application, application.status
-                )}")
+    status_badge(:application, application.status)
   end
 
   def fulfillment_type_badge(application)
-    label = if application.voucher_fulfillment?
-              'Fulfillment: Voucher'
-            else
-              'Fulfillment: Equipment Order'
-            end
-
-    content_tag(:span,
-                label,
-                class: 'px-3 py-2 text-sm font-medium rounded-full whitespace-nowrap inline-flex items-center justify-center bg-gray-100 text-gray-800')
+    badge(application.voucher_fulfillment? ? 'Fulfillment: Voucher' : 'Fulfillment: Equipment Order', :neutral, size: :lg)
   end
 
   def proof_status_badge(_proof_type, status)
-    content_tag(:span,
-                badge_label_for(:proof, status),
-                class: "px-3 py-2 text-sm font-medium rounded-full whitespace-nowrap inline-flex items-center justify-center #{badge_class_for(
-                  :proof, status
-                )}")
+    status_badge(:proof, status)
   end
 
   def evaluation_status_badge(evaluation)
-    content_tag(:span,
-                badge_label_for(:evaluation, evaluation.status),
-                class: "px-3 py-2 text-sm font-medium rounded-full whitespace-nowrap inline-flex items-center justify-center #{badge_class_for(
-                  :evaluation, evaluation.status
-                )}")
+    status_badge(:evaluation, evaluation.status)
   end
 
   def training_session_status_badge(session, label: nil)
-    content_tag(:span,
-                label || badge_label_for(:training_session, session.status),
-                class: "px-3 py-2 text-sm font-medium rounded-full whitespace-nowrap inline-flex items-center justify-center #{badge_class_for(
-                  :training_session, session.status
-                )}")
+    status_badge(:training_session, session.status, label: label)
   end
 
   def training_duration_hours_label(duration_hours)
@@ -70,11 +36,7 @@ module ApplicationHelper
   end
 
   def medical_certification_status_badge(application)
-    content_tag(:span,
-                application.medical_certification_status.titleize,
-                class: "px-3 py-2 text-sm font-medium rounded-full whitespace-nowrap inline-flex items-center justify-center #{badge_class_for(
-                  :certification, application.medical_certification_status
-                )}")
+    status_badge(:certification, application.medical_certification_status, label: application.medical_certification_status.titleize)
   end
 
   def document_signing_status_badge(application)
@@ -90,8 +52,7 @@ module ApplicationHelper
             else status.to_s.humanize
             end
 
-    content_tag(:span, label,
-                class: "px-2 py-1 text-xs font-medium rounded-full whitespace-nowrap inline-flex items-center justify-center #{badge_class_for(:document_signing, status)}") # rubocop:disable Layout/LineLength
+    status_badge(:document_signing, status, label: label, size: nil)
   end
 
   def admin_fulfillment_badge(application)
@@ -102,8 +63,7 @@ module ApplicationHelper
     label = labels[state]
     return unless label
 
-    content_tag(:span, safe_join([tag.span('Fulfillment Status: ', class: 'sr-only'), label]),
-                class: "rounded-full px-2 py-1 text-xs font-semibold #{badge_class_for(:equipment, state)}")
+    badge(safe_join([tag.span('Fulfillment Status: ', class: 'sr-only'), label]), badge_variant_for(:equipment, state))
   end
 
   def proof_review_button_text(application, proof_type)
@@ -111,7 +71,7 @@ module ApplicationHelper
   end
 
   def proof_review_button_class(application, proof_type)
-    application.proof_review_button_class(proof_type)
+    application.proof_review_state(proof_type) == :rejected ? 'btn-danger' : 'btn-primary'
   end
 
   # Alias of the generated constituent_portal_application_new_proof_path. Views and tests use this name.
@@ -119,8 +79,8 @@ module ApplicationHelper
     constituent_portal_application_new_proof_path(application, **)
   end
 
-  # check_box_tag has no form binding. A submitted true value wins. Otherwise the stored value decides,
-  # because cast_boolean_params can make the submitted value false and false is not present?.
+  # check_box_tag has no form binding or hidden field, so an unchecked box is an absent key.
+  # A submitted value wins. Otherwise the stored value decides.
   def medical_release_authorized_checked?(application)
     submitted = params.dig(:application, :medical_release_authorized)
     return ActiveModel::Type::Boolean.new.cast(submitted) if submitted.present?
@@ -128,7 +88,7 @@ module ApplicationHelper
     application.present? && application.medical_release_authorized.present?
   end
 
-  # cast_boolean_params already made submitted values booleans, so do not compare with "1".
+  # Submitted values are raw strings, so cast them instead of comparing with "1".
   # A submitted false is a real answer. Rails sends a hidden "0" for an unchecked box, so only an
   # absent key falls back to the stored selection. Otherwise a failed submit reverts the edit.
   def disability_checked?(field, applicant)

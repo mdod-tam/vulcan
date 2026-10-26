@@ -56,8 +56,7 @@ describe("GuardianPickerController", () => {
     
     controller = new GuardianPickerController()
     
-    // No Stimulus application runs here, so define the targets
-    // Stimulus would otherwise provide directly on the instance
+    // No Stimulus application runs here, so the targets Stimulus would define are set directly on the instance.
     Object.defineProperty(controller, 'element', {
       value: fixture,
       writable: false,
@@ -246,7 +245,7 @@ describe("GuardianPickerController", () => {
     })
     
     it("dispatches selectionChange event with false value", () => {
-      // Don't clear mocks for this test since we need to check dispatch
+      // A fresh mock keeps earlier calls out of the dispatch assertion.
       const freshDispatchMock = jest.fn()
       controller.dispatch = freshDispatchMock
       

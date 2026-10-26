@@ -67,7 +67,7 @@ External integrations are Postmark for email, Twilio for SMS/fax status handling
 ## Prerequisites
 
 - Ruby from [`.ruby-version`](.ruby-version) and Bundler.
-- PostgreSQL running locally; CI uses PostgreSQL 17.
+- PostgreSQL 18, which production and development use and CI tests against. A `pg_dump` used for backups or schema work must have a major version at least equal to the server's.
 - Node.js 24.x (see [`.node-version`](.node-version)) and Yarn 4.12.0, pinned by [`.yarnrc.yml`](.yarnrc.yml) and `packageManager` in [package.json](package.json).
 - Chrome or Chromium when running browser tests.
 - The team credentials key, or an isolated development/test credentials setup as described below.
@@ -123,24 +123,24 @@ bin/rails db:seed
 
 **The demo seed clears existing records.** Use it only with disposable local data. [db/seeds.rb](db/seeds.rb) creates users through factories, loads selected YAML data, seeds policies/templates, and attaches sample files. The test helper also uses it to prepare test data; see the [fixture guide](test/fixtures/README.md).
 
-### Targeted seeds
+### Baseline tasks
 
-These tasks initialize the baseline records for a new environment. Run them after migrations and [initial account setup](#initial-accounts), in the intended Rails environment; for a standalone production install, prefix each command with `RAILS_ENV=production`. The [Heroku sequence](#heroku-style-deployment) runs them against the selected app.
+`bin/rails db:bootstrap` initializes an empty environment (see [bootstrapping an environment](docs/infrastructure/setup_and_maintenance.md#bootstrapping-an-environment)); it migrates, provisions the system audit account and one staff administrator from `BOOTSTRAP_ADMIN_*` inputs, and resets the baseline records. It overwrites staff-edited baseline data. These tasks reapply one part of that baseline with the same overwrite behavior, and need the system audit account it provisions:
 
 | Task | Effect |
 | --- | --- |
-| `bin/rails db:seed_policies` | Initializes program policy defaults: income thresholds, waiting periods, training limits, throttles, secure-link timing, and voucher settings. |
-| `bin/rails db:seed_feature_flags` | Creates missing flags; `vouchers_enabled` defaults to disabled. |
-| `bin/rails db:seed_manual_email_templates` | Loads the checked-in email and letter templates; deletes existing `EmailTemplate` rows first. |
-| `bin/rails db:seed_rejection_reasons` | Adds missing proof/certification rejection reasons. |
+| `bin/rails db:seed_policies` | Resets program policies: income thresholds, waiting periods, training limits, throttles, secure-link timing, and voucher settings. |
+| `bin/rails db:seed_feature_flags` | Resets feature flags and communication controls; `vouchers_enabled` defaults to disabled. |
+| `bin/rails db:seed_manual_email_templates` | Replaces every email and letter template with the checked-in templates. |
+| `bin/rails db:seed_rejection_reasons` | Resets catalog proof/certification rejection reasons. |
 
-Review [policy defaults](lib/tasks/seed_policies.rake) during initialization. If rows already exist, this task updates differing values; routine policy changes belong in the [policy-management workflow](docs/features/application_workflow_guide.md#program-policies). Rerunning the template seed replaces staff-edited copy. The general `db:seed` task is for development/test, depends on FactoryBot, and skips its main seed body in production.
+Review the [policy defaults](app/services/baseline/policies.rb) before initializing. Routine policy changes belong in the [policy-management workflow](docs/features/application_workflow_guide.md#program-policies). The general `db:seed` task is the demo seed for development/test; it depends on FactoryBot and clears existing records.
 
 Products come from [products.yml](test/fixtures/products.yml) in the demo seed. There is no standalone product seed task; production products can be entered through the admin product workflow.
 
 ### Initial accounts
 
-Follow [initial account setup](docs/infrastructure/setup_and_maintenance.md#initial-accounts) to explicitly provision the system audit account and a separate staff administrator before seeding policies or starting workers. The command refuses to promote a conflicting non-admin account. `User.system_user` is lookup-only; runtime requests and jobs do not create or promote accounts for audit attribution.
+`bin/rails db:bootstrap` provisions the system audit account and a separate staff administrator from `BOOTSTRAP_ADMIN_EMAIL`, `BOOTSTRAP_ADMIN_FIRST_NAME`, `BOOTSTRAP_ADMIN_LAST_NAME`, and `BOOTSTRAP_ADMIN_PASSWORD`, and refuses to promote a conflicting account. `User.system_user` is lookup-only; runtime requests and jobs do not create or promote accounts for audit attribution.
 
 The staff administrator must [enroll in MFA](docs/security/authentication_system.md#second-factors) on first sign-in.
 
@@ -233,14 +233,7 @@ git push heroku HEAD:main
 heroku releases --app "$MAT_APP"
 ```
 
-The [release phase](https://devcenter.heroku.com/articles/release-phase) runs `bin/rails db:migrate`; check that it succeeded, then use `heroku run bin/rails console --app "$MAT_APP"` for [initial account setup](#initial-accounts). Provision the system audit account before seeding or starting web and worker processes. For the first deployment, run the remaining initialization commands:
-
-```bash
-heroku run bin/rails db:seed_policies --app "$MAT_APP"
-heroku run bin/rails db:seed_feature_flags --app "$MAT_APP"
-heroku run bin/rails db:seed_manual_email_templates --app "$MAT_APP"
-heroku run bin/rails db:seed_rejection_reasons --app "$MAT_APP"
-```
+The [release phase](https://devcenter.heroku.com/articles/release-phase) runs `bin/rails db:migrate`; check that it succeeded. For the first deployment of an empty database, set the `BOOTSTRAP_ADMIN_*` inputs and run `heroku run bin/rails db:bootstrap --app "$MAT_APP"` once before starting web and worker processes, then unset `BOOTSTRAP_ADMIN_PASSWORD`; see [bootstrapping an environment](docs/infrastructure/setup_and_maintenance.md#bootstrapping-an-environment).
 
 Then check the baseline data and start the web and worker processes:
 
@@ -251,7 +244,7 @@ heroku ps:scale web=1 worker=1 --app "$MAT_APP"
 heroku ps --app "$MAT_APP"
 ```
 
-With a separate worker, leave `SOLID_QUEUE_IN_PUMA` unset. To run jobs inside Puma instead, set it and omit the separate worker; the Puma config tests variable presence, so setting it to the string `false` still enables the plugin.
+With a separate worker, leave `SOLID_QUEUE_IN_PUMA` unset. To run jobs inside Puma instead, set it to `true` and omit the separate worker.
 
 Before opening the environment to users, verify staff sign-in and MFA, a [scanned upload and private download](docs/infrastructure/active_storage_s3_setup.md#verify-upload-and-retrieval), and a [queued email delivery](docs/infrastructure/email_system.md#postmark). If using DocuSeal, complete its [go-live check](docs/development/docuseal_integration_guide.md#go-live-check).
 

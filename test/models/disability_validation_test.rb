@@ -58,7 +58,6 @@ class DisabilityValidationTest < ActiveSupport::TestCase
   end
 
   test 'application cannot be submitted without disability' do
-    # Ensure no disabilities are selected
     @constituent.update(
       hearing_disability: false,
       vision_disability: false,
@@ -80,7 +79,6 @@ class DisabilityValidationTest < ActiveSupport::TestCase
   end
 
   test 'application can be submitted with one disability selected' do
-    # Test each disability type individually
     disability_types = %i[hearing vision speech mobility cognition]
 
     disability_types.each_with_index do |disability_type, index|
@@ -93,7 +91,6 @@ class DisabilityValidationTest < ActiveSupport::TestCase
         date_of_birth: Date.new(1980, 1, 15)
       )
 
-      # Reset all disabilities to false, then set just one disability to true
       constituent.update(
         hearing_disability: disability_type == :hearing,
         vision_disability: disability_type == :vision,
@@ -115,7 +112,6 @@ class DisabilityValidationTest < ActiveSupport::TestCase
   end
 
   test 'application can be submitted with multiple disabilities selected' do
-    # Set multiple disabilities
     @constituent.update(
       hearing_disability: true,
       vision_disability: true,
@@ -135,7 +131,6 @@ class DisabilityValidationTest < ActiveSupport::TestCase
   end
 
   test 'application can be submitted with all disabilities selected' do
-    # Set all disabilities
     @constituent.update(
       hearing_disability: true,
       vision_disability: true,

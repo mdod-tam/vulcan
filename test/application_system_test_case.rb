@@ -16,7 +16,6 @@ rescue LoadError
   # Blank screenshot detection is skipped when the PNG parser is unavailable.
 end
 
-# Global Capybara configuration
 Capybara.configure do |config|
   config.default_driver = :cuprite
   config.javascript_driver = :cuprite
@@ -183,7 +182,7 @@ module MemorySafeTestHelpers
     if factory_name == :user && traits.intersect?(SPECIAL_TRAITS)
       attrs_hash = attrs.first || {}
       attrs_hash[:status] = :active if traits.include?(:confirmed)
-      # TODO: Add support for the :with_webauthn_credential trait.
+      # :with_webauthn_credential is accepted but creates no credential.
       traits -= SPECIAL_TRAITS
 
       FactoryBot.create(factory_name, *traits, attrs_hash)
@@ -401,7 +400,7 @@ class ApplicationSystemTestCase < ActionDispatch::SystemTestCase
   end
 
   def restart_browser!
-    puts '🔄 Manually restarting browser...'
+    puts 'Manually restarting browser...'
     capture_browser_recovery_diagnostics('manual_restart')
     page.driver.restart
     Capybara.reset_sessions!
@@ -468,7 +467,6 @@ class ApplicationSystemTestCase < ActionDispatch::SystemTestCase
     take_screenshot
   end
 
-  # Usage: wait_until(time: seconds) { page.current_path == expected_path }
   def wait_until(time: Capybara.default_max_wait_time)
     Timeout.timeout(time) do
       until (value = yield)
@@ -750,7 +748,6 @@ class ApplicationSystemTestCase < ActionDispatch::SystemTestCase
   end
 
   def capybara_session_cleanup
-    # Capybara cleanup pattern: Capybara.send(:session_pool).each { |name, ses| ses.driver.quit }
     if Capybara.respond_to?(:session_pool, true)
       session_pool = Capybara.send(:session_pool)
       session_count = session_pool.size

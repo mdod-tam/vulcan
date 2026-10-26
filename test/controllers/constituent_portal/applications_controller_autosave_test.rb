@@ -208,9 +208,9 @@ module ConstituentPortal
       assert_equal @user.id, new_application.managing_guardian_id
     end
 
-    # A previous autosave URL omitted the dependent and wrote to the guardian's records.
-    # That also made final submission use the guardian as applicant.
-    # Use the rendered URL to protect the dependent draft and the guardian's unchanged records.
+    # An autosave URL that omits the dependent writes to the guardian's records, and final submission
+    # then uses the guardian as applicant. Posting to the rendered URL protects the dependent draft and
+    # leaves the guardian's records unchanged.
     test 'a dependent new-application page autosaves into the dependent draft and never the guardian' do
       @user.update!(hearing_disability: false)
       @draft_application.update!(household_size: 1)

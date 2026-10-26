@@ -25,54 +25,53 @@
     </ul>
   </div>
 
-  <%= form.label :name, "Name", class: "block text-sm font-medium text-gray-700 required-label" %>
+  <%= form.label :name, "Name", class: "form-label required-label" %>
   <%= form.text_field :name, 
-      class: "mt-1 block w-full px-4 py-2 bg-white border border-gray-300 rounded-md focus:outline-none focus:ring-indigo-500 focus:border-indigo-500",
+      class: "form-input mt-1",
       "aria-describedby": "name-description" %>
-  <p id="name-description" class="mt-1 text-xs text-gray-700">Enter the full name of your certifying professional</p>
+  <p id="name-description" class="form-hint">Enter the full name of your certifying professional</p>
 
   <div class="grid grid-cols-1 md:grid-cols-2 gap-4 mt-4">
     <div>
-      <%= form.label :phone, "Phone", class: "block text-sm font-medium text-gray-700 required-label" %>
+      <%= form.label :phone, "Phone", class: "form-label required-label" %>
       <%= form.telephone_field :phone, 
-          class: "mt-1 block w-full px-4 py-2 bg-white border border-gray-300 rounded-md focus:outline-none focus:ring-indigo-500 focus:border-indigo-500",
+          class: "form-input mt-1",
           "aria-describedby": "phone-description",
           pattern: "[0-9]{10}|[0-9]{3}-[0-9]{3}-[0-9]{4}" %>
-      <p id="phone-description" class="mt-1 text-xs text-gray-700">Enter 10-digit phone number</p>
+      <p id="phone-description" class="form-hint">Enter 10-digit phone number</p>
     </div>
     <div>
-      <%= form.label :email, "Email", class: "block text-sm font-medium text-gray-700 required-label" %>
+      <%= form.label :email, "Email", class: "form-label required-label" %>
       <%= form.email_field :email, 
-          class: "mt-1 block w-full px-4 py-2 bg-white border border-gray-300 rounded-md focus:outline-none focus:ring-indigo-500 focus:border-indigo-500",
+          class: "form-input mt-1",
           "aria-describedby": "email-description" %>
-      <p id="email-description" class="mt-1 text-xs text-gray-700">Enter professional email address</p>
+      <p id="email-description" class="form-hint">Enter professional email address</p>
     </div>
   </div>
 
   <div class="mt-4">
-    <%= form.label :fax, "Fax (Optional)", class: "block text-sm font-medium text-gray-700" %>
+    <%= form.label :fax, "Fax (Optional)", class: "form-label" %>
     <%= form.telephone_field :fax, 
-        class: "mt-1 block w-full px-4 py-2 bg-white border border-gray-300 rounded-md focus:outline-none focus:ring-indigo-500 focus:border-indigo-500",
+        class: "form-input mt-1",
         "aria-describedby": "fax-description" %>
-    <p id="fax-description" class="mt-1 text-xs text-gray-700">Enter fax number if available</p>
+    <p id="fax-description" class="form-hint">Enter fax number if available</p>
   </div>
 
-  <!-- Enhanced Authorization Section -->
-  <div class="mt-6 p-4 bg-blue-50 border border-blue-200 rounded">
-    <h4 class="text-base font-medium text-blue-800 mb-3">Professional Information Release Authorization</h4>
+  <div class="mt-6 p-4 bg-info-50 border border-info-200 rounded">
+    <h4 class="text-base font-medium text-info-800 mb-3">Professional Information Release Authorization</h4>
     
-    <!-- MAT Contact Information -->
     <div class="bg-white p-3 rounded border mb-4">
       <h4 class="text-sm font-medium text-gray-900 mb-2">MAT Program Contact Information</h4>
       <div class="space-y-1 text-xs text-gray-700">
-        <p><strong>Email:</strong> <a href="mailto:<%= Policy.get('support_email') || 'mat.program1@maryland.gov' %>" class="text-indigo-600 hover:text-indigo-500"><%= Policy.get('support_email') || 'mat.program1@maryland.gov' %></a></p>
-        <p><strong>Phone:</strong> <a href="tel:8005527724" class="text-indigo-600 hover:text-indigo-500">800-552-7724</a></p>
-        <p><strong>Voice/TTY:</strong> <a href="tel:4107677253" class="text-indigo-600 hover:text-indigo-500">410-767-7253</a></p>
-        <p><strong>Video Phone:</strong> <a href="tel:4108019618" class="text-indigo-600 hover:text-indigo-500">410-801-9618</a></p>
+        <p><strong>Email:</strong> <a href="mailto:<%= Policy.get('support_email') || 'mat.program1@maryland.gov' %>"
+                                      class="text-primary-600 hover:text-primary-500"><%= Policy.get('support_email') || 'mat.program1@maryland.gov' %></a></p>
+        <p><strong>Phone:</strong> <a href="tel:8005527724" class="text-primary-600 hover:text-primary-500">800-552-7724</a></p>
+        <p><strong>Voice/TTY:</strong> <a href="tel:4107677253" class="text-primary-600 hover:text-primary-500">410-767-7253</a></p>
+        <p><strong>Video Phone:</strong> <a href="tel:4108019618" class="text-primary-600 hover:text-primary-500">410-801-9618</a></p>
       </div>
     </div>
     
-    <div class="text-sm text-blue-700 space-y-3">
+    <div class="text-sm text-info-700 space-y-3">
       <p class="font-medium">By providing your certifying professional's contact information and checking the authorization below, you consent to:</p>
       
       <ul class="list-disc list-inside space-y-1 ml-4">
@@ -89,26 +88,23 @@
       </p>
     </div>
     
-    <!-- Required Authorization Checkbox -->
-    <div class="flex items-start pt-3 mt-3 border-t border-blue-200">
-<%# The checked state was hardcoded false, so this box could never render checked. On any
-    re-render -- validation failure, pending review, any refusal -- the constituent's
-    authorization was silently dropped, and because the box is `required`, final_submit_gate then
-    kept "Submit Application" disabled and made an unchanged retry impossible. Bind it to the
-    submitted value, falling back to what is stored on the application. %>
+    <div class="flex items-start pt-3 mt-3 border-t border-info-200">
+      <%# Bound to the submitted value, falling back to the stored one, so a re-render (validation
+          failure, pending review, any refusal) keeps the authorization. The box is required, so
+          losing it would leave final_submit_gate holding "Submit Application" disabled. %>
       <%= check_box_tag "application[medical_release_authorized]", "1",
           medical_release_authorized_checked?(@application),
-          class: "mt-1 h-4 w-4 text-indigo-600 focus:ring-indigo-500 border-gray-300 rounded",
+          class: "mt-1 h-4 w-4 text-primary-600 border-gray-300 rounded",
           required: true,
           "aria-required": "true",
           "aria-describedby": "medical-release-description",
           id: "application_medical_release_authorized" %>
       <%= label_tag "application[medical_release_authorized]",
           "I authorize the release and sharing of my disability-related information as described above",
-          class: "ml-2 block text-sm font-medium text-blue-800 required-label",
+          class: "ml-2 block text-sm font-medium text-info-800 required-label",
           for: "application_medical_release_authorized" %>
     </div>
-    <p id="medical-release-description" class="text-xs text-blue-600 ml-6 mt-1">
+    <p id="medical-release-description" class="text-xs text-info-600 ml-6 mt-1">
       This authorization is required to process your MAT application and verify your eligibility.
     </p>
   </div>

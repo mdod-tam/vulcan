@@ -136,6 +136,19 @@ class ApplicationMailer < ActionMailer::Base
     end
   end
 
+  # An assignment notice announces one operation to one recipient. A later operation, or a recipient who no
+  # longer holds the work, supersedes it, so it is recorded as not sent rather than reaching a former assignee.
+  # Returns the no-op delivery for a superseded notice, otherwise nil. Pass no recipient for a notice to
+  # someone other than the assignee.
+  def superseded_assignment_delivery(assignment, operation_id:, recipient: nil)
+    return if operation_id.present? && assignment.assignment_operation_id == operation_id &&
+              (recipient.nil? || assignment.assigned_to?(recipient))
+
+    EmailDelivery::Outcome.record_not_sent(EmailDelivery::Decision.suppressed(:assignment_superseded),
+                                           context: @delivery_context, mail_action: "#{self.class.name}##{action_name}")
+    noop_delivery(channel: :email, reason: 'assignment_superseded')
+  end
+
   def noop_delivery(channel: nil, reason: nil)
     NoopDelivery.new(channel: channel, reason: reason)
   end

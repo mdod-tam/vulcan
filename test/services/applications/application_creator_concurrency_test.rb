@@ -10,6 +10,9 @@ module Applications
 
     include ConcurrencyTestHelper
 
+    setup { @conversion_admin = create(:admin) }
+    teardown { cleanup_duplicate_review_test_data!(@conversion_admin) }
+
     test 'merge commits first: submission for the newly-merged duplicate fails closed with zero lifecycle side effects' do
       admin, canonical, duplicate, review_case = build_fixtures
       draft = create(:application, :draft, user: duplicate)
@@ -503,13 +506,11 @@ module Applications
     end
 
     def run_role_conversion(user)
-      controller = Admin::UsersController.new
-      controller.set_request!(ActionDispatch::TestRequest.create)
-      controller.set_response!(ActionDispatch::TestResponse.new)
-      controller.params = ActionController::Parameters.new
-      controller.send(:handle_role_change, User.find(user.id), 'Users::Administrator')
-
-      JSON.parse(controller.response.body, symbolize_names: true)
+      result = Users::CapabilityWriter.call(
+        actor: User.find(@conversion_admin.id), user: User.find(user.id), operation_id: SecureRandom.uuid,
+        intent: Users::CapabilityWriter::Intent.change_role(Users::Administrator)
+      )
+      { success: result.changed?, message: result.message }
     end
   end
 end

@@ -6,14 +6,11 @@ class VoucherTest < ActiveSupport::TestCase
   include ActiveJob::TestHelper
 
   setup do
-    # Clear email deliveries to prevent test pollution
     ActionMailer::Base.deliveries.clear
 
-    # Ensure required email templates exist for voucher notifications
     create_voucher_email_templates
 
     Current.user = create(:admin)
-    # Create a constituent with a unique email for each test to avoid email conflicts
     constituent = create(:constituent, email: "unique_setup_#{Time.now.to_i}_#{rand(1000)}@example.com")
     @application = create(:application, user: constituent)
     @voucher = create(:voucher, application: @application)
@@ -48,7 +45,6 @@ class VoucherTest < ActiveSupport::TestCase
   end
 
   test 'requires unique code' do
-    # Create a new constituent with a unique email to avoid validation errors
     constituent = create(:constituent, email: "unique_dupe_check_#{Time.now.to_i}@example.com")
     application = create(:application, user: constituent)
 
@@ -95,21 +91,18 @@ class VoucherTest < ActiveSupport::TestCase
   end
 
   test 'calculates initial values based on disabilities' do
-    # Create admin user for policy setting
     admin = create(:admin)
     Current.user = admin
 
     # Mock the log_change method to avoid User validation error
     Policy.any_instance.stubs(:log_change).returns(true)
 
-    # Set policy values for disabilities
     Policy.set('voucher_value_hearing_disability', 100)
     Policy.set('voucher_value_vision_disability', 200)
     Policy.set('voucher_value_mobility_disability', 300)
     Policy.set('voucher_value_speech_disability', 400)
     Policy.set('voucher_value_cognition_disability', 500)
 
-    # Create constituent with specific disabilities and unique email
     constituent = create(:constituent,
                          email: "unique_disability_test_#{Time.now.to_i}_#{rand(10_000)}@example.com",
                          hearing_disability: true,   # 100
@@ -201,7 +194,6 @@ class VoucherTest < ActiveSupport::TestCase
   end
 
   test 'successful redemption creates transaction and updates status' do
-    # Create a vendor with a unique email
     vendor = create(:vendor, email: "unique_vendor_#{Time.now.to_i}@example.com")
 
     @voucher.update!(
@@ -220,7 +212,6 @@ class VoucherTest < ActiveSupport::TestCase
   end
 
   test 'full redemption marks voucher as redeemed' do
-    # Create a vendor with a unique email
     vendor = create(:vendor, email: "unique_vendor_redeem_#{Time.now.to_i}@example.com")
 
     @voucher.update!(
@@ -234,7 +225,6 @@ class VoucherTest < ActiveSupport::TestCase
   end
 
   test 'sends notification when redeemed' do
-    # Create a vendor with a unique email
     vendor = create(:vendor, email: "unique_vendor_notify_#{Time.now.to_i}@example.com")
 
     @voucher.update!(
@@ -251,8 +241,7 @@ class VoucherTest < ActiveSupport::TestCase
   end
 
   test 'can be cancelled when issued' do
-    # Since 'issued' isn't a valid status based on the model, use 'active' as a substitute
-    # This test is testing the same thing as 'can_be_cancelled_when_active' so we can adapt it
+    # "issued" is not a voucher status, so this uses active.
     @voucher.update!(status: :active)
     assert @voucher.can_cancel?
   end

@@ -8,7 +8,6 @@ module ConstituentPortal
     setup do
       @constituent = create(:constituent)
 
-      # Create an application for the constituent
       @application = create(:application,
                             user: @constituent,
                             status: :in_progress,
@@ -22,10 +21,8 @@ module ConstituentPortal
       @application.update!(status: :approved)
       Current.reset
 
-      # Set up training session policy
       Policy.find_or_create_by(key: 'max_training_sessions').update(value: 3)
 
-      # Sign in as constituent
       sign_in(@constituent)
     end
 
@@ -37,9 +34,8 @@ module ConstituentPortal
       visit constituent_portal_dashboard_path
       assert_selector 'h1', text: 'My Dashboard'
 
-      # Basic verification that the page loaded
-      assert_selector '.bg-white'
-      assert_selector '.bg-white', minimum: 3
+      assert_selector '.card'
+      assert_selector '.card', minimum: 3
     end
   end
 end

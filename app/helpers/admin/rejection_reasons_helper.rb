@@ -27,11 +27,7 @@ module Admin
     end
 
     def rejection_reason_sync_badge_classes(reason)
-      if reason&.needs_sync?
-        'inline-flex items-center rounded-full bg-amber-100 px-3 py-1 text-xs font-medium text-amber-800'
-      else
-        'inline-flex items-center rounded-full bg-emerald-100 px-3 py-1 text-xs font-medium text-emerald-800'
-      end
+      badge_classes(reason&.needs_sync? ? :warning : :success)
     end
 
     def rejection_reason_last_updated_text(reason)

@@ -4,9 +4,7 @@ class AccountRecoveryController < ApplicationController
   skip_before_action :authenticate_user!, only: %i[new create confirmation]
   around_action :with_public_request_locale, only: %i[new create confirmation]
 
-  def new
-    # Renders the form for requesting security key recovery
-  end
+  def new; end
 
   def create
     @account_recovery_contact = account_recovery_contact
@@ -21,9 +19,7 @@ class AccountRecoveryController < ApplicationController
     redirect_to_recovery_confirmation
   end
 
-  def confirmation
-    # Renders confirmation page
-  end
+  def confirmation; end
 
   private
 
@@ -65,7 +61,7 @@ class AccountRecoveryController < ApplicationController
       notify_admins_of_recovery_request!(recovery_request, admins: notification_admins, requester: locked_user)
     end
   rescue ActiveRecord::RecordNotUnique
-    # Concurrent duplicate pending — treat as coalesced (partial unique index)
+    # The partial unique index rejects a concurrent duplicate pending request. Treat it as already submitted.
     nil
   rescue StandardError => e
     log_recovery_attempt(user, 'failed', error_class: e.class.name)
@@ -162,7 +158,7 @@ class AccountRecoveryController < ApplicationController
   end
 
   def redirect_to_recovery_confirmation
-    # We don't want to reveal if an email exists in our system.
+    # Every outcome redirects here so the response does not reveal whether the account exists.
     redirect_to account_recovery_confirmation_path(locale: public_request_locale_param)
   end
 end

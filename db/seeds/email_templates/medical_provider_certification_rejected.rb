@@ -1,6 +1,5 @@
 # frozen_string_literal: true
 
-# Seed File for "medical_provider_certification_rejected"
 template = EmailTemplate.find_or_initialize_by(name: 'medical_provider_certification_rejected', format: :text, locale: 'en')
 template.subject = 'Disability Certification Rejected'
 template.description = 'Sent to a medical provider when the submitted disability certification form is rejected.'

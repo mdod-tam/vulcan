@@ -5,31 +5,22 @@ require 'application_system_test_case'
 module Admin
   class PaperApplicationConstituentTypeTest < ApplicationSystemTestCase
     test 'creates paper application with correct constituent type' do
-      # This test is currently skipped. Remove the line below to enable it.
       skip 'Skipping until paper application form validations are stabilized'
 
-      # Create admin with explicitly verified status
       admin = create(:admin, verified: true)
 
-      # Use the enhanced sign in helper
       system_test_sign_in(admin)
 
-      # --- Robust Login Verification ---
-      # Verify redirection to the admin dashboard to ensure login was successful.
       visit admin_applications_path
       assert_selector 'h1', text: 'Admin Dashboard'
 
-      # Visit the new paper application form
       visit new_admin_paper_application_path
 
-      # Explicitly select the "Adult" radio button
       assert_selector 'label', text: 'An Adult (applying for themselves)'
       choose 'applicant_is_adult'
 
-      # Verify the constituent section is visible
       assert_selector '#self-info-section', visible: true
 
-      # Fill out the form using specific field IDs/names
       fill_in 'constituent_first_name', with: 'Test'
       fill_in 'constituent_last_name', with: 'User'
       fill_in 'constituent_date_of_birth', with: 30.years.ago.strftime('%Y-%m-%d')

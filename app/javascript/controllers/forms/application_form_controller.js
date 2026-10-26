@@ -1,13 +1,9 @@
 import { Controller } from "@hotwired/stimulus"
 
 /**
- * Application Form Controller (Simplified)
- * 
- * Basic form functionality that doesn't belong in specialized controllers.
- * Most functionality has been moved to:
- * - income-validation (FPL validation)
- * - currency-formatter (input formatting)  
- * - accessibility-announcer (screen reader support)
+ * Listens for submit on the application form target. Income validation, currency formatting, and
+ * screen reader announcements belong to the income-validation, currency-formatter, and
+ * accessibility-announcer controllers.
  */
 export default class extends Controller {
   static targets = ["form"]
@@ -16,7 +12,7 @@ export default class extends Controller {
     if (process.env.NODE_ENV !== 'production') {
       console.log("Application Form Controller connected")
     }
-    // Store bound method reference for proper cleanup
+    // Listener removal needs the same bound function.
     this._boundHandleFormSubmit = this.handleFormSubmit.bind(this)
     this.setupFormHandlers()
   }
@@ -29,7 +25,6 @@ export default class extends Controller {
   }
 
   setupFormHandlers() {
-    // Basic form setup that doesn't belong elsewhere
     if (this.hasFormTarget) {
       this.formTarget.addEventListener("submit", this._boundHandleFormSubmit)
     }
@@ -42,29 +37,8 @@ export default class extends Controller {
   }
 
   handleFormSubmit(event) {
-    // Basic form submission handling
     if (process.env.NODE_ENV !== 'production') {
       console.log("Form submission started")
     }
-    
-    // Let other controllers handle their specific validation
-    // This controller just handles basic form flow
-  }
-
-  // Legacy method for backward compatibility
-  // New code should use the specialized controllers
-  validateIncomeThreshold() {
-    console.warn("validateIncomeThreshold is deprecated. Use income-validation controller instead.")
-  }
-
-  formatCurrencyInput() {
-    console.warn("formatCurrencyInput is deprecated. Use currency-formatter controller instead.")
-  }
-
-  initiateDependentSubmission() {
-    if (process.env.NODE_ENV !== 'production') {
-      console.log("Form submission started");
-    }
-    this.submitForm();
   }
 }

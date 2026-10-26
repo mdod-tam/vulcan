@@ -1,7 +1,5 @@
 # frozen_string_literal: true
 
-# Seed File for "evaluator_mailer_new_evaluation_assigned"
-# --------------------------------------------------
 template = EmailTemplate.find_or_initialize_by(name: 'evaluator_mailer_new_evaluation_assigned', format: :text, locale: 'en')
 template.subject = 'New Evaluation Assigned'
 template.description = 'Sent to an evaluator when a new constituent evaluation has been assigned to them.'

@@ -5,16 +5,16 @@ class UsersController < ApplicationController
 
   before_action :authenticate_user!
   before_action :set_current_user
-  helper_method :after_update_path # Add this line to make the method available to views
+  helper_method :after_update_path
 
   def edit
     @user = current_user
   end
 
   # Locks the current user before requalifying and updating primary contact fields, so a
-  # concurrent merge and a concurrent profile edit can never interleave: either the merge
+  # concurrent merge and a concurrent profile edit cannot interleave: either the merge
   # commits first and this reload sees the retired record and refuses, or the edit commits
-  # first and the merge -- which takes the same lock -- waits.
+  # first and the merge, which takes the same lock, waits.
   def update
     @user = current_user
     update_succeeded = false
@@ -30,7 +30,7 @@ class UsersController < ApplicationController
 
     if update_succeeded
       flash[:notice] = 'Profile successfully updated'
-      redirect_to after_update_path(@user) # Add @user as argument
+      redirect_to after_update_path(@user)
     else
       render :edit, status: :unprocessable_content
     end

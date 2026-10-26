@@ -35,11 +35,11 @@ module Admin
 
     def review_alert_class(days_waiting)
       if days_waiting >= 3
-        'bg-red-50 text-red-700'
+        'bg-danger-50 text-danger-700'
       elsif days_waiting >= 2
-        'bg-yellow-50 text-yellow-700'
+        'bg-warning-50 text-warning-700'
       else
-        'bg-blue-50 text-blue-700'
+        'bg-info-50 text-info-700'
       end
     end
 
@@ -75,15 +75,15 @@ module Admin
       return if remaining > 3
 
       if remaining.zero?
-        content_tag(:div, class: 'bg-red-50 p-4 rounded-md') do
-          content_tag(:p, class: 'text-sm text-red-700') do
+        content_tag(:div, class: 'bg-danger-50 p-4 rounded-md') do
+          content_tag(:p, class: 'text-sm text-danger-700') do
             "This application has reached the maximum number of rejections.
            Further rejections will archive the application."
           end
         end
       else
-        content_tag(:div, class: 'bg-yellow-50 p-4 rounded-md') do
-          content_tag(:p, class: 'text-sm text-yellow-700') do
+        content_tag(:div, class: 'bg-warning-50 p-4 rounded-md') do
+          content_tag(:p, class: 'text-sm text-warning-700') do
             "Warning: #{remaining} #{'rejection'.pluralize(remaining)} remaining
            before application is automatically archived."
           end

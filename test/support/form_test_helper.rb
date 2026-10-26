@@ -1,10 +1,9 @@
 # frozen_string_literal: true
 
 module FormTestHelper
-  # Helper method to create checkbox parameters that simulate Rails form submission
-  # When a checkbox is checked, Rails sends both "0" and "1" values in an array
+  # Rails form checkboxes submit a hidden "0" and the checked "1" under one scalar name, so the last value wins.
   def checkbox_params(checked)
-    checked ? %w[0 1] : '0'
+    checked ? '1' : '0'
   end
 
   # Helper method to create a set of checkbox parameters for multiple checkboxes
