@@ -25,7 +25,13 @@ module UserAuthentication
       password_reset_token_fingerprint
     end
 
+    # Match Rails' password-reset salt binding without storing the password digest in the browser.
+    generates_token_for :two_factor_sign_in do
+      password_salt&.last(10)
+    end
+
     has_many :sessions, dependent: :destroy
+    after_update :revoke_sessions_after_password_change, if: :saved_change_to_password_digest?
 
     has_many :webauthn_credentials, dependent: :destroy
     has_many :totp_credentials, dependent: :destroy
@@ -104,6 +110,11 @@ module UserAuthentication
   end
 
   private
+
+  def revoke_sessions_after_password_change
+    # Reload so a previously loaded association cannot leave a newer session active.
+    sessions.reload.destroy_all
+  end
 
   # Payload for the :password_reset token above. The password digest is the HMAC key
   # because the schema has no separate password salt column.

@@ -18,7 +18,7 @@ class VoucherNotificationsMailer < ApplicationMailer
     begin
       text_template = find_text_template(template_name, locale: locale)
     rescue ActiveRecord::RecordNotFound => e
-      Rails.logger.error "Missing EmailTemplate for #{template_name}: #{e.message}"
+      Rails.logger.error "Missing EmailTemplate for #{template_name}: #{e.class.name}"
       raise "Email template (text format) not found for #{template_name}"
     end
 
@@ -68,7 +68,7 @@ class VoucherNotificationsMailer < ApplicationMailer
     begin
       text_template = find_text_template(template_name, locale: locale)
     rescue ActiveRecord::RecordNotFound => e
-      Rails.logger.error "Missing EmailTemplate for #{template_name}: #{e.message}"
+      Rails.logger.error "Missing EmailTemplate for #{template_name}: #{e.class.name}"
       raise "Email template (text format) not found for #{template_name}"
     end
 
@@ -145,7 +145,7 @@ class VoucherNotificationsMailer < ApplicationMailer
     begin
       text_template = find_text_template(template_name, locale: locale)
     rescue ActiveRecord::RecordNotFound => e
-      Rails.logger.error "Missing EmailTemplate for #{template_name}: #{e.message}"
+      Rails.logger.error "Missing EmailTemplate for #{template_name}: #{e.class.name}"
       raise "Email template (text format) not found for #{template_name}"
     end
 
@@ -208,7 +208,7 @@ class VoucherNotificationsMailer < ApplicationMailer
     begin
       text_template = find_text_template(template_name, locale: locale)
     rescue ActiveRecord::RecordNotFound => e
-      Rails.logger.error "Missing EmailTemplate for #{template_name}: #{e.message}"
+      Rails.logger.error "Missing EmailTemplate for #{template_name}: #{e.class.name}"
       raise "Email template (text format) not found for #{template_name}"
     end
 

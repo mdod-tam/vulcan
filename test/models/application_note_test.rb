@@ -5,7 +5,7 @@ require 'test_helper'
 class ApplicationNoteTest < ActiveSupport::TestCase
   setup do
     @application = create(:application)
-    @admin = create(:admin)
+    @admin = create(:admin, first_name: 'Bob', last_name: 'Jones')
   end
 
   test 'should create a valid application note' do
@@ -100,12 +100,15 @@ class ApplicationNoteTest < ActiveSupport::TestCase
 
   test 'assign_to! should assign note to user and log audit event' do
     note = create(:application_note, application: @application)
-    other_admin = create(:admin)
+    other_admin = create(:admin, first_name: 'Alice', last_name: 'Smith')
     Current.user = @admin
 
     assert_nil note.assigned_to_id
     note.assign_to!(other_admin)
     assert_equal other_admin.id, note.reload.assigned_to_id
+    event = Event.find_by!(auditable: @application, action: 'note_assigned')
+    assert_equal other_admin.id, event.metadata['assigned_to_id']
+    assert_equal 'A*** S***', event.metadata['assigned_to_name']
   end
 
   test 'unassign! should remove assignment and log audit event' do
@@ -140,6 +143,9 @@ class ApplicationNoteTest < ActiveSupport::TestCase
     assert_nil note.completed_at
     note.mark_as_done!
     assert_not_nil note.reload.completed_at
+    event = Event.find_by!(auditable: @application, action: 'note_completed')
+    assert_equal @admin.id, event.metadata['completed_by_id']
+    assert_equal 'B*** J***', event.metadata['completed_by_name']
   end
 
   test 'mark_as_incomplete! should clear completed_at' do

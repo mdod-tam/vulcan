@@ -133,7 +133,7 @@ class MedicalProviderMailerTest < ActionMailer::TestCase
     assert_includes variables[:certification_submission_instructions], variables[:secure_upload_url]
   end
 
-  test 'certification error logging redacts secure upload URLs' do
+  test 'certification error logging uses application identity and omits private exception details' do
     mailer = MedicalProviderMailer.new
     original_logger = Rails.logger
     log_output = StringIO.new
@@ -142,10 +142,11 @@ class MedicalProviderMailerTest < ActionMailer::TestCase
     error.set_backtrace(["app/mailers/example.rb:1:in `#{raw_url}'"])
     Rails.logger = ActiveSupport::Logger.new(log_output)
 
-    mailer.send(:log_certification_error, 'request_certification', 'provider@example.test', error)
+    mailer.send(:log_certification_error, 'request_certification', 42, error)
 
     log_message = log_output.string
-    assert_includes log_message, '[REDACTED_URL]'
+    assert_includes log_message, 'application 42'
+    assert_includes log_message, 'StandardError'
     assert_not_includes log_message, raw_url
     assert_not_includes log_message, 'secret-token'
   ensure

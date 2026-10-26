@@ -1,7 +1,5 @@
 # frozen_string_literal: true
 
-require 'csv'
-
 module Admin
   class EquipmentController < BaseController
     def index
@@ -29,11 +27,11 @@ module Admin
              else
                queue.groups.flat_map(&:last)
              end
-      csv = CSV.generate do |file|
-        file << ['Manufacturer', 'Catalog model', 'Model identifier', 'Required quantity']
+      headers = ['Manufacturer', 'Catalog model', 'Model identifier', 'Required quantity']
+      csv = CsvExport.generate(headers: headers, actor: current_user, export_type: 'equipment_bids') do |file|
         rows.group_by(&:product).each do |product, records|
           quantity = records.sum { |record| record.is_a?(EquipmentNeed) ? record.remaining_quantity : 1 }
-          file << [SpreadsheetCell.safe(product.manufacturer), SpreadsheetCell.safe(product.name), SpreadsheetCell.safe(product.model_number), quantity]
+          file << [product.manufacturer, product.name, product.model_number, quantity]
         end
       end
       send_data csv, type: 'text/csv; charset=utf-8', filename: "equipment-bids-#{Date.current.iso8601}.csv", disposition: 'attachment'

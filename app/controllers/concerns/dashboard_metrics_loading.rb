@@ -41,7 +41,7 @@ module DashboardMetricsLoading # rubocop:disable Metrics/ModuleLength
 
     cached.merge(print_queue_pending_count: PrintQueueItem.unreleased.count)
   rescue StandardError => e
-    Rails.logger.error "Dashboard metric error: #{e.message}"
+    Rails.logger.error "Dashboard metric error: #{e.class.name}"
     default_metric_values_hash
   end
 
@@ -314,7 +314,7 @@ module DashboardMetricsLoading # rubocop:disable Metrics/ModuleLength
   def safe_assign(var_name, value)
     instance_variable_set("@#{var_name}", value)
   rescue StandardError => e
-    Rails.logger.error "Failed to assign @#{var_name}: #{e.message}"
+    Rails.logger.error "Failed to assign @#{var_name}: #{e.class.name}"
     instance_variable_set("@#{var_name}", 0)
   end
 

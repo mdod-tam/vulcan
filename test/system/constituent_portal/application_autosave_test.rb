@@ -223,7 +223,7 @@ class ApplicationAutosaveTest < ApplicationSystemTestCase
     visit edit_constituent_portal_application_path(draft)
     page.execute_script("document.querySelector('[name=autosave_context]').value = 'invalid-context'")
     fill_in 'Household Size', with: 7
-    attach_file 'application_income_proof', file_fixture('income_proof.pdf'), make_visible: true
+    attach_cleared_document 'application_income_proof', file_fixture('income_proof.pdf'), make_visible: true
     take_evidence_screenshot('application-save-with-invalid-ordering-and-upload', full: true, html: true)
     find('input[name="save_draft"]').click
 

@@ -50,13 +50,14 @@
           <%# Proof Preview Section %>
           <div class="bg-gray-50 p-4 rounded-lg">
             <h2 class="text-lg font-medium text-gray-900 mb-4">Proof Preview</h2>
+            <%= render 'shared/document_scan_status', document: @proof %>
             <% if @proof.content_type.start_with?('image/') %>
-              <%= image_tag url_for(@proof), 
+              <%= image_tag document_download_path(@proof),
                   class: "max-w-full h-auto rounded", 
                   alt: "#{@proof_type.titleize} Proof" %>
             <% else %>
               <div class="flex items-center justify-center bg-gray-100 rounded-lg p-8">
-                <%= link_to url_for(@proof), 
+                <%= link_to document_download_path(@proof),
                     class: "inline-flex items-center px-4 py-2 border border-transparent text-sm font-medium rounded-md text-white bg-indigo-600 hover:bg-indigo-700",
                     target: "_blank",
                     rel: "noopener" do %>

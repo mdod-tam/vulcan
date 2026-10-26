@@ -319,7 +319,7 @@ module Applications
       assert_equal %w[medical_provider_email medical_provider_name], event.metadata['overwritten_fields'].sort
       assert_equal 'secure_request_form', event.metadata['submitted_via']
       assert_equal @secure_request_form.id, event.metadata['secure_request_form_id']
-      assert_equal({ 'old' => 'Dr. Admin Entered', 'new' => 'Dr. Secure' }, event.metadata['changes']['medical_provider_name'])
+      assert_equal({ 'old' => 'D*** A*** E***', 'new' => 'D*** S***' }, event.metadata['changes']['medical_provider_name'])
       assert_nil @application.medical_provider_change_source
     end
 
@@ -333,7 +333,7 @@ module Applications
       event = secure_form_change_event
       assert_not event.metadata['review_required']
       assert_empty event.metadata['overwritten_fields']
-      assert_equal({ 'old' => nil, 'new' => 'provider@example.test' }, event.metadata['changes']['medical_provider_email'])
+      assert_equal({ 'old' => nil, 'new' => 'p***@e***.test' }, event.metadata['changes']['medical_provider_email'])
     end
 
     private

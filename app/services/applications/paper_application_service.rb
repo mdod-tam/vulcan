@@ -212,8 +212,7 @@ module Applications
     def run_post_creation_step(description)
       yield
     rescue StandardError => e
-      # The wrapper carries staff guidance. Its cause supplies the original error and backtrace for the log and audit
-      # event.
+      # The wrapper carries staff guidance. Its cause supplies the diagnostic error class.
       diagnostic = e.cause || e
       log_error(diagnostic, "Paper application post-creation step failed: #{description}")
       detail = e.is_a?(PostCreationStepFailure) ? "#{e.message} " : ''
@@ -1140,8 +1139,7 @@ module Applications
     end
 
     def log_error(exception, message)
-      Rails.logger.error "#{message}: #{exception.message}"
-      Rails.logger.error exception.backtrace.join("\n") if exception.backtrace
+      Rails.logger.error "#{message}: #{exception.class.name}"
     end
   end
   # rubocop:enable Metrics/ClassLength

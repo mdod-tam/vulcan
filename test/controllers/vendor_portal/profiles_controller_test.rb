@@ -170,6 +170,7 @@ module VendorPortal
     test 'refuses a W-9 that is not under the size limit and keeps the profile and W-9 unchanged' do
       @vendor_user.w9_form.attach(io: file_fixture('sample_w9.pdf').open, filename: 'w9.pdf', content_type: 'application/pdf')
       previous_w9 = @vendor_user.w9_form.blob
+      mark_document_clean!(previous_w9, user: @vendor_user, purpose: :w9, slot: 'w9_form')
       previous_name = @vendor_user.business_name
       oversized = Tempfile.new(['w9', '.pdf'])
       oversized.binmode
@@ -192,25 +193,29 @@ module VendorPortal
     test 'a rolled-back profile update leaves only the tracked retained W-9 in storage' do
       stored_keys = []
       record_upload = ->(*, payload) { stored_keys << payload[:key] }
+      staged = scanned_w9
 
       ActiveSupport::Notifications.subscribed(record_upload, 'service_upload.active_storage') do
         patch vendor_portal_profile_url, params: {
-          users_vendor: { website_url: 'not a url', w9_form: fixture_file_upload('sample_w9.pdf', 'application/pdf') }
+          users_vendor: { website_url: 'not a url', w9_form: staged.signed_id }
         }
       end
 
       assert_response :unprocessable_content
-      rolled_back, retained = stored_keys
-      assert_equal 2, stored_keys.size, 'the update stores the file once and the re-render keeps it once'
-      assert_not ActiveStorage::Blob.exists?(key: rolled_back)
-      assert_not ActiveStorage::Blob.service.exist?(rolled_back)
-      assert ActiveStorage::Blob.exists?(key: retained), 'the retained upload stays visible to cleanup'
+      assert_empty stored_keys, 'a profile retry reuses the cleared snapshot without storing another copy'
+      assert ActiveStorage::Blob.exists?(staged.id), 'the retained upload stays visible to cleanup'
+      assert staged.service.exist?(staged.key)
+      retained = css_select("input[name='users_vendor[w9_form_signed_id]']").first
+      assert retained, 'the cleared snapshot remains available for a corrected submission'
+      assert_equal staged.id, Vendors::W9Document.restorable(retained['value'], vendor: @vendor_user).id
     end
 
     test 'invalid profile replacement keeps the accepted current W9 archive and status unchanged' do
       @vendor_user.w9_form.attach(io: file_fixture('sample_w9.pdf').open, filename: 'accepted.pdf', content_type: 'application/pdf')
       @vendor_user.update!(w9_status: :approved)
       previous_w9 = @vendor_user.w9_form.blob
+      mark_document_clean!(previous_w9, user: @vendor_user, purpose: :w9, slot: 'w9_form')
+      replacement = scanned_w9
       snapshot = lambda do
         @vendor_user.reload
         [@vendor_user.business_name, @vendor_user.website_url, @vendor_user.w9_form.blob.id,
@@ -220,7 +225,7 @@ module VendorPortal
       assert_no_changes snapshot do
         patch vendor_portal_profile_url, params: {
           users_vendor: { business_name: 'Unsaved replacement', website_url: 'not a url',
-                          w9_form: fixture_file_upload('sample_w9.pdf', 'application/pdf') }
+                          w9_form: replacement.signed_id }
         }
         assert_response :unprocessable_content
       end
@@ -233,6 +238,7 @@ module VendorPortal
       @vendor_user.w9_form.attach(io: file_fixture('sample_w9.pdf').open, filename: 'approved.pdf', content_type: 'application/pdf')
       @vendor_user.update!(w9_status: :approved)
       current = @vendor_user.w9_form.blob
+      mark_document_clean!(current, user: @vendor_user, purpose: :w9, slot: 'w9_form')
       current.with_lock { Vendors::W9Document.protect!(current, vendor: @vendor_user) }
       reference = Vendors::W9Document.reference(current, vendor: @vendor_user)
       snapshot = lambda do
@@ -255,7 +261,7 @@ module VendorPortal
     end
 
     test 'the original reference still permits a profile retry after its current W9 is reviewed and archived' do
-      current = Vendors::ReplaceW9.call(vendor: @vendor_user, file: fixture_file_upload('sample_w9.pdf', 'application/pdf'))
+      current = Vendors::ReplaceW9.call(vendor: @vendor_user, file: scanned_w9)
       reference = Vendors::W9Document.reference(current, vendor: @vendor_user)
       review = Vendors::ReviewW9.new(
         vendor: @vendor_user, admin: create(:admin), attributes: { status: 'approved', reviewed_blob_id: current.id }
@@ -284,9 +290,11 @@ module VendorPortal
     test 'a usable new W-9 is kept for the next attempt when another field fails' do
       @vendor_user.w9_form.attach(io: file_fixture('sample_w9.pdf').open, filename: 'w9.pdf', content_type: 'application/pdf')
       previous_w9 = @vendor_user.w9_form.blob
+      mark_document_clean!(previous_w9, user: @vendor_user, purpose: :w9, slot: 'w9_form')
+      replacement = scanned_w9
 
       patch vendor_portal_profile_url, params: {
-        users_vendor: { website_url: 'not a url', w9_form: fixture_file_upload('sample_w9.pdf', 'application/pdf') }
+        users_vendor: { website_url: 'not a url', w9_form: replacement.signed_id }
       }
 
       assert_response :unprocessable_content
@@ -302,6 +310,15 @@ module VendorPortal
 
       assert_redirected_to vendor_portal_dashboard_url
       assert_equal 'sample_w9.pdf', @vendor_user.reload.w9_form.filename.to_s
+    end
+
+    private
+
+    def scanned_w9
+      file = fixture_file_upload('sample_w9.pdf', 'application/pdf')
+      scanned_upload(file, user: @vendor_user, purpose: :w9, slot: 'w9_form')
+    ensure
+      file&.tempfile&.close
     end
   end
 end

@@ -76,7 +76,7 @@ class ProofAttachmentMetricsJob < ApplicationJob
         deliver: false  # Don't attempt email delivery until mailer is configured
       )
     rescue StandardError => e
-      Rails.logger.error "Failed to create failure warning notification for admin #{admin.id}: #{e.message}"
+      Rails.logger.error "Failed to create failure warning notification for admin #{admin.id}: #{e.class.name}"
     end
 
     Rails.logger.info "Created failure rate warnings for #{current_admins.count} administrators"

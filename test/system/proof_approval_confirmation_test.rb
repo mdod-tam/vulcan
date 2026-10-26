@@ -7,10 +7,7 @@ class ProofApprovalConfirmationTest < ApplicationSystemTestCase
     FeatureFlag.disable!(:vouchers_enabled)
     application = create(:application, skip_proofs: true)
     %i[income_proof residency_proof id_proof medical_certification].each do |attachment|
-      application.public_send(attachment).attach(
-        io: Rails.root.join('app/assets/images/TAM_color.png').open,
-        filename: "#{attachment}.png", content_type: 'image/png'
-      )
+      attach_cleared_proof(application, attachment, filename: "#{attachment}.png")
     end
     application.update!(medical_certification_status: :received)
     system_test_sign_in(create(:admin))

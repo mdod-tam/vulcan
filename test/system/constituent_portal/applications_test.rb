@@ -77,8 +77,8 @@ class ApplicationsSystemTest < ApplicationSystemTestCase
       find('input[name="application[medical_provider_attributes][phone]"]').set('2025551234')
       find('input[name="application[medical_provider_attributes][email]"]').set('drsmith@example.com')
     end
-    attach_file 'application_income_proof', @valid_pdf, make_visible: true
-    attach_file 'application_residency_proof', @valid_image, make_visible: true
+    attach_cleared_document 'application_income_proof', @valid_pdf, make_visible: true
+    attach_cleared_document 'application_residency_proof', @valid_image, make_visible: true
     check 'terms_accepted'
     check 'information_verified'
     check 'I authorize the release and sharing of my disability-related information as described above'
@@ -473,8 +473,8 @@ class ApplicationsSystemTest < ApplicationSystemTestCase
 
     check 'I authorize the release and sharing of my disability-related information as described above'
 
-    attach_file 'Upload Residency Proof Document', @valid_image
-    attach_file 'Upload Income Proof Document', @valid_pdf
+    attach_cleared_document 'Upload Residency Proof Document', @valid_image
+    attach_cleared_document 'Upload Income Proof Document', @valid_pdf
 
     find('input[type="submit"][name="save_draft"]').click
 

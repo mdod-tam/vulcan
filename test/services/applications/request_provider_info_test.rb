@@ -245,14 +245,15 @@ module Applications
       assert_equal 'StandardError', result.data.fetch(:delivery_failures).first.fetch(:error_class)
     end
 
-    test 'delivery error reporting redacts secure provider info urls' do
+    test 'delivery error reporting identifies failure without secure provider info urls' do
       raw_url = 'https://example.test/secure_provider_info_form?token=raw-provider-token'
       @mailer_delivery.stubs(:deliver_now).raises(StandardError, "smtp rendered #{raw_url}")
 
       if Rails.respond_to?(:error)
         Rails.error.expects(:report).with do |reported_error, handled:, context:|
           handled == true &&
-            reported_error.message == 'smtp rendered [REDACTED_URL]' &&
+            reported_error.message == 'StandardError' &&
+            reported_error.backtrace.blank? &&
             reported_error.message.exclude?(raw_url) &&
             reported_error.message.exclude?('raw-provider-token') &&
             context[:error_class] == 'StandardError' &&

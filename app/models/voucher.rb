@@ -240,8 +240,7 @@ class Voucher < ApplicationRecord
       }
     )
   rescue StandardError => e
-    Rails.logger.error("Failed to log voucher redemption event: #{e.message}")
-    Rails.logger.error(e.backtrace.join("\n")) if e.backtrace
+    Rails.logger.error("Failed to log voucher redemption event: #{e.class.name}")
     nil
   end
 
@@ -278,8 +277,7 @@ class Voucher < ApplicationRecord
     )
   rescue StandardError => e
     # Do not raise, so that the voucher update completes.
-    Rails.logger.error("Failed to log voucher status change: #{e.message}")
-    Rails.logger.error(e.backtrace.join("\n")) if e.backtrace
+    Rails.logger.error("Failed to log voucher status change: #{e.class.name}")
     nil
   end
 

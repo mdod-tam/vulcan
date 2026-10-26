@@ -123,7 +123,7 @@ module Admin
 
       ProofAttachmentService.unstub(:attach_proof)
       reattach_files_required_by_restored_dispositions
-      attach_file 'id_proof', Rails.root.join('test/fixtures/files/residency_proof.pdf')
+      attach_cleared_document 'id_proof', Rails.root.join('test/fixtures/files/residency_proof.pdf')
       sync_paper_submit_gate
       assert_button 'Submit Paper Application', disabled: false, wait: 10
 
@@ -182,7 +182,7 @@ module Admin
       ProofAttachmentService.unstub(:attach_proof)
       verify_existing_adult_contact
       reattach_files_required_by_restored_dispositions
-      attach_file 'id_proof', Rails.root.join('test/fixtures/files/residency_proof.pdf')
+      attach_cleared_document 'id_proof', Rails.root.join('test/fixtures/files/residency_proof.pdf')
       sync_paper_submit_gate
       assert_button 'Submit Paper Application', disabled: false, wait: 10
 
@@ -411,7 +411,7 @@ module Admin
 
       ProofAttachmentService.unstub(:attach_proof)
       reattach_files_required_by_restored_dispositions
-      attach_file 'id_proof', Rails.root.join('test/fixtures/files/residency_proof.pdf')
+      attach_cleared_document 'id_proof', Rails.root.join('test/fixtures/files/residency_proof.pdf')
       sync_paper_submit_gate
       assert_button 'Submit Paper Application', disabled: false, wait: 10
 
@@ -577,7 +577,7 @@ module Admin
       { 'medical_certification' => 'medical_certification_valid.pdf',
         'income_proof' => 'income_proof.pdf',
         'residency_proof' => 'residency_proof.pdf' }.each do |field, fixture|
-        attach_file field, Rails.root.join("test/fixtures/files/#{fixture}")
+        attach_cleared_document field, Rails.root.join("test/fixtures/files/#{fixture}")
       end
     end
 

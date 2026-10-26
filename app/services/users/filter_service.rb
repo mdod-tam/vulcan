@@ -137,8 +137,7 @@ module Users
     end
 
     def handle_filter_error(error)
-      Rails.logger.error "Error applying user filters: #{error.message}"
-      Rails.logger.error error.backtrace.join("\n")
+      Rails.logger.error "Error applying user filters: #{error.class.name}"
       failure("Error applying filters: #{error.message}", scope)
     end
 

@@ -1,7 +1,7 @@
 # frozen_string_literal: true
 
 # Shared result contract for public secure form submissions. The public page
-# only ever receives translated messages; raw errors go to the log.
+# receives translated messages; logs identify failures by class and form ID.
 # A service defines request_form (its secure form record) and message(key, **).
 module SecureFormSubmission
   extend ActiveSupport::Concern
@@ -61,11 +61,10 @@ module SecureFormSubmission
     validation_failure
   end
 
-  # Raises with a translated message. The raw error, which can name storage
-  # keys or database details, is logged and never shown to the public.
+  # Raises with a translated message and logs the failure class.
   def raise_attachment_failure(error)
     Rails.logger.warn("#{self.class.name} attachment failed for form #{request_form.id}: " \
-                      "#{sanitize_secure_error_message(error&.message.to_s)}")
+                      "#{error&.class&.name}")
     raise AttachmentFailure, message(:attachment_failed)
   end
 end

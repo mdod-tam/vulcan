@@ -20,7 +20,7 @@ module ApplicationFormHandling
     end
 
     initialize_address_and_provider_for_form
-    render action_name == 'update' ? :edit : :new, status: :unprocessable_content
+    render action_name == 'update' ? :edit : :new, formats: [:html], status: :unprocessable_content
   end
 
   # Common redirect helpers
@@ -49,8 +49,7 @@ module ApplicationFormHandling
 
   # Handle transaction failures consistently
   def handle_transaction_failure?(exception, context)
-    Rails.logger.error("Transaction failed during #{context}: #{exception.message}")
-    Rails.logger.error(exception.backtrace.join("\n")) if exception.backtrace
+    Rails.logger.error("Transaction failed during #{context}: #{exception.class.name}")
     false
   end
 
@@ -60,7 +59,6 @@ module ApplicationFormHandling
   end
 
   def log_error(message, exception = nil)
-    Rails.logger.error(message)
-    Rails.logger.error(exception.backtrace.join("\n")) if exception&.backtrace
+    Rails.logger.error([message, exception&.class&.name].compact.join(': '))
   end
 end

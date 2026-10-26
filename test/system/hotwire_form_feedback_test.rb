@@ -8,10 +8,7 @@ class HotwireFormFeedbackTest < ApplicationSystemTestCase
     FeatureFlag.disable!(:vouchers_enabled)
     application = create(:application, :completed, :voucher_fulfillment)
     %i[income_proof residency_proof id_proof].each do |proof|
-      application.public_send(proof).attach(
-        io: Rails.root.join('test/fixtures/files/sample.png').open,
-        filename: "#{proof}.png", content_type: 'image/png'
-      )
+      attach_cleared_proof(application, proof, filename: "#{proof}.png")
     end
     application.save!
     FeatureFlag.enable!(:vouchers_enabled)
@@ -98,7 +95,7 @@ class HotwireFormFeedbackTest < ApplicationSystemTestCase
       zip_code: '21204', phone: '410-555-9876', email: "final-#{vendor.id}@example.com"
     }
     fill_profile(corrected)
-    attach_file 'Upload New W9', Rails.root.join('test/fixtures/files/sample_w9.pdf')
+    attach_cleared_document 'Upload New W9', Rails.root.join('test/fixtures/files/sample_w9.pdf')
     click_button 'Save Changes'
     assert_current_path vendor_portal_dashboard_path
     vendor.reload

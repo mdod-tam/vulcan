@@ -18,7 +18,7 @@ The server re-decides anything the browser decided.
 
 ## Autosave, as a representative interaction
 
-The constituent application form keeps its draft current while the constituent works: [`autosave_controller.js`](../../app/javascript/controllers/forms/autosave_controller.js) sends one `field_name`/`field_value` pair per save to `ConstituentPortal::ApplicationsController#autosave_field`, which delegates to [`Applications::AutosaveService`](../../app/services/applications/autosave_service.rb). File inputs, disabled fields, and `data-no-autosave` fields are excluded; uploads go through direct upload instead, and user-owned fields such as the address and preferred language are saved only by the full form.
+The constituent application form keeps its draft current while the constituent works: [`autosave_controller.js`](../../app/javascript/controllers/forms/autosave_controller.js) sends one `field_name`/`field_value` pair per save to `ConstituentPortal::ApplicationsController#autosave_field`, which delegates to [`Applications::AutosaveService`](../../app/services/applications/autosave_service.rb). File inputs, disabled fields, and `data-no-autosave` fields are excluded; document uploads use the scan flow below, and user-owned fields such as the address and preferred language are saved only by the full form.
 
 Behaviors that are not visible from one save:
 
@@ -65,13 +65,15 @@ Constraints that are easy to break:
 
 ## Paper identity review and uploads
 
-The paper form uses Rails automatic direct uploads for its four documents and submits directly to `POST /admin/paper_applications`. Identity review or validation failures return a server-rendered form with retained signed IDs and filenames.
+The paper form submits to `POST /admin/paper_applications` after its selected files pass their scans. Identity review or validation failures return a server-rendered form with retained clean references and filenames.
 
 Review choices use normal submit buttons, a rationale, and a short-lived `identity_review_receipt`. Rails locks and recomputes the facts at the write; changed or expired facts require a fresh review. Guardian quick-create posts through `admin-user-search`, receiving an HTML review fragment on refusal or the saved/selected guardian as JSON on success.
 
-Every document field — paper intake, portal proof resubmission, the vendor W-9, and admin certification upload — renders [`shared/_document_upload`](../../app/views/shared/_document_upload.html.erb) with the [`document-upload`](../../app/javascript/controllers/ui/document_upload_controller.js) controller. The file uploads when the form is submitted. Its type and size limits and refusal wording come from the purpose the model declares for the slot, the same ones [`UploadedDocument`](../../app/services/uploaded_document.rb) enforces. A retained upload rides in `<field>_signed_id` and stays in the submission even after a new upload finishes, because storage accepting a file is not the server accepting it: the server prefers the new upload and falls back to the retained one if it refuses the new one. Remove clears every reference the control owns, including the hidden inputs Rails adds for completed uploads, and a reference completed in an interrupted earlier submission is kept until a new upload of that field succeeds, then moves into `<field>_signed_id` so the server can still fall back to it. Native file inputs cannot be repopulated.
+Document fields — including paper intake, portal proof resubmission, secure upload forms, vendor W-9s, certifications and product resources — render [`shared/_document_upload`](../../app/views/shared/_document_upload.html.erb) with the [`document-upload`](../../app/javascript/controllers/ui/document_upload_controller.js) controller. Choosing a file sends it to Rails and starts a private background scan. The control polls the application for status and submits a signed reference only after a clean result. Its type and size limits come from the purpose the model declares for the slot, also enforced by [`UploadedDocument`](../../app/services/uploaded_document.rb). The server rechecks scan state and ownership at final submission.
 
-[`document-proof-handler`](../../app/javascript/controllers/users/document_proof_handler_controller.js) owns the accept, upload-only, and reject decision around a field and clears the field when rejection is chosen. Decisions are locked while an upload is pending by canceling clicks, not by disabling: Rails submits the form before it fires `direct-uploads:end`, and a disabled radio would be left out of the submission. Rails owns the form-wide upload lifecycle.
+An uploading, pending, blocked or unavailable file prevents submission. Retry checks the current scan without allocating a new paid scan. Remove and Cancel clear the control's references and dismiss its staged upload. Choosing a replacement starts a new scan; a late response for the previous choice cannot replace the current selection. Returning to the same form restores a usable staged upload from the server. Native file inputs cannot be repopulated.
+
+[`document-proof-handler`](../../app/javascript/controllers/users/document_proof_handler_controller.js) owns the accept, upload-only, and reject decision around a field. Rejection clears the field and its staged reference. The document-upload control owns upload and scan state; it does not disable review choices while scanning.
 
 ## Password visibility
 

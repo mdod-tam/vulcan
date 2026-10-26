@@ -113,7 +113,7 @@ class SessionsController < ApplicationController
   def setup_two_factor_session(user)
     cookies.delete(:session_token)
     TwoFactorAuth.clear_challenge(session)
-    TwoFactorAuth.store_temp_user_id(session, user.id)
+    TwoFactorAuth.start_authentication(session, user)
     return_path = session[:return_to]
     return_path = nil if return_path&.include?('sign_in') || return_path == '/'
     TwoFactorAuth.store_return_path(session, return_path)

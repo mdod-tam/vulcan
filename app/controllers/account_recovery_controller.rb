@@ -69,7 +69,7 @@ class AccountRecoveryController < ApplicationController
     nil
   rescue StandardError => e
     log_recovery_attempt(user, 'failed', error_class: e.class.name)
-    Rails.logger.error "Failed to submit recovery request for user #{user.id}: #{e.message}"
+    Rails.logger.error "Failed to submit recovery request for user #{user.id}: #{e.class.name}"
     nil
   end
 
@@ -114,7 +114,7 @@ class AccountRecoveryController < ApplicationController
       metadata: recovery_audit_metadata.merge(metadata)
     )
   rescue StandardError => e
-    Rails.logger.warn("Unable to audit security key recovery #{status} for user #{user.id}: #{e.message}")
+    Rails.logger.warn("Unable to audit security key recovery #{status} for user #{user.id}: #{e.class.name}")
   end
 
   def log_unmatched_recovery_rate_limit(rate_limit_scope)

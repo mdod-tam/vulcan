@@ -105,16 +105,8 @@ module Applications
     private
 
     def create_blobs
-      income_blob = ActiveStorage::Blob.create_and_upload!(
-        io: @income_proof.open,
-        filename: @income_proof.original_filename,
-        content_type: @income_proof.content_type
-      )
-      residency_blob = ActiveStorage::Blob.create_and_upload!(
-        io: @residency_proof.open,
-        filename: @residency_proof.original_filename,
-        content_type: @residency_proof.content_type
-      )
+      income_blob = scanned_upload(@income_proof, user: @admin, purpose: :proof, slot: 'income_proof')
+      residency_blob = scanned_upload(@residency_proof, user: @admin, purpose: :proof, slot: 'residency_proof')
       [income_blob, residency_blob]
     end
 
@@ -157,6 +149,8 @@ module Applications
     teardown do
       # Clean up Current context after the test
       Current.reset
+      @income_proof.tempfile.close
+      @residency_proof.tempfile.close
     end
   end
 end

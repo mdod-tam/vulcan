@@ -109,10 +109,11 @@ class TwilioVerifyServiceTest < ActiveSupport::TestCase
       result = TwilioVerifyService.send_verification('555-123-4567', purpose: :setup)
       assert_not result[:success]
       assert_equal 20_400, result[:error_code]
-      assert_private_error_logs(result[:error])
+      assert_private_error_result(result[:error])
     end
 
     assert_private_error_logs(logs)
+    assert_includes logs, 'Twilio::REST::RestError'
   end
 
   test 'provider check errors redact echoed phone numbers and secure URLs from logs' do
@@ -124,14 +125,15 @@ class TwilioVerifyServiceTest < ActiveSupport::TestCase
       assert result[:success]
       assert_not result[:valid]
       assert_equal 'invalid_input', result[:status]
-      assert_private_error_logs(result[:error])
-      TwoFactorAuth.log_verification_failure(42, :sms, result[:error])
+      assert_private_error_result(result[:error])
+      TwoFactorAuth.log_verification_failure(42, :sms, error_class: error.class.name)
     end
 
     assert_private_error_logs(logs)
+    assert_includes logs, 'Twilio::REST::RestError'
   end
 
-  test 'unexpected send errors sanitize both the message and backtrace' do
+  test 'unexpected send errors omit exception text and backtrace from logs' do
     error = StandardError.new(private_error_message)
     error.set_backtrace([private_error_message])
     verifications = mock('verifications')
@@ -141,24 +143,27 @@ class TwilioVerifyServiceTest < ActiveSupport::TestCase
     logs = capture_rails_logs do
       result = TwilioVerifyService.send_verification('555-123-4567', purpose: :setup)
       assert_not result[:success]
-      assert_private_error_logs(result[:error])
+      assert_private_error_result(result[:error])
     end
 
-    assert_includes logs, '[TwilioVerify] Backtrace:'
+    assert_not_includes logs, '[TwilioVerify] Backtrace:'
+    assert_includes logs, 'StandardError'
     assert_private_error_logs(logs)
   end
 
   test 'unexpected check errors sanitize the message' do
-    stub_verification_check(StandardError.new(private_error_message))
+    error = StandardError.new(private_error_message)
+    stub_verification_check(error)
 
     logs = capture_rails_logs do
       result = TwilioVerifyService.check_verification('555-123-4567', '123456', verification_sid: 'VEaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa')
       assert_not result[:success]
-      assert_private_error_logs(result[:error])
-      TwoFactorAuth.log_verification_failure(42, :sms, result[:error])
+      assert_private_error_result(result[:error])
+      TwoFactorAuth.log_verification_failure(42, :sms, error_class: error.class.name)
     end
 
     assert_private_error_logs(logs)
+    assert_includes logs, 'StandardError'
   end
 
   test 'maps Twilio 60200 to invalid input without terminal failure' do
@@ -241,7 +246,11 @@ class TwilioVerifyServiceTest < ActiveSupport::TestCase
     assert_private_phone_logs(logs, '555-123-4567', '+15551234567')
     assert_not_includes logs, 'https://example.test/verify'
     assert_not_includes logs, 'private-token'
-    assert_includes logs, '[REDACTED_PHONE]'
-    assert_includes logs, '[REDACTED_URL]'
+  end
+
+  def assert_private_error_result(message)
+    assert_private_error_logs(message)
+    assert_includes message, '[REDACTED_PHONE]'
+    assert_includes message, '[REDACTED_URL]'
   end
 end

@@ -1,6 +1,7 @@
 # frozen_string_literal: true
 
 require_relative '../../lib/webhooks/email_events_parameter_filter'
+require_relative '../../lib/security/csp_report_filter'
 
 # After you modify this file, restart the server.
 
@@ -24,6 +25,12 @@ Rails.application.config.filter_parameters += [
   # Autosave wraps income, disability, and provider details in a generic value parameter.
   :autosave_context, :field_value,
 
+  # Cleared upload receipts use the original file field names.
+  /\A(?:file|income_proof|residency_proof|id_proof|medical_certification|w9_form|document)\z/,
+
+  # DocuSeal completion URLs can grant access to private signed documents.
+  'data.documents', 'data.audit_log_url',
+
   # Evaluation free text may contain personal information.
   :notes, :post_completion_notes, :working_notes, :recommendation_notes, :reschedule_reason, :attendees,
   :serial_number, :imei, :tracking_number, :reason, :impact_token,
@@ -41,7 +48,7 @@ Rails.application.config.filter_parameters += [
   /_encrypted\z/, /_encrypted_iv\z/,
 
   # Authentication credential secrets
-  :secret, /\A(?:HTTP_)?Authorization\z/i,
+  :secret, :two_factor_sign_in_token, /\A(?:HTTP_)?Authorization\z/i,
   # The legacy /_key\z/ filter also matches public_key.
 
   # Legacy filters also match names outside the explicit lists.
@@ -50,3 +57,4 @@ Rails.application.config.filter_parameters += [
 
 # Redact Postmark parameters before request logging, including rejected callbacks.
 Rails.application.config.middleware.insert_before Rails::Rack::Logger, Webhooks::EmailEventsParameterFilter
+Rails.application.config.middleware.insert_before Rails::Rack::Logger, Security::CspReportFilter

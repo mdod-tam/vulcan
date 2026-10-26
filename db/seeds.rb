@@ -1,7 +1,5 @@
 # frozen_string_literal: true
 
-require 'factory_bot_rails'
-
 # Prevent payment notification callback during seeding
 begin
   Invoice.skip_callback(:save, :after, :send_payment_notification)
@@ -103,7 +101,9 @@ def clear_existing_data
   # they point to (e.g., User).
 
   # Clear models with dependencies first. User is cleared last.
-  [W9Review, Invoice, ApplicationStatusChange, Evaluation, ProofReview,
+  [PrintQueueItem, SecureRequestForm, MedicalProviderSecureRequestForm, GuardianRelationship,
+   ApplicationNote, TrainingSession, VoucherTransactionProduct, VoucherTransaction, Voucher,
+   W9Review, Invoice, ApplicationStatusChange, Evaluation, ProofReview,
    Notification, RoleCapability, PolicyChange, EmailTemplate, Product, Event, Policy, Application].each do |model|
     seed_puts "  Clearing #{model.name} records..."
     # Delete records in small batches to avoid memory issues
@@ -480,6 +480,12 @@ else
 
       seed_puts '🔍 Verifying and fixing missing files...'
       verify_and_fix_missing_files
+
+      if Rails.env.development?
+        seed_puts '👥 Creating varied development applications...'
+        require_relative 'seeds/development_applications'
+        Seeds::DevelopmentApplications.new(admin: User.find_by_email('admin@example.com')).call
+      end
     end
   rescue StandardError => e
     Rails.logger.debug { "❌ SEEDING FAILED: #{e.message}" }

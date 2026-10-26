@@ -17,7 +17,7 @@ module Applications
       result = SubmitProofResubmission.new(
         application: @application,
         secure_request_form: @secure_request_form,
-        file: @file
+        file: cleared_proof(@file, @secure_request_form)
       ).call
 
       assert_predicate result, :success?
@@ -50,7 +50,7 @@ module Applications
       result = SubmitProofResubmission.new(
         application: application,
         secure_request_form: secure_request_form,
-        file: @file
+        file: cleared_proof(@file, secure_request_form)
       ).call
 
       assert_predicate result, :success?
@@ -83,7 +83,7 @@ module Applications
       result = SubmitProofResubmission.new(
         application: other_application,
         secure_request_form: @secure_request_form,
-        file: @file
+        file: cleared_proof(@file, @secure_request_form)
       ).call
 
       assert_not result.success?
@@ -98,7 +98,7 @@ module Applications
       result = SubmitProofResubmission.new(
         application: @application,
         secure_request_form: @secure_request_form,
-        file: @file
+        file: cleared_proof(@file, @secure_request_form)
       ).call
 
       assert_not result.success?
@@ -113,7 +113,7 @@ module Applications
       result = SubmitProofResubmission.new(
         application: @application,
         secure_request_form: @secure_request_form,
-        file: @file
+        file: cleared_proof(@file, @secure_request_form)
       ).call
 
       assert_not result.success?
@@ -128,7 +128,7 @@ module Applications
       result = SubmitProofResubmission.new(
         application: @application,
         secure_request_form: @secure_request_form,
-        file: @file
+        file: cleared_proof(@file, @secure_request_form)
       ).call
 
       assert_not result.success?
@@ -144,7 +144,7 @@ module Applications
       result = SubmitProofResubmission.new(
         application: @application,
         secure_request_form: @secure_request_form,
-        file: @file
+        file: cleared_proof(@file, @secure_request_form)
       ).call
 
       assert_not result.success?
@@ -166,7 +166,7 @@ module Applications
       result = SubmitProofResubmission.new(
         application: @application,
         secure_request_form: @secure_request_form,
-        file: @file
+        file: cleared_proof(@file, @secure_request_form)
       ).call
 
       assert_not result.success?
@@ -199,7 +199,7 @@ module Applications
         # Only one active link per recipient is allowed; clear any link issuance created.
         application.secure_request_forms.update_all(status: SecureRequestForm.statuses[:revoked], revoked_at: Time.current)
         form = create(:secure_request_form, kind: :income_proof_resubmission, application: application)
-        submit_result = SubmitProofResubmission.new(application: application, secure_request_form: form, file: @file).call
+        submit_result = SubmitProofResubmission.new(application: application, secure_request_form: form, file: cleared_proof(@file, form)).call
         assert_equal requestable, submit_result.success?, "submission: #{label}"
       end
     end
@@ -211,7 +211,7 @@ module Applications
       result = SubmitProofResubmission.new(
         application: @application,
         secure_request_form: @secure_request_form,
-        file: @file
+        file: cleared_proof(@file, @secure_request_form)
       ).call
 
       assert_not result.success?
@@ -238,7 +238,7 @@ module Applications
     end
 
     test 'accepts a proof of exactly 5 MB' do
-      result = submit(pdf_upload(ProofUploadFormats::PROOF_MAX_BYTES))
+      result = submit(cleared_proof(pdf_upload(ProofUploadFormats::PROOF_MAX_BYTES), @secure_request_form))
 
       assert_predicate result, :success?
       assert_predicate @secure_request_form.reload, :submitted?
@@ -256,6 +256,10 @@ module Applications
     end
 
     private
+
+    def cleared_proof(file, form)
+      scanned_upload(file, secure_form: form, slot: "#{SecureRequestForm::PROOF_TYPES_BY_KIND.fetch(form.kind)}_proof").signed_id
+    end
 
     def submit(file)
       SubmitProofResubmission.new(application: @application, secure_request_form: @secure_request_form, file: file).call

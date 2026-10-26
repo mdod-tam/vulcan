@@ -22,7 +22,7 @@ class SecureRequestResendController < SecurePublicFormController
         Rails.logger.warn("#{resend_log_label} resend rate limited: #{resend_log_context.merge(remote_ip: request.remote_ip).inspect}")
       elsif (@resend_actor = @secure_request_form.requested_by || User.system_user)
         result = request_replacement_link
-        Rails.logger.warn("#{resend_log_label} resend request failed: #{resend_log_context.merge(message: result.message).inspect}") if result.failure?
+        Rails.logger.warn("#{resend_log_label} resend request failed: #{resend_log_context.inspect}") if result.failure?
       end
     end
 
@@ -61,7 +61,7 @@ class SecureRequestResendController < SecurePublicFormController
   rescue RateLimit::ExceededError
     true
   rescue ArgumentError => e
-    Rails.logger.warn("#{resend_log_label} resend rate limit unavailable: #{e.message}")
+    Rails.logger.warn("#{resend_log_label} resend rate limit unavailable: #{e.class.name}")
     false
   end
 

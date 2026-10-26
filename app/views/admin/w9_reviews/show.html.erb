@@ -17,6 +17,7 @@
       </div>
       <div class="border-t border-gray-200 p-4">
         <% if @w9_form.present? %>
+          <%= render 'shared/document_scan_status', document: @w9_form %>
           <div class="w-full h-[600px] overflow-hidden">
             <% if @w9_form.content_type.to_s.start_with?('image/') %>
               <div class="flex h-full items-center justify-center bg-gray-50">

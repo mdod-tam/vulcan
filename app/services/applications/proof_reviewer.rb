@@ -37,8 +37,7 @@ module Applications
 
       true
     rescue StandardError => e
-      Rails.logger.error "Proof review failed: #{e.class.name}"
-      Rails.logger.error e.backtrace&.join("\n")
+      Rails.logger.error "Proof review failed: #{e.class.name} for application #{@application.id}"
 
       case review_commit_state
       when :committed
@@ -213,7 +212,7 @@ module Applications
       return unless @status_key == 'approved'
 
       attachment = @application.send("#{@proof_type_key}_proof")
-      return if attachment.attached?
+      return DocumentScan.require_clean!(attachment.blob) if attachment.attached?
 
       raise ActiveRecord::RecordInvalid.new(@application),
             "#{@proof_type_key.capitalize} proof must be attached to approve"

@@ -83,10 +83,12 @@ module ConstituentPortal
         handle_creation_failure(result)
       end
     rescue StandardError => e
-      Rails.logger.error "Error creating application: #{e.message}"
-      @application = result&.application || Application.new(filtered_application_params)
-      @application.errors.add(:base, e.message)
-      render_form_errors(nil, @application)
+      log_error('Error creating application', e)
+      handle_creation_failure(Applications::ApplicationCreator::Result.new(
+                                success: false,
+                                application: result&.application,
+                                errors: [I18n.t('applications.creation.failure', locale: form_message_locale)]
+                              ))
     end
 
     def update
@@ -157,7 +159,7 @@ module ConstituentPortal
     rescue ActiveRecord::RecordNotFound
       render_autosave_error('Application not found', :not_found)
     rescue StandardError => e
-      log_error("Autosave error: #{e.message}", e)
+      log_error('Autosave error', e)
       render_autosave_error('An error occurred during autosave', :internal_server_error)
     end
 
@@ -364,7 +366,7 @@ module ConstituentPortal
       setup_address_for_form
       restore_medical_provider_from_params
       prepare_medical_provider_for_edit
-      render :edit, status: :unprocessable_content
+      render :edit, formats: [:html], status: :unprocessable_content
     end
 
     # A submitted guardian-address choice takes precedence so a refusal preserves the selected address.

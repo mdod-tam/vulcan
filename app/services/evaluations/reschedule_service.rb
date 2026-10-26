@@ -21,7 +21,7 @@ module Evaluations
 
       success('Evaluation rescheduled successfully.', { evaluation: @evaluation })
     rescue ActiveRecord::RecordInvalid => e
-      Rails.logger.error("Error rescheduling evaluation: #{e.message}")
+      Rails.logger.error("Error rescheduling evaluation: #{e.class.name}")
       failure(e.message)
     rescue ArgumentError => e
       log_validation_failure(e)
@@ -30,7 +30,7 @@ module Evaluations
       log_validation_failure(e)
       failure('evaluation_date must be a valid date/time')
     rescue StandardError => e
-      Rails.logger.error("Unexpected error rescheduling evaluation: #{e.message}")
+      Rails.logger.error("Unexpected error rescheduling evaluation: #{e.class.name}")
       failure("An unexpected error occurred: #{e.message}")
     end
 
@@ -90,7 +90,7 @@ module Evaluations
     end
 
     def log_validation_failure(error)
-      Rails.logger.warn("Evaluations::RescheduleService validation failed: #{error.message}")
+      Rails.logger.warn("Evaluations::RescheduleService validation failed: #{error.class.name}")
     end
 
     def evaluation_date

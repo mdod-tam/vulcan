@@ -52,10 +52,7 @@ module Applications
         medical_provider_email: 'drsmith@example.com'
       }
 
-      @pdf_file = fixture_file_upload(
-        Rails.root.join('test/fixtures/files/income_proof.pdf'),
-        'application/pdf'
-      )
+      @pdf_file = uploaded_pdf
 
       @invalid_file = fixture_file_upload(
         Rails.root.join('test/fixtures/files/invalid.exe'),
@@ -72,10 +69,12 @@ module Applications
     end
 
     def uploaded_pdf(filename = 'income_proof.pdf')
-      fixture_file_upload(
-        Rails.root.join('test/fixtures/files', filename),
-        'application/pdf'
-      )
+      file = fixture_file_upload(Rails.root.join('test/fixtures/files', filename), 'application/pdf')
+      purpose = filename.start_with?('medical_certification') ? :certification : :proof
+      slot = purpose == :certification ? 'medical_certification' : File.basename(filename, '.pdf')
+      scanned_upload(file, user: @admin, purpose: purpose, slot: slot).signed_id
+    ensure
+      file&.tempfile&.close
     end
 
     def unique_paper_phone
@@ -232,6 +231,28 @@ module Applications
       service = PaperApplicationService.new(params: confirmed_paper_params(service_params, admin: @admin), admin: @admin)
       assert_not service.create
       assert_includes service.errors, 'Please upload a file for medical certification before sending it for review'
+    end
+
+    test 'editing an existing paper applicant records masked from-to contact evidence' do
+      applicant = create(:constituent, email: 'paper-original@example.test', phone: '202-555-1234')
+      service_params = {
+        applicant_type: 'self', existing_constituent_id: applicant.id,
+        contact_info_mode: 'update', contact_info_verified: true,
+        constituent: { email: 'paper-replacement@example.test', phone: '202-555-5678' },
+        application: @application_params
+      }
+      service = PaperApplicationService.new(params: confirmed_paper_params(service_params, admin: @admin), admin: @admin)
+
+      assert service.create, service.errors.inspect
+
+      assert_equal 'paper-replacement@example.test', applicant.reload.email
+      event = Event.find_by!(action: 'constituent_contact_updated', auditable: applicant)
+      assert_equal @admin.id, event.user_id
+      assert_equal 'paper_application', event.metadata['source']
+      assert_equal({ 'from' => 'p***@e***.test', 'to' => 'p***@e***.test' }, event.field_changes['email'])
+      assert_equal({ 'from' => '***-***-1234', 'to' => '***-***-5678' }, event.field_changes['phone'])
+      assert_equal event.metadata['changes'], event.field_changes
+      assert_nil event.change_values
     end
 
     test 'existing self applicant disability flags are saved before application validation' do
@@ -393,15 +414,9 @@ module Applications
         income_proof_action: 'accept',
         income_proof: @pdf_file,
         residency_proof_action: 'accept',
-        residency_proof: fixture_file_upload(
-          Rails.root.join('test/fixtures/files/residency_proof.pdf'),
-          'application/pdf'
-        ),
+        residency_proof: uploaded_pdf('residency_proof.pdf'),
         id_proof_action: 'accept',
-        id_proof: fixture_file_upload(
-          Rails.root.join('test/fixtures/files/id_proof.pdf'),
-          'application/pdf'
-        ),
+        id_proof: uploaded_pdf('id_proof.pdf'),
         medical_certification_action: 'not_requested'
       }
 
@@ -540,9 +555,9 @@ module Applications
         income_proof_action: 'accept',
         income_proof: uploaded_pdf,
         residency_proof_action: 'accept',
-        residency_proof: uploaded_pdf,
+        residency_proof: uploaded_pdf('residency_proof.pdf'),
         id_proof_action: 'accept',
-        id_proof: uploaded_pdf,
+        id_proof: uploaded_pdf('id_proof.pdf'),
         medical_certification_action: 'accept',
         medical_certification: uploaded_pdf('medical_certification_valid.pdf')
       }
@@ -1473,7 +1488,7 @@ module Applications
       )
       params = base_paper_params.merge(
         income_proof_action: 'upload_only',
-        income_proof: fixture_file_upload(Rails.root.join('test/fixtures/files/income_proof.pdf'), 'application/pdf')
+        income_proof: uploaded_pdf
       )
 
       service = paper_service_with_proofs(params)
@@ -1498,7 +1513,7 @@ module Applications
       )
       params = base_paper_params.merge(
         income_proof_action: 'upload_only',
-        income_proof: fixture_file_upload(Rails.root.join('test/fixtures/files/income_proof.pdf'), 'application/pdf')
+        income_proof: uploaded_pdf
       )
 
       service = paper_service_with_proofs(params)

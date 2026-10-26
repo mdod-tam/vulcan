@@ -92,7 +92,8 @@ class VendorSecureRequestFormTest < ActiveSupport::TestCase
     assert_equal form.id.to_s, metadata['vendor_secure_request_form_id'].to_s
     assert_equal form.vendor_id.to_s, metadata['vendor_id'].to_s
     assert_equal form.request_batch_id, metadata['request_batch_id']
-    assert_equal form.recipient_email, metadata['recipient_email']
+    assert_equal 'v***@e***.com', metadata['recipient_email']
+    assert_not_includes metadata.to_json, form.recipient_email
     assert_equal 'w9_upload', metadata['kind']
     assert_equal 'email', metadata['requested_channel']
     assert_equal 'manual_revocation', metadata['reason']

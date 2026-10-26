@@ -275,13 +275,15 @@ class VendorNotificationsMailerTest < ActionMailer::TestCase
     assert_includes decoded_text_part(email), 'has requested a W9 form from you'
   end
 
-  test 'mailer error audit metadata redacts secure upload URLs' do
+  test 'mailer error audit metadata omits private exception text and backtraces' do
     raw_url = 'https://example.test/secure_w9_form?token=secret-token'
+    error = StandardError.new("Private Patient private-mail@example.test at 410-555-0199 #{raw_url}")
+    error.set_backtrace(["#{raw_url}:1:in failure"])
 
     assert_difference -> { Event.where(action: 'email_delivery_error', auditable: @vendor).count }, 1 do
       VendorNotificationsMailer.new.send(
         :log_mail_error,
-        StandardError.new("boom #{raw_url}"),
+        error,
         @vendor,
         'vendor_notifications_w9_rejected'
       )
@@ -289,8 +291,12 @@ class VendorNotificationsMailerTest < ActionMailer::TestCase
 
     event = Event.where(action: 'email_delivery_error', auditable: @vendor).last
 
-    assert_includes event.metadata.fetch('error_message'), '[REDACTED_URL]'
-    assert_not_includes event.metadata.fetch('error_message'), raw_url
+    assert_equal 'StandardError', event.metadata.fetch('error_class')
+    assert_not event.metadata.key?('error_message')
+    assert_not event.metadata.key?('backtrace')
+    ['Private Patient', 'private-mail@example.test', '410-555-0199', raw_url].each do |private_value|
+      assert_not_includes event.metadata.to_json, private_value
+    end
     assert_not event.metadata.key?('variables')
   end
 

@@ -46,7 +46,7 @@ test('restores the button and logs a missing feedback target', async () => {
   await application.controllers[0].startVerification({ preventDefault: jest.fn() })
   expect(button).toBeEnabled()
   expect(button).toHaveAttribute('aria-disabled', 'false')
-  expect(log).toHaveBeenCalledWith(expect.any(String), expect.any(Error))
+  expect(log).toHaveBeenCalledWith(expect.any(String), 'Error')
   expect(fetch).not.toHaveBeenCalled()
 })
 
@@ -57,7 +57,7 @@ test('logs unexpected failures after options load and reports verification failu
   button.click()
   await waitFor(() => expect(button).toBeEnabled())
   expect(feedback).toHaveTextContent(messages.failed)
-  expect(log).toHaveBeenCalledWith(expect.any(String), error)
+  expect(log).toHaveBeenCalledWith(expect.any(String), 'TypeError')
 })
 
 test('does not parse unsuccessful options responses and logs only their status', async () => {
@@ -70,6 +70,23 @@ test('does not parse unsuccessful options responses and logs only their status',
   expect(button).toBeEnabled()
   expect(json).not.toHaveBeenCalled()
   expect(log).toHaveBeenCalledWith(expect.stringContaining('503'))
+  expect(JSON.stringify(log.mock.calls)).not.toContain('Private')
+})
+
+test.each([undefined, 'Please sign in again.', 'Vuelva a iniciar sesión.'])('options 401 uses rendered session guidance %s without parsing diagnostics', async (message) => {
+  document.querySelector('div').dataset.credentialAuthenticatorMessagesValue = JSON.stringify({ ...messages, user_session: message })
+  const json = jest.fn().mockResolvedValue({ error: 'Private authentication detail' })
+  const log = jest.spyOn(console, 'error').mockImplementation(() => {})
+  fetch.mockReset().mockResolvedValue({ ok: false, status: 401, json })
+
+  button.click()
+
+  await waitFor(() => expect(feedback).toHaveTextContent(message || messages.optionsError))
+  expect(button).toBeEnabled()
+  expect(button).toHaveAttribute('aria-disabled', 'false')
+  expect(json).not.toHaveBeenCalled()
+  expect(WebAuthnJSON.get).not.toHaveBeenCalled()
+  expect(log).toHaveBeenCalledWith('Security-key options request failed with status 401')
   expect(JSON.stringify(log.mock.calls)).not.toContain('Private')
 })
 
@@ -148,10 +165,10 @@ test.each(['verification_failed', 'unknown_code'])('maps server code %s without 
   expect(feedback.textContent).not.toContain('Credential')
 })
 
-test('existing helper callers without messages retain their feedback and result contract', async () => {
+test('existing helper callers without messages retain feedback without exception details', async () => {
   WebAuthnJSON.get.mockRejectedValueOnce(new DOMException('Cancelled', 'NotAllowedError'))
   const result = await Auth.verifyWebAuthnCredential(options, '/verify', feedback)
-  expect(result).toEqual({ success: false, message: 'The operation was cancelled or timed out.', details: 'Cancelled' })
+  expect(result).toEqual({ success: false, message: 'The operation was cancelled or timed out.', details: '' })
   expect(feedback).toHaveTextContent(result.message)
 })
 

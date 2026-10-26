@@ -62,7 +62,7 @@ module Applications
            ActiveRecord::RecordInvalid,
            ActiveRecord::RecordNotFound,
            Applications::SecureRequestIssuanceIntegrity::ParticipantSetUnstable => e
-      Rails.logger.warn("Proof resubmission request failed for application #{application.id}: #{e.message}")
+      Rails.logger.warn("Proof resubmission request failed for application #{application.id}: #{e.class.name}")
       failure(message(:request_conflict))
     rescue SecureRequestIssuance::Refused => e
       failure(message(e.reason))

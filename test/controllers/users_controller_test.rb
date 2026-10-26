@@ -44,9 +44,9 @@ class UsersControllerTest < ActionDispatch::IntegrationTest
 
     # Verify changes are recorded
     changes = event.field_changes
-    assert_equal 'Updated First', changes['first_name']['new']
-    assert_equal 'Updated Last', changes['last_name']['new']
-    assert_equal 'updated@example.com', changes['email']['new']
+    assert_equal 'U*** F***', changes['first_name']['new']
+    assert_equal 'U*** L***', changes['last_name']['new']
+    assert_equal 'u***@e***.com', changes['email']['new']
   end
 
   %i[inactive suspended].each do |status|

@@ -148,7 +148,7 @@ class PasswordsControllerTest < ActionDispatch::IntegrationTest
 
     assert_redirected_to sign_in_path
     assert_equal account_access_confirmation_message, flash[:notice]
-    assert_includes logs, '[REDACTED_URL]'
+    assert_includes logs, 'StandardError'
     assert_not_includes logs, reset_url
     assert_not_includes logs, 'secret-reset-token'
   end

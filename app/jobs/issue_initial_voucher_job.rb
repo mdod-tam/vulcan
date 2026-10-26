@@ -16,7 +16,7 @@ class IssueInitialVoucherJob < ApplicationJob
       assignment_method: assignment_method.to_sym
     )
   rescue StandardError => e
-    Rails.logger.error "IssueInitialVoucherJob failed for application #{application_id}: #{e.message}"
+    Rails.logger.error "IssueInitialVoucherJob failed for application #{application_id}: #{e.class.name}"
     raise
   end
 end

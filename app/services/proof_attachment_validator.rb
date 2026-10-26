@@ -32,7 +32,7 @@ class ProofAttachmentValidator
   rescue ValidationError
     raise
   rescue StandardError => e
-    Rails.logger.error("Unexpected error in document content inspection: #{e.message}")
+    Rails.logger.error("Unexpected error in document content inspection: #{e.class.name}")
     raise ValidationError.new(:unreadable, 'The file could not be read')
   end
 
@@ -77,11 +77,7 @@ class ProofAttachmentValidator
   end
 
   def detected_mime_type(attachment)
-    @detected_mime_type ||= Marcel::MimeType.for(
-      StringIO.new(attachment_content(attachment)),
-      name: attachment_filename(attachment),
-      declared_type: declared_content_type(attachment)
-    )
+    @detected_mime_type ||= Marcel::MimeType.for(StringIO.new(attachment_content(attachment)))
   end
 
   def attachment_content(attachment)
@@ -111,11 +107,5 @@ class ProofAttachmentValidator
     else
       ''
     end
-  end
-
-  def declared_content_type(attachment)
-    return unless attachment.respond_to?(:content_type)
-
-    attachment.content_type.to_s.split(';').first
   end
 end

@@ -21,13 +21,13 @@ The application timeline combines events, status changes, proof reviews, selecte
 
 ## Two different kinds of deduplication
 
-**At creation:** `AuditEventService` checks the previous five seconds for the same action, auditable record, and action-specific fingerprint. It returns `nil` when suppressing a duplicate and raises if the new event fails validation. It skips this check for `application_created` and events without an auditable record.
+**At creation:** `AuditEventService` checks the previous five seconds for the same action, auditable record, and action-specific fingerprint. It returns `nil` when suppressing a duplicate and raises if the new event fails validation. It skips this check for `application_created`, events without an auditable record, and profile/contact/vendor/voucher mutations without an operation ID. Equal masked values cannot identify the same mutation; each real save must remain visible, including a repeated transition.
 
 **At display:** the timeline groups matching fingerprints into one-minute buckets and chooses a representative. It favors creation events, then status changes, then proof reviews/events, then notifications. This changes the display without deleting stored records.
 
 Each business event still needs a single owner. Neither layer substitutes for that: creation-time deduplication is a five-second window, not a concurrency guarantee, and display deduplication only hides what two writers already stored.
 
-Fingerprints are what separate a legitimate repeated action from a duplicate — the blob for an attachment, the case ID for duplicate review, the retired user ID for a merge, the step name for a paper follow-up failure. A caller that passes `operation_id` in metadata gets one event per operation, however close together, and a retry of that operation is suppressed; email template edits and toggles use this. The creation and display fingerprints are computed separately, so a new action can be distinguished in one layer and collapsed in the other.
+Fingerprints are what separate a legitimate repeated action from a duplicate — the blob for an attachment, the case ID for duplicate review, the retired user ID for a merge, the step name for a paper follow-up failure. A caller that passes `operation_id` in metadata distinguishes separate operations even when they occur close together; a retry of the same operation within five seconds is suppressed. Email template edits and toggles use this. The creation and display fingerprints are computed separately, so a new action can be distinguished in one layer and collapsed in the other.
 
 ## Event ownership
 
@@ -42,7 +42,7 @@ Fingerprints are what separate a legitimate repeated action from a duplicate —
 | Communication | `NotificationService` audits notification creation/delivery only when `audit: true`; most callers leave the domain event with its workflow owner. |
 | Delivery controls | [ControlWriter](../../app/services/email_delivery/control_writer.rb) owns `email_control_changed` and `email_template_pair_toggled`. Bulk template changes include each pair event and one `email_templates_bulk_enabled` or `email_templates_bulk_disabled` summary in the same transaction. Operation IDs prevent a replay from reversing a later change. |
 | Delivery refusals and enqueue failures | [EmailDelivery::Outcome](../../app/services/email_delivery/outcome.rb) owns `email_delivery_suppressed`, `email_delivery_configuration_error`, and `email_delivery_enqueue_failed`, keyed by the original delivery request. The job records adapter failures at the actual enqueue boundary, including after commit. These events do not claim provider delivery. |
-| Contact changes | [ContactChangeAudit](../../app/models/concerns/contact_change_audit.rb) records `alternate_contact_updated`, and `medical_provider_info_updated` for a submitted application, from every write path. These events store old and new values so staff can see what was replaced. A secure provider information submission that replaces a value on file sets `review_required`. |
+| Contact changes | [ContactChangeAudit](../../app/models/concerns/contact_change_audit.rb) records `alternate_contact_updated`, and `medical_provider_info_updated` for a submitted application, from every write path. These events store masked old and new values so staff can see what was replaced without copying full personal values. A secure provider information submission that replaces a value on file sets `review_required`. |
 | Vendor W9 | A change to a W-9 field (business name, tax ID, or address) while the W9 is approved or under review records `w9_details_changed` with field names only. Only a newly attached W9 moves the status to pending review. |
 | Secure request links | Revocation and expiration events come from each form model's audit hooks; see [secure request links](secure_request_links.md). |
 
@@ -54,11 +54,15 @@ Action names are an interface: displays and reports match on them, so renaming o
 
 ## Actors and metadata
 
+Personal-value masking has one owner, [AuditMetadataPrivacy](../../app/services/audit_metadata_privacy.rb), called before the audit service logs or persists metadata. Personal changes store their masks directly in metadata; only device history uses the encrypted change-value cell. Readers display the stored values without a second privacy transformation. The [PII guide](../security/pii_encryption.md#audit-events) describes the field masks and device-history storage. Profile and contact writes without an operation ID bypass the five-second creation deduplication window, and their timelines retain stored mutations by event identity. An explicit operation ID suppresses retries of the same operation within five seconds. Eligible structural actions retain their action-specific five-second fingerprints; masked-value equality does not prove a retry or a reversion.
+
+Masking follows personal fields through nested hashes and collections and also applies to values wrapped in a secret or withheld field. Metadata name snapshots, including staff assignment and completion names, retain initials. The exact actor ID and any role metadata are preserved. `Event#user` remains the account association for authorized screens to resolve the actor's current identity, so a masked name snapshot does not remove attribution.
+
 The actor is the authenticated person who performed the action. Public proof and provider-info submissions instead record [PublicAuditActor](../../app/services/public_audit_actor.rb), since holding a bearer link proves nothing about who is holding it; the person the submission was made for belongs in metadata rather than in the actor.
 
 `PublicAuditActor` resolves the administrator at `system@mdmat.org`, provisioned through [initial account setup](../infrastructure/setup_and_maintenance.md#initial-accounts). Missing that account skips public audit events; public registrations needing a duplicate-review case roll back. Creating a staff administrator alone does not satisfy this dependency.
 
-Metadata stays small and bounded — stable IDs, reason codes, status changes, channel, batch or form identifiers, the failed step. Raw tokens and bearer URLs are credentials and do not belong in a durable row, and personal information beyond what the event needs makes the audit trail itself a disclosure surface. Bounded generated events say nothing about the records around them: staff-written rationales and stored case snapshots carry their own privacy questions.
+Metadata stays small and bounded — stable IDs, reason codes, status changes, channel, batch or form identifiers, the failed step. Raw tokens and bearer URLs are credentials and do not belong in a durable row. Notes, identity rationales, and free-text rejection/decline reasons are withheld from audit metadata; the owning workflow's authorized detail view remains responsible for full text. Stored case snapshots and other workflow records still require their own privacy review.
 
 The `Event` model reads request context from `Current`. Background work may have no request context, so pass the actor explicitly. Workflow flags such as `Current.paper_context` belong to their owning service and must be cleared when that scope ends.
 

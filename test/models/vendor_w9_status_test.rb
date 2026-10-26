@@ -28,7 +28,8 @@ class VendorW9StatusTest < ActiveSupport::TestCase
     force_w9_status(:approved)
 
     file = Rack::Test::UploadedFile.new(Rails.root.join('test/fixtures/files/sample_w9.pdf'), 'application/pdf')
-    Vendors::ReplaceW9.call(vendor: @vendor, file: file)
+    upload = scanned_upload(file, user: @vendor, purpose: :w9, slot: 'w9_form')
+    Vendors::ReplaceW9.call(vendor: @vendor, file: upload)
 
     assert_predicate @vendor.reload, :w9_status_pending_review?
   end

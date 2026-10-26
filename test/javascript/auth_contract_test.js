@@ -59,3 +59,43 @@ test('502 and 503 use the existing bounded backoff before a successful response'
   expect(fetch).toHaveBeenCalledTimes(3)
   expect(jest.getTimerCount()).toBe(0)
 })
+
+test('network failures log only the error category without the request URL or message', async () => {
+  const log = jest.spyOn(console, 'error').mockImplementation(() => {})
+  fetch.mockRejectedValue(new TypeError('private-network@example.test'))
+
+  const result = await Auth.sendRequest('/verify?token=private-request-secret', 'POST', {}, { networkError: 'Try again' })
+
+  expect(result).toEqual({ success: false, message: 'Try again', details: '' })
+  expect(log).toHaveBeenCalledWith('Network request failed:', 'TypeError')
+  expect(JSON.stringify(log.mock.calls)).not.toMatch(/private-network|private-request/)
+})
+
+test.each(['registerWebAuthnCredential', 'verifyWebAuthnCredential'])('%s retains safe feedback and drops browser exception details', async (operation) => {
+  const log = jest.spyOn(console, 'error').mockImplementation(() => {})
+  const failure = new DOMException('private-device@example.test token=private-device-secret', 'NotAllowedError')
+  WebAuthnJSON.create.mockRejectedValue(failure)
+  WebAuthnJSON.get.mockRejectedValue(failure)
+  const feedback = jest.fn()
+
+  const result = operation === 'registerWebAuthnCredential'
+    ? await Auth[operation]('/register', {}, 'Office', feedback)
+    : await Auth[operation]({}, '/verify', feedback)
+
+  expect(result).toEqual({ success: false, message: 'The operation was cancelled or timed out.', details: '' })
+  expect(feedback).toHaveBeenLastCalledWith(result.message, true)
+  expect(log).toHaveBeenCalledWith(expect.stringContaining('failed:'), 'NotAllowedError')
+  expect(JSON.stringify([result, log.mock.calls])).not.toMatch(/private-device/)
+})
+
+test('HTTP failures preserve mapped feedback without copying or logging server diagnostics', async () => {
+  const log = jest.spyOn(console, 'error').mockImplementation(() => {})
+  const result = await Auth.handleResponse({
+    ok: false, status: 422,
+    json: async () => ({ error_code: 'verification_failed', error: 'private-server@example.test', details: 'token=private-server-secret' })
+  }, { verification_failed: 'Try the security key again' })
+
+  expect(result).toEqual({ success: false, message: 'Try the security key again', details: '' })
+  expect(log).toHaveBeenCalledWith('Operation failed with status 422')
+  expect(JSON.stringify([result, log.mock.calls])).not.toMatch(/private-server/)
+})

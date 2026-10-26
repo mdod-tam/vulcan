@@ -27,7 +27,11 @@ Equipment identifiers use normalized encrypted equality for duplicate checks. No
 
 ### Audit events
 
-`Event#metadata` is plain JSON — a plain-text data format — so it must not hold values whose columns are encrypted. When `metadata[:changes]` names an encrypted record field or an explicitly sensitive audit field, [`AuditEventService.log`](../../app/services/audit_event_service.rb) keeps the field name in metadata, with an empty placeholder, and moves its old and new values to the encrypted `Event#change_values`. The sensitive-field list includes `serial_duplicate_reason`: an equipment acknowledgment may contain a device identifier even though it is not a stored EquipmentItem attribute. Read recorded changes with `Event#field_changes`, which restores those values. Reading `metadata['changes']` directly shows only the names. Other change fields are stored as given.
+[`AuditEventService.log`](../../app/services/audit_event_service.rb) applies one [audit privacy policy](../../app/services/audit_metadata_privacy.rb) before logging or storing metadata. Personal changes keep their existing old/new, from/to, or array shape. Emails retain the first character of the local part and domain plus the final domain suffix; phone and tax IDs retain their last four digits; names retain initials. Birth dates, street addresses, cities, ZIP codes, notes, identity rationale, and free-text rejection/decline reasons are withheld. Passwords, digests, tokens, and bearer links retain no fragments. Boolean presence flags, record IDs, reason codes, sources, actors, and event times remain usable. Workflow records retain their own authorized detail views.
+
+The same classifications apply inside nested hashes and record collections. An enclosing secret or withheld field also protects its nested values. Staff name snapshots, including assignment and completion names, are masked. The actor's exact `Event#user_id`, its account association, and any role metadata remain intact; authorized views can resolve that account's current identity. Masked name snapshots do not replace accountable actor IDs or their access-controlled account records.
+
+Encrypted model declarations supplement the explicit personal-field classifications. Masked personal changes are stored directly in `Event#metadata`, with no copy in `Event#change_values` and no masking step in the history reader. Device serial, IMEI, tracking, and duplicate-identity acknowledgment history keeps its encrypted storage and authorized operational readers. `Event#field_changes` combines metadata changes with these encrypted device values; `field_change_pairs` supports the live old/new, from/to, and array callers. This pre-release change adds no conversion or compatibility path for historical personal-value audit storage.
 
 The password digest is a BCrypt hash that is also encrypted at rest. A WebAuthn public key is not a cryptographic secret, though this application encrypts its stored value.
 
@@ -47,26 +51,30 @@ Public sign-in and recovery use `find_by_login_identifier`. Account-access reque
 
 Database search functions such as SQL `LOWER`, `LIKE`, and substring matching operate on ciphertext and silently return nothing useful. Admin email search works around that with separate HMAC search tokens in [UserEmailSearch](../../app/models/concerns/user_email_search.rb). An HMAC token is a keyed fingerprint that can match a value without revealing it.
 
-## Keys and existing data
+## Keys and encrypted storage
 
 [The initializer](../../config/initializers/active_record_encryption.rb) reads `primary_key`, `deterministic_key`, and `key_derivation_salt` from `Rails.application.credentials.active_record_encryption`.
 
-**Retained data needs stable keys.** Normal non-test startup, including development, refuses missing, incomplete, or blank encryption credentials. The error names the missing entries and the credentials-edit command for the environment. Temporary random keys are limited to disposable test runs and asset builds with `SECRET_KEY_BASE_DUMMY=1` and `assets:precompile` as the sole requested Rake task. A Rake task is a command-line job the framework can run. Complete configured keys are reused in those paths too.
+**Configure stable keys before saving records.** Normal non-test startup, including development, refuses missing, incomplete, or blank encryption credentials before serving requests, starting jobs, or running database tasks. The error names the missing entries and the credentials-edit command for the environment. Temporary random keys are limited to disposable test runs. Complete configured keys are reused in tests too.
 
-When initializing fresh data, run `bin/rails db:encryption:init` to generate keys. Save all three entries in the matching credentials file before saving records. Preserve the original encryption keys and salt for any data you retain. Temporary keys cannot reliably read records after a restart. Losing the matching keys makes encrypted records unreadable, including restored backups.
+The secretless build exception applies only when `assets:precompile` is the sole requested Rake task, a command-line job the framework runs. Missing encryption keys stay unset in that process; encrypted data operations still require their configured keys. `SECRET_KEY_BASE_DUMMY` alone does not bypass runtime validation, and combining precompilation with a database task is rejected. The Docker build removes Rails' temporary signing-secret file before copying the application into the final image.
+
+Run `bin/rails db:encryption:init` to generate keys for initial setup. Save all three entries in the matching credentials file before saving records, and reuse them across application instances and restarts. Losing the matching keys makes encrypted records unreadable.
 
 `RAILS_MASTER_KEY` decrypts the credentials file, not database columns. A replacement instance can use a different master key only with credentials re-encrypted under it that preserve the original Active Record keys and salt. Preserve the effective `secret_key_base` too. Besides signed cookies and links, it supplies the HMAC key for the persisted email-search index. Changing it requires rebuilding those tokens.
 
-Use the [backup checklist and settings comparison](../infrastructure/backup_and_recovery.md) for recovery. See the [vendor tax-record cutover](../infrastructure/vendor_tax_records_cutover.md) for the stable-key check, resumable TIN/audit conversion, W9 storage-key rotation, and cache invalidation order.
+Use the [backup checklist and settings comparison](../infrastructure/backup_and_recovery.md) for recovery.
 
-Two settings matter during migrations:
+Encrypted storage has one representation:
 
-- `support_unencrypted_data: true` allows existing plaintext values to be read.
-- `extend_queries: false` means equality searches do not automatically cover both plaintext and encrypted representations.
+- `support_unencrypted_data: false` rejects plaintext stored values for encrypted attributes, including deterministic contact fields.
+- `extend_queries: false` keeps equality searches on their encrypted representation.
 
-Fixtures — the test data files — are encrypted, and key references are stored. Rotate keys with previous-key support, deterministic lookup and uniqueness checks, data migration, and a tested restore before retiring old keys.
+Rails encrypts fixture values before storage through `encrypt_fixtures: true`; plaintext fixture source files do not require plaintext database reads. Key references are stored with ciphertext. This pre-release application has no plaintext conversion task or mixed-storage compatibility mode.
 
 ## Keep personal data out of logs
+
+Diagnostic logs and error reports use the exception class and limited context such as record IDs. Exception messages, backtraces, validation text, and rejected metadata can contain personal data or credentials. Keep them out of diagnostics, including messages passed through shared logging helpers. Expected validation feedback can still explain a rejected form to the person submitting it. Unexpected application-creation failures show a generic message in the user's language.
 
 [Parameter filtering](../../config/initializers/filter_parameter_logging.rb) covers contact details, names, addresses, DOB (date of birth), password fields, provider contacts, and tokens. Paper identity receipts, rationales, and upload `*_signed_id` parameters are filtered. The filter also covers `identity_decision` as defense in depth. Autosave filters `field_value`, which can contain personal data, and its `autosave_context` page identifier. Encrypted attributes are also added to filtering. Review storage and filtering together when adding a sensitive field.
 

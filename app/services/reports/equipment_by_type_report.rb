@@ -130,7 +130,7 @@ module Reports
         include_voucher_counts: include_voucher_counts,
         current_date: current_date
       }
-      Rails.error.report(error, handled: true, context: context) if Rails.respond_to?(:error)
+      Rails.error.report(StandardError.new(error.class.name), handled: true, context: context) if Rails.respond_to?(:error)
       log_error(error, context)
     end
 

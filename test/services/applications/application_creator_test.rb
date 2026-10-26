@@ -414,7 +414,7 @@ module Applications
       end
 
       assert result.failure?
-      assert_includes result.error_messages, 'dependent audit unavailable'
+      assert_includes result.error_messages, I18n.t('applications.creation.failure', locale: :es)
       assert_equal application_before, application.reload.attributes
       assert_equal dependent_before, @dependent.reload.attributes
     end
@@ -467,7 +467,7 @@ module Applications
                       "Comprobante de ingresos: #{I18n.t('documents.refused.invalid_type', locale: :es)}"
     end
 
-    test 'a later refused document leaves no stored file behind for an earlier one' do
+    test 'a later refused document leaves an earlier staged file available for retry' do
       form = create_valid_form_with_proofs(@user)
       form.income_proof = fixture_file_upload('test/fixtures/files/invalid.exe', 'application/octet-stream')
       stored_keys = []
@@ -478,9 +478,11 @@ module Applications
       end
 
       assert result.failure?
-      assert_equal 1, stored_keys.size, 'only the residency proof passes the gate and is stored'
-      assert_not ActiveStorage::Blob.exists?(key: stored_keys.first)
-      assert_not ActiveStorage::Blob.service.exist?(stored_keys.first)
+      assert_empty stored_keys, 'the application writer does not upload bytes inside its transaction'
+      staged = ActiveStorage::Blob.find_signed!(form.residency_proof)
+      assert ActiveStorage::Blob.exists?(staged.id)
+      assert staged.service.exist?(staged.key)
+      assert_empty staged.attachments
     end
 
     # Submitted locale values reach the form without an allowlist.
@@ -767,8 +769,8 @@ module Applications
     # Proof uploads let these assertions detect unintended attachments.
     def create_valid_form_with_proofs(user)
       form = create_valid_form(user)
-      form.residency_proof = fixture_file_upload('test/fixtures/files/residency_proof.pdf', 'application/pdf')
-      form.income_proof = fixture_file_upload('test/fixtures/files/income_proof.pdf', 'application/pdf')
+      form.residency_proof = scanned_upload(fixture_file_upload('test/fixtures/files/residency_proof.pdf', 'application/pdf'), user: user, slot: 'residency_proof').signed_id
+      form.income_proof = scanned_upload(fixture_file_upload('test/fixtures/files/income_proof.pdf', 'application/pdf'), user: user).signed_id
       form
     end
 

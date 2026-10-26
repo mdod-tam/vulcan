@@ -14,6 +14,15 @@ en:
       hide: "Hide password"
   sessions:
     title: "Sign In"
+    activity:
+      label: "Sign-in time remaining"
+      keep_working: "Keep working"
+      messages:
+        expired: "Your session expired. Keep this page open and copy any unfinished work before signing in again."
+        absolute: "Your sign-in expires soon. Save your work before signing in again."
+        refresh_failed: "We couldn't refresh your session. Check your connection, then choose Keep working."
+        idle_one: "Your session expires in %{minutes} minute. Choose Keep working to stay signed in."
+        idle_other: "Your session expires in %{minutes} minutes. Choose Keep working to stay signed in."
     form:
       contact_label: "Email Address or Phone Number"
       contact_hint: "Use your account email or phone number. Text access links are sent only to text-capable numbers."
@@ -172,16 +181,31 @@ en:
   documents:
     # The shared document upload control. %{filename} is the chosen or kept file.
     upload:
-      uploaded: "Uploaded: %{filename}"
-      selected: "Selected: %{filename}. It uploads when you submit the form."
+      uploaded: "Ready: %{filename}"
       uploading: "Uploading %{filename}…"
-      canceled: "Upload canceled. Any earlier upload is kept."
-      failed: "Upload failed. Try again or choose another file. Any earlier upload is kept."
+      canceled: "Upload canceled."
+      failed: "The upload failed. Choose the file again."
       progress: "Upload progress"
       remove: "Remove document"
       cancel: "Cancel upload"
+      scanning: "Checking %{filename} for viruses… This may take a few minutes."
+      blocked: "This file did not pass the virus check. Choose a different file."
+      unavailable: "We couldn't check the upload status. Your file is saved. Try again."
+      wait: "Wait for the virus check before submitting."
+      retry: "Check again"
+      choose_again: "Choose file again"
+      session_expired: "Your session expired. Refresh this page to sign in again."
+      javascript_required: "Turn on JavaScript to check files before submitting."
+    scan:
+      pending: "Checking this file for viruses."
+      clean: "This file passed the virus check."
+      blocked: "This file did not pass the virus check. Choose a different file."
+      failed: "We couldn't finish the virus check. Try uploading the file again later."
+      limit_reached: "The upload limit has been reached. Wait, then choose the file again to retry."
+      link_unavailable: "This upload link is no longer active. Ask the person who sent it for a new link."
     refused_document: "%{document}: %{reason}"
     refused:
+      scan_required: "Wait for the file to pass its virus check before submitting."
       missing: "Choose a file to upload."
       unsupported: "We could not read that upload. Choose the file again."
       unreadable: "We could not read that file. Upload a different file."
@@ -210,6 +234,8 @@ en:
         # Support must resolve distinct people who share both values.
         duplicate_identity: "%{name} is already associated with your account with this name and birthdate. If this is a different person, contact the MAT Team at %{support_email} or %{support_phone}."
   applications:
+    creation:
+      failure: "Your application could not be saved. Please try again."
     autosave:
       # Autosave status for the constituent application form, announced through a polite live region.
       saving: "Saving draft…"
@@ -578,6 +604,8 @@ en:
       hint: "Use at least %{count} characters."
   alerts:
     invalid_voucher_code: "Invalid voucher code"
+    sign_in_required: "Please sign in to continue"
+    session_expired: "Your session expired; please sign in again."
     session_fail: "Unable to create session"
     review_not_found: "Review not found"
     w9_missing: "W9 form is missing"

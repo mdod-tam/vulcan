@@ -25,6 +25,7 @@ module Vendors
           return failure(review.errors.full_messages.to_sentence, { review: review })
         end
         blob.lock!
+        DocumentScan.require_clean!(blob) if review.status_approved?
         review.reviewed_blob = blob
         review.save!
         W9Document.protect!(blob, vendor: @vendor)
@@ -38,6 +39,9 @@ module Vendors
         ActiveRecord.after_all_transactions_commit { deliver_follow_up(review, result) }
       end
       result
+    rescue DocumentScan::NotCleared
+      review.errors.add(:base, 'This document has not passed its security scan and cannot be approved.')
+      failure(review.errors.full_messages.to_sentence, { review: review })
     rescue ActiveRecord::RecordInvalid => e
       failure(e.record.errors.full_messages.to_sentence, { review: review })
     rescue ActiveRecord::RecordNotUnique

@@ -204,15 +204,9 @@ class VoucherTransitionBehaviorTest < ActiveSupport::TestCase
       },
       income_proof_action: 'none',
       residency_proof_action: 'accept',
-      residency_proof: fixture_file_upload(
-        Rails.root.join('test/fixtures/files/income_proof.pdf'),
-        'application/pdf'
-      ),
+      residency_proof: scanned_upload(fixture_file_upload('income_proof.pdf', 'application/pdf'), user: admin, slot: 'residency_proof').signed_id,
       id_proof_action: 'accept',
-      id_proof: fixture_file_upload(
-        Rails.root.join('test/fixtures/files/income_proof.pdf'),
-        'application/pdf'
-      )
+      id_proof: scanned_upload(fixture_file_upload('income_proof.pdf', 'application/pdf'), user: admin, slot: 'id_proof').signed_id
     }
 
     service = Applications::PaperApplicationService.new(params: params, admin: admin)

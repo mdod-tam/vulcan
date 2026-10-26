@@ -23,7 +23,7 @@ module ProductResources
         @resource.assign_attributes(attributes)
         if @accepted_document
           # Recheck and hold the staged blob lock until publication, alongside cleanup's lock.
-          @resource.document = UploadedDocument.resolve!(@accepted_document, record: @resource, name: 'document')
+          @resource.document = UploadedDocument.resolve!(@accepted_document, record: @resource, name: 'document', scan_owner: @actor)
         end
         @resource.document = nil if source == 'url'
         @resource.url = nil if source == 'pdf'
@@ -56,7 +56,7 @@ module ProductResources
     def resolve_document(input)
       # Keep an accepted upload available for a corrected form submission.
       ProductResource.transaction do
-        UploadedDocument.resolve!(input, record: @resource, name: 'document')
+        UploadedDocument.resolve!(input, record: @resource, name: 'document', scan_owner: @actor)
       end
     end
 

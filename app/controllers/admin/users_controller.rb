@@ -65,7 +65,7 @@ module Admin
       if result.success?
         result.data
       else
-        Rails.logger.warn "User filter error: #{result.message}"
+        Rails.logger.warn 'User filter error'
         scope.order(:type, :last_name, :first_name)
       end
     end
@@ -73,7 +73,7 @@ module Admin
     def paginate_users(scope)
       pagy(scope, items: 25)
     rescue StandardError => e
-      Rails.logger.error "Pagination failed: #{e.message}"
+      Rails.logger.error "Pagination failed: #{e.class.name}"
       [Pagy.new(count: scope.count, page: 1, items: 25), scope.limit(25)]
     end
 
@@ -232,7 +232,7 @@ module Admin
 
     def update_role
       user = User.find(params[:id])
-      Rails.logger.info "Admin::UsersController#update_role - Received raw params[:role]: #{params[:role].inspect} for user_id: #{user.id}"
+      Rails.logger.info "Admin::UsersController#update_role - Received role update for user_id: #{user.id}"
 
       namespaced_role = validate_and_normalize_role(params[:role], user.id)
       return if performed?
@@ -272,7 +272,7 @@ module Admin
         render_capability_success("Added #{capability.titleize} Capability")
       else
         error_message = extract_error_message(result)
-        Rails.logger.error "Failed to add capability: #{error_message}"
+        Rails.logger.error 'Failed to add capability: validation_failed'
         render_capability_error(error_message || 'Failed to add capability')
       end
     end
@@ -288,8 +288,8 @@ module Admin
       end
     end
 
-    def log_capability_action(action, capability, result)
-      Rails.logger.info "#{action} capability #{capability} to user #{@user.id}: #{result}"
+    def log_capability_action(action, _capability, result)
+      Rails.logger.info "#{action} capability for user #{@user.id}: #{result.class.name}"
     end
 
     def extract_error_message(result)
@@ -305,7 +305,7 @@ module Admin
     end
 
     def handle_capability_error(error)
-      Rails.logger.error "Error in update_capabilities: #{error.message}\n#{error.backtrace.join("\n")}"
+      Rails.logger.error "Error in update_capabilities: #{error.class.name}"
       render json: {
         success: false,
         message: error.message
@@ -450,7 +450,7 @@ module Admin
           action: 'admin_user_deletion_failed',
           actor: current_user,
           auditable: @user,
-          metadata: metadata.merge(error_class: e.class.name, error_message: e.message)
+          metadata: metadata.merge(error_class: e.class.name)
         )
 
         redirect_to admin_user_path(@user),
@@ -763,7 +763,7 @@ module Admin
                         end
 
       if namespaced_role.blank?
-        Rails.logger.warn "Admin::UsersController#update_role - Invalid role: #{raw_role_param.inspect} for user_id: #{user_id}"
+        Rails.logger.warn "Admin::UsersController#update_role - Invalid role for user_id: #{user_id}"
         render json: {
           success: false,
           message: "Invalid role specified: '#{raw_role_param}'. Please select a valid role."
@@ -859,7 +859,7 @@ module Admin
 
     def handle_failed_user_conversion(converted_user, original_user)
       Rails.logger.error "Admin::UsersController#update_role - Failed to save converted_user_id: #{original_user.id} " \
-                         "as type #{converted_user.type}: #{converted_user.errors.full_messages.join(', ')}"
+                         "as type #{converted_user.type}: validation_failed"
       render json: {
         success: false,
         message: converted_user.errors.full_messages.join(', ')

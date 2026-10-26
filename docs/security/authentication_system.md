@@ -20,9 +20,21 @@ Required password changes and MFA enrollment take priority. Pending MFA verifica
 
 [`SessionsController#create`](../../app/controllers/sessions_controller.rb) resolves the identifier and rejects locked accounts before checking the password or updating either failure counter. An unknown account or wrong password goes through the shared IP rate limiter first. A rate limiter slows or blocks repeated attempts. Only requests the limiter allows increment a matched account's failure count. Valid credentials bypass that limiter. They then either create a session or start MFA verification.
 
-Session creation itself is [`ApplicationController#_create_and_set_session_cookie`](../../app/controllers/application_controller.rb). It locks the user and rechecks them before writing a [`Session`](../../app/models/session.rb). Password-only sign-in also re-verifies the submitted identifier and password inside that lock. A merge or credential change landing mid-request therefore cannot be accepted on stale reads. Registration creates its first session by a separate path.
+Session creation itself is [`ApplicationController#_create_and_set_session_cookie`](../../app/controllers/application_controller.rb). It locks the user and rechecks them before writing a [`Session`](../../app/models/session.rb). Password-only sign-in also re-verifies the submitted identifier and password inside that lock. A merge or credential change landing mid-request therefore cannot be accepted on stale reads. Registration uses this same session owner. After the session transaction commits, it resets the Rails browser session, preserves the intended return path, and sets the signed login cookie. Password and MFA sign-in use that same completion boundary.
 
 The signed `session_token` cookie identifies the session row. [`Authentication`](../../app/controllers/concerns/authentication.rb) resolves it on every later request. Sign-out deletes the session, the cookie, and any pending MFA state.
+
+## Session lifetime
+
+Sessions have a **30-minute idle limit** and retain the existing **24-hour absolute limit**. Activity can move the idle deadline but cannot extend the absolute deadline. Background document-scan status checks do not refresh the idle deadline. The login cookie has HttpOnly, production Secure, and explicit SameSite=Lax flags.
+
+Password sign-in, MFA completion, and registration deliberately use a browser-session cookie without `Expires` or `Max-Age`. Registration follows the same cookie lifetime policy as subsequent sign-ins; it does not request a permanent cookie. The stored session still expires at the server deadlines if a browser restores the cookie. During deployment, inspect the HTTPS sign-in and registration responses to confirm `Secure`, `HttpOnly`, and `SameSite=Lax` on `session_token`.
+
+Authenticated requests refresh `Session#last_active_at` only when its stored value is at least one minute old. This bounds database writes and makes the idle deadline conservative by up to one minute compared with the latest request. Expiry is checked again under the session row lock before an activity write; waiting for another request cannot revive an expired session. Activity refresh runs inside `authenticate_user!`, so inherited callback ordering cannot skip the expiry recheck. Public actions that skip authentication do not refresh activity.
+
+Pages for fully signed-in users record genuine typing and interaction through an authenticated, CSRF-protected session-activity POST, at most once a minute. The warning and **Keep working** action cover all roles, with English or Spanish copy. Background scan polling, warning timers, and session-status GETs do not renew the session. The browser checks the server's deadlines when the page opens or regains focus and before showing a five-minute warning. **Keep working** renews idle time while the session remains valid; the absolute limit still requires another sign-in. If the session expires, the page keeps its visible form input and blocks submission so users can copy unfinished work. This does not save a draft or guarantee that signing in restores the form.
+
+Apply [the session migration](../../db/migrate/20261022173000_add_last_active_at_to_sessions.rb) with the rest of the schema before first launch. It clears stored sessions, requiring anyone signed in on an existing instance to sign in once more. New sessions record activity at creation. An expired protected request clears browser authentication and pending session state. JSON receives the no-store 401 response described below; HTML and Turbo return to sign-in with an English or Spanish expiry alert. The redirect uses a supported request locale, then the expired session user's effective locale, then the default. An anonymous request instead receives a generic sign-in alert in its supported request locale.
 
 Five recorded password failures lock the account for an hour ([`UserAuthentication`](../../app/models/concerns/user_authentication.rb)). This lockout is separate from request throttling.
 
@@ -46,6 +58,8 @@ Credential lookup, challenge, and signature failures return the same JSON 422 re
 
 A verified key followed by a session creation failure returns `session_failed` with guidance to sign in again. If the temporary MFA user no longer resolves, verification returns `user_session` with the same sign-in guidance. JSON verification failures use 422 regardless of locale. Non-JSON HTTP failures produce a status-only console diagnostic and generic user feedback.
 
+Missing or cleared pending MFA state makes a JSON security-key options request return 401; HTML and Turbo navigation redirect to sign-in. The key page uses its rendered English or Spanish sign-in guidance for that 401 without reading server error details. Reactivating an account does not restore cleared pending state: start again with password sign-in before another verification attempt.
+
 WebAuthn enrollment uses **Maryland Accessible Telecommunications** as its display name. The [WebAuthn initializer](../../config/initializers/webauthn.rb) configures the RP ID (the site identity the credential is bound to) and the allowed origins separately. These define the credential scope and accepted origins.
 
 TOTP provisioning URIs retain `MatVulcan` as the issuer, a deliberate exception to the public program name. A provisioning URI is the code an authenticator app scans. The issuer labels new enrollments. Changing it does not rename existing authenticator entries or alter TOTP codes.
@@ -59,6 +73,8 @@ The request-locale wrapper covers public sign-in and MFA verification, not setup
 Links are built against the [configured public host](../../app/services/canonical_public_url_options.rb) rather than the request host. Production refuses the `example.com` placeholder.
 
 The `:password_reset` token expires in **20 minutes**. It is derived from the password digest (a one-way fingerprint of the value), the normalized login email, and the normalized phone. Changing any of those invalidates outstanding links, including one already texted to a number a merge later removed. Reformatting a phone or email cosmetically does not, since normalization absorbs it. Redemption re-resolves the token under lock before writing the password. Signed-in and forced changes go through [`Users::PasswordUpdateService`](../../app/services/users/password_update_service.rb).
+
+A saved password change revokes the account's existing login sessions in the same transaction. It also invalidates unfinished MFA sign-ins: the pending browser state carries a signed token bound to the password salt. TOTP, SMS, and security-key verification check that token, and session creation checks it again under the shared user lock. A changed password requires a fresh password step even if the second factor was already accepted. Invalid input or a rolled-back change keeps existing sessions and pending sign-ins intact. An authenticated change replaces this browser's session after checking the new password under the shared user lock; existing welcome and MFA-enrollment routing still applies. If a replacement session cannot be created, the password change remains successful and the browser returns to sign-in. Reset links return to sign-in and clear the resetting browser's authentication when it belongs to that account.
 
 Issuing a reset link deliberately sits outside the merge lock. A racing contact change can therefore send a now-dead link to an old destination. Token invalidation and locked redemption are what make that safe. See the [merge integrity boundary](../development/service_architecture.md#merge-integrity-lock-boundary).
 
@@ -103,7 +119,8 @@ Tests simulate Twilio Verify and accept `123456`. Development falls back to the 
 ## Tests
 
 - [Root redirects](../../test/controllers/home_controller_test.rb) — role destinations, expired sessions, password/MFA gates, and public sign-in links.
-- [Sessions](../../test/controllers/sessions_controller_test.rb), [enrollment policy](../../test/controllers/mfa_enrollment_policy_test.rb)
+- [Sessions](../../test/controllers/sessions_controller_test.rb), [idle and absolute lifetime](../../test/models/session_test.rb), [real-cookie activity flow](../../test/integration/session_activity_test.rb), [enrollment policy](../../test/controllers/mfa_enrollment_policy_test.rb)
+- [Password sign-in and registration cookie attributes](../../test/integration/session_cookie_test.rb) — browser-session lifetime, HttpOnly, SameSite=Lax, and the stored 24-hour deadline.
 - [WebAuthn verification](../../test/controllers/two_factor_authentication_webauthn_test.rb), [SMS selection](../../test/controllers/two_factor_authentication_sms_selection_test.rb)
 - [Password reset](../../test/controllers/passwords_controller_test.rb), [concurrent resets](../../test/controllers/passwords_controller_concurrency_test.rb)
 - [Recovery requests](../../test/controllers/account_recovery_controller_test.rb), [admin approval](../../test/controllers/admin/recovery_requests_controller_test.rb)

@@ -89,11 +89,21 @@ class EmailDeliveryOutcomeTest < ActionDispatch::IntegrationTest
     stale = Notification.find(notification.id)
     notification.mark_delivery_suppressed!('global_disabled')
 
-    NotificationService.new.send(:handle_audit_trail_error, stale, StandardError.new('audit unavailable'))
+    private_detail = 'Private Patient private-audit@example.test at 410-555-0199'
+    error = StandardError.new(private_detail)
+    messages = []
+    Rails.logger.stub(:error, ->(message) { messages << message }) do
+      NotificationService.new.send(:handle_audit_trail_error, stale, error)
+    end
 
     assert_equal 'global_disabled', notification.reload.metadata.dig('delivery_suppressed', 'reason')
     assert_equal 'none', notification.metadata['actual_delivery_channel']
-    assert_equal 'audit unavailable', notification.metadata.dig('audit_error', 'message')
+    assert_equal 'StandardError', notification.metadata.dig('audit_error', 'error_class')
+    assert_not notification.metadata.fetch('audit_error').key?('message')
+    %w[Private private-audit@example.test 410-555-0199].each do |private_value|
+      assert_not_includes notification.metadata.to_json, private_value
+      assert_not_includes messages.join, private_value
+    end
   end
 
   test 'a later handler error cannot overwrite a recorded configuration refusal' do

@@ -82,6 +82,20 @@ class SecurityKeyFeedbackTest < ApplicationSystemTestCase
       capture('security-key-missing-session-narrow')
       user.update!(status: :active)
 
+      click_button verification_button
+      assert_selector '#security-key-feedback', text: code_copy('errors.user_session')
+      assert_button verification_button, disabled: false
+      assert_no_selector 'html[data-key-prompt="ready"]', visible: :all
+      capture('security-key-cleared-session-narrow')
+
+      visit sign_in_path(locale: locale)
+      fill_in 'contact-input', with: user.email
+      fill_in 'password-input', with: 'password1234'
+      click_button I18n.t('sessions.form.submit', locale: locale)
+      click_link I18n.t('two_factor_verification.choice.key', locale: locale)
+      assert_current_path verify_method_two_factor_authentication_path(type: 'webauthn', locale: locale)
+      install_authenticator_prompt
+
       TwoFactorAuthenticationsController.any_instance.expects(:_create_and_set_session_cookie).returns(nil)
       click_button verification_button
       finish_prompt(sign_assertion(client, origin.host))

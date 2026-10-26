@@ -46,7 +46,7 @@
   </p>
   <div class="mt-4 bg-gray-50 rounded p-4">
     <h3 class="font-medium text-gray-700 mb-2">MFR throughput comparison (events in period)</h3>
-    <div style="position: relative; height: 300px; width: 100%;"
+    <div class="relative h-[300px] w-full"
          data-controller="chart"
          data-chart-data-value="<%= @mfr_chart_data[:current].to_json %>"
          data-chart-comparison-data-value="<%= @mfr_chart_data[:previous].to_json %>"

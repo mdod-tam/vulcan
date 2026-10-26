@@ -2,6 +2,13 @@
 
 module BadgeHelper
   COLOR_MAPS = {
+    document_scan: {
+      clean: 'bg-green-100 text-green-800',
+      pending: 'bg-yellow-100 text-yellow-800',
+      blocked: 'bg-red-100 text-red-800',
+      failed: 'bg-amber-100 text-amber-800',
+      default: 'bg-gray-100 text-gray-800'
+    },
     proof: {
       not_reviewed: 'bg-gray-100 text-gray-800',
       approved: 'bg-green-100 text-green-800',
@@ -90,6 +97,10 @@ module BadgeHelper
   end
 
   def badge_label_for(type, status)
+    if type.to_sym == :document_scan
+      return { 'clean' => 'Passed', 'pending' => 'Pending', 'blocked' => 'Blocked', 'failed' => 'Failed' }.fetch(status.to_s, 'Not scanned')
+    end
+
     # Special case for evaluation "pending" status
     return 'Requested' if type.to_sym == :evaluation && status.to_s == 'pending'
 

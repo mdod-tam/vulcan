@@ -20,13 +20,13 @@ module Evaluations
 
       success('Evaluation scheduled successfully.', { evaluation: @evaluation })
     rescue ActiveRecord::RecordInvalid => e
-      Rails.logger.error("Error scheduling evaluation: #{e.message}")
+      Rails.logger.error("Error scheduling evaluation: #{e.class.name}")
       failure(e.message)
     rescue ArgumentError => e
       log_validation_failure(e)
       failure(e.message)
     rescue StandardError => e
-      Rails.logger.error("Unexpected error scheduling evaluation: #{e.message}")
+      Rails.logger.error("Unexpected error scheduling evaluation: #{e.class.name}")
       failure("An unexpected error occurred: #{e.message}")
     end
 
@@ -77,7 +77,7 @@ module Evaluations
     end
 
     def log_validation_failure(error)
-      Rails.logger.warn("Evaluations::ScheduleService validation failed: #{error.message}")
+      Rails.logger.warn("Evaluations::ScheduleService validation failed: #{error.class.name}")
     end
 
     def evaluation_date

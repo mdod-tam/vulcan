@@ -47,8 +47,6 @@ gem 'rotp', '~> 6.3'
 gem 'rqrcode', '~> 3.2'
 # gem for creating zip files
 gem 'rubyzip', '~> 3.2'
-# CSV processing, representing rows as Ruby hashes for easy integration with ActiveRecord
-gem 'smarter_csv', '~> 1.14', '>= 1.14.4'
 # hotwire's modest JavaScript framework [https://stimulus.hotwired.dev]
 gem 'stimulus-rails', '~> 1.3', '>= 1.3.4'
 # Add HTTP asset caching/compression and X-Sendfile acceleration to Puma [https://github.com/basecamp/thruster/]
@@ -74,6 +72,7 @@ group :development, :test do
   gem 'brakeman', '~> 8.0', '>= 8.0.4', require: false
   gem 'byebug', '~> 13.0'
   gem 'debug', '~> 1.11', require: 'debug/prelude'
+  gem 'factory_bot_rails'
 end
 
 group :development do
@@ -91,7 +90,6 @@ group :test do
   gem 'capybara', '~> 3.40'
   gem 'cuprite', '~> 0.17'
   gem 'database_cleaner-active_record'
-  gem 'factory_bot_rails'
   gem 'minitest-rails', '~> 8.1'
   gem 'mocha', '~> 3.1', require: false
   gem 'rails-controller-testing'

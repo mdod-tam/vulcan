@@ -49,7 +49,7 @@ class ApplicationTransitionStatusTest < ActiveSupport::TestCase
     assert_equal @admin, event.user
     assert_equal 'in_progress', event.metadata['old_status']
     assert_equal 'approved', event.metadata['new_status']
-    assert_equal 'Manual approval', event.metadata['notes']
+    assert_equal '[withheld]', event.metadata['notes']
     assert_equal 'admin_panel', event.metadata['trigger']
   end
 

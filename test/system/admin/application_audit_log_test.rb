@@ -35,10 +35,13 @@ module Admin
     end
 
     test 'admin can see proof review history in audit log' do
+      upload = fixture_file_upload(Rails.root.join('test/fixtures/files/income_proof.pdf'), 'application/pdf')
+      proof = scanned_upload(upload, user: @admin, purpose: :proof, slot: 'income_proof')
+      upload.tempfile.close
       result = ProofAttachmentService.attach_proof(
         application: @application,
         proof_type: :income,
-        blob_or_file: fixture_file_upload(Rails.root.join('test/fixtures/files/income_proof.pdf'), 'application/pdf'),
+        blob_or_file: proof,
         status: :not_reviewed,
         admin: @admin,
         submission_method: :paper
@@ -127,22 +130,26 @@ module Admin
       click_button 'Assign Evaluator'
       assert_text I18n.t('admin.applications.assign_evaluator.eval_assign_pass')
 
-      if page.has_css?('#audit-logs')
-        # Resolve the section again to avoid a stale element.
-        within('#audit-logs') do
-          assert_selector('tr', text: 'Evaluator Assigned', wait: 15)
+      assert_equal @evaluator.id, @application.evaluations.sole.evaluator_id
+      event = Event.where(auditable: @application, action: 'evaluator_assigned').sole
+      assert_equal @evaluator.id, event.metadata.fetch('evaluator_id')
+      assert_equal 'T*** E***', event.metadata.fetch('evaluator_name')
+      assert_equal @admin.id, event.user_id
 
-          assert_text @evaluator.full_name
-          assert_text @admin.full_name
-        end
+      within('#audit-logs') do
+        assert_selector('tr', text: 'Evaluator Assigned', wait: 15)
+        assert_text 'Evaluator T*** E*** assigned'
+        assert_no_text @evaluator.full_name
+        assert_text @admin.full_name
       end
+      take_screenshot('admin-evaluator-assignment-audit-masked', html: true, full: true)
     end
 
     test 'admin can see voucher assignments in audit log' do
       # Vouchers are assigned only to voucher-fulfillment applications, with the voucher feature on.
       FeatureFlag.enable!(:vouchers_enabled)
       @application.update_columns(fulfillment_type: Application.fulfillment_types[:voucher])
-      %i[income_proof residency_proof id_proof].each { |proof| attach_lightweight_proof(@application, proof) }
+      %i[income_proof residency_proof id_proof].each { |proof| attach_cleared_proof(@application, proof) }
       @application.update!(
         status: 'approved',
         income_proof_status: 'approved',

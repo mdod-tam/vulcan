@@ -27,19 +27,7 @@ module Admin
     def medical_certification_link(application, style = :link)
       return nil unless application.medical_certification.attached?
 
-      host = if Rails.env.production?
-               # Fail fast if APPLICATION_HOST is not configured in production
-               ENV.fetch('APPLICATION_HOST')
-             else
-               # For non-production environments, use request.host if available
-               Rails.application.routes.default_url_options[:host] || (defined?(request) && request.host)
-             end
-
-      url = Rails.application.routes.url_helpers.rails_blob_path(
-        application.medical_certification,
-        disposition: :inline,
-        host: host
-      )
+      url = document_download_path(application.medical_certification, disposition: :inline)
 
       if style == :button
         # Use classes similar to other full-height buttons in the form
@@ -143,44 +131,6 @@ module Admin
         'Rejected'
       else
         'Pending'
-      end
-    end
-
-    def proof_reviewer_actions_html(proof_type, application)
-      # Already wrapped in if/else statement
-      proof_status_method = "#{proof_type}_proof_status"
-      case application.send(proof_status_method)
-      when 'approved'
-        link_to 'View Approved Proof',
-                rails_blob_path(application.send("#{proof_type}_proof"), disposition: :inline),
-                target: '_blank',
-                class: 'btn btn-success btn-sm', rel: 'noopener'
-      when 'pending'
-        content_tag(:span, 'Manual review required',
-                    class: 'badge badge-pill badge-warning')
-      when 'rejected'
-        latest_review = application.proof_reviews.where(proof_type: proof_type, status: 'rejected').order(created_at: :desc).first
-        if latest_review
-          content_tag(:div) do
-            safe_join([
-                        "Rejected on #{latest_review.created_at.strftime('%B %d, %Y')} by #{latest_review.admin&.email || 'Unknown'}",
-                        content_tag(:div, class: 'mt-2') do
-                          link_to 'Review Again',
-                                  'javascript:;',
-                                  class: 'btn btn-primary btn-sm',
-                                  data: {
-                                    toggle: 'modal',
-                                    target: "##{proof_type}ProofReviewModal"
-                                  }
-                        end
-                      ])
-          end
-        else
-          content_tag(:span, 'Rejected',
-                      class: 'badge badge-pill badge-danger')
-        end
-      else
-        'Unknown Status'
       end
     end
 

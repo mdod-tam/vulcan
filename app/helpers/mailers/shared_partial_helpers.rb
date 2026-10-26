@@ -23,7 +23,7 @@ module Mailers
         result
       end
     rescue StandardError => e
-      Rails.logger.error "Error during cached render (#{key.first}): #{e.message}\n#{e.backtrace.first(5).join("\n")}"
+      Rails.logger.error "Error during cached render (#{key.first}): #{e.class.name}"
       "Error rendering #{key.first} '#{key[1]}'"
     end
 
@@ -37,7 +37,7 @@ module Mailers
         )
       end
     rescue ActionView::MissingTemplate => e
-      Rails.logger.error "Missing shared mailer partial: shared/mailers/#{partial_name} (#{e.message})"
+      Rails.logger.error "Missing shared mailer partial: shared/mailers/#{partial_name} (#{e.class.name})"
       "Error: Missing partial 'shared/mailers/#{partial_name}' for format #{format}"
     end
 
@@ -98,7 +98,7 @@ module Mailers
         version: 1
       )
     rescue StandardError => e
-      Rails.logger.error "Failed to create fallback template #{template_name}: #{e.message}"
+      Rails.logger.error "Failed to create fallback template #{template_name}: #{e.class.name}"
       nil
     end
 

@@ -1,0 +1,10 @@
+<%# locals: (template:, frame_id:, title:, error_message: nil, announce_result: false) -%>
+<%= tag.iframe id: frame_id,
+               name: frame_id,
+               src: preview_document_admin_email_template_path(template),
+               srcdoc: error_message.present? ? tag.p(error_message, role: 'alert') : nil,
+               title: title,
+               sandbox: announce_result ? 'allow-scripts' : '',
+               referrerpolicy: 'no-referrer',
+               class: 'email-preview h-[300px] w-full border-0 bg-white',
+               data: { turbo: false, 'email-preview-target': announce_result ? 'document' : nil } %>

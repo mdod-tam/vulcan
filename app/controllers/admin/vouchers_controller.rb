@@ -5,6 +5,8 @@ module Admin
     include Pagy::Backend
     include TurboStreamResponseHandling
 
+    CSV_HEADERS = ['Code', 'Status', 'Initial Value', 'Remaining Value', 'Vendor', 'Created At', 'Expiration Date', 'Last Transaction'].freeze
+
     before_action :set_voucher, only: %i[show update cancel]
     before_action :require_admin!
 
@@ -167,43 +169,15 @@ module Admin
     end
 
     def generate_csv(vouchers)
-      return '' if vouchers.empty?
-
-      build_csv_content(vouchers)
-    end
-
-    def build_csv_content(vouchers)
-      require 'smarter_csv'
-
-      vouchers_data = vouchers.map { |voucher| voucher_to_hash(voucher) }
-
-      # Use SmarterCSV to generate CSV with automatic header discovery
-      temp_file = Tempfile.new(['vouchers', '.csv'])
-
-      begin
-        writer = SmarterCSV::Writer.new(temp_file.path)
-        writer << vouchers_data
-        writer.finalize
-
-        temp_file.rewind
-        temp_file.read
-      ensure
-        temp_file.close
-        temp_file.unlink
+      headers = vouchers.empty? ? [] : CSV_HEADERS
+      CsvExport.generate(headers: headers, actor: current_user, export_type: 'admin_vouchers') do |csv|
+        vouchers.each { |voucher| csv << voucher_csv_row(voucher) }
       end
     end
 
-    def voucher_to_hash(voucher)
-      {
-        'Code' => voucher.code,
-        'Status' => voucher.status,
-        'Initial Value' => voucher.initial_value,
-        'Remaining Value' => voucher.remaining_value,
-        'Vendor' => voucher.vendor&.business_name,
-        'Created At' => format_date_time(voucher.created_at),
-        'Expiration Date' => format_date(voucher.expiration_date),
-        'Last Transaction' => format_date_time(voucher.transactions.last&.processed_at)
-      }
+    def voucher_csv_row(voucher)
+      [voucher.code, voucher.status, voucher.initial_value, voucher.remaining_value, voucher.vendor&.business_name,
+       format_date_time(voucher.created_at), format_date(voucher.expiration_date), format_date_time(voucher.transactions.last&.processed_at)]
     end
 
     def format_date_time(datetime)

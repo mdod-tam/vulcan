@@ -79,7 +79,7 @@ module Applications
                                    .raises(StandardError, 'simulated submission audit failure')
       result = ApplicationCreator.call(submitted)
       assert result.failure?
-      assert_includes result.error_messages, 'simulated submission audit failure'
+      assert_includes result.error_messages, I18n.t('applications.creation.failure')
       assert_equal before, @draft.reload.attributes
       assert_equal 'superseded', save_field('household_size', '4', 4)[:outcome]
     end

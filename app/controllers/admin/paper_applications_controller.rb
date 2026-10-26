@@ -330,7 +330,7 @@ module Admin
                     'An unexpected error occurred.'
                   end
       operation_context = Rails.env.test? ? '[TEST_BUSINESS_LOGIC] ' : '[ADMIN_OPERATION] '
-      Rails.logger.error "#{operation_context}Paper application operation failed: #{error_msg}"
+      Rails.logger.error "#{operation_context}Paper application operation failed: #{service.class.name}"
 
       repopulate_form_data(service, existing_application)
 
@@ -409,7 +409,7 @@ module Admin
     # Keep usable uploads across validation and identity review. Errors report a refused file.
     def retained_uploads(existing_application)
       DOCUMENT_KEYS.index_with do |key|
-        UploadedDocument.retained(params, record: existing_application || Application, field: key)
+        UploadedDocument.retained(params, record: existing_application || Application, field: key, scan_owner: current_user)
       end.compact
     end
 

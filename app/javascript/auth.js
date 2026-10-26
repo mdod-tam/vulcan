@@ -76,7 +76,7 @@ const Auth = {
           return this.formatError(messages.timedOut || "Request timed out. Please try again.");
         }
         clearTimeout(timeoutId);
-        Logger.error(`Network error during ${method} to ${url}:`, error);
+        Logger.error("Network request failed:", error.name);
         return this.formatError(messages.networkError || "Network error. Please check your connection and try again.");
       }
     }
@@ -94,11 +94,11 @@ const Auth = {
     } else {
       try {
         const errorData = await response.json();
-        Logger.error(`Operation failed with status ${response.status}:`, errorData);
+        Logger.error(`Operation failed with status ${response.status}`);
         return {
           success: false,
           message: messages[errorData.error_code] || messages.failed || errorData.error || 'Operation failed',
-          details: errorData.details || ''
+          details: ''
         };
       } catch (_) {
         Logger.error(`Operation failed with status ${response.status}: invalid JSON response`);
@@ -151,10 +151,10 @@ const Auth = {
       if (!result.success) this.updateFeedback(feedback, result.message);
       return result;
     } catch (error) {
-      Logger.error("Registration failed:", error);
+      Logger.error("Registration failed:", error.name);
       const msg = this.getErrorMessage(error);
       this.updateFeedback(feedback, msg);
-      return this.formatError(msg, error.message);
+      return this.formatError(msg);
     }
   },
 
@@ -171,10 +171,10 @@ const Auth = {
       if (!result.success) this.updateFeedback(feedback, result.message);
       return result;
     } catch (error) {
-      Logger.error("Verification failed:", error);
+      Logger.error("Verification failed:", error.name);
       const msg = messages[error.name] || messages.failed || this.getErrorMessage(error);
       this.updateFeedback(feedback, msg);
-      return this.formatError(msg, error.message);
+      return this.formatError(msg);
     }
   }
 };

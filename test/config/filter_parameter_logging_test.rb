@@ -3,6 +3,39 @@
 require 'test_helper'
 
 class FilterParameterLoggingTest < ActiveSupport::TestCase
+  test 'normal DocuSeal completion parameters redact private document and audit URLs' do
+    payload = {
+      'event_type' => 'form.completed',
+      'data' => {
+        'submission_id' => 'submission-123',
+        'documents' => [
+          { 'url' => 'https://private.example/signed.pdf?token=document-secret', 'filename' => 'private-name.pdf' },
+          { 'url' => 'https://private.example/another.pdf?token=another-secret' }
+        ],
+        'audit_log_url' => 'https://private.example/audit?token=audit-secret'
+      },
+      'url' => 'https://public.example/help'
+    }
+    filtered = ActiveSupport::ParameterFilter.new(Rails.application.config.filter_parameters).filter(payload)
+
+    assert_equal '[FILTERED]', filtered.dig('data', 'documents')
+    assert_equal '[FILTERED]', filtered.dig('data', 'audit_log_url')
+    assert_equal 'submission-123', filtered.dig('data', 'submission_id')
+    assert_equal 'form.completed', filtered['event_type']
+    assert_equal 'https://public.example/help', filtered['url']
+    assert_not_includes filtered.inspect, 'private.example'
+    assert_not_includes filtered.inspect, 'private-name.pdf'
+  end
+
+  test 'upload receipts are filtered under their original file field names' do
+    fields = %w[file income_proof residency_proof id_proof medical_certification w9_form document]
+    filtered = ActiveSupport::ParameterFilter.new(Rails.application.config.filter_parameters).filter(
+      'application' => fields.index_with { 'private-upload-receipt' }, 'purpose' => 'proof'
+    )
+    fields.each { |field| assert_equal '[FILTERED]', filtered.dig('application', field) }
+    assert_equal 'proof', filtered['purpose']
+  end
+
   test 'vendor TIN parameters are filtered at every request nesting level' do
     filter = ActiveSupport::ParameterFilter.new(Rails.application.config.filter_parameters)
     filtered = filter.filter('business_tax_id' => '123456789', 'vendor' => { 'business_tax_id' => '987654321' },
@@ -49,12 +82,14 @@ class FilterParameterLoggingTest < ActiveSupport::TestCase
     filtered = filter.filter(
       'contact' => '410-555-0198',
       'password' => 'password1234',
+      'two_factor_sign_in_token' => 'private-pending-sign-in',
       'controller' => 'sessions',
       'action' => 'create'
     )
 
     assert_equal '[FILTERED]', filtered['contact']
     assert_equal '[FILTERED]', filtered['password']
+    assert_equal '[FILTERED]', filtered['two_factor_sign_in_token']
     assert_equal 'sessions', filtered['controller']
     assert_equal 'create', filtered['action']
   end

@@ -1,167 +1,218 @@
 # frozen_string_literal: true
 
-require 'test_helper'
-require 'rake'
+# This boot contract avoids test_helper, which truncates and seeds the database.
+require 'bundler/setup'
+require 'minitest/autorun'
+require 'active_support/test_case'
+require 'json'
+require 'open3'
+require 'rbconfig'
+require 'securerandom'
+require 'tmpdir'
 
 class EncryptionKeyConfigurationTest < ActiveSupport::TestCase
-  PERSISTENT_KEYS = {
-    primary_key: 'saved-primary-key',
-    deterministic_key: 'saved-deterministic-key',
-    key_derivation_salt: 'saved-key-derivation-salt'
-  }.freeze
+  KEY_NAMES = %w[primary_key deterministic_key key_derivation_salt].freeze
+  INITIALIZER = File.expand_path('../../config/initializers/active_record_encryption.rb', __dir__)
+  BOOT_PROBE = <<~'RUBY'
+    require 'json'
+    require 'rails'
+    require 'active_record/railtie'
+    require 'fileutils'
+    require 'logger'
+    require 'stringio'
+
+    spec = JSON.parse(ENV.fetch('ENCRYPTION_BOOT_SPEC'))
+    Object.const_set(:Rake, Module.new) if spec['partial_rake'] && !defined?(Rake)
+    require 'propshaft' if spec['compile_assets']
+    root = Pathname.new(ENV.fetch('ENCRYPTION_BOOT_ROOT'))
+    Rails.env = spec.fetch('environment', 'production')
+    credentials = ActiveSupport::OrderedOptions.new
+    credentials.active_record_encryption = spec['keys']&.symbolize_keys
+    credentials.secret_key_base = SecureRandom.hex(64)
+
+    class EncryptionBootApplication < Rails::Application
+      config.eager_load = false
+      config.logger = Logger.new(StringIO.new)
+      config.paths['config/initializers'] = []
+    end
+
+    app = EncryptionBootApplication.instance
+    app.config.root = root
+    app.define_singleton_method(:credentials) { credentials }
+    app.config.define_singleton_method(:database_configuration) do
+      { Rails.env => { 'adapter' => 'postgresql', 'database' => 'encryption_boot_unused' } }
+    end
+    app.initializer('encryption_guard_under_test', before: 'load_config_initializers') do
+      load ENV.fetch('ENCRYPTION_BOOT_INITIALIZER')
+    end
+
+    # Reject connection checkout before a real database can be contacted.
+    ActiveRecord::ConnectionAdapters::ConnectionPool.prepend(Module.new do
+      def checkout(...)
+        raise 'Database access is forbidden in the encryption boot probe'
+      end
+    end)
+
+    begin
+      if spec['tasks']
+        require 'rake'
+        Rake.application.init('rake', spec.fetch('tasks'))
+        Rake::Task.define_task(:environment) { app.initialize! }
+        if spec['compile_assets']
+          FileUtils.mkdir_p(root.join('app/assets/builds'))
+          File.write(root.join('app/assets/builds/application.css'), 'body { color: #123; }')
+          load Gem::Specification.find_by_name('propshaft').full_gem_path + '/lib/propshaft/railties/assets.rake'
+          Rake.application.top_level
+        else
+          app.initialize!
+        end
+      else
+        app.initialize!
+      end
+
+      settings = app.config.active_record.encryption
+      result = { 'keys' => settings.slice(:primary_key, :deterministic_key, :key_derivation_salt),
+                 'support_unencrypted_data' => settings.support_unencrypted_data,
+                 'assets' => Dir[root.join('public/assets/*').to_s].map { |path| File.basename(path) } }
+      if spec['encrypt'] || spec['ciphertexts'] || spec['plaintext']
+        types = [false, true].map do |deterministic|
+          ActiveRecord::Encryption::EncryptedAttributeType.new(
+            scheme: ActiveRecord::Encryption::Scheme.new(deterministic: deterministic)
+          )
+        end
+        if spec['encrypt'] || spec['ciphertexts']
+          result['ciphertexts'] = types.map { |type| type.serialize('synthetic test value') }
+          result['decrypted'] = types.zip(spec['ciphertexts'] || result['ciphertexts']).map do |type, ciphertext|
+            type.deserialize(ciphertext)
+          end
+        end
+        if spec['plaintext']
+          result['plaintext_rejected'] = types.map do |type|
+            type.deserialize(spec['plaintext'])
+            false
+          rescue ActiveRecord::Encryption::Errors::Decryption
+            true
+          end
+          result['absent_values'] = types.map { |type| type.deserialize(nil) }
+        end
+      end
+      puts JSON.generate(result)
+    rescue StandardError => error
+      warn "#{error.class}: #{error.message}"
+      exit 1
+    end
+  RUBY
 
   setup do
-    @original_encryption_settings = Rails.application.config.active_record.encryption.to_h.deep_dup
-    @original_dummy = ENV.fetch('SECRET_KEY_BASE_DUMMY', nil)
-    ENV.delete('SECRET_KEY_BASE_DUMMY')
+    @keys = KEY_NAMES.index_with { SecureRandom.hex(32) }
   end
 
-  teardown do
-    Rails.application.config.active_record.encryption.replace(@original_encryption_settings)
-    if @original_dummy.nil?
-      ENV.delete('SECRET_KEY_BASE_DUMMY')
-    else
-      ENV['SECRET_KEY_BASE_DUMMY'] = @original_dummy
+  test 'persistent startup rejects absent and each missing or blank setting without printing values' do
+    [nil, {}, *KEY_NAMES.flat_map { |name| [@keys.except(name), *[nil, '', ' '].map { |blank| @keys.merge(name => blank) }] }].each do |keys|
+      output, status = boot(keys: keys)
+
+      assert_not status.success?, 'Invalid runtime configuration must fail during initialization'
+      missing = KEY_NAMES.select { |name| keys&.fetch(name, nil).blank? }
+      assert_includes output, "Missing: #{missing.join(', ')}."
+      @keys.each_value { |value| assert_not_includes output, value }
+      assert_not_includes output, 'Database access is forbidden'
     end
   end
 
-  test 'production refuses temporary encryption keys when credentials are absent' do
-    Rails.stubs(:env).returns(ActiveSupport::EnvironmentInquirer.new('production'))
-    Rails.application.credentials.stubs(:active_record_encryption).returns(nil)
-
-    error = assert_raises(RuntimeError) { load Rails.root.join('config/initializers/active_record_encryption.rb') }
-
-    assert_equal 'Persistent Active Record encryption credentials are required in production. ' \
-                 'Missing: primary_key, deterministic_key, key_derivation_salt. ' \
-                 'Configure them with bin/rails credentials:edit --environment production.', error.message
-  end
-
-  test 'production refuses partially configured persistent encryption keys' do
-    Rails.stubs(:env).returns(ActiveSupport::EnvironmentInquirer.new('production'))
-    PERSISTENT_KEYS.each_key do |missing|
-      keys = PERSISTENT_KEYS.except(missing)
-      Rails.application.credentials.stubs(:active_record_encryption).returns(keys)
-
-      assert_raises(RuntimeError, "#{missing} must be configured before production boot") do
-        load Rails.root.join('config/initializers/active_record_encryption.rb')
-      end
-    end
-  end
-
-  test 'production refuses blank persistent encryption key entries' do
-    Rails.stubs(:env).returns(ActiveSupport::EnvironmentInquirer.new('production'))
-    PERSISTENT_KEYS.each_key do |missing|
-      keys = PERSISTENT_KEYS.merge(missing => ' ')
-      Rails.application.credentials.stubs(:active_record_encryption).returns(keys)
-
-      assert_raises(RuntimeError) { load_initializer }
-    end
-  end
-
-  test 'only an explicit dummy-key asset precompile may use temporary production encryption keys' do
-    Rails.stubs(:env).returns(ActiveSupport::EnvironmentInquirer.new('production'))
-    Rails.application.credentials.stubs(:active_record_encryption).returns(nil)
-    ENV['SECRET_KEY_BASE_DUMMY'] = '1'
-    Rake.application.stubs(:top_level_tasks).returns(['assets:precompile'])
-
-    load_initializer
-
-    settings = Rails.application.config.active_record.encryption
-    PERSISTENT_KEYS.each_key do |key|
-      assert_match(/\A[0-9a-f]{64}\z/, settings[key])
-    end
-  end
-
-  test 'asset precompile with partial credentials uses temporary build-only keys' do
-    Rails.stubs(:env).returns(ActiveSupport::EnvironmentInquirer.new('production'))
-    Rails.application.credentials.stubs(:active_record_encryption).returns({ primary_key: 'partial-setting' })
-    ENV['SECRET_KEY_BASE_DUMMY'] = '1'
-    Rake.application.stubs(:top_level_tasks).returns(['assets:precompile'])
-
-    load_initializer
-
-    assert_not_equal 'partial-setting', Rails.application.config.active_record.encryption.primary_key
-    assert Rails.application.config.active_record.encryption.deterministic_key.present?
-  end
-
-  test 'dummy key alone does not permit runtime, release tasks, or combined asset and database tasks' do
-    Rails.stubs(:env).returns(ActiveSupport::EnvironmentInquirer.new('production'))
-    Rails.application.credentials.stubs(:active_record_encryption).returns(nil)
-    ENV['SECRET_KEY_BASE_DUMMY'] = '1'
-    [[], ['server'], ['jobs:work'], ['console'], ['db:migrate'], ['assets:precompile', 'db:migrate']].each do |tasks|
-      Rake.application.stubs(:top_level_tasks).returns(tasks)
-
-      assert_raises(RuntimeError, "Runtime tasks #{tasks.inspect} must require persistent keys") { load_initializer }
-    end
-  end
-
-  test 'asset precompile without explicit dummy key still requires persistent production keys' do
-    Rails.stubs(:env).returns(ActiveSupport::EnvironmentInquirer.new('production'))
-    Rails.application.credentials.stubs(:active_record_encryption).returns(nil)
-    Rake.application.stubs(:top_level_tasks).returns(['assets:precompile'])
-
-    assert_raises(RuntimeError) { load_initializer }
-  end
-
-  test 'development and custom runtimes refuse missing or empty persistent credentials' do
+  test 'development and custom persistent environments also require saved keys' do
     %w[development staging].each do |environment|
-      Rails.stubs(:env).returns(ActiveSupport::EnvironmentInquirer.new(environment))
-      [nil, {}].each do |keys|
-        Rails.application.credentials.stubs(:active_record_encryption).returns(keys)
+      output, status = boot(environment: environment)
 
-        error = assert_raises(RuntimeError) { load_initializer }
-
-        assert_includes error.message, "Persistent Active Record encryption credentials are required in #{environment}."
-        assert_includes error.message, 'Missing: primary_key, deterministic_key, key_derivation_salt.'
-        assert_includes error.message, "bin/rails credentials:edit --environment #{environment}."
-        assert_equal @original_encryption_settings.slice(*PERSISTENT_KEYS.keys),
-                     Rails.application.config.active_record.encryption.to_h.slice(*PERSISTENT_KEYS.keys)
-      end
+      assert_not status.success?
+      assert_includes output, "credentials are required in #{environment}"
     end
   end
 
-  test 'development refuses each missing or blank persistent key' do
-    Rails.stubs(:env).returns(ActiveSupport::EnvironmentInquirer.new('development'))
-    PERSISTENT_KEYS.each_key do |missing|
-      incomplete = [PERSISTENT_KEYS.except(missing)]
-      incomplete.concat([nil, '', ' '].map { |blank| PERSISTENT_KEYS.merge(missing => blank) })
-      incomplete.each do |keys|
-        Rails.application.credentials.stubs(:active_record_encryption).returns(keys)
+  test 'a partially loaded Rake module neither crashes startup nor permits a build exception' do
+    output, status = boot(keys: @keys, partial_rake: true)
+    assert status.success?, output
+    assert_equal @keys, JSON.parse(output).fetch('keys')
 
-        error = assert_raises(RuntimeError) { load_initializer }
+    missing_output, missing_status = boot(partial_rake: true, dummy: '1')
+    assert_not missing_status.success?
+    assert_includes missing_output, 'Missing: primary_key, deterministic_key, key_derivation_salt.'
+    assert_not_includes missing_output, 'NoMethodError'
+  end
 
-        assert_includes error.message, "Missing: #{missing}."
-      end
+  test 'saved keys round-trip deterministic and nondeterministic ciphertext across fresh boots' do
+    first, first_status = boot(keys: @keys, encrypt: true)
+    assert first_status.success?, first
+    encrypted = JSON.parse(first)
+    assert_equal @keys, encrypted.fetch('keys')
+    assert_equal false, encrypted.fetch('support_unencrypted_data')
+    encrypted.fetch('ciphertexts').each { |value| assert_not_equal 'synthetic test value', value }
+
+    second, second_status = boot(keys: @keys, ciphertexts: encrypted.fetch('ciphertexts'))
+    assert second_status.success?, second
+    assert_equal ['synthetic test value', 'synthetic test value'], JSON.parse(second).fetch('decrypted')
+  end
+
+  test 'encrypted attributes reject stored plaintext while allowing absent values' do
+    %w[production test].each do |environment|
+      output, status = boot(environment: environment, keys: @keys, plaintext: 'synthetic personal value')
+      assert status.success?, output
+      result = JSON.parse(output)
+
+      assert_equal false, result.fetch('support_unencrypted_data')
+      assert_equal [true, true], result.fetch('plaintext_rejected')
+      assert_equal [nil, nil], result.fetch('absent_values')
     end
   end
 
-  test 'complete saved keys are retained unchanged in persistent and test environments' do
-    Rails.application.credentials.stubs(:active_record_encryption).returns(PERSISTENT_KEYS)
-    %w[development staging production test].each do |environment|
-      Rails.stubs(:env).returns(ActiveSupport::EnvironmentInquirer.new(environment))
+  test 'disposable tests generate temporary keys but retain supplied complete keys' do
+    [nil, @keys.slice('primary_key'), @keys].each do |keys|
+      output, status = boot(environment: 'test', keys: keys, encrypt: true)
+      assert status.success?, output
+      result = JSON.parse(output)
 
-      load_initializer
-
-      assert_equal PERSISTENT_KEYS, Rails.application.config.active_record.encryption.to_h.slice(*PERSISTENT_KEYS.keys)
+      KEY_NAMES.each { |name| assert_match(/\A[0-9a-f]{64}\z/, result.fetch('keys').fetch(name)) }
+      assert_equal @keys, result.fetch('keys') if keys == @keys
+      assert_equal ['synthetic test value', 'synthetic test value'], result.fetch('decrypted')
     end
   end
 
-  test 'disposable test runtime replaces missing or incomplete credentials with a full temporary key set' do
-    Rails.stubs(:env).returns(ActiveSupport::EnvironmentInquirer.new('test'))
-    [nil, {}, PERSISTENT_KEYS.slice(:primary_key), PERSISTENT_KEYS.merge(primary_key: ' ')].each do |keys|
-      Rails.application.credentials.stubs(:active_record_encryption).returns(keys)
+  test 'sole production asset compilation succeeds without encryption keys or encrypted data access' do
+    output, status = boot(tasks: ['assets:precompile'], compile_assets: true)
+    assert status.success?, output
+    result = JSON.parse(output.lines.last)
 
-      load_initializer
+    assert_empty result.fetch('keys')
+    assert result.fetch('assets').any? { |name| name.match?(/\Aapplication-[a-f0-9]+\.css\z/) }, result.inspect
 
-      PERSISTENT_KEYS.each_key do |key|
-        assert_match(/\A[0-9a-f]{64}\z/, Rails.application.config.active_record.encryption[key])
-      end
+    encrypted_output, encrypted_status = boot(tasks: ['assets:precompile'], encrypt: true)
+    assert_not encrypted_status.success?
+    assert_includes encrypted_output, 'Missing Active Record encryption credential'
+  end
+
+  test 'dummy signing key cannot bypass runtime or mixed asset and database tasks' do
+    [nil, [], ['server'], ['solid_queue:start'], ['console'], ['db:migrate'], ['assets:precompile', 'db:migrate']].each do |tasks|
+      output, status = boot(tasks: tasks, dummy: '1')
+
+      assert_not status.success?, "Runtime context #{tasks.inspect} must require saved keys"
+      assert_includes output, 'Missing: primary_key, deterministic_key, key_derivation_salt.'
     end
   end
 
   private
 
-  def load_initializer
-    load Rails.root.join('config/initializers/active_record_encryption.rb')
+  def boot(**spec)
+    Dir.mktmpdir('encryption-boot') do |root|
+      env = {
+        'ENCRYPTION_BOOT_SPEC' => JSON.generate(spec),
+        'ENCRYPTION_BOOT_ROOT' => root,
+        'ENCRYPTION_BOOT_INITIALIZER' => INITIALIZER,
+        'RAILS_ENV' => spec.fetch(:environment, 'production'),
+        'SECRET_KEY_BASE_DUMMY' => spec[:dummy],
+        'SECRET_KEY_BASE' => nil,
+        'RAILS_MASTER_KEY' => nil,
+        'DATABASE_URL' => nil
+      }
+      Open3.capture2e(env, RbConfig.ruby, '-e', BOOT_PROBE)
+    end
   end
 end

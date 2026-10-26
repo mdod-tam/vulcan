@@ -55,7 +55,7 @@
           </dl>
 
           <div class="mt-4">
-            <div style="position: relative; height: 200px; width: 100%;"
+            <div class="relative h-[200px] w-full"
                  data-controller="chart"
                  data-chart-data-value="<%= { 'Created' => @current_fy_applications, 'Draft' => @current_fy_draft_applications }.to_json %>"
                  data-chart-compact-value="true"
@@ -84,7 +84,7 @@
           </dl>
 
           <div class="mt-4">
-            <div style="position: relative; height: 200px; width: 100%;"
+            <div class="relative h-[200px] w-full"
                  data-controller="chart"
                  data-chart-data-value="<%= { 'Created' => @previous_fy_applications, 'Draft' => @previous_fy_draft_applications }.to_json %>"
                  data-chart-compact-value="true"
@@ -101,7 +101,7 @@
       </div>
 
       <div class="mt-4">
-        <div style="position: relative; height: 300px; width: 100%;"
+        <div class="relative h-[300px] w-full"
              data-controller="chart"
              data-chart-data-value="<%= @applications_chart_data[:current].to_json %>"
              data-chart-comparison-data-value="<%= @applications_chart_data[:previous].to_json %>"
@@ -183,7 +183,7 @@
 
         <div class="mt-4">
           <h4 class="sr-only" id="disability-comparison-chart-heading">Disability Type Comparison Chart</h4>
-          <div style="position: relative; height: 300px; width: 100%;"
+          <div class="relative h-[300px] w-full"
                aria-labelledby="disability-comparison-chart-heading disability-comparison-chart-desc"
                data-controller="chart"
                data-chart-data-value="<%= {
@@ -245,7 +245,7 @@
           </dl>
 
           <div class="mt-4">
-            <div style="position: relative; height: 200px; width: 100%;"
+            <div class="relative h-[200px] w-full"
                  data-controller="chart"
                  data-chart-data-value="<%= {
                    'Issued' => @current_fy_vouchers,
@@ -288,7 +288,7 @@
           </dl>
 
           <div class="mt-4">
-            <div style="position: relative; height: 200px; width: 100%;"
+            <div class="relative h-[200px] w-full"
                  data-controller="chart"
                  data-chart-data-value="<%= {
                    'Issued' => @previous_fy_vouchers,
@@ -311,7 +311,7 @@
       </div>
 
       <div class="mt-4">
-        <div style="position: relative; height: 300px; width: 100%;"
+        <div class="relative h-[300px] w-full"
              data-controller="chart"
              data-chart-data-value="<%= @vouchers_chart_data[:current].to_json %>"
              data-chart-comparison-data-value="<%= @vouchers_chart_data[:previous].to_json %>"
@@ -334,7 +334,7 @@
           <span class="text-sm font-medium text-gray-900"><%= number_to_currency(@previous_fy_voucher_value) %></span>
         </div>
 
-        <div style="position: relative; height: 300px; width: 100%;"
+        <div class="relative h-[300px] w-full"
              data-controller="chart"
              data-chart-data-value="<%= { 'Total Value' => @current_fy_voucher_value.to_f }.to_json %>"
              data-chart-comparison-data-value="<%= { 'Total Value' => @previous_fy_voucher_value.to_f }.to_json %>"
@@ -367,7 +367,7 @@
           </dl>
 
           <div class="mt-4">
-            <div style="position: relative; height: 200px; width: 100%;"
+            <div class="relative h-[200px] w-full"
                  data-controller="chart"
                  data-chart-data-value="<%= { 'Training' => @current_fy_trainings, 'Evaluation' => @current_fy_evaluations }.to_json %>"
                  data-chart-compact-value="true"
@@ -396,7 +396,7 @@
           </dl>
 
           <div class="mt-4">
-            <div style="position: relative; height: 200px; width: 100%;"
+            <div class="relative h-[200px] w-full"
                  data-controller="chart"
                  data-chart-data-value="<%= { 'Training' => @previous_fy_trainings, 'Evaluation' => @previous_fy_evaluations }.to_json %>"
                  data-chart-compact-value="true"
@@ -492,7 +492,7 @@
           </div>
         </div>
 
-        <div style="position: relative; height: 300px; width: 100%;"
+        <div class="relative h-[300px] w-full"
              data-controller="chart"
              data-chart-data-value="<%= @services_chart_data[:current].to_json %>"
              data-chart-comparison-data-value="<%= @services_chart_data[:previous].to_json %>"
@@ -523,7 +523,7 @@
           </dl>
 
           <div class="mt-4">
-            <div style="position: relative; height: 200px; width: 100%;"
+            <div class="relative h-[200px] w-full"
                  data-controller="chart"
                  data-chart-data-value="<%= { 'Recent' => @recent_active_vendors, 'Other' => (@active_vendors - @recent_active_vendors) }.to_json %>"
                  data-chart-comparison-data-value="<%= {}.to_json %>"
@@ -639,7 +639,7 @@
       <div class="mt-6 bg-gray-50 rounded p-4">
         <h4 id="referral-ytd-chart-heading" class="font-medium text-gray-700 mb-2">Referral Sources - Year to Date</h4>
         <% if @referral_ytd_data&.any? %>
-          <div style="position: relative; height: 300px; width: 100%;"
+          <div class="relative h-[300px] w-full"
                aria-labelledby="referral-ytd-chart-heading referral-ytd-chart-desc"
                data-controller="chart"
                data-chart-data-value="<%= @referral_ytd_data.to_json %>"

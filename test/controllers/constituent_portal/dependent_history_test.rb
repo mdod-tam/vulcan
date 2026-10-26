@@ -41,16 +41,19 @@ module ConstituentPortal
     private
 
     def assert_history
-      assert_match 'Sam Staff', response.body
-      assert_match 'Gail Guardian', response.body
-      assert_match 'Towson', response.body
-      assert_match 'Bel Air', response.body
-      assert_match 'Date of birth', response.body
-      # Decrypted from Event#change_values for display; the event's plain metadata holds no value.
-      assert_match '2012-05-15', response.body
-      assert_match '2012-05-16', response.body
+      history = css_select('h2').find { |heading| heading.text == 'Recent Changes' }.parent.parent.text
+      assert_match 'Sam Staff', history
+      assert_match 'Gail Guardian', history
+      assert_no_match 'Towson', history
+      assert_no_match 'Bel Air', history
+      assert_match 'Date of birth', history
+      # The same field history remains visible without disclosing date or location values.
+      assert_no_match '2012-05-15', history
+      assert_no_match '2012-05-16', history
+      assert_includes history, '[withheld]'
       dob_event = Event.where(action: 'profile_updated_by_guardian').where("metadata->>'user_id' = ?", @dependent.id.to_s).last
-      assert_equal({}, dob_event.metadata['changes']['date_of_birth'])
+      assert_equal({ 'old' => '[withheld]', 'new' => '[withheld]' }, dob_event.metadata['changes']['date_of_birth'])
+      assert_nil dob_event.change_values
     end
 
     def with_actor(user)

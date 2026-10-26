@@ -33,7 +33,7 @@ module ContactChangeAudit
       metadata: { changes: changes, changed_by: Current.user&.id }
     )
   rescue StandardError => e
-    Rails.logger.error "Failed to log alternate contact changes for application #{id}: #{e.message}"
+    Rails.logger.error "Failed to log alternate contact changes for application #{id} (#{e.class})"
   end
 
   # A secure form submission that replaces a value already on file is marked for staff review.

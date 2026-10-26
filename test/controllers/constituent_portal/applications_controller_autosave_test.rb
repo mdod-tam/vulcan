@@ -31,6 +31,60 @@ module ConstituentPortal
       assert_equal original_size, @draft_application.reload.household_size
     end
 
+    test 'unexpected autosave failures keep exception messages and backtraces out of logs and JSON' do
+      sentinel = 'private-autosave-sentinel person@example.test token=secret-proof-token'
+      error = StandardError.new(sentinel)
+      error.set_backtrace(["#{sentinel}:1:in 'autosave'"])
+      log = StringIO.new
+      service = Applications::AutosaveService.new(current_user: @user, params: {})
+
+      [autosave_field_constituent_portal_application_path(@draft_application),
+       autosave_field_constituent_portal_applications_path].each do |path|
+        assert_no_difference ['Application.count', 'Event.count', 'Notification.count'] do
+          Rails.stub(:logger, ActiveSupport::Logger.new(log)) do
+            Applications::AutosaveService.stub(:new, ->(*) { service }) do
+              service.stub(:call, -> { raise error }) do
+                patch path, params: { field_name: 'application[household_size]', field_value: '7' }, as: :json
+              end
+            end
+          end
+        end
+
+        assert_response :internal_server_error
+        assert_equal({ 'success' => false, 'errors' => { 'base' => ['An error occurred during autosave'] } }, response.parsed_body)
+        assert_not_includes response.body, sentinel
+        assert_not_includes log.string, sentinel
+        assert_includes log.string, 'Autosave error: StandardError'
+      end
+    end
+
+    test 'unexpected autosave service failures keep exception details out of logs and JSON' do
+      sentinel = 'private-autosave-owner-sentinel person@example.test token=secret-proof-token'
+      log = StringIO.new
+      original_size = @draft_application.household_size
+
+      [autosave_field_constituent_portal_application_path(@draft_application),
+       autosave_field_constituent_portal_applications_path].each do |path|
+        assert_no_difference ['Application.count', 'Event.count', 'Notification.count'] do
+          Rails.stub(:logger, ActiveSupport::Logger.new(log)) do
+            User.stub(:lock_for_merge_integrity!, ->(*) { raise StandardError, sentinel }) do
+              patch path, params: {
+                **autosave_metadata(actor: @user),
+                field_name: 'application[household_size]', field_value: '7'
+              }, as: :json
+            end
+          end
+        end
+
+        assert_response :unprocessable_content
+        assert_equal ['This field could not be saved'], response.parsed_body.dig('errors', 'base')
+        assert_not_includes response.body, sentinel
+        assert_not_includes log.string, sentinel
+        assert_includes log.string, 'Error autosaving field: StandardError'
+        assert_equal original_size, @draft_application.reload.household_size
+      end
+    end
+
     test 'a page opened yesterday still saves its full form and selected document' do
       metadata = nil
       travel_to 25.hours.ago do
@@ -40,10 +94,11 @@ module ConstituentPortal
         metadata = %w[autosave_context autosave_revision].index_with { |name| html.at_css("input[name='#{name}']")['value'] }
       end
       sign_in_for_integration_test(@user)
+      upload = scanned_upload(fixture_file_upload('income_proof.pdf', 'application/pdf'), user: @user, slot: 'income_proof')
       patch constituent_portal_application_path(@draft_application), params: metadata.merge(
         save_draft: 'Save Application', application: {
           household_size: '4', annual_income: '40000', hearing_disability: '1',
-          income_proof: fixture_file_upload(Rails.root.join('test/fixtures/files/income_proof.pdf'), 'application/pdf')
+          income_proof: upload.signed_id
         }
       )
       assert_response :redirect

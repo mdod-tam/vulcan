@@ -49,9 +49,8 @@
                                   method: :post,
                                   form: {
                                     class: 'inline',
-                                    onsubmit: "return confirm(#{t('admin.vendors.vendor_secure_request_forms.table.revoke_confirm').to_json})",
                                     data: {
-                                      turbo: false
+                                      turbo_confirm: t('admin.vendors.vendor_secure_request_forms.table.revoke_confirm')
                                     }
                                   },
                                   'aria-label': secure_link_row_action_label(t('admin.vendors.vendor_secure_request_forms.table.revoke'), form,

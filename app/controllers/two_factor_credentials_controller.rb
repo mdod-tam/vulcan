@@ -376,12 +376,12 @@ class TwoFactorCredentialsController < ApplicationController
   end
 
   def log_sms_credential_save_failure(credential)
-    Rails.logger.warn("[2FA_CREDENTIAL] Failed to build SMS credential for user #{current_user.id}: #{credential.errors.full_messages.join(', ')}")
+    Rails.logger.warn("[2FA_CREDENTIAL] Failed to build SMS credential for user #{current_user.id}, credential ID: #{credential.id}")
   end
 
-  def log_totp_setup_failure(message)
-    Rails.logger.warn("[2FA_CREDENTIAL] TOTP credential setup verification failed for user #{current_user.id}: #{message}")
-    TwoFactorAuth.log_verification_failure(current_user.id, :totp, 'Invalid code during setup')
+  def log_totp_setup_failure(_message)
+    Rails.logger.warn("[2FA_CREDENTIAL] TOTP credential setup verification failed for user #{current_user.id}")
+    TwoFactorAuth.log_verification_failure(current_user.id, :totp, reason: :invalid_setup_code)
   end
 
   # The hidden form value supplies the secret when session metadata has none.
@@ -572,11 +572,11 @@ class TwoFactorCredentialsController < ApplicationController
   def handle_webauthn_error(error, error_type)
     case error_type
     when 'verification'
-      Rails.logger.warn("[2FA_CREDENTIAL] WebAuthn credential verification failed for user #{current_user.id}: #{error.message}")
-      render json: { error: "Verification failed: #{error.message}" }, status: :unprocessable_content
+      Rails.logger.warn("[2FA_CREDENTIAL] WebAuthn credential verification failed for user #{current_user.id}: #{error.class.name}")
+      render json: { error: t('security_key_verification.feedback.failed'), error_code: 'verification_failed' }, status: :unprocessable_content
     when 'creation'
-      Rails.logger.error("[2FA_CREDENTIAL] Error creating WebAuthn credential for user #{current_user.id}: #{error.message}")
-      render json: { error: "Error creating credential: #{error.message}" }, status: :unprocessable_content
+      Rails.logger.error("[2FA_CREDENTIAL] Error creating WebAuthn credential for user #{current_user.id}: #{error.class.name}")
+      render json: { error: t('security_key_verification.feedback.failed'), error_code: 'creation_failed' }, status: :unprocessable_content
     end
   end
 end

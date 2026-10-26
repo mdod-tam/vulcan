@@ -128,8 +128,10 @@ module ConstituentPortal
 
     test 'public PDF proxy link contains no application identity and exact product resources do not spread by device type' do
       resource = @product.product_resources.new(title: 'PDF setup', locale: 'en')
-      blob = ActiveStorage::Blob.create_and_upload!(io: StringIO.new("%PDF-1.4\n#{'x' * 1024}"), filename: 'guide.pdf', content_type: 'application/pdf')
-      assert ProductResources::Writer.new(resource: resource, actor: create(:admin)).save(
+      admin = create(:admin)
+      upload = Rack::Test::UploadedFile.new(file_fixture('medical_certification_valid.pdf'), 'application/pdf', original_filename: 'guide.pdf')
+      blob = scanned_upload(upload, user: admin, purpose: :product_resource, slot: 'document')
+      assert ProductResources::Writer.new(resource: resource, actor: admin).save(
         attributes: { title: 'PDF setup', locale: 'en' }, source: 'pdf', document: blob
       )
       get constituent_portal_product_path(@product)
@@ -144,6 +146,8 @@ module ConstituentPortal
       create(:equipment_item, application: @application, product: other_product, shipped_at: Date.current, tracking_number: 'Other')
       get constituent_portal_product_path(other_product)
       assert_not_includes response.body, 'PDF setup'
+    ensure
+      upload&.tempfile&.close
     end
   end
 end

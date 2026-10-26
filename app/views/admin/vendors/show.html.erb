@@ -75,6 +75,7 @@
                 <%= link_to 'View W9 Form', vendor_w9_document_path(@vendor, @vendor.w9_form.blob, disposition: 'inline'),
                             target: '_blank', rel: 'noopener', class: 'text-indigo-600 hover:text-indigo-900' %>
               </div>
+              <%= render 'shared/document_scan_status', document: @vendor.w9_form %>
             <% else %>
               <span class="text-red-500">No W9 form uploaded</span>
             <% end %>

@@ -18,7 +18,7 @@ class W9ReviewController extends Controller {
     }
 
     this.statusTarget.value = 'approved'
-    this.formTarget.submit()
+    this.formTarget.requestSubmit()
   }
 
   reject() {
@@ -50,7 +50,7 @@ class W9ReviewController extends Controller {
         alert(errorMessage) // Use alert for immediate user feedback since this is form validation
       } else {
         this.statusTarget.value = 'rejected'
-        this.formTarget.submit()
+        this.formTarget.requestSubmit()
       }
     }
   }

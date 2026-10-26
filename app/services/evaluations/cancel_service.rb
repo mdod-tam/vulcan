@@ -23,10 +23,10 @@ module Evaluations
 
       success('Evaluation cancelled successfully.', { evaluation: @evaluation })
     rescue ActiveRecord::RecordInvalid => e
-      Rails.logger.error("Error cancelling evaluation: #{e.message}")
+      Rails.logger.error("Error cancelling evaluation: #{e.class.name}")
       failure(e.message)
     rescue ArgumentError => e
-      Rails.logger.warn("Evaluations::CancelService validation failed: #{e.message}")
+      Rails.logger.warn("Evaluations::CancelService validation failed: #{e.class.name}")
       failure(e.message)
     end
 

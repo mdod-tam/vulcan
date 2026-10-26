@@ -19,7 +19,7 @@ module Vendors
         SubmitW9Resubmission.new(
           vendor: @vendor,
           vendor_secure_request_form: @secure_request_form,
-          file: file
+          file: cleared_w9(file)
         ).call
       end
 
@@ -48,7 +48,7 @@ module Vendors
       end
 
       assert_no_changes snapshot do
-        result = SubmitW9Resubmission.new(vendor: @vendor, vendor_secure_request_form: @secure_request_form, file: upload).call
+        result = SubmitW9Resubmission.new(vendor: @vendor, vendor_secure_request_form: @secure_request_form, file: cleared_w9(upload)).call
         assert_predicate result, :failure?
       end
       assert_predicate @vendor, :w9_status_rejected?
@@ -63,7 +63,7 @@ module Vendors
       result = SubmitW9Resubmission.new(
         vendor: other_vendor,
         vendor_secure_request_form: @secure_request_form,
-        file: file
+        file: cleared_w9(file)
       ).call
 
       assert_not result.success?
@@ -96,7 +96,7 @@ module Vendors
         result = SubmitW9Resubmission.new(
           vendor: @vendor,
           vendor_secure_request_form: @secure_request_form,
-          file: file
+          file: cleared_w9(file)
         ).call
 
         assert_predicate result, :success?
@@ -158,6 +158,12 @@ module Vendors
       assert_equal previous_w9, @vendor.reload.w9_form.blob
     ensure
       tempfile&.close!
+    end
+
+    private
+
+    def cleared_w9(file)
+      scanned_upload(file, secure_form: @secure_request_form, purpose: :w9, slot: 'w9_form').signed_id
     end
   end
 end

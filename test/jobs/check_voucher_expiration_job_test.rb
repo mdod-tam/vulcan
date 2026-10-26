@@ -5,17 +5,18 @@ require 'test_helper'
 # Runs the real processor and mail jobs. The expiration queries use the database clock,
 # so issue dates are set relative to the current time rather than frozen Ruby time.
 class CheckVoucherExpirationJobTest < ActiveJob::TestCase
-  VALIDITY_MONTHS = 6
+  # Annual validity keeps warning fixtures in range across month-end and leap-day clipping.
+  VALIDITY_MONTHS = 12
 
   setup do
-    ensure_system_audit_actor!
-    Policy.find_or_initialize_by(key: 'voucher_validity_period_months').update!(value: VALIDITY_MONTHS)
+    actor = ensure_system_audit_actor!
+    Policy.find_or_initialize_by(key: 'voucher_validity_period_months').update!(value: VALIDITY_MONTHS, updated_by: actor)
     load_seeded_email_templates('voucher_notifications_voucher_expiring_soon', 'voucher_notifications_voucher_expired')
     ActionMailer::Base.deliveries.clear
   end
 
   test 'warns a voucher inside the expiring-soon window once across repeated runs' do
-    voucher = create_voucher(expires_in: 7.days)
+    voucher = create_warning_voucher
 
     2.times { perform_enqueued_jobs { CheckVoucherExpirationJob.perform_now } }
 
@@ -36,9 +37,7 @@ class CheckVoucherExpirationJobTest < ActiveJob::TestCase
   end
 
   test 'a voucher between the warning and expiry windows receives no notice' do
-    # Month-end clipping can remove up to three days; this target still expires in one to four days.
-    voucher = Voucher.create!(application: create(:application, :completed), initial_value: 500, remaining_value: 500,
-                              status: :active, issued_at: 4.days.from_now.utc - VALIDITY_MONTHS.months)
+    voucher = create_voucher(expires_in: 4.days)
 
     perform_enqueued_jobs { CheckVoucherExpirationJob.perform_now }
 
@@ -57,7 +56,7 @@ class CheckVoucherExpirationJobTest < ActiveJob::TestCase
   end
 
   test 'an intentionally suppressed warning is recorded truthfully and never replayed' do
-    voucher = create_voucher(expires_in: 7.days)
+    voucher = create_warning_voucher
     admin = create(:admin)
     EmailDelivery::ControlWriter.set(name: EmailDelivery::ALL_CONTROL, enabled: false, actor: admin, operation_id: SecureRandom.uuid)
     perform_enqueued_jobs { CheckVoucherExpirationJob.perform_now }
@@ -73,7 +72,7 @@ class CheckVoucherExpirationJobTest < ActiveJob::TestCase
   end
 
   test 'legacy sent-warning history still prevents duplicate warnings' do
-    voucher = create_voucher(expires_in: 7.days)
+    voucher = create_warning_voucher
     voucher.events.create!(user: ensure_system_audit_actor!, action: 'expiration_warning_sent')
     perform_enqueued_jobs { CheckVoucherExpirationJob.perform_now }
     assert_empty ActionMailer::Base.deliveries
@@ -81,7 +80,7 @@ class CheckVoucherExpirationJobTest < ActiveJob::TestCase
   end
 
   test 'a queue failure does not consume the voucher warning' do
-    voucher = create_voucher(expires_in: 7.days)
+    voucher = create_warning_voucher
     adapter = EmailDelivery::MailDeliveryJob.queue_adapter
     adapter.stubs(:enqueue).raises(ActiveJob::EnqueueError, 'queue unavailable')
     CheckVoucherExpirationJob.perform_now
@@ -94,6 +93,13 @@ class CheckVoucherExpirationJobTest < ActiveJob::TestCase
 
   private
 
+  def create_warning_voucher
+    voucher = create_voucher(expires_in: 7.days)
+    candidates = Vouchers::ExpirationProcessorService.new.send(:vouchers_expiring_soon)
+    assert candidates.exists?(id: voucher.id), 'Warning fixture must be inside the database warning window'
+    voucher
+  end
+
   def create_voucher(expires_in:)
     application = create(:application, :completed)
     Voucher.create!(
@@ -101,7 +107,7 @@ class CheckVoucherExpirationJobTest < ActiveJob::TestCase
       initial_value: 500,
       remaining_value: 500,
       status: :active,
-      issued_at: VALIDITY_MONTHS.months.ago + expires_in
+      issued_at: expires_in.from_now.utc - VALIDITY_MONTHS.months
     )
   end
 

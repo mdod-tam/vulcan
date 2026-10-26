@@ -584,7 +584,7 @@ module Applications
 
     test 'handles errors gracefully' do
       Rails.logger.stubs(:error)
-      Rails.logger.expects(:error).with(regexp_matches(/Error applying filters: Test error/)).once
+      Rails.logger.expects(:error).with('Error applying filters: StandardError').once
 
       with_mocked_attachments do
         bad_scope = Object.new

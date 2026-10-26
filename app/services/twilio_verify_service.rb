@@ -53,13 +53,12 @@ class TwilioVerifyService
         error: I18n.t(e.is_a?(ApplicationMailer::DeliverySkipped) ? 'outbound_delivery.sms_suppressed' : 'outbound_delivery.sms_configuration_error') }
     rescue Twilio::REST::RestError => e
       error_message = sanitize_secure_error_message(e.message)
-      Rails.logger.error("[TwilioVerify] Twilio API error: #{error_message}")
+      Rails.logger.error("[TwilioVerify] Twilio API error: #{e.class.name}")
       Rails.logger.error("[TwilioVerify] Error code: #{e.code}") if e.respond_to?(:code)
       { success: false, error: error_message, error_code: e.code }
     rescue StandardError => e
       error_message = sanitize_secure_error_message(e.message)
-      Rails.logger.error("[TwilioVerify] Unexpected error: #{error_message}")
-      Rails.logger.error("[TwilioVerify] Backtrace: #{sanitize_secure_error_message(e.backtrace.first(5).join("\n"))}") if e.backtrace.present?
+      Rails.logger.error("[TwilioVerify] Unexpected error: #{e.class.name}")
       { success: false, error: error_message }
     end
 
@@ -100,7 +99,7 @@ class TwilioVerifyService
       }
     rescue Twilio::REST::RestError => e
       error_message = sanitize_secure_error_message(e.message)
-      Rails.logger.error("[TwilioVerify] Verification check error: #{error_message}")
+      Rails.logger.error("[TwilioVerify] Verification check error: #{e.class.name}")
       Rails.logger.error("[TwilioVerify] Error code: #{e.code}") if e.respond_to?(:code)
 
       # Twilio uses 60200 for invalid parameters and 60202 for exhausted code-check attempts.
@@ -111,7 +110,7 @@ class TwilioVerifyService
       { success: false, error: error_message, error_code: e.code }
     rescue StandardError => e
       error_message = sanitize_secure_error_message(e.message)
-      Rails.logger.error("[TwilioVerify] Unexpected error: #{error_message}")
+      Rails.logger.error("[TwilioVerify] Unexpected error: #{e.class.name}")
       { success: false, error: error_message }
     end
 

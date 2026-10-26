@@ -123,7 +123,6 @@ class ProofReviewService < BaseService
 
   def log_review_error(error)
     Rails.logger.error "ProofReviewService: Error during review for Application ##{application.id}: #{error.class.name}"
-    Rails.logger.error error.backtrace.join("\n")
     # Possible improvement: report the error to an error tracker such as Honeybadger.
   end
 end

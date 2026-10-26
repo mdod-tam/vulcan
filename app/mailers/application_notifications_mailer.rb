@@ -420,9 +420,7 @@ class ApplicationNotificationsMailer < ApplicationMailer # rubocop:disable Metri
   def with_mailer_error_handling(context, raise_in_test_only: false)
     yield
   rescue StandardError => e
-    error_message = sanitize_secure_error_message(e.message)
-    backtrace = sanitize_secure_error_message(e.backtrace&.join("\n"))
-    Rails.logger.error("Mailer error (#{context}): #{error_message}\n#{backtrace}")
+    Rails.logger.error("Mailer error (#{context}): #{e.class.name}")
     raise if !raise_in_test_only || Rails.env.test?
 
     noop_delivery
@@ -749,7 +747,7 @@ class ApplicationNotificationsMailer < ApplicationMailer # rubocop:disable Metri
 
     unless result.success?
       constituent_id = constituent_params.is_a?(Hash) ? constituent_params[:id] : constituent_params&.id
-      Rails.logger.error("Failed to prepare income threshold data for constituent #{constituent_id}: #{result.error_message}")
+      Rails.logger.error("Failed to prepare income threshold data for constituent #{constituent_id}")
       raise result.error_message
     end
 

@@ -50,7 +50,9 @@ class DocumentSigningWorkflowTest < ActionDispatch::IntegrationTest
     # Viewed webhook
     viewed_payload = {
       event_type: 'form.viewed',
+      timestamp: Time.current.utc.iso8601(6),
       data: {
+        'id' => 'submitter_789',
         'submission_id' => 'sub_123456',
         'email' => 'doctor@example.com'
       }
@@ -59,7 +61,7 @@ class DocumentSigningWorkflowTest < ActionDispatch::IntegrationTest
     signature = compute_webhook_signature(viewed_payload.to_json)
     post webhooks_docuseal_medical_certification_path,
          params: viewed_payload,
-         headers: { 'X-Webhook-Signature' => signature },
+         headers: { 'X-Docuseal-Signature' => signature },
          as: :json
 
     assert_response :ok
@@ -69,7 +71,9 @@ class DocumentSigningWorkflowTest < ActionDispatch::IntegrationTest
     # Started webhook
     started_payload = {
       event_type: 'form.started',
+      timestamp: Time.current.utc.iso8601(6),
       data: {
+        'id' => 'submitter_789',
         'submission_id' => 'sub_123456',
         'email' => 'doctor@example.com'
       }
@@ -78,7 +82,7 @@ class DocumentSigningWorkflowTest < ActionDispatch::IntegrationTest
     signature = compute_webhook_signature(started_payload.to_json)
     post webhooks_docuseal_medical_certification_path,
          params: started_payload,
-         headers: { 'X-Webhook-Signature' => signature },
+         headers: { 'X-Docuseal-Signature' => signature },
          as: :json
 
     assert_response :ok
@@ -88,38 +92,36 @@ class DocumentSigningWorkflowTest < ActionDispatch::IntegrationTest
     completed_payload = {
       event_type: 'form.completed',
       data: {
+        'id' => 'submitter_789',
         'submission_id' => 'sub_123456',
         'email' => 'doctor@example.com',
         'documents' => [
           {
-            'url' => 'https://example.com/signed_doc.pdf',
+            'url' => 'https://docuseal.com/signed_doc.pdf',
             'filename' => 'medical_cert.pdf'
           }
         ],
-        'audit_log_url' => 'https://example.com/audit_log'
+        'audit_log_url' => 'https://docuseal.com/audit_log'
       }
     }
 
-    mock_response = mock('http_response')
-    mock_response.stubs(:status).returns(mock('status'))
-    mock_response.status.stubs(:success?).returns(true)
-    mock_response.stubs(:body).returns('mock pdf content')
-    HTTP.stubs(:timeout).returns(HTTP)
-    HTTP.stubs(:get).returns(mock_response)
+    mock_docuseal_download
 
     signature = compute_webhook_signature(completed_payload.to_json)
     post webhooks_docuseal_medical_certification_path,
          params: completed_payload,
-         headers: { 'X-Webhook-Signature' => signature },
+         headers: { 'X-Docuseal-Signature' => signature },
          as: :json
 
     assert_response :ok
+    scan = assert_pending_scan(certification_status: 'requested', signing_status: 'opened')
+    complete_scan!(scan)
     @application.reload
     assert_equal 'signed', @application.document_signing_status
     assert_equal 'received', @application.medical_certification_status
     assert_not_nil @application.document_signing_signed_at
     assert @application.medical_certification.attached?
-    assert_equal 'https://example.com/audit_log', @application.document_signing_audit_url
+    assert_equal 'https://docuseal.com/audit_log', @application.document_signing_audit_url
 
     # Review queue
     get admin_applications_path(filter: 'digitally_signed_needs_review')
@@ -141,7 +143,9 @@ class DocumentSigningWorkflowTest < ActionDispatch::IntegrationTest
 
     declined_payload = {
       event_type: 'form.declined',
+      timestamp: Time.current.utc.iso8601(6),
       data: {
+        'id' => 'submitter_789',
         'submission_id' => 'sub_123456',
         'email' => 'doctor@example.com'
       }
@@ -150,7 +154,7 @@ class DocumentSigningWorkflowTest < ActionDispatch::IntegrationTest
     signature = compute_webhook_signature(declined_payload.to_json)
     post webhooks_docuseal_medical_certification_path,
          params: declined_payload,
-         headers: { 'X-Webhook-Signature' => signature },
+         headers: { 'X-Docuseal-Signature' => signature },
          as: :json
 
     assert_response :ok
@@ -172,6 +176,7 @@ class DocumentSigningWorkflowTest < ActionDispatch::IntegrationTest
     @application.update!(
       document_signing_service: 'docuseal',
       document_signing_submission_id: 'sub_123456',
+      document_signing_submitter_id: 'submitter_789',
       document_signing_status: :sent,
       document_signing_requested_at: 1.day.ago
     )
@@ -179,32 +184,30 @@ class DocumentSigningWorkflowTest < ActionDispatch::IntegrationTest
     completed_payload = {
       event_type: 'form.completed',
       data: {
+        'id' => 'submitter_789',
         'submission_id' => 'sub_123456',
         'email' => 'doctor@example.com',
         'documents' => [
           {
-            'url' => 'https://example.com/signed_doc.pdf',
+            'url' => 'https://docuseal.com/signed_doc.pdf',
             'filename' => 'medical_cert.pdf'
           }
         ],
-        'audit_log_url' => 'https://example.com/audit_log'
+        'audit_log_url' => 'https://docuseal.com/audit_log'
       }
     }
 
-    mock_response = mock('http_response')
-    mock_response.stubs(:status).returns(mock('status'))
-    mock_response.status.stubs(:success?).returns(true)
-    mock_response.stubs(:body).returns('mock pdf content')
-    HTTP.stubs(:timeout).returns(HTTP)
-    HTTP.stubs(:get).returns(mock_response)
+    mock_docuseal_download
 
     signature = compute_webhook_signature(completed_payload.to_json)
     post webhooks_docuseal_medical_certification_path,
          params: completed_payload,
-         headers: { 'X-Webhook-Signature' => signature },
+         headers: { 'X-Docuseal-Signature' => signature },
          as: :json
 
     assert_response :ok
+    scan = assert_pending_scan(certification_status: 'rejected', signing_status: 'sent')
+    complete_scan!(scan)
     @application.reload
 
     assert_equal 'received', @application.medical_certification_status
@@ -212,40 +215,54 @@ class DocumentSigningWorkflowTest < ActionDispatch::IntegrationTest
     assert @application.medical_certification.attached?
   end
 
-  test 'document signing workflow ignores completion when already approved' do
+  test 'document signing workflow retains the approved primary and files a clean completion as additional' do
+    file = Rack::Test::UploadedFile.new(file_fixture('medical_certification_valid.pdf'), 'application/pdf')
+    primary = scanned_upload(file, user: @admin, purpose: :certification, slot: 'medical_certification')
+    file.tempfile.close
+    @application.medical_certification.attach(primary)
     @application.update!(medical_certification_status: :approved)
     @application.update!(
       document_signing_service: 'docuseal',
       document_signing_submission_id: 'sub_123456',
+      document_signing_submitter_id: 'submitter_789',
       document_signing_status: :sent
     )
 
     completed_payload = {
       event_type: 'form.completed',
       data: {
+        'id' => 'submitter_789',
         'submission_id' => 'sub_123456',
         'email' => 'doctor@example.com',
         'documents' => [
           {
-            'url' => 'https://example.com/signed_doc.pdf'
+            'url' => 'https://docuseal.com/signed_doc.pdf'
           }
         ],
-        'audit_log_url' => 'https://example.com/audit_log'
+        'audit_log_url' => 'https://docuseal.com/audit_log'
       }
     }
 
+    mock_docuseal_download
     signature = compute_webhook_signature(completed_payload.to_json)
     post webhooks_docuseal_medical_certification_path,
          params: completed_payload,
-         headers: { 'X-Webhook-Signature' => signature },
+         headers: { 'X-Docuseal-Signature' => signature },
          as: :json
 
     assert_response :ok
+    scan = assert_pending_scan(certification_status: 'approved', signing_status: 'sent', primary: primary)
+    assert_difference -> { @application.additional_medical_certifications.attachments.count }, 1 do
+      complete_scan!(scan)
+    end
     @application.reload
 
     assert_equal 'approved', @application.medical_certification_status
     assert_equal 'signed', @application.document_signing_status
-    assert_not @application.medical_certification.attached?
+    assert_equal primary.id, @application.medical_certification.blob.id
+    assert @application.additional_medical_certifications.blobs.exists?(id: scan.blob_id)
+    event = Event.where(action: 'document_signing_completed', auditable: @application).sole
+    assert_equal 'additional_medical_certification', event.metadata.fetch('retained_as')
   end
 
   test 'prevents rapid duplicate requests' do
@@ -266,7 +283,34 @@ class DocumentSigningWorkflowTest < ActionDispatch::IntegrationTest
 
   private
 
+  def mock_docuseal_download
+    response = mock('http_response')
+    response.stubs(:status).returns(mock('status', success?: true))
+    response.stubs(:body).returns(HTTP::Response::Body.new(DocumentScanFixtures::ResponseStream.new(file_fixture('medical_certification_valid.pdf').binread)))
+    HTTP.stubs(:timeout).returns(HTTP)
+    HTTP.stubs(:get).returns(response)
+  end
+
+  def assert_pending_scan(certification_status:, signing_status:, primary: nil)
+    scan = DocumentScan.find_by!(continuation: 'docuseal')
+    assert_predicate scan, :pending?
+    assert_empty scan.blob.attachments
+    @application.reload
+    assert_equal primary&.id, @application.medical_certification.blob&.id
+    assert_equal certification_status, @application.medical_certification_status
+    assert_equal signing_status, @application.document_signing_status
+    assert_not Event.exists?(action: 'document_signing_completed', auditable: @application)
+    scan
+  end
+
+  def complete_scan!(scan)
+    scan.update!(status: :clean, completed_at: Time.current)
+    DocumentSigning::AcceptScannedDocumentJob.perform_now(scan.id)
+  end
+
   def compute_webhook_signature(payload)
-    OpenSSL::HMAC.hexdigest('SHA256', @webhook_secret, payload)
+    timestamp = Time.current.to_i
+    digest = OpenSSL::HMAC.hexdigest('SHA256', @webhook_secret, "#{timestamp}.#{payload}")
+    "#{timestamp}.#{digest}"
   end
 end

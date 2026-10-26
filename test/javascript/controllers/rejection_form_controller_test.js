@@ -10,7 +10,7 @@ describe("RejectionFormController", () => {
   beforeEach(() => {
     // Set up DOM
     document.body.innerHTML = `
-      <div data-controller="rejection-form">
+      <dialog data-controller="rejection-form">
         <input type="hidden" id="rejection-proof-type" value="" data-rejection-form-target="proofType">
         <input type="hidden" data-rejection-form-target="reasonCode">
         <textarea data-rejection-form-target="reasonField"></textarea>
@@ -26,6 +26,8 @@ describe("RejectionFormController", () => {
             data-proof-types="income,residency">
             Address mismatch
           </button>
+          <button data-action="click->rejection-form#selectOther"
+            data-rejection-form-target="reasonButton" data-proof-types="income,residency">Other</button>
         </div>
         <div class="medical-only-reasons hidden" data-rejection-form-target="medicalOnlyReasons">
           <button
@@ -40,7 +42,7 @@ describe("RejectionFormController", () => {
         <button data-action="click->rejection-form#handleProofTypeClick" data-proof-type="income">Income Proof</button>
         <button data-action="click->rejection-form#handleProofTypeClick" data-proof-type="residency">Residency Proof</button>
         <button data-action="click->rejection-form#handleProofTypeClick" data-proof-type="medical">Medical Proof</button>
-      </div>
+      </dialog>
     `
 
     // Set up Stimulus application
@@ -68,6 +70,45 @@ describe("RejectionFormController", () => {
       .toBe("Selected rejection reason: Address mismatch. Reason text inserted in the reason field.")
     expect(controller.reasonFieldTarget.readOnly).toBe(true)
     window.requestAnimationFrame.mockRestore()
+  })
+
+  test("proof-type changes reset reason selection without styling the dialog", () => {
+    const controller = application.getControllerForElementAndIdentifier(element, "rejection-form")
+    const predefined = element.querySelector('[data-reason-code="address_mismatch"]')
+    const other = element.querySelector('[data-action="click->rejection-form#selectOther"]')
+    const changeProof = proofType => element.dispatchEvent(new CustomEvent("proof-type-changed", { detail: { proofType } }))
+    const expectReset = () => {
+      expect(element.classList.contains("text-white")).toBe(false)
+      expect(element.classList.contains("bg-indigo-600")).toBe(false)
+      expect(element.hasAttribute("aria-pressed")).toBe(false)
+      controller.reasonButtonTargets.forEach(button => {
+        expect(button.getAttribute("aria-pressed")).toBe("false")
+        expect(button.classList.contains("bg-indigo-600")).toBe(false)
+      })
+      expect(controller.reasonFieldTarget.value).toBe("")
+      expect(controller.reasonFieldTarget.readOnly).toBe(true)
+      expect(controller.reasonCodeTarget.value).toBe("")
+    }
+
+    changeProof("income")
+    controller.selectPredefinedReason({ currentTarget: predefined })
+    expect(predefined.getAttribute("aria-pressed")).toBe("true")
+    expect(controller.reasonFieldTarget.value).toBe("Address mismatch general text")
+    changeProof("residency")
+    expectReset()
+
+    controller.selectOther({ currentTarget: other })
+    expect(other.getAttribute("aria-pressed")).toBe("true")
+    expect(controller.reasonCodeTarget.value).toBe("other")
+    expect(controller.reasonFieldTarget.readOnly).toBe(false)
+    controller.reasonFieldTarget.value = "Custom reason"
+    changeProof("income")
+    expectReset()
+
+    controller.selectPredefinedReason({ currentTarget: predefined })
+    expect(predefined.getAttribute("aria-pressed")).toBe("true")
+    expect(controller.reasonCodeTarget.value).toBe("address_mismatch")
+    expect(controller.reasonFieldTarget.value).toBe("Address mismatch general text")
   })
 
   test("shows general reasons when income proof type is selected", () => {

@@ -56,7 +56,7 @@ module Admin
       assert_equal true, metadata['old_value']
       assert_equal false, metadata['new_value']
       assert_equal @admin.id, metadata['admin_id']
-      assert_equal @admin.full_name, metadata['admin_name']
+      assert_equal 'A*** U***', metadata['admin_name']
     end
 
     test 'update redirects to index with success notice' do

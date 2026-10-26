@@ -142,7 +142,7 @@ module Admin
 
     # @return [User] The current user, reloaded for legacy administrator types
     def validate_and_prepare_admin_user
-      Rails.logger.info "Current user: #{current_user.inspect}; Current user type: #{current_user.type}, admin? method result: #{current_user.admin?}"
+      Rails.logger.info "Current user ID: #{current_user.id}; Current user type: #{current_user.type}, admin? method result: #{current_user.admin?}"
 
       if current_user.admin?
         current_user
@@ -291,7 +291,7 @@ module Admin
       redirect_to admin_application_path(@application),
                   alert: e.record.errors.full_messages.to_sentence.presence || e.message
     rescue StandardError => e
-      Rails.logger.error "Failed to request evaluation for application #{@application.id}: #{e.message}"
+      Rails.logger.error "Failed to request evaluation for application #{@application.id}: #{e.class.name}"
       redirect_to admin_application_path(@application),
                   alert: "Failed to request evaluation: #{e.message}"
     end
@@ -539,7 +539,7 @@ module Admin
         redirect_to admin_application_path(@application),
                     notice: "Disability certification successfully uploaded and #{status_text}."
       else
-        Rails.logger.error "Disability certification operation failed: #{result[:error]&.message}"
+        Rails.logger.error "Disability certification operation failed: #{result[:error]&.class&.name}"
         redirect_to admin_application_path(@application),
                     alert: "Failed to process disability certification: #{result[:error]&.message}"
       end
@@ -675,7 +675,7 @@ module Admin
         result
       end
     rescue StandardError => e
-      Rails.logger.error "Filter error: #{e.message}"
+      Rails.logger.error "Filter error: #{e.class.name}"
       flash.now[:alert] = t(unfiltered_error)
       scope
     end
@@ -683,7 +683,7 @@ module Admin
     def paginate(scope)
       pagy(scope, items: 20)
     rescue StandardError => e
-      Rails.logger.error "Pagination failed: #{e.message}"
+      Rails.logger.error "Pagination failed: #{e.class.name}"
       [Pagy.new(count: scope.count, page: 1), scope.limit(20)]
     end
 

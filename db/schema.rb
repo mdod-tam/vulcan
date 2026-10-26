@@ -10,7 +10,7 @@
 #
 # It's strongly recommended that you check this file into your version control system.
 
-ActiveRecord::Schema[8.1].define(version: 2026_10_20_124000) do
+ActiveRecord::Schema[8.1].define(version: 2026_10_22_233100) do
   # These are extensions that must be enabled in order to support this database
   enable_extension "pg_catalog.plpgsql"
 
@@ -178,6 +178,55 @@ ActiveRecord::Schema[8.1].define(version: 2026_10_20_124000) do
     t.bigint "product_id", null: false
     t.index ["application_id", "product_id"], name: "index_applications_products_on_application_id_and_product_id"
     t.index ["product_id", "application_id"], name: "index_applications_products_on_product_id_and_application_id"
+  end
+
+  create_table "document_scan_provider_budgets", force: :cascade do |t|
+    t.datetime "next_available_at", null: false
+    t.datetime "created_at", null: false
+    t.datetime "updated_at", null: false
+    t.check_constraint "id = 1", name: "document_scan_provider_budget_singleton"
+  end
+
+  create_table "document_scans", force: :cascade do |t|
+    t.bigint "blob_id", null: false
+    t.bigint "user_id"
+    t.string "secure_form_type"
+    t.bigint "secure_form_id"
+    t.string "purpose", null: false
+    t.string "slot", null: false
+    t.string "form_context", default: "", null: false
+    t.string "status", default: "pending", null: false
+    t.boolean "synthetic_fixture", default: false, null: false
+    t.string "sha256", null: false
+    t.string "provider_scan_id"
+    t.integer "attempts", default: 0, null: false
+    t.integer "poll_count", default: 0, null: false
+    t.string "last_error_code"
+    t.string "lease_token"
+    t.datetime "lease_expires_at"
+    t.datetime "next_attempt_at"
+    t.datetime "submitted_at"
+    t.datetime "completed_at"
+    t.datetime "continued_at"
+    t.datetime "dismissed_at"
+    t.string "continuation"
+    t.integer "continuation_attempts", default: 0, null: false
+    t.datetime "continuation_next_attempt_at"
+    t.string "continuation_error_code"
+    t.string "dedup_key"
+    t.text "context"
+    t.datetime "created_at", null: false
+    t.datetime "updated_at", null: false
+    t.index ["blob_id"], name: "index_document_scans_on_blob_id", unique: true
+    t.index ["continuation", "continued_at", "continuation_next_attempt_at"], name: "index_document_scans_on_continuation_recovery"
+    t.index ["created_at"], name: "index_document_scans_on_created_at"
+    t.index ["dedup_key"], name: "index_document_scans_on_dedup_key", unique: true
+    t.index ["secure_form_type", "secure_form_id"], name: "index_document_scans_on_secure_form"
+    t.index ["status", "next_attempt_at"], name: "index_document_scans_on_status_and_next_attempt_at"
+    t.index ["user_id", "purpose", "slot", "form_context"], name: "index_document_scans_on_recovery"
+    t.index ["user_id"], name: "index_document_scans_on_user_id"
+    t.check_constraint "((user_id IS NOT NULL)::integer + (secure_form_id IS NOT NULL)::integer + COALESCE((continuation::text = 'docuseal'::text)::integer, 0)) <= 1", name: "document_scans_owner"
+    t.check_constraint "status::text = ANY (ARRAY['pending'::character varying, 'clean'::character varying, 'blocked'::character varying, 'failed'::character varying]::text[])", name: "document_scans_status"
   end
 
   create_table "duplicate_review_case_candidates", force: :cascade do |t|
@@ -711,6 +760,7 @@ ActiveRecord::Schema[8.1].define(version: 2026_10_20_124000) do
     t.datetime "updated_at", null: false
     t.string "user_agent"
     t.bigint "user_id", null: false
+    t.datetime "last_active_at", null: false
     t.index ["expires_at"], name: "index_sessions_on_expires_at"
     t.index ["session_token"], name: "index_sessions_on_session_token", unique: true
     t.index ["user_id"], name: "index_sessions_on_user_id"
@@ -1159,6 +1209,8 @@ ActiveRecord::Schema[8.1].define(version: 2026_10_20_124000) do
   add_foreign_key "applications", "users", column: "income_verified_by_id"
   add_foreign_key "applications", "users", column: "managing_guardian_id"
   add_foreign_key "applications", "users", column: "medical_certification_verified_by_id"
+  add_foreign_key "document_scans", "active_storage_blobs", column: "blob_id", on_delete: :cascade
+  add_foreign_key "document_scans", "users", on_delete: :nullify
   add_foreign_key "duplicate_review_case_candidates", "duplicate_review_cases"
   add_foreign_key "duplicate_review_case_candidates", "users", column: "candidate_user_id"
   add_foreign_key "duplicate_review_cases", "users", column: "resolved_by_id"

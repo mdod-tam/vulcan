@@ -301,11 +301,9 @@ class ApplicationMailer < ActionMailer::Base
       metadata: {
         user_agent: Current.user_agent,
         ip_address: Current.ip_address,
-        error_message: sanitize_secure_error_message(error.message),
         error_class: error.class.name,
         template_name: template_name,
-        mail_action: "#{self.class.name}##{action_name}",
-        backtrace: sanitize_secure_value(error.backtrace&.first(5))
+        mail_action: "#{self.class.name}##{action_name}"
       }
     )
   rescue StandardError => e

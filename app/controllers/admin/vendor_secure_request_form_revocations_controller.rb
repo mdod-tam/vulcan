@@ -9,14 +9,17 @@ module Admin
       # revoke! returns false when a submission committed first.
       unless @form.active? && @form.revoke!(actor: current_user, reason: :manual_revocation)
         redirect_to admin_vendor_path(@vendor),
+                    status: :see_other,
                     alert: t('admin.vendors.vendor_secure_request_form_revocations.create.not_active')
         return
       end
 
       redirect_to admin_vendor_path(@vendor),
+                  status: :see_other,
                   notice: t('admin.vendors.vendor_secure_request_form_revocations.create.success')
     rescue ActiveRecord::RecordInvalid, ActiveRecord::RecordNotSaved, ActiveRecord::StatementInvalid
       redirect_to admin_vendor_path(@vendor),
+                  status: :see_other,
                   alert: t('admin.vendors.vendor_secure_request_form_revocations.create.failure')
     end
 

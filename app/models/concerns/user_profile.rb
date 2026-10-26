@@ -186,7 +186,7 @@ module UserProfile
       next unless saved_change_to_attribute?(field)
 
       old_value, new_value = saved_change_to_attribute(field)
-      # AuditEventService.log stores values of encrypted fields encrypted (see Event#change_values).
+      # AuditEventService applies the shared privacy policy before storing changes.
       changed_attributes[field] = { old: old_value, new: new_value }
     end
 
@@ -227,7 +227,7 @@ module UserProfile
 
     errors.add(:email, 'has already been taken')
   rescue StandardError => e
-    Rails.logger.warn "Email uniqueness check failed: #{e.message}"
+    Rails.logger.warn "Email uniqueness check failed: #{e.class.name}"
   end
 
   def phone_must_be_unique
@@ -239,7 +239,7 @@ module UserProfile
 
     errors.add(:phone, 'has already been taken')
   rescue StandardError => e
-    Rails.logger.warn "Phone uniqueness check failed: #{e.message}"
+    Rails.logger.warn "Phone uniqueness check failed: #{e.class.name}"
   end
 
   def paper_context_no_email?

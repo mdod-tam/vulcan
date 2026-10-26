@@ -78,7 +78,7 @@ class VoucherRedemptionTest < ActiveSupport::TestCase
 
   test "fault-tolerant event logging doesn't prevent redemption" do
     Rails.logger.stubs(:error)
-    Rails.logger.expects(:error).with(regexp_matches(/Failed to log voucher redemption event: Simulated audit error/)).once
+    Rails.logger.expects(:error).with('Failed to log voucher redemption event: StandardError').once
 
     AuditEventService.stubs(:log).raises(StandardError, 'Simulated audit error')
 

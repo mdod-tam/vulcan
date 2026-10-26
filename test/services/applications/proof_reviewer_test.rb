@@ -49,10 +49,11 @@ module Applications
 
     test 'non-rejected reviews do not persist rejection reason code' do
       @application.income_proof.attach(
-        io: StringIO.new('test income proof'),
+        io: file_fixture('income_proof.pdf').open,
         filename: 'income-proof.pdf',
         content_type: 'application/pdf'
       )
+      mark_document_clean!(@application.income_proof.blob, user: @application.user, slot: 'income_proof')
 
       @reviewer.review(
         proof_type: :income,
@@ -98,10 +99,11 @@ module Applications
       app.update_columns(medical_certification_status: Application.medical_certification_statuses[:approved])
       app.update_columns(id_proof_status: Application.id_proof_statuses[:approved])
       app.residency_proof.attach(
-        io: StringIO.new('test residency proof'),
+        io: file_fixture('residency_proof.pdf').open,
         filename: 'residency-proof.pdf',
         content_type: 'application/pdf'
       )
+      mark_document_clean!(app.residency_proof.blob, user: app.user, slot: 'residency_proof')
       app.stubs(:purge_rejected_proof).returns(true)
       Current.user = @admin
 
@@ -170,10 +172,11 @@ module Applications
         metadata: { 'proof_type' => 'income', 'submission_method' => 'secure_form' }
       )
       @application.income_proof.attach(
-        io: StringIO.new('test income proof'),
+        io: file_fixture('income_proof.pdf').open,
         filename: 'income-proof.pdf',
         content_type: 'application/pdf'
       )
+      mark_document_clean!(@application.income_proof.blob, user: @application.user, slot: 'income_proof')
 
       @reviewer.review(proof_type: :income, status: :approved)
 

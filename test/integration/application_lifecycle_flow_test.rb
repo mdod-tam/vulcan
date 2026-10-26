@@ -369,7 +369,7 @@ class ApplicationLifecycleFlowTest < ActiveSupport::TestCase
     attach_pdf(application.income_proof, 'income.pdf') if attach_income_proof
     attach_pdf(application.residency_proof, 'residency.pdf') if attach_residency_proof
     attach_pdf(application.id_proof, 'id-proof.pdf') if attach_id_proof
-    attach_pdf(application.medical_certification, 'medical-certification.pdf') if attach_medical_certification
+    attach_pdf(application.medical_certification, 'medical-certification.pdf', purpose: :certification) if attach_medical_certification
 
     application.reload
   end
@@ -387,11 +387,12 @@ class ApplicationLifecycleFlowTest < ActiveSupport::TestCase
     application.reload
   end
 
-  def attach_pdf(attachment, filename)
+  def attach_pdf(attachment, filename, purpose: :proof)
     attachment.attach(
-      io: StringIO.new("PDF content for #{filename}"),
+      io: file_fixture('medical_certification_valid.pdf').open,
       filename: filename,
       content_type: 'application/pdf'
     )
+    mark_document_clean!(attachment.blob, user: attachment.record.user, purpose: purpose, slot: attachment.name)
   end
 end

@@ -227,17 +227,103 @@ module Admin
       assert_match "#{EmailTemplate.deliverable.distinct.count(:name)} templates changed", flash[:notice]
     end
 
-    test 'HTML test previews keep formatting without executable template markup' do
+    test 'all HTML preview surfaces use the same sandboxed document boundary' do
       template = create(:email_template, :html, subject: 'Preview', variables: { required: [], optional: [] },
-                                                body: '<p>Allowed text</p><script>alert(1)</script><a href="javascript:alert(1)">Link</a><img src="x" onerror="alert(1)">')
+                                                body: '<style>p { color: #123456; }</style><p id="styled-preview" style="background: #ffeedd;">Allowed text</p><script>window.previewScriptRan = true</script>')
 
-      get new_test_email_admin_email_template_path(template), headers: default_headers
+      [admin_email_template_path(template), edit_admin_email_template_path(template),
+       new_test_email_admin_email_template_path(template)].each do |path|
+        get path, headers: default_headers
+        assert_response :success
+        assert_select 'iframe.email-preview[src=?]', preview_document_admin_email_template_path(template) do |frames|
+          assert_equal path == edit_admin_email_template_path(template) ? 'allow-scripts' : '', frames.first['sandbox']
+          assert_equal 'no-referrer', frames.first['referrerpolicy']
+          assert frames.first['title'].present?
+        end
+        assert_select '#styled-preview', count: 0
+        assert_not_includes response.headers.fetch('Content-Security-Policy'), "'unsafe-inline'"
+      end
+
+      get preview_document_admin_email_template_path(template), headers: default_headers
 
       assert_response :success
-      assert_select '.email-preview p', text: 'Allowed text'
-      assert_select '.email-preview script', count: 0
-      assert_select '.email-preview a[href^="javascript:"]', count: 0
-      assert_select '.email-preview img[onerror]', count: 0
+      assert_select '#styled-preview[style]', text: 'Allowed text'
+      assert_select 'style', text: 'p { color: #123456; }'
+      assert_select 'script', text: 'window.previewScriptRan = true'
+      assert_private_preview_policy
+      assert_select 'script[nonce]', count: 0
+    end
+
+    test 'HTML draft preview renders unsaved content in its document without changing the template' do
+      template = create(:email_template, :html, subject: 'Saved', body: '<p>Saved body %<name>s</p>')
+      saved_body = template.body
+
+      get edit_admin_email_template_path(template), headers: default_headers
+      assert_select 'iframe#template-preview-en-document[name="template-preview-en-document"][sandbox]'
+      assert_select 'input[type="submit"][value="Preview Draft"][formtarget="template-preview-en-document"]'
+
+      assert_no_difference 'Event.count' do
+        patch preview_admin_email_template_path(template), headers: default_headers, params: {
+          locale: 'en', email_template: { subject: 'Unsaved', body: '<p style="color: #123456;">Draft %<name>s</p><script>window.previewScriptRan = true</script>' }
+        }
+      end
+
+      assert_response :success
+      assert_select 'title', text: 'Unsaved'
+      assert_select 'p', text: 'Subject Preview: Unsaved'
+      assert_select 'p[style]', text: 'Draft Sample Name'
+      assert_private_preview_policy(draft: true)
+      first_nonce = response.headers.fetch('Content-Security-Policy')[/script-src 'nonce-([^']+)'/, 1]
+      assert_select 'script[nonce=?]', first_nonce, count: 1
+      assert_select 'script:not([nonce])', text: 'window.previewScriptRan = true'
+      assert_equal saved_body, template.reload.body
+      assert_equal 'Saved', template.subject
+
+      patch preview_admin_email_template_path(template), headers: default_headers, params: {
+        locale: 'en', email_template: { syntax: 'liquid', subject: 'Unsaved', body: '<p>{{ name }}</p>' }
+      }
+      assert_response :unprocessable_content
+      assert_select '[role="alert"]', text: /Liquid email templates are only available for text templates/
+      assert_private_preview_policy(draft: true)
+      assert_not_equal first_nonce, response.headers.fetch('Content-Security-Policy')[/script-src 'nonce-([^']+)'/, 1]
+      assert_equal saved_body, template.reload.body
+    end
+
+    test 'an initial HTML rendering error keeps the named draft frame available for retry' do
+      template = create(:email_template, :html)
+      EmailTemplate.any_instance.stubs(:render).raises(StandardError, 'Rendering failed')
+
+      get edit_admin_email_template_path(template), headers: default_headers
+
+      assert_response :success
+      assert_select 'iframe#template-preview-en-document[name="template-preview-en-document"][sandbox][srcdoc]' do |frames|
+        assert_includes frames.first['srcdoc'], 'role="alert"'
+        assert_includes frames.first['srcdoc'], 'Use Insert Variable'
+      end
+      assert_select '#template-preview-en [role="alert"][aria-atomic="true"]', text: /Preview unavailable.*correct the draft/
+      assert_select 'input[value="Preview Draft"][formtarget="template-preview-en-document"]'
+    end
+
+    test 'preview documents require an administrator and all refusals are non-cacheable' do
+      template = create(:email_template, :html)
+      sign_out
+      reset!
+      get preview_document_admin_email_template_path(template)
+      assert_redirected_to sign_in_path
+      assert_includes response.headers.fetch('Cache-Control'), 'no-store'
+
+      sign_in_for_integration_test(create(:constituent))
+      get preview_document_admin_email_template_path(template)
+      assert_redirected_to root_path
+      assert_includes response.headers.fetch('Cache-Control'), 'no-store'
+
+      sign_in_for_integration_test(@admin)
+      get preview_document_admin_email_template_path(create(:email_template, :text))
+      assert_response :not_found
+      assert_private_preview_policy
+      get preview_document_admin_email_template_path(0)
+      assert_redirected_to admin_email_templates_path
+      assert_includes response.headers.fetch('Cache-Control'), 'no-store'
     end
 
     [true, false].each do |enabled|
@@ -640,14 +726,16 @@ module Admin
       get edit_admin_email_template_path(template), headers: default_headers
 
       assert_response :success
-      assert_select '#edit-template-title.min-w-0.max-w-full.flex-1.break-words'
-      assert_select '#edit-template-title .break-all', text: long_name
+      assert_select '#edit-template-title.min-w-0.max-w-full.flex-1[class~="[overflow-wrap:anywhere]"]'
+      assert_select '#edit-template-title span[class~="[overflow-wrap:anywhere]"][class~="[word-break:break-word]"]', text: long_name
+      assert_select '#edit-template-title[style], #edit-template-title [style]', count: 0
 
       get admin_email_template_path(template), headers: default_headers
 
       assert_response :success
-      assert_select '#template-title.min-w-0.max-w-full.flex-1.break-words'
-      assert_select '#template-title .break-all', text: long_name
+      assert_select '#template-title.min-w-0.max-w-full.flex-1[class~="[overflow-wrap:anywhere]"]'
+      assert_select '#template-title span[class~="[overflow-wrap:anywhere]"][class~="[word-break:break-word]"]', text: long_name
+      assert_select '#template-title[style], #template-title [style]', count: 0
     end
 
     test 'update rejects liquid syntax for html templates' do
@@ -855,6 +943,24 @@ module Admin
     end
 
     private
+
+    def assert_private_preview_policy(draft: false)
+      policy = response.headers.fetch('Content-Security-Policy')
+      ["default-src 'none'", "script-src-attr 'none'", "style-src 'unsafe-inline'",
+       "base-uri 'none'", "form-action 'none'", "frame-ancestors 'self'", draft ? 'sandbox allow-scripts' : 'sandbox'].each do |directive|
+        assert_includes policy.split(';').map(&:strip), directive
+      end
+      if draft
+        assert_match(/\Ascript-src 'nonce-[^']+'\z/, policy.split(';').map(&:strip).find { |directive| directive.start_with?('script-src ') })
+      else
+        assert_includes policy.split(';').map(&:strip), "script-src 'none'"
+        assert_not_includes policy, 'nonce-'
+      end
+      assert_includes response.headers.fetch('Cache-Control'), 'private'
+      assert_includes response.headers.fetch('Cache-Control'), 'no-store'
+      assert_equal 'no-referrer', response.headers['Referrer-Policy']
+      assert_equal 'nosniff', response.headers['X-Content-Type-Options']
+    end
 
     def template_pair(name)
       %w[en es].map do |locale|

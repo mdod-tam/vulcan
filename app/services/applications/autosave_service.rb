@@ -115,8 +115,7 @@ module Applications
     rescue IneligibleAutosaveTargetError => e
       { success: false, errors: { base: [e.message] } }
     rescue StandardError => e
-      # The exception text can carry database or internal detail, so it stays in the log.
-      Rails.logger.error("Error autosaving field #{attribute_name}: #{e.message}")
+      Rails.logger.error("Error autosaving field: #{e.class.name}")
       autosave_error_result('This field could not be saved')
     end
 

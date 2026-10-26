@@ -38,6 +38,80 @@ module ConstituentPortal
       end
     end
 
+    test 'unexpected create failures stay private and preserve the dependent form for retry' do
+      guardian, dependent = guardian_and_dependent
+      sign_in_for_integration_test(guardian)
+      sentinel = 'private-create-sentinel person@example.test token=secret-proof-token'
+      error = StandardError.new(sentinel)
+      log = StringIO.new
+
+      [[:en, 'text/html'], [:es, 'text/vnd.turbo-stream.html']].each do |locale, accept|
+        submitted = {
+          save_draft: 'Save Application', constituent: { locale: locale },
+          application: {
+            user_id: dependent.id, household_size: '3', annual_income: '50000', hearing_disability: '1',
+            physical_address_1: '123 Retry Street', city: 'Baltimore', state: 'MD', zip_code: '21201',
+            medical_provider_attributes: { name: 'Dr. Retry', phone: '2025551234', email: 'retry@example.com' }
+          }
+        }
+
+        assert_no_difference ['Application.count', 'Event.count', 'Notification.count'] do
+          Rails.stub(:logger, ActiveSupport::Logger.new(log)) do
+            Applications::ApplicationCreator.stub(:call, ->(*) { raise error }) do
+              post constituent_portal_applications_path, params: submitted, headers: { 'Accept' => accept }
+            end
+          end
+        end
+
+        assert_response :unprocessable_content
+        assert_includes response.body, I18n.t('applications.creation.failure', locale: locale)
+        assert_not_includes response.body, sentinel
+        assert_not_includes log.string, sentinel
+        assert_includes log.string, 'Error creating application: StandardError'
+        assert_select 'input[name="application[user_id]"][value=?]', dependent.id.to_s
+        assert_select 'input[name="application[physical_address_1]"][value=?]', '123 Retry Street'
+        assert_select 'input[name="application[medical_provider_attributes][name]"][value=?]', 'Dr. Retry'
+
+        post constituent_portal_applications_path, params: submitted, headers: { 'Accept' => accept }
+        assert_response :redirect
+        draft = dependent.applications.draft.sole
+        assert_equal guardian.id, draft.managing_guardian_id
+        assert_equal 'Dr. Retry', draft.medical_provider_name
+      end
+    end
+
+    test 'unexpected creator failures are private through create and update routes' do
+      draft = create(:application, :draft, user: @user)
+      sentinel = 'private-creator-sentinel person@example.test token=secret-proof-token'
+      log = StringIO.new
+      submitted = {
+        save_draft: 'Save Application', constituent: { locale: 'es' },
+        application: { household_size: '3', annual_income: '50000', hearing_disability: '1' }
+      }
+
+      failures = [
+        [:post, constituent_portal_applications_path, 'text/html', User, :lock_for_merge_integrity!],
+        [:post, constituent_portal_applications_path, 'text/vnd.turbo-stream.html', AuditEventService, :log],
+        [:patch, constituent_portal_application_path(draft), 'text/vnd.turbo-stream.html', User, :lock_for_merge_integrity!]
+      ]
+
+      failures.each do |method, path, accept, owner, operation|
+        assert_no_difference ['Application.count', 'Event.count', 'Notification.count'] do
+          Rails.stub(:logger, ActiveSupport::Logger.new(log)) do
+            owner.stub(operation, ->(*) { raise StandardError, sentinel }) do
+              public_send(method, path, params: submitted, headers: { 'Accept' => accept })
+            end
+          end
+        end
+
+        assert_response :unprocessable_content
+        assert_includes response.body, I18n.t('applications.creation.failure', locale: :es)
+        assert_not_includes response.body, sentinel
+        assert_not_includes log.string, sentinel
+        assert_includes log.string, 'ApplicationCreator failed: StandardError'
+      end
+    end
+
     test 'should handle array values for self_certify_disability' do
       unique_user = create(:constituent, :with_disabilities,
                            email: "checkbox_test_#{Time.now.to_i}_#{rand(1000)}@example.com")
@@ -74,6 +148,7 @@ module ConstituentPortal
       assert_select 'select[name="constituent[locale]"]'
       assert_select 'select[name="constituent[locale]"] option[value="en"]', text: 'English'
       assert_select 'select[name="constituent[locale]"] option[value="es"]', text: 'Spanish'
+      assert_select '[data-document-upload-scans-url-value=?]', document_scans_path
     end
 
     test 'should create application as draft' do
@@ -184,8 +259,8 @@ module ConstituentPortal
             speech_disability: checkbox_params(false),
             mobility_disability: checkbox_params(false),
             cognition_disability: checkbox_params(false),
-            residency_proof: @valid_image,
-            income_proof: @valid_pdf,
+            residency_proof: cleared_proof(@valid_image, :residency_proof).signed_id,
+            income_proof: cleared_proof(@valid_pdf, :income_proof).signed_id,
             terms_accepted: checkbox_params(true),
             information_verified: checkbox_params(true),
             medical_release_authorized: checkbox_params(true),
@@ -224,7 +299,7 @@ module ConstituentPortal
           application: {
             maryland_resident: true, household_size: 3, annual_income: 50_000,
             self_certify_disability: checkbox_params(true), hearing_disability: checkbox_params(true),
-            residency_proof: @valid_image, income_proof: fixture_file_upload(disguised.path, 'application/pdf'),
+            residency_proof: cleared_proof(@valid_image, :residency_proof).signed_id, income_proof: fixture_file_upload(disguised.path, 'application/pdf'),
             terms_accepted: checkbox_params(true), information_verified: checkbox_params(true),
             medical_release_authorized: checkbox_params(true),
             medical_provider_attributes: { name: 'Dr. Smith', phone: '2025551234', email: 'drsmith@example.com' }
@@ -630,8 +705,8 @@ module ConstituentPortal
             speech_disability: checkbox_params(false),
             mobility_disability: checkbox_params(false),
             cognition_disability: checkbox_params(false),
-            residency_proof: @valid_image,
-            income_proof: @valid_pdf,
+            residency_proof: cleared_proof(@valid_image, :residency_proof).signed_id,
+            income_proof: cleared_proof(@valid_pdf, :income_proof).signed_id,
             no_provider_info_provided: '1',
             medical_provider_attributes: {
               name: '',
@@ -670,8 +745,8 @@ module ConstituentPortal
             speech_disability: checkbox_params(false),
             mobility_disability: checkbox_params(false),
             cognition_disability: checkbox_params(false),
-            residency_proof: @valid_image,
-            income_proof: @valid_pdf,
+            residency_proof: cleared_proof(@valid_image, :residency_proof).signed_id,
+            income_proof: cleared_proof(@valid_pdf, :income_proof).signed_id,
             no_provider_info_provided: '1',
             medical_provider_attributes: {
               name: '',
@@ -712,8 +787,8 @@ module ConstituentPortal
             speech_disability: checkbox_params(false),
             mobility_disability: checkbox_params(false),
             cognition_disability: checkbox_params(false),
-            residency_proof: @valid_image,
-            income_proof: @valid_pdf,
+            residency_proof: cleared_proof(@valid_image, :residency_proof).signed_id,
+            income_proof: cleared_proof(@valid_pdf, :income_proof).signed_id,
             terms_accepted: checkbox_params(true),
             information_verified: checkbox_params(true),
             medical_release_authorized: checkbox_params(true),
@@ -807,8 +882,8 @@ module ConstituentPortal
     end
 
     test 'should not get edit for submitted application' do
-      @application.income_proof.attach(@valid_pdf)
-      @application.residency_proof.attach(@valid_image)
+      @application.income_proof.attach(cleared_proof(@valid_pdf, :income_proof))
+      @application.residency_proof.attach(cleared_proof(@valid_image, :residency_proof))
 
       @application.update!(status: :in_progress)
 
@@ -868,8 +943,8 @@ module ConstituentPortal
           speech_disability: checkbox_params(false),
           mobility_disability: checkbox_params(false),
           cognition_disability: checkbox_params(false),
-          residency_proof: @valid_image,
-          income_proof: @valid_pdf,
+          residency_proof: cleared_proof(@valid_image, :residency_proof).signed_id,
+          income_proof: cleared_proof(@valid_pdf, :income_proof).signed_id,
           medical_provider_attributes: {
             name: 'Dr. Smith',
             phone: '2025551234',
@@ -886,8 +961,8 @@ module ConstituentPortal
     end
 
     test 'should not update submitted application' do
-      @application.income_proof.attach(@valid_pdf)
-      @application.residency_proof.attach(@valid_image)
+      @application.income_proof.attach(cleared_proof(@valid_pdf, :income_proof))
+      @application.residency_proof.attach(cleared_proof(@valid_image, :residency_proof))
 
       @application.update!(status: :in_progress, household_size: 3, annual_income: 50_000)
 
@@ -924,8 +999,8 @@ module ConstituentPortal
     end
 
     test 'should show uploaded document filenames on show page' do
-      @application.income_proof.attach(@valid_pdf)
-      @application.residency_proof.attach(@valid_image)
+      @application.income_proof.attach(cleared_proof(@valid_pdf, :income_proof))
+      @application.residency_proof.attach(cleared_proof(@valid_image, :residency_proof))
       @application.save!
 
       get constituent_portal_application_path(@application)
@@ -1131,8 +1206,8 @@ module ConstituentPortal
             city: 'Silver Spring',
             state: 'MD',
             zip_code: '20901',
-            residency_proof: @valid_image,
-            income_proof: @valid_pdf,
+            residency_proof: cleared_proof(@valid_image, :residency_proof).signed_id,
+            income_proof: cleared_proof(@valid_pdf, :income_proof).signed_id,
             terms_accepted: checkbox_params(true),
             information_verified: checkbox_params(true),
             medical_release_authorized: checkbox_params(true),
@@ -1197,8 +1272,8 @@ module ConstituentPortal
             city: 'Rockville',
             state: 'MD',
             zip_code: '20850',
-            residency_proof: @valid_image,
-            income_proof: @valid_pdf,
+            residency_proof: cleared_proof(@valid_image, :residency_proof).signed_id,
+            income_proof: cleared_proof(@valid_pdf, :income_proof).signed_id,
             terms_accepted: checkbox_params(true),
             information_verified: checkbox_params(true),
             medical_release_authorized: checkbox_params(true),
@@ -1233,6 +1308,11 @@ module ConstituentPortal
     end
 
     private
+
+    def cleared_proof(upload, slot)
+      @cleared_proofs ||= {}
+      @cleared_proofs[[@authenticated_user.id, slot]] ||= scanned_upload(upload, user: @authenticated_user, purpose: :proof, slot: slot)
+    end
 
     def pending_review_message
       I18n.t('activemodel.errors.models.application_form.attributes.base.pending_identity_review')
@@ -1290,8 +1370,8 @@ module ConstituentPortal
           speech_disability: checkbox_params(false),
           mobility_disability: checkbox_params(false),
           cognition_disability: checkbox_params(false),
-          residency_proof: @valid_image,
-          income_proof: @valid_pdf,
+          residency_proof: cleared_proof(@valid_image, :residency_proof).signed_id,
+          income_proof: cleared_proof(@valid_pdf, :income_proof).signed_id,
           terms_accepted: checkbox_params(true),
           information_verified: checkbox_params(true),
           medical_release_authorized: checkbox_params(true),

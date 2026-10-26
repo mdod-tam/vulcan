@@ -31,6 +31,15 @@ class UserTest < ActiveSupport::TestCase
     assert_match(/WHERE.+"users"\."type" = 'Users::Administrator'/, scope_sql)
   end
 
+  test 'invalid capability logs only validation category and attributes' do
+    Rails.logger.expects(:error).with("Failed to add capability to user #{@existing_constituent.id}: validation_failed attributes=capability").once
+
+    capability = @existing_constituent.add_capability('private-capability-value')
+
+    assert_not capability.persisted?
+    assert_includes capability.errors.attribute_names, :capability
+  end
+
   test 'should not save constituent with duplicate email' do
     constituent = build(:constituent, email: @existing_constituent.email)
     assert_not constituent.save, 'Saved constituent with duplicate email'
@@ -169,7 +178,6 @@ class UserTest < ActiveSupport::TestCase
     Current.user = nil
 
     original_first_name = @existing_constituent.first_name
-    original_email = @existing_constituent.email
 
     assert_difference('Event.count', 1) do
       @existing_constituent.update!(first_name: 'Updated Name', email: 'updated@example.com')
@@ -182,10 +190,10 @@ class UserTest < ActiveSupport::TestCase
     assert_equal @existing_constituent.id, event.metadata['updated_by']
 
     changes = event.field_changes
-    assert_equal 'Updated Name', changes['first_name']['new']
-    assert_equal original_first_name, changes['first_name']['old']
-    assert_equal 'updated@example.com', changes['email']['new']
-    assert_equal original_email, changes['email']['old']
+    assert_equal 'U*** N***', changes['first_name']['new']
+    assert_equal "#{original_first_name.first}***", changes['first_name']['old']
+    assert_equal 'u***@e***.com', changes['email']['new']
+    assert_equal 'u***@e***.com', changes['email']['old']
   end
 
   test 'logs profile update when guardian updates dependent profile' do
@@ -203,8 +211,8 @@ class UserTest < ActiveSupport::TestCase
     assert_equal @guardian_user.id, event.metadata['updated_by']
 
     changes = event.field_changes
-    assert_equal 'Updated Dependent', changes['first_name']['new']
-    assert_equal unique_phone, changes['phone']['new']
+    assert_equal 'U*** D***', changes['first_name']['new']
+    assert_equal "***-***-#{unique_phone.last(4)}", changes['phone']['new']
   end
 
   test 'does not log event when no profile fields change' do
@@ -244,14 +252,14 @@ class UserTest < ActiveSupport::TestCase
     event = Event.last
     changes = event.field_changes
 
-    assert_equal 'New First', changes['first_name']['new']
-    assert_equal 'New Last', changes['last_name']['new']
-    assert_equal unique_email, changes['email']['new']
-    assert_equal unique_phone, changes['phone']['new']
-    assert_equal '123 New Street', changes['physical_address_1']['new']
-    assert_equal 'New City', changes['city']['new']
+    assert_equal 'N*** F***', changes['first_name']['new']
+    assert_equal 'N*** L***', changes['last_name']['new']
+    assert_equal 'n***@e***.com', changes['email']['new']
+    assert_equal "***-***-#{unique_phone.last(4)}", changes['phone']['new']
+    assert_equal '[withheld]', changes['physical_address_1']['new']
+    assert_equal '[withheld]', changes['city']['new']
     assert_equal 'NY', changes['state']['new']
-    assert_equal '12345', changes['zip_code']['new']
+    assert_equal '[withheld]', changes['zip_code']['new']
   end
 
   test 'saved_changes_to_profile_fields? returns true when profile fields change' do
@@ -290,7 +298,7 @@ class UserTest < ActiveSupport::TestCase
 
     event = Event.last
     changes = event.field_changes
-    assert_equal unique_phone, changes['phone']['old']
+    assert_equal "***-***-#{unique_phone.last(4)}", changes['phone']['old']
     assert_nil changes['phone']['new']
   end
 
@@ -305,7 +313,7 @@ class UserTest < ActiveSupport::TestCase
     event = Event.last
     changes = event.field_changes
     assert_nil changes['physical_address_1']['old']
-    assert_equal '123 Main St', changes['physical_address_1']['new']
+    assert_equal '[withheld]', changes['physical_address_1']['new']
   end
 
   test 'paper_intake contact helpers treat guardian-routed synthetic primary contact as no owned email' do

@@ -8,6 +8,7 @@ module Vendors
       @vendor = create(:vendor, :with_w9)
       @admin = create(:admin)
       @blob = @vendor.w9_form.blob
+      mark_document_clean!(@blob, user: @vendor, purpose: :w9, slot: 'w9_form')
     end
 
     test 'a decision records its document status and audit atomically' do
@@ -20,6 +21,19 @@ module Vendors
       event = Event.find_by!(auditable: @vendor, action: 'w9_approved')
       assert_equal @blob.id, event.metadata['reviewed_blob_id']
       assert_predicate @vendor, :vendor_pending?
+    end
+
+    test 'an uncleared document cannot be approved' do
+      scan = DocumentScan.find_by!(blob_id: @blob.id)
+      %w[pending blocked failed].each do |status|
+        scan.update!(status: status)
+        assert_no_changes -> { [W9Review.count, Event.count, Notification.count, @vendor.reload.w9_status] } do
+          result = decide
+          assert_predicate result, :failure?
+          assert_includes result.message, 'has not passed its security scan'
+        end
+        assert_not @vendor.w9_archive.blobs.exists?(@blob.id)
+      end
     end
 
     test 'approval of A cannot approve replacement B' do
@@ -124,7 +138,8 @@ module Vendors
     end
 
     def upload
-      Rack::Test::UploadedFile.new(file_fixture('sample_w9.pdf'), 'application/pdf')
+      scanned_upload(Rack::Test::UploadedFile.new(file_fixture('sample_w9.pdf'), 'application/pdf'),
+                     user: @vendor, purpose: :w9, slot: 'w9_form')
     end
   end
 end

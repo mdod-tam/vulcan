@@ -23,12 +23,8 @@ class NotificationService
     opts = normalize_options(options)
     build_notification_builder(type, recipient, opts).create_and_deliver!
   rescue StandardError => e
-    # Exclude service paths to locate the external caller, including after a file rename.
-    calling_location = e.backtrace_locations&.find { |loc| !loc.path.match?(%r{app/services/notification_service}) }
-    caller_info = calling_location ? "Called from #{calling_location.path}:#{calling_location.lineno} in `#{calling_location.label}`" : 'Caller unknown'
-    error_type = e.is_a?(ArgumentError) ? 'invalid argument(s)' : 'unexpected error'
-    Rails.logger.error "NotificationService: Failed to create and deliver notification (type: #{type.inspect}, recipient: #{recipient.inspect})
-    due to #{error_type}: #{e.message}. #{caller_info}"
+    recipient_id = recipient.id if recipient.respond_to?(:id)
+    Rails.logger.error "NotificationService: Failed to create and deliver notification (type: #{type}, recipient_id: #{recipient_id}): #{e.class.name}"
     nil
   end
 
@@ -173,8 +169,8 @@ class NotificationService
     perform_post_creation_actions(notification, opts, channel)
     notification
   rescue StandardError => e
-    ActiveSupport::Notifications.instrument 'notification_service.error', type: type_for_log, error: e, stage: 'orchestration'
-    Rails.logger.error "NotificationService: Top-level orchestration failed for type '#{type_for_log}': #{e.message}\n#{e.backtrace.first(5).join("\n")}"
+    ActiveSupport::Notifications.instrument 'notification_service.error', type: type_for_log, error_class: e.class.name, stage: 'orchestration'
+    Rails.logger.error "NotificationService: Top-level orchestration failed for type '#{type_for_log}': #{e.class.name}"
     nil
   end
 
@@ -190,10 +186,10 @@ class NotificationService
 
     create_notification!(attrs)
   rescue ActiveRecord::RecordInvalid => e
-    ActiveSupport::Notifications.instrument 'notification_service.error', type: opts[:type], error: e, stage: 'creation_validation'
+    ActiveSupport::Notifications.instrument 'notification_service.error', type: opts[:type], error_class: e.class.name, stage: 'creation_validation'
     handle_record_invalid_error(e, opts)
   rescue StandardError => e
-    ActiveSupport::Notifications.instrument 'notification_service.error', type: opts[:type], error: e, stage: 'creation_general'
+    ActiveSupport::Notifications.instrument 'notification_service.error', type: opts[:type], error_class: e.class.name, stage: 'creation_general'
     handle_standard_error_for_creation(e, opts)
   end
 
@@ -264,12 +260,12 @@ class NotificationService
       return nil
     end
 
-    Rails.logger.error "NotificationService: Validation failed for type '#{opts[:type]}': #{error.message}"
+    Rails.logger.error "NotificationService: Validation failed for type '#{opts[:type]}': #{error.class.name}"
     nil
   end
 
   def handle_standard_error_for_creation(error, opts)
-    Rails.logger.error "NotificationService: Creation failed for type '#{opts[:type]}': #{error.message}\n#{error.backtrace.first(5).join("\n")}"
+    Rails.logger.error "NotificationService: Creation failed for type '#{opts[:type]}': #{error.class.name}"
     nil
   end
 
@@ -300,13 +296,12 @@ class NotificationService
   def log_notifiable_validation_status(notifiable)
     return if notifiable.valid?
 
-    Rails.logger.warn "NotificationService: Notifiable #{notifiable.class.name}##{safe_id(notifiable)} is still invalid after reload.
-    Errors: #{notifiable.errors.full_messages.to_sentence}"
+    Rails.logger.warn "NotificationService: Notifiable #{notifiable.class.name}##{safe_id(notifiable)} is still invalid after reload."
   end
 
   def handle_retry_record_invalid(error, opts)
-    ActiveSupport::Notifications.instrument 'notification_service.error', type: opts[:type], error: error, stage: 'creation_retry'
-    Rails.logger.error "NotificationService: Validation failed on retry for type '#{opts[:type]}': #{error.message}"
+    ActiveSupport::Notifications.instrument 'notification_service.error', type: opts[:type], error_class: error.class.name, stage: 'creation_retry'
+    Rails.logger.error "NotificationService: Validation failed on retry for type '#{opts[:type]}': #{error.class.name}"
     nil
   end
 
@@ -371,7 +366,7 @@ class NotificationService
     )
     !notification.local_delivery_outcome?
   rescue StandardError => e
-    ActiveSupport::Notifications.instrument 'notification_service.error', notification: notification, error: e, stage: 'delivery', channel: channel
+    ActiveSupport::Notifications.instrument 'notification_service.error', notification: notification, error_class: e.class.name, stage: 'delivery', channel: channel
     handle_delivery_error(notification, e, channel)
     false
   end
@@ -529,13 +524,13 @@ class NotificationService
       end
     end
   rescue StandardError => e
-    Rails.logger.warn "NotificationService: Failed to persist routing metadata for Notification ##{notification.id}: #{e.message}"
+    Rails.logger.warn "NotificationService: Failed to persist routing metadata for Notification ##{notification.id}: #{e.class.name}"
   end
 
   def redact_temp_password(notification)
     notification.update_metadata!('temp_password', '[REDACTED]')
   rescue StandardError => e
-    Rails.logger.warn "NotificationService: Failed to redact temp_password for Notification ##{notification.id}: #{e.message}"
+    Rails.logger.warn "NotificationService: Failed to redact temp_password for Notification ##{notification.id}: #{e.class.name}"
   end
 
   def find_proof_review_for_notification(application, proof_type, action)
@@ -547,7 +542,7 @@ class NotificationService
                .order(created_at: :desc)
                .first
   rescue StandardError => e
-    Rails.logger.warn "NotificationService: Failed to find proof review for #{action} notification: #{e.message}"
+    Rails.logger.warn "NotificationService: Failed to find proof review for #{action} notification: #{e.class.name}"
     nil
   end
 
@@ -590,12 +585,12 @@ class NotificationService
     if Rails.env.test? && error_message.include?('SMTP')
       Rails.logger.warn "NotificationService: SMTP delivery failed in test environment for Notification ##{notification.id}"
     else
-      Rails.logger.error "NotificationService: Delivery via #{channel} failed for Notification ##{notification.id}: #{error_message}"
+      Rails.logger.error "NotificationService: Delivery via #{channel} failed for Notification ##{notification.id}: #{error.class.name}"
     end
 
     notification.mark_delivery_failed!(error, channel: channel)
   rescue StandardError => e
-    Rails.logger.error "NotificationService: Failed persisting delivery error for Notification ##{notification.id}: #{e.message}"
+    Rails.logger.error "NotificationService: Failed persisting delivery error for Notification ##{notification.id}: #{e.class.name}"
   end
 
   def log_to_audit_trail(notification)
@@ -644,17 +639,17 @@ class NotificationService
   private :audit_event_action
 
   def handle_audit_trail_error(notification, error)
-    ActiveSupport::Notifications.instrument 'notification_service.error', notification: notification, error: error, stage: 'audit'
-    Rails.logger.error "NotificationService: Audit log creation failed for Notification ##{notification.id}: #{error.message}"
+    ActiveSupport::Notifications.instrument 'notification_service.error', notification: notification, error_class: error.class.name, stage: 'audit'
+    Rails.logger.error "NotificationService: Audit log creation failed for Notification ##{notification.id}: #{error.class.name}"
 
     notification.update_metadata!(
       'audit_error', {
-        'message' => error.message,
+        'error_class' => error.class.name,
         'error_at' => Time.current.iso8601
       }
     )
   rescue StandardError => e
-    Rails.logger.error "NotificationService: Failed persisting audit error for Notification ##{notification.id}: #{e.message}"
+    Rails.logger.error "NotificationService: Failed persisting audit error for Notification ##{notification.id}: #{e.class.name}"
   end
   private :handle_audit_trail_error
 
@@ -675,13 +670,13 @@ class NotificationService
 
   def extract_raw_metadata(opts)
     raw_meta = opts[:metadata] || opts['metadata']
-    Rails.logger.debug { "NotificationService: finalized_metadata received metadata: #{raw_meta.inspect}" } if Rails.env.test?
+    Rails.logger.debug { "NotificationService: finalized_metadata received #{raw_meta.class.name}" } if Rails.env.test?
     raw_meta
   end
 
   def validate_and_normalize_metadata(raw_meta)
     unless raw_meta.nil? || raw_meta.is_a?(Hash)
-      Rails.logger.warn "NotificationService: Metadata received as #{raw_meta.class} (value: #{raw_meta.inspect}),
+      Rails.logger.warn "NotificationService: Metadata received as #{raw_meta.class.name},
       but metadata must be a Hash. Ignoring non-hash metadata."
       raw_meta = {}
     end

@@ -106,7 +106,8 @@ module ProductResources
     def pdf_blob(size)
       bytes = "%PDF-1.4\n"
       bytes += 'x' * (size - bytes.bytesize)
-      ActiveStorage::Blob.create_and_upload!(io: StringIO.new(bytes), filename: 'guide.pdf', content_type: 'application/pdf')
+      blob = ActiveStorage::Blob.create_and_upload!(io: StringIO.new(bytes), filename: 'guide.pdf', content_type: 'application/pdf')
+      mark_document_clean!(blob, user: @admin, purpose: :product_resource, slot: 'document')
     end
   end
 end

@@ -37,7 +37,7 @@ class ApplicationNote < ApplicationRecord
     end
     true
   rescue StandardError => e
-    Rails.logger.error "Failed to assign note: #{e.message}"
+    Rails.logger.error "Failed to assign note: #{e.class.name}"
     false
   end
 
@@ -56,7 +56,7 @@ class ApplicationNote < ApplicationRecord
     end
     true
   rescue StandardError => e
-    Rails.logger.error "Failed to unassign note: #{e.message}"
+    Rails.logger.error "Failed to unassign note: #{e.class.name}"
     false
   end
 
@@ -79,7 +79,7 @@ class ApplicationNote < ApplicationRecord
     end
     true
   rescue StandardError => e
-    Rails.logger.error "Failed to mark note as done: #{e.message}"
+    Rails.logger.error "Failed to mark note as done: #{e.class.name}"
     false
   end
 
@@ -100,7 +100,7 @@ class ApplicationNote < ApplicationRecord
     end
     true
   rescue StandardError => e
-    Rails.logger.error "Failed to reopen note: #{e.message}"
+    Rails.logger.error "Failed to reopen note: #{e.class.name}"
     false
   end
 end

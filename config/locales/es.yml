@@ -1,4 +1,8 @@
 es:
+  alerts:
+    sign_in_required: "Inicie sesión para continuar."
+    session_expired: "Su sesión ha expirado; vuelva a iniciar sesión."
+    session_fail: "No se pudo iniciar la sesión."
   layouts:
     secure_public:
       program_name: "Programa de Telecomunicaciones Accesibles de Maryland"
@@ -28,6 +32,15 @@ es:
       hide: "Ocultar contraseña"
   sessions:
     title: "Iniciar sesión"
+    activity:
+      label: "Tiempo restante de la sesión"
+      keep_working: "Seguir trabajando"
+      messages:
+        expired: "Su sesión ha expirado. Mantenga esta página abierta y copie el trabajo pendiente antes de volver a iniciar sesión."
+        absolute: "Su sesión está por expirar. Guarde su trabajo antes de volver a iniciar sesión."
+        refresh_failed: "No pudimos renovar su sesión. Revise su conexión y seleccione Seguir trabajando."
+        idle_one: "Su sesión vence en %{minutes} minuto. Seleccione Seguir trabajando para mantener la sesión iniciada."
+        idle_other: "Su sesión vence en %{minutes} minutos. Seleccione Seguir trabajando para mantener la sesión iniciada."
     form:
       contact_label: "Correo electrónico o número de teléfono"
       contact_hint: "Use el correo electrónico o número de teléfono de su cuenta. Los enlaces de acceso por texto solo se envían a números con capacidad de recibir textos."
@@ -184,16 +197,31 @@ es:
       reason: "Motivo: %{reason}"
   documents:
     upload:
-      uploaded: "Subido: %{filename}"
-      selected: "Seleccionado: %{filename}. Se sube cuando envíe el formulario."
+      uploaded: "Listo: %{filename}"
       uploading: "Subiendo %{filename}…"
-      canceled: "Carga cancelada. Se conserva cualquier archivo anterior."
-      failed: "La carga falló. Inténtelo de nuevo o elija otro archivo. Se conserva cualquier archivo anterior."
+      canceled: "Carga cancelada."
+      failed: "La carga falló. Elija el archivo de nuevo."
       progress: "Progreso de la carga"
       remove: "Quitar documento"
       cancel: "Cancelar carga"
+      scanning: "Comprobando si %{filename} contiene virus… Esto puede tardar unos minutos."
+      blocked: "Este archivo no pasó la comprobación de virus. Elija otro archivo."
+      unavailable: "No pudimos comprobar el estado de la carga. Su archivo está guardado. Inténtelo de nuevo."
+      wait: "Espere a que termine la comprobación de virus antes de enviar el formulario."
+      retry: "Comprobar de nuevo"
+      choose_again: "Elegir archivo de nuevo"
+      session_expired: "Su sesión ha caducado. Actualice esta página para iniciar sesión de nuevo."
+      javascript_required: "Active JavaScript para comprobar los archivos antes de enviar el formulario."
+    scan:
+      pending: "Comprobando si este archivo contiene virus."
+      clean: "Este archivo pasó la comprobación de virus."
+      blocked: "Este archivo no pasó la comprobación de virus. Elija otro archivo."
+      failed: "No pudimos terminar la comprobación de virus. Intente subir el archivo de nuevo más tarde."
+      limit_reached: "Se alcanzó el límite de cargas. Espere y luego elija el archivo de nuevo para reintentar."
+      link_unavailable: "Este enlace de carga ya no está activo. Pida un enlace nuevo a la persona que lo envió."
     refused_document: "%{document}: %{reason}"
     refused:
+      scan_required: "Espere a que el archivo pase la comprobación de virus antes de enviar el formulario."
       missing: "Elija un archivo para subir."
       unsupported: "No pudimos leer ese archivo. Elíjalo de nuevo."
       unreadable: "No pudimos leer ese archivo. Suba otro archivo."
@@ -217,6 +245,8 @@ es:
         stale_request: "Este formulario estaba desactualizado, por lo que no se cambió nada. Vuelva a cargar la página e inténtelo de nuevo."
         duplicate_identity: "%{name} ya está asociado a su cuenta con este nombre y fecha de nacimiento. Si se trata de otra persona, comuníquese con el equipo de MAT al %{support_email} o %{support_phone}."
   applications:
+    creation:
+      failure: "No se pudo guardar su solicitud. Inténtelo de nuevo."
     # El nombre del botón queda en inglés a propósito: este formulario todavía no está traducido.
     autosave:
       saving: "Guardando borrador…"

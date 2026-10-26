@@ -190,11 +190,11 @@ module Admin
       assert_select "form[action='#{admin_application_secure_request_forms_path(application)}']", count: 0
     end
 
-    test 'show page activity history shows replaced provider values for review' do
-      application = create(:application, status: :awaiting_proof)
+    test 'show page activity history shows masked replaced provider values for review' do
+      old_email = 'original@example.test'
+      application = create(:application, status: :awaiting_proof, medical_provider_email: old_email)
       form = create(:secure_request_form, application: application, recipient: application.user)
       create(:admin, email: PublicAuditActor::SYSTEM_AUDIT_EMAIL)
-      old_email = application.medical_provider_email
 
       Applications::SubmitProviderInfo.new(
         application: application,
@@ -206,11 +206,16 @@ module Admin
         }
       ).call
 
+      assert_equal 'replacement@example.test', application.reload.medical_provider_email
+
       get admin_application_path(application)
 
       assert_response :success
-      assert_includes response.body, 'Provider Info Replaced - Review'
-      assert_includes response.body, "Medical provider email: #{old_email} -&gt; replacement@example.test"
+      history = css_select('#audit-logs').first.text
+      assert_includes history, 'Provider Info Replaced - Review'
+      assert_includes history, 'Medical provider email: o***@e***.test -> r***@e***.test'
+      assert_not_includes history, old_email
+      assert_not_includes history, 'replacement@example.test'
     end
 
     test 'show page shows secure provider information requests when any required provider field is missing' do
@@ -338,7 +343,8 @@ module Admin
       get admin_application_path(application)
 
       assert_response :success
-      assert_select "form[action='#{admin_application_certification_upload_request_path(application)}'][data-turbo='false']"
+      assert_select "form[action='#{admin_application_certification_upload_request_path(application)}'][method='post'][data-turbo-frame='_top'][data-turbo-confirm=?]:not([data-turbo='false']):not([onsubmit])",
+                    'Send secure certification upload link to secure@example.test?'
       assert_includes response.body, 'Send Secure Cert Upload Link'
       assert_includes response.body, 'Print DCF'
       assert_not_includes response.body, 'Send Email'
@@ -382,7 +388,7 @@ module Admin
       get admin_application_path(application)
 
       assert_response :success
-      assert_select "form[action='#{admin_application_certification_upload_request_path(application)}'][data-turbo='false']"
+      assert_select "form[action='#{admin_application_certification_upload_request_path(application)}'][data-turbo-frame='_top'][data-turbo-confirm]:not([data-turbo='false']):not([onsubmit])"
       assert_includes response.body, 'Send Secure Cert Upload Link'
     end
 
@@ -396,8 +402,8 @@ module Admin
       get admin_application_path(application)
 
       assert_response :success
-      assert_select 'form[data-turbo="false"][onsubmit*=?]', 'DocuSeal request is already opened'
-      assert_select 'form[data-turbo="false"][onsubmit*=?]', 'additional option'
+      assert_select 'form[data-turbo-frame="_top"][data-turbo-confirm*=?]:not([data-turbo="false"]):not([onsubmit])', 'DocuSeal request is already opened'
+      assert_select 'form[data-turbo-frame="_top"][data-turbo-confirm*=?]:not([data-turbo="false"]):not([onsubmit])', 'additional option'
     end
 
     test 'show page confirms DocuSeal as an additional option when secure certification links are active' do
@@ -441,8 +447,13 @@ module Admin
                       .pluck('aria-label')
       assert_equal 2, revoke_labels.uniq.size, 'each Revoke button names its own link'
       [first, second].each do |form|
-        assert_select "form[action='#{admin_application_secure_request_forms_path(application)}'][onsubmit*='confirm'] " \
-                      "input[name='resend_of_id'][value='#{form.id}']"
+        assert_select "form[action='#{admin_application_secure_request_form_revocation_path(application, form)}'][method='post'][data-turbo-frame='_top'][data-turbo-confirm=?]:not([data-turbo='false']):not([onsubmit])",
+                      I18n.t('admin.applications.secure_request_forms.table.revoke_confirm')
+        assert_select "form[action='#{admin_application_secure_request_forms_path(application)}'][method='post'][data-turbo-frame='_top'][data-turbo-confirm=?]:not([data-turbo='false']):not([onsubmit])",
+                      I18n.t('admin.applications.secure_request_forms.table.resend_confirm') do
+          assert_select "input[name='resend_of_id'][value='#{form.id}']"
+          assert_select "input[name='recipient_ids[]'][value='#{form.recipient_id}']"
+        end
       end
     end
 
@@ -525,9 +536,11 @@ module Admin
       assert_includes response.body, 'Secure income proof upload links'
       assert_includes response.body, 'Secure proof of Maryland residency upload links'
       assert_includes response.body, 'Secure proof of identity upload links'
-      assert_select "form[action='#{admin_application_secure_request_form_revocation_path(application, income_request)}']"
-      assert_select "form[action='#{admin_application_secure_request_form_revocation_path(application, residency_request)}']"
-      assert_select "form[action='#{admin_application_secure_request_form_revocation_path(application, id_request)}']"
+      { income: income_request, residency: residency_request, id: id_request }.each do |proof_type, request|
+        assert_select "form[action='#{admin_application_secure_request_form_revocation_path(application, request)}'][method='post'][data-turbo-frame='_top'][data-turbo-confirm=?]:not([data-turbo='false']):not([onsubmit])",
+                      I18n.t('admin.applications.proof_secure_request_forms.table.revoke_confirm',
+                             proof_type: I18n.t("secure_proof_forms.proof_types.#{proof_type}"))
+      end
       assert_not_includes response.body, 'Send Secure Income Upload Link'
       assert_not_includes response.body, 'Send Secure Residency Upload Link'
       assert_not_includes response.body, 'Send Secure Id Upload Link'
@@ -636,6 +649,7 @@ module Admin
       post admin_application_certification_upload_request_path(application)
 
       assert_redirected_to admin_application_path(application)
+      assert_response :see_other
       assert_equal I18n.t('admin.applications.certification_upload_requests.create.success'), flash[:notice]
     end
 
@@ -646,7 +660,31 @@ module Admin
       post admin_application_certification_upload_request_path(application)
 
       assert_redirected_to admin_application_path(application)
+      assert_response :see_other
       assert_equal I18n.t('applications.certification_upload.messages.provider_email_required'), flash[:alert]
+    end
+
+    test 'certification request failure logs omit personal validation details' do
+      application = create(:application)
+      invalid_record = User.new
+      invalid_record.errors.add(:base, 'Contact private-certification@example.test at 410-555-0199')
+      error = ActiveRecord::RecordInvalid.new(invalid_record)
+      Applications::RequestCertificationUpload.any_instance.stubs(:call).raises(error)
+      messages = []
+
+      Rails.logger.stub(:error, ->(message) { messages << message }) do
+        assert_no_difference ['MedicalProviderSecureRequestForm.count', 'Notification.count', 'Event.count'] do
+          post admin_application_certification_upload_request_path(application)
+        end
+      end
+
+      assert_redirected_to admin_application_path(application)
+      assert_response :see_other
+      assert_equal I18n.t('admin.applications.certification_upload_requests.create.failure'), flash[:alert]
+      assert_not_includes messages.join, 'private-certification@example.test'
+      assert_not_includes messages.join, '410-555-0199'
+      assert_includes messages.join, 'ActiveRecord::RecordInvalid'
+      assert_includes messages.join, application.id.to_s
     end
 
     test 'secure proof resubmission request redirects with service success message' do
@@ -669,6 +707,27 @@ module Admin
 
       assert_redirected_to admin_application_path(application)
       assert_equal 'Secure proof upload request sent.', flash[:notice]
+    end
+
+    test 'proof resubmission request failure logs omit personal validation details' do
+      application = create(:application, :in_progress, income_proof_status: :rejected)
+      invalid_record = User.new
+      invalid_record.errors.add(:base, 'Contact private-proof@example.test at 202-555-0198')
+      Applications::RequestProofResubmission.any_instance.stubs(:call).raises(ActiveRecord::RecordInvalid.new(invalid_record))
+      messages = []
+
+      Rails.logger.stub(:error, ->(message) { messages << message }) do
+        assert_no_difference ['SecureRequestForm.count', 'Notification.count', 'Event.count'] do
+          post admin_application_proof_resubmission_request_path(application), params: { proof_type: :income }
+        end
+      end
+
+      assert_redirected_to admin_application_path(application)
+      assert_equal I18n.t('admin.applications.proof_resubmission_requests.create.failure'), flash[:alert]
+      assert_not_includes messages.join, 'private-proof@example.test'
+      assert_not_includes messages.join, '202-555-0198'
+      assert_includes messages.join, 'ActiveRecord::RecordInvalid'
+      assert_includes messages.join, application.id.to_s
     end
 
     test 'secure proof resubmission request passes selected recipients and channel overrides to service' do
@@ -709,14 +768,45 @@ module Admin
                                    provider_name: 'Dr. Secure',
                                    provider_email: 'secure@example.test')
 
+      get admin_application_path(application)
+
+      assert_response :success
+      assert_select "form[action='#{admin_application_medical_provider_secure_request_form_revocation_path(application, secure_request_form)}'][method='post'][data-turbo-frame='_top'][data-turbo-confirm=?]:not([data-turbo='false']):not([onsubmit])",
+                    I18n.t('admin.applications.medical_provider_secure_request_forms.table.revoke_confirm')
+
       assert_difference("Event.where(auditable: application, action: 'cert_upload_request_revoked').count", 1) do
         post admin_application_medical_provider_secure_request_form_revocation_path(application, secure_request_form)
       end
 
       assert_redirected_to admin_application_path(application)
+      assert_response :see_other
       event = Event.find_by!(auditable: application, action: 'cert_upload_request_revoked')
       assert_equal secure_request_form.id, event.metadata.fetch('medical_provider_secure_request_form_id')
       assert_equal 'manual_revocation', event.metadata.fetch('reason')
+    end
+
+    test 'certification revocation failure logs omit personal validation details' do
+      application = create(:application)
+      form = create(:medical_provider_secure_request_form, application: application)
+      invalid_record = User.new
+      invalid_record.errors.add(:base, 'Contact private-certification@example.test at 410-555-0199')
+      MedicalProviderSecureRequestForm.any_instance.stubs(:revoke!).raises(ActiveRecord::RecordInvalid.new(invalid_record))
+      messages = []
+
+      Rails.logger.stub(:error, ->(message) { messages << message }) do
+        assert_no_difference 'Event.count' do
+          post admin_application_medical_provider_secure_request_form_revocation_path(application, form)
+        end
+      end
+
+      assert_redirected_to admin_application_path(application)
+      assert_response :see_other
+      assert_equal I18n.t('admin.applications.medical_provider_secure_request_form_revocations.create.failure'), flash[:alert]
+      assert_predicate form.reload, :active?
+      assert_not_includes messages.join, 'private-certification@example.test'
+      assert_not_includes messages.join, '410-555-0199'
+      assert_includes messages.join, 'ActiveRecord::RecordInvalid'
+      assert_includes messages.join, application.id.to_s
     end
 
     test 'show page offers batch revoke when active sibling links share a request batch' do
@@ -732,10 +822,12 @@ module Admin
 
       assert_response :success
       assert_includes response.body, I18n.t('admin.applications.secure_request_forms.table.revoke_batch')
-      assert_select 'form[data-turbo="false"][onsubmit*=?]',
+      assert_select 'form[method="post"][data-turbo-frame="_top"][data-turbo-confirm=?]:not([data-turbo="false"]):not([onsubmit])',
                     I18n.t('admin.applications.secure_request_forms.table.revoke_confirm')
-      assert_select 'form[data-turbo="false"][onsubmit*=?]',
-                    I18n.t('admin.applications.secure_request_forms.table.revoke_batch_confirm')
+      assert_select "form[action='#{admin_application_secure_request_form_batch_revocations_path(application)}'][method='post'][data-turbo-frame='_top'][data-turbo-confirm=?]:not([data-turbo='false']):not([onsubmit])",
+                    I18n.t('admin.applications.secure_request_forms.table.revoke_batch_confirm') do
+        assert_select "input[name='request_batch_id'][value='#{batch_id}']"
+      end
     end
 
     test 'batch revoke marks all active sibling links revoked' do
@@ -751,6 +843,7 @@ module Admin
            params: { request_batch_id: batch_id }
 
       assert_redirected_to admin_application_path(application)
+      assert_response :see_other
       assert_predicate first_request.reload, :status_revoked?
       assert_predicate second_request.reload, :status_revoked?
     end
@@ -770,6 +863,7 @@ module Admin
            params: { request_batch_id: batch_id }
 
       assert_redirected_to admin_application_path(application)
+      assert_response :see_other
       assert_equal I18n.t('admin.applications.secure_request_form_batch_revocations.create.failure'), flash[:alert]
       assert_predicate first_request.reload, :status_sent?
       assert_predicate second_request.reload, :status_sent?
@@ -787,6 +881,7 @@ module Admin
       post admin_application_secure_request_form_revocation_path(application, secure_request_form)
 
       assert_redirected_to admin_application_path(application)
+      assert_response :see_other
       assert_equal I18n.t('admin.applications.secure_request_form_revocations.create.not_active'), flash[:alert]
       assert_predicate secure_request_form.reload, :status_submitted?
     end
@@ -799,6 +894,7 @@ module Admin
       post admin_application_secure_request_form_revocation_path(application, secure_request_form)
 
       assert_redirected_to admin_application_path(application)
+      assert_response :see_other
       assert_equal I18n.t('admin.applications.secure_request_form_revocations.create.failure'), flash[:alert]
       assert_predicate secure_request_form.reload, :status_sent?
     end
@@ -810,6 +906,7 @@ module Admin
       post admin_application_secure_request_form_revocation_path(application, secure_request_form)
 
       assert_redirected_to admin_application_path(application)
+      assert_response :see_other
       assert_predicate secure_request_form.reload, :status_revoked?
     end
 
@@ -909,6 +1006,7 @@ module Admin
       end
 
       assert_redirected_to admin_application_path(application)
+      assert_response :see_other
       assert_equal I18n.t('applications.provider_info.messages.invalid_channel_override',
                           locale: @admin.effective_locale),
                    flash[:alert]
@@ -928,6 +1026,7 @@ module Admin
       end
 
       assert_redirected_to admin_application_path(application)
+      assert_response :see_other
       assert_equal I18n.t('applications.provider_info.messages.invalid_channel_override',
                           locale: @admin.effective_locale),
                    flash[:alert]

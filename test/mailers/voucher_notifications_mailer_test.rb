@@ -72,6 +72,20 @@ class VoucherNotificationsMailerTest < ActionMailer::TestCase
     assert_includes email.body.to_s, "Text Assigned for voucher #{@voucher.code}"
   end
 
+  test 'missing template logs only the exception class and retains delivery failure' do
+    EmailTemplate.stubs(:find_by!)
+                 .with(name: 'voucher_notifications_voucher_assigned', format: :text, locale: 'en')
+                 .raises(ActiveRecord::RecordNotFound, 'private-template-query-value')
+    Rails.logger.expects(:error).with('Missing EmailTemplate for voucher_notifications_voucher_assigned: ActiveRecord::RecordNotFound').once
+
+    assert_no_emails do
+      error = assert_raises(RuntimeError) do
+        VoucherNotificationsMailer.with(voucher: @voucher).voucher_assigned.deliver_now
+      end
+      assert_equal 'Email template (text format) not found for voucher_notifications_voucher_assigned', error.message
+    end
+  end
+
   %w[voucher_assigned voucher_expiring_soon voucher_expired voucher_redeemed].each do |action|
     test "#{action} renders Spanish dates with a real template" do
       @user.update!(locale: :es)

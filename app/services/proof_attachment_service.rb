@@ -87,10 +87,10 @@ class ProofAttachmentService
   end
 
   def self.record_failure(error, context)
-    log_error(error)
+    log_error(error, context.fetch(:application).id)
     record_failure_audit_after_transaction(error, context)
   rescue StandardError => e
-    Rails.logger.error "Failed to record proof failure: #{e.message}"
+    Rails.logger.error "Failed to record proof failure: #{e.class.name}"
   end
 
   # A caller's rollback would remove an audit event written inside its transaction.
@@ -108,7 +108,7 @@ class ProofAttachmentService
     context = build_context(result, proof_type, status)
     record_datadog_metrics(result, context, proof_type, status)
   rescue StandardError => e
-    Rails.logger.error "Failed to record proof metrics: #{e.message}"
+    Rails.logger.error "Failed to record proof metrics: #{e.class.name}"
   end
 
   def self.record_basic_logging(result, proof_type, status)
@@ -116,10 +116,10 @@ class ProofAttachmentService
       Rails.logger.info "Proof #{proof_type} #{status} completed in #{result[:duration_ms]}ms"
     elsif Rails.env.test? && result[:error]&.message.to_s.match?(/mismatched digest/i)
       Rails.logger.debug do
-        "[EXPECTED_TEST_ATTACHMENT] Proof #{proof_type} #{status} failed in #{result[:duration_ms]}ms: #{result[:error]&.message}"
+        "[EXPECTED_TEST_ATTACHMENT] Proof #{proof_type} #{status} failed in #{result[:duration_ms]}ms: #{result[:error]&.class&.name}"
       end
     else
-      Rails.logger.error "Proof #{proof_type} #{status} failed in #{result[:duration_ms]}ms: #{result[:error]&.message}"
+      Rails.logger.error "Proof #{proof_type} #{status} failed in #{result[:duration_ms]}ms: #{result[:error]&.class&.name}"
     end
   end
 
@@ -151,8 +151,6 @@ class ProofAttachmentService
     return unless result[:error]
 
     context[:error_class] = result[:error].class.name
-    context[:error_message] = result[:error].message
-    context[:error_backtrace] = result[:error].backtrace.first(3) if result[:error].backtrace
   end
 
   def self.record_datadog_metrics(result, _context, proof_type, status)
@@ -211,13 +209,13 @@ class ProofAttachmentService
     def save_application_with_attachment(application)
       application.save!
     rescue StandardError => e
-      Rails.logger.error "Save failed: #{e.message}"
+      Rails.logger.error "Save failed for application #{application.id}: #{e.class.name}"
       log_validation_errors(application) unless Rails.env.test? && ENV['VERBOSE_TESTS'].blank?
       raise "Failed to save application with attachment: #{e.message}"
     end
 
     def log_validation_errors(application)
-      Rails.logger.error "Validation errors: #{application.errors.full_messages.join(', ')}"
+      Rails.logger.error "Validation failed for application #{application.id}"
     end
 
     def verify_attachment_persisted(application, proof_type)
@@ -230,9 +228,9 @@ class ProofAttachmentService
       raise 'Attachment failed to persist after save and reload'
     end
 
-    def log_error(error)
+    def log_error(error, application_id)
       context = Rails.env.test? ? '[TEST_ATTACHMENT] ' : '[ATTACHMENT_ERROR] '
-      message = "#{context}Proof attachment error: #{error.message}"
+      message = "#{context}Proof attachment error for application #{application_id}: #{error.class.name}"
 
       # Digest failures use DEBUG in tests to reduce error log noise.
       if Rails.env.test? && error.message.to_s.match?(/mismatched digest/i)
@@ -240,10 +238,6 @@ class ProofAttachmentService
       else
         Rails.logger.error(message)
       end
-
-      backtrace = error.backtrace&.join("\n")
-      Rails.logger.debug(backtrace) if backtrace && Rails.env.test?
-      Rails.logger.error(backtrace || 'No backtrace available') unless Rails.env.test?
     end
 
     # Use a fresh record after the caller's transaction ends.
@@ -270,7 +264,7 @@ class ProofAttachmentService
         metadata: final_metadata
       )
     rescue StandardError => e
-      Rails.logger.error "Failed to record audit for failure: #{e.message}"
+      Rails.logger.error "Failed to record audit for failure: #{e.class.name}"
     end
 
     def determine_submission_method(application, submission_method)
@@ -352,7 +346,7 @@ class ProofAttachmentService
         trigger: :"#{proof_type}_proof_approved"
       )
     rescue StandardError => e
-      Rails.logger.error "Workflow reconciliation failed for Application #{application.id}: #{e.message}\n#{e.backtrace.join("\n")}"
+      Rails.logger.error "Workflow reconciliation failed for Application #{application.id}: #{e.class.name}"
     end
 
     def send_notification(context, event_metadata)
@@ -417,7 +411,8 @@ class ProofAttachmentService
         record: application,
         name: get_attachment_method_name(proof_type),
         signed_ids: params.fetch(:signed_ids),
-        min_bytes: params.fetch(:min_bytes)
+        min_bytes: params.fetch(:min_bytes),
+        scan_owner: params[:scan_owner] || params[:admin] || application.user
       )
 
       Struct.new(:application, :proof_type, :attachment_param, :blob_size, :submission_method, keyword_init: true).new( # rubocop:disable Style/RedundantStructKeywordInit

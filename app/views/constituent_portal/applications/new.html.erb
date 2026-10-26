@@ -11,7 +11,7 @@
           New Application for <%= current_user.full_name %>
         <% end %>
       </h1>
-      <p class="text-l text-gray-900"><span style="color: red;">*</span> Indicates a required field</p>
+      <p class="text-l text-gray-900"><span class="text-[#ff0000]">*</span> Indicates a required field</p>
 
       <%# The server resolves the draft for this applicant. A dependent page must name the
           dependent here, or every save goes to the guardian's own draft. %>
@@ -299,11 +299,8 @@
                 <strong>current, unexpired Medicaid and/or SNAP award letter</strong>, or <strong>current, unexpired VA Benefits letter</strong>.
                 <span class="font-semibold text-red-600">This proof is required to submit your application.</span>
               </p>
-              <%= form.file_field :income_proof,
-                  id: "application_income_proof",
-                  class: "block w-full text-sm text-gray-700 file:mr-4 file:py-2 file:px-4 file:rounded-md file:border-0 file:text-sm file:font-semibold file:bg-indigo-50 file:text-indigo-700 hover:file:bg-indigo-100 focus:outline-none focus:ring-2 focus:ring-indigo-500 focus:border-indigo-500",
-                  "aria-describedby": "income-hint",
-                  accept: proof_upload_accept_attribute %>
+              <%= render 'shared/document_upload', form: form, model: @application, field: :income_proof,
+                                                   input_id: 'application_income_proof', described_by: 'income-hint' %>
               <p class="mt-1 text-xs text-gray-700">
                 <span class="sr-only">Keyboard users:</span> Press Space or Enter to open the file browser
               </p>
@@ -334,11 +331,8 @@
                 <strong>identification card</strong>, <strong>utility bill</strong>, or <strong> photo ID</strong>.
                 <span class="font-semibold text-red-600">This proof is required to submit your application.</span>
               </p>
-              <%= form.file_field :residency_proof,
-                  id: "application_residency_proof",
-                  class: "block w-full text-sm text-gray-700 file:mr-4 file:py-2 file:px-4 file:rounded-md file:border-0 file:text-sm file:font-semibold file:bg-indigo-50 file:text-indigo-700 hover:file:bg-indigo-100 focus:outline-none focus:ring-2 focus:ring-indigo-500 focus:border-indigo-500",
-                  "aria-describedby": "residency-hint",
-                  accept: proof_upload_accept_attribute %>
+              <%= render 'shared/document_upload', form: form, model: @application, field: :residency_proof,
+                                                   input_id: 'application_residency_proof', described_by: 'residency-hint' %>
               <p class="mt-1 text-xs text-gray-700">
                 <span class="sr-only">Keyboard users:</span> Press Space or Enter to open the file browser
               </p>
@@ -355,11 +349,8 @@
                 <strong>identification card</strong>, or <strong>passport</strong>.
                 <span class="font-semibold text-red-600">This proof is required to submit your application.</span>
               </p>
-              <%= form.file_field :id_proof,
-                  id: "application_id_proof",
-                  class: "block w-full text-sm text-gray-700 file:mr-4 file:py-2 file:px-4 file:rounded-md file:border-0 file:text-sm file:font-semibold file:bg-indigo-50 file:text-indigo-700 hover:file:bg-indigo-100 focus:outline-none focus:ring-2 focus:ring-indigo-500 focus:border-indigo-500",
-                  "aria-describedby": "id-hint",
-                  accept: proof_upload_accept_attribute %>
+              <%= render 'shared/document_upload', form: form, model: @application, field: :id_proof,
+                                                   input_id: 'application_id_proof', described_by: 'id-hint' %>
               <p class="mt-1 text-xs text-gray-700">
                 <span class="sr-only">Keyboard users:</span> Press Space or Enter to open the file browser
               </p>

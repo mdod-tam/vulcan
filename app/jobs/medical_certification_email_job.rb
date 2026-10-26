@@ -55,8 +55,7 @@ class MedicalCertificationEmailJob < ApplicationJob
   end
 
   def handle_job_error(application_id, error, notification)
-    Rails.logger.error "Failed to send certification email for application #{application_id}: #{error.message}"
-    Rails.logger.error error.backtrace.join("\n")
+    Rails.logger.error "Failed to send certification email for application #{application_id}: #{error.class.name}"
 
     return if notification.blank? || notification.email_delivery_attempts.exists?
 

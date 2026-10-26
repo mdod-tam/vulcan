@@ -120,7 +120,7 @@ class MedicalProviderNotifier
     update_notification_metadata(delivery_result, notification_id: notification_id)
     delivery_result.merge(tracking_status: notification_id ? :recorded : :not_requested)
   rescue StandardError => e
-    Rails.logger.error "Failed to handle delivery result for Application ID: #{application.id} - #{sanitize_secure_error_message(e.message)}"
+    Rails.logger.error "Failed to handle delivery result for Application ID: #{application.id} - #{e.class.name}"
     delivery_result.merge(tracking_status: :failed, tracking_error: e.class.name)
   end
 
@@ -142,7 +142,7 @@ class MedicalProviderNotifier
         metadata.delete('provider_notification_error')
         apply_success_metadata(metadata, delivery_result)
       elsif delivery_result[:error].present?
-        metadata['provider_notification_error'] = sanitize_secure_error_message(delivery_result[:error])
+        metadata['provider_notification_error'] = 'Provider notification could not be sent.'
       end
       notification.update!(metadata: metadata)
     end
@@ -199,7 +199,7 @@ class MedicalProviderNotifier
   rescue ApplicationMailer::DeliverySkipped, EmailDelivery::ConfigurationError => e
     refusal_result(EMAIL_METHOD, e)
   rescue StandardError => e
-    Rails.logger.error("Provider email failed for application #{application.id}: #{sanitize_secure_error_message(e.message)}")
+    Rails.logger.error("Provider email failed for application #{application.id}: #{e.class.name}")
     failure_result(method: EMAIL_METHOD, error: e.message)
   end
 

@@ -9,6 +9,29 @@ module Admin
       sign_in_for_integration_test @admin
     end
 
+    test 'invalid role feedback stays available to the admin without logging the submitted value' do
+      user = create(:constituent)
+      original_type = user.type
+      submitted_role = 'private-role-sentinel person@example.test token=private-role-token'
+      log = StringIO.new
+
+      assert_no_difference ['User.count', 'RoleCapability.count', 'Event.count'] do
+        Rails.stub(:logger, ActiveSupport::Logger.new(log)) do
+          patch update_role_admin_user_path(user), params: { role: submitted_role }, as: :json
+        end
+      end
+
+      assert_response :unprocessable_content
+      assert_equal({ 'success' => false,
+                     'message' => "Invalid role specified: '#{submitted_role}'. Please select a valid role." }, response.parsed_body)
+      assert_equal original_type, user.reload.type
+      assert_includes log.string, "Received role update for user_id: #{user.id}"
+      assert_includes log.string, "Invalid role for user_id: #{user.id}"
+      %w[private-role-sentinel person@example.test private-role-token].each do |value|
+        assert_not_includes log.string, value
+      end
+    end
+
     test 'show surfaces destructive admin actions with native confirmation messages' do
       user = create(:constituent)
 
@@ -214,6 +237,29 @@ module Admin
 
       event = Event.find_by!(action: 'admin_user_deletion_failed', auditable: user)
       assert_equal 'ActiveRecord::DeleteRestrictionError', event.metadata['error_class']
+    end
+
+    test 'admin deletion failure excludes sensitive exception details from diagnostics' do
+      user = create(:admin)
+      private_email = 'private-deletion@example.test'
+      private_phone = '410-555-0199'
+      user.errors.add(:base, "Contact #{private_email} at #{private_phone}")
+      error = ActiveRecord::RecordInvalid.new(user)
+      User.any_instance.stubs(:destroy!).raises(error)
+      log_output = StringIO.new
+      logger = ActiveSupport::TaggedLogging.new(ActiveSupport::Logger.new(log_output))
+
+      Rails.stub(:logger, logger) { delete admin_user_path(user) }
+
+      assert_redirected_to admin_user_path(user)
+      assert User.exists?(user.id)
+      event = Event.find_by!(action: 'admin_user_deletion_failed', auditable: user)
+      assert_equal 'ActiveRecord::RecordInvalid', event.metadata['error_class']
+      assert_not event.metadata.key?('error_message')
+      [event.metadata.to_json, log_output.string, flash[:alert]].each do |diagnostics|
+        assert_not_includes diagnostics, private_email
+        assert_not_includes diagnostics, private_phone
+      end
     end
 
     test 'admin deletion failure logs voucher blockers for constituent applications' do

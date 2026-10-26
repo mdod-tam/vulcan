@@ -14,6 +14,26 @@ module Applications
                             medical_provider_email: 'provider@example.com')
     end
 
+    test 'certification request failure logs omit personal validation details' do
+      invalid_record = User.new
+      invalid_record.errors.add(:base, 'Contact private-certification@example.test at 410-555-0199')
+      MedicalProviderSecureRequestForm.stubs(:create!).raises(ActiveRecord::RecordInvalid.new(invalid_record))
+      messages = []
+
+      result = Rails.logger.stub(:warn, ->(message) { messages << message }) do
+        assert_no_difference ['MedicalProviderSecureRequestForm.count', 'Notification.count', 'ApplicationStatusChange.count', 'Event.count'] do
+          RequestCertificationUpload.new(application: @application, actor: @actor).call
+        end
+      end
+
+      assert_predicate result, :failure?
+      assert_equal I18n.t('applications.certification_upload.messages.request_conflict', locale: @actor.effective_locale), result.message
+      assert_not_includes messages.join, 'private-certification@example.test'
+      assert_not_includes messages.join, '410-555-0199'
+      assert_includes messages.join, 'ActiveRecord::RecordInvalid'
+      assert_includes messages.join, @application.id.to_s
+    end
+
     test 'preparation records one initial transition and secure resends do not count provider requests' do
       result = nil
       assert_no_emails do

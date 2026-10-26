@@ -26,8 +26,7 @@ module Vouchers
            .order(created_at: :desc)
            .to_a
     rescue StandardError => e
-      Rails.logger.error "Failed to build audit logs for voucher #{voucher.id}: #{e.message}"
-      Rails.logger.error e.backtrace.join("\n")
+      Rails.logger.error "Failed to build audit logs for voucher #{voucher.id}: #{e.class.name}"
       add_error("Failed to build audit logs: #{e.message}")
       []
     end
@@ -39,8 +38,7 @@ module Vouchers
       events = build_audit_logs
       Applications::EventDeduplicationService.new.deduplicate(events)
     rescue StandardError => e
-      Rails.logger.error "Failed to build deduplicated audit logs for voucher #{voucher.id}: #{e.message}"
-      Rails.logger.error e.backtrace.join("\n")
+      Rails.logger.error "Failed to build deduplicated audit logs for voucher #{voucher.id}: #{e.class.name}"
       add_error("Failed to build deduplicated audit logs: #{e.message}")
       []
     end

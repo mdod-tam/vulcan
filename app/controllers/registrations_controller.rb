@@ -29,8 +29,10 @@ class RegistrationsController < ApplicationController
     end
 
     if save_user_with_duplicate_review!(duplicate_detection)
-      create_session_and_cookie
-      track_sign_in
+      unless _create_and_set_session_cookie(@user)
+        redirect_to sign_in_path(locale: public_form_locale_param), alert: t('alerts.session_fail')
+        return
+      end
       send_registration_confirmation
 
       @user.reload
@@ -58,7 +60,7 @@ class RegistrationsController < ApplicationController
     ).call
     return result.data if result.success?
 
-    Rails.logger.warn("Registration duplicate detection failed: #{result.message}")
+    Rails.logger.warn('Registration duplicate detection failed')
     DuplicateDetectionService::Result.new([], 0.0, [], false, :allow, :proceed)
   end
 
@@ -75,7 +77,7 @@ class RegistrationsController < ApplicationController
     Rails.logger.warn('Registration rolled back because duplicate review case could not be opened')
     false
   rescue ActiveRecord::ActiveRecordError => e
-    Rails.logger.warn("Registration rolled back because duplicate review case failed: #{e.message}")
+    Rails.logger.warn("Registration rolled back because duplicate review case failed: #{e.class.name}")
     @user.errors.add(:base, t('portal_self_service.registrations.registration_blocked_heading')) if @user.errors.empty?
     false
   end
@@ -118,7 +120,7 @@ class RegistrationsController < ApplicationController
       metadata: { intake_context: 'registration' }
     ).call
     if result.failure?
-      Rails.logger.warn("Registration duplicate review case failed: #{result.message}")
+      Rails.logger.warn("Registration duplicate review case failed for user #{@user.id}")
       return false
     end
 
@@ -139,29 +141,13 @@ class RegistrationsController < ApplicationController
     end
   end
 
-  def create_session_and_cookie
-    @session = @user.sessions.create!(
-      user_agent: request.user_agent,
-      ip_address: request.remote_ip
-    )
-    cookies.signed[:session_token] = {
-      value: @session.session_token,
-      httponly: true,
-      permanent: true
-    }
-  end
-
-  def track_sign_in
-    @user.track_sign_in!(request.remote_ip)
-  end
-
   def send_registration_confirmation
     # Delegate confirmation logic to RegistrationConfirmationService
     result = Users::RegistrationConfirmationService.new(user: @user, request: request).call
 
     return if result.success?
 
-    Rails.logger.error("Registration confirmation failed: #{result.message}")
+    Rails.logger.error("Registration confirmation failed for user #{@user.id}")
   end
 
   def registration_params

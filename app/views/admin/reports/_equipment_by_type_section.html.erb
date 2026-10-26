@@ -15,13 +15,13 @@
         <% end %>
       </p>
     </div>
-    <%= form_with url: admin_reports_path, method: :get, class: "flex items-center gap-2" do |f| %>
+    <%= form_with url: admin_reports_path, method: :get, class: 'flex items-center gap-2', data: { controller: 'autosubmit' } do |f| %>
       <%= f.label :equipment_period, "Period:", class: "text-sm font-medium text-gray-700" %>
       <%= f.select :equipment_period,
           options_for_select(period_options.map { |value, label| [label, value] }, period),
           {},
           class: "rounded-md border-gray-300 shadow-sm focus:border-indigo-300 focus:ring focus:ring-indigo-200 focus:ring-opacity-50",
-          onchange: "this.form.requestSubmit()" %>
+          data: { action: 'change->autosubmit#submit' } %>
     <% end %>
   </div>
 
@@ -61,7 +61,7 @@
         </table>
       </div>
 
-      <div class="mt-4" style="position: relative; height: 300px; width: 100%;"
+      <div class="mt-4 relative h-[300px] w-full"
            aria-describedby="equipment-by-type-chart-desc"
            data-controller="chart"
            data-chart-data-value="<%= chart_data[:non_voucher].to_json %>"

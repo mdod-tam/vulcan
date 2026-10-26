@@ -12,8 +12,8 @@ class UploadedDocumentTest < ActiveSupport::TestCase
     @tempfiles&.each(&:close!)
   end
 
-  test 'stores a multipart upload at exactly the limit' do
-    blob = resolve(pdf_upload(@max))
+  test 'accepts a scanned snapshot at exactly the limit' do
+    blob = resolve(scanned_upload(pdf_upload(@max), user: @application.user))
 
     assert_predicate blob, :persisted?
     assert_equal @max, blob.byte_size
@@ -31,25 +31,13 @@ class UploadedDocumentTest < ActiveSupport::TestCase
 
     service.stub(:upload, failing_upload) do
       assert_raises(StandardError) do
-        ApplicationRecord.transaction { resolve(pdf_upload(1.kilobyte)) }
+        DocumentScan.stage!(input: pdf_upload(1.kilobyte), user: @application.user, purpose: :proof, slot: 'income_proof')
       end
     end
 
     assert written_key, 'the object was written before the failure'
     assert_not service.exist?(written_key)
     assert_not ActiveStorage::Blob.exists?(key: written_key)
-  end
-
-  test 'a caller rollback after a successful write deletes the stored object' do
-    blob = nil
-    ApplicationRecord.transaction do
-      blob = resolve(pdf_upload(1.kilobyte))
-      assert ActiveStorage::Blob.service.exist?(blob.key)
-      raise ActiveRecord::Rollback
-    end
-
-    assert_not ActiveStorage::Blob.service.exist?(blob.key)
-    assert_not ActiveStorage::Blob.exists?(key: blob.key)
   end
 
   test 'refuses a multipart upload one byte over the limit before storing it' do
@@ -100,7 +88,7 @@ class UploadedDocumentTest < ActiveSupport::TestCase
 
   test 'refuses an unattached blob at the cleanup retention age' do
     blob = stored_blob(3.kilobytes)
-    blob.update_column(:created_at, CleanupUnattachedUploadsJob::RETENTION.ago)
+    blob.update_column(:created_at, DocumentScan::RETENTION.ago)
 
     assert_refused(:expired) { resolve(blob.signed_id) }
   end
@@ -117,7 +105,7 @@ class UploadedDocumentTest < ActiveSupport::TestCase
     assert_refused(:attached_elsewhere) { resolve(own.signed_id, name: 'residency_proof') }
   end
 
-  test 'judges a direct upload by its identified type, not the type the browser declared' do
+  test 'refuses a client-created blob and requires multipart scan staging' do
     bytes = "MZ\x90\x00#{'x' * 2048}"
     disguised = ActiveStorage::Blob.create_before_direct_upload!(
       filename: 'proof.pdf', byte_size: bytes.bytesize, content_type: 'application/pdf',
@@ -126,13 +114,15 @@ class UploadedDocumentTest < ActiveSupport::TestCase
     disguised.upload_without_unfurling(StringIO.new(bytes))
     assert_not_predicate disguised, :identified?
 
-    assert_refused(:invalid_type) { resolve(disguised.signed_id) }
+    assert_refused(:scan_required) { resolve(disguised.signed_id) }
+    assert_refused(:unsupported) { DocumentScan.stage!(input: disguised, user: @application.user, purpose: :proof, slot: 'income_proof') }
   end
 
   test 'accepts a TIFF scan' do
     tiff = ActiveStorage::Blob.create_and_upload!(io: StringIO.new("II*\x00#{'x' * 2048}"), filename: 'scan.tif',
                                                   content_type: 'image/tiff')
 
+    mark_document_clean!(tiff, user: @application.user)
     assert_equal 'image/tiff', resolve(tiff.signed_id).content_type
   end
 
@@ -150,7 +140,7 @@ class UploadedDocumentTest < ActiveSupport::TestCase
   test 'restorable returns a still-usable upload and writes nothing' do
     usable = stored_blob(3.kilobytes)
     expired = stored_blob(3.kilobytes)
-    expired.update_column(:created_at, CleanupUnattachedUploadsJob::RETENTION.ago)
+    expired.update_column(:created_at, DocumentScan::RETENTION.ago)
     elsewhere = stored_blob(3.kilobytes)
     create(:application).income_proof.attach(elsewhere)
     missing = stored_blob(3.kilobytes)
@@ -169,7 +159,7 @@ class UploadedDocumentTest < ActiveSupport::TestCase
   private
 
   def resolve(input, name: 'income_proof', signed_ids: true)
-    UploadedDocument.resolve!(input, record: @application, name: name, signed_ids: signed_ids)
+    UploadedDocument.resolve!(input, record: @application, name: name, signed_ids: signed_ids, scan_owner: @application.user)
   end
 
   def assert_refused(reason, &)
@@ -192,7 +182,8 @@ class UploadedDocumentTest < ActiveSupport::TestCase
   end
 
   def stored_blob(size)
-    ActiveStorage::Blob.create_and_upload!(io: StringIO.new(pdf_bytes(size)), filename: 'proof.pdf',
-                                           content_type: 'application/pdf')
+    blob = ActiveStorage::Blob.create_and_upload!(io: StringIO.new(pdf_bytes(size)), filename: 'proof.pdf',
+                                                  content_type: 'application/pdf')
+    mark_document_clean!(blob, user: @application.user)
   end
 end

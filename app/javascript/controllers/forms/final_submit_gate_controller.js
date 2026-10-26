@@ -1,4 +1,5 @@
 import { Controller } from "@hotwired/stimulus"
+import { documentUploadBlocker } from "../../utils/document_upload_state"
 
 const REQUIRED_CONTROL_SELECTOR =
   'input[required]:not([type="radio"]):not([type="hidden"]):not([type="submit"]):not([type="button"]):not([type="reset"]), select[required], textarea[required]'
@@ -13,6 +14,7 @@ export default class extends Controller {
     this._boundHandleIncomeValidation = this.handleIncomeValidation.bind(this)
     this.element.addEventListener("input", this._boundUpdate)
     this.element.addEventListener("change", this._boundUpdate)
+    this.element.addEventListener("document-upload:status", this._boundUpdate)
     this.element.addEventListener("income-validation:validated", this._boundHandleIncomeValidation)
     this.update()
   }
@@ -20,6 +22,7 @@ export default class extends Controller {
   disconnect() {
     this.element.removeEventListener("input", this._boundUpdate)
     this.element.removeEventListener("change", this._boundUpdate)
+    this.element.removeEventListener("document-upload:status", this._boundUpdate)
     this.element.removeEventListener("income-validation:validated", this._boundHandleIncomeValidation)
   }
 
@@ -34,11 +37,13 @@ export default class extends Controller {
     this._syncConditionalRequiredControls()
 
     const hardBlockMessage = this._hardBlockMessage()
+    const uploadBlocker = documentUploadBlocker(this.element, field => this.elementIsVisible(field))
     const disabled = hardBlockMessage !== null ||
       this._incomeExceedsThreshold ||
       this._requiredControlsBlockSubmit() ||
       this._requiredRadioGroupBlocksSubmit() ||
-      this._checkboxGroupBlocksSubmit()
+      this._checkboxGroupBlocksSubmit() ||
+      uploadBlocker !== null
 
     this.submitButtonTargets.forEach((button) => {
       button.disabled = disabled
@@ -51,13 +56,10 @@ export default class extends Controller {
     })
 
     if (this.hasStatusTarget) {
-      if (hardBlockMessage !== null) {
-        this.statusTarget.textContent = hardBlockMessage
-      } else {
-        this.statusTarget.textContent = disabled
+      const message = hardBlockMessage ?? uploadBlocker?.validationMessage ?? (disabled
           ? this._incompleteMessage()
-          : this._readyMessage()
-      }
+          : this._readyMessage())
+      if (this.statusTarget.textContent !== message) this.statusTarget.textContent = message
     }
   }
 

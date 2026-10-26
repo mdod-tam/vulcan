@@ -70,7 +70,6 @@ module UserServiceIntegration
   # @param context [String] Context description (e.g., "creating dependent")
   # @param errors [Object] The errors to log
   def log_user_service_error(context, errors)
-    error_messages = extract_error_messages(errors)
-    Rails.logger.error "Failed #{context}: #{error_messages.join(', ')}"
+    Rails.logger.error "Failed #{context}: #{errors.class.name}"
   end
 end

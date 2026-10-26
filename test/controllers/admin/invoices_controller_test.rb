@@ -157,11 +157,20 @@ module Admin
     end
 
     test 'the CSV neutralizes vendor-entered text that a spreadsheet would run as a formula' do
-      @vendor.update_column(:business_name, '=HYPERLINK("http://example.test","Ray")')
+      name = "\t＝HYPERLINK(\"http://example.test\",\"Ray\"),\nnext line"
+      @vendor.update_column(:business_name, name)
 
-      get admin_invoices_path(format: :csv), params: { vendor_id: @vendor.id }
+      assert_difference -> { Event.where(action: 'export_generated', user: @admin).count }, 2 do
+        2.times { get admin_invoices_path(format: :csv), params: { vendor_id: @vendor.id } }
+      end
 
-      assert_equal ["'=HYPERLINK(\"http://example.test\",\"Ray\")"], CSV.parse(response.body, headers: true).pluck('Vendor')
+      rows = CSV.parse(response.body, headers: true)
+      assert_equal ["'#{name}"], rows.pluck('Vendor')
+      assert_equal ['Invoice Number', 'Vendor', 'Period Start', 'Covered Through', 'Total Amount', 'Status', 'Approved At',
+                    'Payment Date', 'Payment Method', 'Payment Reference', 'Check Number', 'GAD Reference', 'Recorded By'], rows.headers
+      assert_equal '80.00', rows.sole['Total Amount']
+      event = Event.where(action: 'export_generated', user: @admin).order(:id).last
+      assert_equal({ 'export_type' => 'admin_invoices', 'row_count' => 1, '__service_generated' => true }, event.metadata)
     end
 
     test 'staff who are not admins cannot reach invoices' do

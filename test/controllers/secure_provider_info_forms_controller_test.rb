@@ -3,6 +3,32 @@
 require 'test_helper'
 
 class SecureProviderInfoFormsControllerTest < ActionDispatch::IntegrationTest
+  test 'a real secure submission keeps review evidence with masked provider history' do
+    actor = create(:admin, email: PublicAuditActor::SYSTEM_AUDIT_EMAIL)
+    application = create(:application, status: :awaiting_proof, medical_provider_name: 'Existing Doctor',
+                                       medical_provider_email: 'existing@example.test', medical_provider_phone: '410-555-1234')
+    token = SecureRequestForm.generate_public_token
+    form = create(:secure_request_form, application: application, recipient: application.user, raw_token: token)
+
+    patch secure_provider_info_form_path(token: token), params: {
+      medical_provider_name: 'Incoming Doctor', medical_provider_email: 'incoming@example.test', medical_provider_phone: '202-555-5678'
+    }
+
+    assert_response :redirect
+    assert form.reload.submitted?
+    assert_equal 'incoming@example.test', application.reload.medical_provider_email
+    event = Event.where(action: 'medical_provider_info_updated', auditable: application).order(:id).last
+    assert_equal actor.id, event.user_id
+    assert event.metadata['review_required']
+    assert_equal form.id, event.metadata['secure_request_form_id']
+    assert_equal({ 'old' => 'e***@e***.test', 'new' => 'i***@e***.test' }, event.field_changes['medical_provider_email'])
+    assert_equal({ 'old' => '***-***-1234', 'new' => '***-***-5678' }, event.field_changes['medical_provider_phone'])
+    %w[existing@example.test incoming@example.test 410-555-1234 202-555-5678].each do |value|
+      assert_not_includes event.metadata.to_json, value
+    end
+    assert_not_includes event.metadata.to_json, token
+  end
+
   test 'request locale is scoped to the secure form delivery owner and reset after rendering' do
     I18n.with_locale(:en) do
       constituent = create(:constituent, locale: 'en')
