@@ -250,6 +250,8 @@ module Admin
       spanish_template = create(:email_template, :html, name: template.name, locale: 'es', subject: 'Saved Spanish subject',
                                                         body: '<p>Saved Spanish body</p>', variables: { required: [], optional: [] }, updated_by: @admin)
       visit edit_admin_email_template_path(template)
+      parent_origin = page.evaluate_script('window.location.origin')
+      observe_preview_results
       within(find_by_id('body-editor-en').ancestor('form')) do
         fill_in 'Email Subject (EN)', with: 'Unsaved subject'
         find_by_id('body-editor-en').set('<p id="draft-preview" style="color: #123456;">Unsaved body</p>' \
@@ -261,7 +263,9 @@ module Admin
         assert_selector '#draft-preview', text: 'Unsaved body'
         assert_equal 'rgb(18, 52, 86)', page.evaluate_script('getComputedStyle(document.querySelector("#draft-preview")).color')
         assert_nil page.evaluate_script('window.previewScriptRan')
+        assert_equal ['null', parent_origin], page.evaluate_script('[window.origin, window.location.origin]')
       end
+      assert_preview_results [false]
       assert_current_path edit_admin_email_template_path(template)
       assert_equal saved_body, template.reload.body
       assert_equal 'Saved subject', template.subject
@@ -272,13 +276,18 @@ module Admin
         find_by_id('body-editor-en').set('<p>%<not_allowed>s</p>')
         click_button 'Preview Draft'
       end
-      within_frame('template-preview-en-document') { assert_selector '[role="alert"]', text: /Insert Variable/ }
+      within_frame('template-preview-en-document') do
+        assert_selector '[role="alert"]', text: /Insert Variable/
+        assert_equal ['null', parent_origin], page.evaluate_script('[window.origin, window.location.origin]')
+      end
       assert_selector '#template-preview-en [role="alert"][aria-atomic="true"]', text: /Preview unavailable.*correct the draft/
+      assert_preview_results [false, true]
       assert_selector '#body-editor-en', text: '%<not_allowed>s'
       assert_field 'Email Subject (EN)', with: 'Unsaved subject'
       within(find_by_id('body-editor-en').ancestor('form')) { click_button 'Preview Draft' }
       within_frame('template-preview-en-document') { assert_selector '[role="alert"]', text: /Insert Variable/ }
       assert_selector '#template-preview-en [role="alert"]', text: /Preview unavailable.*correct the draft/
+      assert_preview_results [false, true, true]
       take_screenshot('default-csp-invalid-html-draft', full: true, html: true)
       within(find_by_id('body-editor-en').ancestor('form')) do
         fill_in 'Email Subject (EN)', with: 'Corrected subject'
@@ -289,6 +298,7 @@ module Admin
         assert_selector '#retry-preview', text: 'Corrected draft'
         assert_selector 'p', text: 'Subject Preview: Corrected subject'
       end
+      assert_preview_results [false, true, true, false]
       assert_no_selector '#template-preview-en [role="alert"]'
       assert_equal saved_body, template.reload.body
       assert_no_parent_violations
@@ -310,7 +320,55 @@ module Admin
       take_screenshot('default-csp-spanish-html-draft', full: true, html: true)
     end
 
+    test 'an initial HTML srcdoc error can retry through the routed draft document' do
+      template = html_template
+      template.update_column(:body, '<p>%<not_allowed>s</p>')
+
+      visit edit_admin_email_template_path(template)
+      parent_origin = page.evaluate_script('window.location.origin')
+      observe_preview_results
+      assert_selector '#template-preview-en [role="alert"]', text: /Preview unavailable.*correct the draft/
+      within_frame('template-preview-en-document') do
+        assert_selector '[role="alert"]', text: /Insert Variable/
+        assert_equal ['null', 'null', 'about:srcdoc'], page.evaluate_script('[window.origin, window.location.origin, window.location.href]')
+      end
+      assert_equal [], page.evaluate_script('window.previewResults')
+      take_screenshot('default-csp-initial-html-draft-error', full: true, html: true)
+
+      within(find_by_id('body-editor-en').ancestor('form')) do
+        find_by_id('body-editor-en').set('<p id="initial-error-retry">Corrected initial draft</p>')
+        click_button 'Preview Draft'
+      end
+      within_frame('template-preview-en-document') do
+        assert_selector '#initial-error-retry', text: 'Corrected initial draft'
+        assert_equal ['null', parent_origin], page.evaluate_script('[window.origin, window.location.origin]')
+      end
+      assert_preview_results [false]
+      assert_no_selector '#template-preview-en [role="alert"]'
+      assert_equal '<p>%<not_allowed>s</p>', template.reload.body
+      assert_no_parent_violations
+      take_screenshot('default-csp-initial-html-draft-retry', full: true, html: true)
+    end
+
     private
+
+    def observe_preview_results
+      page.execute_script(<<~JS)
+        window.previewResults = [];
+        window.addEventListener('message', event => {
+          if (event.data?.type !== 'mat-vulcan:email-preview') return;
+          window.previewResults.push({ origin: event.origin, failed: event.data.failed,
+            ownFrame: event.source === document.getElementById('template-preview-en-document').contentWindow });
+          document.documentElement.dataset.previewResultCount = window.previewResults.length;
+        });
+      JS
+    end
+
+    def assert_preview_results(failures)
+      assert_selector "html[data-preview-result-count='#{failures.length}']"
+      assert_equal failures.map { |failed| { 'origin' => 'null', 'failed' => failed, 'ownFrame' => true } },
+                   page.evaluate_script('window.previewResults')
+    end
 
     def html_template
       create(:email_template, :html, subject: 'Saved subject', variables: { required: [], optional: [] }, updated_by: @admin,

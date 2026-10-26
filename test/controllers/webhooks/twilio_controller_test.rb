@@ -32,6 +32,58 @@ module Webhooks
       assert_equal false, response.parsed_body['success']
     end
 
+    test 'callback exceptions keep private provider details out of logs and JSON and allow retry' do
+      sentinel = 'private-fax-sentinel doctor@example.test token=secret-provider-token'
+      log = StringIO.new
+      notifier = MedicalProviderNotifier.new(@application)
+      original_metadata = @notification.metadata.deep_dup
+
+      assert_no_difference ['Event.count', 'Notification.count'] do
+        Rails.stub(:logger, ActiveSupport::Logger.new(log)) do
+          MedicalProviderNotifier.stub(:new, notifier) do
+            notifier.stub(:receive_fax_status, ->(*) { raise StandardError, sentinel }) do
+              post webhooks_twilio_fax_status_path, params: { FaxSid: 'FX_TEST_123', Status: 'delivered' }
+            end
+          end
+        end
+      end
+
+      assert_response :internal_server_error
+      assert_equal({ 'success' => false, 'error' => 'Callback could not be processed' }, response.parsed_body)
+      assert_not_includes response.body, sentinel
+      assert_not_includes log.string, sentinel
+      assert_includes log.string, 'Error handling fax status update: StandardError'
+      assert_equal original_metadata, @notification.reload.metadata
+
+      callback('delivered')
+      assert_equal 'delivered', @notification.reload.delivery_status
+    end
+
+    test 'invalid signature diagnostics omit query credentials' do
+      sentinel = 'private-fax-signature-token'
+      log = StringIO.new
+      validator = mock('signature validator')
+      validator.expects(:validate).returns(false)
+      MedicalProviderNotifier.expects(:new).never
+
+      assert_no_difference ['Event.count', 'Notification.count'] do
+        Rails.stub(:logger, ActiveSupport::Logger.new(log)) do
+          Rails.env.stub(:production?, true) do
+            Twilio::Security::RequestValidator.stub(:new, validator) do
+              post webhooks_twilio_fax_status_path(token: sentinel),
+                   params: { FaxSid: 'FX_TEST_123', Status: 'delivered' }, headers: { 'X-Twilio-Signature' => 'invalid' }
+            end
+          end
+        end
+      end
+
+      assert_response :forbidden
+      assert_equal({ 'error' => 'Invalid signature' }, response.parsed_body)
+      assert_includes log.string, 'Invalid Twilio signature for fax status callback'
+      assert_not_includes log.string, sentinel
+      assert_not_includes response.body, sentinel
+    end
+
     test 'a duplicate failure queues one fallback with original authorization' do
       assert_enqueued_jobs 1, only: EmailDelivery::MailDeliveryJob do
         2.times { callback('failed') }

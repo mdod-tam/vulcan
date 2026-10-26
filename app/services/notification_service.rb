@@ -670,13 +670,13 @@ class NotificationService
 
   def extract_raw_metadata(opts)
     raw_meta = opts[:metadata] || opts['metadata']
-    Rails.logger.debug { "NotificationService: finalized_metadata received metadata: #{raw_meta.inspect}" } if Rails.env.test?
+    Rails.logger.debug { "NotificationService: finalized_metadata received #{raw_meta.class.name}" } if Rails.env.test?
     raw_meta
   end
 
   def validate_and_normalize_metadata(raw_meta)
     unless raw_meta.nil? || raw_meta.is_a?(Hash)
-      Rails.logger.warn "NotificationService: Metadata received as #{raw_meta.class} (value: #{raw_meta.inspect}),
+      Rails.logger.warn "NotificationService: Metadata received as #{raw_meta.class.name},
       but metadata must be a Hash. Ignoring non-hash metadata."
       raw_meta = {}
     end

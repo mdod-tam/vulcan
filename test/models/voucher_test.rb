@@ -24,6 +24,17 @@ class VoucherTest < ActiveSupport::TestCase
     assert @voucher.valid?
   end
 
+  test 'status audit failure logs only its class and preserves the voucher update' do
+    error = RuntimeError.new('private-voucher-audit-value')
+    error.set_backtrace(['private-voucher-audit-backtrace'])
+    AuditEventService.stubs(:log).raises(error)
+    Rails.logger.expects(:error).with('Failed to log voucher status change: RuntimeError').once
+
+    @voucher.update!(status: :cancelled)
+
+    assert_equal 'cancelled', @voucher.reload.status
+  end
+
   test 'requires application' do
     @voucher.application = nil
     assert_not @voucher.valid?

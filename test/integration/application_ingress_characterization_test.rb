@@ -148,7 +148,7 @@ class ApplicationIngressCharacterizationTest < ActionDispatch::IntegrationTest
     response.stubs(:status).returns(status)
     response.stubs(:body).returns(HTTP::Response::Body.new(DocumentScanFixtures::ResponseStream.new(file_fixture('medical_certification_valid.pdf').binread)))
     HTTP.stubs(:timeout).with(30).returns(HTTP)
-    HTTP.stubs(:get).with('https://example.com/signed_doc.pdf').returns(response)
+    HTTP.stubs(:get).with('https://docuseal.com/signed_doc.pdf').returns(response)
 
     payload = {
       event_type: 'form.completed',
@@ -156,7 +156,7 @@ class ApplicationIngressCharacterizationTest < ActionDispatch::IntegrationTest
         'id' => 'submitter_789',
         'submission_id' => 'sub_123456',
         'email' => 'doctor@example.com',
-        'documents' => [{ 'url' => 'https://example.com/signed_doc.pdf' }],
+        'documents' => [{ 'url' => 'https://docuseal.com/signed_doc.pdf' }],
         'audit_log_url' => 'https://example.com/audit_log'
       }
     }

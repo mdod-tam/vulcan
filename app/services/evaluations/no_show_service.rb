@@ -23,10 +23,10 @@ module Evaluations
 
       success('Evaluation marked as no-show.', { evaluation: @evaluation })
     rescue ActiveRecord::RecordInvalid => e
-      Rails.logger.error("Error marking evaluation as no-show: #{e.message}")
+      Rails.logger.error("Error marking evaluation as no-show: #{e.class.name}")
       failure(e.message)
     rescue ArgumentError => e
-      Rails.logger.warn("Evaluations::NoShowService validation failed: #{e.message}")
+      Rails.logger.warn("Evaluations::NoShowService validation failed: #{e.class.name}")
       failure(e.message)
     end
 

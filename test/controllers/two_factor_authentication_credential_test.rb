@@ -220,6 +220,32 @@ class TwoFactorAuthenticationCredentialTest < ActionDispatch::IntegrationTest
     assert_response :success
   end
 
+  { verification: WebAuthn::Error, creation: StandardError }.each do |failure_type, error_class|
+    test "WebAuthn enrollment #{failure_type} failure hides exception details at the routed response" do
+      sensitive_message = 'private-enrollment@example.test token=private-enrollment-secret'
+      failure = error_class.new(sensitive_message)
+      logs = []
+      log_level = failure_type == :verification ? :warn : :error
+
+      WebAuthn::Credential.stub(:from_create, ->(_attributes) { raise failure }) do
+        Rails.logger.stub(log_level, ->(message) { logs << message }) do
+          assert_no_difference('WebauthnCredential.count') do
+            post create_credential_two_factor_authentication_path(type: 'webauthn'),
+                 params: { two_factor_credential: { id: 'key', rawId: 'key', type: 'public-key' } },
+                 as: :json
+          end
+        end
+      end
+
+      assert_response :unprocessable_content
+      assert_equal({ 'error' => I18n.t('security_key_verification.feedback.failed'),
+                     'error_code' => "#{failure_type}_failed" }, response.parsed_body)
+      assert(logs.any? { |message| message.include?(error_class.name) })
+      assert_not_includes [response.body, logs].join, sensitive_message
+      assert_not_includes [response.body, logs].join, 'private-enrollment-secret'
+    end
+  end
+
   test 'should require authentication' do
     sign_out
 

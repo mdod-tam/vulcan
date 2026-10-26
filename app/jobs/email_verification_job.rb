@@ -25,7 +25,7 @@ class EmailVerificationJob < ApplicationJob
     # If we get here, the email format is valid and MX records exist
     medical_provider_email.update(status: :verified)
   rescue StandardError => e
-    Rails.logger.error "Email verification failed: #{e.message}"
+    Rails.logger.error "Email verification failed: #{e.class.name}"
     medical_provider_email.update(status: :failed)
   end
 end

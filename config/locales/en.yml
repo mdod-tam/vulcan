@@ -234,6 +234,8 @@ en:
         # Support must resolve distinct people who share both values.
         duplicate_identity: "%{name} is already associated with your account with this name and birthdate. If this is a different person, contact the MAT Team at %{support_email} or %{support_phone}."
   applications:
+    creation:
+      failure: "Your application could not be saved. Please try again."
     autosave:
       # Autosave status for the constituent application form, announced through a polite live region.
       saving: "Saving draft…"

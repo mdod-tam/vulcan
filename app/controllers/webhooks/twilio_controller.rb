@@ -27,7 +27,7 @@ module Webhooks
         render json: { success: false, error: 'Notification not found' }, status: :ok
       end
     rescue StandardError => e
-      Rails.logger.error "Error handling fax status update: #{e.message}"
+      Rails.logger.error "Error handling fax status update: #{e.class.name}"
       render json: { success: false, error: 'Callback could not be processed' }, status: :internal_server_error
     end
 
@@ -44,7 +44,7 @@ module Webhooks
       url = request.original_url
 
       unless validator.validate(url, params.to_unsafe_h, signature)
-        Rails.logger.warn "Invalid Twilio signature for request to #{url}"
+        Rails.logger.warn 'Invalid Twilio signature for fax status callback'
         render json: { error: 'Invalid signature' }, status: :forbidden
         return false
       end

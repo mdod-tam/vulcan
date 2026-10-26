@@ -9,6 +9,29 @@ module Admin
       sign_in_for_integration_test @admin
     end
 
+    test 'invalid role feedback stays available to the admin without logging the submitted value' do
+      user = create(:constituent)
+      original_type = user.type
+      submitted_role = 'private-role-sentinel person@example.test token=private-role-token'
+      log = StringIO.new
+
+      assert_no_difference ['User.count', 'RoleCapability.count', 'Event.count'] do
+        Rails.stub(:logger, ActiveSupport::Logger.new(log)) do
+          patch update_role_admin_user_path(user), params: { role: submitted_role }, as: :json
+        end
+      end
+
+      assert_response :unprocessable_content
+      assert_equal({ 'success' => false,
+                     'message' => "Invalid role specified: '#{submitted_role}'. Please select a valid role." }, response.parsed_body)
+      assert_equal original_type, user.reload.type
+      assert_includes log.string, "Received role update for user_id: #{user.id}"
+      assert_includes log.string, "Invalid role for user_id: #{user.id}"
+      %w[private-role-sentinel person@example.test private-role-token].each do |value|
+        assert_not_includes log.string, value
+      end
+    end
+
     test 'show surfaces destructive admin actions with native confirmation messages' do
       user = create(:constituent)
 

@@ -93,6 +93,53 @@ class TwoFactorAuthenticationWebauthnTest < ActionDispatch::IntegrationTest
     assert_redirected_to sign_in_path
   end
 
+  %i[en es].each do |locale|
+    test "#{locale} options without password state refuse JSON and redirect browser navigation" do
+      options_path = verification_options_two_factor_authentication_path(type: 'webauthn', locale: locale)
+
+      get options_path, headers: { 'Accept' => 'application/json' }
+
+      assert_response :unauthorized
+      assert_equal({ 'error' => 'Authentication required' }, response.parsed_body)
+      assert_nil response.headers['Location']
+
+      ['text/html', 'text/vnd.turbo-stream.html'].each do |accept|
+        get options_path, headers: { 'Accept' => accept }
+        assert_redirected_to sign_in_path(locale: locale)
+      end
+
+      post process_verification_two_factor_authentication_path(type: 'webauthn', locale: locale),
+           params: { two_factor_authentication: { id: @credential.external_id } }, as: :json
+      assert_response :unprocessable_content
+      assert_equal 'user_session', response.parsed_body['error_code']
+      assert_equal I18n.t('two_factor_verification.errors.user_session', locale: locale), response.parsed_body['error']
+    end
+
+    test "#{locale} options after pending state was cleared require a fresh password step" do
+      post sign_in_path(locale: locale), params: { email: @user.email, password: 'password1234' }
+      assert_redirected_to verify_method_two_factor_authentication_path(type: 'webauthn', locale: locale)
+      options_path = verification_options_two_factor_authentication_path(type: 'webauthn', locale: locale)
+      get options_path, headers: { 'Accept' => 'application/json' }
+      assert_response :success
+      assert response.parsed_body['challenge'].present?
+
+      @user.update!(status: :suspended)
+      post process_verification_two_factor_authentication_path(type: 'webauthn', locale: locale),
+           params: { two_factor_authentication: { id: @credential.external_id } }, as: :json
+      assert_response :unprocessable_content
+      assert_equal 'user_session', response.parsed_body['error_code']
+      @user.update!(status: :active)
+
+      get options_path, headers: { 'Accept' => 'application/json' }
+
+      assert_response :unauthorized
+      assert_equal({ 'error' => 'Authentication required' }, response.parsed_body)
+      assert_nil response.headers['Location']
+      assert_empty @user.sessions
+      assert_equal 0, @credential.reload.sign_count
+    end
+  end
+
   test 'should have proper error handling for malformed credentials' do
     # Step 1: Sign in, expect redirect to 2FA verify page
     post sign_in_path, params: { email: @user.email, password: 'password1234' }

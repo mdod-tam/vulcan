@@ -69,7 +69,7 @@ module Admin
         template_id: @email_template.id
       )
     rescue StandardError => e
-      Rails.logger.error("Failed to render template preview: #{e.message}")
+      Rails.logger.error("Failed to render template preview: #{e.class.name}")
       friendly_error = helpers.template_render_error_message(e)
       @rendered_subject = 'Preview unavailable'
       @rendered_body = friendly_error
@@ -151,8 +151,7 @@ module Admin
         error_message: helpers.template_validation_error_messages(target_template.errors.full_messages).join(', ')
       ))
     rescue StandardError => e
-      Rails.logger.error("Failed to render draft template preview: #{e.message}")
-      Rails.logger.error(e.backtrace.join("\n")) if e.backtrace
+      Rails.logger.error("Failed to render draft template preview: #{e.class.name}")
       render_draft_preview(**draft_preview_error_locals_for(
         target_template || @email_template,
         error_message: helpers.template_render_error_message(e)
@@ -486,8 +485,7 @@ module Admin
     end
 
     def handle_test_email_error(error)
-      Rails.logger.error("Failed to send test email for template #{@email_template.id}: #{error.message}")
-      Rails.logger.error(error.backtrace.join("\n"))
+      Rails.logger.error("Failed to send test email for template #{@email_template.id}: #{error.class.name}")
 
       @test_email_form = ::Admin::TestEmailForm.new(
         email: params.dig(:admin_test_email_form, :email) || current_user.email,

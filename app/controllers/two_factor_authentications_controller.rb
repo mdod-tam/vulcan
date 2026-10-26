@@ -397,7 +397,7 @@ class TwoFactorAuthenticationsController < ApplicationController
 
   def ensure_two_factor_initiated_unless_skipped
     return if session[:skip_2fa] || two_factor_authentication_initiated?
-    return ensure_two_factor_initiated unless action_name == 'process_verification'
+    return respond_with_authentication_required unless action_name == 'process_verification'
 
     @type = params[:type]
     respond_to { |format| handle_failed_verification(format, :user_session) }

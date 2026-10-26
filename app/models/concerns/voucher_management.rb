@@ -40,7 +40,7 @@ module VoucherManagement
       voucher
     end
   rescue StandardError => e
-    Rails.logger.error "Failed to assign voucher for application #{id}: #{e.message}"
+    Rails.logger.error "Failed to assign voucher for application #{id}: #{e.class.name}"
     raise if raise_on_failure
 
     false

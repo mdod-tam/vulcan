@@ -414,7 +414,7 @@ module Applications
       end
 
       assert result.failure?
-      assert_includes result.error_messages, 'dependent audit unavailable'
+      assert_includes result.error_messages, I18n.t('applications.creation.failure', locale: :es)
       assert_equal application_before, application.reload.attributes
       assert_equal dependent_before, @dependent.reload.attributes
     end

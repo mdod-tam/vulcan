@@ -245,6 +245,8 @@ es:
         stale_request: "Este formulario estaba desactualizado, por lo que no se cambió nada. Vuelva a cargar la página e inténtelo de nuevo."
         duplicate_identity: "%{name} ya está asociado a su cuenta con este nombre y fecha de nacimiento. Si se trata de otra persona, comuníquese con el equipo de MAT al %{support_email} o %{support_phone}."
   applications:
+    creation:
+      failure: "No se pudo guardar su solicitud. Inténtelo de nuevo."
     # El nombre del botón queda en inglés a propósito: este formulario todavía no está traducido.
     autosave:
       saving: "Guardando borrador…"

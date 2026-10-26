@@ -17,8 +17,7 @@ module Applications
       preload_delivery_owners(events)
       events.sort_by(&:created_at).reverse
     rescue StandardError => e
-      Rails.logger.error "Failed to build audit logs: #{e.message}"
-      Rails.logger.error e.backtrace.join("\n")
+      Rails.logger.error "Failed to build audit logs: #{e.class.name}"
       add_error("Failed to build audit logs: #{e.message}")
       []
     end
@@ -51,8 +50,7 @@ module Applications
 
       deduped
     rescue StandardError => e
-      Rails.logger.error "Failed to build deduplicated audit logs: #{e.message}"
-      Rails.logger.error e.backtrace.join("\n")
+      Rails.logger.error "Failed to build deduplicated audit logs: #{e.class.name}"
       add_error("Failed to build deduplicated audit logs: #{e.message}")
       []
     end

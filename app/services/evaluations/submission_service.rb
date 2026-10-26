@@ -41,7 +41,7 @@ module Evaluations
       Rails.logger.error "Evaluation submission failed for ID #{@evaluation&.id}: #{e.class.name}"
       failure(e.message)
     rescue ArgumentError => e
-      Rails.logger.warn("Evaluations::SubmissionService validation failed: #{e.message}")
+      Rails.logger.warn("Evaluations::SubmissionService validation failed: #{e.class.name}")
       failure(e.message)
     rescue Equipment::Conflict => e
       failure(e.message)

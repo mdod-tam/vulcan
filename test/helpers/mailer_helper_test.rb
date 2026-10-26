@@ -53,4 +53,13 @@ class MailerHelperTest < ActionView::TestCase
     date = Date.new(2025, 3, 10)
     assert_equal 'March 10 2025', format_date(date, :unknown_format)
   end
+
+  test 'format_date retains its fallback without logging the date or exception text' do
+    date = Date.new(2025, 3, 10)
+    date.stubs(:strftime).raises(ArgumentError, 'private-date-value')
+    date.expects(:inspect).never
+    Rails.logger.expects(:error).with('Error formatting date: ArgumentError').once
+
+    assert_equal '2025-03-10', format_date(date)
+  end
 end

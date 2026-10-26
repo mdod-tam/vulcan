@@ -16,6 +16,8 @@ Saved, draft, and test-email HTML previews share a [sandboxed iframe](../../app/
 
 Saved and test-email GET documents block scripts entirely. An unsaved HTML draft response permits only a fixed, server-authored result reporter with that response's script nonce. Its sandbox allows scripts while retaining an opaque origin, without `allow-same-origin`. Editable HTML receives no script nonce, external scripts remain blocked, and script attributes are disabled. The reporter sends a fixed message type and success/failure boolean to the parent. The [parent controller](../../app/javascript/controllers/admin/email_preview_controller.js) checks the exact iframe window, opaque origin, message type, and boolean before announcing a fixed error string. It does not insert message HTML or draft error text into the parent.
 
+The reporter runs in the routed draft response. Its `window.location.origin` is the application URL's origin and explicitly targets the parent; the sandbox's `window.origin` and received message origin are `null`. An initial rendering error instead uses an alert-only `about:srcdoc` document, whose URL origin is `null`. That document has no reporter: the parent error is already rendered, and a retry navigates the named iframe to the routed draft response.
+
 Draft preview submits the editor's validated, unsaved values into that iframe. It uses the same template renderer and sample-data owner as saved preview, without changing stored templates or delivered email markup. Text previews remain escaped application content. Preview browser behavior does not establish how a recipient's email client will render the message.
 
 ## Reports and logging

@@ -119,7 +119,7 @@ module UserRolesAndCapabilities
       Rails.logger.info "Successfully added capability #{capability} to user #{id}"
       reset_all_caches
     else
-      Rails.logger.error "Failed to add capability #{capability} to user #{id}: #{new_capability.errors.full_messages}"
+      Rails.logger.error "Failed to add capability to user #{id}: validation_failed attributes=#{new_capability.errors.attribute_names.join(',')}"
     end
     new_capability
   end

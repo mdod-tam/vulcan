@@ -51,7 +51,7 @@ module ActiveStorageHelper
       Rails.application.routes.url_helpers.rails_blob_url(attachment)
     end
   rescue StandardError => e
-    Rails.logger.error "Error generating representation URL: #{e.message}"
+    Rails.logger.error "Error generating representation URL: #{e.class.name}"
     nil
   end
 end

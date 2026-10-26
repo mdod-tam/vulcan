@@ -38,6 +38,80 @@ module ConstituentPortal
       end
     end
 
+    test 'unexpected create failures stay private and preserve the dependent form for retry' do
+      guardian, dependent = guardian_and_dependent
+      sign_in_for_integration_test(guardian)
+      sentinel = 'private-create-sentinel person@example.test token=secret-proof-token'
+      error = StandardError.new(sentinel)
+      log = StringIO.new
+
+      [[:en, 'text/html'], [:es, 'text/vnd.turbo-stream.html']].each do |locale, accept|
+        submitted = {
+          save_draft: 'Save Application', constituent: { locale: locale },
+          application: {
+            user_id: dependent.id, household_size: '3', annual_income: '50000', hearing_disability: '1',
+            physical_address_1: '123 Retry Street', city: 'Baltimore', state: 'MD', zip_code: '21201',
+            medical_provider_attributes: { name: 'Dr. Retry', phone: '2025551234', email: 'retry@example.com' }
+          }
+        }
+
+        assert_no_difference ['Application.count', 'Event.count', 'Notification.count'] do
+          Rails.stub(:logger, ActiveSupport::Logger.new(log)) do
+            Applications::ApplicationCreator.stub(:call, ->(*) { raise error }) do
+              post constituent_portal_applications_path, params: submitted, headers: { 'Accept' => accept }
+            end
+          end
+        end
+
+        assert_response :unprocessable_content
+        assert_includes response.body, I18n.t('applications.creation.failure', locale: locale)
+        assert_not_includes response.body, sentinel
+        assert_not_includes log.string, sentinel
+        assert_includes log.string, 'Error creating application: StandardError'
+        assert_select 'input[name="application[user_id]"][value=?]', dependent.id.to_s
+        assert_select 'input[name="application[physical_address_1]"][value=?]', '123 Retry Street'
+        assert_select 'input[name="application[medical_provider_attributes][name]"][value=?]', 'Dr. Retry'
+
+        post constituent_portal_applications_path, params: submitted, headers: { 'Accept' => accept }
+        assert_response :redirect
+        draft = dependent.applications.draft.sole
+        assert_equal guardian.id, draft.managing_guardian_id
+        assert_equal 'Dr. Retry', draft.medical_provider_name
+      end
+    end
+
+    test 'unexpected creator failures are private through create and update routes' do
+      draft = create(:application, :draft, user: @user)
+      sentinel = 'private-creator-sentinel person@example.test token=secret-proof-token'
+      log = StringIO.new
+      submitted = {
+        save_draft: 'Save Application', constituent: { locale: 'es' },
+        application: { household_size: '3', annual_income: '50000', hearing_disability: '1' }
+      }
+
+      failures = [
+        [:post, constituent_portal_applications_path, 'text/html', User, :lock_for_merge_integrity!],
+        [:post, constituent_portal_applications_path, 'text/vnd.turbo-stream.html', AuditEventService, :log],
+        [:patch, constituent_portal_application_path(draft), 'text/vnd.turbo-stream.html', User, :lock_for_merge_integrity!]
+      ]
+
+      failures.each do |method, path, accept, owner, operation|
+        assert_no_difference ['Application.count', 'Event.count', 'Notification.count'] do
+          Rails.stub(:logger, ActiveSupport::Logger.new(log)) do
+            owner.stub(operation, ->(*) { raise StandardError, sentinel }) do
+              public_send(method, path, params: submitted, headers: { 'Accept' => accept })
+            end
+          end
+        end
+
+        assert_response :unprocessable_content
+        assert_includes response.body, I18n.t('applications.creation.failure', locale: :es)
+        assert_not_includes response.body, sentinel
+        assert_not_includes log.string, sentinel
+        assert_includes log.string, 'ApplicationCreator failed: StandardError'
+      end
+    end
+
     test 'should handle array values for self_certify_disability' do
       unique_user = create(:constituent, :with_disabilities,
                            email: "checkbox_test_#{Time.now.to_i}_#{rand(1000)}@example.com")

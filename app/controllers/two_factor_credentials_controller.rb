@@ -573,10 +573,10 @@ class TwoFactorCredentialsController < ApplicationController
     case error_type
     when 'verification'
       Rails.logger.warn("[2FA_CREDENTIAL] WebAuthn credential verification failed for user #{current_user.id}: #{error.class.name}")
-      render json: { error: "Verification failed: #{error.message}" }, status: :unprocessable_content
+      render json: { error: t('security_key_verification.feedback.failed'), error_code: 'verification_failed' }, status: :unprocessable_content
     when 'creation'
       Rails.logger.error("[2FA_CREDENTIAL] Error creating WebAuthn credential for user #{current_user.id}: #{error.class.name}")
-      render json: { error: "Error creating credential: #{error.message}" }, status: :unprocessable_content
+      render json: { error: t('security_key_verification.feedback.failed'), error_code: 'creation_failed' }, status: :unprocessable_content
     end
   end
 end

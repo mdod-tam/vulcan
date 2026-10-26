@@ -385,10 +385,10 @@ module ConstituentPortal
       ).call
       return true if result.success?
 
-      Rails.logger.warn("Portal dependent duplicate review case failed: #{result.message}")
+      Rails.logger.warn('Portal dependent duplicate review case failed')
       false
     rescue ActiveRecord::ActiveRecordError => e
-      Rails.logger.warn("Portal dependent duplicate review case failed: #{e.message}")
+      Rails.logger.warn("Portal dependent duplicate review case failed: #{e.class.name}")
       false
     end
 
@@ -528,7 +528,7 @@ module ConstituentPortal
                        end
 
       error_prefix = Rails.env.test? ? '[TEST_VALIDATION] ' : ''
-      Rails.logger.error "#{error_prefix}Failed to create dependent: #{error_messages.join(', ')}"
+      Rails.logger.error "#{error_prefix}Failed to create dependent: #{errors.class.name}"
 
       # Rebuild from submitted fields because rollback leaves generated contact values on the failed user object.
       # Showing those values could expose internal placeholders and change contact ownership on retry.

@@ -287,7 +287,7 @@ class Application < ApplicationRecord
     Rails.cache.delete('admin_dashboard_metrics')
     Rails.cache.delete('dashboard_metrics_training_requests')
   rescue StandardError => e
-    Rails.logger.warn "[Application] Cache expiry failed (non-fatal): #{e.message}"
+    Rails.logger.warn "[Application] Cache expiry failed (non-fatal): #{e.class.name}"
   end
 
   def self.batch_update_status(ids, new_status, actor:) # rubocop:disable Metrics/PerceivedComplexity

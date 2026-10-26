@@ -31,6 +31,15 @@ class UserTest < ActiveSupport::TestCase
     assert_match(/WHERE.+"users"\."type" = 'Users::Administrator'/, scope_sql)
   end
 
+  test 'invalid capability logs only validation category and attributes' do
+    Rails.logger.expects(:error).with("Failed to add capability to user #{@existing_constituent.id}: validation_failed attributes=capability").once
+
+    capability = @existing_constituent.add_capability('private-capability-value')
+
+    assert_not capability.persisted?
+    assert_includes capability.errors.attribute_names, :capability
+  end
+
   test 'should not save constituent with duplicate email' do
     constituent = build(:constituent, email: @existing_constituent.email)
     assert_not constituent.save, 'Saved constituent with duplicate email'

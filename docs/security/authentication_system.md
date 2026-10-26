@@ -58,6 +58,8 @@ Credential lookup, challenge, and signature failures return the same JSON 422 re
 
 A verified key followed by a session creation failure returns `session_failed` with guidance to sign in again. If the temporary MFA user no longer resolves, verification returns `user_session` with the same sign-in guidance. JSON verification failures use 422 regardless of locale. Non-JSON HTTP failures produce a status-only console diagnostic and generic user feedback.
 
+Missing or cleared pending MFA state makes a JSON security-key options request return 401; HTML and Turbo navigation redirect to sign-in. The key page uses its rendered English or Spanish sign-in guidance for that 401 without reading server error details. Reactivating an account does not restore cleared pending state: start again with password sign-in before another verification attempt.
+
 WebAuthn enrollment uses **Maryland Accessible Telecommunications** as its display name. The [WebAuthn initializer](../../config/initializers/webauthn.rb) configures the RP ID (the site identity the credential is bound to) and the allowed origins separately. These define the credential scope and accepted origins.
 
 TOTP provisioning URIs retain `MatVulcan` as the issuer, a deliberate exception to the public program name. A provisioning URI is the code an authenticator app scans. The issuer labels new enrollments. Changing it does not rename existing authenticator entries or alter TOTP codes.

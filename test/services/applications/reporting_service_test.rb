@@ -384,8 +384,8 @@ module Applications
 
     test 'handles errors gracefully' do
       Rails.logger.stubs(:error)
-      Rails.logger.expects(:error).with(regexp_matches(/Error generating dashboard data: Test error/)).once
-      Rails.logger.expects(:error).with(regexp_matches(/Error generating index data: Test error/)).once
+      Rails.logger.expects(:error).with('Error generating dashboard data: StandardError').once
+      Rails.logger.expects(:error).with('Error generating index data: StandardError').once
 
       current_fy_year = Date.current.month >= 7 ? Date.current.year : Date.current.year - 1
       current_fy_start = Date.new(current_fy_year, 7, 1)

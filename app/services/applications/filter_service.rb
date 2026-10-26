@@ -52,8 +52,7 @@ module Applications
     end
 
     def handle_filter_error(error)
-      Rails.logger.error "Error applying filters: #{error.message}"
-      Rails.logger.error error.backtrace.join("\n")
+      Rails.logger.error "Error applying filters: #{error.class.name}"
       # A failure retains the original scope in Result#data.
       failure("Error applying filters: #{error.message}", scope)
     end

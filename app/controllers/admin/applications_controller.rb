@@ -291,7 +291,7 @@ module Admin
       redirect_to admin_application_path(@application),
                   alert: e.record.errors.full_messages.to_sentence.presence || e.message
     rescue StandardError => e
-      Rails.logger.error "Failed to request evaluation for application #{@application.id}: #{e.message}"
+      Rails.logger.error "Failed to request evaluation for application #{@application.id}: #{e.class.name}"
       redirect_to admin_application_path(@application),
                   alert: "Failed to request evaluation: #{e.message}"
     end
@@ -675,7 +675,7 @@ module Admin
         result
       end
     rescue StandardError => e
-      Rails.logger.error "Filter error: #{e.message}"
+      Rails.logger.error "Filter error: #{e.class.name}"
       flash.now[:alert] = t(unfiltered_error)
       scope
     end
@@ -683,7 +683,7 @@ module Admin
     def paginate(scope)
       pagy(scope, items: 20)
     rescue StandardError => e
-      Rails.logger.error "Pagination failed: #{e.message}"
+      Rails.logger.error "Pagination failed: #{e.class.name}"
       [Pagy.new(count: scope.count, page: 1), scope.limit(20)]
     end
 

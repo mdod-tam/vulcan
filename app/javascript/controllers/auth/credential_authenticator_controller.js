@@ -43,7 +43,9 @@ class CredentialAuthenticatorController extends Controller {
         })
         if (!response.ok) {
           console.error(`Security-key options request failed with status ${response.status}`)
-          this.feedbackTarget.textContent = this.messagesValue.optionsError
+          this.feedbackTarget.textContent = response.status === 401
+            ? (this.messagesValue.user_session || this.messagesValue.optionsError)
+            : this.messagesValue.optionsError
           return
         }
         const options = await response.json()
@@ -68,7 +70,7 @@ class CredentialAuthenticatorController extends Controller {
       )
       if (result.success) this.feedbackTarget.textContent = this.messagesValue.verified
     } catch (error) {
-      console.error("Security-key verification could not be completed:", error)
+      console.error("Security-key verification could not be completed:", error.name)
       if (this.hasFeedbackTarget) this.feedbackTarget.textContent = failureMessage
     } finally {
       button.disabled = false

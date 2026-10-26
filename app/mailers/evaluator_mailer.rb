@@ -47,7 +47,7 @@ class EvaluatorMailer < ApplicationMailer
   def load_email_template(template_name, locale: nil)
     find_text_template(template_name, locale: locale)
   rescue ActiveRecord::RecordNotFound => e
-    Rails.logger.error "Missing EmailTemplate for #{template_name}: #{e.message}"
+    Rails.logger.error "Missing EmailTemplate for #{template_name}: #{e.class.name}"
     raise "Email templates not found for #{template_name}"
   end
 

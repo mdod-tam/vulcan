@@ -24,8 +24,7 @@ module Applications
 
       success(nil, data)
     rescue StandardError => e
-      Rails.logger.error "Error generating dashboard data: #{e.message}"
-      Rails.logger.error e.backtrace.join("\n")
+      Rails.logger.error "Error generating dashboard data: #{e.class.name}"
       failure("Error generating dashboard data: #{e.message}", {})
     end
 
@@ -41,8 +40,7 @@ module Applications
 
       success(nil, data)
     rescue StandardError => e
-      Rails.logger.error "Error generating index data: #{e.message}"
-      Rails.logger.error e.backtrace.join("\n")
+      Rails.logger.error "Error generating index data: #{e.class.name}"
       failure("Error generating index data: #{e.message}", {})
     end
 
@@ -65,8 +63,7 @@ module Applications
                 status_counts: status_counts
               })
     rescue StandardError => e
-      Rails.logger.error "Error generating index chart data: #{e.message}"
-      Rails.logger.error e.backtrace.join("\n")
+      Rails.logger.error "Error generating index chart data: #{e.class.name}"
       failure("Error generating index chart data: #{e.message}", {})
     end
 
@@ -94,8 +91,7 @@ module Applications
                 }
               })
     rescue StandardError => e
-      Rails.logger.error "Error generating MFR reports data: #{e.message}"
-      Rails.logger.error e.backtrace.join("\n")
+      Rails.logger.error "Error generating MFR reports data: #{e.class.name}"
       failure("Error generating MFR reports data: #{e.message}", {})
     end
 
@@ -361,7 +357,7 @@ module Applications
       data[:dependent_users_count] = User.respond_to?(:with_guardians) ? User.with_guardians.count : 0
       data[:dependent_applications_count] = Application.where.not(managing_guardian_id: nil).count
     rescue NoMethodError => e
-      Rails.logger.error "Error in guardian relationship counts: #{e.message}"
+      Rails.logger.error "Error in guardian relationship counts: #{e.class.name}"
       data[:guardian_users_count] = 0
       data[:dependent_users_count] = 0
       data[:dependent_applications_count] = 0

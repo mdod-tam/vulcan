@@ -81,7 +81,7 @@ module EvaluationManagement
     end
     true
   rescue ::ActiveRecord::RecordInvalid => e
-    Rails.logger.error "Failed to assign evaluator: #{e.message}"
+    Rails.logger.error "Failed to assign evaluator: #{e.class.name}"
     errors.add(:base, e.message)
     false
   end

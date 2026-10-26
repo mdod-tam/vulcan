@@ -222,8 +222,7 @@ module ApplicationDataLoading
   # @param ids [Array<Integer>] Application IDs being processed
   # @return [Hash] Empty hash as fallback
   def handle_attachments_error(error, ids)
-    Rails.logger.error "Error preloading attachments for applications #{ids}: #{error.message}"
-    Rails.logger.error error.backtrace.join("\n") if ENV['VERBOSE_TESTS']
+    Rails.logger.error "Error preloading attachments for applications #{ids}: #{error.class.name}"
     {}
   end
 end
