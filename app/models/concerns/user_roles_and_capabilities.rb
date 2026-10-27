@@ -106,8 +106,4 @@ module UserRolesAndCapabilities
   def assignable_trainer?
     persisted? && public_login_active? && can_train?
   end
-
-  def prevent_self_role_update?(current_user, new_role)
-    !(self == current_user && type != new_role)
-  end
 end

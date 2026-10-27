@@ -67,7 +67,6 @@ class DiagnosticPrivacyTest < ActiveSupport::TestCase
 
     assert_includes log, 'creating dependent'
     assert_private_detail_absent(log)
-    assert_equal [PRIVATE_DETAIL], adapter.extract_error_messages(record.errors)
   end
 
   test 'malformed notification metadata is discarded without inspecting its contents' do

@@ -42,11 +42,6 @@ class BaseService
     false
   end
 
-  # Same as add_error, for call sites that read as a predicate.
-  def add_error?(message)
-    add_error(message)
-  end
-
   # Logs the exception class with optional context, then records the exception message.
   def log_error(exception, context = nil)
     error_message = if context.is_a?(String)

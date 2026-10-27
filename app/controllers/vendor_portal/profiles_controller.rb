@@ -59,30 +59,10 @@ module VendorPortal
     end
 
     def vendor_params
-      permitted = params.expect(
-        users_vendor: [:business_name,
-                       :business_tax_id,
-                       :website_url,
-                       :address_line1,      # legacy key that may be submitted
-                       :address_line2,      # legacy key that may be submitted
-                       :physical_address_1,
-                       :physical_address_2,
-                       :city,
-                       :state,
-                       :zip_code,
-                       :phone,
-                       :email,
-                       :w9_form,
-                       :w9_form_signed_id,
-                       :terms_accepted]
+      params.expect(
+        users_vendor: %i[business_name business_tax_id website_url physical_address_1 physical_address_2
+                         city state zip_code phone email w9_form w9_form_signed_id terms_accepted]
       )
-
-      # Map legacy keys to new column names if new ones are blank.
-      permitted[:physical_address_1] = permitted.delete(:address_line1) if permitted[:physical_address_1].blank? && permitted[:address_line1].present?
-
-      permitted[:physical_address_2] = permitted.delete(:address_line2) if permitted[:physical_address_2].blank? && permitted[:address_line2].present?
-
-      permitted
     end
   end
 end
