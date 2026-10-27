@@ -33,4 +33,24 @@ class AssignTrainerTest < ApplicationSystemTestCase
 
     assert_equal @trainer.id, @application.reload.active_training_session&.trainer_id
   end
+
+  test 'Escape does not dismiss the reassignment dialog while its request is pending' do
+    create(:user, :trainer, first_name: 'Sam', last_name: 'Replacement')
+    @application.update!(assigned_trainer: @trainer)
+    create(:training_session, :scheduled, application: @application, trainer: @trainer)
+    dialog = '#trainer-reassign-confirm-dialog'
+
+    visit admin_application_path(@application)
+    click_button 'Reassign Trainer'
+    assert_selector "#{dialog}[open]"
+
+    # Turbo marks the dialog busy from the moment the form submits until the response arrives.
+    page.execute_script("document.querySelector('#{dialog}').dataset.busy = 'true'")
+    find("#{dialog} select").send_keys(:escape)
+    assert_selector "#{dialog}[open]"
+
+    page.execute_script("delete document.querySelector('#{dialog}').dataset.busy")
+    find("#{dialog} select").send_keys(:escape)
+    assert_no_selector "#{dialog}[open]"
+  end
 end

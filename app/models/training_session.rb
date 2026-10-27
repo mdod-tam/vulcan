@@ -22,6 +22,20 @@ class TrainingSession < ApplicationRecord
 
   # The canonical open-session set includes requested rows. StatusManagement.active excludes them.
   scope :assigned_or_scheduled, -> { where(status: OPEN_STATUSES) }
+
+  # Open assigned work for access changes and recovery queues: everything neither completed nor cancelled, so
+  # requested and legacy rescheduled rows count. A no-show is still owed a follow-up only until a later session
+  # exists for the application.
+  scope :open_assigned, lambda {
+    where.not(status: %i[completed cancelled]).where(<<~SQL.squish, no_show: statuses.fetch('no_show'))
+      training_sessions.status <> :no_show OR NOT EXISTS (
+        SELECT 1 FROM training_sessions later
+        WHERE later.application_id = training_sessions.application_id
+          AND (later.created_at, later.id) > (training_sessions.created_at, training_sessions.id)
+      )
+    SQL
+  }
+
   scope :latest_per_application, lambda {
     select('DISTINCT ON (training_sessions.application_id) training_sessions.*')
       .order('training_sessions.application_id, training_sessions.created_at DESC, training_sessions.id DESC')
@@ -105,14 +119,16 @@ class TrainingSession < ApplicationRecord
                .count
   end
 
-  # Locks the acting user, then the application, then this session, the order access changes use.
+  # Locks the acting user, then the application, then this session, the order access changes use. The locked row
+  # decides whether the actor may still work: a request that loaded the user before a capability change commits
+  # must not act on the stale copy.
   def with_current_trainer_lock(actor)
     transaction do
-      User.lock_for_merge_integrity!(actor) if actor&.persisted?
+      actor = User.lock_for_merge_integrity!(actor).fetch(actor.id) if actor&.persisted?
       application.with_lock do
         with_lock do
           errors.clear
-          raise TrainingSessions::OperationError, I18n.t('training_rules.current_trainer_change') unless application.current_trainer?(actor) && trainer_id == actor&.id
+          raise TrainingSessions::OperationError, I18n.t('training_rules.current_trainer_change') unless assigned_to?(actor)
 
           yield
         end

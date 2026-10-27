@@ -123,11 +123,11 @@ module Users
 
     def role_plan
       klass = @intent.role
-      return noop("#{@target.full_name}'s role is already #{role_name(klass)}.") if @target.type == klass.name
+      return noop("Role is already #{role_name(klass)}.") if @target.type == klass.name
       return refuse('Add a date of birth before making this user a constituent.') if klass <= Users::Constituent && @target.date_of_birth.blank?
 
       { status: :changed, after: UserRolesAndCapabilities::CAPABILITY_MATRIX.dig(klass.name.demodulize, :provides).to_a,
-        message: "#{@target.full_name}'s role updated to #{role_name(klass)}.", apply: -> { convert_role!(klass) } }
+        message: "Role updated to #{role_name(klass)}.", apply: -> { convert_role!(klass) } }
     end
 
     # Explicit grants never survive a role change: effective access comes from the new role alone.
@@ -248,6 +248,7 @@ module Users
       @role_before ||= @from_role ? UserRolesAndCapabilities::CAPABILITY_MATRIX.dig(@from_role.demodulize, :provides).to_a : @target.role_provided_capabilities
     end
 
+    # The receipt stores the message and a replay shows it again, so a message never names the person.
     def finish(status, message)
       AuditEventService.log(
         action: RECEIPT_ACTION, actor: @actor, auditable: @target,

@@ -24,7 +24,6 @@ module Evaluations
     private
 
     def validate_access!
-      raise ArgumentError, 'Only the assigned evaluator can update this evaluation.' unless @evaluation.evaluator_id == @actor&.id
       raise ArgumentError, 'Working notes are read-only after report submission.' unless @evaluation.working_notes_editable?
     end
 

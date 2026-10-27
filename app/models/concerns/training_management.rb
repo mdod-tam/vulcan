@@ -94,7 +94,13 @@ module TrainingManagement
     false
   end
 
-  # Rows still owed to the constituent: neither completed nor cancelled, so no-show and rescheduled rows count.
+  # The covering trainer can no longer take work, so the coverage needs a new holder even when no row is open.
+  def covering_trainer_unavailable?
+    assigned_trainer.present? && !assigned_trainer.assignable_trainer?
+  end
+
+  # Rows still owed to the constituent: neither completed nor cancelled, with a no-show counted until a later
+  # session resolves it.
   def open_training_assignments
     training_sessions.open_assigned.order(:id)
   end
@@ -105,7 +111,8 @@ module TrainingManagement
   end
 
   # Transfers every open training row and the coverage to another trainer, keeping schedules, outcomes and notes.
-  # `expected_version` is the coverage the administrator reviewed; changed coverage is refused, not overwritten.
+  # A coverage holder who can no longer take work is transferred even when no row is open. `expected_version` is
+  # the coverage the administrator reviewed; changed coverage is refused, not overwritten.
   def reassign_trainer!(trainer, actor:, expected_version:)
     @training_notification_outcomes = []
     transaction do
@@ -125,8 +132,11 @@ module TrainingManagement
           metadata: { operation_id: operation_id, application_id: id, trainer_id: trainer.id, previous_trainer_ids: current_ids - [trainer.id],
                       training_session_ids: sessions.map(&:id) }
         )
-        %w[trainer_reassigned training_trainer_changed].each do |action|
-          @training_notification_outcomes << TrainingSessionNotifier.new(sessions.last, actor: actor, action: action).deliver_after_commit
+        # Without an open row there is no appointment to announce; a pending request shows on the new trainer's dashboard.
+        if sessions.any?
+          %w[trainer_reassigned training_trainer_changed].each do |action|
+            @training_notification_outcomes << TrainingSessionNotifier.new(sessions.last, actor: actor, action: action).deliver_after_commit
+          end
         end
       end
     end
@@ -140,31 +150,36 @@ module TrainingManagement
 
   def unassign_trainer!(actor:, reason: nil)
     @training_notification_outcomes = []
-    with_lock do
-      errors.clear
-      reject_training_assignment!('Only an administrator can remove trainer coverage.') unless actor&.admin?
-      reject_training_assignment!(:training_session_not_active) if assigned_trainer_id.blank?
+    transaction do
+      _assignee, actor = lock_assignment_participants(nil, actor)
+      with_lock do
+        errors.clear
+        reject_training_assignment!('Only an administrator can remove trainer coverage.') unless assignment_actor_eligible?(actor)
+        reject_training_assignment!(:training_session_not_active) if assigned_trainer_id.blank?
 
-      trainer_id = assigned_trainer_id
-      open_sessions = training_sessions.assigned_or_scheduled.order(:id).lock.to_a
-      open_sessions.each do |training_session|
-        training_session.update!(
-          status: :cancelled, cancelled_at: Time.current, cancellation_initiator: :admin,
-          cancellation_reason: reason.presence || 'Trainer assignment removed by administrator.'
-        )
+        trainer_id = assigned_trainer_id
+        operation_id = SecureRandom.uuid
+        open_sessions = training_sessions.assigned_or_scheduled.order(:id).lock.to_a
+        open_sessions.each do |training_session|
+          # A new operation id supersedes any transfer notice still queued for the row.
+          training_session.update!(
+            status: :cancelled, cancelled_at: Time.current, cancellation_initiator: :admin, assignment_operation_id: operation_id,
+            cancellation_reason: reason.presence || 'Trainer assignment removed by administrator.'
+          )
+          AuditEventService.log(
+            action: 'training_cancelled', actor: actor, auditable: training_session,
+            metadata: { application_id: id, training_session_id: training_session.id, cancellation_initiator: 'admin' }
+          )
+          @training_notification_outcomes << TrainingSessionNotifier.new(
+            training_session, actor: actor, action: 'training_cancelled'
+          ).deliver_after_commit
+        end
+        update!(assigned_trainer: nil)
         AuditEventService.log(
-          action: 'training_cancelled', actor: actor, auditable: training_session,
-          metadata: { application_id: id, training_session_id: training_session.id, cancellation_initiator: 'admin' }
+          action: 'trainer_unassigned', actor: actor, auditable: self,
+          metadata: { operation_id: operation_id, application_id: id, trainer_id: trainer_id, training_session_ids: open_sessions.map(&:id) }
         )
-        @training_notification_outcomes << TrainingSessionNotifier.new(
-          training_session, actor: actor, action: 'training_cancelled'
-        ).deliver_after_commit
       end
-      update!(assigned_trainer: nil)
-      AuditEventService.log(
-        action: 'trainer_unassigned', actor: actor, auditable: self,
-        metadata: { application_id: id, trainer_id: trainer_id, training_session_ids: open_sessions.map(&:id) }
-      )
     end
 
     Application.expire_training_request_metrics_cache!
@@ -190,7 +205,7 @@ module TrainingManagement
     reject_training_assignment!('Only an administrator can reassign a trainer.') unless assignment_actor_eligible?(actor)
     reject_training_assignment!(:training_service_window) unless service_window_active?
     reject_training_assignment!('Select an active trainer.') unless trainer&.assignable_trainer?
-    reject_training_assignment!('There is no open training to transfer.') if sessions.empty?
+    reject_training_assignment!('There is no open training to transfer.') if sessions.empty? && !covering_trainer_unavailable?
 
     stale = (training_coverage_ids(sessions) - locked_ids).any? || training_assignment_version(sessions) != expected_version
     reject_training_assignment!('Training assignments changed. Review the current assignment and try again.') if stale

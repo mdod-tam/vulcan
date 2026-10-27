@@ -256,6 +256,19 @@ class FilterParameterLoggingTest < ActiveSupport::TestCase
     assert_equal 'ups', filtered.dig('equipment_item', 'carrier')
   end
 
+  test 'the staff access confirmation token is filtered without hiding fields that merely mention confirmation' do
+    filtered = ActiveSupport::ParameterFilter.new(Rails.application.config.filter_parameters).filter(
+      'confirmation' => 'signed-impact-token', 'capability' => 'can_train', 'operation_id' => 'op-1',
+      'user' => { 'confirmation' => 'nested-token', 'confirmation_status' => 'pending' }
+    )
+
+    assert_equal '[FILTERED]', filtered['confirmation']
+    assert_equal '[FILTERED]', filtered.dig('user', 'confirmation')
+    assert_equal 'pending', filtered.dig('user', 'confirmation_status')
+    assert_equal 'can_train', filtered['capability']
+    assert_equal 'op-1', filtered['operation_id']
+  end
+
   private
 
   def capture_active_record_log

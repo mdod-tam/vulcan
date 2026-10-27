@@ -9,6 +9,20 @@ module Admin
       "#{practitioner.full_name} (#{identifier})"
     end
 
+    # Wording for the trainer transfer dialog: open appointments move with the coverage, or only the coverage moves.
+    def trainer_transfer_copy(open_sessions)
+      count = open_sessions.size
+      if count.zero?
+        { summary: 'Transfer the coverage to another trainer. Completed sessions stay with their trainers.',
+          confirmation: 'Transfer the coverage to the trainer selected below? Later training requests go to them.' }
+      else
+        { summary: 'Transfer open training to another trainer. Schedules, locations, notes and outcomes are preserved, ' \
+                   'and completed sessions stay with their trainers.',
+          confirmation: "Transfer #{count} open training #{'session'.pluralize(count)} to the trainer selected below? " \
+                        'Appointments are preserved. The new trainer and the constituent are notified.' }
+      end
+    end
+
     MedicalCertificationActionState = Struct.new(
       :latest_certification_request,
       :latest_certification_reject,

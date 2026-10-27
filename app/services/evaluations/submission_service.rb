@@ -57,8 +57,6 @@ module Evaluations
     end
 
     def validate_status!(source)
-      raise ArgumentError, 'Only the assigned evaluator can update this evaluation.' unless @evaluation.evaluator_id == @actor&.id
-
       @evaluation.require_approved_application!
       if source == 'outside_specialist' && !@evaluation.outside_specialist_report_allowed?(@actor)
         raise ArgumentError, 'Outside-specialist reports are only available to the assigned administrator.'

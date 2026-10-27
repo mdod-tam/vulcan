@@ -23,6 +23,10 @@ class Evaluation < ApplicationRecord
 
   scope :by_report_submission, -> { order(Arel.sql('report_submitted_at DESC NULLS LAST'), updated_at: :desc) }
 
+  # Open assigned work for access changes and recovery queues: everything neither completed nor cancelled.
+  # A no-show stays open because assigning again reuses its row.
+  scope :open_assigned, -> { where.not(status: %i[completed cancelled]) }
+
   # Simplified validations
   validates :reschedule_reason, presence: true, if: :rescheduling?
   validate :evaluator_must_be_assignable, if: -> { new_record? || will_save_change_to_evaluator_id? }
@@ -105,11 +109,19 @@ class Evaluation < ApplicationRecord
     end
   end
 
-  # Locks the acting user, then the application, then this evaluation, the order access changes use.
-  def with_actor_and_application_lock(actor, &)
+  # Locks the acting user, then the application, then this evaluation, the order access changes use. Only the
+  # locked row of the actor decides whether they still hold the evaluation: a request that loaded the user before
+  # a capability change commits must not act on the stale copy.
+  def with_actor_and_application_lock(actor)
     transaction do
-      User.lock_for_merge_integrity!(actor) if actor&.persisted?
-      application.with_lock { with_lock(&) }
+      actor = User.lock_for_merge_integrity!(actor).fetch(actor.id) if actor&.persisted?
+      application.with_lock do
+        with_lock do
+          raise ArgumentError, 'Only the assigned evaluator can update this evaluation.' unless assigned_to?(actor)
+
+          yield
+        end
+      end
     end
   end
 

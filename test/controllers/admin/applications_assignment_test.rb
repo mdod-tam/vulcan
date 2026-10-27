@@ -378,7 +378,7 @@ module Admin
       assert_nil draft_app.reload.evaluation_requested_at
     end
 
-    test 'reassignment moves every open training row to the selected trainer and keeps the appointment' do
+    test 'reassignment moves the open training row to the selected trainer and keeps the appointment' do
       trainer = current_coverage
       replacement = create(:trainer)
       no_show = create(:training_session, :no_show, application: @application, trainer: trainer)
@@ -392,8 +392,39 @@ module Admin
       assert_redirected_to admin_application_path(@application)
       assert_equal 'Open training reassigned. Appointment details have been preserved.', flash[:notice]
       assert_equal replacement.id, @application.reload.assigned_trainer_id
-      assert_equal [replacement.id], [no_show, scheduled].map { |session| session.reload.trainer_id }.uniq
+      assert_equal replacement.id, scheduled.reload.trainer_id
+      assert_equal trainer.id, no_show.reload.trainer_id
       assert_equal 'Agreed library room', scheduled.location
+    end
+
+    test 'show offers the coverage transfer when the covering trainer lost access and nothing is open' do
+      trainer = current_coverage
+      create(:training_session, :completed, application: @application, trainer: trainer)
+      replacement = create(:trainer)
+      trainer.update_columns(status: User.statuses[:suspended])
+
+      get admin_application_path(@application)
+
+      assert_select '[data-testid="trainer-ineligible-notice"]', text: /#{Regexp.escape(trainer.full_name)} can no longer take training assignments.*Transfer the coverage/m
+      assert_select "form[action='#{reassign_trainer_admin_application_path(@application)}']" do
+        assert_select "select[name=trainer_id] option[value='#{replacement.id}']"
+      end
+
+      post reassign_trainer_admin_application_path(@application),
+           params: { trainer_id: replacement.id, expected_version: @application.training_assignment_version }
+
+      assert_redirected_to admin_application_path(@application)
+      assert_equal replacement.id, @application.reload.assigned_trainer_id
+    end
+
+    test 'show offers no transfer between appointments while the covering trainer can still work' do
+      trainer = current_coverage
+      create(:training_session, :completed, application: @application, trainer: trainer)
+
+      get admin_application_path(@application)
+
+      assert_select '[data-testid="trainer-ineligible-notice"]', count: 0
+      assert_select "form[action='#{reassign_trainer_admin_application_path(@application)}']", count: 0
     end
 
     test 'reassignment with a stale reviewed version or an unavailable trainer changes nothing' do

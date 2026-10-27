@@ -31,7 +31,6 @@ module Evaluations
     private
 
     def validate_params!
-      raise ArgumentError, 'Only the assigned evaluator can update this evaluation.' unless @evaluation.evaluator_id == @actor&.id
       raise ArgumentError, 'Only requested, scheduled, or confirmed evaluations can be cancelled.' unless @evaluation.can_cancel?
       return if cancellation_reason.present?
 

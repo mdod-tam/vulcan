@@ -193,6 +193,23 @@ module Users
       assert @evaluator.reload.explicit_grant?('can_train')
     end
 
+    test 'receipts and replays never carry the person\'s name' do
+      target = create(:evaluator, first_name: 'Receiptprobe', last_name: 'Surname')
+      change = SecureRandom.uuid
+      unchanged = SecureRandom.uuid
+
+      applied = write(target, Intent.change_role(Users::Trainer), operation_id: change)
+      same_role = write(target, Intent.change_role(Users::Trainer), operation_id: unchanged)
+      replay = write(target, Intent.change_role(Users::Trainer), operation_id: change)
+
+      assert_equal ['Role updated to Trainer.', 'Role is already Trainer.', :already_applied],
+                   [applied.message, same_role.message, replay.status]
+      assert_equal 'Role updated to Trainer.', replay.message
+      stored = Event.where(action: described_receipt, auditable: target).pluck(:metadata).to_json
+      assert_not_includes stored, 'Receiptprobe'
+      assert_not_includes stored, 'Surname'
+    end
+
     test 'a failed required audit rolls back the grant and its receipt' do
       AuditEventService.stubs(:log).returns(nil)
 

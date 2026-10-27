@@ -20,7 +20,7 @@
     <dialog id="<%= dialog_id %>"
             class="backdrop:bg-gray-500 backdrop:bg-opacity-75 bg-white rounded-lg max-w-md w-full shadow-elevation-4 p-0"
             data-controller="modal"
-            data-action="click->modal#clickOutside close->modal#onClose"
+            data-action="click->modal#clickOutside cancel->modal#guardCancel close->modal#onClose"
             aria-labelledby="<%= type %>-reassign-confirm-heading"
             aria-describedby="<%= type %>-reassign-confirm-description">
       <div class="p-6">

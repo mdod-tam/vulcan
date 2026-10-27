@@ -12,6 +12,8 @@ Views are styled with Tailwind utilities, a small set of design tokens, and one 
 
 Each color uses Tailwind's full scale (`bg-primary-600`, `text-danger-700`). A color never carries a status alone; badges and messages also say it in words.
 
+Outcome colors always come from these tokens. A few accents use Tailwind's raw palette on purpose and are not outcome colors: the guardian (blue) and dependent (green) markers in the user list and application rows, the step headers of the paper application form, the vendor portal header, the timeline markers on the dependent pages, voucher amount tiers, and the `attention` (orange) and `accent` (purple) badge variants. When auditing for leftover raw colors, search `app/views`, `app/helpers` and `app/javascript` for red, yellow, green, amber, blue and emerald utilities, and set these accents aside; anything else should use a token.
+
 ## Components
 
 - **Buttons:** `btn` plus one of `btn-primary`, `btn-secondary` (tinted), `btn-outline`, `btn-success`, `btn-danger`, `btn-danger-outline`; add `btn-sm` for a compact size. Layout utilities such as `w-full` stay on the element.

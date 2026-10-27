@@ -251,8 +251,11 @@ class Application < ApplicationRecord
   }
 
   # Open work whose assignee no longer holds the capability. Membership follows the data; no flag is stored.
+  # Training also counts a covering trainer who can no longer work, even with nothing open, because the coverage needs a new holder.
   scope :needing_trainer_reassignment, lambda {
-    where(id: TrainingSession.open_assigned.where.not(trainer_id: User.assignable_for(:can_train).select(:id)).select(:application_id))
+    assignable = User.assignable_for(:can_train).select(:id)
+    where(id: TrainingSession.open_assigned.where.not(trainer_id: assignable).select(:application_id))
+      .or(where.not(assigned_trainer_id: nil).where.not(assigned_trainer_id: assignable))
   }
   scope :needing_evaluator_reassignment, lambda {
     where(id: Evaluation.open_assigned.where.not(evaluator_id: User.assignable_for(:can_evaluate).select(:id)).select(:application_id))

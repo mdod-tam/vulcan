@@ -19,31 +19,48 @@ class TrainingReassignmentTest < ActiveSupport::TestCase
     @application.reassign_trainer!(trainer, actor: actor, expected_version: version)
   end
 
-  test 'transfers every open row and the coverage, keeping schedules, outcomes and notes' do
-    before = [@no_show, @scheduled].to_h { |session| [session.id, session.attributes.except('trainer_id', 'updated_at', 'assignment_operation_id')] }
+  test 'transfers the open row and the coverage, keeping schedules, outcomes and notes' do
+    before = @scheduled.attributes.except('trainer_id', 'updated_at', 'assignment_operation_id')
     completed = create(:training_session, :completed, application: @application, trainer: @trainer)
-    previous_operations = [@no_show, @scheduled].map(&:assignment_operation_id)
+    previous_operation = @scheduled.assignment_operation_id
 
     assert_difference -> { Event.where(action: 'trainer_reassigned').count }, 1 do
       assert reassign
     end
 
     assert_equal @replacement.id, @application.reload.assigned_trainer_id
-    [@no_show, @scheduled].each do |session|
-      assert_equal @replacement.id, session.reload.trainer_id
-      assert_equal before[session.id], session.attributes.except('trainer_id', 'updated_at', 'assignment_operation_id')
-    end
+    assert_equal @replacement.id, @scheduled.reload.trainer_id
+    assert_equal before, @scheduled.attributes.except('trainer_id', 'updated_at', 'assignment_operation_id')
     assert_equal @trainer.id, completed.reload.trainer_id
-    assert_equal 1, [@no_show, @scheduled].map(&:assignment_operation_id).uniq.size
-    assert_empty previous_operations & [@scheduled.assignment_operation_id]
+    assert_not_equal previous_operation, @scheduled.assignment_operation_id
 
     event = Event.find_by!(action: 'trainer_reassigned', auditable: @application)
     assert_equal @admin.id, event.user_id
     assert_equal @scheduled.assignment_operation_id, event.metadata['operation_id']
     assert_equal [@trainer.id], event.metadata['previous_trainer_ids']
-    assert_equal [@no_show.id, @scheduled.id], event.metadata['training_session_ids']
+    assert_equal [@scheduled.id], event.metadata['training_session_ids']
     assert_equal 2, @application.training_notification_outcomes.size
     assert(@application.training_notification_outcomes.none?(&:warning?))
+  end
+
+  test 'a no-show resolved by a later session is history and keeps its trainer' do
+    assert_equal [@scheduled.id], @application.open_training_assignments.ids
+
+    assert reassign
+
+    assert_equal @trainer.id, @no_show.reload.trainer_id
+    assert_equal 'Missed once', @no_show.internal_notes
+  end
+
+  test 'a no-show still awaiting its follow-up moves with the coverage' do
+    @scheduled.update_columns(status: TrainingSession.statuses[:cancelled], cancelled_at: Time.current, created_at: 2.days.ago)
+    @no_show.update_columns(created_at: 1.day.ago)
+    assert_equal [@no_show.id], @application.open_training_assignments.ids
+
+    assert reassign
+
+    assert_equal @replacement.id, @no_show.reload.trainer_id
+    assert_equal @trainer.id, @scheduled.reload.trainer_id
   end
 
   test 'queues one notice for the new trainer and one for the constituent after commit' do
@@ -126,5 +143,63 @@ class TrainingReassignmentTest < ActiveSupport::TestCase
 
     assert_equal(attributes, [@no_show, @scheduled].map { |session| session.reload.attributes })
     assert_equal @trainer.id, @application.reload.assigned_trainer_id
+  end
+
+  test 'a covering trainer who lost access is replaced even when only completed training remains' do
+    [@no_show, @scheduled].each { |session| session.update_columns(status: TrainingSession.statuses[:completed]) }
+    @trainer.update_columns(status: User.statuses[:suspended])
+    assert_includes Application.needing_trainer_reassignment.ids, @application.id
+
+    assert_difference -> { Event.where(action: 'trainer_reassigned').count }, 1 do
+      assert_no_difference 'Notification.count' do
+        assert_no_enqueued_jobs { assert reassign }
+      end
+    end
+
+    assert_equal @replacement.id, @application.reload.assigned_trainer_id
+    assert_equal [@trainer.id], [@no_show, @scheduled].map { |session| session.reload.trainer_id }.uniq
+    assert_empty @application.training_notification_outcomes
+    assert_equal [], Event.find_by!(action: 'trainer_reassigned', auditable: @application).metadata['training_session_ids']
+    assert_not_includes Application.needing_trainer_reassignment.ids, @application.id
+  end
+
+  test 'recovery lists open work and unavailable coverage, and drops a no-show once a later session resolves it' do
+    assert_not_includes Application.needing_trainer_reassignment.ids, @application.id
+
+    @trainer.update_columns(status: User.statuses[:suspended])
+    assert_includes Application.needing_trainer_reassignment.ids, @application.id
+
+    @scheduled.update_columns(status: TrainingSession.statuses[:completed])
+    assert_includes Application.needing_trainer_reassignment.ids, @application.id, 'coverage stays listed with only history left'
+
+    @application.update_columns(assigned_trainer_id: nil)
+    assert_not_includes Application.needing_trainer_reassignment.ids, @application.id, 'a resolved no-show is not open work'
+
+    @no_show.update_columns(created_at: 1.day.from_now)
+    assert_includes Application.needing_trainer_reassignment.ids, @application.id, 'a no-show awaiting follow-up is open work'
+  end
+
+  test 'cancelling removes the operation a queued transfer notice was written for' do
+    queued = @scheduled.reload.assignment_operation_id
+
+    assert @application.unassign_trainer!(actor: @admin)
+
+    assert @scheduled.reload.status_cancelled?
+    assert_predicate @scheduled.assignment_operation_id, :present?
+    assert_not_equal queued, @scheduled.assignment_operation_id
+    assert_equal @scheduled.assignment_operation_id, Event.find_by!(action: 'trainer_unassigned', auditable: @application).metadata['operation_id']
+  end
+
+  test 'an administrator who is no longer eligible cannot remove coverage' do
+    stale_admin = User.find(@admin.id)
+    @admin.update_columns(status: User.statuses[:suspended])
+
+    assert_no_difference ['Event.count', 'Notification.count'] do
+      assert_equal false, @application.unassign_trainer!(actor: stale_admin)
+    end
+
+    assert_equal ['Only an administrator can remove trainer coverage.'], @application.errors[:base]
+    assert_equal @trainer.id, @application.reload.assigned_trainer_id
+    assert @scheduled.reload.status_scheduled?
   end
 end
