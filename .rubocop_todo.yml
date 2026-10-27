@@ -150,11 +150,6 @@ Rails/UniqueValidationWithoutIndex:
     - 'app/models/email_template.rb'
     - 'app/models/voucher_transaction.rb'
 
-# Offense count: 1
-Security/Open:
-  Exclude:
-    - 'app/controllers/webhooks/disability_certifications_controller.rb'
-
 # Offense count: 2
 Style/ClassVars:
   Exclude:

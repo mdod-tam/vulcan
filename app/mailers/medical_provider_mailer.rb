@@ -36,7 +36,7 @@ class MedicalProviderMailer < ApplicationMailer
     raise e
   end
 
-  # A code on the latest rejected medical review selects the localized stored reason.
+  # A code on the latest rejected disability certification review selects the localized stored reason.
   # @param application [Application] The application with the rejected certification
   # @param rejection_reason [String] Fallback text when no stored reason body resolves
   # @param admin [User] The admin who rejected the certification

@@ -292,7 +292,7 @@ class DisabilityCertificationAttachmentService
     ActiveRecord::Base.transaction do
       params[:resolved_reason] = resolve_rejection_reason_text(params)
       update_rejection_status(params)
-      upsert_medical_rejection_review(params)
+      upsert_disability_certification_rejection_review(params)
       create_rejection_audit_trail(params)
       notification = send_rejection_notification(params)
       { notification_id: notification&.id }
@@ -316,7 +316,7 @@ class DisabilityCertificationAttachmentService
     params[:application].reload
   end
 
-  def self.upsert_medical_rejection_review(params)
+  def self.upsert_disability_certification_rejection_review(params)
     app = params[:application]
     review = app.proof_reviews.find_or_initialize_by(
       proof_type: :disability_certification,

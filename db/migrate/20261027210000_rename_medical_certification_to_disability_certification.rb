@@ -2,7 +2,8 @@
 
 class RenameMedicalCertificationToDisabilityCertification < ActiveRecord::Migration[8.1]
   def change
-    # The foreign key's generated name embeds the column, so it is dropped and re-added around the rename.
+    # Rails names the foreign key fk_rails_<hash of table and column>, so renaming the column would leave the old
+    # hash behind. Drop and re-add it so a migrated database matches a fresh schema load.
     # rename_column already renames the two default-named indexes.
     remove_foreign_key :applications, :users, column: :medical_certification_verified_by_id
 
