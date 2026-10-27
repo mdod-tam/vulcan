@@ -90,6 +90,7 @@ module Applications
 
     # The exception message can carry applicant PII, so the report keeps the class, the application frames, and ids.
     def report_unexpected_failure(error)
+      Rails.logger.error("ApplicationCreator failed: #{error.class.name}")
       reported = StandardError.new(error.class.name)
       reported.set_backtrace(Rails.backtrace_cleaner.clean(error.backtrace || []))
       Rails.error.report(reported, handled: true, context: { application_id: target_application&.id, actor_id: @form.current_user&.id })

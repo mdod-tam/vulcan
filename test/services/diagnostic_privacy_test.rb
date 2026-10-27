@@ -58,6 +58,21 @@ class DiagnosticPrivacyTest < ActiveSupport::TestCase
     assert_not_includes log, 'unhandled framework failure'
   end
 
+  test 'a report made during a request logs only the caller context, never the controller or request' do
+    controller = Object.new
+    controller.instance_variable_set(:@session, PRIVATE_DETAIL)
+    controller.instance_variable_set(:@self, controller)
+
+    log = capture_log do
+      ActiveSupport::ExecutionContext.set(controller: controller, request: controller) do
+        Rails.error.report(StandardError.new('ArgumentError'), handled: true, context: { application_id: 7 })
+      end
+    end
+
+    assert_includes log, 'ArgumentError context={"application_id":7}'
+    assert_private_detail_absent(log)
+  end
+
   test 'shared user failure logging does not copy validation details into diagnostics' do
     adapter = Object.new.extend(UserServiceIntegration)
     record = User.new
