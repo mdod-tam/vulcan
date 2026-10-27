@@ -112,6 +112,35 @@ class NotificationsControllerTest < ActionDispatch::IntegrationTest
     assert_redirected_to root_path
   end
 
+  test 'admin Turbo refresh puts the current message in the flash region and keeps the region in the page' do
+    create_tracked_attempt
+    sign_in_for_integration_test(create(:admin))
+
+    assert_enqueued_with(job: UpdateEmailStatusJob, args: [@notification.id]) do
+      post check_email_status_notification_path(@notification), headers: { 'Accept' => 'text/vnd.turbo-stream.html' }
+    end
+
+    assert_response :success
+    assert_turbo_stream action: 'update', target: 'flash' do
+      assert_select '[data-testid="flash-notice"]', text: 'Checking email status. This may take a moment.', count: 1
+    end
+    assert_no_turbo_stream action: 'replace', target: 'flash'
+    assert_turbo_stream action: 'append', target: "notification_#{@notification.id}"
+  end
+
+  test 'admin Turbo refresh of an untracked or unknown notification shows an alert in the flash region' do
+    sign_in_for_integration_test(create(:admin))
+    turbo = { 'Accept' => 'text/vnd.turbo-stream.html' }
+
+    { @notification.id => 'Cannot check status for this notification.', 0 => 'Notification not found.' }.each do |id, message|
+      post check_email_status_notification_path(id), headers: turbo
+
+      assert_turbo_stream action: 'update', target: 'flash' do
+        assert_select '[data-testid="flash-alert"]', text: message, count: 1
+      end
+    end
+  end
+
   test 'admin can act on any notification' do
     admin = create(:admin)
     sign_in_for_integration_test(admin)

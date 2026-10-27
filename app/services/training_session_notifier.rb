@@ -49,13 +49,7 @@ class TrainingSessionNotifier
       channel: :email
     )
     outcome.notification_id = notification&.id
-    outcome.status = if notification.nil? || notification.error_delivery_status?
-                       :failed
-                     elsif notification.suppressed_delivery_status?
-                       :suppressed
-                     else
-                       :queued
-                     end
+    outcome.status = NotificationService.delivery_outcome(notification)
   rescue StandardError => e
     outcome.status = :failed
     outcome.error_class = e.class.name

@@ -45,11 +45,6 @@ class NotificationsController < ApplicationController
     UpdateEmailStatusJob.perform_later(@notification.id) if tracking
 
     flash_message = tracking ? 'Checking email status. This may take a moment.' : 'Cannot check status for this notification.'
-    render_partials = [turbo_stream.replace('flash', partial: 'shared/flash')]
-    if tracking
-      render_partials << turbo_stream.append("notification_#{@notification.id}",
-                                             partial: 'notifications/checking_status')
-    end
 
     respond_to do |format|
       format.html do
@@ -58,7 +53,9 @@ class NotificationsController < ApplicationController
       end
       format.turbo_stream do
         flash.now[tracking ? :notice : :alert] = flash_message
-        render turbo_stream: render_partials
+        streams = [turbo_stream.update('flash', partial: 'shared/flash')]
+        streams << turbo_stream.append("notification_#{@notification.id}", partial: 'notifications/checking_status') if tracking
+        render turbo_stream: streams
       end
     end
   end
@@ -80,7 +77,7 @@ class NotificationsController < ApplicationController
       end
       format.turbo_stream do
         flash.now[:alert] = 'Notification not found.'
-        render turbo_stream: turbo_stream.replace('flash', partial: 'shared/flash')
+        render turbo_stream: turbo_stream.update('flash', partial: 'shared/flash')
       end
     end
   end

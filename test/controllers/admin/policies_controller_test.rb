@@ -70,6 +70,8 @@ module Admin
       end
       assert_redirected_to admin_policies_path
       assert_equal "Policy 'new_test_policy' created successfully.", flash[:notice]
+      follow_redirect!
+      assert_select '[data-testid="flash-notice"]', text: "Policy 'new_test_policy' created successfully.", count: 1
     end
   end
 end

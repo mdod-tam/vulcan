@@ -39,6 +39,8 @@ module Applications
         !success?
       end
 
+      # Display-safe, locale-resolved copy. An unexpected failure carries the generic creation.failure message,
+      # never exception text; its diagnostics go to Rails.error.
       def error_messages
         @errors.map(&:to_s)
       end
@@ -78,17 +80,20 @@ module Applications
     rescue IneligibleApplicantError, RefusedUploadError => e
       @errors << e.message
       failure_result(@errors)
-    rescue ActiveRecord::RecordInvalid => e
-      Rails.logger.error("ApplicationCreator failed: #{e.class.name}")
-      @errors << e.message
-      failure_result(@errors)
     rescue StandardError => e
-      Rails.logger.error("ApplicationCreator failed: #{e.class.name}")
+      report_unexpected_failure(e)
       @errors << I18n.t('applications.creation.failure', locale: @form.message_locale)
       failure_result(@errors)
     end
 
     private
+
+    # The exception message can carry applicant PII, so the report keeps the class, the application frames, and ids.
+    def report_unexpected_failure(error)
+      reported = StandardError.new(error.class.name)
+      reported.set_backtrace(Rails.backtrace_cleaner.clean(error.backtrace || []))
+      Rails.error.report(reported, handled: true, context: { application_id: target_application&.id, actor_id: @form.current_user&.id })
+    end
 
     def lock_and_requalify_applicant!
       current_user_id = @form.current_user&.id

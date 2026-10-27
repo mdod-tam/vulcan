@@ -132,6 +132,20 @@ class TwoFactorAuthenticationWebauthnTest < ActionDispatch::IntegrationTest
     end
   end
 
+  test 'browser alerts for an unsupported method or missing security keys follow the public request locale' do
+    post sign_in_path(locale: 'es'), params: { email: @user.email, password: 'password1234' }
+
+    get verification_options_two_factor_authentication_path(type: 'totp', locale: 'es')
+    assert_redirected_to sign_in_path(locale: 'es')
+    assert_equal I18n.t('two_factor_verification.errors.invalid_method', locale: :es), flash[:alert]
+
+    post sign_in_path(locale: 'es'), params: { email: @user.email, password: 'password1234' }
+    @credential.destroy!
+    get verification_options_two_factor_authentication_path(type: 'webauthn', locale: 'es')
+    assert_redirected_to sign_in_path(locale: 'es')
+    assert_equal I18n.t('two_factor_verification.errors.key_unavailable', locale: :es), flash[:alert]
+  end
+
   test 'should have proper error handling for malformed credentials' do
     post sign_in_path, params: { email: @user.email, password: 'password1234' }
     assert_response :redirect

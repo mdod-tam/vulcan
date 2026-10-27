@@ -2,7 +2,6 @@
 
 class Notification < ApplicationRecord
   has_many :email_delivery_attempts, dependent: :nullify
-  attr_accessor :delivery_successful
 
   # Suffix: true generates methods like `delivered_status?` and scopes like `delivered_status`.
   # queued and submitted mean the provider has the message, not that the recipient received it;

@@ -52,6 +52,14 @@ class SessionsControllerTest < ActionDispatch::IntegrationTest
     assert_equal I18n.t('controllers.sessions.invalid_credentials', locale: :es), flash[:alert]
   end
 
+  def test_successful_login_notice_follows_public_request_locale
+    user = create(:constituent)
+
+    post sign_in_path, params: { locale: 'es', email: user.email, password: 'password1234' }
+
+    assert_equal I18n.t('controllers.application.sign_in.signin_pass', locale: :es), flash[:notice]
+  end
+
   def test_failed_login_increments_failed_attempts
     user = create(:constituent)
 

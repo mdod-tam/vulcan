@@ -36,7 +36,7 @@ class RegistrationsController < ApplicationController
       send_registration_confirmation
 
       @user.reload
-      redirect_to welcome_path, notice: 'Account created successfully. Welcome!'
+      redirect_to welcome_path, notice: t('portal_self_service.registrations.account_created')
     else
       render :new, status: :unprocessable_content
     end

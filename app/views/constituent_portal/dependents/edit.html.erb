@@ -22,12 +22,6 @@
         <div class="lg:col-span-2">
           <div class="card">
             <div class="px-4 py-5 sm:px-6">
-              <% if flash[:alert] %>
-                <div class="flash-message flash-alert" role="alert" aria-live="polite">
-                  <span><%= flash[:alert] %></span>
-                </div>
-              <% end %>
-
               <% if @guardian_relationship %>
                 <div class="bg-info-50 border border-info-200 text-info-800 p-4 rounded mb-4">
                   <span class="font-medium">Current Relationship:</span> <%= @guardian_relationship.relationship_type %>

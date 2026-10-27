@@ -17,13 +17,6 @@
       <span class="text-danger-700">*</span> <%= t('portal_self_service.registrations.required_indicator') %>
     </p>
 
-    <% if flash[:alert] %>
-      <div role="alert" aria-live="polite" aria-atomic="true"
-           class="flash-message flash-error">
-        <p><%= flash[:alert] %></p>
-      </div>
-    <% end %>
-
     <% if @registration_support_needed %>
       <div role="alert" aria-live="assertive"
            class="flash-message flash-warning">

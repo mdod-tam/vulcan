@@ -97,41 +97,6 @@ class ApplicationController < ActionController::Base
     _dashboard_for(user)
   end
 
-  # rubocop:disable Rails/ActionControllerFlashBeforeRender
-  def flash_success(message)
-    flash[:success] = message
-  end
-
-  def flash_error(message)
-    flash[:error] = message
-  end
-
-  def flash_warning(message)
-    flash[:warning] = message
-  end
-
-  def flash_info(message)
-    flash[:info] = message
-  end
-  # rubocop:enable Rails/ActionControllerFlashBeforeRender
-
-  # These flash messages apply to the current render.
-  def flash_success_now(message)
-    flash.now[:success] = message
-  end
-
-  def flash_error_now(message)
-    flash.now[:error] = message
-  end
-
-  def flash_warning_now(message)
-    flash.now[:warning] = message
-  end
-
-  def flash_info_now(message)
-    flash.now[:info] = message
-  end
-
   # Creates a session, sets the cookie, records sign-in, and redirects.
   # Call this method after password or 2FA authentication.
   #

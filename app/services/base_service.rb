@@ -1,6 +1,12 @@
 # frozen_string_literal: true
 
 # Base class for service objects: the Result struct, error collection, and error logging.
+#
+# Result contract: success? and failure? say whether the service did its job, message is the display-ready outcome copy,
+# and data carries the details a caller needs to choose its response. A service whose callers branch on more than that
+# returns its own value object instead of widening Result, such as Applications::ApplicationCreator::Result (field
+# errors and a pending-review flag), VoucherVerificationService::VerificationResult (message key and attempts left), or
+# Users::CapabilityWriter::Result (a status symbol). No universal Result type is planned.
 class BaseService
   include SecureErrorSanitizer
 

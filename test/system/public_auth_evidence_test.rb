@@ -52,6 +52,14 @@ class PublicAuthEvidenceTest < ApplicationSystemTestCase
     assert_text 'Edit Profile'
     assert_text I18n.t('portal_self_service.profile.on_file')
     take_screenshot('public-auth-profile-edit', html: true)
+
+    visit edit_password_path
+    fill_in 'Current Password', with: 'wrong-password-1234'
+    fill_in 'New Password', with: 'NewValid*Password123'
+    fill_in 'Confirm New Password', with: 'NewValid*Password123'
+    click_button 'Change Password'
+    assert_selector '[data-testid="flash-alert"]', text: 'Current password is incorrect.', count: 1
+    take_screenshot('public-auth-password-change-failure', html: true)
   end
 
   private
