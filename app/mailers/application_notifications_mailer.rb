@@ -784,7 +784,7 @@ class ApplicationNotificationsMailer < ApplicationMailer # rubocop:disable Metri
   end
 
   def build_active_vendors_list
-    active_vendors = Vendor.active.order(:business_name)
+    active_vendors = Users::Vendor.active.order(:business_name)
     if active_vendors.any?
       active_vendors.map { |v| "- #{v.business_name}" }.join("\n")
     else

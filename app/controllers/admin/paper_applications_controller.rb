@@ -60,7 +60,7 @@ module Admin
         application: Application.new,
         guardian_attributes: Users::Constituent.new,
         applicant_attributes: {},
-        constituent: Constituent.new,
+        constituent: Users::Constituent.new,
         show_create_new_adult: false
       }
 
@@ -370,7 +370,7 @@ module Admin
     end
 
     def rebuilt_constituent(service, existing_application, submitted_params)
-      constituent = service.constituent || existing_application&.user || Constituent.new
+      constituent = service.constituent || existing_application&.user || Users::Constituent.new
       # Submitted values take precedence over persisted values on a retry.
       constituent.assign_attributes(submitted_params[:constituent]) if submitted_params[:constituent].present?
       # The form submits disability flags under applicant_attributes, but the user owns these columns.
@@ -439,7 +439,7 @@ module Admin
       submitted = submitted_params[:applicant_attributes]
       return {} if submitted.blank?
 
-      submitted.to_h.symbolize_keys.slice(*(USER_DISABILITY_FIELDS & Constituent.column_names.map(&:to_sym)))
+      submitted.to_h.symbolize_keys.slice(*(USER_DISABILITY_FIELDS & Users::Constituent.column_names.map(&:to_sym)))
     end
 
     def build_submitted_params

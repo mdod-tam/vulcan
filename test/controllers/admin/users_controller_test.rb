@@ -689,31 +689,6 @@ module Admin
       assert user.real_phone?
     end
 
-    test 'legacy Constituent STI rows cannot clear all contact information outside paper intake' do
-      user = create(:constituent, email: generate(:email), phone: '410-555-0101')
-      user.update_column(:type, 'Constituent')
-      legacy = User.find(user.id)
-
-      patch admin_user_path(legacy), params: {
-        user: {
-          first_name: legacy.first_name,
-          last_name: legacy.last_name,
-          email: '',
-          phone: '',
-          communication_preference: 'letter',
-          physical_address_1: legacy.physical_address_1,
-          city: legacy.city,
-          state: legacy.state,
-          zip_code: legacy.zip_code
-        }
-      }
-
-      assert_response :unprocessable_content
-      legacy = User.find(user.id)
-      assert legacy.real_email?
-      assert legacy.real_phone?
-    end
-
     test 'admin cannot set email delivery without email on file' do
       user = create(:constituent, email: generate(:email), phone: '410-555-0100')
 
@@ -795,15 +770,14 @@ module Admin
       assert_nil user.email
     end
 
-    test 'constituents list includes legacy Constituent STI rows' do
-      legacy = create(:constituent, email: generate(:email), first_name: 'LegacyInactive')
-      legacy.update_column(:type, 'Constituent')
-      create(:application, :archived, user: legacy)
+    test 'constituents list includes constituents with archived applications' do
+      archived = create(:constituent, email: generate(:email), first_name: 'ArchivedListed')
+      create(:application, :archived, user: archived)
 
       get constituents_admin_users_path
 
       assert_response :success
-      assert_match 'LegacyInactive', response.body
+      assert_match 'ArchivedListed', response.body
     end
 
     test 'constituents list shows no email on file for address-only users' do

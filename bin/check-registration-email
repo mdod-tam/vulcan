@@ -9,7 +9,7 @@ require 'active_job'
 
 ActionMailer::Base.deliveries.clear
 
-user = Constituent.new(
+user = Users::Constituent.new(
   first_name: 'Test',
   last_name: 'User',
   email: 'test@example.com',

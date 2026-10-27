@@ -7,7 +7,7 @@ module UserRolesAndCapabilities
   VALID_ROLES = %w[admin constituent evaluator vendor trainer].freeze
 
   # The staff capability policy. A role provides some capabilities and may be granted others; every other role has
-  # neither. Keys are STI class basenames, so Users::Trainer and the older Trainer spelling resolve alike.
+  # neither. Keys are STI class basenames, so Users::Trainer is looked up as 'Trainer'.
   CAPABILITY_MATRIX = {
     'Administrator' => { provides: %w[can_train can_evaluate].freeze, grantable: [].freeze }.freeze,
     'Evaluator' => { provides: %w[can_evaluate].freeze, grantable: %w[can_train].freeze }.freeze,
@@ -42,7 +42,7 @@ module UserRolesAndCapabilities
     end
 
     def sti_types(roles)
-      roles.flat_map { |role| ["Users::#{role}", role] }
+      roles.map { |role| "Users::#{role}" }
     end
   end
 
@@ -54,10 +54,7 @@ module UserRolesAndCapabilities
     next if role == 'admin' # admin? is handled separately
 
     define_method "#{role}?" do
-      # Check for both namespaced and non-namespaced type values
-      self.class.name == "Users::#{role.classify}" ||
-        type == "Users::#{role.classify}" ||
-        type == role.classify
+      self.class.name == "Users::#{role.classify}" || type == "Users::#{role.classify}"
     end
   end
 

@@ -161,13 +161,13 @@ module UserProfile
   end
 
   def constituent_must_have_disability
-    return unless type == 'Users::Constituent'
+    return unless constituent_user_type?
 
     errors.add(:base, 'At least one disability must be selected.') unless disability_selected?
   end
 
   def validate_constituent_disability?
-    return false unless type == 'Users::Constituent'
+    return false unless constituent_user_type?
     return false if new_record? && !@validate_disability_required
 
     applications.exists? || @validate_disability_required
@@ -271,7 +271,7 @@ module UserProfile
   end
 
   def constituent_user_type?
-    Users::FilterService::CONSTITUENT_TYPE_VALUES.include?(type)
+    type == 'Users::Constituent'
   end
 
   def email_delivery_requires_real_email

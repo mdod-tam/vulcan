@@ -33,6 +33,17 @@ module Admin
       assert_equal({ 'export_type' => 'admin_vouchers', 'row_count' => 1, '__service_generated' => true }, event.metadata)
     end
 
+    test 'the vendor filter offers the approved vendors the download accepts' do
+      approved = create(:vendor, :approved, business_name: 'Approved Filter Vendor')
+      pending = create(:vendor, business_name: 'Pending Filter Vendor')
+
+      get admin_vouchers_path
+
+      assert_response :success
+      assert_select 'select[name=vendor_id] option[value=?]', approved.id.to_s, text: 'Approved Filter Vendor'
+      assert_select 'select[name=vendor_id] option[value=?]', pending.id.to_s, count: 0
+    end
+
     test 'an empty voucher download retains the empty response and records a zero-row export' do
       get admin_vouchers_path(format: :csv), params: { vendor_id: create(:vendor, :approved).id }
 

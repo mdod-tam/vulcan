@@ -4,7 +4,7 @@ require 'test_helper'
 
 class DisabilityValidationTest < ActiveSupport::TestCase
   setup do
-    @constituent = Constituent.create!(
+    @constituent = Users::Constituent.create!(
       email: "test_user_#{Time.now.to_i}@example.com",
       password: 'password1234',
       first_name: 'Test',
@@ -26,7 +26,7 @@ class DisabilityValidationTest < ActiveSupport::TestCase
   end
 
   test 'constituent can be created without disability' do
-    constituent = Constituent.new(
+    constituent = Users::Constituent.new(
       email: "test_user_#{Time.now.to_i + 1}@example.com",
       password: 'password1234',
       first_name: 'Test',
@@ -37,14 +37,14 @@ class DisabilityValidationTest < ActiveSupport::TestCase
   end
 
   test 'constituent can be changed to admin without disability' do
-    constituent = Constituent.create!(
+    constituent = Users::Constituent.create!(
       email: "test_user_#{Time.now.to_i + 2}@example.com",
       password: 'password1234',
       first_name: 'Test',
       last_name: 'User',
       date_of_birth: Date.new(1980, 1, 15)
     )
-    constituent.type = 'Admin'
+    constituent.type = 'Users::Administrator'
     assert constituent.save, 'Constituent should be changed to admin without disability'
   end
 
@@ -83,7 +83,7 @@ class DisabilityValidationTest < ActiveSupport::TestCase
 
     disability_types.each_with_index do |disability_type, index|
       # Create a new constituent for each disability type to avoid 3-year validation
-      constituent = Constituent.create!(
+      constituent = Users::Constituent.create!(
         email: "test_user_#{Time.now.to_i}_#{index}@example.com",
         password: 'password1234',
         first_name: 'Test',

@@ -36,21 +36,6 @@ module Admin
       end
     end
 
-    def role_description(role)
-      case role
-      when 'Admin'
-        'Full system access and management capabilities'
-      when 'Evaluator'
-        'Can perform evaluations and manage assessment data'
-      when 'Constituent'
-        'Standard user access to system features'
-      when 'Users::Vendor'
-        'Vendor-specific access and management features'
-      else
-        'Standard system access'
-      end
-    end
-
     def user_row_classes(user)
       classes = ['hover:bg-gray-50']
       classes << 'bg-warning-50 hover:bg-warning-100' if user.needs_duplicate_review

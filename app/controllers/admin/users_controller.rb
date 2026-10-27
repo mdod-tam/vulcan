@@ -323,10 +323,9 @@ module Admin
 
     def constituents
       @q = params[:q]
-      scope = User.where(type: Users::FilterService::CONSTITUENT_TYPE_VALUES)
-                  .joins(:applications)
-                  .where(applications: { status: [Application.statuses[:rejected], Application.statuses[:archived]] })
-                  .group('users.id')
+      scope = Users::Constituent.joins(:applications)
+                                .where(applications: { status: [Application.statuses[:rejected], Application.statuses[:archived]] })
+                                .group('users.id')
 
       if @q.present?
         scope = scope.where("first_name ILIKE :q OR last_name ILIKE :q OR (first_name || ' ' || last_name) ILIKE :q",
@@ -522,7 +521,6 @@ module Admin
       }
     end
 
-    # The constituent filter includes legacy "Constituent" STI records that satisfy +paper_applicant_candidate?+.
     def users_for_paper_search(query, role_filter, limit: 10)
       if role_filter == 'constituent'
         result = Users::FilterService.new(User.preload(*USER_PRELOADS), q: query, role: nil).apply_filters

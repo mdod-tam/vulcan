@@ -629,7 +629,7 @@ class ApplicationNotificationsMailerTest < ActionMailer::TestCase
   end
 
   test 'account_created' do
-    constituent = Constituent.create!(
+    constituent = Users::Constituent.create!(
       first_name: 'John',
       last_name: 'Doe',
       date_of_birth: Date.new(1980, 1, 15),
@@ -722,7 +722,7 @@ class ApplicationNotificationsMailerTest < ActionMailer::TestCase
   end
 
   test 'account_created generates letter when preference is letter' do
-    constituent = Constituent.create!(
+    constituent = Users::Constituent.create!(
       first_name: 'John',
       last_name: 'Doe',
       date_of_birth: Date.new(1980, 1, 15),
@@ -817,7 +817,7 @@ class ApplicationNotificationsMailerTest < ActionMailer::TestCase
   end
 
   test 'registration_confirmation' do
-    user = Constituent.create!(
+    user = Users::Constituent.create!(
       first_name: 'Jane',
       last_name: 'Smith',
       date_of_birth: Date.new(1980, 1, 15),
@@ -827,10 +827,6 @@ class ApplicationNotificationsMailerTest < ActionMailer::TestCase
       password_confirmation: 'password1234',
       hearing_disability: true
     )
-
-    active_vendors = []
-    Vendor.stubs(:active).returns(Vendor.none)
-    Vendor.none.stubs(:order).returns(active_vendors)
 
     mock_template(
       'Mock Welcome Jane!',
@@ -857,8 +853,26 @@ class ApplicationNotificationsMailerTest < ActionMailer::TestCase
     assert_match 'No authorized vendors found at this time.', text_content
   end
 
+  test 'registration_confirmation lists approved vendors and omits unapproved ones' do
+    user = create(:constituent)
+    create(:vendor, :approved, business_name: 'Zeta Devices')
+    create(:vendor, :approved, business_name: 'Alpha Mobility')
+    create(:vendor, business_name: 'Pending Shop')
+    template = mock_template('Welcome', "Authorized vendors:\n%<active_vendors_text_list>s")
+    EmailTemplate.stubs(:find_by!).with(name: 'application_notifications_registration_confirmation',
+                                        format: :text, locale: 'en').returns(template)
+
+    email = ApplicationNotificationsMailer.registration_confirmation(user)
+    email.deliver_now
+
+    text = decoded_text_part(email)
+    assert_includes text, '- Alpha Mobility'
+    assert_includes text, '- Zeta Devices'
+    assert_not_includes text, 'Pending Shop'
+  end
+
   test 'registration_confirmation generates letter when preference is letter' do
-    user = Constituent.create!(
+    user = Users::Constituent.create!(
       first_name: 'Jane',
       last_name: 'Smith',
       date_of_birth: Date.new(1980, 1, 15),
@@ -873,10 +887,6 @@ class ApplicationNotificationsMailerTest < ActionMailer::TestCase
       state: 'MD',
       zip_code: '21201'
     )
-
-    active_vendors = []
-    Vendor.stubs(:active).returns(Vendor.none)
-    Vendor.none.stubs(:order).returns(active_vendors)
 
     pdf_service_mock = mock('pdf_service')
     pdf_service_mock.expects(:queue_for_printing).once
