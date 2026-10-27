@@ -269,6 +269,8 @@ class PasswordsControllerTest < ActionDispatch::IntegrationTest
 
     assert_redirected_to new_password_path
     assert_equal 'Invalid or expired reset link.', flash[:alert]
+    follow_redirect!
+    assert_select '[data-testid="flash-alert"]', text: 'Invalid or expired reset link.', count: 1
     assert_not @user.reload.authenticate('ReplayReset*Password123')
   end
 
@@ -372,6 +374,7 @@ class PasswordsControllerTest < ActionDispatch::IntegrationTest
 
     assert_response :unprocessable_content
     assert_equal 'Current password is incorrect.', flash.now[:alert]
+    assert_select '[data-testid="flash-alert"]', text: 'Current password is incorrect.', count: 1
 
     @user.reload
     assert_equal @original_password_digest, @user.password_digest
@@ -386,6 +389,7 @@ class PasswordsControllerTest < ActionDispatch::IntegrationTest
 
     assert_response :unprocessable_content
     assert_equal 'New password and confirmation do not match.', flash.now[:alert]
+    assert_select '[data-testid="flash-alert"]', text: 'New password and confirmation do not match.', count: 1
 
     @user.reload
     assert_equal @original_password_digest, @user.password_digest

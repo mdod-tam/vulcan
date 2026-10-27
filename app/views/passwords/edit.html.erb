@@ -3,12 +3,6 @@
     <% token_reset = params[:token].present? %>
     <h2 id="password-form-heading" class="text-2xl font-semibold mb-6 text-center"><%= token_reset ? "Reset Password" : "Change Password" %></h2>
 
-    <% if flash[:alert] %>
-      <div role="alert" aria-live="assertive" class="flash-message flash-alert">
-        <span><%= flash[:alert] %></span>
-      </div>
-    <% end %>
-
     <%= form_with(url: password_path, method: :patch, html: { class: "space-y-6" }) do |form| %>
       <% if token_reset %>
         <%= form.hidden_field :token, value: params[:token] %>

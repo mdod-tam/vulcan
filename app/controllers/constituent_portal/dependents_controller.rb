@@ -288,7 +288,6 @@ module ConstituentPortal
     # New portal dependents require disability validation and must not reuse a user lookup result.
     def create_portal_dependent_user(dependent_attrs)
       create_user_with_service(dependent_attrs,
-                               is_managing_adult: false,
                                skip_user_lookup: true,
                                require_disability_validation: true)
     end

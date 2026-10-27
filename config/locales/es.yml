@@ -1,4 +1,7 @@
 es:
+  # Only alerts shown by public flows under the request locale are translated here. The other alerts.* keys, such as
+  # the vendor and admin ones, stay English-only on purpose: VendorPortal::BaseController pins that portal to English
+  # and admin pages are English-only.
   alerts:
     sign_in_required: "Inicie sesión para continuar."
     session_expired: "Su sesión ha expirado; vuelva a iniciar sesión."
@@ -78,6 +81,7 @@ es:
     registrations:
       skip_to_form: "Saltar al formulario de registro"
       title: "Crear cuenta"
+      account_created: "Cuenta creada correctamente. Le damos la bienvenida."
       required_indicator: "Indica un campo obligatorio"
       name_legend: "Nombre"
       first_name_label: "Nombre"
@@ -1023,6 +1027,10 @@ es:
     application:
       check_password_change_required:
         password_security_change: "Por razones de seguridad, debe cambiar su contraseña antes de continuar."
+      sign_in:
+        signin_pass: "Sesión iniciada correctamente."
+      complete_two_factor_authentication:
+        signin_pass_2fa: "Sesión iniciada correctamente."
   terms_and_conditions:
     title: "Acuerdo del Programa de Telecomunicaciones Accesibles de Maryland para la Aceptación de Propiedad Estatal para Uso Personal"
     intro: "Entiendo y acepto lo siguiente:"
@@ -1079,6 +1087,7 @@ es:
       exclusion: "no está disponible"
       greater_than: "debe ser mayor que %{count}"
       greater_than_or_equal_to: "debe ser mayor o igual que %{count}"
+      in: "debe estar en %{count}"
       inclusion: "no está incluido en la lista"
       invalid: "tiene un valor no válido"
       less_than: "debe ser menor que %{count}"
@@ -1088,6 +1097,7 @@ es:
       not_an_integer: "debe ser un número entero"
       odd: "debe ser un número impar"
       other_than: "debe ser distinto de %{count}"
+      password_too_long: "tiene demasiados caracteres"
       present: "debe estar en blanco"
       required: "debe existir"
       taken: "ya está en uso"

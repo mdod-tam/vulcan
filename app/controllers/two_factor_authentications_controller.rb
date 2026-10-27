@@ -139,17 +139,17 @@ class TwoFactorAuthenticationsController < ApplicationController
 
   def process_verification_attempt(type, verification_params)
     @type = type
-    success, message = if @type.present?
-                         verify_credential(@type, verification_params)
-                       else
-                         [false, t('two_factor_verification.errors.invalid_type')]
-                       end
+    outcome = if @type.present?
+                verify_credential(@type, verification_params)
+              else
+                verification_refused(t('two_factor_verification.errors.invalid_type'))
+              end
 
     respond_to do |format|
-      if success
+      if outcome.success?
         handle_successful_verification(format)
       else
-        handle_failed_verification(format, message)
+        handle_failed_verification(format, outcome)
       end
     end
   end
@@ -221,7 +221,7 @@ class TwoFactorAuthenticationsController < ApplicationController
     @type = params[:type]
 
     return unless ensure_two_factor_auth_in_progress
-    return respond_with_unsupported_type('verification method') unless @type == 'webauthn'
+    return respond_with_unsupported_type unless @type == 'webauthn'
 
     handle_webauthn_verification_options
   end
@@ -281,7 +281,7 @@ class TwoFactorAuthenticationsController < ApplicationController
 
     return if generate_webauthn_verification_options(user_for_2fa)
 
-    respond_with_missing_credentials(:webauthn)
+    respond_with_missing_credentials
   end
 
   def get_verification_params(type)
@@ -316,13 +316,8 @@ class TwoFactorAuthenticationsController < ApplicationController
     end
   end
 
-  def handle_failed_verification(format, message)
-    error_code = message if message.is_a?(Symbol)
-    message = case message
-              when :verification_failed then t('security_key_verification.feedback.failed')
-              when :user_session then t('two_factor_verification.errors.user_session')
-              else message
-              end
+  def handle_failed_verification(format, outcome)
+    message = outcome.message
 
     format.html do
       if set_verification_context
@@ -352,7 +347,7 @@ class TwoFactorAuthenticationsController < ApplicationController
     end
     format.json do
       error = { error: message }
-      error[:error_code] = error_code if error_code
+      error[:error_code] = outcome.error_code if outcome.error_code
       render json: error, status: :unprocessable_content
     end
   end
@@ -382,13 +377,11 @@ class TwoFactorAuthenticationsController < ApplicationController
   end
 
   def totp_code_valid?(code)
-    success, _message = verify_totp_credential(code)
-    success
+    verify_totp_credential(code).success?
   end
 
   def sms_code_valid?(code)
-    success, _message = verify_sms_credential(code, nil)
-    success
+    verify_sms_credential(code, nil).success?
   end
 
   def two_factor_auth_in_progress?
@@ -400,7 +393,7 @@ class TwoFactorAuthenticationsController < ApplicationController
     return respond_with_authentication_required unless action_name == 'process_verification'
 
     @type = params[:type]
-    respond_to { |format| handle_failed_verification(format, :user_session) }
+    respond_to { |format| handle_failed_verification(format, user_session_missing) }
   end
 
   def resolve_sms_credential_for_resend(user)

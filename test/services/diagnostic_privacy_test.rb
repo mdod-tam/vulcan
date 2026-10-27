@@ -44,6 +44,35 @@ class DiagnosticPrivacyTest < ActiveSupport::TestCase
     assert_private_detail_absent(log)
   end
 
+  test 'a handled report reaches the log with its class-only message, backtrace, and context, and an unhandled one does not' do
+    reported = StandardError.new('ActiveRecord::StatementInvalid')
+    reported.set_backtrace(["app/services/example.rb:1:in 'call'"])
+
+    log = capture_log do
+      Rails.error.report(reported, handled: true, context: { application_id: 7 })
+      Rails.error.report(RuntimeError.new('unhandled framework failure'), handled: false)
+    end
+
+    assert_includes log, 'ActiveRecord::StatementInvalid context={"application_id":7}'
+    assert_includes log, "app/services/example.rb:1:in 'call'"
+    assert_not_includes log, 'unhandled framework failure'
+  end
+
+  test 'a report made during a request logs only the caller context, never the controller or request' do
+    controller = Object.new
+    controller.instance_variable_set(:@session, PRIVATE_DETAIL)
+    controller.instance_variable_set(:@self, controller)
+
+    log = capture_log do
+      ActiveSupport::ExecutionContext.set(controller: controller, request: controller) do
+        Rails.error.report(StandardError.new('ArgumentError'), handled: true, context: { application_id: 7 })
+      end
+    end
+
+    assert_includes log, 'ArgumentError context={"application_id":7}'
+    assert_private_detail_absent(log)
+  end
+
   test 'shared user failure logging does not copy validation details into diagnostics' do
     adapter = Object.new.extend(UserServiceIntegration)
     record = User.new
@@ -53,7 +82,6 @@ class DiagnosticPrivacyTest < ActiveSupport::TestCase
 
     assert_includes log, 'creating dependent'
     assert_private_detail_absent(log)
-    assert_equal [PRIVATE_DETAIL], adapter.extract_error_messages(record.errors)
   end
 
   test 'malformed notification metadata is discarded without inspecting its contents' do

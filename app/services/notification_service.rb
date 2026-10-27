@@ -14,6 +14,15 @@ class NotificationService
     nil
   end
 
+  # Reads a create_and_deliver! result as one outcome, so a returned record is never mistaken for a delivered one:
+  # :failed (no record, or delivery errored), :suppressed (intentionally not sent), :recorded (saved, no delivery
+  # attempted), or the Notification delivery_status once handed off (:queued, :submitted, :delivered, :opened).
+  def self.delivery_outcome(notification)
+    return :failed if notification.nil? || notification.error_delivery_status?
+
+    notification.delivery_status&.to_sym || :recorded
+  end
+
   def self.build_notification_builder(type, recipient, opts)
     new.build
        .type(type)

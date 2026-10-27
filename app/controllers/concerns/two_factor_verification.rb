@@ -5,6 +5,12 @@
 module TwoFactorVerification
   extend ActiveSupport::Concern
 
+  # Outcome of a second-factor check. A failure carries the localized message to show and, for the two generic failures
+  # that never name which factor failed (:user_session, :verification_failed), the error code JSON clients receive.
+  Outcome = Data.define(:message, :error_code) do
+    def success? = message.nil?
+  end
+
   protected
 
   def store_challenge(type, challenge, metadata = {})
@@ -27,8 +33,7 @@ module TwoFactorVerification
     TwoFactorAuth.log_verification_failure(user_id, type, context)
   end
 
-  # Returns [success, message_or_error_code]. On failure, handle_failed_verification
-  # translates :user_session and :verification_failed or uses the localized message.
+  # Returns an Outcome.
   def verify_credential(type, params)
     case type.to_sym
     when :webauthn
@@ -38,7 +43,7 @@ module TwoFactorVerification
     when :sms
       verify_sms_credential(params[:code], params[:credential_id])
     else
-      [false, t('two_factor_verification.errors.invalid_type')]
+      verification_refused(t('two_factor_verification.errors.invalid_type'))
     end
   end
 
@@ -49,7 +54,7 @@ module TwoFactorVerification
   end
 
   def verify_totp_credential(code)
-    return [false, t('two_factor_verification.errors.no_code')] if code.blank?
+    return verification_refused(t('two_factor_verification.errors.no_code')) if code.blank?
 
     with_verified_user(:totp) do |user|
       verify_totp_code(code, user)
@@ -57,13 +62,13 @@ module TwoFactorVerification
   end
 
   def verify_sms_credential(code, credential_id)
-    return [false, t('two_factor_verification.errors.no_code')] if code.blank?
+    return verification_refused(t('two_factor_verification.errors.no_code')) if code.blank?
 
     user = find_user_for_two_factor
-    return [false, :user_session] unless user
+    return user_session_missing unless user
 
     credential = sms_credential_from_active_challenge(user, credential_id)
-    return [false, t('two_factor_verification.errors.expired_code')] unless credential
+    return verification_refused(t('two_factor_verification.errors.expired_code')) unless credential
 
     verify_sms_code(code, credential)
   end
@@ -72,23 +77,31 @@ module TwoFactorVerification
 
   def with_verified_user(_credential_type)
     user_for_2fa = find_user_for_two_factor
-    return [false, :user_session] unless user_for_2fa
+    return user_session_missing unless user_for_2fa
 
     yield(user_for_2fa)
   end
+
+  def verification_passed = Outcome.new(message: nil, error_code: nil)
+
+  def verification_refused(message, error_code = nil) = Outcome.new(message: message, error_code: error_code)
+
+  def user_session_missing = verification_refused(t('two_factor_verification.errors.user_session'), :user_session)
+
+  def verification_failed = verification_refused(t('security_key_verification.feedback.failed'), :verification_failed)
 
   def verify_webauthn_challenge(params, user)
     webauthn_credential = WebAuthn::Credential.from_get(params)
     stored_credential = user.webauthn_credentials.find_by(external_id: webauthn_credential.id)
     unless stored_credential
       log_verification_failure(user.id, :webauthn, reason: :credential_not_found)
-      return [false, :verification_failed]
+      return verification_failed
     end
 
     perform_webauthn_verification(webauthn_credential, stored_credential, user)
   rescue WebAuthn::Error, OpenSSL::PKey::PKeyError => e
     log_verification_failure(user.id, :webauthn, credential_id: stored_credential&.id, error_class: e.class.name)
-    [false, :verification_failed]
+    verification_failed
   end
 
   def perform_webauthn_verification(webauthn_credential, stored_credential, user)
@@ -101,7 +114,7 @@ module TwoFactorVerification
 
     stored_credential.update!(sign_count: webauthn_credential.sign_count)
     log_verification_success(user.id, :webauthn, credential_id: stored_credential.id)
-    [true, 'Verification successful']
+    verification_passed
   end
 
   def verify_totp_code(code, user)
@@ -111,11 +124,11 @@ module TwoFactorVerification
 
       credential.update(last_used_at: Time.current)
       log_verification_success(user.id, :totp, credential_id: credential.id)
-      return [true, 'Verification successful'] # The controller completes sign-in.
+      return verification_passed # The controller completes sign-in.
     end
 
     log_verification_failure(user.id, :totp, credential_ids: user.totp_credentials.pluck(:id), reason: :invalid_code)
-    [false, t('two_factor_verification.errors.invalid_code')]
+    verification_refused(t('two_factor_verification.errors.invalid_code'))
   end
 
   def sms_credential_from_active_challenge(user, submitted_credential_id)
@@ -134,22 +147,22 @@ module TwoFactorVerification
   def verify_sms_code(code, credential)
     challenge = sms_login_challenge(credential)
     result = challenge.check(code)
-    return [false, t('two_factor_verification.errors.expired_code')] unless result
+    return verification_refused(t('two_factor_verification.errors.expired_code')) unless result
 
     user_for_2fa = find_user_for_two_factor
-    return [false, :user_session] unless user_for_2fa
+    return user_session_missing unless user_for_2fa
 
     if result[:success] && result[:status] == 'approved'
       challenge.clear!
       log_verification_success(user_for_2fa.id, :sms, credential_id: credential.id)
-      [true, 'Verification successful'] # The controller completes sign-in.
+      verification_passed # The controller completes sign-in.
     elsif result[:success]
       challenge.clear! if challenge.terminal_status?(result[:status])
       log_verification_failure(user_for_2fa.id, :sms, credential_id: credential.id, reason: :invalid_code)
-      [false, sms_verification_error_message(result[:status])]
+      verification_refused(sms_verification_error_message(result[:status]))
     else
       log_verification_failure(user_for_2fa.id, :sms, credential_id: credential.id, reason: :provider_unavailable)
-      [false, t('two_factor_verification.errors.verification_service_unavailable')]
+      verification_refused(t('two_factor_verification.errors.verification_service_unavailable'))
     end
   end
 
@@ -267,25 +280,19 @@ module TwoFactorVerification
     end
   end
 
-  def respond_with_unsupported_type(type_name = 'credential type')
+  def respond_with_unsupported_type
+    message = t('two_factor_verification.errors.invalid_method')
     respond_to do |format|
-      format.json { render json: { error: "Unsupported #{type_name}" }, status: :bad_request }
-      format.html { redirect_to sign_in_path, alert: "Invalid #{type_name}." }
+      format.json { render json: { error: message }, status: :bad_request }
+      format.html { redirect_to sign_in_path, alert: message }
     end
   end
 
-  def respond_with_missing_credentials(credential_type)
-    error_messages = {
-      webauthn: 'No security keys are registered for this account',
-      sms: 'SMS verification not available',
-      totp: 'No authenticator app is set up'
-    }
-
-    error_message = error_messages[credential_type.to_sym] || 'No credentials available'
-
+  def respond_with_missing_credentials
+    message = t('two_factor_verification.errors.key_unavailable')
     respond_to do |format|
-      format.json { render json: { error: error_message }, status: :not_found }
-      format.html { redirect_to sign_in_path, alert: "#{error_message.gsub('for this account', 'for your account')}." }
+      format.json { render json: { error: message }, status: :not_found }
+      format.html { redirect_to sign_in_path, alert: message }
     end
   end
 

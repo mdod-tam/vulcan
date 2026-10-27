@@ -21,7 +21,7 @@ module VendorPortal
       if voucher
         redirect_to verify_vendor_portal_voucher_path(voucher.code)
       else
-        flash.now[:alert] = t('alerts.invalid_voucher_code', default: 'Invalid voucher code')
+        flash.now[:alert] = t('alerts.invalid_voucher_code')
       end
     end
 
@@ -101,7 +101,7 @@ module VendorPortal
       @voucher = Voucher.find_by(code: params[:code])
       return if @voucher
 
-      flash[:alert] = 'Invalid voucher code'
+      flash[:alert] = t('alerts.invalid_voucher_code')
       redirect_to vendor_portal_vouchers_path
     end
 

@@ -60,6 +60,7 @@ en:
     registrations:
       skip_to_form: "Skip to sign up form"
       title: "Create Account"
+      account_created: "Account created successfully. Welcome!"
       required_indicator: "Indicates a required field"
       name_legend: "Name"
       first_name_label: "First Name"

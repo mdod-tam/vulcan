@@ -60,6 +60,20 @@ class NotificationDeliveryVisibilityTest < ApplicationSystemTestCase
     page.current_window.resize_to(1200, 800)
   end
 
+  test 'admin status refresh shows its message once and keeps the flash region for the next update' do
+    sign_in(create(:admin))
+    visit notifications_path(scope: 'all')
+
+    2.times do
+      within("#notification_#{@notification.id}") { click_button 'Check status' }
+
+      assert_selector '#flash', count: 1
+      assert_selector '#flash [data-testid="flash-notice"]', text: 'Checking email status. This may take a moment.', count: 1
+      assert_selector '[data-testid="flash-notice"]', count: 1
+    end
+    capture_recipient_screen('delivery-admin-refresh-flash')
+  end
+
   private
 
   def assert_recipient_statuses(accepted_label, suppressed_label)

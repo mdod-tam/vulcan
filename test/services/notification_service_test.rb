@@ -62,6 +62,21 @@ class NotificationServiceTest < ActiveSupport::TestCase
     end
   end
 
+  test 'delivery_outcome never reports a returned record as delivered' do
+    notification = create(:notification, recipient: @constituent)
+
+    assert_equal :failed, NotificationService.delivery_outcome(nil)
+    assert_equal :recorded, NotificationService.delivery_outcome(notification)
+    {
+      'queued' => :queued, 'submitted' => :submitted, 'delivered' => :delivered, 'opened' => :opened,
+      'suppressed' => :suppressed, 'error' => :failed
+    }.each do |status, outcome|
+      notification.delivery_status = status
+
+      assert_equal outcome, NotificationService.delivery_outcome(notification), status
+    end
+  end
+
   test 'create_and_deliver! creates a notification and enqueues an email job for deliverable actions' do
     assert_enqueued_jobs 1, only: EmailDelivery::MailDeliveryJob do
       notification = nil

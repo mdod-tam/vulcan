@@ -2,12 +2,6 @@
   <div class="card p-8 w-full max-w-md">
     <h2 class="text-2xl font-semibold mb-6 text-center"><%= t("portal_self_service.account_access.title") %></h2>
 
-    <% if flash[:alert] %>
-      <div class="flash-message flash-alert">
-        <span><%= flash[:alert] %></span>
-      </div>
-    <% end %>
-
     <%= form_with url: password_path, method: :post, class: "space-y-6" do |form| %>
       <%= hidden_field_tag :locale, public_form_locale_param if public_form_locale_param.present? %>
 

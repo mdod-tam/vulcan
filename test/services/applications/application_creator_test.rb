@@ -419,6 +419,29 @@ module Applications
       assert_equal dependent_before, @dependent.reload.attributes
     end
 
+    test 'an unexpected failure shows generic copy and reports only the class, application frames, and ids' do
+      private_detail = 'Private Patient private-creator@example.test 410-555-0199'
+      invalid_record = Application.new.tap { |application| application.errors.add(:base, private_detail) }
+
+      [ActiveRecord::StatementInvalid.new(private_detail), ActiveRecord::RecordInvalid.new(invalid_record)].each do |error|
+        form = create_valid_form(@user)
+        form.locale = 'es'
+        AutosaveRevisions.any_instance.stubs(:prepare!).raises(error)
+
+        result = nil
+        report = nil
+        assert_no_difference 'Application.count' do
+          report = assert_error_reported { result = ApplicationCreator.call(form) }
+        end
+
+        assert_equal [I18n.t('applications.creation.failure', locale: :es)], result.error_messages, error.class.name
+        assert_equal error.class.name, report.error.message
+        assert_equal({ application_id: nil, actor_id: @user.id }, report.context)
+        assert_not_empty report.error.backtrace
+        assert_not_includes [report.error.message, report.error.backtrace.join, report.context.to_json].join, private_detail
+      end
+    end
+
     # Pending identity review
     # Final submission waits for staff to resolve the applicant's open registration soft match case.
 

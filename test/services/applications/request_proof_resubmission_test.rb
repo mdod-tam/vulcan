@@ -196,6 +196,21 @@ module Applications
       assert_predicate result.data.fetch(:secure_request_forms).first.reload, :revoked?
     end
 
+    test 'a delivery failure reaches the log with ids and the error class but no secure proof upload url or token' do
+      raw_url = 'https://example.test/secure_proof_form?token=raw-proof-token'
+      @mailer_delivery.stubs(:deliver_now).raises(StandardError, "smtp rendered #{raw_url}")
+      output = StringIO.new
+
+      Rails.stub(:logger, ActiveSupport::Logger.new(output)) do
+        RequestProofResubmission.new(application: @application, actor: @actor, proof_type: :income).call
+      end
+
+      assert_includes output.string, 'StandardError context={"error_class":"StandardError","secure_request_form_ids":['
+      assert_includes output.string, '"proof_type":"income"'
+      assert_not_includes output.string, 'raw-proof-token'
+      assert_not_includes output.string, raw_url
+    end
+
     test 'delivers proof rejection email to resolved guardian recipient' do
       guardian = create(:constituent, first_name: 'Guardian')
       dependent = create(:constituent, first_name: 'Dependent')

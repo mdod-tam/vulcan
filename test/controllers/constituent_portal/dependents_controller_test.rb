@@ -601,6 +601,7 @@ module ConstituentPortal
       get edit_constituent_portal_dependent_path(@dependent)
       assert_response :success
       assert_select 'h1', "Edit #{@dependent.full_name}"
+      assert_select '#flash', count: 1
     end
 
     test 'should update dependent profile and log guardian change' do

@@ -54,11 +54,7 @@ module Applications
         metadata: { recipient_id: recipient.id, recipient_audience: audience, constituent_id: application.user_id,
                     application_id: application.id }, channel: :email
       )
-      return :failed unless notification
-      return :failed if notification.error_delivery_status?
-      return :suppressed if notification.suppressed_delivery_status?
-
-      :queued
+      NotificationService.delivery_outcome(notification)
     rescue StandardError => e
       Rails.logger.error("Training request notification failed (application_id=#{application.id}, recipient_id=#{recipient.id}, error_class=#{e.class.name})")
       :failed

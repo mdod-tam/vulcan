@@ -100,27 +100,27 @@ module Applications
         @dependent_user = locked_users.fetch(@dependent_user.id)
 
         eligibility_error = relationship_participant_error
-        return add_error?("Failed to create relationship: #{eligibility_error}") if eligibility_error
+        return add_error("Failed to create relationship: #{eligibility_error}") if eligibility_error
 
         create_relationship_record!(relationship_type)
       end
       true
     rescue ActiveRecord::RecordNotFound
-      add_error?('Failed to create relationship: a selected record is no longer available')
+      add_error('Failed to create relationship: a selected record is no longer available')
     rescue ActiveRecord::RecordInvalid => e
-      add_error?("Failed to create relationship: #{e.record.errors.full_messages.to_sentence.presence || e.message}")
+      add_error("Failed to create relationship: #{e.record.errors.full_messages.to_sentence.presence || e.message}")
     rescue ActiveRecord::RecordNotUnique
-      add_error?('Failed to create relationship: relationship already exists')
+      add_error('Failed to create relationship: relationship already exists')
     end
 
     private
 
     def setup_guardian(guardian_id)
-      return add_error?('Guardian information missing') if guardian_id.blank?
+      return add_error('Guardian information missing') if guardian_id.blank?
 
       @guardian_user = User.find_by(id: guardian_id)
-      return add_error?('Guardian not found') unless @guardian_user
-      return add_error?('Selected guardian is not an eligible active constituent') unless @guardian_user.paper_guardian_candidate?
+      return add_error('Guardian not found') unless @guardian_user
+      return add_error('Selected guardian is not an eligible active constituent') unless @guardian_user.paper_guardian_candidate?
 
       true
     end
@@ -151,19 +151,19 @@ module Applications
       @identity_review = review_owner.call(lock: true)
       @guardian_user.reload
 
-      return add_error?(Applications::PaperIdentityReview::INVALID_DATE_OF_BIRTH_MESSAGE) if @identity_review.invalid_input?
-      return add_error?('Duplicate detection failed. Try again.') if @identity_review.error?
-      return add_error?(dependent_decision_error(@identity_review)) if @identity_review.invalid_decision?
-      return add_error?(DEPENDENT_CONTACT_COLLISION_MESSAGE) if @identity_review.blocked?
+      return add_error(Applications::PaperIdentityReview::INVALID_DATE_OF_BIRTH_MESSAGE) if @identity_review.invalid_input?
+      return add_error('Duplicate detection failed. Try again.') if @identity_review.error?
+      return add_error(dependent_decision_error(@identity_review)) if @identity_review.invalid_decision?
+      return add_error(DEPENDENT_CONTACT_COLLISION_MESSAGE) if @identity_review.blocked?
 
       if @identity_review.confirmed?
-        return add_error?('Explain the identity decision before continuing.') if params[:identity_rationale].blank?
+        return add_error('Explain the identity decision before continuing.') if params[:identity_rationale].blank?
 
         return true
       end
       return true if @identity_review.clear?
 
-      add_error?(dependent_decision_error(@identity_review))
+      add_error(dependent_decision_error(@identity_review))
     end
 
     # The replay pair is written here rather than by a follow-up update from the caller, so the key,
@@ -172,12 +172,12 @@ module Applications
     # replay would resolve to the wrong answer. The two are meaningless apart -- a check constraint
     # keeps them present or absent together -- and both are absent for every non-portal writer.
     def create_relationship(relationship_type)
-      return add_error?('Relationship type required') if relationship_type.blank?
+      return add_error('Relationship type required') if relationship_type.blank?
 
       create_relationship_record!(relationship_type)
       true
     rescue ActiveRecord::RecordInvalid => e
-      add_error?("Failed to create relationship: #{e.message}")
+      add_error("Failed to create relationship: #{e.message}")
       false
     end
 
@@ -282,7 +282,7 @@ module Applications
         return candidate unless User.exists_with_phone?(candidate)
       end
 
-      add_error?('Unable to generate unique synthetic dependent phone')
+      add_error('Unable to generate unique synthetic dependent phone')
       nil
     end
 
@@ -301,7 +301,7 @@ module Applications
         applicant_data: applicant_data,
         strategy_params: params
       ).call
-      return add_error?(choice.message) unless choice.valid?
+      return add_error(choice.message) unless choice.valid?
 
       true
     end
@@ -318,17 +318,12 @@ module Applications
       @email_backed_portal_created_user_ids << user_id.to_s if user_id.present?
     end
 
-    def add_error?(message)
-      @errors << message
-      false
-    end
-
     def success(data)
       Result.new(success: true, data: data)
     end
 
     def failure(message, data = nil)
-      add_error?(message) if @errors.empty?
+      add_error(message) if @errors.empty?
       Result.new(success: false, message: message, data: data || { errors: @errors })
     end
   end

@@ -9,7 +9,7 @@ module VendorPortal
 
     private
 
-    # The portal is English until all of its screens support another locale.
+    # The portal is English until all of its screens support another locale, so its alerts.* keys have no es entry.
     def with_vendor_portal_locale(&)
       I18n.with_locale(:en, &)
     end
@@ -34,7 +34,7 @@ module VendorPortal
 
       respond_to do |format|
         format.html do
-          flash[:alert] = I18n.t('alerts.must_be_vendor', default: 'You must be a vendor to access this section')
+          flash[:alert] = t('alerts.must_be_vendor')
           redirect_to root_path
         end
 
