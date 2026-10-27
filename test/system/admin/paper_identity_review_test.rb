@@ -9,7 +9,7 @@ module Admin
     include PaperApplicationsTestHelper
     include SystemTestEvidence
 
-    PROOFS = %w[income_proof residency_proof id_proof medical_certification].freeze
+    PROOFS = %w[income_proof residency_proof id_proof disability_certification].freeze
 
     setup do
       @admin = create(:admin)

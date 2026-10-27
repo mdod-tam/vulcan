@@ -36,7 +36,7 @@
     <% income_reason_options = reason_options_for.call('income') %>
     <% residency_reason_options = reason_options_for.call('residency') %>
     <% id_reason_options = reason_options_for.call('id') %>
-    <% medical_reason_options = reason_options_for.call('medical_certification') %>
+    <% disability_certification_reason_options = reason_options_for.call('disability_certification') %>
 
     <% paper_form_data = {
       turbo: false,
@@ -579,10 +579,10 @@
                   <div class="flex flex-wrap gap-4">
                     <label class="flex items-center p-3 bg-info-50 border border-info-200 rounded-lg cursor-pointer hover:bg-info-100 has-[:checked]:ring-2 has-[:checked]:ring-info-500">
                       <input type="radio"
-                             id="upload_only_medical_certification"
-                             name="medical_certification_action"
+                             id="upload_only_disability_certification"
+                             name="disability_certification_action"
                              value="upload_only"
-                             <%= 'checked' if submitted_params[:medical_certification_action] == 'upload_only' %>
+                             <%= 'checked' if submitted_params[:disability_certification_action] == 'upload_only' %>
                              class="h-4 w-4 text-info-600 border-gray-300"
                              data-action="change->document-proof-handler#toggleProofAction"
                              data-document-proof-handler-target="uploadOnlyRadio">
@@ -590,13 +590,13 @@
                     </label>
                     <label class="flex items-center p-3 bg-success-50 border border-success-200 rounded-lg cursor-pointer hover:bg-success-100 has-[:checked]:ring-2 has-[:checked]:ring-success-500">
                       <input type="radio"
-                             id="accept_medical_certification"
-                             name="medical_certification_action"
+                             id="accept_disability_certification"
+                             name="disability_certification_action"
                              value="approved"
                              <%# Default to approval only when no submission exists. A retry with a missing action must
                                  require a choice. Multiple checked radios would let the last one override the restored
                                  choice. %>
-                             <%= 'checked' if submitted_params[:medical_certification_action] == 'approved' || submitted_params.blank? %>
+                             <%= 'checked' if submitted_params[:disability_certification_action] == 'approved' || submitted_params.blank? %>
                              class="h-4 w-4 text-success-600 border-gray-300"
                              data-action="change->document-proof-handler#toggleProofAction"
                              data-document-proof-handler-target="acceptRadio">
@@ -604,17 +604,17 @@
                     </label>
                     <label class="flex items-center p-3 bg-danger-50 border border-danger-200 rounded-lg cursor-pointer hover:bg-danger-100 has-[:checked]:ring-2 has-[:checked]:ring-danger-500">
                       <input type="radio"
-                             id="reject_medical_certification"
-                             name="medical_certification_action"
+                             id="reject_disability_certification"
+                             name="disability_certification_action"
                              value="rejected"
-                             <%= 'checked' if submitted_params[:medical_certification_action] == 'rejected' %>
+                             <%= 'checked' if submitted_params[:disability_certification_action] == 'rejected' %>
                              class="h-4 w-4 text-danger-600 border-gray-300"
                              data-action="change->document-proof-handler#toggleProofAction"
                              data-document-proof-handler-target="rejectRadio">
                       <span class="ml-2 text-sm font-medium text-danger-800">Reject</span>
                     </label>
                     <button type="button"
-                            id="no_medical_certification_provided"
+                            id="no_disability_certification_provided"
                             class="flex items-center p-3 bg-gray-50 border border-gray-200 rounded-lg cursor-pointer hover:bg-gray-100"
                             data-action="click->document-proof-handler#handleNoneProvided"
                             data-document-proof-handler-target="noneButton">
@@ -623,55 +623,55 @@
                   </div>
                 </fieldset>
 
-                <div id="medical_certification_upload" class="mb-4" data-document-proof-handler-target="uploadSection">
-                  <label for="medical_certification" class="form-label mb-1 required-label">Upload Medical Certification</label>
+                <div id="disability_certification_upload" class="mb-4" data-document-proof-handler-target="uploadSection">
+                  <label for="disability_certification" class="form-label mb-1 required-label">Upload Disability Certification</label>
                   <%= render 'shared/document_upload',
-                             form: form, field: 'medical_certification', model: Application,
-                             blob: @uploaded_proofs&.dig('medical_certification'),
-                             described_by: 'medical_certification_help',
+                             form: form, field: 'disability_certification', model: Application,
+                             blob: @uploaded_proofs&.dig('disability_certification'),
+                             described_by: 'disability_certification_help',
                              input_data: { document_proof_handler_target: 'fileInput' } %>
-                  <p id="medical_certification_help" class="mt-1 text-xs text-gray-500">
+                  <p id="disability_certification_help" class="mt-1 text-xs text-gray-500">
                     Upload documentation verifying the disability certification.
                     Accepted formats: <%= proof_upload_formats_label %>.
                   </p>
                 </div>
 
-                <div id="medical_certification_rejection" class="hidden mb-4" data-document-proof-handler-target="rejectionSection">
+                <div id="disability_certification_rejection" class="hidden mb-4" data-document-proof-handler-target="rejectionSection">
                   <div class="space-y-4">
                     <div>
-                      <label for="medical_certification_rejection_reason" class="form-label mb-1">Rejection Reason</label>
-                      <select id="medical_certification_rejection_reason"
-                              name="medical_certification_rejection_reason"
+                      <label for="disability_certification_rejection_reason" class="form-label mb-1">Rejection Reason</label>
+                      <select id="disability_certification_rejection_reason"
+                              name="disability_certification_rejection_reason"
                               class="form-input"
                               data-action="change->document-proof-handler#handleReasonSelectionChanged"
                               data-document-proof-handler-target="rejectionReasonSelect">
                         <option value="">Select a reason</option>
-                        <option value="none_provided" <%= 'selected' if submitted_params[:medical_certification_rejection_reason] == 'none_provided' %>
+                        <option value="none_provided" <%= 'selected' if submitted_params[:disability_certification_rejection_reason] == 'none_provided' %>
                                 data-reason-text="No disability certification was provided with the application.">None Provided</option>
-                        <% medical_reason_options.each do |reason| %>
-                          <option value="<%= reason.code %>" <%= 'selected' if submitted_params[:medical_certification_rejection_reason] == reason.code %>
+                        <% disability_certification_reason_options.each do |reason| %>
+                          <option value="<%= reason.code %>" <%= 'selected' if submitted_params[:disability_certification_rejection_reason] == reason.code %>
                                   data-reason-text="<%= h reason.body %>"><%= RejectionReason.label_for(reason.code) %></option>
                         <% end %>
-                        <option value="other" <%= 'selected' if submitted_params[:medical_certification_rejection_reason] == 'other' %>>Other</option>
+                        <option value="other" <%= 'selected' if submitted_params[:disability_certification_rejection_reason] == 'other' %>>Other</option>
                       </select>
                     </div>
-                    <div id="medical_certification_reason_preview" class="p-3 bg-gray-50 border border-gray-200 rounded-md text-sm text-gray-700 hidden" role="status" aria-live="polite" aria-atomic="true" data-document-proof-handler-target="reasonPreview"></div>
+                    <div id="disability_certification_reason_preview" class="p-3 bg-gray-50 border border-gray-200 rounded-md text-sm text-gray-700 hidden" role="status" aria-live="polite" aria-atomic="true" data-document-proof-handler-target="reasonPreview"></div>
                     <p class="text-xs text-gray-500">
                       Predefined reasons are read-only in this form. To edit that wording, use
                       <%= link_to "Rejection Reasons", admin_rejection_reasons_path, class: "text-primary-700 underline hover:text-primary-900" %>.
                     </p>
                     <div class="hidden" data-document-proof-handler-target="customReasonSection">
-                      <label for="medical_certification_custom_rejection_reason" class="form-label mb-1">Custom Rejection Reason</label>
+                      <label for="disability_certification_custom_rejection_reason" class="form-label mb-1">Custom Rejection Reason</label>
                       <div class="rounded-md border border-warning-200 bg-warning-50 px-3 py-2 text-sm text-warning-900 mb-2" data-document-proof-handler-target="languageNotice">
                         Disability certification communications are sent to the certificate signer in English.
                       </div>
-                      <textarea id="medical_certification_custom_rejection_reason"
-                                name="medical_certification_custom_rejection_reason"
+                      <textarea id="disability_certification_custom_rejection_reason"
+                                name="disability_certification_custom_rejection_reason"
                                 rows="3"
                                 disabled
                                 placeholder="Enter the rejection reason that will be sent to the certifying professional"
                                 class="form-input"
-                                data-document-proof-handler-target="customReasonField"><%= submitted_params[:medical_certification_custom_rejection_reason] %></textarea>
+                                data-document-proof-handler-target="customReasonField"><%= submitted_params[:disability_certification_custom_rejection_reason] %></textarea>
                     </div>
                   </div>
                 </div>

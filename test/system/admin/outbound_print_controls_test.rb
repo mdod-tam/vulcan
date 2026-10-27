@@ -8,8 +8,8 @@ module Admin
       @admin = create(:admin)
       @recipient = create(:constituent)
       @application = create(:application, user: @recipient)
-      @letter = Letters::Delivery.queue!(recipient: @recipient, application: @application, letter_type: :medical_certification_form,
-                                         context: EmailDelivery::Policy.capture(mail_action: 'Letters#medical_certification_form'), actor: @admin) do
+      @letter = Letters::Delivery.queue!(recipient: @recipient, application: @application, letter_type: :disability_certification_form,
+                                         context: EmailDelivery::Policy.capture(mail_action: 'Letters#disability_certification_form'), actor: @admin) do
         StringIO.new('%PDF letter')
       end
     end
@@ -42,8 +42,8 @@ module Admin
       within('[data-email-control="communications.global"]') { accept_confirm { click_button 'Turn on' } }
       assert_text 'All outgoing communications is now on.'
       assert @letter.reload.canceled?
-      @letter = Letters::Delivery.queue!(recipient: @recipient, application: @application, letter_type: :medical_certification_form,
-                                         context: EmailDelivery::Policy.capture(mail_action: 'Letters#medical_certification_form'), actor: @admin) do
+      @letter = Letters::Delivery.queue!(recipient: @recipient, application: @application, letter_type: :disability_certification_form,
+                                         context: EmailDelivery::Policy.capture(mail_action: 'Letters#disability_certification_form'), actor: @admin) do
         StringIO.new('%PDF new letter')
       end
       visit admin_print_queue_path(@letter)
@@ -80,8 +80,8 @@ module Admin
     end
 
     test 'select all releases a batch and refreshes the queue after downloading' do
-      second = Letters::Delivery.queue!(recipient: @recipient, application: @application, letter_type: :medical_certification_form,
-                                        context: EmailDelivery::Policy.capture(mail_action: 'Letters#medical_certification_form'), actor: @admin) do
+      second = Letters::Delivery.queue!(recipient: @recipient, application: @application, letter_type: :disability_certification_form,
+                                        context: EmailDelivery::Policy.capture(mail_action: 'Letters#disability_certification_form'), actor: @admin) do
         StringIO.new('%PDF second letter')
       end
       sign_in(@admin)

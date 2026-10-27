@@ -137,7 +137,7 @@ Rails/SkipsModelValidations:
     - 'app/models/users/vendor.rb'
     - 'app/models/w9_review.rb'
     - 'app/services/applications/autosave_service.rb'
-    - 'app/services/applications/medical_certification_service.rb'
+    - 'app/services/applications/disability_certification_service.rb'
     - 'app/services/applications/proof_reviewer.rb'
     - 'app/services/document_signing/submission_service.rb'
     - 'app/services/notification_service.rb'
@@ -149,11 +149,6 @@ Rails/UniqueValidationWithoutIndex:
   Exclude:
     - 'app/models/email_template.rb'
     - 'app/models/voucher_transaction.rb'
-
-# Offense count: 1
-Security/Open:
-  Exclude:
-    - 'app/controllers/webhooks/medical_certifications_controller.rb'
 
 # Offense count: 2
 Style/ClassVars:

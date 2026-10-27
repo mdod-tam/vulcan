@@ -366,7 +366,7 @@ class NotificationService
                     ensure_action_contract?(notification, notifiable_class: [Application, ProofReview], actor_presence: true)
                   when 'account_created'
                     ensure_action_contract?(notification, recipient_class: User)
-                  when 'medical_certification_not_provided'
+                  when 'disability_certification_not_provided'
                     ensure_action_contract?(notification, notifiable_class: Application, actor_presence: true)
                   else
                     true

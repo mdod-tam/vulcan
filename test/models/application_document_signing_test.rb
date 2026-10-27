@@ -86,17 +86,17 @@ class ApplicationDocumentSigningTest < ActiveSupport::TestCase
     # Should exclude approved applications
     approved_app = create(:application, :in_progress,
                           document_signing_status: :signed,
-                          medical_certification_status: :approved)
+                          disability_certification_status: :approved)
 
     # Should exclude rejected applications
     rejected_app = create(:application, :in_progress,
                           document_signing_status: :signed,
-                          medical_certification_status: :rejected)
+                          disability_certification_status: :rejected)
 
     # Should include received applications
     received_app = create(:application, :in_progress,
                           document_signing_status: :signed,
-                          medical_certification_status: :received)
+                          disability_certification_status: :received)
 
     results = Application.digitally_signed_needs_review
     assert_not_includes results, approved_app

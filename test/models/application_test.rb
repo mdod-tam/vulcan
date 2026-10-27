@@ -48,7 +48,7 @@ class ApplicationTest < ActiveSupport::TestCase
     assert application.valid?
 
     application.status = :approved
-    application.medical_certification_status = :approved
+    application.disability_certification_status = :approved
     assert application.valid?
   end
 
@@ -713,7 +713,7 @@ class ApplicationTest < ActiveSupport::TestCase
       income_proof_status: Application.income_proof_statuses[:approved],
       residency_proof_status: Application.residency_proof_statuses[:approved],
       id_proof_status: Application.id_proof_statuses[:approved],
-      medical_certification_status: Application.medical_certification_statuses[:not_requested],
+      disability_certification_status: Application.disability_certification_statuses[:not_requested],
       updated_at: Time.current
     )
     application.reload
@@ -728,7 +728,7 @@ class ApplicationTest < ActiveSupport::TestCase
 
     application.reload
     assert_equal 'awaiting_dcf', application.status
-    assert_equal 'not_requested', application.medical_certification_status
+    assert_equal 'not_requested', application.disability_certification_status
   end
 
   test 'escalate_to_dcf! transitions to awaiting_dcf but skips cert request when proofs not approved' do
@@ -737,7 +737,7 @@ class ApplicationTest < ActiveSupport::TestCase
       status: Application.statuses[:in_progress],
       income_proof_status: Application.income_proof_statuses[:approved],
       residency_proof_status: Application.residency_proof_statuses[:not_reviewed],
-      medical_certification_status: Application.medical_certification_statuses[:not_requested],
+      disability_certification_status: Application.disability_certification_statuses[:not_requested],
       updated_at: Time.current
     )
     application.reload
@@ -748,7 +748,7 @@ class ApplicationTest < ActiveSupport::TestCase
 
     application.reload
     assert_equal 'awaiting_dcf', application.status
-    assert_equal 'not_requested', application.medical_certification_status
+    assert_equal 'not_requested', application.disability_certification_status
   end
 
   test 'escalate_to_dcf! is a no-op when already awaiting_dcf' do
@@ -758,7 +758,7 @@ class ApplicationTest < ActiveSupport::TestCase
       income_proof_status: Application.income_proof_statuses[:approved],
       id_proof_status: Application.id_proof_statuses[:approved],
       residency_proof_status: Application.residency_proof_statuses[:approved],
-      medical_certification_status: Application.medical_certification_statuses[:not_requested],
+      disability_certification_status: Application.disability_certification_statuses[:not_requested],
       updated_at: Time.current
     )
     application.reload
@@ -771,7 +771,7 @@ class ApplicationTest < ActiveSupport::TestCase
 
     application.reload
     assert_equal 'awaiting_dcf', application.status
-    assert_equal 'not_requested', application.medical_certification_status
+    assert_equal 'not_requested', application.disability_certification_status
   end
 
   test 'escalate_to_dcf! no-ops for terminal statuses' do
@@ -780,7 +780,7 @@ class ApplicationTest < ActiveSupport::TestCase
       application.update_columns(
         income_proof_status: Application.income_proof_statuses[:approved],
         residency_proof_status: Application.residency_proof_statuses[:approved],
-        medical_certification_status: Application.medical_certification_statuses[:not_requested],
+        disability_certification_status: Application.disability_certification_statuses[:not_requested],
         updated_at: Time.current
       )
       application.reload
@@ -794,7 +794,7 @@ class ApplicationTest < ActiveSupport::TestCase
       application.reload
       assert_equal terminal_status.to_s, application.status,
                    "Expected #{terminal_status} to remain unchanged"
-      assert_equal 'not_requested', application.medical_certification_status,
+      assert_equal 'not_requested', application.disability_certification_status,
                    "Expected cert status to remain not_requested for #{terminal_status}"
     end
   end
@@ -805,7 +805,7 @@ class ApplicationTest < ActiveSupport::TestCase
       status: Application.statuses[:awaiting_dcf],
       income_proof_status: Application.income_proof_statuses[:approved],
       residency_proof_status: Application.residency_proof_statuses[:approved],
-      medical_certification_status: Application.medical_certification_statuses[:requested],
+      disability_certification_status: Application.disability_certification_statuses[:requested],
       updated_at: Time.current
     )
     application.reload
@@ -820,7 +820,7 @@ class ApplicationTest < ActiveSupport::TestCase
 
     application.reload
     assert_equal 'awaiting_dcf', application.status
-    assert_equal 'requested', application.medical_certification_status
+    assert_equal 'requested', application.disability_certification_status
   end
 
   test 'escalate_to_dcf! creates exactly one status change and one audit event' do
@@ -830,7 +830,7 @@ class ApplicationTest < ActiveSupport::TestCase
       income_proof_status: Application.income_proof_statuses[:approved],
       id_proof_status: Application.id_proof_statuses[:approved],
       residency_proof_status: Application.residency_proof_statuses[:approved],
-      medical_certification_status: Application.medical_certification_statuses[:not_requested],
+      disability_certification_status: Application.disability_certification_statuses[:not_requested],
       updated_at: Time.current
     )
     application.reload

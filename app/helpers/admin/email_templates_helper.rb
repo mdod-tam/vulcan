@@ -336,7 +336,7 @@ module Admin
         'transaction_history_text' => is_es ? "- Canjeó $100 en el Vendedor A\n- Canjeó $50 en el Vendedor B" : "- Redeemed $100 at Vendor A\n- Redeemed $50 at Vendor B",
         'remaining_value_message_text' => is_es ? 'Tu saldo restante es de $350.00.' : 'Your remaining balance is $350.00.',
         'fully_redeemed_message_text' => is_es ? 'Este vale ha sido canjeado en su totalidad.' : 'This voucher has been fully redeemed.',
-        'download_form_url' => 'http://example.com/forms/medical_cert.pdf',
+        'download_form_url' => 'http://example.com/forms/disability_cert.pdf',
         'request_count_message' => is_es ? '(Solicitud #1)' : '(Request #1)',
         'temp_password' => 'temporaryP@ssw0rd',
         'household_size' => 4,

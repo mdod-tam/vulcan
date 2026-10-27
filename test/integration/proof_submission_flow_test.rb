@@ -14,7 +14,7 @@ class ProofSubmissionFlowTest < ActionDispatch::IntegrationTest
 
     @user = create(:constituent, email: 'johnny-test@example.com')
     @application = create(:application, :paper_rejected_proofs, user: @user)
-    @raw_pdf = fixture_file_upload('test/fixtures/files/medical_certification_valid.pdf', 'application/pdf')
+    @raw_pdf = fixture_file_upload('test/fixtures/files/disability_certification_valid.pdf', 'application/pdf')
     @valid_pdf = scanned_upload(@raw_pdf, user: @user, purpose: :proof, slot: 'income_proof').signed_id
 
     sign_in_for_integration_test(@user)

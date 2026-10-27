@@ -131,7 +131,7 @@ Guardian selected pane fails WCAG 1.4.10 Reflow at 320 CSS pixels
 
 - [ ] Tooltip/inline-help component: Stimulus controller + Tailwind styles
 - [ ] Data API: `data-help` attributes on inputs; ARIA compliance
-- [ ] Seed initial help copy for income/residency/medical fields (i18n YAML)
+- [ ] Seed initial help copy for income/residency/disability certification fields (i18n YAML)
 - [ ] Track interactions (open/close) to inform copy improvements
 
 ## Advanced Reporting  [DATA-001][DATA-002][AUTHZ-002][AUDIT-002]

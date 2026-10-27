@@ -131,22 +131,22 @@ class EmailDeliveryBoundaryTest < ActionDispatch::IntegrationTest
 
     assert result.data[:delivery_suppressed]
     application.reload
-    assert application.medical_certification_status_not_requested?
-    assert_nil application.medical_certification_requested_at
-    assert Event.exists?(action: 'medical_certification_request_not_sent', auditable: application)
+    assert application.disability_certification_status_not_requested?
+    assert_nil application.disability_certification_requested_at
+    assert Event.exists?(action: 'disability_certification_request_not_sent', auditable: application)
   end
 
   test 'a late certification stop does not undo a status this request did not set' do
     application = create(:application, :in_progress, medical_provider_name: 'Dr. Provider',
                                                      medical_provider_email: 'provider@example.test')
-    application.update_columns(medical_certification_status: Application.medical_certification_statuses[:requested],
-                               medical_certification_requested_at: 2.days.ago)
+    application.update_columns(disability_certification_status: Application.disability_certification_statuses[:requested],
+                               disability_certification_requested_at: 2.days.ago)
     EmailDelivery::Policy.stubs(:verify_delivery).returns(EmailDelivery::Decision.allowed)
                          .then.returns(EmailDelivery::Decision.suppressed(:global_disabled))
 
     Applications::RequestCertificationUpload.new(application: application, actor: @admin, deliver_email: true).call
 
-    assert application.reload.medical_certification_status_requested?
+    assert application.reload.disability_certification_status_requested?
   end
 
   test 'a late certification stop keeps a DocuSeal request accepted in the same second' do
@@ -174,8 +174,8 @@ class EmailDeliveryBoundaryTest < ActionDispatch::IntegrationTest
 
     application.reload
     assert application.document_signing_status_sent?
-    assert application.medical_certification_status_requested?
-    assert_not_nil application.medical_certification_requested_at
+    assert application.disability_certification_status_requested?
+    assert_not_nil application.disability_certification_requested_at
   end
 
   test 'a queued notification email suppressed when the worker runs is recorded on the notification' do
@@ -212,7 +212,7 @@ class EmailDeliveryBoundaryTest < ActionDispatch::IntegrationTest
   end
 
   test 'feedback on an old attempt does not overwrite a local suppression on its notification' do
-    notification = Notification.create!(recipient: @admin, actor: @admin, action: 'medical_certification_requested',
+    notification = Notification.create!(recipient: @admin, actor: @admin, action: 'disability_certification_requested',
                                         notifiable: create(:application), metadata: {})
     attempt = EmailDeliveryAttempt.create!(notification: notification, correlation_id: SecureRandom.uuid,
                                            recipient_key: EmailDeliveryAttempt.recipient_key('original@example.test'), destination: 'original@example.test',
@@ -242,7 +242,7 @@ class EmailDeliveryBoundaryTest < ActionDispatch::IntegrationTest
   end
 
   test 'a suppressed notification without a provider message id shows its status' do
-    notification = Notification.create!(recipient: @admin, actor: @admin, action: 'medical_certification_requested',
+    notification = Notification.create!(recipient: @admin, actor: @admin, action: 'disability_certification_requested',
                                         notifiable: create(:application), metadata: {})
     notification.mark_delivery_suppressed!('global_disabled')
 

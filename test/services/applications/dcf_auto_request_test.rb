@@ -20,7 +20,7 @@ module Applications
       end
       @application.update_columns(id_proof_status: Application.id_proof_statuses[:approved],
                                   residency_proof_status: Application.residency_proof_statuses[:approved],
-                                  medical_certification_status: Application.medical_certification_statuses[:not_requested])
+                                  disability_certification_status: Application.disability_certification_statuses[:not_requested])
       @flag = FeatureFlag.find_or_create_by!(name: 'dcf_auto_request_certification') { |flag| flag.enabled = false }
       @original_flag = @flag.enabled
       @control = FeatureFlag.find_by!(name: EmailDelivery.category_control('certification'))
@@ -43,16 +43,16 @@ module Applications
       Application.transaction do
         escalate_by_approving_proof
         assert @application.reload.status_awaiting_dcf?
-        assert @application.medical_certification_status_not_requested?
+        assert @application.disability_certification_status_not_requested?
         assert_empty certification_jobs
       end
       assert @application.reload.status_awaiting_dcf?
-      assert @application.medical_certification_status_requested?
-      assert_equal 1, @application.medical_certification_request_count
-      assert @application.medical_certification_requested_at
-      notification = Notification.where(notifiable: @application, action: 'medical_certification_requested').sole
+      assert @application.disability_certification_status_requested?
+      assert_equal 1, @application.disability_certification_request_count
+      assert @application.disability_certification_requested_at
+      notification = Notification.where(notifiable: @application, action: 'disability_certification_requested').sole
       assert_equal notification.id, certification_jobs.sole.dig('email_delivery_context', 'notification_id')
-      assert Event.exists?(auditable: @application, action: 'medical_certification_requested')
+      assert Event.exists?(auditable: @application, action: 'disability_certification_requested')
       @application.escalate_to_dcf!(actor: @admin)
       assert_equal 1, certification_jobs.size
     end
@@ -61,7 +61,7 @@ module Applications
       @flag.update!(enabled: false)
       assert_not FeatureFlag.enabled?(:dcf_auto_request_certification, default: false)
       @application.escalate_to_dcf!(actor: @admin)
-      assert @application.reload.medical_certification_status_not_requested?
+      assert @application.reload.disability_certification_status_not_requested?
       assert_empty certification_jobs
       @flag.destroy!
       @application.update_columns(status: Application.statuses[:in_progress])
@@ -88,7 +88,7 @@ module Applications
       @application.escalate_to_dcf!(actor: @admin)
       assert @application.reload.status_awaiting_dcf?
       assert @application.dcf_auto_request_not_sent?
-      assert_equal 0, @application.medical_certification_request_count
+      assert_equal 0, @application.disability_certification_request_count
       assert_empty certification_jobs
     end
 
@@ -96,10 +96,10 @@ module Applications
       @flag.update!(enabled: true)
       @application.escalate_to_dcf!(actor: @admin)
       EmailDelivery::ControlWriter.set(name: @control.name, enabled: false, actor: @admin, operation_id: SecureRandom.uuid)
-      perform_enqueued_jobs(only: MedicalCertificationEmailJob)
+      perform_enqueued_jobs(only: DisabilityCertificationEmailJob)
       assert @application.reload.status_awaiting_dcf?
       assert @application.dcf_auto_request_not_sent?
-      assert_equal 0, @application.medical_certification_request_count
+      assert_equal 0, @application.disability_certification_request_count
     end
 
     test 'rollback never issues an automatic request and enabling never sends for existing waiting applications' do
@@ -114,14 +114,14 @@ module Applications
       @application.escalate_to_dcf!(actor: @admin)
       @flag.update!(enabled: true)
       @application.escalate_to_dcf!(actor: @admin)
-      assert @application.reload.medical_certification_status_not_requested?
+      assert @application.reload.disability_certification_status_not_requested?
       assert_empty certification_jobs
     end
 
     private
 
     def certification_jobs
-      enqueued_jobs.select { |job| job[:job] == MedicalCertificationEmailJob }
+      enqueued_jobs.select { |job| job[:job] == DisabilityCertificationEmailJob }
     end
 
     def escalate_by_approving_proof

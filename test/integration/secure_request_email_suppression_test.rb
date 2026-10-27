@@ -97,7 +97,7 @@ class SecureRequestEmailSuppressionTest < ActiveSupport::TestCase
     end
 
     assert result.data[:delivery_suppressed]
-    assert application.reload.medical_certification_status_not_requested?
+    assert application.reload.disability_certification_status_not_requested?
     assert_empty ActionMailer::Base.deliveries
   end
 

@@ -14,7 +14,7 @@ module Admin
 
       sign_in_for_integration_test(@admin)
       @application = create(:application, user: create(:constituent, email: generate(:email)))
-      @application.update!(medical_certification_status: 'requested')
+      @application.update!(disability_certification_status: 'requested')
     end
 
     test 'should get index' do
@@ -164,42 +164,42 @@ module Admin
     end
 
     test 'certification upload recovery is scoped to the application' do
-      other_application = create(:application, medical_certification_status: :requested)
+      other_application = create(:application, disability_certification_status: :requested)
       get admin_application_path(other_application)
       assert_response :success
-      other_context = css_select('#medical-certification-upload-form [data-document-upload-context-value]').sole['data-document-upload-context-value']
+      other_context = css_select('#disability-certification-upload-form [data-document-upload-context-value]').sole['data-document-upload-context-value']
 
-      post document_scans_path, params: { file: fixture_file_upload('medical_certification_valid.pdf', 'application/pdf'),
-                                          purpose: 'certification', slot: 'medical_certification', context: other_context }
+      post document_scans_path, params: { file: fixture_file_upload('disability_certification_valid.pdf', 'application/pdf'),
+                                          purpose: 'certification', slot: 'disability_certification', context: other_context }
       assert_response :accepted
       scan = DocumentScan.find(response.parsed_body.fetch('id'))
       scan.update!(status: :clean, completed_at: Time.current)
 
       get admin_application_path(@application)
       assert_response :success
-      context = css_select('#medical-certification-upload-form [data-document-upload-context-value]').sole['data-document-upload-context-value']
+      context = css_select('#disability-certification-upload-form [data-document-upload-context-value]').sole['data-document-upload-context-value']
       assert_not_equal other_context, context
-      get document_scans_path, params: { purpose: 'certification', slot: 'medical_certification', context: context }
+      get document_scans_path, params: { purpose: 'certification', slot: 'disability_certification', context: context }
       assert_response :success
       assert_nil response.parsed_body
 
-      get document_scans_path, params: { purpose: 'certification', slot: 'medical_certification', context: other_context }
+      get document_scans_path, params: { purpose: 'certification', slot: 'disability_certification', context: other_context }
       assert_response :success
       assert_equal scan.id, response.parsed_body.fetch('id')
       assert_equal scan.blob, ActiveStorage::Blob.find_signed!(response.parsed_body.fetch('signed_id'))
-      assert_not_predicate @application.reload.medical_certification, :attached?
+      assert_not_predicate @application.reload.disability_certification, :attached?
     end
 
     test 'show binds each document virus scan to its own file separately from review status' do
       @application.update_column(:income_proof_required, true)
-      { income_proof: 'clean', residency_proof: 'blocked', id_proof: 'failed', medical_certification: 'pending' }.each do |slot, status|
+      { income_proof: 'clean', residency_proof: 'blocked', id_proof: 'failed', disability_certification: 'pending' }.each do |slot, status|
         attachment = @application.public_send(slot)
-        attachment.attach(io: file_fixture('medical_certification_valid.pdf').open, filename: "#{slot}.pdf", content_type: 'application/pdf')
-        mark_document_clean!(attachment.blob, user: @application.user, purpose: slot == :medical_certification ? :certification : :proof, slot: slot.to_s)
+        attachment.attach(io: file_fixture('disability_certification_valid.pdf').open, filename: "#{slot}.pdf", content_type: 'application/pdf')
+        mark_document_clean!(attachment.blob, user: @application.user, purpose: slot == :disability_certification ? :certification : :proof, slot: slot.to_s)
         DocumentScan.find_by!(blob: attachment.blob).update!(status: status, completed_at: status == 'pending' ? nil : Time.current)
       end
-      @application.additional_medical_certifications.attach(
-        io: file_fixture('medical_certification_valid.pdf').open, filename: 'additional.pdf', content_type: 'application/pdf'
+      @application.additional_disability_certifications.attach(
+        io: file_fixture('disability_certification_valid.pdf').open, filename: 'additional.pdf', content_type: 'application/pdf'
       )
 
       get admin_application_path(@application)
@@ -210,8 +210,8 @@ module Admin
           assert_select "[data-testid='document-scan-status'][data-scan-status='#{status}']", count: 1
         end
       end
-      assert_select '[data-testid="medical-certification"] [data-scan-status="pending"]', count: 1
-      assert_select '[data-testid="additional-medical-certifications"] [data-scan-status="not_scanned"]', text: /Not scanned/, count: 1
+      assert_select '[data-testid="disability-certification"] [data-scan-status="pending"]', count: 1
+      assert_select '[data-testid="additional-disability-certifications"] [data-scan-status="not_scanned"]', text: /Not scanned/, count: 1
       assert_select 'span', text: 'Not Reviewed', minimum: 3
     end
 
@@ -247,9 +247,9 @@ module Admin
       assert_includes response.body, 'Secure certification uploaded for Dr. Secure Cert'
     end
 
-    test 'should upload medical certification document' do
-      assert_equal 'requested', @application.medical_certification_status
-      assert_not @application.medical_certification.attached?
+    test 'should upload disability certification document' do
+      assert_equal 'requested', @application.disability_certification_status
+      assert_not @application.disability_certification.attached?
 
       file = fixture_file_upload(
         Rails.root.join('test/fixtures/files/test_document.pdf'),
@@ -258,18 +258,18 @@ module Admin
 
       mock_result = { success: true, status: 'approved' }
 
-      MedicalCertificationAttachmentService.stub :attach_certification, mock_result do
+      DisabilityCertificationAttachmentService.stub :attach_certification, mock_result do
         # The service stub omits persistence, so this test creates its own status history.
         ApplicationStatusChange.create!(
           application: @application,
           user: @admin,
           from_status: 'requested',
           to_status: 'approved',
-          metadata: { change_type: 'medical_certification' }
+          metadata: { change_type: 'disability_certification' }
         )
 
-        patch upload_medical_certification_admin_application_path(@application),
-              params: { medical_certification: file, medical_certification_status: 'approved' }
+        patch upload_disability_certification_admin_application_path(@application),
+              params: { disability_certification: file, disability_certification_status: 'approved' }
 
         # This fallback supplies the success flash when the stub does not.
         flash[:notice] = 'Disability certification successfully uploaded and approved.' if flash[:notice].blank?
@@ -282,20 +282,20 @@ module Admin
       end
 
       # The stub also omits the status and attachment writes.
-      @application.update_column(:medical_certification_status, 'approved')
-      @application.medical_certification.attach(io: StringIO.new('test content'), filename: 'test.pdf')
+      @application.update_column(:disability_certification_status, 'approved')
+      @application.disability_certification.attach(io: StringIO.new('test content'), filename: 'test.pdf')
 
       assert ApplicationStatusChange.where(
         application: @application,
         user: @admin,
         from_status: 'requested',
         to_status: 'approved'
-      ).exists?(["metadata->>'change_type' = ?", 'medical_certification'])
+      ).exists?(["metadata->>'change_type' = ?", 'disability_certification'])
     end
 
     test 'should reject upload without file' do
-      patch upload_medical_certification_admin_application_path(@application),
-            params: { medical_certification: nil, medical_certification_status: 'approved' }
+      patch upload_disability_certification_admin_application_path(@application),
+            params: { disability_certification: nil, disability_certification_status: 'approved' }
 
       assert_redirected_to admin_application_path(@application)
       # Preserve test authentication across the redirect.
@@ -304,14 +304,14 @@ module Admin
       assert_match(/Please select a file to upload/, flash[:alert])
 
       @application.reload
-      assert_equal 'requested', @application.medical_certification_status
+      assert_equal 'requested', @application.disability_certification_status
 
       file = fixture_file_upload(
         Rails.root.join('test/fixtures/files/test_document.pdf'),
         'application/pdf'
       )
-      patch upload_medical_certification_admin_application_path(@application),
-            params: { medical_certification: file }
+      patch upload_disability_certification_admin_application_path(@application),
+            params: { disability_certification: file }
 
       assert_redirected_to admin_application_path(@application)
       # Preserve test authentication across the redirect.
@@ -320,53 +320,53 @@ module Admin
       assert_match(/Please select whether to accept or reject the certification/, flash[:alert])
 
       @application.reload
-      assert_equal 'requested', @application.medical_certification_status
-      assert_not @application.medical_certification.attached?
+      assert_equal 'requested', @application.disability_certification_status
+      assert_not @application.disability_certification.attached?
     end
 
     test 'staff cannot upload over a certification that awaits review or is approved' do
       %w[received approved].each do |status|
-        existing = ActiveStorage::Blob.create_and_upload!(io: file_fixture('medical_certification_valid.pdf').open,
+        existing = ActiveStorage::Blob.create_and_upload!(io: file_fixture('disability_certification_valid.pdf').open,
                                                           filename: 'existing.pdf', content_type: 'application/pdf')
-        @application.medical_certification.attach(existing)
-        @application.update_column(:medical_certification_status, status)
+        @application.disability_certification.attach(existing)
+        @application.update_column(:disability_certification_status, status)
 
         get admin_application_path(@application)
-        assert_select '[data-testid="medical-certification-upload-form"]', count: 0
+        assert_select '[data-testid="disability-certification-upload-form"]', count: 0
 
-        patch upload_medical_certification_admin_application_path(@application),
-              params: { medical_certification: fixture_file_upload('medical_certification_valid.pdf', 'application/pdf'),
-                        medical_certification_status: 'approved' }
+        patch upload_disability_certification_admin_application_path(@application),
+              params: { disability_certification: fixture_file_upload('disability_certification_valid.pdf', 'application/pdf'),
+                        disability_certification_status: 'approved' }
 
         assert_redirected_to admin_application_path(@application)
-        assert_equal I18n.t('admin.applications.upload_medical_certification.m_not_allowed'), flash[:alert]
+        assert_equal I18n.t('admin.applications.upload_disability_certification.m_not_allowed'), flash[:alert]
         @application.reload
-        assert_equal status, @application.medical_certification_status
-        assert_equal existing, @application.medical_certification.blob
+        assert_equal status, @application.disability_certification_status
+        assert_equal existing, @application.disability_certification.blob
       end
     end
 
     test 'staff can upload again once a certification is rejected' do
-      @application.update_column(:medical_certification_status, 'rejected')
+      @application.update_column(:disability_certification_status, 'rejected')
 
       get admin_application_path(@application)
 
-      assert_select '[data-testid="medical-certification-upload-form"]'
+      assert_select '[data-testid="disability-certification-upload-form"]'
     end
 
     test 'rejecting a certification without a reason changes nothing' do
-      patch upload_medical_certification_admin_application_path(@application),
-            params: { medical_certification_status: 'rejected', rejection_reason_code: '' }
+      patch upload_disability_certification_admin_application_path(@application),
+            params: { disability_certification_status: 'rejected', rejection_reason_code: '' }
 
       assert_redirected_to admin_application_path(@application)
       assert_equal 'Please select a rejection reason', flash[:alert]
-      assert_equal 'requested', @application.reload.medical_certification_status
+      assert_equal 'requested', @application.reload.disability_certification_status
     end
 
     %w[text/html text/vnd.turbo-stream.html].each do |format|
       test "#{format} certification confirmation reports provider submission rather than receipt" do
         message = 'Disability certification rejected. Provider email submitted.'
-        Applications::MedicalCertificationReviewer.any_instance.expects(:reject).returns(
+        Applications::DisabilityCertificationReviewer.any_instance.expects(:reject).returns(
           BaseService::Result.new(success: true, message: message, data: { provider_delivery: { success: true, outcome: :submitted } })
         )
 
@@ -605,19 +605,19 @@ module Admin
 
     test 'show page uses db-backed rejection reason text in modal buttons' do
       income_body = 'DB income missing-name reason for modal test.'
-      medical_body = 'DB medical missing-signature reason for modal test.'
+      disability_certification_body = 'DB disability certification missing-signature reason for modal test.'
 
       RejectionReason.where(code: 'missing_name', proof_type: 'income', locale: 'en').destroy_all
-      RejectionReason.where(code: 'missing_signature', proof_type: 'medical_certification', locale: 'en').destroy_all
+      RejectionReason.where(code: 'missing_signature', proof_type: 'disability_certification', locale: 'en').destroy_all
 
       RejectionReason.create!(code: 'missing_name', proof_type: 'income', locale: 'en', body: income_body)
-      RejectionReason.create!(code: 'missing_signature', proof_type: 'medical_certification', locale: 'en', body: medical_body)
+      RejectionReason.create!(code: 'missing_signature', proof_type: 'disability_certification', locale: 'en', body: disability_certification_body)
 
       get admin_application_path(@application)
       assert_response :success
 
       assert_select "dialog#proofRejectionModal button[data-reason-code='missing_name'][data-reason-text='#{income_body}']"
-      assert_select "dialog#medicalCertificationRejectionModal button[data-reason-code='missing_signature'][data-reason-text='#{medical_body}']"
+      assert_select "dialog#disabilityCertificationRejectionModal button[data-reason-code='missing_signature'][data-reason-text='#{disability_certification_body}']"
     end
 
     test 'show page includes accessible rejection reason button attributes' do
@@ -625,11 +625,11 @@ module Admin
       assert_response :success
 
       assert_select "dialog#proofRejectionModal button[data-reason-code='address_mismatch'][aria-pressed='false']"
-      assert_select "dialog#medicalCertificationRejectionModal button[data-reason-code='missing_signature'][aria-pressed='false']"
+      assert_select "dialog#disabilityCertificationRejectionModal button[data-reason-code='missing_signature'][aria-pressed='false']"
       assert_select "dialog#proofRejectionModal [data-rejection-form-target='liveRegion'][aria-live='polite'][aria-atomic='true']"
-      assert_select "dialog#medicalCertificationRejectionModal [data-rejection-form-target='liveRegion'][aria-live='polite'][aria-atomic='true']"
+      assert_select "dialog#disabilityCertificationRejectionModal [data-rejection-form-target='liveRegion'][aria-live='polite'][aria-atomic='true']"
       assert_select "dialog#proofRejectionModal [data-rejection-form-target='codeStatus']", text: /No predefined rejection reason selected\./
-      assert_select "dialog#medicalCertificationRejectionModal [data-rejection-form-target='codeStatus']", text: /No predefined rejection reason selected\./
+      assert_select "dialog#disabilityCertificationRejectionModal [data-rejection-form-target='codeStatus']", text: /No predefined rejection reason selected\./
     end
 
     test 'should reject proof and send rejection email' do
@@ -843,7 +843,7 @@ module Admin
           id_proof_status: :approved,
           income_proof_required: false,
           status: :awaiting_proof,
-          medical_certification_status: :requested,
+          disability_certification_status: :requested,
           medical_provider_name: nil,
           medical_provider_phone: nil,
           medical_provider_email: nil
@@ -871,13 +871,13 @@ module Admin
 
     test 'queueing the certification form attaches the pregenerated PDF and leaves no named temporary file' do
       ensure_system_audit_actor!
-      pregenerated = Rails.root.join('app/assets/pdfs/medical_certification_form.pdf')
+      pregenerated = Rails.root.join('app/assets/pdfs/disability_certification_form.pdf')
 
       Dir.mktmpdir('dcf-queue') do |tmpdir|
         original_tmpdir = ENV.fetch('TMPDIR', nil)
         ENV['TMPDIR'] = tmpdir
         assert_difference 'PrintQueueItem.count', 1 do
-          post queue_medical_certification_form_admin_application_path(@application),
+          post queue_disability_certification_form_admin_application_path(@application),
                params: { operation_id: SecureRandom.uuid }, as: :turbo_stream
         end
         assert_response :success
@@ -897,13 +897,13 @@ module Admin
       script_pdf.write("%PDF-1.4\n/OpenAction << /S /JavaScript >>\n#{'x' * 2048}")
       script_pdf.close
 
-      patch upload_medical_certification_admin_application_path(@application),
-            params: { medical_certification: fixture_file_upload(script_pdf.path, 'application/pdf'),
-                      medical_certification_status: 'approved' }
+      patch upload_disability_certification_admin_application_path(@application),
+            params: { disability_certification: fixture_file_upload(script_pdf.path, 'application/pdf'),
+                      disability_certification_status: 'approved' }
 
       assert_redirected_to admin_application_path(@application)
       assert_includes flash[:alert], I18n.t('documents.refused.suspicious_content')
-      assert_not_predicate @application.reload.medical_certification, :attached?
+      assert_not_predicate @application.reload.disability_certification, :attached?
     ensure
       script_pdf&.unlink
     end

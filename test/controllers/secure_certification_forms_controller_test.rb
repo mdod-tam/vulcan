@@ -108,8 +108,8 @@ class SecureCertificationFormsControllerTest < ActionDispatch::IntegrationTest
   test 'patch success redirects to success' do
     result = BaseService::Result.new(success: true, message: 'ok', data: {})
     Applications::SubmitCertificationUpload.any_instance.stubs(:call).returns(result)
-    file = fixture_file_upload(Rails.root.join('test/fixtures/files/medical_certification_valid.pdf'), 'application/pdf')
-    reference = scanned_upload(file, secure_form: @secure_request_form, purpose: :certification, slot: 'medical_certification').signed_id
+    file = fixture_file_upload(Rails.root.join('test/fixtures/files/disability_certification_valid.pdf'), 'application/pdf')
+    reference = scanned_upload(file, secure_form: @secure_request_form, purpose: :certification, slot: 'disability_certification').signed_id
 
     patch secure_certification_form_path, params: { token: @raw_token, file: reference }
 

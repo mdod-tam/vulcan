@@ -25,7 +25,7 @@ Rails.application.routes.draw do
   get 'eligibility', to: 'pages#eligibility', as: :eligibility
   get 'apply', to: 'pages#apply', as: :apply
   get 'contact', to: 'pages#contact', as: :contact
-  get 'medical_certification_form', to: 'medical_certification_forms#show', as: :medical_certification_form
+  get 'disability_certification_form', to: 'disability_certification_forms#show', as: :disability_certification_form
   get 'secure_certification_form/success', to: 'secure_certification_forms#success', as: :secure_certification_form_success
   resource :secure_certification_form, only: %i[show update]
   resource :secure_certification_form_resend, only: %i[new create], controller: 'secure_certification_form_resends'
@@ -195,10 +195,10 @@ Rails.application.routes.draw do
         post :request_evaluation
         patch :update_proof_status
         patch :update_certification_status
-        post :resend_medical_certification
-        patch :upload_medical_certification
+        post :resend_disability_certification
+        patch :upload_disability_certification
         post :send_document_signing_request
-        post :queue_medical_certification_form
+        post :queue_disability_certification_form
       end
 
       resources :notes, only: %i[create update], controller: 'application_notes'
@@ -454,6 +454,6 @@ Rails.application.routes.draw do
   namespace :webhooks do
     resources :email_events, only: [:create]
     post 'twilio/fax_status', to: 'twilio#fax_status', as: :twilio_fax_status
-    post 'docuseal/medical_certification', to: 'docuseal#medical_certification'
+    post 'docuseal/disability_certification', to: 'docuseal#disability_certification'
   end
 end

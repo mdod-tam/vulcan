@@ -70,8 +70,8 @@ module Applications
 
     def uploaded_pdf(filename = 'income_proof.pdf')
       file = fixture_file_upload(Rails.root.join('test/fixtures/files', filename), 'application/pdf')
-      purpose = filename.start_with?('medical_certification') ? :certification : :proof
-      slot = purpose == :certification ? 'medical_certification' : File.basename(filename, '.pdf')
+      purpose = filename.start_with?('disability_certification') ? :certification : :proof
+      slot = purpose == :certification ? 'disability_certification' : File.basename(filename, '.pdf')
       scanned_upload(file, user: @admin, purpose: purpose, slot: slot).signed_id
     ensure
       file&.tempfile&.close
@@ -149,8 +149,8 @@ module Applications
         residency_proof: uploaded_pdf('residency_proof.pdf'),
         id_proof_action: 'upload_only',
         id_proof: uploaded_pdf('id_proof.pdf'),
-        medical_certification_action: 'upload_only',
-        medical_certification: uploaded_pdf('medical_certification_valid.pdf')
+        disability_certification_action: 'upload_only',
+        disability_certification: uploaded_pdf('disability_certification_valid.pdf')
       }
 
       %i[income residency id].each do |proof_type|
@@ -163,7 +163,7 @@ module Applications
           )
         ).returns({ success: true })
       end
-      MedicalCertificationAttachmentService.expects(:attach_certification).with(
+      DisabilityCertificationAttachmentService.expects(:attach_certification).with(
         has_entries(
           status: :received,
           admin: @admin,
@@ -219,18 +219,18 @@ module Applications
       assert_includes service.errors, 'Please upload a file for income proof before sending it for review'
     end
 
-    test 'upload only requires an uploaded medical certification file' do
+    test 'upload only requires an uploaded disability certification file' do
       service_params = {
         constituent: @constituent_params.merge(email: generate(:email), phone: unique_paper_phone),
         application: @application_params,
-        medical_certification_action: 'upload_only'
+        disability_certification_action: 'upload_only'
       }
 
-      MedicalCertificationAttachmentService.expects(:attach_certification).never
+      DisabilityCertificationAttachmentService.expects(:attach_certification).never
 
       service = PaperApplicationService.new(params: confirmed_paper_params(service_params, admin: @admin), admin: @admin)
       assert_not service.create
-      assert_includes service.errors, 'Please upload a file for medical certification before sending it for review'
+      assert_includes service.errors, 'Please upload a file for disability certification before sending it for review'
     end
 
     test 'editing an existing paper applicant records masked from-to contact evidence' do
@@ -417,7 +417,7 @@ module Applications
         residency_proof: uploaded_pdf('residency_proof.pdf'),
         id_proof_action: 'accept',
         id_proof: uploaded_pdf('id_proof.pdf'),
-        medical_certification_action: 'not_requested'
+        disability_certification_action: 'not_requested'
       }
 
       AuditEventService.stubs(:recent_duplicate_exists?).returns(false)
@@ -434,7 +434,7 @@ module Applications
 
       application.reload
       assert_equal 'awaiting_dcf', application.status
-      assert_equal 'not_requested', application.medical_certification_status
+      assert_equal 'not_requested', application.disability_certification_status
     end
 
     test 'uses Other custom rejection reason text as income rejection reason' do
@@ -463,22 +463,22 @@ module Applications
       assert result, "Failed to create application with custom rejection reason: #{service.errors.inspect}"
     end
 
-    test 'uses Other custom rejection reason text as medical certification rejection reason' do
+    test 'uses Other custom rejection reason text as disability certification rejection reason' do
       test_timestamp = Time.now.to_i
-      unique_email = "test-medical-other-#{test_timestamp}@example.com"
+      unique_email = "test-disability-certification-other-#{test_timestamp}@example.com"
       unique_phone = "202568#{test_timestamp.to_s[-4..]}"
       custom_note = "Provider noted additional details not covered by predefined reasons. [#{test_timestamp}]"
 
       service_params = {
         constituent: @constituent_params.merge(email: unique_email, phone: unique_phone),
         application: @application_params,
-        medical_certification_action: 'rejected',
-        medical_certification_rejection_reason: 'other',
-        medical_certification_custom_rejection_reason: custom_note
+        disability_certification_action: 'rejected',
+        disability_certification_rejection_reason: 'other',
+        disability_certification_custom_rejection_reason: custom_note
       }
 
       reviewer_result = BaseService::Result.new(success: true, data: { provider_delivery: { success: true, outcome: :deferred } })
-      Applications::MedicalCertificationReviewer.any_instance.expects(:reject).with(
+      Applications::DisabilityCertificationReviewer.any_instance.expects(:reject).with(
         rejection_reason: custom_note,
         notes: nil,
         rejection_reason_code: nil
@@ -486,24 +486,24 @@ module Applications
 
       service = PaperApplicationService.new(params: confirmed_paper_params(service_params, admin: @admin), admin: @admin)
       result = service.create
-      assert result, "Failed to create application with medical custom rejection reason: #{service.errors.inspect}"
+      assert result, "Failed to create application with disability certification custom rejection reason: #{service.errors.inspect}"
     end
 
-    test 'routes none provided medical certification rejection directly through attachment service' do
+    test 'routes none provided disability certification rejection directly through attachment service' do
       test_timestamp = Time.now.to_i
-      unique_email = "test-medical-none-#{test_timestamp}@example.com"
+      unique_email = "test-disability-certification-none-#{test_timestamp}@example.com"
       unique_phone = "202569#{test_timestamp.to_s[-4..]}"
 
       service_params = {
         no_medical_provider_information: true,
         constituent: @constituent_params.merge(email: unique_email, phone: unique_phone),
         application: @application_params.except(:medical_provider_name, :medical_provider_phone, :medical_provider_email),
-        medical_certification_action: 'rejected',
-        medical_certification_rejection_reason: 'none_provided'
+        disability_certification_action: 'rejected',
+        disability_certification_rejection_reason: 'none_provided'
       }
 
-      Applications::MedicalCertificationReviewer.any_instance.expects(:reject).never
-      MedicalCertificationAttachmentService.expects(:reject_certification).with(
+      Applications::DisabilityCertificationReviewer.any_instance.expects(:reject).never
+      DisabilityCertificationAttachmentService.expects(:reject_certification).with(
         has_entries(
           reason: 'none_provided',
           reason_code: nil,
@@ -513,7 +513,7 @@ module Applications
 
       service = PaperApplicationService.new(params: confirmed_paper_params(service_params, admin: @admin), admin: @admin)
       result = service.create
-      assert result, "Failed to create application with medical certification marked none provided: #{service.errors.inspect}"
+      assert result, "Failed to create application with disability certification marked none provided: #{service.errors.inspect}"
     end
 
     test 'paper intake without provider info creates application and sends provider info request' do
@@ -558,8 +558,8 @@ module Applications
         residency_proof: uploaded_pdf('residency_proof.pdf'),
         id_proof_action: 'accept',
         id_proof: uploaded_pdf('id_proof.pdf'),
-        medical_certification_action: 'accept',
-        medical_certification: uploaded_pdf('medical_certification_valid.pdf')
+        disability_certification_action: 'accept',
+        disability_certification: uploaded_pdf('disability_certification_valid.pdf')
       }
 
       NotificationService.stubs(:create_and_deliver!).returns(true)
@@ -575,14 +575,14 @@ module Applications
       assert_predicate application, :income_proof_status_approved?
       assert_predicate application, :residency_proof_status_approved?
       assert_predicate application, :id_proof_status_approved?
-      assert_predicate application, :medical_certification_status_approved?
+      assert_predicate application, :disability_certification_status_approved?
       assert_nil application.medical_provider_name
       assert_nil application.medical_provider_phone
       assert_nil application.medical_provider_email
       assert_nil service.reconciliation_note
     end
 
-    test 'routes medical certification rejection directly when provider contact information is missing' do
+    test 'routes disability certification rejection directly when provider contact information is missing' do
       custom_reason = "No provider contact details were available. [#{Time.now.to_i}]"
       application = create(:application, user: create(:constituent, :with_disabilities))
       application.update_columns(
@@ -592,13 +592,13 @@ module Applications
       )
 
       service_params = {
-        medical_certification_action: 'rejected',
-        medical_certification_rejection_reason: 'other',
-        medical_certification_custom_rejection_reason: custom_reason
+        disability_certification_action: 'rejected',
+        disability_certification_rejection_reason: 'other',
+        disability_certification_custom_rejection_reason: custom_reason
       }
 
-      Applications::MedicalCertificationReviewer.any_instance.expects(:reject).never
-      MedicalCertificationAttachmentService.expects(:reject_certification).with(
+      Applications::DisabilityCertificationReviewer.any_instance.expects(:reject).never
+      DisabilityCertificationAttachmentService.expects(:reject_certification).with(
         has_entries(
           reason: custom_reason,
           reason_code: nil,
@@ -1238,7 +1238,7 @@ module Applications
       end
     end
 
-    test 'medical certification not provided notice notifies constituent for none_provided review' do
+    test 'disability certification not provided notice notifies constituent for none_provided review' do
       constituent = create(:constituent, communication_preference: :email)
       application = create(:application, :in_progress, skip_proofs: true, user: constituent)
       %i[income residency].each do |proof_type|
@@ -1251,7 +1251,7 @@ module Applications
       create(:proof_review,
              application: application,
              admin: @admin,
-             proof_type: :medical_certification,
+             proof_type: :disability_certification,
              status: :rejected,
              rejection_reason: 'none_provided',
              rejection_reason_code: 'none_provided',
@@ -1261,9 +1261,9 @@ module Applications
       service.instance_variable_set(:@application, application)
       service.instance_variable_set(:@constituent, constituent)
 
-      NotificationService.expects(:create_and_deliver!).with(has_entry(type: 'medical_certification_not_provided')).once
+      NotificationService.expects(:create_and_deliver!).with(has_entry(type: 'disability_certification_not_provided')).once
 
-      service.send(:send_medical_certification_not_provided_notice)
+      service.send(:send_disability_certification_not_provided_notice)
     end
 
     test 'append_proof_resubmission_delivery_warnings surfaces note when resubmission delivery failed' do

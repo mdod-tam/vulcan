@@ -111,8 +111,8 @@ class DocumentScanTest < ActiveSupport::TestCase
     pending = DocumentScan.stage!(input: file, user: @user, purpose: :proof, slot: 'income_proof')
     assert_enqueued_with(job: DocumentScanJob, args: [pending.id]) { assert_same pending, pending.resume! }
 
-    certification = Rack::Test::UploadedFile.new(file_fixture('medical_certification_valid.pdf'), 'application/pdf')
-    terminal = DocumentScan.stage!(input: certification, purpose: :certification, slot: 'medical_certification', continuation: 'docuseal')
+    certification = Rack::Test::UploadedFile.new(file_fixture('disability_certification_valid.pdf'), 'application/pdf')
+    terminal = DocumentScan.stage!(input: certification, purpose: :certification, slot: 'disability_certification', continuation: 'docuseal')
     %w[clean blocked failed].each do |status|
       terminal.update!(status: status)
       assert_enqueued_with(job: DocumentSigning::AcceptScannedDocumentJob, args: [terminal.id]) { assert_same terminal, terminal.resume! }

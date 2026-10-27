@@ -45,7 +45,7 @@ module Admin
       assert_equal ['Jane Doe', 'neighbor', '555-123-4567', 'jane.doe@example.com'],
                    [application.alternate_contact_name, application.alternate_contact_relationship_type,
                     application.alternate_contact_phone, application.alternate_contact_email]
-      %i[income_proof residency_proof id_proof medical_certification].each do |document|
+      %i[income_proof residency_proof id_proof disability_certification].each do |document|
         assert application.public_send(document).attached?, "#{document} should be attached"
       end
     end

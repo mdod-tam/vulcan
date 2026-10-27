@@ -14,7 +14,7 @@ module Applications
       # Create a mix of certification and non-certification events using the existing admin user
       cert_notification = create(:notification,
                                  notifiable: @application,
-                                 action: 'medical_certification_requested',
+                                 action: 'disability_certification_requested',
                                  actor: @admin,
                                  recipient: @application.user)
 
@@ -24,13 +24,13 @@ module Applications
         user: @admin,
         from_status: 'submitted',
         to_status: 'requested',
-        metadata: { change_type: 'medical_certification' }
+        metadata: { change_type: 'disability_certification' }
       )
 
       cert_event = Event.create!(
         user: @admin,
         auditable: @application,
-        action: 'medical_certification_approved',
+        action: 'disability_certification_approved',
         metadata: {}
       )
 
@@ -61,7 +61,7 @@ module Applications
 
       request_notification = create(:notification,
                                     notifiable: @application,
-                                    action: 'medical_certification_requested',
+                                    action: 'disability_certification_requested',
                                     actor: @admin,
                                     recipient: @application.user)
       request_notification.update!(created_at: time_base - 2.minutes)
@@ -69,7 +69,7 @@ module Applications
       approved_event = Event.create!(
         user: @admin,
         auditable: @application,
-        action: 'medical_certification_approved',
+        action: 'disability_certification_approved',
         metadata: {},
         created_at: time_base - 1.minute
       )
@@ -79,7 +79,7 @@ module Applications
         user: @admin,
         from_status: 'submitted',
         to_status: 'requested',
-        metadata: { change_type: 'medical_certification' },
+        metadata: { change_type: 'disability_certification' },
         created_at: time_base
       )
 

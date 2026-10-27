@@ -133,10 +133,10 @@ module Applications
         .select('id, recipient_id, actor_id, notifiable_id, notifiable_type, action, read_at, created_at, message_id, delivery_status, metadata')
         .where(notifiable_type: 'Application', notifiable_id: application.id)
         .where(action: %w[
-                 medical_certification_requested
-                 medical_certification_received
-                 medical_certification_approved
-                 medical_certification_rejected
+                 disability_certification_requested
+                 disability_certification_received
+                 disability_certification_approved
+                 disability_certification_rejected
                  provider_info_requested
                  proof_resubmission_requested
                  cert_upload_requested
@@ -160,7 +160,7 @@ module Applications
             evaluator_assigned evaluator_reassigned trainer_assigned trainer_unassigned trainer_reassigned
             trainer_access_removed evaluator_access_removed
             evaluation_working_notes_updated
-            medical_certification_requested medical_certification_status_changed
+            disability_certification_requested disability_certification_status_changed
             alternate_contact_updated medical_provider_info_updated proof_secure_submission_refused
             proof_resubmission_request_failed
             provider_info_request_revoked proof_resubmission_request_revoked

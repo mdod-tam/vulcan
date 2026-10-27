@@ -1,10 +1,10 @@
 # frozen_string_literal: true
 
 module Applications
-  # Generates or attaches a Medical Certification Form (DCF) PDF and enqueues it for printing.
+  # Generates or attaches a Disability Certification Form (DCF) PDF and enqueues it for printing.
   # - If a pregenerated PDF is available (path or IO provided), it will be attached as-is.
   # - Otherwise, a simple generated PDF with key fields is produced.
-  class MedicalCertificationPdfService < BaseService
+  class DisabilityCertificationPdfService < BaseService
     attr_reader :application, :actor, :pdf_source
 
     # @param application [Application]
@@ -19,9 +19,9 @@ module Applications
     end
 
     def call
-      context = EmailDelivery::Policy.capture(mail_action: 'Letters#medical_certification_form', request_id: @request_key)
+      context = EmailDelivery::Policy.capture(mail_action: 'Letters#disability_certification_form', request_id: @request_key)
       item = Letters::Delivery.queue!(recipient: application.user, application: application,
-                                      letter_type: :medical_certification_form, context: context,
+                                      letter_type: :disability_certification_form, context: context,
                                       actor: actor, request_key: @request_key) { prepare_pdf_tempfile }
       success('DCF queued for printing', item)
     rescue ApplicationMailer::DeliverySkipped => e

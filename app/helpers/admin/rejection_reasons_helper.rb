@@ -17,7 +17,7 @@ module Admin
       case proof_type.to_s
       when 'income' then 'Income'
       when 'residency' then 'Residency'
-      when 'medical_certification' then 'Medical Certification'
+      when 'disability_certification' then 'Disability Certification'
       else proof_type.to_s.humanize
       end
     end

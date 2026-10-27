@@ -26,7 +26,7 @@ Rails.application.config.filter_parameters += [
   :autosave_context, :field_value,
 
   # Cleared upload receipts use the original file field names.
-  /\A(?:file|income_proof|residency_proof|id_proof|medical_certification|w9_form|document)\z/,
+  /\A(?:file|income_proof|residency_proof|id_proof|disability_certification|w9_form|document)\z/,
 
   # DocuSeal completion URLs can grant access to private signed documents.
   'data.documents', 'data.audit_log_url',

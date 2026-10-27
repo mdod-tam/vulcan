@@ -34,7 +34,7 @@ class DocumentScanningTest < ApplicationSystemTestCase
     fill_in 'Descriptive title (in the resource language)', with: 'Accessible setup guide'
     select 'English', from: 'Content language'
     select 'PDF document', from: 'Resource source'
-    attach_file 'PDF document', Rails.root.join('test/fixtures/files/medical_certification_valid.pdf')
+    attach_file 'PDF document', Rails.root.join('test/fixtures/files/disability_certification_valid.pdf')
     assert_selector '[data-scan-state="pending"]', text: 'Checking'
     scan = DocumentScan.where(user: @admin, purpose: 'product_resource').sole
     assert scan.pending?
@@ -106,7 +106,7 @@ class DocumentScanningTest < ApplicationSystemTestCase
     select 'PDF document', from: 'Resource source'
 
     %w[blocked failed].each do |verdict|
-      attach_file 'PDF document', Rails.root.join('test/fixtures/files/medical_certification_valid.pdf')
+      attach_file 'PDF document', Rails.root.join('test/fixtures/files/disability_certification_valid.pdf')
       assert_selector '[data-scan-state="pending"]'
       scan = DocumentScan.where(user: @admin, purpose: 'product_resource').order(:id).last
       scan.update!(status: verdict, completed_at: Time.current)
@@ -131,13 +131,13 @@ class DocumentScanningTest < ApplicationSystemTestCase
         return original(url, options);
       };
     JS
-    attach_file 'PDF document', Rails.root.join('test/fixtures/files/medical_certification_valid.pdf')
+    attach_file 'PDF document', Rails.root.join('test/fixtures/files/disability_certification_valid.pdf')
     assert_selector '[data-scan-state="unavailable"]', text: I18n.t('documents.scan.limit_reached')
     assert_button I18n.t('documents.upload.choose_again')
     take_screenshot('document-scan-allocation-refused-next-choice', html: true, full: true)
     click_button I18n.t('documents.upload.choose_again')
     assert_selector '[data-scan-state="idle"]'
-    attach_file 'PDF document', Rails.root.join('test/fixtures/files/medical_certification_valid.pdf')
+    attach_file 'PDF document', Rails.root.join('test/fixtures/files/disability_certification_valid.pdf')
     assert_selector '[data-scan-state="pending"]'
     assert_equal 3, DocumentScan.where(user: @admin).count
     assert_equal [], page.evaluate_script('window.scanPageViolations')

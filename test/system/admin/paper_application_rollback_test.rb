@@ -14,7 +14,7 @@ module Admin
     include SystemTestEvidence
 
     PROOFS = {
-      'medical_certification' => 'medical_certification_valid.pdf',
+      'disability_certification' => 'disability_certification_valid.pdf',
       'income_proof' => 'income_proof.pdf',
       'residency_proof' => 'residency_proof.pdf',
       'id_proof' => 'residency_proof.pdf'
@@ -531,9 +531,9 @@ module Admin
       complete_paper_application_attestations
     end
 
-    # Use non-default medical and ID actions so defaults cannot mask lost state.
+    # Use non-default disability certification and ID actions so defaults cannot mask lost state.
     def choose_non_default_proof_dispositions
-      choose 'upload_only_medical_certification', allow_label_click: true
+      choose 'upload_only_disability_certification', allow_label_click: true
       choose 'reject_id_proof', allow_label_click: true
       select 'None Provided', from: 'id_proof_rejection_reason'
       sync_paper_submit_gate
@@ -563,7 +563,7 @@ module Admin
 
       # Workflow decisions are not model attributes, so they require explicit restoration.
       { 'income_proof_action' => 'accept', 'residency_proof_action' => 'accept',
-        'id_proof_action' => 'reject', 'medical_certification_action' => 'upload_only' }.each do |group, expected|
+        'id_proof_action' => 'reject', 'disability_certification_action' => 'upload_only' }.each do |group, expected|
         assert_equal expected, checked_value(group), "#{group} was not restored"
       end
 
@@ -574,7 +574,7 @@ module Admin
 
     # The restored ID rejection specifies None Provided. An ID attachment would contradict it.
     def reattach_files_required_by_restored_dispositions
-      { 'medical_certification' => 'medical_certification_valid.pdf',
+      { 'disability_certification' => 'disability_certification_valid.pdf',
         'income_proof' => 'income_proof.pdf',
         'residency_proof' => 'residency_proof.pdf' }.each do |field, fixture|
         attach_cleared_document field, Rails.root.join("test/fixtures/files/#{fixture}")
@@ -583,7 +583,7 @@ module Admin
 
     def assert_restored_dispositions
       { 'income_proof_action' => 'accept', 'residency_proof_action' => 'accept',
-        'id_proof_action' => 'reject', 'medical_certification_action' => 'upload_only' }.each do |group, expected|
+        'id_proof_action' => 'reject', 'disability_certification_action' => 'upload_only' }.each do |group, expected|
         assert_equal expected, checked_value(group), "#{group} changed before the retry was submitted"
       end
       assert_equal 'none_provided',
@@ -601,7 +601,7 @@ module Admin
       assert_equal 'approved', application.income_proof_status
       assert_equal 'approved', application.residency_proof_status
 
-      assert application.medical_certification.attached?, 'the certification should have been attached'
+      assert application.disability_certification.attached?, 'the certification should have been attached'
 
       assert_not application.id_proof.attached?, 'a rejected ID proof must not carry a document'
       assert_equal 'rejected', application.id_proof_status

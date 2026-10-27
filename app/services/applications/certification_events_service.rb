@@ -44,7 +44,7 @@ module Applications
     end
 
     def certification_related_status_change?(event)
-      medical_certification_metadata?(event) ||
+      disability_certification_metadata?(event) ||
         status_contains_certification?(event)
     end
 
@@ -53,11 +53,11 @@ module Applications
         (event.metadata.is_a?(Hash) && event.metadata.to_s.include?('certification'))
     end
 
-    def medical_certification_metadata?(event)
+    def disability_certification_metadata?(event)
       return false unless event.metadata
 
-      event.metadata[:change_type] == 'medical_certification' ||
-        event.metadata['change_type'] == 'medical_certification'
+      event.metadata[:change_type] == 'disability_certification' ||
+        event.metadata['change_type'] == 'disability_certification'
     end
 
     def status_contains_certification?(event)
@@ -68,7 +68,7 @@ module Applications
     def request_event?(event)
       case event
       when Notification
-        event.action == 'medical_certification_requested'
+        event.action == 'disability_certification_requested'
       when ApplicationStatusChange
         event.to_status == 'requested'
       when Event
@@ -79,7 +79,7 @@ module Applications
     end
 
     def request_event_record?(event)
-      event.action == 'medical_certification_requested' ||
+      event.action == 'disability_certification_requested' ||
         (event.metadata.is_a?(Hash) && event.metadata['details'].to_s.include?('certification requested'))
     end
 

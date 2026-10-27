@@ -13,7 +13,7 @@ module Letters
       @application = create(:application, user: @recipient)
       @control = FeatureFlag.find_by!(name: EmailDelivery::ALL_CONTROL)
       @control_before = @control.slice(:enabled, :delivery_generation)
-      @context = EmailDelivery::Policy.capture(mail_action: 'Letters#medical_certification_form')
+      @context = EmailDelivery::Policy.capture(mail_action: 'Letters#disability_certification_form')
     end
 
     teardown do
@@ -153,7 +153,7 @@ module Letters
 
     def queue(&)
       Delivery.queue!(recipient: User.find(@recipient.id), application: Application.find(@application.id),
-                      letter_type: :medical_certification_form, context: @context, actor: @admin, &)
+                      letter_type: :disability_certification_form, context: @context, actor: @admin, &)
     end
 
     def disable

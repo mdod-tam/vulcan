@@ -48,7 +48,7 @@ def valid_proof_status?(proof_type, status_value)
   valid_statuses = case proof_type
                    when :income_proof, :residency_proof
                      %w[approved rejected not_reviewed] # Include not_reviewed for test data
-                   when :medical_certification
+                   when :disability_certification
                      %w[received accepted]
                    else
                      []
@@ -347,11 +347,11 @@ def process_other_applications
                                   filename: 'residency_proof.pdf'
                                 })
     attach_proof_to_application(app, {
-                                  type: :medical_certification,
-                                  status_method: :medical_certification_status,
-                                  attachment_method: :medical_certification,
-                                  file_path: 'medical_certification_valid.pdf',
-                                  filename: 'medical_certification_valid.pdf'
+                                  type: :disability_certification,
+                                  status_method: :disability_certification_status,
+                                  attachment_method: :disability_certification,
+                                  file_path: 'disability_certification_valid.pdf',
+                                  filename: 'disability_certification_valid.pdf'
                                 })
   end
 end
@@ -364,7 +364,7 @@ def verify_and_fix_missing_files
 
     verify_and_fix_attachment(app, :income_proof, :income_proof, 'income_proof.pdf', fixed_files)
     verify_and_fix_attachment(app, :residency_proof, :residency_proof, 'residency_proof.pdf', fixed_files)
-    verify_and_fix_attachment(app, :medical_certification, :medical_certification, 'medical_certification_valid.pdf', fixed_files)
+    verify_and_fix_attachment(app, :disability_certification, :disability_certification, 'disability_certification_valid.pdf', fixed_files)
 
     seed_success "  Fixed #{fixed_files.size} missing files for Application ##{app.id}: #{fixed_files.join(', ')}" if fixed_files.any?
   end

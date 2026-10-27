@@ -88,8 +88,8 @@ class ApplicationIngressCharacterizationTest < ActionDispatch::IntegrationTest
         income_proof: scanned_reference('income_proof.pdf', user: @admin, purpose: :proof, slot: 'income_proof'),
         residency_proof_action: 'accept',
         residency_proof: scanned_reference('residency_proof.pdf', user: @admin, purpose: :proof, slot: 'residency_proof'),
-        medical_certification_action: 'approved',
-        medical_certification: scanned_reference('medical_certification_valid.pdf', user: @admin, purpose: :certification, slot: 'medical_certification')
+        disability_certification_action: 'approved',
+        disability_certification: scanned_reference('disability_certification_valid.pdf', user: @admin, purpose: :certification, slot: 'disability_certification')
       },
       admin: @admin
     )
@@ -101,31 +101,31 @@ class ApplicationIngressCharacterizationTest < ActionDispatch::IntegrationTest
     assert_equal 'paper', application.submission_method
     assert_equal 'approved', application.income_proof_status
     assert_equal 'approved', application.residency_proof_status
-    assert_equal 'approved', application.medical_certification_status
+    assert_equal 'approved', application.disability_certification_status
     assert application.income_proof.attached?
     assert application.residency_proof.attached?
-    assert application.medical_certification.attached?
+    assert application.disability_certification.attached?
     assert Event.exists?(auditable: application, action: 'application_created')
   end
 
   test 'admin certification review produces the expected certification state' do
-    application = create(:application, medical_certification_status: :requested)
+    application = create(:application, disability_certification_status: :requested)
 
     sign_in_for_integration_test(@admin)
 
-    patch upload_medical_certification_admin_application_path(application),
+    patch upload_disability_certification_admin_application_path(application),
           params: {
-            medical_certification: scanned_reference('medical_certification_valid.pdf', user: @admin, purpose: :certification, slot: 'medical_certification'),
-            medical_certification_status: 'approved'
+            disability_certification: scanned_reference('disability_certification_valid.pdf', user: @admin, purpose: :certification, slot: 'disability_certification'),
+            disability_certification_status: 'approved'
           }
 
     assert_redirected_to admin_application_path(application)
 
-    assert_medical_certification_contract(
+    assert_disability_certification_contract(
       application,
       expected_status: 'approved',
       expected_from_status: 'requested',
-      expected_event_action: 'medical_certification_status_changed',
+      expected_event_action: 'disability_certification_status_changed',
       expected_submission_method: 'admin_upload',
       expected_actor: @admin
     )
@@ -139,14 +139,14 @@ class ApplicationIngressCharacterizationTest < ActionDispatch::IntegrationTest
       document_signing_submitter_id: 'submitter_789',
       document_signing_requested_at: 1.day.ago,
       document_signing_status: :sent,
-      medical_certification_status: :requested
+      disability_certification_status: :requested
     )
 
     response = mock('docuseal_response')
     status = mock('docuseal_status')
     status.stubs(:success?).returns(true)
     response.stubs(:status).returns(status)
-    response.stubs(:body).returns(HTTP::Response::Body.new(DocumentScanFixtures::ResponseStream.new(file_fixture('medical_certification_valid.pdf').binread)))
+    response.stubs(:body).returns(HTTP::Response::Body.new(DocumentScanFixtures::ResponseStream.new(file_fixture('disability_certification_valid.pdf').binread)))
     HTTP.stubs(:timeout).with(30).returns(HTTP)
     HTTP.stubs(:get).with('https://docuseal.com/signed_doc.pdf').returns(response)
 
@@ -161,7 +161,7 @@ class ApplicationIngressCharacterizationTest < ActionDispatch::IntegrationTest
       }
     }
 
-    post webhooks_docuseal_medical_certification_path,
+    post webhooks_docuseal_disability_certification_path,
          params: payload,
          headers: webhook_headers(payload),
          as: :json
@@ -171,8 +171,8 @@ class ApplicationIngressCharacterizationTest < ActionDispatch::IntegrationTest
     scan = DocumentScan.find_by!(continuation: 'docuseal')
     assert_predicate scan, :pending?
     assert_empty scan.blob.attachments
-    assert_not application.reload.medical_certification.attached?
-    assert_equal 'requested', application.medical_certification_status
+    assert_not application.reload.disability_certification.attached?
+    assert_equal 'requested', application.disability_certification_status
     assert_equal 'sent', application.document_signing_status
     assert_not Event.exists?(auditable: application, action: 'document_signing_completed')
 
@@ -180,8 +180,8 @@ class ApplicationIngressCharacterizationTest < ActionDispatch::IntegrationTest
     DocumentSigning::AcceptScannedDocumentJob.perform_now(scan.id)
 
     application.reload
-    assert application.medical_certification.attached?
-    assert_equal 'received', application.medical_certification_status
+    assert application.disability_certification.attached?
+    assert_equal 'received', application.disability_certification_status
     assert_equal 'signed', application.document_signing_status
     assert_equal 'https://example.com/audit_log', application.document_signing_audit_url
     assert Event.exists?(auditable: application, action: 'document_signing_completed')
@@ -229,20 +229,20 @@ class ApplicationIngressCharacterizationTest < ActionDispatch::IntegrationTest
     assert_equal expected_submission_method, event.metadata['submission_method']
   end
 
-  def assert_medical_certification_contract(application, expected_status:, expected_from_status:, expected_event_action:,
-                                            expected_submission_method:, expected_actor:)
+  def assert_disability_certification_contract(application, expected_status:, expected_from_status:, expected_event_action:,
+                                               expected_submission_method:, expected_actor:)
     application.reload
 
-    assert application.medical_certification.attached?
-    assert_equal expected_status, application.medical_certification_status
+    assert application.disability_certification.attached?
+    assert_equal expected_status, application.disability_certification_status
 
-    status_change = ApplicationStatusChange.where(application: application, change_type: :medical_certification)
+    status_change = ApplicationStatusChange.where(application: application, change_type: :disability_certification)
                                            .order(:created_at)
                                            .last
     assert_not_nil status_change
     assert_equal expected_from_status, status_change.from_status
     assert_equal expected_status, status_change.to_status
-    assert_equal 'medical_certification', status_change.metadata['change_type']
+    assert_equal 'disability_certification', status_change.metadata['change_type']
     assert_equal expected_submission_method, status_change.metadata['submission_method']
 
     event = Event.where(auditable: application, action: expected_event_action).order(:created_at).last

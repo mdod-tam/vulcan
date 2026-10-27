@@ -151,8 +151,8 @@
       </dl>
     </section>
 
-    <section aria-labelledby="medical-heading" class="mb-6 p-4 bg-gray-50 rounded">
-      <h2 id="medical-heading" class="text-xl font-semibold mb-4 text-gray-900">Disability Certification</h2>
+    <section aria-labelledby="disability-certification-heading" class="mb-6 p-4 bg-gray-50 rounded">
+      <h2 id="disability-certification-heading" class="text-xl font-semibold mb-4 text-gray-900">Disability Certification</h2>
       <% if @application.medical_provider_name.present? %>
         <div class="mb-4">
           <h3 class="text-lg font-medium text-gray-900 mb-3">Certifying Professional Information</h3>
@@ -180,7 +180,7 @@
 
       <div>
         <span class="text-sm font-medium text-gray-700">Certification Status:</span>
-        <% status = @application.medical_certification_status %>
+        <% status = @application.disability_certification_status %>
         <span class="ml-2 <%= badge_class_for(:certification, status) %>"
               role="status"
               aria-label="Disability certification status: <%= status.titleize %>">

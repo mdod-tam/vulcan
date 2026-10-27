@@ -182,9 +182,9 @@ module Applications
       end
     end
 
-    test 'filters by medical certifications to review' do
-      @active_app.update!(medical_certification_status: :received, status: :in_progress)
-      @approved_app.update!(medical_certification_status: :approved, status: :approved)
+    test 'filters by disability certifications to review' do
+      @active_app.update!(disability_certification_status: :received, status: :in_progress)
+      @approved_app.update!(disability_certification_status: :approved, status: :approved)
 
       @rejected_app_user = create(:user,
                                   first_name: 'Rejected',
@@ -220,23 +220,23 @@ module Applications
           residency_proof_status: :approved
         )
 
-        medical_cert_mock = mock_attached_file(
-          filename: 'medical_certification.pdf',
+        disability_cert_mock = mock_attached_file(
+          filename: 'disability_certification.pdf',
           content_type: 'application/pdf',
           created_at: 1.day.ago
         )
-        @rejected_app.stubs(:medical_certification).returns(medical_cert_mock)
-        @rejected_app.stubs(:medical_certification_attached?).returns(true)
-        @rejected_app.update!(medical_certification_status: :received)
+        @rejected_app.stubs(:disability_certification).returns(disability_cert_mock)
+        @rejected_app.stubs(:disability_certification_attached?).returns(true)
+        @rejected_app.update!(disability_certification_status: :received)
 
-        service = FilterService.new(@scope, { filter: 'medical_certs_to_review' })
+        service = FilterService.new(@scope, { filter: 'disability_certs_to_review' })
         service_result = service.apply_filters
 
         assert service_result.success?, 'Expected service call to be successful'
         result_data = service_result.data
         assert_includes result_data, @active_app
         assert_not_includes result_data, @approved_app
-        assert_not_includes result_data, @rejected_app, 'Rejected applications should be excluded even with received medical certification'
+        assert_not_includes result_data, @rejected_app, 'Rejected applications should be excluded even with received disability certification'
       end
     end
 

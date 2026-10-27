@@ -28,23 +28,23 @@ module Admin
     ].freeze
 
     # The controller owns the allowlist for proof inputs restored to staff.
-    # Medical certification uses approved where other proof groups use accept.
+    # Disability certification uses approved where other proof groups use accept.
     PROOF_FILE_GROUPS = {
       income_proof_action: 'Income proof',
       residency_proof_action: 'Residency proof',
       id_proof_action: 'Identity proof',
-      medical_certification_action: 'Disability certification'
+      disability_certification_action: 'Disability certification'
     }.freeze
     ACTIONS_NEEDING_A_FILE = %w[accept approved upload_only].freeze
     # Each group's document field; its action, reasons, and retained upload share this prefix.
     DOCUMENT_KEYS = PROOF_FILE_GROUPS.keys.map { |action| action.to_s.delete_suffix('_action') }.freeze
 
     PROOF_WORKFLOW_FIELDS = %i[
-      income_proof_action residency_proof_action id_proof_action medical_certification_action
+      income_proof_action residency_proof_action id_proof_action disability_certification_action
       income_proof_rejection_reason income_proof_custom_rejection_reason
       residency_proof_rejection_reason residency_proof_custom_rejection_reason
       id_proof_rejection_reason id_proof_custom_rejection_reason
-      medical_certification_rejection_reason medical_certification_custom_rejection_reason
+      disability_certification_rejection_reason disability_certification_custom_rejection_reason
     ].freeze
 
     APPLICATION_FIELDS = %i[
@@ -526,8 +526,8 @@ module Admin
         :residency_proof_rejection_reason, :residency_proof_custom_rejection_reason,
         :id_proof_action, :id_proof, :id_proof_signed_id,
         :id_proof_rejection_reason, :id_proof_custom_rejection_reason,
-        :medical_certification_action, :medical_certification, :medical_certification_signed_id,
-        :medical_certification_rejection_reason, :medical_certification_custom_rejection_reason,
+        :disability_certification_action, :disability_certification, :disability_certification_signed_id,
+        :disability_certification_rejection_reason, :disability_certification_custom_rejection_reason,
         :no_medical_provider_information,
         application: APPLICATION_FIELDS,
         applicant_attributes: USER_DISABILITY_FIELDS,

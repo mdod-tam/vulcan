@@ -16,7 +16,7 @@ module Webhooks
       end
     end
 
-    def medical_certification
+    def disability_certification
       @system_actor = User.system_user
       return head :service_unavailable unless @system_actor
 
@@ -200,8 +200,8 @@ module Webhooks
           file.write(chunk)
         end
         file.rewind
-        upload = ActionDispatch::Http::UploadedFile.new(tempfile: file, filename: "medical_cert_docuseal_#{app.id}.pdf", type: 'application/pdf')
-        DocumentScan.stage!(input: upload, purpose: :certification, slot: 'medical_certification',
+        upload = ActionDispatch::Http::UploadedFile.new(tempfile: file, filename: "disability_cert_docuseal_#{app.id}.pdf", type: 'application/pdf')
+        DocumentScan.stage!(input: upload, purpose: :certification, slot: 'disability_certification',
                             continuation: 'docuseal', context: context, dedup_key: dedup_key)
       end
     ensure

@@ -781,7 +781,7 @@ module Applications
     end
 
     def process_proof_uploads
-      proof_types = %i[income residency id medical_certification]
+      proof_types = %i[income residency id disability_certification]
       proof_types -= %i[income] unless @application.income_proof_required?
 
       proof_types.each do |proof_type|
@@ -792,7 +792,7 @@ module Applications
     end
 
     def process_proof(type)
-      action_key = type == :medical_certification ? "#{type}_action" : "#{type}_proof_action"
+      action_key = type == :disability_certification ? "#{type}_action" : "#{type}_proof_action"
       action = params[action_key] || params[action_key.to_sym]
 
       return true unless %w[upload_only accept reject approved rejected not_requested].include?(action)
@@ -813,11 +813,11 @@ module Applications
       upload = submitted_document(type)
       return add_error("Please upload a file for #{proof_upload_label(type)} before sending it for review") if upload.blank?
 
-      attach_document(type, upload, status: type == :medical_certification ? :received : :not_reviewed)
+      attach_document(type, upload, status: type == :disability_certification ? :received : :not_reviewed)
     end
 
     def proof_upload_label(type)
-      type == :medical_certification ? 'medical certification' : "#{type} proof"
+      type == :disability_certification ? 'disability certification' : "#{type} proof"
     end
 
     # Approval requires an attachment in all contexts. Only rejections may proceed without files.
@@ -829,13 +829,13 @@ module Applications
     end
 
     def submitted_document(type)
-      UploadedDocument.submitted(params, type == :medical_certification ? type.to_s : "#{type}_proof")
+      UploadedDocument.submitted(params, type == :disability_certification ? type.to_s : "#{type}_proof")
     end
 
     # The writer resolves the file through UploadedDocument; its refusal is reported against this document
     def attach_document(type, upload, status:)
-      result = if type == :medical_certification
-                 MedicalCertificationAttachmentService.attach_certification(
+      result = if type == :disability_certification
+                 DisabilityCertificationAttachmentService.attach_certification(
                    application: @application, blob_or_file: upload, status: status,
                    admin: @admin, submission_method: :paper, metadata: {}
                  )
@@ -851,27 +851,27 @@ module Applications
       add_error("Error processing #{proof_upload_label(type)}: #{result[:error]&.message}")
     rescue UploadedDocument::Refused => e
       add_error(e.user_message_for(proof_upload_label(type).upcase_first))
-    rescue MedicalCertificationAttachmentService::StaffUploadNotAllowed => e
+    rescue DisabilityCertificationAttachmentService::StaffUploadNotAllowed => e
       add_error("#{proof_upload_label(type).upcase_first}: #{e.message}")
     end
 
     def process_reject_proof(type)
-      reason_key        = type == :medical_certification ? "#{type}_rejection_reason" : "#{type}_proof_rejection_reason"
-      custom_reason_key = type == :medical_certification ? "#{type}_custom_rejection_reason" : "#{type}_proof_custom_rejection_reason"
-      notes_key         = type == :medical_certification ? "#{type}_rejection_notes" : "#{type}_proof_rejection_notes"
+      reason_key        = type == :disability_certification ? "#{type}_rejection_reason" : "#{type}_proof_rejection_reason"
+      custom_reason_key = type == :disability_certification ? "#{type}_custom_rejection_reason" : "#{type}_proof_custom_rejection_reason"
+      notes_key         = type == :disability_certification ? "#{type}_rejection_notes" : "#{type}_proof_rejection_notes"
       selected_reason   = fetch_param(reason_key).to_s
       custom_reason     = fetch_param(custom_reason_key).to_s.strip
       legacy_notes      = fetch_param(notes_key).to_s.strip
       custom_reason     = legacy_notes if custom_reason.blank? && legacy_notes.present?
 
-      result = if type == :medical_certification
-                 reject_medical_certification(
+      result = if type == :disability_certification
+                 reject_disability_certification(
                    selected_reason: selected_reason,
                    custom_reason: custom_reason,
                    notes: legacy_notes.presence
                  )
                else
-                 reject_non_medical_proof(
+                 reject_non_certification_proof(
                    type: type,
                    selected_reason: selected_reason,
                    custom_reason: custom_reason,
@@ -894,7 +894,7 @@ module Applications
       custom_reason
     end
 
-    def reject_non_medical_proof(type:, selected_reason:, custom_reason:, notes:)
+    def reject_non_certification_proof(type:, selected_reason:, custom_reason:, notes:)
       resolved_reason = resolve_rejection_reason_value(
         selected_reason: selected_reason,
         custom_reason: custom_reason
@@ -911,11 +911,11 @@ module Applications
       )
     end
 
-    def resolve_medical_rejection_reason_payload(selected_reason:, custom_reason:)
+    def resolve_disability_certification_rejection_reason_payload(selected_reason:, custom_reason:)
       if selected_reason.present? && %w[none_provided other].exclude?(selected_reason)
         resolved_reason = RejectionReason.resolve_text(
           code: selected_reason,
-          proof_type: 'medical_certification',
+          proof_type: 'disability_certification',
           fallback: selected_reason
         )
 
@@ -932,15 +932,15 @@ module Applications
       params[key] || params[key.to_sym]
     end
 
-    def reject_medical_certification(selected_reason:, custom_reason:, notes:)
-      if medical_certification_reviewer_path?(selected_reason)
-        reject_medical_certification_via_reviewer(
+    def reject_disability_certification(selected_reason:, custom_reason:, notes:)
+      if disability_certification_reviewer_path?(selected_reason)
+        reject_disability_certification_via_reviewer(
           selected_reason: selected_reason,
           custom_reason: custom_reason,
           notes: notes
         )
       else
-        reject_medical_certification_directly(
+        reject_disability_certification_directly(
           selected_reason: selected_reason,
           custom_reason: custom_reason,
           notes: notes
@@ -948,7 +948,7 @@ module Applications
       end
     end
 
-    def medical_certification_reviewer_path?(selected_reason)
+    def disability_certification_reviewer_path?(selected_reason)
       selected_reason != 'none_provided' && medical_provider_notification_available?
     end
 
@@ -957,13 +957,13 @@ module Applications
         (@application.medical_provider_email.present? || @application.medical_provider_fax.present?)
     end
 
-    def reject_medical_certification_via_reviewer(selected_reason:, custom_reason:, notes:)
-      reason_payload = resolve_medical_rejection_reason_payload(
+    def reject_disability_certification_via_reviewer(selected_reason:, custom_reason:, notes:)
+      reason_payload = resolve_disability_certification_rejection_reason_payload(
         selected_reason: selected_reason,
         custom_reason: custom_reason
       )
 
-      reviewer_result = Applications::MedicalCertificationReviewer.new(@application, @admin).reject(
+      reviewer_result = Applications::DisabilityCertificationReviewer.new(@application, @admin).reject(
         rejection_reason: reason_payload[:reason],
         notes: notes,
         rejection_reason_code: reason_payload[:reason_code]
@@ -983,13 +983,13 @@ module Applications
       { success: false, error: StandardError.new(reviewer_result.message) }
     end
 
-    def reject_medical_certification_directly(selected_reason:, custom_reason:, notes:)
-      reason_payload = resolve_medical_rejection_reason_payload(
+    def reject_disability_certification_directly(selected_reason:, custom_reason:, notes:)
+      reason_payload = resolve_disability_certification_rejection_reason_payload(
         selected_reason: selected_reason,
         custom_reason: custom_reason
       )
 
-      MedicalCertificationAttachmentService.reject_certification(
+      DisabilityCertificationAttachmentService.reject_certification(
         application: @application,
         admin: @admin,
         reason: reason_payload[:reason],
@@ -1001,7 +1001,7 @@ module Applications
     end
 
     def send_notifications
-      send_medical_certification_not_provided_notice
+      send_disability_certification_not_provided_notice
       send_account_creation_notifications
     end
 
@@ -1010,7 +1010,7 @@ module Applications
     # The wrapper surfaces failures with manual-send guidance and a durable event.
     def request_provider_info_if_missing
       return unless params[:no_medical_provider_information]
-      return if @application.medical_certification_status_approved?
+      return if @application.disability_certification_status_approved?
 
       result = Applications::RequestProviderInfo.new(
         application: @application,
@@ -1030,16 +1030,16 @@ module Applications
     end
 
     # ProofReview routes income, residency, and ID rejections through Applications::RequestProofResubmission.
-    # Paper intake sends the medical-certification-not-provided notice directly because it has no resubmission form.
-    def send_medical_certification_not_provided_notice
+    # Paper intake sends the disability-certification-not-provided notice directly because it has no resubmission form.
+    def send_disability_certification_not_provided_notice
       not_provided = @application.proof_reviews.reload.rejections.find_by(
-        proof_type: :medical_certification,
+        proof_type: :disability_certification,
         rejection_reason_code: 'none_provided'
       )
       return unless not_provided
 
       NotificationService.create_and_deliver!(
-        type: 'medical_certification_not_provided',
+        type: 'disability_certification_not_provided',
         recipient: @constituent,
         actor: @admin,
         notifiable: @application,

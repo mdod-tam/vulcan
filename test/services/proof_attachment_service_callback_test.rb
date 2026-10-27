@@ -13,7 +13,7 @@ class ProofAttachmentServiceCallbackTest < ActiveSupport::TestCase
 
     @admin = create(:admin)
     @constituent = create(:constituent, email: "callback-test-#{SecureRandom.hex(4)}@example.com")
-    @valid_pdf_file = fixture_file_upload('test/fixtures/files/medical_certification_valid.pdf', 'application/pdf')
+    @valid_pdf_file = fixture_file_upload('test/fixtures/files/disability_certification_valid.pdf', 'application/pdf')
   end
 
   teardown do
@@ -123,7 +123,7 @@ class ProofAttachmentServiceCallbackTest < ActiveSupport::TestCase
     app = create(:application, :in_progress, user: @constituent)
     app.update_columns(
       residency_proof_status: Application.residency_proof_statuses[:approved],
-      medical_certification_status: Application.medical_certification_statuses[:approved]
+      disability_certification_status: Application.disability_certification_statuses[:approved]
     )
 
     result = ProofAttachmentService.attach_proof(
@@ -228,7 +228,7 @@ class ProofAttachmentServiceCallbackTest < ActiveSupport::TestCase
       income_proof_status: Application.income_proof_statuses[:not_reviewed],
       id_proof_status: Application.id_proof_statuses[:approved],
       residency_proof_status: Application.residency_proof_statuses[:approved],
-      medical_certification_status: Application.medical_certification_statuses[:approved],
+      disability_certification_status: Application.disability_certification_statuses[:approved],
       status: Application.statuses[:awaiting_dcf]
     )
     app.reload

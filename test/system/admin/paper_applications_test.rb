@@ -273,7 +273,7 @@ module Admin
         choose 'accept_id_proof', allow_label_click: true
         attach_cleared_document 'id_proof', Rails.root.join('test/fixtures/files/residency_proof.pdf')
       end
-      attach_cleared_document 'medical_certification', Rails.root.join('test/fixtures/files/medical_certification_valid.pdf')
+      attach_cleared_document 'disability_certification', Rails.root.join('test/fixtures/files/disability_certification_valid.pdf')
       complete_paper_application_attestations
 
       assert_difference 'Application.count', 1 do
@@ -656,7 +656,7 @@ module Admin
                                       submission_method: :paper,
                                       income_proof_status: :not_reviewed,
                                       residency_proof_status: :not_reviewed,
-                                      medical_certification_status: :not_requested)
+                                      disability_certification_status: :not_requested)
 
       attach_cleared_proof(application, :income_proof, filename: 'income.pdf')
       attach_cleared_proof(application, :residency_proof, filename: 'residency.pdf')
@@ -691,10 +691,10 @@ module Admin
       )
       application.update!(id_proof_status: :approved)
 
-      attach_cleared_proof(application, :medical_certification, filename: 'medical.pdf')
+      attach_cleared_proof(application, :disability_certification, filename: 'disability_certification.pdf')
       application.update!(
-        medical_certification_status: :approved,
-        medical_certification_verified_by: @admin
+        disability_certification_status: :approved,
+        disability_certification_verified_by: @admin
       )
 
       # Reconcile after all proof and certification updates.
@@ -704,7 +704,7 @@ module Admin
       assert_equal 'approved', application.income_proof_status.to_s
       assert_equal 'approved', application.residency_proof_status.to_s
       assert_equal 'approved', application.id_proof_status.to_s
-      assert_equal 'approved', application.medical_certification_status.to_s
+      assert_equal 'approved', application.disability_certification_status.to_s
 
       visit_admin_application_with_retry(application, user: @admin)
       wait_for_turbo
@@ -722,7 +722,7 @@ module Admin
       assert_equal 'approved', application.income_proof_status.to_s, 'Income proof should be approved'
       assert_equal 'approved', application.residency_proof_status.to_s, 'Residency proof should be approved'
       assert_equal 'approved', application.id_proof_status.to_s, 'ID proof should be approved'
-      assert_equal 'approved', application.medical_certification_status.to_s, 'Medical certification should be approved'
+      assert_equal 'approved', application.disability_certification_status.to_s, 'Disability certification should be approved'
     end
 
     # The search refuses an applicant still inside the waiting period; the server-side rule is covered
@@ -789,13 +789,13 @@ module Admin
       check 'application[information_verified]'
 
       choose 'upload_only_income_proof'
-      attach_cleared_document 'income_proof', Rails.root.join('test/fixtures/files/medical_certification_valid.pdf')
+      attach_cleared_document 'income_proof', Rails.root.join('test/fixtures/files/disability_certification_valid.pdf')
 
       choose 'upload_only_residency_proof'
-      attach_cleared_document 'residency_proof', Rails.root.join('test/fixtures/files/medical_certification_valid.pdf')
+      attach_cleared_document 'residency_proof', Rails.root.join('test/fixtures/files/disability_certification_valid.pdf')
 
       choose 'upload_only_id_proof'
-      attach_cleared_document 'id_proof', Rails.root.join('test/fixtures/files/medical_certification_valid.pdf')
+      attach_cleared_document 'id_proof', Rails.root.join('test/fixtures/files/disability_certification_valid.pdf')
 
       page.execute_script(<<~JS)
         const form = document.querySelector('form[data-controller~="paper-application"]');

@@ -525,7 +525,7 @@ module Applications
           application: cert_only,
           from_status: 'in_progress',
           to_status: 'approved',
-          change_type: :medical_certification,
+          change_type: :disability_certification,
           changed_at: in_fy + 1.day,
           user: admin
         )
@@ -548,7 +548,7 @@ module Applications
           application: app,
           from_status: 'approved',
           to_status: 'approved',
-          change_type: :medical_certification,
+          change_type: :disability_certification,
           changed_at: in_fy + 4.days,
           user: admin
         )
@@ -659,7 +659,7 @@ module Applications
         status: Application.statuses[:approved],
         income_proof_status: Application.income_proof_statuses[:approved],
         residency_proof_status: Application.residency_proof_statuses[:approved],
-        medical_certification_status: Application.medical_certification_statuses[:approved],
+        disability_certification_status: Application.disability_certification_statuses[:approved],
         updated_at: Time.current
       )
       application.reload

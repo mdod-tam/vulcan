@@ -8,7 +8,7 @@ module Admin
       @admin = create(:admin)
       @application = create(:application, :in_progress)
       @notification = create(:notification, recipient: @admin, actor: @admin, notifiable: @application,
-                                            action: 'medical_certification_requested', created_at: 70.minutes.ago, metadata: { 'channel' => 'email' })
+                                            action: 'disability_certification_requested', created_at: 70.minutes.ago, metadata: { 'channel' => 'email' })
       @attempt = EmailDeliveryAttempt.create!(notification: @notification, origin: @application, application: @application,
                                               correlation_id: SecureRandom.uuid, destination: 'provider-with-long-name@example.test',
                                               recipient_key: EmailDeliveryAttempt.recipient_key('provider-with-long-name@example.test'),
@@ -72,15 +72,15 @@ module Admin
     end
 
     test 'certification rejection attention opens the affected attempt alongside newer local delivery' do
-      @application.update!(medical_certification_status: :rejected)
+      @application.update!(disability_certification_status: :rejected)
       @attempt.update!(bounced_at: nil)
-      notification = create(:notification, notifiable: @application, action: 'medical_certification_rejected')
+      notification = create(:notification, notifiable: @application, action: 'disability_certification_rejected')
       attempt = EmailDeliveryAttempt.create!(notification: notification, origin: @application, application: @application,
                                              correlation_id: SecureRandom.uuid, destination: 'provider@example.test',
                                              recipient_key: EmailDeliveryAttempt.recipient_key('provider@example.test'),
                                              server_id: '23', mail_action: 'MedicalProviderMailer#certification_rejected',
                                              attempted_at: 5.minutes.ago, bounced_at: 4.minutes.ago, bounce_category: 'HardBounce')
-      create(:notification, notifiable: @application, action: 'medical_certification_requested', delivery_status: :queued)
+      create(:notification, notifiable: @application, action: 'disability_certification_requested', delivery_status: :queued)
 
       sign_in(@admin)
       visit admin_applications_path

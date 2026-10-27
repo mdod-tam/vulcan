@@ -24,12 +24,12 @@ module DashboardMetricsLoading # rubocop:disable Metrics/ModuleLength
       end
       metrics[:proofs_needing_review_count] = Application.with_proofs_needing_review.distinct.count
 
-      metrics[:medical_certs_to_review_count] = Application.where.not(status: %i[rejected archived])
-                                                           .where(medical_certification_status: :received)
-                                                           .count
+      metrics[:disability_certs_to_review_count] = Application.where.not(status: %i[rejected archived])
+                                                              .where(disability_certification_status: :received)
+                                                              .count
 
       metrics[:digitally_signed_needs_review_count] = Application.where(document_signing_status: :signed)
-                                                                 .where.not(medical_certification_status: :approved)
+                                                                 .where.not(disability_certification_status: :approved)
                                                                  .count
 
       metrics[:training_requests_count] = calculate_training_requests_count
@@ -84,19 +84,19 @@ module DashboardMetricsLoading # rubocop:disable Metrics/ModuleLength
   end
 
   def load_certification_review_counts
-    medical_count = cached_count('medical_certs_to_review') do
+    disability_certs_count = cached_count('disability_certs_to_review') do
       Application.where.not(status: %i[rejected archived])
-                 .where(medical_certification_status: :received)
+                 .where(disability_certification_status: :received)
                  .count
     end
 
     digitally_signed_count = cached_count('digitally_signed_needs_review') do
       Application.where(document_signing_status: :signed)
-                 .where.not(medical_certification_status: :approved)
+                 .where.not(disability_certification_status: :approved)
                  .count
     end
 
-    safe_assign(:medical_certs_to_review_count, medical_count)
+    safe_assign(:disability_certs_to_review_count, disability_certs_count)
     safe_assign(:digitally_signed_needs_review_count, digitally_signed_count)
   end
 
@@ -339,7 +339,7 @@ module DashboardMetricsLoading # rubocop:disable Metrics/ModuleLength
       open_applications_count: 0,
       pending_services_count: 0,
       proofs_needing_review_count: 0,
-      medical_certs_to_review_count: 0,
+      disability_certs_to_review_count: 0,
       digitally_signed_needs_review_count: 0,
       training_requests_count: 0,
       evaluation_requests_count: 0,

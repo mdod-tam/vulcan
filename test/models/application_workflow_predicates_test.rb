@@ -157,7 +157,7 @@ class ApplicationWorkflowPredicatesTest < ActiveSupport::TestCase
   test 'voucher_issuable? returns false without all required proofs approved' do
     app = create(:application, :approved, :voucher_fulfillment)
     app.update_columns(
-      medical_certification_status: Application.medical_certification_statuses[:approved],
+      disability_certification_status: Application.disability_certification_statuses[:approved],
       residency_proof_status: Application.residency_proof_statuses[:approved],
       income_proof_status: Application.income_proof_statuses[:approved],
       id_proof_status: Application.id_proof_statuses[:not_reviewed]
@@ -222,7 +222,7 @@ class ApplicationWorkflowPredicatesTest < ActiveSupport::TestCase
     @vouchers_flag.update!(enabled: true)
     app = create(:application, :approved, :voucher_fulfillment)
     app.update_columns(
-      medical_certification_status: Application.medical_certification_statuses[:approved],
+      disability_certification_status: Application.disability_certification_statuses[:approved],
       residency_proof_status: Application.residency_proof_statuses[:approved],
       income_proof_status: Application.income_proof_statuses[:approved],
       id_proof_status: Application.id_proof_statuses[:not_reviewed]
@@ -239,7 +239,7 @@ class ApplicationWorkflowPredicatesTest < ActiveSupport::TestCase
     app = create(:application, :in_progress, :income_not_required)
     app.update_columns(
       residency_proof_status: Application.residency_proof_statuses[:approved],
-      medical_certification_status: Application.medical_certification_statuses[:approved],
+      disability_certification_status: Application.disability_certification_statuses[:approved],
       id_proof_status: Application.id_proof_statuses[:approved]
     )
     app.reload
@@ -249,7 +249,7 @@ class ApplicationWorkflowPredicatesTest < ActiveSupport::TestCase
 
   test 'ProofReviewer auto-approves when income not required and residency approved' do
     app = create(:application, :in_progress, :income_not_required)
-    app.update_columns(medical_certification_status: Application.medical_certification_statuses[:approved], id_proof_status: Application.id_proof_statuses[:approved])
+    app.update_columns(disability_certification_status: Application.disability_certification_statuses[:approved], id_proof_status: Application.id_proof_statuses[:approved])
     app.residency_proof.attach(
       io: file_fixture('residency_proof.pdf').open,
       filename: 'residency.pdf',
@@ -270,7 +270,7 @@ class ApplicationWorkflowPredicatesTest < ActiveSupport::TestCase
 
   test 'ProofReviewer creates audit event on auto-approval via reconciler' do
     app = create(:application, :in_progress, :income_not_required)
-    app.update_columns(medical_certification_status: Application.medical_certification_statuses[:approved], id_proof_status: Application.id_proof_statuses[:approved])
+    app.update_columns(disability_certification_status: Application.disability_certification_statuses[:approved], id_proof_status: Application.id_proof_statuses[:approved])
     app.residency_proof.attach(
       io: file_fixture('residency_proof.pdf').open,
       filename: 'residency.pdf',

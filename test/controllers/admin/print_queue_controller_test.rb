@@ -10,8 +10,8 @@ module Admin
       @recipient = create(:constituent)
       @application = create(:application, user: @recipient)
       @letters = 2.times.map do
-        Letters::Delivery.queue!(recipient: @recipient, application: @application, letter_type: :medical_certification_form,
-                                 context: EmailDelivery::Policy.capture(mail_action: 'Letters#medical_certification_form')) do
+        Letters::Delivery.queue!(recipient: @recipient, application: @application, letter_type: :disability_certification_form,
+                                 context: EmailDelivery::Policy.capture(mail_action: 'Letters#disability_certification_form')) do
           StringIO.new('%PDF test letter')
         end
       end

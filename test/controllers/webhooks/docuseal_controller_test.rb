@@ -13,7 +13,7 @@ module Webhooks
                             document_signing_submitter_id: 'signer_42',
                             document_signing_requested_at: 1.day.ago,
                             document_signing_status: :sent,
-                            medical_certification_status: :requested)
+                            disability_certification_status: :requested)
 
       @webhook_secret = 'whsec_fixture_docuseal_signing_secret'
       Rails.application.credentials.stubs(:webhook_secret).returns(@webhook_secret)
@@ -50,7 +50,7 @@ module Webhooks
           'documents' => [
             {
               'url' => 'https://docuseal.com/signed_doc.pdf',
-              'filename' => 'medical_cert.pdf'
+              'filename' => 'disability_cert.pdf'
             }
           ],
           'audit_log_url' => 'https://docuseal.com/audit_log'
@@ -70,7 +70,7 @@ module Webhooks
 
     def make_signed_webhook_request(payload)
       body = payload.to_json
-      post webhooks_docuseal_medical_certification_path, params: body, headers: webhook_headers(compute_signature(body))
+      post webhooks_docuseal_disability_certification_path, params: body, headers: webhook_headers(compute_signature(body))
     end
 
     def webhook_headers(signature = nil, header = 'X-Docuseal-Signature')
@@ -91,8 +91,8 @@ module Webhooks
         signature = '1792756800.4166bae5e9fe205c0a72895f22c565f11f54d051e323bd01a8c19e683c363b99'
 
         assert_difference -> { Event.where(action: 'document_signing_viewed', auditable: @application).count }, 1 do
-          post webhooks_docuseal_medical_certification_path, params: body,
-                                                             headers: { 'Content-Type' => 'application/json', 'X-Docuseal-Signature' => signature }
+          post webhooks_docuseal_disability_certification_path, params: body,
+                                                                headers: { 'Content-Type' => 'application/json', 'X-Docuseal-Signature' => signature }
         end
         assert_response :ok
         assert_equal 'opened', @application.reload.document_signing_status
@@ -126,14 +126,14 @@ module Webhooks
           application = create(:application, :in_progress, user: @application.user,
                                                            document_signing_service: 'docuseal', document_signing_submission_id: "signature_#{index}",
                                                            document_signing_submitter_id: 'signer_42', document_signing_requested_at: 1.day.ago,
-                                                           document_signing_status: :sent, medical_certification_status: :requested)
+                                                           document_signing_status: :sent, disability_certification_status: :requested)
           payload = @viewed_payload.deep_dup
           payload[:data]['submission_id'] = application.document_signing_submission_id
           body = payload.to_json
           signature = compute_signature(body, timestamp: Time.current.to_i + offset)
 
           assert_difference -> { Event.where(action: 'document_signing_viewed', auditable: application).count }, 1 do
-            post webhooks_docuseal_medical_certification_path, params: body, headers: webhook_headers(signature)
+            post webhooks_docuseal_disability_certification_path, params: body, headers: webhook_headers(signature)
           end
           assert_response :ok
           assert_equal 'opened', application.reload.document_signing_status
@@ -165,7 +165,7 @@ module Webhooks
       other_application = create(:application, :in_progress,
                                  document_signing_service: 'docuseal', document_signing_submission_id: 'other_submission',
                                  document_signing_submitter_id: 'other_signer', document_signing_requested_at: 1.day.ago,
-                                 document_signing_status: :sent, medical_certification_status: :requested)
+                                 document_signing_status: :sent, disability_certification_status: :requested)
       body = @viewed_payload.to_json
       overrides = {
         event_type: 'form.completed', timestamp: Time.current.utc.iso8601(6),
@@ -177,14 +177,14 @@ module Webhooks
       assert_difference -> { Event.where(auditable: @application, action: 'document_signing_viewed').count }, 1 do
         assert_no_difference ['DocumentScan.count', 'ActiveStorage::Blob.count', 'ActiveStorage::Attachment.count',
                               -> { Event.where(auditable: other_application).count }] do
-          path = "#{webhooks_docuseal_medical_certification_path}?#{overrides.to_query}"
+          path = "#{webhooks_docuseal_disability_certification_path}?#{overrides.to_query}"
           post path, params: body, headers: webhook_headers(compute_signature(body))
           assert_response :ok
         end
       end
       assert_equal 'opened', @application.reload.document_signing_status
       assert_equal 'sent', other_application.reload.document_signing_status
-      assert_equal 'requested', other_application.medical_certification_status
+      assert_equal 'requested', other_application.disability_certification_status
       event = Event.find_by!(auditable: @application, action: 'document_signing_viewed')
       assert_equal @viewed_payload[:timestamp], event.metadata['viewed_at']
     end
@@ -198,7 +198,7 @@ module Webhooks
       travel 6.seconds do
         overrides = { event_type: 'form.declined', timestamp: Time.current.utc.iso8601(6) }
         assert_no_difference ['Event.count', 'Notification.count', 'DocumentScan.count'] do
-          path = "#{webhooks_docuseal_medical_certification_path}?#{overrides.to_query}"
+          path = "#{webhooks_docuseal_disability_certification_path}?#{overrides.to_query}"
           post path, params: body, headers: webhook_headers(signature)
           assert_response :ok
         end
@@ -211,7 +211,7 @@ module Webhooks
       HTTP.expects(:timeout).never
 
       assert_no_difference ['Event.count', 'DocumentScan.count', 'ActiveStorage::Blob.count'] do
-        path = "#{webhooks_docuseal_medical_certification_path}?#{@completed_payload.to_query}"
+        path = "#{webhooks_docuseal_disability_certification_path}?#{@completed_payload.to_query}"
         post path, params: body, headers: webhook_headers(compute_signature(body))
         assert_response :unprocessable_content
       end
@@ -239,7 +239,7 @@ module Webhooks
         assert_equal 'invalid_document_url', event.metadata['failure_reason']
         assert_not event.metadata['failure_retryable']
         assert_equal 'sent', @application.reload.document_signing_status
-        assert_equal 'requested', @application.medical_certification_status
+        assert_equal 'requested', @application.disability_certification_status
       end
     end
 
@@ -261,7 +261,7 @@ module Webhooks
         scan = DocumentScan.order(:id).last!
         assert_equal url, scan.context['document_url']
         assert_equal 'pending', scan.status
-        assert_not @application.reload.medical_certification.attached?
+        assert_not @application.reload.disability_certification.attached?
       end
     end
 
@@ -281,8 +281,8 @@ module Webhooks
         end
         complete_docuseal_scan!
       end
-      assert_equal scan.blob_id, @application.reload.medical_certification.blob_id
-      assert_empty @application.additional_medical_certifications
+      assert_equal scan.blob_id, @application.reload.disability_certification.blob_id
+      assert_empty @application.additional_disability_certifications
       assert_equal 1, Event.where(auditable: @application, action: 'document_signing_completed').count
     end
 
@@ -323,7 +323,7 @@ module Webhooks
         action = "document_signing_#{activity}"
 
         assert_difference -> { Event.where(auditable: @application, action: action).count }, 1 do
-          post webhooks_docuseal_medical_certification_path, params: body, headers: webhook_headers(signature)
+          post webhooks_docuseal_disability_certification_path, params: body, headers: webhook_headers(signature)
           assert_response :ok
         end
         first_event = Event.find_by!(auditable: @application, action: action)
@@ -331,7 +331,7 @@ module Webhooks
 
         travel 6.seconds do
           assert_no_difference ['Event.count', 'Notification.count', 'ApplicationStatusChange.count'] do
-            post webhooks_docuseal_medical_certification_path, params: body, headers: webhook_headers(signature)
+            post webhooks_docuseal_disability_certification_path, params: body, headers: webhook_headers(signature)
             assert_response :ok
           end
         end
@@ -429,7 +429,7 @@ module Webhooks
         signed_at = 10.minutes.ago.change(usec: 0)
         %i[signed declined].each do |state|
           @application.update!(document_signing_status: state, document_signing_signed_at: signed_at,
-                               document_signing_document_url: 'https://docuseal.com/signed.pdf', medical_certification_status: :received)
+                               document_signing_document_url: 'https://docuseal.com/signed.pdf', disability_certification_status: :received)
           payload = instance_variable_get("@#{activity}_payload").deep_dup
           payload[:timestamp] = (Time.iso8601(payload[:timestamp]) + (state == :signed ? 1 : 2).seconds).iso8601(6)
 
@@ -441,7 +441,7 @@ module Webhooks
           assert_equal state.to_s, @application.document_signing_status
           assert_equal signed_at, @application.document_signing_signed_at
           assert_equal 'https://docuseal.com/signed.pdf', @application.document_signing_document_url
-          assert_equal 'received', @application.medical_certification_status
+          assert_equal 'received', @application.disability_certification_status
         end
       end
     end
@@ -459,8 +459,8 @@ module Webhooks
       end
     end
 
-    test 'handles form.completed event with approved medical cert status' do
-      @application.update!(medical_certification_status: :approved)
+    test 'handles form.completed event with approved disability cert status' do
+      @application.update!(disability_certification_status: :approved)
       mock_successful_docuseal_download
 
       make_signed_webhook_request(@completed_payload)
@@ -470,11 +470,11 @@ module Webhooks
       @application.reload
       assert_equal 'signed', @application.document_signing_status
       assert_not_nil @application.document_signing_signed_at
-      assert_equal 'approved', @application.medical_certification_status
+      assert_equal 'approved', @application.disability_certification_status
       # The signed form remains available for staff review after certification approval.
-      assert_not @application.medical_certification.attached?
-      assert_equal 1, @application.additional_medical_certifications.count
-      assert_equal 'certification_approved', @application.additional_medical_certifications.first.blob.metadata['retention_reason']
+      assert_not @application.disability_certification.attached?
+      assert_equal 1, @application.additional_disability_certifications.count
+      assert_equal 'certification_approved', @application.additional_disability_certifications.first.blob.metadata['retention_reason']
       assert_equal 'https://docuseal.com/signed_doc.pdf', @application.document_signing_document_url
       assert_equal 'https://docuseal.com/audit_log', @application.document_signing_audit_url
 
@@ -496,7 +496,7 @@ module Webhooks
       assert_predicate scan, :pending?
       assert_empty scan.blob.attachments
       assert_equal 'sent', @application.reload.document_signing_status
-      assert_equal 'requested', @application.medical_certification_status
+      assert_equal 'requested', @application.disability_certification_status
       assert_nil @application.document_signing_signed_at
       assert_nil @application.document_signing_document_url
       assert_not Event.exists?(auditable: @application, action: 'document_signing_completed')
@@ -507,9 +507,9 @@ module Webhooks
         assert_response :ok
       end
       complete_docuseal_scan!
-      assert_equal scan.blob_id, @application.reload.medical_certification.blob.id
+      assert_equal scan.blob_id, @application.reload.disability_certification.blob.id
       assert_equal 'signed', @application.document_signing_status
-      assert_equal 'received', @application.medical_certification_status
+      assert_equal 'received', @application.disability_certification_status
 
       assert_no_difference ['ActiveStorage::Attachment.count', 'Event.count', 'Notification.count'] do
         DocumentSigning::AcceptScannedDocumentJob.perform_now(scan.id)
@@ -526,8 +526,8 @@ module Webhooks
         assert_response :ok
       end
       complete_docuseal_scan!
-      assert_equal scan.blob_id, @application.reload.medical_certification.blob_id
-      assert_empty @application.additional_medical_certifications
+      assert_equal scan.blob_id, @application.reload.disability_certification.blob_id
+      assert_empty @application.additional_disability_certifications
       assert_equal 1, Event.where(auditable: @application, action: 'document_signing_completed').count
     end
 
@@ -549,7 +549,7 @@ module Webhooks
     test 'permanent certification acceptance failures stop recovery and record giving up once' do
       scan = stage_docuseal_scan!
       scan.update!(status: :clean)
-      MedicalCertificationAttachmentService.expects(:accept_submission).once.returns(success: false, error: ArgumentError.new('rejected'))
+      DisabilityCertificationAttachmentService.expects(:accept_submission).once.returns(success: false, error: ArgumentError.new('rejected'))
 
       assert_difference -> { Event.where(action: 'document_signing_attachment_failed').count }, 1 do
         assert_no_difference 'ActiveStorage::Attachment.count' do
@@ -598,7 +598,7 @@ module Webhooks
     test 'transient continuation errors back off and stop after three attempts' do
       scan = stage_docuseal_scan!
       scan.update!(status: :clean)
-      MedicalCertificationAttachmentService.expects(:accept_submission).times(3).raises(ActiveRecord::Deadlocked)
+      DisabilityCertificationAttachmentService.expects(:accept_submission).times(3).raises(ActiveRecord::Deadlocked)
 
       DocumentSigning::AcceptScannedDocumentJob.perform_now(scan.id)
       assert_nil scan.reload.continued_at
@@ -650,7 +650,7 @@ module Webhooks
         DocumentSigning::AcceptScannedDocumentJob.perform_now(scan.id)
       end
       assert scan.reload.continued_at
-      assert @application.reload.medical_certification.attached?
+      assert @application.reload.disability_certification.attached?
       assert_equal 1, Event.where(action: 'document_signing_completed', auditable: @application).count
       assert_not Event.exists?(action: 'document_signing_attachment_failed', auditable: @application)
       assert_nil scan.continuation_error_code
@@ -687,7 +687,7 @@ module Webhooks
         assert_raises(DocumentScan::NotCleared) { DocumentSigning::AcceptScannedDocument.call(scan) }
       end
       assert_equal 'sent', @application.reload.document_signing_status
-      assert_equal 'requested', @application.medical_certification_status
+      assert_equal 'requested', @application.disability_certification_status
     end
 
     test 'a blocked DocuSeal verdict records one failure and alerts only admins without accepting the PDF' do
@@ -851,9 +851,9 @@ module Webhooks
 
       scan = complete_docuseal_scan!
       assert_equal requested_at, Time.iso8601(scan.context.fetch('requested_at'))
-      assert_equal 'rejected', @application.reload.medical_certification_status
-      assert_not @application.medical_certification.attached?
-      assert_equal [scan.blob_id], @application.additional_medical_certifications.blobs.ids
+      assert_equal 'rejected', @application.reload.disability_certification_status
+      assert_not @application.disability_certification.attached?
+      assert_equal [scan.blob_id], @application.additional_disability_certifications.blobs.ids
       assert_equal 'request_predates_rejection', scan.blob.reload.metadata['retention_reason']
     end
 
@@ -896,14 +896,14 @@ module Webhooks
         end
       end
       assert_equal 'sent', @application.reload.document_signing_status
-      assert_equal 'requested', @application.medical_certification_status
+      assert_equal 'requested', @application.disability_certification_status
       assert_nil @application.document_signing_document_url
       assert_equal :completed, DocumentSigning::AcceptScannedDocument.call(scan)
-      assert_equal scan.blob_id, @application.reload.medical_certification.blob.id
+      assert_equal scan.blob_id, @application.reload.disability_certification.blob.id
     end
 
     test 'repeated approved completion adds no events after the document URL is stored' do
-      @application.update!(medical_certification_status: :approved)
+      @application.update!(disability_certification_status: :approved)
       mock_successful_docuseal_download
 
       make_signed_webhook_request(@completed_payload)
@@ -919,7 +919,7 @@ module Webhooks
       end
     end
 
-    test 'handles form.completed event with rejected medical cert status' do
+    test 'handles form.completed event with rejected disability cert status' do
       record_certification_rejection(at: 2.days.ago)
       @application.update!(document_signing_requested_at: 1.day.ago)
 
@@ -932,13 +932,13 @@ module Webhooks
       @application.reload
       assert_equal 'signed', @application.document_signing_status
       assert_not_nil @application.document_signing_signed_at
-      assert_equal 'received', @application.medical_certification_status
-      assert @application.medical_certification.attached?
+      assert_equal 'received', @application.disability_certification_status
+      assert @application.disability_certification.attached?
       assert_equal 'https://docuseal.com/audit_log', @application.document_signing_audit_url
     end
 
-    test 'handles form.completed event with requested medical cert status' do
-      @application.update!(medical_certification_status: :requested)
+    test 'handles form.completed event with requested disability cert status' do
+      @application.update!(disability_certification_status: :requested)
 
       mock_successful_docuseal_download
 
@@ -948,13 +948,13 @@ module Webhooks
 
       @application.reload
       assert_equal 'signed', @application.document_signing_status
-      assert_equal 'received', @application.medical_certification_status
-      assert @application.medical_certification.attached?
+      assert_equal 'received', @application.disability_certification_status
+      assert @application.disability_certification.attached?
     end
 
     test 'late DocuSeal completion does not overwrite certification received through secure upload' do
-      @application.update!(medical_certification_status: :received)
-      @application.medical_certification.attach(
+      @application.update!(disability_certification_status: :received)
+      @application.disability_certification.attach(
         io: StringIO.new('secure upload content'),
         filename: 'secure_upload.pdf',
         content_type: 'application/pdf'
@@ -972,20 +972,20 @@ module Webhooks
 
       @application.reload
       assert_equal 'signed', @application.document_signing_status
-      assert_equal 'received', @application.medical_certification_status
-      assert_equal 'secure_upload.pdf', @application.medical_certification.blob.filename.to_s
-      assert_equal 1, @application.additional_medical_certifications.count
-      assert_equal 'certification_received', @application.additional_medical_certifications.first.blob.metadata['retention_reason']
+      assert_equal 'received', @application.disability_certification_status
+      assert_equal 'secure_upload.pdf', @application.disability_certification.blob.filename.to_s
+      assert_equal 1, @application.additional_disability_certifications.count
+      assert_equal 'certification_received', @application.additional_disability_certifications.first.blob.metadata['retention_reason']
 
       event = Event.where(action: 'document_signing_completed', auditable: @application).last
-      assert_equal 'additional_medical_certification', event.metadata['retained_as']
+      assert_equal 'additional_disability_certification', event.metadata['retained_as']
       assert_equal 'certification_received', event.metadata['retention_reason']
-      assert event.metadata['additional_medical_certification_blob_id'].present?
+      assert event.metadata['additional_disability_certification_blob_id'].present?
     end
 
     test 'late DocuSeal completion after rejected secure upload is retained for deliberate review' do
-      @application.update!(medical_certification_status: :rejected)
-      @application.medical_certification.attach(
+      @application.update!(disability_certification_status: :rejected)
+      @application.disability_certification.attach(
         io: StringIO.new('secure upload content'),
         filename: 'secure_upload.pdf',
         content_type: 'application/pdf'
@@ -1003,15 +1003,15 @@ module Webhooks
 
       @application.reload
       assert_equal 'signed', @application.document_signing_status
-      assert_equal 'rejected', @application.medical_certification_status
-      assert_equal 'secure_upload.pdf', @application.medical_certification.blob.filename.to_s
-      assert_equal 1, @application.additional_medical_certifications.count
-      assert_equal 'request_predates_rejection', @application.additional_medical_certifications.first.blob.metadata['retention_reason']
+      assert_equal 'rejected', @application.disability_certification_status
+      assert_equal 'secure_upload.pdf', @application.disability_certification.blob.filename.to_s
+      assert_equal 1, @application.additional_disability_certifications.count
+      assert_equal 'request_predates_rejection', @application.additional_disability_certifications.first.blob.metadata['retention_reason']
 
       event = Event.where(action: 'document_signing_completed', auditable: @application).last
-      assert_equal 'additional_medical_certification', event.metadata['retained_as']
+      assert_equal 'additional_disability_certification', event.metadata['retained_as']
       assert_equal 'request_predates_rejection', event.metadata['retention_reason']
-      assert event.metadata['additional_medical_certification_blob_id'].present?
+      assert event.metadata['additional_disability_certification_blob_id'].present?
     end
 
     test 'DocuSeal completion for a request sent before the latest rejection is kept aside' do
@@ -1024,14 +1024,14 @@ module Webhooks
       complete_docuseal_scan!
 
       @application.reload
-      assert_equal 'rejected', @application.medical_certification_status
-      assert_not @application.medical_certification.attached?
-      assert_equal 'request_predates_rejection', @application.additional_medical_certifications.first.blob.metadata['retention_reason']
+      assert_equal 'rejected', @application.disability_certification_status
+      assert_not @application.disability_certification.attached?
+      assert_equal 'request_predates_rejection', @application.additional_disability_certifications.first.blob.metadata['retention_reason']
     end
 
     test 'late DocuSeal completion retains approved secure-uploaded certification for comparison' do
-      @application.update!(medical_certification_status: :approved)
-      @application.medical_certification.attach(
+      @application.update!(disability_certification_status: :approved)
+      @application.disability_certification.attach(
         io: StringIO.new('secure upload content'),
         filename: 'secure_upload.pdf',
         content_type: 'application/pdf'
@@ -1049,12 +1049,12 @@ module Webhooks
 
       @application.reload
       assert_equal 'signed', @application.document_signing_status
-      assert_equal 'approved', @application.medical_certification_status
-      assert_equal 'secure_upload.pdf', @application.medical_certification.blob.filename.to_s
-      assert_equal 1, @application.additional_medical_certifications.count
+      assert_equal 'approved', @application.disability_certification_status
+      assert_equal 'secure_upload.pdf', @application.disability_certification.blob.filename.to_s
+      assert_equal 1, @application.additional_disability_certifications.count
 
       event = Event.where(action: 'document_signing_completed', auditable: @application).last
-      assert_equal 'additional_medical_certification', event.metadata['retained_as']
+      assert_equal 'additional_disability_certification', event.metadata['retained_as']
     end
 
     test 'handles form.declined event' do
@@ -1118,7 +1118,7 @@ module Webhooks
     end
 
     test 'a download exception leaves signing and certification incomplete' do
-      @application.update!(medical_certification_status: :requested)
+      @application.update!(disability_certification_status: :requested)
       Rails.logger.stubs(:error)
       Rails.logger.expects(:error).with(regexp_matches(/Document signing intake failed for App/)).once
 
@@ -1131,8 +1131,8 @@ module Webhooks
       @application.reload
       assert_equal 'sent', @application.document_signing_status
       assert_nil @application.document_signing_signed_at
-      assert_equal 'requested', @application.medical_certification_status
-      assert_not @application.medical_certification.attached?
+      assert_equal 'requested', @application.disability_certification_status
+      assert_not @application.disability_certification.attached?
 
       event = Event.where(action: 'document_signing_attachment_failed').last
       assert_not_nil event
@@ -1140,8 +1140,8 @@ module Webhooks
       assert_equal 'intake_failed', event.metadata['failure_reason']
     end
 
-    test 'does not update medical status when HTTP download returns error status' do
-      @application.update!(medical_certification_status: :requested)
+    test 'does not update disability certification status when HTTP download returns error status' do
+      @application.update!(disability_certification_status: :requested)
 
       mock_response = mock('http_response')
       mock_response.stubs(:status).returns(mock('status'))
@@ -1156,8 +1156,8 @@ module Webhooks
 
       @application.reload
       assert_equal 'sent', @application.document_signing_status
-      assert_equal 'requested', @application.medical_certification_status
-      assert_not @application.medical_certification.attached?
+      assert_equal 'requested', @application.disability_certification_status
+      assert_not @application.disability_certification.attached?
 
       event = Event.where(action: 'document_signing_attachment_failed').last
       assert_not_nil event
@@ -1197,8 +1197,8 @@ module Webhooks
       assert_equal 'sent', @application.reload.document_signing_status
     end
 
-    test 'does not update medical status when document URL is missing' do
-      @application.update!(medical_certification_status: :requested)
+    test 'does not update disability certification status when document URL is missing' do
+      @application.update!(disability_certification_status: :requested)
 
       payload_without_docs = @completed_payload.deep_dup
       payload_without_docs[:data].delete('documents')
@@ -1208,7 +1208,7 @@ module Webhooks
 
       @application.reload
       assert_equal 'sent', @application.document_signing_status
-      assert_equal 'requested', @application.medical_certification_status
+      assert_equal 'requested', @application.disability_certification_status
 
       event = Event.where(action: 'document_signing_attachment_failed').last
       assert_not_nil event
@@ -1248,10 +1248,10 @@ module Webhooks
       assert scan.reload.continued_at
       assert_not DocumentScan.cleared?(scan.blob)
       assert_equal 'sent', @application.reload.document_signing_status
-      assert_equal 'requested', @application.medical_certification_status
+      assert_equal 'requested', @application.disability_certification_status
       assert_nil @application.document_signing_signed_at
       assert_nil @application.document_signing_document_url
-      assert_not @application.medical_certification.attached?
+      assert_not @application.disability_certification.attached?
 
       travel 6.seconds do
         assert_no_difference ['Event.count', 'Notification.count', 'ActiveStorage::Attachment.count'] do
@@ -1262,29 +1262,29 @@ module Webhooks
 
     def assert_rejected_completion(headers, body: @completed_payload.to_json)
       assert_no_difference ['DocumentScan.count', 'Event.count', 'Notification.count', 'ActiveStorage::Attachment.count', 'ActiveStorage::Blob.count'] do
-        post webhooks_docuseal_medical_certification_path, params: body, headers: headers
+        post webhooks_docuseal_disability_certification_path, params: body, headers: headers
       end
 
       assert_response :unauthorized
       @application.reload
       assert_equal 'sent', @application.document_signing_status
-      assert_equal 'requested', @application.medical_certification_status
+      assert_equal 'requested', @application.disability_certification_status
       assert_nil @application.document_signing_signed_at
       assert_nil @application.document_signing_document_url
-      assert_not @application.medical_certification.attached?
+      assert_not @application.disability_certification.attached?
     end
 
     def record_certification_rejection(at:)
-      @application.update!(medical_certification_status: :rejected)
+      @application.update!(disability_certification_status: :rejected)
       ApplicationStatusChange.create!(application: @application, user: @system_user, from_status: 'requested',
-                                      to_status: 'rejected', change_type: 'medical_certification', changed_at: at)
+                                      to_status: 'rejected', change_type: 'disability_certification', changed_at: at)
     end
 
     def mock_successful_docuseal_download(bytes: nil)
       mock_response = mock('http_response')
       mock_response.stubs(:status).returns(mock('status'))
       mock_response.status.stubs(:success?).returns(true)
-      bytes ||= file_fixture('medical_certification_valid.pdf').binread
+      bytes ||= file_fixture('disability_certification_valid.pdf').binread
       mock_response.stubs(:body).returns(HTTP::Response::Body.new(DocumentScanFixtures::ResponseStream.new(bytes)))
       HTTP.stubs(:timeout).returns(HTTP)
       HTTP.stubs(:get).returns(mock_response)

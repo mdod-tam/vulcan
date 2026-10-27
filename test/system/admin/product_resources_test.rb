@@ -188,7 +188,7 @@ module Admin
     def public_guide_pdf
       @public_guide_pdf ||= Tempfile.new(['public-product-guide', '.pdf']).tap do |file|
         file.binmode
-        file.write(Rails.root.join('test/fixtures/files/medical_certification_valid.pdf').binread)
+        file.write(Rails.root.join('test/fixtures/files/disability_certification_valid.pdf').binread)
         file.flush
       end
     end

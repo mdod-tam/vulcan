@@ -6,10 +6,10 @@ class ProofApprovalConfirmationTest < ApplicationSystemTestCase
   test 'proof approvals require confirmation before changing their status' do
     FeatureFlag.disable!(:vouchers_enabled)
     application = create(:application, skip_proofs: true)
-    %i[income_proof residency_proof id_proof medical_certification].each do |attachment|
+    %i[income_proof residency_proof id_proof disability_certification].each do |attachment|
       attach_cleared_proof(application, attachment, filename: "#{attachment}.png")
     end
-    application.update!(medical_certification_status: :received)
+    application.update!(disability_certification_status: :received)
     system_test_sign_in(create(:admin))
     visit admin_application_path(application)
 
@@ -17,7 +17,7 @@ class ProofApprovalConfirmationTest < ApplicationSystemTestCase
       ['incomeProofReviewModal', :income_proof_status, 'Approve income proof?'],
       ['residencyProofReviewModal', :residency_proof_status, 'Approve residency proof?'],
       ['idProofReviewModal', :id_proof_status, 'Approve ID proof?'],
-      ['medicalCertificationReviewModal', :medical_certification_status, 'Approve this disability certification?']
+      ['disabilityCertificationReviewModal', :disability_certification_status, 'Approve this disability certification?']
     ].each do |modal, status_field, message|
       find("button[data-modal-id='#{modal}']").click
       assert_selector "dialog##{modal}[open]"

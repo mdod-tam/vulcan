@@ -16,7 +16,7 @@ module Webhooks
         application = create(:application, :in_progress, user: owner, document_signing_service: 'docuseal',
                                                          document_signing_submission_id: "activity_#{SecureRandom.hex(4)}",
                                                          document_signing_submitter_id: 'signer_42', document_signing_requested_at: 1.day.ago,
-                                                         document_signing_status: :sent, medical_certification_status: :requested)
+                                                         document_signing_status: :sent, disability_certification_status: :requested)
         payload = { event_type: "form.#{activity}", timestamp: 1.hour.ago.utc.iso8601(6),
                     data: { id: 'signer_42', submission_id: application.document_signing_submission_id } }
         secret = 'activity-concurrency-signing-secret'
@@ -69,9 +69,9 @@ module Webhooks
       timestamp = Time.current.to_i
       digest = OpenSSL::HMAC.hexdigest('SHA256', secret, "#{timestamp}.#{body}")
       session = ActionDispatch::Integration::Session.new(Rails.application)
-      session.post webhooks_docuseal_medical_certification_path, params: body,
-                                                                 headers: { 'Content-Type' => 'application/json',
-                                                                            'X-Docuseal-Signature' => "#{timestamp}.#{digest}" }
+      session.post webhooks_docuseal_disability_certification_path, params: body,
+                                                                    headers: { 'Content-Type' => 'application/json',
+                                                                               'X-Docuseal-Signature' => "#{timestamp}.#{digest}" }
       session.response.status
     end
   end

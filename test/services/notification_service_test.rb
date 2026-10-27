@@ -144,10 +144,10 @@ class NotificationServiceTest < ActiveSupport::TestCase
     end
   end
 
-  test 'medical certification approval notifications are record-only delivery noops' do
+  test 'disability certification approval notifications are record-only delivery noops' do
     assert_no_enqueued_jobs only: EmailDelivery::MailDeliveryJob do
       notification = NotificationService.create_and_deliver!(
-        type: :medical_certification_approved,
+        type: :disability_certification_approved,
         recipient: @constituent,
         actor: @admin,
         notifiable: @application,
@@ -156,7 +156,7 @@ class NotificationServiceTest < ActiveSupport::TestCase
 
       assert_not_nil notification
       notification.reload
-      assert_equal 'medical_certification_approved', notification.action
+      assert_equal 'disability_certification_approved', notification.action
       assert_equal 'none', notification.metadata['actual_delivery_channel']
       assert_equal 'no_email_action', notification.metadata['delivery_route_reason']
       assert_nil notification.delivery_status
@@ -229,12 +229,12 @@ class NotificationServiceTest < ActiveSupport::TestCase
     assert_nil mailer
     assert_nil method
 
-    medical_cert_notif = Notification.new(action: 'medical_certification_rejected')
-    mailer, method = NotificationService.send(:resolve_mailer, medical_cert_notif)
+    disability_cert_notif = Notification.new(action: 'disability_certification_rejected')
+    mailer, method = NotificationService.send(:resolve_mailer, disability_cert_notif)
     assert_nil mailer
     assert_nil method
 
-    requested_cert_notif = Notification.new(action: 'medical_certification_requested')
+    requested_cert_notif = Notification.new(action: 'disability_certification_requested')
     mailer, method = NotificationService.send(:resolve_mailer, requested_cert_notif)
     assert_equal MedicalProviderMailer, mailer
     assert_equal :requested, method

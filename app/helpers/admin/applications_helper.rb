@@ -23,7 +23,7 @@ module Admin
       end
     end
 
-    MedicalCertificationActionState = Struct.new(
+    DisabilityCertificationActionState = Struct.new(
       :latest_certification_request,
       :latest_certification_reject,
       :requested_after_rejection,
@@ -38,28 +38,28 @@ module Admin
       alias_method :provider_ready_for_docuseal?, :provider_ready_for_docuseal
     end
 
-    def medical_certification_link(application, style = :link)
-      return nil unless application.medical_certification.attached?
+    def disability_certification_link(application, style = :link)
+      return nil unless application.disability_certification.attached?
 
-      url = document_download_path(application.medical_certification, disposition: :inline)
+      url = document_download_path(application.disability_certification, disposition: :inline)
 
-      link_to 'View Medical Certification Document', url,
+      link_to 'View Disability Certification Document', url,
               target: '_blank',
               class: style == :button ? 'btn btn-primary' : 'text-primary-700 hover:text-primary-900 underline',
               rel: 'noopener'
     end
 
-    def medical_certification_submission_method(application)
-      return 'unknown' unless application.medical_certification.attached?
+    def disability_certification_submission_method(application)
+      return 'unknown' unless application.disability_certification.attached?
 
-      if application.respond_to?(:medical_certification_submission_method) &&
-         application.medical_certification_submission_method.present?
-        return application.medical_certification_submission_method
+      if application.respond_to?(:disability_certification_submission_method) &&
+         application.disability_certification_submission_method.present?
+        return application.disability_certification_submission_method
       end
 
       status_change = ApplicationStatusChange.where(application_id: application.id)
                                              .where("metadata->>'change_type' = ? OR to_status = ?",
-                                                    'medical_certification', 'received')
+                                                    'disability_certification', 'received')
                                              .order(created_at: :desc)
                                              .first
 
@@ -77,7 +77,7 @@ module Admin
       'request_predates_rejection' => 'requested before the latest rejection, review'
     }.freeze
 
-    def additional_medical_certification_source_label(certification)
+    def additional_disability_certification_source_label(certification)
       source = case certification.blob.metadata['source']
                when 'docuseal' then 'DocuSeal signed form'
                when 'secure_form' then 'Secure upload'
@@ -183,30 +183,30 @@ module Admin
       end
     end
 
-    def show_medical_certification_request_buttons?(application)
-      application.medical_certification_status == 'not_requested' ||
-        application.medical_certification_status == 'rejected' ||
-        (application.medical_certification_status == 'requested' && !application.medical_certification.attached?)
+    def show_disability_certification_request_buttons?(application)
+      application.disability_certification_status == 'not_requested' ||
+        application.disability_certification_status == 'rejected' ||
+        (application.disability_certification_status == 'requested' && !application.disability_certification.attached?)
     end
 
-    def medical_certification_pending_review?(application)
-      application.medical_certification.attached? &&
-        (application.medical_certification_status_received? || application.medical_certification_status_requested?)
+    def disability_certification_pending_review?(application)
+      application.disability_certification.attached? &&
+        (application.disability_certification_status_received? || application.disability_certification_status_requested?)
     end
 
     def show_secure_cert_upload_button?(application)
-      return false if application.medical_certification_status_approved?
-      return true if application.medical_certification_status_rejected?
+      return false if application.disability_certification_status_approved?
+      return true if application.disability_certification_status_rejected?
 
-      !application.medical_certification.attached?
+      !application.disability_certification.attached?
     end
 
-    def medical_certification_action_state(application, secure_request_forms: nil)
-      latest_request = latest_medical_certification_notification(application, 'medical_certification_requested')
-      latest_reject = latest_medical_certification_notification(application, 'medical_certification_rejected')
+    def disability_certification_action_state(application, secure_request_forms: nil)
+      latest_request = latest_disability_certification_notification(application, 'disability_certification_requested')
+      latest_reject = latest_disability_certification_notification(application, 'disability_certification_rejected')
       active_secure_forms = Array(secure_request_forms || application.medical_provider_secure_request_forms).count(&:active?)
 
-      MedicalCertificationActionState.new(
+      DisabilityCertificationActionState.new(
         latest_certification_request: latest_request,
         latest_certification_reject: latest_reject,
         requested_after_rejection: requested_after_rejection?(latest_request, latest_reject),
@@ -221,7 +221,7 @@ module Admin
 
     private
 
-    def latest_medical_certification_notification(application, action)
+    def latest_disability_certification_notification(application, action)
       Notification
         .where(notifiable: application, action: action)
         .order(created_at: :desc)

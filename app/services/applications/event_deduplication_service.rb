@@ -52,8 +52,8 @@ module Applications
     end
 
     def fingerprint_for_status_change(event)
-      if event.metadata&.[](:change_type) == 'medical_certification' ||
-         event.metadata&.[]('change_type') == 'medical_certification'
+      if event.metadata&.[](:change_type) == 'disability_certification' ||
+         event.metadata&.[]('change_type') == 'disability_certification'
         nil
       else
         "#{event.from_status}-#{event.to_status}"
@@ -108,9 +108,9 @@ module Applications
       when Notification, Event
         event.action.to_s.gsub(/_proof_submitted$/, '_submission')
       when ApplicationStatusChange
-        if event.metadata&.[](:change_type) == 'medical_certification' ||
-           event.metadata&.[]('change_type') == 'medical_certification'
-          "medical_certification_#{event.to_status}"
+        if event.metadata&.[](:change_type) == 'disability_certification' ||
+           event.metadata&.[]('change_type') == 'disability_certification'
+          "disability_certification_#{event.to_status}"
         else
           "status_change_#{event.to_status}"
         end

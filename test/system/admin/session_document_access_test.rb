@@ -57,14 +57,14 @@ module Admin
       ensure_system_audit_actor!
       application = create(:application, :in_progress)
       application.income_proof.attach(io: file_fixture('income_proof.pdf').open, filename: 'income_proof.pdf', content_type: 'application/pdf')
-      application.medical_certification.attach(io: file_fixture('medical_certification_valid.pdf').open,
-                                               filename: 'certification.pdf', content_type: 'application/pdf')
+      application.disability_certification.attach(io: file_fixture('disability_certification_valid.pdf').open,
+                                                  filename: 'certification.pdf', content_type: 'application/pdf')
       mark_document_clean!(application.income_proof.blob, user: @admin)
-      mark_document_clean!(application.medical_certification.blob, user: @admin, purpose: :certification, slot: 'medical_certification')
+      mark_document_clean!(application.disability_certification.blob, user: @admin, purpose: :certification, slot: 'disability_certification')
       visit admin_application_path(application)
       stale_signed_url = rails_blob_path(application.income_proof)
       proof_path = document_attachment_path(application.income_proof.attachment, disposition: :inline)
-      certification_path = document_attachment_path(application.medical_certification.attachment, disposition: :attachment)
+      certification_path = document_attachment_path(application.disability_certification.attachment, disposition: :attachment)
       assert_selector "a[href='#{certification_path}']"
 
       travel 16.minutes do
@@ -79,7 +79,7 @@ module Admin
         assert_equal 404, browser_download(stale_signed_url).fetch('status')
         certification_response = browser_download(certification_path)
         assert_equal 200, certification_response.fetch('status')
-        assert_equal application.medical_certification.blob.byte_size, certification_response.fetch('bytes')
+        assert_equal application.disability_certification.blob.byte_size, certification_response.fetch('bytes')
         take_screenshot('proof-modal-after-download-url-expiry', html: true, full: true)
       end
     end

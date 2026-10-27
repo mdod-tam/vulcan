@@ -213,7 +213,7 @@ class SecurePublicFormMatrixTest < ActionDispatch::IntegrationTest
                medical_provider_email: 'matrix@example.test' }
     end
 
-    { token: token, file: fixture_file_upload(Rails.root.join('test/fixtures/files/medical_certification_valid.pdf'), 'application/pdf') }
+    { token: token, file: fixture_file_upload(Rails.root.join('test/fixtures/files/disability_certification_valid.pdf'), 'application/pdf') }
   end
 
   def spanish_locale_owner(name, form)

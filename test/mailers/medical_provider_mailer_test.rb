@@ -72,7 +72,7 @@ class MedicalProviderMailerTest < ActionMailer::TestCase
     variables = mailer.send(:build_rejection_variables)
 
     assert variables[:download_form_url].present?
-    assert_match %r{/medical_certification_form\z}, variables[:download_form_url]
+    assert_match %r{/disability_certification_form\z}, variables[:download_form_url]
     assert_equal 'https://example.test/secure_certification_form?token=abc', variables[:secure_upload_url]
     assert_includes variables[:certification_resubmission_instructions], 'Secure certification upload link'
     assert_includes variables[:certification_resubmission_instructions], variables[:secure_upload_url]
@@ -104,7 +104,7 @@ class MedicalProviderMailerTest < ActionMailer::TestCase
 
     assert_equal @constituent.phone, variables[:constituent_phone_formatted]
     assert_equal @constituent.email, variables[:constituent_email]
-    assert_match %r{/medical_certification_form\z}, variables[:download_form_url]
+    assert_match %r{/disability_certification_form\z}, variables[:download_form_url]
     assert_includes variables[:certification_submission_instructions], 'Return the completed form by fax'
     assert_not_includes variables[:certification_submission_instructions], 'disability_cert@mdmat.org'
     assert_equal '', variables[:secure_upload_url]

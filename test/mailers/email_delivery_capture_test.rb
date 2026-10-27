@@ -90,9 +90,9 @@ class EmailDeliveryCaptureTest < ActiveSupport::TestCase
 
   test 'certification wrapper job reaches the same acceptance owner' do
     application = create(:application, :in_progress, medical_provider_email: 'provider@example.test')
-    notification = create(:notification, recipient: @admin, actor: @admin, notifiable: application, action: 'medical_certification_requested')
+    notification = create(:notification, recipient: @admin, actor: @admin, notifiable: application, action: 'disability_certification_requested')
     @transport.expects(:post).once.returns(@response)
-    MedicalCertificationEmailJob.perform_now(application_id: application.id, timestamp: Time.current.iso8601, notification_id: notification.id)
+    DisabilityCertificationEmailJob.perform_now(application_id: application.id, timestamp: Time.current.iso8601, notification_id: notification.id)
     attempt = notification.email_delivery_attempts.sole
     assert_equal application, attempt.origin
     assert_equal 'provider@example.test', attempt.destination
@@ -141,10 +141,10 @@ class EmailDeliveryCaptureTest < ActiveSupport::TestCase
 
   test 'the certification wrapper retries without a stale local error panel' do
     application = create(:application, :in_progress, medical_provider_email: 'provider@example.test')
-    notification = create(:notification, recipient: @admin, actor: @admin, notifiable: application, action: 'medical_certification_requested')
+    notification = create(:notification, recipient: @admin, actor: @admin, notifiable: application, action: 'disability_certification_requested')
     refusal = stub(code: '429', body: { ErrorCode: 0, Message: 'Rate limited' }.to_json)
     @transport.expects(:post).twice.returns(refusal).then.returns(@response)
-    job = MedicalCertificationEmailJob.perform_later(application_id: application.id, timestamp: Time.current.iso8601, notification_id: notification.id)
+    job = DisabilityCertificationEmailJob.perform_later(application_id: application.id, timestamp: Time.current.iso8601, notification_id: notification.id)
     clear_enqueued_jobs
     ActiveJob::Base.execute(job.serialize)
     assert_equal 'failed', notification.email_delivery_attempts.sole.state

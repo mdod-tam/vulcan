@@ -34,15 +34,15 @@ module ApplicationStatusManagement
           income_proof_status: income_proof_statuses[:rejected],
           residency_proof_status: residency_proof_statuses[:rejected]
         )
-      when 'awaiting_medical_response'
+      when 'awaiting_disability_certification'
         where(status: statuses[:awaiting_dcf])
       when 'digitally_signed_needs_review'
         where(
           document_signing_status: document_signing_statuses[:signed]
         ).where.not(
-          medical_certification_status: [
-            medical_certification_statuses[:approved],
-            medical_certification_statuses[:rejected]
+          disability_certification_status: [
+            disability_certification_statuses[:approved],
+            disability_certification_statuses[:rejected]
           ]
         )
       end
@@ -102,7 +102,7 @@ module ApplicationStatusManagement
       return if status_approved? || status_rejected? || status_archived? || status_awaiting_dcf?
 
       auto_request = FeatureFlag.enabled?(:dcf_auto_request_certification, default: false) &&
-                     required_proofs_for_dcf_approved? && medical_certification_status_not_requested?
+                     required_proofs_for_dcf_approved? && disability_certification_status_not_requested?
       transition_status!(
         :awaiting_dcf,
         actor: actor,
@@ -111,14 +111,14 @@ module ApplicationStatusManagement
       )
       if auto_request
         ActiveRecord.after_all_transactions_commit do
-          Applications::MedicalCertificationService.new(application: self, actor: actor).auto_request_certification
+          Applications::DisabilityCertificationService.new(application: self, actor: actor).auto_request_certification
         end
       end
     end
   end
 
   def dcf_auto_request_not_sent?
-    status_awaiting_dcf? && medical_certification_status_not_requested? &&
+    status_awaiting_dcf? && disability_certification_status_not_requested? &&
       status_changes.where(to_status: 'awaiting_dcf').order(:id).last&.metadata&.dig('dcf_auto_request') == true
   end
 
@@ -126,6 +126,6 @@ module ApplicationStatusManagement
 
   def all_requirements_met?
     required_proofs_approved? &&
-      medical_certification_status_approved?
+      disability_certification_status_approved?
   end
 end

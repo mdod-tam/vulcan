@@ -10,7 +10,7 @@
 #
 # It's strongly recommended that you check this file into your version control system.
 
-ActiveRecord::Schema[8.1].define(version: 2026_10_27_200000) do
+ActiveRecord::Schema[8.1].define(version: 2026_10_27_210000) do
   # These are extensions that must be enabled in order to support this database
   enable_extension "pg_catalog.plpgsql"
 
@@ -122,11 +122,11 @@ ActiveRecord::Schema[8.1].define(version: 2026_10_27_200000) do
     t.string "last_visited_step"
     t.bigint "managing_guardian_id"
     t.boolean "maryland_resident"
-    t.integer "medical_certification_request_count", default: 0
-    t.datetime "medical_certification_requested_at"
-    t.integer "medical_certification_status", default: 0, null: false
-    t.datetime "medical_certification_verified_at"
-    t.bigint "medical_certification_verified_by_id"
+    t.integer "disability_certification_request_count", default: 0
+    t.datetime "disability_certification_requested_at"
+    t.integer "disability_certification_status", default: 0, null: false
+    t.datetime "disability_certification_verified_at"
+    t.bigint "disability_certification_verified_by_id"
     t.string "medical_provider_email"
     t.string "medical_provider_fax"
     t.string "medical_provider_name"
@@ -149,6 +149,8 @@ ActiveRecord::Schema[8.1].define(version: 2026_10_27_200000) do
     t.datetime "equipment_needs_initialized_at"
     t.bigint "assigned_trainer_id"
     t.index ["assigned_trainer_id"], name: "index_applications_on_assigned_trainer_id"
+    t.index ["disability_certification_status"], name: "index_applications_on_disability_certification_status"
+    t.index ["disability_certification_verified_by_id"], name: "index_applications_on_disability_certification_verified_by_id"
     t.index ["document_signing_service"], name: "index_applications_on_document_signing_service"
     t.index ["document_signing_status"], name: "index_applications_on_document_signing_status"
     t.index ["document_signing_submission_id"], name: "index_applications_on_document_signing_submission_id"
@@ -159,8 +161,6 @@ ActiveRecord::Schema[8.1].define(version: 2026_10_27_200000) do
     t.index ["income_verified_by_id"], name: "index_applications_on_income_verified_by_id"
     t.index ["last_proof_submitted_at"], name: "index_applications_on_last_proof_submitted_at"
     t.index ["managing_guardian_id"], name: "index_applications_on_managing_guardian_id"
-    t.index ["medical_certification_status"], name: "index_applications_on_medical_certification_status"
-    t.index ["medical_certification_verified_by_id"], name: "index_applications_on_medical_certification_verified_by_id"
     t.index ["medical_provider_email", "status"], name: "index_applications_on_medical_provider_email_and_status"
     t.index ["needs_review_since"], name: "index_applications_on_needs_review_since"
     t.index ["residency_proof_status"], name: "idx_applications_on_residency_proof_status"
@@ -1208,9 +1208,9 @@ ActiveRecord::Schema[8.1].define(version: 2026_10_27_200000) do
   add_foreign_key "application_status_changes", "users"
   add_foreign_key "applications", "users"
   add_foreign_key "applications", "users", column: "assigned_trainer_id"
+  add_foreign_key "applications", "users", column: "disability_certification_verified_by_id"
   add_foreign_key "applications", "users", column: "income_verified_by_id"
   add_foreign_key "applications", "users", column: "managing_guardian_id"
-  add_foreign_key "applications", "users", column: "medical_certification_verified_by_id"
   add_foreign_key "document_scans", "active_storage_blobs", column: "blob_id", on_delete: :cascade
   add_foreign_key "document_scans", "users", on_delete: :nullify
   add_foreign_key "duplicate_review_case_candidates", "duplicate_review_cases"

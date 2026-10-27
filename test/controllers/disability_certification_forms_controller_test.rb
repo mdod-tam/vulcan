@@ -2,9 +2,9 @@
 
 require 'test_helper'
 
-class MedicalCertificationFormsControllerTest < ActionDispatch::IntegrationTest
-  test 'downloads the blank medical certification form' do
-    get medical_certification_form_path
+class DisabilityCertificationFormsControllerTest < ActionDispatch::IntegrationTest
+  test 'downloads the blank disability certification form' do
+    get disability_certification_form_path
 
     assert_response :success
     assert_equal 'application/pdf', response.media_type
@@ -13,10 +13,10 @@ class MedicalCertificationFormsControllerTest < ActionDispatch::IntegrationTest
   end
 
   test 'allows repeated downloads of the blank form' do
-    get medical_certification_form_path
+    get disability_certification_form_path
     assert_response :success
 
-    get medical_certification_form_path
+    get disability_certification_form_path
     assert_response :success
   end
 end

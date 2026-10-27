@@ -36,7 +36,7 @@ class MedicalProviderMailer < ApplicationMailer
     raise e
   end
 
-  # A code on the latest rejected medical review selects the localized stored reason.
+  # A code on the latest rejected disability certification review selects the localized stored reason.
   # @param application [Application] The application with the rejected certification
   # @param rejection_reason [String] Fallback text when no stored reason body resolves
   # @param admin [User] The admin who rejected the certification
@@ -85,7 +85,7 @@ class MedicalProviderMailer < ApplicationMailer
   def build_rejection_variables(locale = 'en')
     application = params[:application]
     constituent = application.user
-    rejection_reason = resolve_medical_cert_rejection_reason(application, locale)
+    rejection_reason = resolve_disability_cert_rejection_reason(application, locale)
 
     {
       constituent_full_name: constituent.full_name,
@@ -100,19 +100,19 @@ class MedicalProviderMailer < ApplicationMailer
 
   # A stored code selects the localized reason.
   # Without a resolved body, fallback order is supplied text, review text, then 'Not specified'.
-  def resolve_medical_cert_rejection_reason(application, locale)
-    latest_review = application.latest_medical_rejection_review
+  def resolve_disability_cert_rejection_reason(application, locale)
+    latest_review = application.latest_disability_certification_rejection_review
     code = latest_review&.rejection_reason_code.presence
     fallback_reason = params[:rejection_reason] ||
                       latest_review&.rejection_reason ||
-                      application.medical_certification_rejection_reason ||
+                      application.disability_certification_rejection_reason ||
                       'Not specified'
 
     return fallback_reason if code.blank?
 
     reason = RejectionReason.resolve(
       code: code,
-      proof_type: 'medical_certification',
+      proof_type: 'disability_certification',
       locale: locale
     )
     reason&.body.presence || fallback_reason
@@ -171,7 +171,7 @@ class MedicalProviderMailer < ApplicationMailer
   end
 
   def format_request_count_message(application)
-    request_count = application.medical_certification_request_count || 1
+    request_count = application.disability_certification_request_count || 1
     request_count > 1 ? "This is a follow-up request (Request ##{request_count})" : ''
   end
 
@@ -201,7 +201,7 @@ class MedicalProviderMailer < ApplicationMailer
   end
 
   def build_download_form_url
-    medical_certification_form_url(host: default_url_options[:host])
+    disability_certification_form_url(host: default_url_options[:host])
   rescue StandardError
     '#'
   end

@@ -20,10 +20,10 @@ module Admin
                                                      .includes(:delivery_owner).order(attempted_at: :desc, id: :desc).to_a
       notifications = EmailDelivery::Visibility.preload(
         Notification.where(notifiable: @application,
-                           action: %w[medical_certification_requested medical_certification_rejected medical_certification_approved])
+                           action: %w[disability_certification_requested disability_certification_rejected disability_certification_approved])
                     .includes(:actor).order(created_at: :desc, id: :desc)
       )
-      @certification_delivery_notifications = notifications.select { |notification| notification.action == 'medical_certification_requested' }
+      @certification_delivery_notifications = notifications.select { |notification| notification.action == 'disability_certification_requested' }
       @certification_local_delivery_notifications = notifications.select do |notification|
         (notification.email_delivery_attempts.empty? || notification.local_delivery_outcome?) &&
           DeliveryStatusPresenter.new(notification).status != 'unknown'

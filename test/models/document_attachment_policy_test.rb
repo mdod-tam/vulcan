@@ -22,7 +22,7 @@ class DocumentAttachmentPolicyTest < ActiveSupport::TestCase
       end
     end
 
-    assert_includes checked, 'Application#medical_certification'
+    assert_includes checked, 'Application#disability_certification'
     assert_includes checked, 'Users::Vendor#w9_form'
   end
 end

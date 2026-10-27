@@ -42,8 +42,8 @@ module EmailDelivery
       'ApplicationNotificationsMailer#application_submitted' => [:application, :preference, 'application_notifications_application_submitted'],
       'ApplicationNotificationsMailer#income_threshold_exceeded' => [:application, :preference, 'application_notifications_income_threshold_exceeded'],
       'ApplicationNotificationsMailer#max_rejections_reached' => [:proof, :preference, 'application_notifications_max_rejections_reached'],
-      'ApplicationNotificationsMailer#medical_certification_not_provided' => [:certification, :preference,
-                                                                              'application_notifications_medical_certification_not_provided'],
+      'ApplicationNotificationsMailer#disability_certification_not_provided' => [:certification, :preference,
+                                                                                 'application_notifications_disability_certification_not_provided'],
       'ApplicationNotificationsMailer#proof_approved' => [:proof, :preference, 'application_notifications_proof_approved'],
       'ApplicationNotificationsMailer#proof_needs_review_reminder' => [:proof, :email_only, 'application_notifications_proof_needs_review_reminder'],
       'ApplicationNotificationsMailer#proof_received' => [:proof, :preference, 'application_notifications_proof_received'],
@@ -96,7 +96,7 @@ module EmailDelivery
       'TwoFactor#sms_login' => [:account_security, :sms, nil, 'TwoFactor::SmsLoginChallenge'],
       'TwoFactor#sms_setup' => [:account_security, :sms, nil, 'TwoFactor::PendingSmsSetupChallenge'],
       'FaxService#certification_rejected' => [:certification, :fax, nil, 'MedicalProviderNotifier'],
-      'Letters#medical_certification_form' => [:certification, :letter, nil, 'Applications::MedicalCertificationPdfService']
+      'Letters#disability_certification_form' => [:certification, :letter, nil, 'Applications::DisabilityCertificationPdfService']
     }.to_h do |key, (category, routing, template, owner)|
       [key, MailAction.new(key: key, category: category.to_s, routing: routing, template: template, owner: owner, essential: ESSENTIAL_ACTIONS[key])]
     end.freeze
@@ -127,14 +127,14 @@ module EmailDelivery
       'training_missed' => ['TrainingSessionNotificationsMailer#no_show_notification', :notifiable_and_notification, :preference],
       'security_key_recovery_approved' => ['ApplicationNotificationsMailer#security_key_recovery_approved', :notifiable_and_notification,
                                            :email_only],
-      'medical_certification_requested' => ['MedicalProviderMailer#requested', :notifiable_and_notification, :email],
-      'medical_certification_not_provided' => ['ApplicationNotificationsMailer#medical_certification_not_provided',
-                                               :notifiable_and_notification, :preference],
+      'disability_certification_requested' => ['MedicalProviderMailer#requested', :notifiable_and_notification, :email],
+      'disability_certification_not_provided' => ['ApplicationNotificationsMailer#disability_certification_not_provided',
+                                                  :notifiable_and_notification, :preference],
       'max_rejections_warning' => ['ApplicationNotificationsMailer#max_rejections_reached', :notifiable, :email],
-      'medical_certification_received' => AUDIT_ONLY,
+      'disability_certification_received' => AUDIT_ONLY,
       'documents_requested' => AUDIT_ONLY,
       'proof_approved' => AUDIT_ONLY,
-      'medical_certification_approved' => AUDIT_ONLY,
+      'disability_certification_approved' => AUDIT_ONLY,
       # Vendors::RequestW9Resubmission owns the secure link and rejection email.
       'w9_rejected' => AUDIT_ONLY
     }.to_h do |action, (mail_action, adapter, routing, owner)|

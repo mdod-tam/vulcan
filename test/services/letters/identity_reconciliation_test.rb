@@ -11,7 +11,7 @@ module Letters
       @admin = create(:admin)
       @recipient = create(:constituent)
       @application = create(:application, user: @recipient)
-      @context = EmailDelivery::Policy.capture(mail_action: 'Letters#medical_certification_form')
+      @context = EmailDelivery::Policy.capture(mail_action: 'Letters#disability_certification_form')
       @items = []
     end
 
@@ -150,7 +150,7 @@ module Letters
     private
 
     def queue(recipient: @recipient, secure_request_form: nil)
-      Delivery.queue!(recipient: recipient, application: @application, letter_type: :medical_certification_form,
+      Delivery.queue!(recipient: recipient, application: @application, letter_type: :disability_certification_form,
                       context: @context, secure_request_form: secure_request_form,
                       request_key: SecureRandom.uuid) { StringIO.new('%PDF test letter') }.tap { |item| @items << item }
     end

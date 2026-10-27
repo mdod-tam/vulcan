@@ -6,7 +6,7 @@ module NotificationsHelper
     id_proof_rejected
     income_proof_rejected
     residency_proof_rejected
-    medical_certification_rejected
+    disability_certification_rejected
   ].freeze
 
   # Icon colors: danger for rejections, success for approvals, info for requests in progress, warning for
@@ -16,9 +16,9 @@ module NotificationsHelper
 
     if notification.action == 'proof_resubmission_requested'
       proof_resubmission_rejected_notification?(notification) ? 'bg-danger-100 text-danger-700' : 'bg-warning-100 text-warning-700'
-    elsif %w[trainer_assigned proof_approved medical_certification_approved].include?(notification.action)
+    elsif %w[trainer_assigned proof_approved disability_certification_approved].include?(notification.action)
       'bg-success-100 text-success-700'
-    elsif %w[training_requested medical_certification_requested medical_certification_received].include?(notification.action)
+    elsif %w[training_requested disability_certification_requested disability_certification_received].include?(notification.action)
       'bg-info-100 text-info-700'
     elsif notification.action == 'documents_requested'
       'bg-warning-100 text-warning-700'
@@ -35,9 +35,9 @@ module NotificationsHelper
       :training_requested
     when 'trainer_assigned'
       :trainer_assigned
-    when 'medical_certification_requested', 'medical_certification_received'
-      :medical
-    when 'proof_approved', 'medical_certification_approved'
+    when 'disability_certification_requested', 'disability_certification_received'
+      :disability_certification
+    when 'proof_approved', 'disability_certification_approved'
       :approved
     when *REJECTED_NOTIFICATION_ACTIONS
       :rejected

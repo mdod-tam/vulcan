@@ -15,10 +15,10 @@ class DocumentValidatorTest < ActiveSupport::TestCase
   end
 
   test 'a newly attached certification over its limit is invalid' do
-    @application.medical_certification.attach(blob(ProofUploadFormats.max_bytes(:certification) + 1))
+    @application.disability_certification.attach(blob(ProofUploadFormats.max_bytes(:certification) + 1))
 
     assert_not @application.valid?
-    assert_includes @application.errors[:medical_certification], 'is too large. Maximum size allowed is 10MB.'
+    assert_includes @application.errors[:disability_certification], 'is too large. Maximum size allowed is 10MB.'
   end
 
   test 'a stored document is not re-judged on an unrelated save' do
@@ -33,10 +33,10 @@ class DocumentValidatorTest < ActiveSupport::TestCase
   test 'a provider-generated certification keeps its own contract' do
     generated = blob(ProofUploadFormats.max_bytes(:certification) + 1, metadata: { 'source' => 'docuseal' })
 
-    @application.additional_medical_certifications.attach(generated)
+    @application.additional_disability_certifications.attach(generated)
 
     assert_predicate @application, :valid?
-    assert_includes @application.reload.additional_medical_certifications.blobs, generated
+    assert_includes @application.reload.additional_disability_certifications.blobs, generated
   end
 
   private

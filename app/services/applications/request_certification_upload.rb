@@ -35,8 +35,8 @@ module Applications
           ensure_cooldown_allows!
           revoke_open_requests
           delivery = create_request
-          MedicalCertificationService.new(application: application, actor: actor)
-                                     .prepare_upload_request!(notification: Notification.find(delivery.notification_id))
+          DisabilityCertificationService.new(application: application, actor: actor)
+                                        .prepare_upload_request!(notification: Notification.find(delivery.notification_id))
         end
       end
 
@@ -169,7 +169,7 @@ module Applications
     end
 
     def after_delivery_not_sent(delivery)
-      MedicalCertificationService.restore_unsent_request(Notification.find_by(id: delivery.notification_id))
+      DisabilityCertificationService.restore_unsent_request(Notification.find_by(id: delivery.notification_id))
     end
 
     def result_data(request_form, raw_token)
@@ -206,13 +206,13 @@ module Applications
     def rejection_delivery?
       # The certification status selects the template. Secure certification
       # links serve only first requests and rejection follow-ups.
-      application.medical_certification_status_rejected?
+      application.disability_certification_status_rejected?
     end
 
     def rejection_reason_for_delivery
-      latest_review = application.latest_medical_rejection_review
+      latest_review = application.latest_disability_certification_rejection_review
       latest_review&.rejection_reason.presence ||
-        application.medical_certification_rejection_reason.presence ||
+        application.disability_certification_rejection_reason.presence ||
         I18n.t('secure_certification_form_resends.create.default_rejection_reason')
     end
 

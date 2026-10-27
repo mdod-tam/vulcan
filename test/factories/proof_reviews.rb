@@ -9,7 +9,7 @@ FactoryBot.define do
     reviewed_at { Time.current }
 
     after(:build) do |proof_review|
-      # This guard does not verify an ID or medical certification attachment.
+      # This guard does not verify an ID or disability certification attachment.
       next if proof_review.application.income_proof.attached? && proof_review.application.residency_proof.attached?
 
       original_context = Thread.current[:paper_application_context]

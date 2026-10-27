@@ -3,7 +3,7 @@
 module ApplicationDataLoading
   extend ActiveSupport::Concern
 
-  DEFAULT_ATTACHMENT_NAMES = %w[income_proof residency_proof id_proof medical_certification].freeze
+  DEFAULT_ATTACHMENT_NAMES = %w[income_proof residency_proof id_proof disability_certification].freeze
 
   # @param application_id [Integer, String] The ID of the application to load
   # @return [Application] The loaded application
@@ -113,8 +113,8 @@ module ApplicationDataLoading
   # @return [ActiveRecord::Relation] Notifications
   def load_application_notifications(application, actions: nil)
     actions ||= %w[
-      medical_certification_requested medical_certification_received
-      medical_certification_approved medical_certification_rejected
+      disability_certification_requested disability_certification_received
+      disability_certification_approved disability_certification_rejected
       review_requested documents_requested proof_approved proof_rejected
     ]
 

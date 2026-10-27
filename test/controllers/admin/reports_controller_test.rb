@@ -337,7 +337,7 @@ module Admin
         income_proof_status: Application.income_proof_statuses[:approved],
         residency_proof_status: Application.residency_proof_statuses[:approved],
         id_proof_status: Application.id_proof_statuses[:approved],
-        medical_certification_status: Application.medical_certification_statuses[:approved],
+        disability_certification_status: Application.disability_certification_statuses[:approved],
         updated_at: Time.current
       )
       application.reload

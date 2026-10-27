@@ -4,8 +4,8 @@ require 'test_helper'
 require 'tmpdir'
 
 module Applications
-  class MedicalCertificationPdfServiceTest < ActiveSupport::TestCase
-    PREGENERATED_PDF = Rails.root.join('app/assets/pdfs/medical_certification_form.pdf')
+  class DisabilityCertificationPdfServiceTest < ActiveSupport::TestCase
+    PREGENERATED_PDF = Rails.root.join('app/assets/pdfs/disability_certification_form.pdf')
 
     setup do
       @admin = create(:admin)
@@ -66,7 +66,7 @@ module Applications
         original_tmpdir = ENV.fetch('TMPDIR', nil)
         ENV['TMPDIR'] = tmpdir
         handles = record_tempfile_handles
-        service = MedicalCertificationPdfService.new(
+        service = DisabilityCertificationPdfService.new(
           application: @application, actor: @admin, pdf_source: { type: :pregenerated, source: source }
         )
         handoffs = record_handoffs(service)

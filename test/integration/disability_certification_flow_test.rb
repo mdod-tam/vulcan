@@ -2,7 +2,7 @@
 
 require 'test_helper'
 
-class MedicalCertificationFlowTest < ActionDispatch::IntegrationTest
+class DisabilityCertificationFlowTest < ActionDispatch::IntegrationTest
   include ActiveJob::TestHelper
 
   def setup
@@ -25,8 +25,8 @@ class MedicalCertificationFlowTest < ActionDispatch::IntegrationTest
     get admin_application_path(@application)
     assert_response :success
 
-    assert_enqueued_with(job: MedicalCertificationEmailJob) do
-      post resend_medical_certification_admin_application_path(@application)
+    assert_enqueued_with(job: DisabilityCertificationEmailJob) do
+      post resend_disability_certification_admin_application_path(@application)
     end
 
     assert_redirected_to admin_application_path(@application)
@@ -35,12 +35,12 @@ class MedicalCertificationFlowTest < ActionDispatch::IntegrationTest
     follow_redirect!(headers: { 'X-Test-User-Id' => @admin.id.to_s })
 
     @application.reload
-    assert_equal 'requested', @application.medical_certification_status
-    assert_equal 1, @application.medical_certification_request_count
+    assert_equal 'requested', @application.disability_certification_status
+    assert_equal 1, @application.disability_certification_request_count
 
     notification = Notification.last
     assert_not_nil notification, 'Expected notification to be created but was nil'
-    assert_equal 'medical_certification_requested', notification.action
+    assert_equal 'disability_certification_requested', notification.action
     assert_equal @application.user.id, notification.recipient_id
     assert_equal @admin.id, notification.actor_id
     assert_nil notification.metadata&.dig('delivery_error', 'message')
@@ -49,16 +49,16 @@ class MedicalCertificationFlowTest < ActionDispatch::IntegrationTest
     assert_emails 1
 
     # A second request gives the page a request history.
-    post resend_medical_certification_admin_application_path(@application)
+    post resend_disability_certification_admin_application_path(@application)
     @application.reload
-    assert_equal 2, @application.medical_certification_request_count
+    assert_equal 2, @application.disability_certification_request_count
 
     get admin_application_path(@application)
     assert_response :success
 
     assert_select '.history-item', minimum: 2
 
-    assert_match(/Medical Certification/, response.body)
+    assert_match(/Disability Certification/, response.body)
   end
 
   def test_constituent_portal_view
@@ -68,7 +68,7 @@ class MedicalCertificationFlowTest < ActionDispatch::IntegrationTest
 
     # The admin sends the request before the constituent views it.
     sign_in_for_integration_test(@admin)
-    post resend_medical_certification_admin_application_path(@application)
+    post resend_disability_certification_admin_application_path(@application)
     sign_out
 
     sign_in_for_integration_test(@constituent)
@@ -77,7 +77,7 @@ class MedicalCertificationFlowTest < ActionDispatch::IntegrationTest
     assert_response :success
 
     @application.reload
-    assert_equal 'requested', @application.medical_certification_status
+    assert_equal 'requested', @application.disability_certification_status
 
     assert_select 'h2', text: /Disability Certification/
 
@@ -91,11 +91,11 @@ class MedicalCertificationFlowTest < ActionDispatch::IntegrationTest
     # update_columns skips validations, so the provider email can be nil.
     application_without_email.update_columns(medical_provider_email: nil)
 
-    post resend_medical_certification_admin_application_path(application_without_email)
+    post resend_disability_certification_admin_application_path(application_without_email)
     assert_redirected_to admin_application_path(application_without_email)
     assert_match(/Failed to process certification request/, flash[:alert])
 
-    assert_no_enqueued_jobs only: MedicalCertificationEmailJob
+    assert_no_enqueued_jobs only: DisabilityCertificationEmailJob
 
     assert_no_difference 'Notification.count' do
       application_without_email
@@ -117,9 +117,9 @@ class MedicalCertificationFlowTest < ActionDispatch::IntegrationTest
       name: 'medical_provider_request_certification',
       format: :text,
       locale: 'en',
-      subject: 'Medical Certification Request',
+      subject: 'Disability Certification Request',
       body: "Dear Medical Provider,\n\n" \
-            "We need medical certification for %<constituent_full_name>s.\n\n" \
+            "We need disability certification for %<constituent_full_name>s.\n\n" \
             "Application ID: %<application_id>s\n" \
             "Date: %<timestamp_formatted>s\n" \
             "DOB: %<constituent_dob_formatted>s\n" \

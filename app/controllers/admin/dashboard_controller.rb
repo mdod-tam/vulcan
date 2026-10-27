@@ -37,7 +37,7 @@ module Admin
         scope.where(status: :approved)
       when 'proofs_needing_review'
         scope.with_proofs_needing_review
-      when 'awaiting_medical_response'
+      when 'awaiting_disability_certification'
         scope.where(status: :awaiting_dcf)
       when 'training_requests'
         scope.with_pending_training_request

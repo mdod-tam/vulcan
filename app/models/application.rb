@@ -68,13 +68,13 @@ class Application < ApplicationRecord
     rejected: 2
   }, prefix: true
 
-  enum :medical_certification_status, {
+  enum :disability_certification_status, {
     not_requested: 0,
     requested: 1,
     received: 2,
     approved: 3,
     rejected: 4
-  }, prefix: :medical_certification_status
+  }, prefix: :disability_certification_status
 
   enum :document_signing_status, {
     not_sent: 0,
@@ -96,7 +96,7 @@ class Application < ApplicationRecord
              class_name: 'User',
              optional: true,
              inverse_of: :managed_applications
-  belongs_to :medical_certification_verified_by,
+  belongs_to :disability_certification_verified_by,
              class_name: 'User',
              optional: true
 
@@ -116,11 +116,11 @@ class Application < ApplicationRecord
   has_one_attached :income_proof
   has_one_attached :residency_proof
   has_one_attached :id_proof
-  has_one_attached :medical_certification
+  has_one_attached :disability_certification
   # Retain late DocuSeal or secure-upload submissions when certification is received or approved,
   # or when the request predates rejection.
-  has_many_attached :additional_medical_certifications
-  validates :medical_certification, :additional_medical_certifications, document: { purpose: :certification }
+  has_many_attached :additional_disability_certifications
+  validates :disability_certification, :additional_disability_certifications, document: { purpose: :certification }
 
   validates :application_date, presence: true
   validates :status, presence: true
@@ -273,19 +273,19 @@ class Application < ApplicationRecord
     ).distinct
   }
 
-  # Preload income, residency, and medical certification attachments with their blobs.
+  # Preload income, residency, and disability certification attachments with their blobs.
   # Active Storage uses separate preload queries. Use with a relation or a single-record finder:
   #   Application.with_proof_blobs.includes(:user).page(params[:page])
   scope :with_proof_blobs, lambda {
     with_attached_income_proof
       .with_attached_residency_proof
-      .with_attached_medical_certification
+      .with_attached_disability_certification
   }
 
   scope :digitally_signed_needs_review, lambda {
     where(document_signing_status: :signed)
       .where.not(status: %i[rejected archived])
-      .where.not(medical_certification_status: %i[approved rejected])
+      .where.not(disability_certification_status: %i[approved rejected])
   }
 
   def self.pain_point_analysis
@@ -347,7 +347,7 @@ class Application < ApplicationRecord
   def skip_medical_provider_validation?
     status_draft? ||
       status_awaiting_proof? ||
-      ((status_awaiting_dcf? || medical_certification_status_approved?) && missing_required_provider_info?)
+      ((status_awaiting_dcf? || disability_certification_status_approved?) && missing_required_provider_info?)
   end
 
   def missing_required_provider_info?

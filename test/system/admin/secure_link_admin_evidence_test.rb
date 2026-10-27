@@ -41,9 +41,9 @@ module Admin
     end
 
     test 'certification section flags a kept-aside document and explains a disabled action' do
-      application = create(:application, medical_certification_status: :approved, medical_provider_name: 'Dr. Evidence')
+      application = create(:application, disability_certification_status: :approved, medical_provider_name: 'Dr. Evidence')
       application.update_columns(medical_provider_email: nil)
-      application.additional_medical_certifications.attach(
+      application.additional_disability_certifications.attach(
         io: StringIO.new('late docuseal'),
         filename: 'late_docuseal.pdf',
         content_type: 'application/pdf',
@@ -52,14 +52,14 @@ module Admin
 
       visit admin_application_path(application)
 
-      assert_selector '[data-testid="additional-medical-certifications"]', text: 'received after approval, review'
-      find('[data-testid="additional-medical-certifications"]').scroll_to(:center)
+      assert_selector '[data-testid="additional-disability-certifications"]', text: 'received after approval, review'
+      find('[data-testid="additional-disability-certifications"]').scroll_to(:center)
       take_evidence_screenshot('admin-certification-kept-aside', full: true)
     end
 
     test 'disabled secure certification action shows its reason' do
       application = create(:application, medical_provider_name: 'Dr. Missing')
-      application.update_columns(medical_provider_email: nil, medical_certification_status: Application.medical_certification_statuses[:requested])
+      application.update_columns(medical_provider_email: nil, disability_certification_status: Application.disability_certification_statuses[:requested])
 
       visit admin_application_path(application)
 

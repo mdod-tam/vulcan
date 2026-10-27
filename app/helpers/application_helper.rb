@@ -35,8 +35,8 @@ module ApplicationHelper
     t('trainer_workflow.duration_label', count: duration_hours.to_f, hours: hours)
   end
 
-  def medical_certification_status_badge(application)
-    status_badge(:certification, application.medical_certification_status, label: application.medical_certification_status.titleize)
+  def disability_certification_status_badge(application)
+    status_badge(:certification, application.disability_certification_status, label: application.disability_certification_status.titleize)
   end
 
   def document_signing_status_badge(application)

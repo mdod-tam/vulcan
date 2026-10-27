@@ -5,7 +5,7 @@ describe("RejectionFormController", () => {
   let application
   let element
   let generalReasons
-  let medicalOnlyReasons
+  let disabilityCertificationOnlyReasons
 
   beforeEach(() => {
     document.body.innerHTML = `
@@ -28,19 +28,19 @@ describe("RejectionFormController", () => {
           <button data-action="click->rejection-form#selectOther"
             data-rejection-form-target="reasonButton" data-proof-types="income,residency">Other</button>
         </div>
-        <div class="medical-only-reasons hidden" data-rejection-form-target="medicalOnlyReasons">
+        <div class="disability-certification-only-reasons hidden" data-rejection-form-target="disabilityCertificationOnlyReasons">
           <button
             data-action="click->rejection-form#selectPredefinedReason"
             data-rejection-form-target="reasonButton"
-            data-reason-code="medical_missing"
-            data-reason-text="Medical missing text"
-            data-proof-types="medical">
-            Medical missing
+            data-reason-code="disability_certification_missing"
+            data-reason-text="Disability certification missing text"
+            data-proof-types="disability_certification">
+            Disability certification missing
           </button>
         </div>
         <button data-action="click->rejection-form#handleProofTypeClick" data-proof-type="income">Income Proof</button>
         <button data-action="click->rejection-form#handleProofTypeClick" data-proof-type="residency">Residency Proof</button>
-        <button data-action="click->rejection-form#handleProofTypeClick" data-proof-type="medical">Medical Proof</button>
+        <button data-action="click->rejection-form#handleProofTypeClick" data-proof-type="disability_certification">Disability Certification</button>
       </dialog>
     `
 
@@ -49,7 +49,7 @@ describe("RejectionFormController", () => {
 
     element = document.querySelector("[data-controller='rejection-form']")
     generalReasons = document.querySelector(".general-reasons")
-    medicalOnlyReasons = document.querySelector(".medical-only-reasons")
+    disabilityCertificationOnlyReasons = document.querySelector(".disability-certification-only-reasons")
   })
 
   afterEach(() => {
@@ -118,7 +118,7 @@ describe("RejectionFormController", () => {
     
     expect(proofTypeInput.value).toBe("income")
     expect(generalReasons.classList.contains("hidden")).toBe(false)
-    expect(medicalOnlyReasons.classList.contains("hidden")).toBe(true)
+    expect(disabilityCertificationOnlyReasons.classList.contains("hidden")).toBe(true)
   })
 
   test("shows general reasons when residency proof type is selected", () => {
@@ -130,32 +130,32 @@ describe("RejectionFormController", () => {
     
     expect(proofTypeInput.value).toBe("residency")
     expect(generalReasons.classList.contains("hidden")).toBe(false)
-    expect(medicalOnlyReasons.classList.contains("hidden")).toBe(true)
+    expect(disabilityCertificationOnlyReasons.classList.contains("hidden")).toBe(true)
   })
 
   test("initializes with reason groups hidden by default", () => {
     const controller = application.getControllerForElementAndIdentifier(element, "rejection-form")
     expect(generalReasons.classList.contains("hidden")).toBe(true)
-    expect(medicalOnlyReasons.classList.contains("hidden")).toBe(true)
+    expect(disabilityCertificationOnlyReasons.classList.contains("hidden")).toBe(true)
   })
 
   test("updates reason group visibility when proof type changes", () => {
     const controller = application.getControllerForElementAndIdentifier(element, "rejection-form")
     const incomeButton = document.querySelector("[data-proof-type='income']")
     const residencyButton = document.querySelector("[data-proof-type='residency']")
-    const medicalButton = document.querySelector("[data-proof-type='medical']")
+    const disabilityCertificationButton = document.querySelector("[data-proof-type='disability_certification']")
     
     incomeButton.click()
     expect(generalReasons.classList.contains("hidden")).toBe(false)
-    expect(medicalOnlyReasons.classList.contains("hidden")).toBe(true)
+    expect(disabilityCertificationOnlyReasons.classList.contains("hidden")).toBe(true)
 
-    medicalButton.click()
+    disabilityCertificationButton.click()
     expect(generalReasons.classList.contains("hidden")).toBe(true)
-    expect(medicalOnlyReasons.classList.contains("hidden")).toBe(false)
+    expect(disabilityCertificationOnlyReasons.classList.contains("hidden")).toBe(false)
     
     residencyButton.click()
     expect(generalReasons.classList.contains("hidden")).toBe(false)
-    expect(medicalOnlyReasons.classList.contains("hidden")).toBe(true)
+    expect(disabilityCertificationOnlyReasons.classList.contains("hidden")).toBe(true)
   })
 
   test("selects predefined reason text when button is clicked", () => {
@@ -173,13 +173,13 @@ describe("RejectionFormController", () => {
     expect(reasonField.value).toBe("Address mismatch general text")
     expect(reasonCodeInput.value).toBe("address_mismatch")
     
-    const medicalButton = document.querySelector("[data-proof-type='medical']")
-    medicalButton.click() // Set proofTypeInput.value to "medical"
+    const disabilityCertificationButton = document.querySelector("[data-proof-type='disability_certification']")
+    disabilityCertificationButton.click() // Set proofTypeInput.value to "disability_certification"
     
-    const medicalReasonButton = document.querySelector("[data-reason-code='medical_missing']")
-    controller.selectPredefinedReason({ currentTarget: medicalReasonButton })
-    expect(reasonField.value).toBe("Medical missing text")
-    expect(reasonCodeInput.value).toBe("medical_missing")
+    const disabilityCertificationReasonButton = document.querySelector("[data-reason-code='disability_certification_missing']")
+    controller.selectPredefinedReason({ currentTarget: disabilityCertificationReasonButton })
+    expect(reasonField.value).toBe("Disability certification missing text")
+    expect(reasonCodeInput.value).toBe("disability_certification_missing")
   })
 
   test("validates form submission", () => {

@@ -68,11 +68,11 @@ class EmailDeliveryAttempt < ApplicationRecord
 
       application&.proof_requestable_via_secure_form?(origin.kind.delete_suffix('_proof_resubmission'))
     when MedicalProviderSecureRequestForm
-      origin.active? && application&.medical_certification_status != 'approved'
+      origin.active? && application&.disability_certification_status != 'approved'
     when VendorSecureRequestForm
       origin.active?
     when Application
-      mail_action.start_with?('MedicalProviderMailer#') && application&.medical_certification_status.in?(%w[requested rejected])
+      mail_action.start_with?('MedicalProviderMailer#') && application&.disability_certification_status.in?(%w[requested rejected])
     else
       false
     end

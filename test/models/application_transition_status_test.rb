@@ -101,7 +101,7 @@ class ApplicationTransitionStatusTest < ActiveSupport::TestCase
         income_proof_status: Application.income_proof_statuses[:approved],
         residency_proof_status: Application.residency_proof_statuses[:approved],
         id_proof_status: Application.id_proof_statuses[:approved],
-        medical_certification_status: Application.medical_certification_statuses[:approved]
+        disability_certification_status: Application.disability_certification_statuses[:approved]
       )
 
       assert_difference -> { Voucher.where(application: application).count }, 1 do
@@ -131,7 +131,7 @@ class ApplicationTransitionStatusTest < ActiveSupport::TestCase
         income_proof_status: Application.income_proof_statuses[:approved],
         residency_proof_status: Application.residency_proof_statuses[:approved],
         id_proof_status: Application.id_proof_statuses[:approved],
-        medical_certification_status: Application.medical_certification_statuses[:approved]
+        disability_certification_status: Application.disability_certification_statuses[:approved]
       )
 
       application.transition_status!(:approved, actor: admin)

@@ -71,10 +71,10 @@ module Applications
         scope.where(status: :rejected)
       when 'proofs_needing_review'
         scope.with_proofs_needing_review
-      when 'awaiting_medical_response'
+      when 'awaiting_disability_certification'
         scope.where(status: :awaiting_dcf)
-      when 'medical_certs_to_review'
-        scope.where(status: :in_progress, medical_certification_status: :received)
+      when 'disability_certs_to_review'
+        scope.where(status: :in_progress, disability_certification_status: :received)
       when 'pending_provider_info'
         scope.pending_provider_info
       when 'training_requests'

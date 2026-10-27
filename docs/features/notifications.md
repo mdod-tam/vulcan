@@ -23,15 +23,15 @@ The requested channel is `:email`, `:letter`, or record-only `:sms`, and what ha
 | Proof approval | `ProofReview` records the audit event and a notification without sending a message. |
 | Proof rejection | [RequestProofResubmission](../../app/services/applications/request_proof_resubmission.rb) issues the secure upload request. A failed delivery leaves the review saved and lets staff see a warning. A link that cannot be issued records `proof_resubmission_request_failed`. |
 | Request for provider details | [RequestProviderInfo](../../app/services/applications/request_provider_info.rb) owns the secure request and delivery. |
-| Disability certification | [MedicalCertificationService](../../app/services/applications/medical_certification_service.rb) and [MedicalCertificationReviewer](../../app/services/applications/medical_certification_reviewer.rb) own provider requests and follow-up. Fax delivery is unavailable with the installed client; historical callbacks remain handled. DocuSeal signing has separate tracking. |
+| Disability certification | [DisabilityCertificationService](../../app/services/applications/disability_certification_service.rb) and [DisabilityCertificationReviewer](../../app/services/applications/disability_certification_reviewer.rb) own provider requests and follow-up. Fax delivery is unavailable with the installed client; historical callbacks remain handled. DocuSeal signing has separate tracking. |
 | Security-key recovery approval | Always email, including for users who prefer letters. |
 | Account-access SMS | [PasswordsController](../../app/controllers/passwords_controller.rb) sends through `SmsService` and records the outcome in audit events. |
 
-Proof rejection is fenced off: `NotificationService` refuses ordinary `proof_rejected` delivery unless the caller marks itself a legacy path, because the secure-request flow is what actually gives the constituent a way to replace the document. Provider rejection is fenced the same way by omission — there is no generic `medical_certification_rejected` entry in the mailer map, and certification services own that message.
+Proof rejection is fenced off: `NotificationService` refuses ordinary `proof_rejected` delivery unless the caller marks itself a legacy path, because the secure-request flow is what actually gives the constituent a way to replace the document. Provider rejection is fenced the same way by omission — there is no generic `disability_certification_rejected` entry in the mailer map, and certification services own that message.
 
 ### Record-only actions
 
-`proof_approved`, `medical_certification_received`, `medical_certification_approved`, and `documents_requested` intentionally send nothing. The first three reflect status visible in the portal; `documents_requested` has no delivery mailer.
+`proof_approved`, `disability_certification_received`, `disability_certification_approved`, and `documents_requested` intentionally send nothing. The first three reflect status visible in the portal; `documents_requested` has no delivery mailer.
 
 When delivery is requested for these actions, routing metadata records `none` / `no_email_action`. This is expected behavior.
 

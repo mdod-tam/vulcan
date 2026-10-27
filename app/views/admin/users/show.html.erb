@@ -228,8 +228,8 @@
                         <% end %>
                         <span class="text-sm text-gray-700">Residency:</span>
                         <%= proof_status_badge('residency', active_app.residency_proof_status) %>
-                        <span class="text-sm text-gray-700">Medical:</span>
-                        <%= medical_certification_status_badge(active_app) %>
+                        <span class="text-sm text-gray-700">Disability Certification:</span>
+                        <%= disability_certification_status_badge(active_app) %>
                       </div>
                     <% elsif last_app %>
                       <div class="flex items-center flex-wrap gap-2">
@@ -253,8 +253,8 @@
                         <% end %>
                         <span class="text-sm text-gray-700">Residency:</span>
                         <%= proof_status_badge('residency', last_app.residency_proof_status) %>
-                        <span class="text-sm text-gray-700">Medical:</span>
-                        <%= medical_certification_status_badge(last_app) %>
+                        <span class="text-sm text-gray-700">Disability Certification:</span>
+                        <%= disability_certification_status_badge(last_app) %>
                       </div>
                     <% else %>
                       <div class="text-xs text-gray-700">No prior applications</div>
@@ -383,8 +383,8 @@
                     <% end %>
                     <span class="text-sm text-gray-700">Residency:</span>
                     <%= proof_status_badge('residency', application.residency_proof_status) %>
-                    <span class="text-sm text-gray-700">Medical:</span>
-                    <%= medical_certification_status_badge(application) %>
+                    <span class="text-sm text-gray-700">Disability Certification:</span>
+                    <%= disability_certification_status_badge(application) %>
                   </div>
                   <div class="mt-2 text-xs text-gray-600">
                     Last updated: <%= application.updated_at.strftime('%b %d, %Y at %l:%M %p') %>

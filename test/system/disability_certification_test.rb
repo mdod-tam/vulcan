@@ -2,7 +2,7 @@
 
 require 'application_system_test_case'
 
-class MedicalCertificationTest < ApplicationSystemTestCase
+class DisabilityCertificationTest < ApplicationSystemTestCase
   def setup
     super
 
@@ -16,7 +16,7 @@ class MedicalCertificationTest < ApplicationSystemTestCase
                           medical_provider_phone: '555-555-5555')
   end
 
-  test 'admin can view medical certification section' do
+  test 'admin can view disability certification section' do
     system_test_sign_in(@admin)
     wait_for_turbo
 
@@ -33,7 +33,7 @@ class MedicalCertificationTest < ApplicationSystemTestCase
     clear_pending_network_connections if respond_to?(:clear_pending_network_connections)
   end
 
-  test 'admin can send medical certification request' do
+  test 'admin can send disability certification request' do
     system_test_sign_in(@admin)
     wait_for_turbo
 
@@ -50,7 +50,7 @@ class MedicalCertificationTest < ApplicationSystemTestCase
       elsif page.has_button?('Send Secure Cert Upload Link', wait: 5)
         click_button 'Send Secure Cert Upload Link'
       else
-        skip 'No medical certification request buttons available'
+        skip 'No disability certification request buttons available'
       end
     end
 
@@ -79,7 +79,7 @@ class MedicalCertificationTest < ApplicationSystemTestCase
 
   test 'constituent can view certification status' do
     NotificationService.create_and_deliver!(
-      type: 'medical_certification_requested',
+      type: 'disability_certification_requested',
       notifiable: @application,
       recipient: @constituent,
       actor: @admin,
@@ -88,8 +88,8 @@ class MedicalCertificationTest < ApplicationSystemTestCase
     )
 
     @application.update!(
-      medical_certification_status: 'requested',
-      medical_certification_request_count: 1
+      disability_certification_status: 'requested',
+      disability_certification_request_count: 1
     )
 
     system_test_sign_in(@constituent)
