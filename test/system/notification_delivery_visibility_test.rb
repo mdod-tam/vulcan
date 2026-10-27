@@ -70,6 +70,7 @@ class NotificationDeliveryVisibilityTest < ApplicationSystemTestCase
       assert_selector '#flash', count: 1
       assert_selector '#flash [data-testid="flash-notice"]', text: 'Checking email status. This may take a moment.', count: 1
       assert_selector '[data-testid="flash-notice"]', count: 1
+      assert_no_selector "#notification_#{@notification.id} .animate-spin"
     end
     capture_recipient_screen('delivery-admin-refresh-flash')
   end

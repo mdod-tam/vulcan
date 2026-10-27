@@ -84,8 +84,7 @@ class Application < ApplicationRecord
     declined: 4
   }, prefix: :document_signing_status
 
-  # Accept both constituent STI names.
-  belongs_to :user, -> { where("type = 'Users::Constituent' OR type = 'Constituent'") },
+  belongs_to :user, -> { where(type: 'Users::Constituent') },
              class_name: 'User',
              foreign_key: :user_id,
              inverse_of: :applications

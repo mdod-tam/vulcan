@@ -43,11 +43,11 @@ module ApplicationSubmissionEligibility
 
     # Portal submission and autosave share the active-application and waiting-period rules.
     # +applications+ contains the caller's locked Application records for the applicant.
-    # +target_application+ is excluded from the sibling check.
-    def sibling_application_eligibility_error(applications, target_application:)
+    # +target_application+ is excluded from the sibling check. The error is a message in +locale+.
+    def sibling_application_eligibility_error(applications, target_application:, locale: I18n.locale)
       siblings = Array(applications).select(&:persisted?).reject { |app| app.id == target_application.id }
       has_blocking_sibling = siblings.any?(&:blocking_new_submission?)
-      return 'You already have an active application; wait for it to be processed before starting another.' if has_blocking_sibling
+      return I18n.t('applications.creation.refusals.active_application', locale: locale) if has_blocking_sibling
 
       return nil if skip_wait_period_validation
 
@@ -57,7 +57,7 @@ module ApplicationSubmissionEligibility
       waiting_period = Policy.get('waiting_period_years') || 3
       return nil unless most_recent > waiting_period.years.ago
 
-      "You must wait #{waiting_period} years before submitting a new application."
+      I18n.t('applications.creation.refusals.waiting_period', years: waiting_period, locale: locale)
     end
   end
 end

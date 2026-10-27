@@ -53,9 +53,7 @@ class NotificationsController < ApplicationController
       end
       format.turbo_stream do
         flash.now[tracking ? :notice : :alert] = flash_message
-        streams = [turbo_stream.update('flash', partial: 'shared/flash')]
-        streams << turbo_stream.append("notification_#{@notification.id}", partial: 'notifications/checking_status') if tracking
-        render turbo_stream: streams
+        render turbo_stream: turbo_stream.update('flash', partial: 'shared/flash')
       end
     end
   end

@@ -237,6 +237,17 @@ en:
   applications:
     creation:
       failure: "Your application could not be saved. Please try again."
+      # Why a save or submission is refused after the form was loaded.
+      refusals:
+        inactive_record: "This record is no longer an eligible active record."
+        guardian_changed: "This guardian relationship changed while the application was being saved."
+        not_draft: "This application is no longer a draft."
+        not_constituent: "Only constituent records can use the constituent application portal."
+        wrong_participant: "This application no longer belongs to this participant."
+        guardian_not_managing: "This application is no longer managed by this guardian."
+        guardian_not_authorized: "This guardian relationship is no longer authorized."
+        active_application: "You already have an active application; wait for it to be processed before starting another."
+        waiting_period: "You must wait %{years} years before submitting a new application."
     autosave:
       # Autosave status for the constituent application form, announced through a polite live region.
       saving: "Saving draft…"

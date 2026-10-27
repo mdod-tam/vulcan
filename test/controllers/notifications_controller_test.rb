@@ -112,7 +112,7 @@ class NotificationsControllerTest < ActionDispatch::IntegrationTest
     assert_redirected_to root_path
   end
 
-  test 'admin Turbo refresh puts the current message in the flash region and keeps the region in the page' do
+  test 'admin Turbo refresh updates only the flash region, so repeated clicks add nothing to the notification' do
     create_tracked_attempt
     sign_in_for_integration_test(create(:admin))
 
@@ -125,7 +125,7 @@ class NotificationsControllerTest < ActionDispatch::IntegrationTest
       assert_select '[data-testid="flash-notice"]', text: 'Checking email status. This may take a moment.', count: 1
     end
     assert_no_turbo_stream action: 'replace', target: 'flash'
-    assert_turbo_stream action: 'append', target: "notification_#{@notification.id}"
+    assert_select 'turbo-stream', count: 1
   end
 
   test 'admin Turbo refresh of an untracked or unknown notification shows an alert in the flash region' do
