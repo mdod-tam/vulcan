@@ -7,9 +7,9 @@ class UserMailer < ApplicationMailer
     user = params[:user]
     template_name = 'user_mailer_password_reset'
     token = user.generate_token_for(:password_reset)
-    reset_url = edit_password_url(token: token, **CanonicalPublicUrlOptions.call)
-
     locale = resolve_template_locale(recipient: user)
+    reset_url = edit_password_url(token: token, locale: locale, **CanonicalPublicUrlOptions.call)
+
     text_template = find_text_template(template_name, locale: locale)
 
     variables = {

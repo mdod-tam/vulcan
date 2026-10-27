@@ -3,9 +3,10 @@
 class PasswordsController < ApplicationController
   skip_before_action :authenticate_user!
   skip_before_action :enforce_required_mfa_enrollment
+  # The reset link and form carry the locale, so declare this first to cover the callbacks' redirect messages too.
+  around_action :with_public_request_locale
   before_action :set_user_from_token, only: %i[edit]
   before_action :require_password_change_authorization, only: %i[edit update]
-  around_action :with_public_request_locale, only: %i[new create]
 
   def new; end
 
@@ -89,14 +90,18 @@ class PasswordsController < ApplicationController
 
     @user = User.find_by_token_for(:password_reset, params[:token])
     @user = nil unless @user&.public_login_active?
-    redirect_to new_password_path, alert: 'Invalid or expired reset link.' unless @user
+    redirect_to_new_password(t('passwords.invalid_reset_link')) unless @user
   end
 
   def require_password_change_authorization
     return if params[:token].present?
     return if current_user.present?
 
-    redirect_to new_password_path, alert: 'Use your account access link to reset your password.'
+    redirect_to_new_password(t('passwords.account_access_required'))
+  end
+
+  def redirect_to_new_password(alert)
+    redirect_to new_password_path(locale: public_request_locale_param), alert: alert
   end
 
   def find_user_for_account_access(contact = account_access_contact.to_s.strip.presence)
@@ -231,9 +236,9 @@ class PasswordsController < ApplicationController
   end
 
   def account_access_sms_body(user)
-    token = user.generate_token_for(:password_reset)
-    reset_url = edit_password_url(token: token, **canonical_public_url_options)
     locale = account_access_sms_locale_for(user)
+    token = user.generate_token_for(:password_reset)
+    reset_url = edit_password_url(token: token, locale: locale, **canonical_public_url_options)
 
     I18n.t('passwords.account_access_sms.message', locale: locale, reset_url: reset_url)
   end
@@ -248,10 +253,10 @@ class PasswordsController < ApplicationController
 
   def update_password_from_token
     @user = User.find_by_token_for(:password_reset, params[:token])
-    return redirect_to new_password_path, alert: 'Invalid or expired reset link.' unless @user
+    return redirect_to_new_password(t('passwords.invalid_reset_link')) unless @user
 
     if params[:password] != params[:password_confirmation]
-      flash.now[:alert] = 'New password and confirmation do not match.'
+      flash.now[:alert] = t('passwords.mismatch')
       return render :edit, status: :unprocessable_content
     end
 
@@ -284,11 +289,11 @@ class PasswordsController < ApplicationController
       )
     end
 
-    return redirect_to new_password_path, alert: 'Invalid or expired reset link.' unless eligible
+    return redirect_to_new_password(t('passwords.invalid_reset_link')) unless eligible
 
     if update_succeeded
       clear_session_authentication if current_user&.id == @user.id
-      redirect_to sign_in_path, notice: 'Password successfully updated.'
+      redirect_to sign_in_path(locale: public_request_locale_param), notice: t('passwords.updated')
     else
       flash.now[:alert] = Users::PasswordUpdateService.failure_message(@user)
       render :edit, status: :unprocessable_content

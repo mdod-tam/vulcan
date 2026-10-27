@@ -57,6 +57,18 @@ class UserMailerTest < ActionMailer::TestCase
     assert_includes decoded_text_part(email), expected_body
   end
 
+  test 'password_reset link carries the locale the email is written in' do
+    user = create(:constituent, locale: 'es')
+    user.stubs(:generate_token_for).with(:password_reset).returns('test-password-reset-token')
+    UserMailer.any_instance.expects(:edit_password_url)
+              .with(has_entries(token: 'test-password-reset-token', locale: 'es'))
+              .returns('http://example.com/password/edit?locale=es&token=test-password-reset-token')
+
+    emails = capture_emails { UserMailer.with(user: user).password_reset.deliver_now }
+
+    assert_equal 1, emails.size
+  end
+
   test 'password_reset uses Spanish template for Spanish locale constituent' do
     user = create(:constituent, locale: 'es')
     user.stubs(:generate_token_for).with(:password_reset).returns('test-password-reset-token')

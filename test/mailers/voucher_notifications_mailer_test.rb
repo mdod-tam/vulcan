@@ -151,7 +151,7 @@ class VoucherNotificationsMailerTest < ActionMailer::TestCase
 
     assert_emails 1
     assert_equal 'Importante: Su Vale Expirara Pronto', email.subject
-    assert_includes rendered_variables[:status_box_warning_text], 'El vale expirara pronto'
+    assert_includes rendered_variables[:status_box_warning_text], 'El vale expirará pronto'
     assert_includes rendered_variables[:status_box_warning_text], 'Su vale vence en'
     assert_includes rendered_variables[:status_box_info_text], 'Siguiente paso'
     assert_includes rendered_variables[:status_box_info_text], 'antes de la fecha de vencimiento'

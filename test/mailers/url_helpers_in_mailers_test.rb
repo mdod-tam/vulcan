@@ -91,7 +91,7 @@ class UrlHelpersInMailersTest < ActionMailer::TestCase
     email = UserMailer.with(user: @user).password_reset
 
     assert_includes decoded_text_part(email),
-                    'Reset link: http://test.example.com/password/edit?token=canonical-reset-token'
+                    'Reset link: http://test.example.com/password/edit?locale=en&token=canonical-reset-token'
   end
 
   test 'password reset email fails fast for unsafe production canonical host' do

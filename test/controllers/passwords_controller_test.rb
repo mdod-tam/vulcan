@@ -107,7 +107,7 @@ class PasswordsControllerTest < ActionDispatch::IntegrationTest
 
     SmsService.expects(:send_message)
               .with(@user.phone,
-                    regexp_matches(%r{MAT account access link to set your password: http://example\.com/password/edit\?token=\S+ This link expires in 20 minutes\.}),
+                    regexp_matches(%r{MAT account access link to set your password: http://example\.com/password/edit\?locale=en&token=\S+ This link expires in 20 minutes\.}),
                     sensitive: true,
                     action: 'SmsService#account_access',
                     delivery_context: has_entries('mail_action' => 'SmsService#account_access'),
@@ -160,6 +160,93 @@ class PasswordsControllerTest < ActionDispatch::IntegrationTest
 
     assert_redirected_to sign_in_path(locale: 'es')
     assert_equal account_access_confirmation_message(locale: :es), flash[:notice]
+  end
+
+  def test_account_access_sms_link_carries_the_recipients_locale
+    @user.update!(phone_type: 'text', locale: 'es')
+
+    SmsService.expects(:send_message)
+              .with(@user.phone,
+                    regexp_matches(%r{password/edit\?locale=es&token=\S+}),
+                    sensitive: true,
+                    action: 'SmsService#account_access',
+                    delivery_context: has_entries('mail_action' => 'SmsService#account_access'),
+                    context: { recipient_id: @user.id, recipient_channel: 'account_access_sms' })
+              .returns(true)
+
+    post password_path, params: { contact: @user.phone }
+  end
+
+  def test_reset_page_follows_the_link_locale
+    token = @user.generate_token_for(:password_reset)
+    sign_out if respond_to?(:sign_out)
+
+    get edit_password_path(token: token, locale: 'es')
+
+    assert_response :success
+    assert_select 'html[lang=es]'
+    assert_select 'h2', text: I18n.t('passwords.edit.reset', locale: :es)
+    assert_select 'label', text: I18n.t('passwords.edit.new_password', locale: :es)
+    assert_select 'label', text: I18n.t('passwords.edit.confirm_password', locale: :es)
+    assert_select 'input[type=submit][value=?]', I18n.t('passwords.edit.reset', locale: :es)
+    assert_select 'input[name=locale][value=es]'
+    assert_select 'a[href=?]', sign_in_path(locale: 'es'), text: I18n.t('passwords.edit.cancel', locale: :es)
+  end
+
+  def test_reset_page_never_takes_its_language_from_the_account
+    @user.update!(locale: 'es')
+    token = @user.generate_token_for(:password_reset)
+    sign_out if respond_to?(:sign_out)
+
+    get edit_password_path(token: token)
+
+    assert_select 'html[lang=en]'
+    assert_select 'h2', text: 'Reset Password'
+  end
+
+  def test_failed_reset_submissions_stay_in_the_form_locale
+    token = @user.generate_token_for(:password_reset)
+    sign_out if respond_to?(:sign_out)
+
+    patch password_path, params: { token: token, locale: 'es', password: 'NewValid*Password123', password_confirmation: 'Different*Password123' }
+
+    assert_response :unprocessable_content
+    assert_select '[data-testid="flash-alert"]', text: I18n.t('passwords.mismatch', locale: :es), count: 1
+    assert_select 'html[lang=es]'
+    assert_select 'input[name=locale][value=es]'
+
+    patch password_path, params: { token: token, locale: 'es', password: 'short', password_confirmation: 'short' }
+
+    assert_response :unprocessable_content
+    assert_equal 'No se pudo actualizar la contraseña. Contraseña tiene muy pocos caracteres (mínimo 12).', flash.now[:alert]
+    assert_equal @original_password_digest, @user.reload.password_digest
+  end
+
+  def test_successful_reset_redirects_to_sign_in_in_the_form_locale
+    token = @user.generate_token_for(:password_reset)
+    sign_out if respond_to?(:sign_out)
+
+    patch password_path, params: { token: token, locale: 'es', password: 'TokenReset*Password123', password_confirmation: 'TokenReset*Password123' }
+
+    assert_redirected_to sign_in_path(locale: 'es')
+    assert_equal I18n.t('passwords.updated', locale: :es), flash[:notice]
+    assert @user.reload.authenticate('TokenReset*Password123')
+  end
+
+  def test_invalid_and_missing_reset_links_redirect_in_the_request_locale
+    sign_out if respond_to?(:sign_out)
+
+    get edit_password_path(token: 'invalid-token', locale: 'es')
+    assert_redirected_to new_password_path(locale: 'es')
+    assert_equal I18n.t('passwords.invalid_reset_link', locale: :es), flash[:alert]
+
+    get edit_password_path(locale: 'es')
+    assert_redirected_to new_password_path(locale: 'es')
+    assert_equal I18n.t('passwords.account_access_required', locale: :es), flash[:alert]
+
+    get edit_password_path(token: 'invalid-token')
+    assert_redirected_to new_password_path
+    assert_equal 'Invalid or expired reset link.', flash[:alert]
   end
 
   def test_should_rate_limit_repeated_account_access_sms_requests

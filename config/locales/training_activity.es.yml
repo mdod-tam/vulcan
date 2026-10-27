@@ -14,7 +14,7 @@ es:
     time_unavailable: "Hora no disponible"
     initiators:
       constituent: "la persona participante"
-      trainer: "el instructor"
+      trainer: "el capacitador"
       admin: "el administrador"
       program: "el programa"
 

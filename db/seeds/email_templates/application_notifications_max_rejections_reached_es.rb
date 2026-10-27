@@ -10,7 +10,7 @@ EmailTemplate.create_or_find_by!(name: 'application_notifications_max_rejections
 
     Lamentamos informarle que su solicitud (ID: %<application_id>s) ha sido archivada debido a que alcanzó el número máximo de intentos de revisión de documentos.
 
-    Su solicitud actual no puede avanzar más en el proceso de revisión. Sin embargo, lo invitamos a presentar una nueva solicitud después del %<reapply_date_formatted>s.
+    Su solicitud actual no puede avanzar más en el proceso de revisión. Sin embargo, le invitamos a presentar una nueva solicitud después del %<reapply_date_formatted>s.
 
     POR QUÉ SE ARCHIVAN LAS SOLICITUDES
     Las solicitudes pueden archivarse cuando no podemos verificar la elegibilidad después de múltiples intentos. Esto se debe típicamente a:
@@ -19,7 +19,7 @@ EmailTemplate.create_or_find_by!(name: 'application_notifications_max_rejections
 
     FUTURAS SOLICITUDES
     Al enviar una nueva solicitud después del %<reapply_date_formatted>s, asegúrese de tener listo lo siguiente:
-    * Prueba de residencia actual en Maryland
+    * Comprobante de residencia actual en Maryland
     * Cualquier documentación de discapacidad requerida para el programa
 
     Si tiene alguna pregunta sobre esta decisión o necesita ayuda con una futura solicitud, comuníquese con nuestro equipo a %<support_email>s o llame al (410) 767-6960.
