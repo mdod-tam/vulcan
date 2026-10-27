@@ -1,12 +1,12 @@
 # frozen_string_literal: true
 
 # Admin review of an income, residency, or ID proof.
-# Medical certification reviews also use this model, but skip its rejection and notification side effects.
+# Disability certification reviews also use this model, but skip its rejection and notification side effects.
 class ProofReview < ApplicationRecord
   belongs_to :application
   belongs_to :admin, -> { where(type: 'Users::Administrator') }, class_name: 'User'
 
-  enum :proof_type, { income: 0, residency: 1, medical_certification: 2, id: 3 }, prefix: true
+  enum :proof_type, { income: 0, residency: 1, disability_certification: 2, id: 3 }, prefix: true
   enum :status, { approved: 0, rejected: 1 }, prefix: true
   enum :submission_method, { web: 0, email: 1, scanned: 2, paper: 3, secure_form: 4 }, prefix: true
 
@@ -37,7 +37,7 @@ class ProofReview < ApplicationRecord
   scope :last_3_days, -> { where('created_at > ?', 3.days.ago) }
 
   def apply_repeat_rejection_side_effects!
-    return if proof_type_medical_certification?
+    return if proof_type_disability_certification?
     return unless status_rejected?
 
     ActiveRecord::Base.transaction do
@@ -60,8 +60,8 @@ class ProofReview < ApplicationRecord
   end
 
   def should_validate_proof_attachment?
-    # A rejected medical certification or paper proof can have no attachment, in all environments.
-    return false if status_rejected? && proof_type_medical_certification?
+    # A rejected disability certification or paper proof can have no attachment, in all environments.
+    return false if status_rejected? && proof_type_disability_certification?
     return false if status_rejected? && submission_method_paper?
 
     # Tests skip this validation unless VALIDATE_PROOF_ATTACHMENTS=true.
@@ -80,7 +80,7 @@ class ProofReview < ApplicationRecord
             when 'income' then application&.income_proof
             when 'residency' then application&.residency_proof
             when 'id' then application&.id_proof
-            when 'medical_certification' then application&.medical_certification
+            when 'disability_certification' then application&.disability_certification
             end
     errors.add(:base, "No #{proof_type} proof found for review") unless proof&.attached?
   end
@@ -110,7 +110,7 @@ class ProofReview < ApplicationRecord
   end
 
   def process_rejection_flow
-    return if proof_type_medical_certification?
+    return if proof_type_disability_certification?
 
     ActiveRecord::Base.transaction do
       if status_rejected?
@@ -124,8 +124,8 @@ class ProofReview < ApplicationRecord
   end
 
   def send_status_notification
-    # Medical certification reviews have their own provider notification flow.
-    return if proof_type_medical_certification?
+    # Disability certification reviews have their own provider notification flow.
+    return if proof_type_disability_certification?
 
     # Skip when the applicant or the admin record is missing.
     return unless application&.user.present? && admin.present?

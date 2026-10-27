@@ -3,14 +3,14 @@
 require 'test_helper'
 
 module Applications
-  class MedicalCertificationReviewerTransactionTest < ActiveSupport::TestCase
+  class DisabilityCertificationReviewerTransactionTest < ActiveSupport::TestCase
     self.use_transactional_tests = false
     include ConcurrencyTestHelper
 
     setup do
       @admin = create(:admin)
       @constituent = create(:constituent)
-      @application = create(:application, user: @constituent, medical_certification_status: :requested,
+      @application = create(:application, user: @constituent, disability_certification_status: :requested,
                                           medical_provider_name: 'Dr. Provider', medical_provider_email: 'provider@example.test')
     end
 
@@ -27,7 +27,7 @@ module Applications
       end.returns(BaseService::Result.new(success: true, data: { secure_upload_url: 'https://example.test/secure_certification_form?token=test' }))
       MedicalProviderNotifier.any_instance.stubs(:send_certification_rejection_notice).with do |**_arguments|
         assert_not ActiveRecord::Base.current_transaction.open?
-        assert @application.reload.medical_certification_status_rejected?
+        assert @application.reload.disability_certification_status_rejected?
         attempts << :provider
         true
       end.returns(success: false, outcome: :suppressed, tracking_status: :recorded)
@@ -35,7 +35,7 @@ module Applications
       paper.instance_variable_set(:@application, @application)
 
       ActiveRecord::Base.transaction do
-        result = paper.send(:reject_medical_certification_via_reviewer,
+        result = paper.send(:reject_disability_certification_via_reviewer,
                             selected_reason: 'other', custom_reason: 'Missing signature', notes: nil)
         assert result[:success]
         assert_equal :deferred, result[:provider_delivery][:outcome]
@@ -44,7 +44,7 @@ module Applications
       end
 
       assert_equal %i[secure_request provider], attempts
-      assert @application.reload.medical_certification_status_rejected?
+      assert @application.reload.disability_certification_status_rejected?
       assert_includes paper.warning_message, 'Provider email was not sent because delivery is disabled.'
       assert_equal 1, ApplicationStatusChange.where(application: @application, to_status: 'rejected').count
     end
@@ -58,13 +58,13 @@ module Applications
                        Event.where(auditable: @application).count]
 
       ActiveRecord::Base.transaction do
-        result = MedicalCertificationReviewer.new(@application, @admin).reject(rejection_reason: 'Missing signature')
+        result = DisabilityCertificationReviewer.new(@application, @admin).reject(rejection_reason: 'Missing signature')
         assert result.success?
         assert_equal :deferred, result.data[:provider_delivery][:outcome]
         raise ActiveRecord::Rollback
       end
 
-      assert @application.reload.medical_certification_status_requested?
+      assert @application.reload.disability_certification_status_requested?
       assert_equal before_counts, [ApplicationStatusChange.where(application: @application).count,
                                    Notification.where(notifiable: @application).count,
                                    @application.proof_reviews.count,
@@ -75,7 +75,7 @@ module Applications
     test 'missing rejection notification preserves committed rejection and warns without repeating provider delivery' do
       invalid_notification = Notification.new
       invalid_notification.errors.add(:base, 'Private notification validation failure')
-      Notification.expects(:create!).with(has_entries(action: 'medical_certification_rejected', notifiable: @application))
+      Notification.expects(:create!).with(has_entries(action: 'disability_certification_rejected', notifiable: @application))
                   .raises(ActiveRecord::RecordInvalid.new(invalid_notification))
       secure_upload_url = 'https://example.test/secure_certification_form?token=test'
       RequestCertificationUpload.any_instance.expects(:call).returns(
@@ -91,9 +91,9 @@ module Applications
       paper.instance_variable_set(:@application, @application)
       result = nil
 
-      assert_no_difference -> { Notification.where(notifiable: @application, action: 'medical_certification_rejected').count } do
+      assert_no_difference -> { Notification.where(notifiable: @application, action: 'disability_certification_rejected').count } do
         ActiveRecord::Base.transaction do
-          result = paper.send(:reject_medical_certification_via_reviewer,
+          result = paper.send(:reject_disability_certification_via_reviewer,
                               selected_reason: 'other', custom_reason: 'Missing signature', notes: nil)
           assert result[:success]
           assert_equal :deferred, result[:provider_delivery][:outcome]
@@ -101,10 +101,10 @@ module Applications
         end
       end
 
-      assert @application.reload.medical_certification_status_rejected?
+      assert @application.reload.disability_certification_status_rejected?
       assert_equal 1, ApplicationStatusChange.where(application: @application, to_status: 'rejected').count
-      assert_equal 1, Event.where(auditable: @application, action: 'medical_certification_status_changed').count
-      review = @application.proof_reviews.find_by!(proof_type: :medical_certification, status: :rejected)
+      assert_equal 1, Event.where(auditable: @application, action: 'disability_certification_status_changed').count
+      review = @application.proof_reviews.find_by!(proof_type: :disability_certification, status: :rejected)
       assert_equal 'Missing signature', review.rejection_reason
       assert result[:provider_delivery][:success]
       assert_equal :submitted, result[:provider_delivery][:outcome]
@@ -125,27 +125,27 @@ module Applications
       end.returns(true)
       RequestCertificationUpload.any_instance.stubs(:call).with do
         assert_not ActiveRecord::Base.current_transaction.open?
-        attempts << [:secure_request, @application.reload.medical_certification_status]
+        attempts << [:secure_request, @application.reload.disability_certification_status]
         true
       end.returns(BaseService::Result.new(success: true, data: {}))
       MedicalProviderNotifier.any_instance.stubs(:send_certification_rejection_notice).with do |**_arguments|
         assert_not ActiveRecord::Base.current_transaction.open?
-        attempts << [:provider, @application.reload.medical_certification_status]
+        attempts << [:provider, @application.reload.disability_certification_status]
         true
       end.returns(success: true, outcome: :submitted, tracking_status: :recorded)
       paper = PaperApplicationService.new(params: {}, admin: @admin)
       paper.instance_variable_set(:@application, @application)
 
       assert_difference -> { ApplicationStatusChange.where(application: @application, to_status: 'rejected').count }, 1 do
-        assert_difference -> { Event.where(auditable: @application, action: 'medical_certification_status_changed').count }, 1 do
+        assert_difference -> { Event.where(auditable: @application, action: 'disability_certification_status_changed').count }, 1 do
           assert_no_difference -> { ApplicationNote.where(application: @application).count } do
             ActiveRecord::Base.transaction do
-              result = paper.send(:reject_medical_certification_via_reviewer,
+              result = paper.send(:reject_disability_certification_via_reviewer,
                                   selected_reason: 'other', custom_reason: 'Missing signature', notes: 'Please add a signature')
               assert result[:success]
               assert_empty attempts
             end
-            assert @application.reload.medical_certification_status_rejected?, "Post-commit attempts: #{attempts.inspect}"
+            assert @application.reload.disability_certification_status_rejected?, "Post-commit attempts: #{attempts.inspect}"
           end
         end
       end

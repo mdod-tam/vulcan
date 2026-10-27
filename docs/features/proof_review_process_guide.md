@@ -17,7 +17,7 @@ Four things are easy to conflate:
 - The **[`ProofReview`](../../app/models/proof_review.rb)** is the decision: reviewer, time, and rejection reason. A re-review updates the existing record.
 - The **application status** is the whole application's position in its lifecycle. Rejecting one proof is not rejecting the application.
 
-Disability certification is a separate requirement that still goes by `medical_certification` in code, and receiving or signing that document is not the same as approving it.
+Disability certification is a separate requirement, and receiving or signing that document is not the same as approving it.
 
 Status alone does not tell you whether there is a file: [`Application#proof_review_state`](../../app/models/application.rb) combines requirement, attachment, status, and submission history, and the admin flow uses `proof_type_reviewable?` to decide whether a proof can be acted on at all.
 

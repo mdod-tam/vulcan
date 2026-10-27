@@ -13,9 +13,9 @@ module Admin
 
       attach_cleared_proof(@application, :residency_proof, filename: 'residency_proof.pdf') unless @application.residency_proof.attached?
 
-      attach_cleared_proof(@application, :medical_certification, filename: 'medical_certification_valid.pdf') unless @application.medical_certification.attached?
+      attach_cleared_proof(@application, :disability_certification, filename: 'disability_certification_valid.pdf') unless @application.disability_certification.attached?
 
-      @application.update!(medical_certification_status: :received)
+      @application.update!(disability_certification_status: :received)
 
       system_test_sign_in(@admin)
     end
@@ -41,19 +41,19 @@ module Admin
       end
     end
 
-    test 'admin can approve medical certification directly via service' do
-      assert_equal 'received', @application.medical_certification_status
+    test 'admin can approve disability certification directly via service' do
+      assert_equal 'received', @application.disability_certification_status
 
-      result = MedicalCertificationAttachmentService.update_certification_status(
+      result = DisabilityCertificationAttachmentService.update_certification_status(
         application: @application,
         status: :approved,
         admin: @admin
       )
 
-      assert result[:success], 'Medical certification approval failed'
+      assert result[:success], 'Disability certification approval failed'
 
       @application.reload
-      assert_equal 'approved', @application.medical_certification_status
+      assert_equal 'approved', @application.disability_certification_status
 
       with_browser_rescue do
         visit admin_application_path(@application)
@@ -79,19 +79,19 @@ module Admin
         assert has_selector?('h1', text: /Application.*Details/, wait: 25)
 
         # Try the scoped status before the broader page text.
-        medical_cert_found = false
+        disability_cert_found = false
 
-        if has_selector?('[data-testid="medical-certification-section"]', wait: 15)
-          within '[data-testid="medical-certification-section"]' do
-            medical_cert_found = true if has_text?('Medical Certification', wait: 10) && has_text?('Approved', wait: 10)
+        if has_selector?('[data-testid="disability-certification-section"]', wait: 15)
+          within '[data-testid="disability-certification-section"]' do
+            disability_cert_found = true if has_text?('Disability Certification', wait: 10) && has_text?('Approved', wait: 10)
           end
         end
 
-        medical_cert_found = true if !medical_cert_found && has_text?('Medical Certification', wait: 15) && has_text?('Approved', wait: 15)
+        disability_cert_found = true if !disability_cert_found && has_text?('Disability Certification', wait: 15) && has_text?('Approved', wait: 15)
 
-        medical_cert_found = true if !medical_cert_found && has_text?('Certification', wait: 10) && has_text?('Approved', wait: 10)
+        disability_cert_found = true if !disability_cert_found && has_text?('Certification', wait: 10) && has_text?('Approved', wait: 10)
 
-        assert medical_cert_found, 'Could not find approved medical certification status on page'
+        assert disability_cert_found, 'Could not find approved disability certification status on page'
       end
     end
 
@@ -115,7 +115,7 @@ module Admin
     test 'with auto-request enabled, approving the required proofs requests the certification' do
       FeatureFlag.enable!(:dcf_auto_request_certification)
       @application.update!(
-        medical_certification_status: :not_requested,
+        disability_certification_status: :not_requested,
         income_proof_status: :not_reviewed,
         residency_proof_status: :not_reviewed,
         id_proof_status: :not_reviewed
@@ -146,7 +146,7 @@ module Admin
       assert_equal 'approved', @application.income_proof_status, 'Income proof status was not approved'
       assert_equal 'approved', @application.residency_proof_status, 'Residency proof status was not approved'
 
-      assert_equal 'requested', @application.medical_certification_status,
+      assert_equal 'requested', @application.disability_certification_status,
                    "Disability certification wasn't automatically requested after approving the required proofs"
     end
   end

@@ -30,9 +30,9 @@ Constituent links use the recipient's delivery locale for email, SMS, and pages.
 
 ### Certification request state and counts
 
-[`MedicalCertificationService`](../../app/services/applications/medical_certification_service.rb) records certification request state, status history, and audit for both queued provider requests and secure upload preparation. Each state write attaches the previous status, timestamp, and count to its tracking notification so a delivery refusal can restore that request without replacing newer state.
+[`DisabilityCertificationService`](../../app/services/applications/disability_certification_service.rb) records certification request state, status history, and audit for both queued provider requests and secure upload preparation. Each state write attaches the previous status, timestamp, and count to its tracking notification so a delivery refusal can restore that request without replacing newer state.
 
-`medical_certification_request_count` counts the ordinary provider requests queued by `MedicalCertificationService` (including resends) and the separate DocuSeal signing requests. It is recorded at issuance, before confirmed delivery; an intentional or configuration refusal restores the unchanged queued request's previous count. Transport failures retain the request for failure tracking. Issuing or resending a secure upload link leaves this count unchanged, including when the secure issuer delivers the link directly. Rejection review also prepares a link for a separate provider notifier. Preparation changes `not_requested` to `requested` once; later links retain certification status, timestamp, and count, including `rejected`.
+`disability_certification_request_count` counts the ordinary provider requests queued by `DisabilityCertificationService` (including resends) and the separate DocuSeal signing requests. It is recorded at issuance, before confirmed delivery; an intentional or configuration refusal restores the unchanged queued request's previous count. Transport failures retain the request for failure tracking. Issuing or resending a secure upload link leaves this count unchanged, including when the secure issuer delivers the link directly. Rejection review also prepares a link for a separate provider notifier. Preparation changes `not_requested` to `requested` once; later links retain certification status, timestamp, and count, including `rejected`.
 
 ## Submitting
 
@@ -49,7 +49,7 @@ Submission locks the application before the form, in the same order as issuance,
 
 - **Proof:** the proof must still be requestable (`ProofManageable#proof_requestable_via_secure_form?`), which is rejected, or never uploaded and not reviewed. A proof approved or replaced by another path refuses the upload and records `proof_secure_submission_refused`.
 - **Provider information:** a submission is always accepted. When it replaces a value already on file, the change event is marked for staff review.
-- **Certification:** `MedicalCertificationAttachmentService.accept_submission` places the document; see [which file wins](../development/docuseal_integration_guide.md#which-file-wins).
+- **Certification:** `DisabilityCertificationAttachmentService.accept_submission` places the document; see [which file wins](../development/docuseal_integration_guide.md#which-file-wins).
 
 ## Revoking
 

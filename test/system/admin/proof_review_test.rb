@@ -18,7 +18,7 @@ module AdminTests
                             annual_income: 30_000,
                             maryland_resident: true,
                             self_certify_disability: true,
-                            medical_certification_status: 'approved') # Hide certification request controls.
+                            disability_certification_status: 'approved') # Hide certification request controls.
 
       attach_cleared_proof(@application, :income_proof)
       attach_cleared_proof(@application, :residency_proof)
@@ -215,28 +215,28 @@ module AdminTests
       end
     end
 
-    test 'medical certification review uses Turbo Stream like income/residency proofs' do
-      @application.update!(medical_certification_status: 'received')
-      attach_cleared_proof(@application, :medical_certification)
+    test 'disability certification review uses Turbo Stream like income/residency proofs' do
+      @application.update!(disability_certification_status: 'received')
+      attach_cleared_proof(@application, :disability_certification)
 
       visit_admin_application_with_retry(@application, user: @admin)
 
-      assert_selector '#medical-certification-section', wait: 10
+      assert_selector '#disability-certification-section', wait: 10
 
       click_button 'Review Disability Certification'
 
-      assert_selector 'dialog#medicalCertificationReviewModal[open]', visible: true, wait: 10
+      assert_selector 'dialog#disabilityCertificationReviewModal[open]', visible: true, wait: 10
 
-      within '#medicalCertificationReviewModal' do
+      within '#disabilityCertificationReviewModal' do
         accept_confirm { click_button 'Approve' }
       end
 
       wait_for_turbo
-      assert_no_selector 'dialog#medicalCertificationReviewModal[open]', wait: 10
+      assert_no_selector 'dialog#disabilityCertificationReviewModal[open]', wait: 10
 
       assert_text(/updated|approved|success/i, wait: 5)
 
-      assert_selector '#medical-certification-section', wait: 5
+      assert_selector '#disability-certification-section', wait: 5
     end
   end
 end

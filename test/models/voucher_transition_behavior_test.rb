@@ -220,7 +220,7 @@ class VoucherTransitionBehaviorTest < ActiveSupport::TestCase
     # proof-sufficiency check when the flag is off.
     assert_equal 'awaiting_dcf', app.status,
                  'Expected awaiting_dcf: income ignored (flag off), residency approved triggers DCF escalation'
-    assert_equal 'not_requested', app.medical_certification_status,
+    assert_equal 'not_requested', app.disability_certification_status,
                  'Escalation leaves the certification request to staff'
   end
 

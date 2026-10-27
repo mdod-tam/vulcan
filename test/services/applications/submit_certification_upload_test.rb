@@ -12,9 +12,9 @@ module Applications
                             medical_provider_name: 'Dr. Provider',
                             medical_provider_email: 'provider@example.com')
       @secure_request_form = create(:medical_provider_secure_request_form, application: @application)
-      upload = fixture_file_upload(Rails.root.join('test/fixtures/files/medical_certification_valid.pdf'), 'application/pdf')
+      upload = fixture_file_upload(Rails.root.join('test/fixtures/files/disability_certification_valid.pdf'), 'application/pdf')
       @file = scanned_upload(upload, secure_form: @secure_request_form, purpose: :certification,
-                                     slot: 'medical_certification').signed_id
+                                     slot: 'disability_certification').signed_id
     end
 
     test 'attaches certification through attachment service and marks request submitted' do
@@ -26,27 +26,27 @@ module Applications
 
       assert_predicate result, :success?
       assert_predicate @secure_request_form.reload, :submitted?
-      assert_predicate @application.reload.medical_certification, :attached?
-      assert_predicate @application, :medical_certification_status_received?
+      assert_predicate @application.reload.disability_certification, :attached?
+      assert_predicate @application, :disability_certification_status_received?
 
       event = Event.find_by!(auditable: @application, action: 'cert_submitted_via_secure_form')
       assert_equal @secure_request_form.id, event.metadata.fetch('medical_provider_secure_request_form_id')
       assert_equal User.system_user, event.user
 
-      status_change = ApplicationStatusChange.where(application: @application, change_type: :medical_certification).last
+      status_change = ApplicationStatusChange.where(application: @application, change_type: :disability_certification).last
       assert_equal 'secure_form', status_change.metadata.fetch('submission_method')
     end
 
     test 'retains secure upload as additional certification when DocuSeal primary already exists' do
-      @application.update!(medical_certification_status: :received)
-      @application.medical_certification.attach(
+      @application.update!(disability_certification_status: :received)
+      @application.disability_certification.attach(
         io: StringIO.new('docuseal primary content'),
-        filename: 'medical_cert_docuseal_123.pdf',
+        filename: 'disability_cert_docuseal_123.pdf',
         content_type: 'application/pdf',
         metadata: { source: 'docuseal' }
       )
 
-      MedicalCertificationAttachmentService.expects(:attach_certification).never
+      DisabilityCertificationAttachmentService.expects(:attach_certification).never
 
       assert_no_difference -> { ApplicationStatusChange.where(application: @application).count } do
         result = SubmitCertificationUpload.new(
@@ -60,12 +60,12 @@ module Applications
 
       @application.reload
       assert_predicate @secure_request_form.reload, :submitted?
-      assert_equal 'received', @application.medical_certification_status
-      assert_equal 'medical_cert_docuseal_123.pdf', @application.medical_certification.blob.filename.to_s
-      assert_equal 1, @application.additional_medical_certifications.count
+      assert_equal 'received', @application.disability_certification_status
+      assert_equal 'disability_cert_docuseal_123.pdf', @application.disability_certification.blob.filename.to_s
+      assert_equal 1, @application.additional_disability_certifications.count
 
-      additional_blob = @application.additional_medical_certifications.first.blob
-      assert_equal 'medical_certification_valid.pdf', additional_blob.filename.to_s
+      additional_blob = @application.additional_disability_certifications.first.blob
+      assert_equal 'disability_certification_valid.pdf', additional_blob.filename.to_s
       assert_equal 'secure_form', additional_blob.metadata.fetch('source')
       assert_equal @secure_request_form.id, additional_blob.metadata.fetch('medical_provider_secure_request_form_id')
       assert_equal @secure_request_form.request_batch_id, additional_blob.metadata.fetch('request_batch_id')
@@ -75,13 +75,13 @@ module Applications
       assert_equal @secure_request_form.id, event.metadata.fetch('medical_provider_secure_request_form_id')
       assert_equal 'p***@e***.com', event.metadata.fetch('provider_email')
       assert_equal @secure_request_form.request_batch_id, event.metadata.fetch('request_batch_id')
-      assert_equal 'additional_medical_certification', event.metadata.fetch('retained_as')
-      assert_equal additional_blob.id, event.metadata.fetch('additional_medical_certification_blob_id')
+      assert_equal 'additional_disability_certification', event.metadata.fetch('retained_as')
+      assert_equal additional_blob.id, event.metadata.fetch('additional_disability_certification_blob_id')
     end
 
     test 'retains secure upload as additional certification for legacy DocuSeal primary without blob metadata' do
-      @application.update!(medical_certification_status: :received)
-      @application.medical_certification.attach(
+      @application.update!(disability_certification_status: :received)
+      @application.disability_certification.attach(
         io: StringIO.new('legacy docuseal primary content'),
         filename: 'legacy_docuseal_primary.pdf',
         content_type: 'application/pdf'
@@ -91,9 +91,9 @@ module Applications
         user: User.system_user,
         from_status: 'requested',
         to_status: 'received',
-        change_type: 'medical_certification',
+        change_type: 'disability_certification',
         metadata: {
-          change_type: 'medical_certification',
+          change_type: 'disability_certification',
           submission_method: 'docuseal'
         }
       )
@@ -110,16 +110,16 @@ module Applications
 
       @application.reload
       assert_predicate @secure_request_form.reload, :submitted?
-      assert_equal 'legacy_docuseal_primary.pdf', @application.medical_certification.blob.filename.to_s
-      assert_equal 1, @application.additional_medical_certifications.count
-      assert_equal 'secure_form', @application.additional_medical_certifications.first.blob.metadata.fetch('source')
+      assert_equal 'legacy_docuseal_primary.pdf', @application.disability_certification.blob.filename.to_s
+      assert_equal 1, @application.additional_disability_certifications.count
+      assert_equal 'secure_form', @application.additional_disability_certifications.first.blob.metadata.fetch('source')
     end
 
     test 'attaches secure upload as primary when DocuSeal completed without primary certification' do
       @application.update!(
         document_signing_status: :signed,
         document_signing_signed_at: Time.current,
-        medical_certification_status: :requested
+        disability_certification_status: :requested
       )
 
       result = SubmitCertificationUpload.new(
@@ -132,12 +132,12 @@ module Applications
       assert_predicate @secure_request_form.reload, :submitted?
 
       @application.reload
-      assert_predicate @application.medical_certification, :attached?
-      assert_equal 'medical_certification_valid.pdf', @application.medical_certification.blob.filename.to_s
-      assert_equal 0, @application.additional_medical_certifications.count
-      assert_predicate @application, :medical_certification_status_received?
+      assert_predicate @application.disability_certification, :attached?
+      assert_equal 'disability_certification_valid.pdf', @application.disability_certification.blob.filename.to_s
+      assert_equal 0, @application.additional_disability_certifications.count
+      assert_predicate @application, :disability_certification_status_received?
 
-      status_change = ApplicationStatusChange.where(application: @application, change_type: :medical_certification).last
+      status_change = ApplicationStatusChange.where(application: @application, change_type: :disability_certification).last
       assert_equal 'secure_form', status_change.metadata.fetch('submission_method')
     end
 
@@ -153,7 +153,7 @@ module Applications
       assert_not result.success?
       assert_predicate result.data.fetch(:errors), :any?
       assert_predicate @secure_request_form.reload, :status_sent?
-      assert_not @application.reload.medical_certification.attached?
+      assert_not @application.reload.disability_certification.attached?
     end
 
     test 'rejects request form for a different application' do
@@ -168,7 +168,7 @@ module Applications
       assert_not result.success?
       assert_equal I18n.t('applications.certification_upload.messages.invalid_request'), result.message
       assert_predicate @secure_request_form.reload, :status_sent?
-      assert_not other_application.reload.medical_certification.attached?
+      assert_not other_application.reload.disability_certification.attached?
     end
 
     test 'rejects expired request form without attaching certification' do
@@ -183,7 +183,7 @@ module Applications
       assert_not result.success?
       assert_equal I18n.t('applications.certification_upload.messages.expired'), result.message
       assert_predicate @secure_request_form.reload, :status_sent?
-      assert_not @application.reload.medical_certification.attached?
+      assert_not @application.reload.disability_certification.attached?
     end
 
     test 'rejects revoked request form without attaching certification' do
@@ -198,7 +198,7 @@ module Applications
       assert_not result.success?
       assert_equal I18n.t('applications.certification_upload.messages.revoked'), result.message
       assert_predicate @secure_request_form.reload, :status_revoked?
-      assert_not @application.reload.medical_certification.attached?
+      assert_not @application.reload.disability_certification.attached?
     end
 
     test 'rejects already submitted request form without attaching certification' do
@@ -212,7 +212,7 @@ module Applications
 
       assert_not result.success?
       assert_equal I18n.t('applications.certification_upload.messages.already_submitted'), result.message
-      assert_not @application.reload.medical_certification.attached?
+      assert_not @application.reload.disability_certification.attached?
     end
 
     test 'a correction requested after a DocuSeal rejection replaces the primary certification' do
@@ -224,9 +224,9 @@ module Applications
 
       assert_predicate result, :success?
       @application.reload
-      assert_predicate @application, :medical_certification_status_received?
-      assert_equal 'medical_certification_valid.pdf', @application.medical_certification.blob.filename.to_s
-      assert_equal 0, @application.additional_medical_certifications.count
+      assert_predicate @application, :disability_certification_status_received?
+      assert_equal 'disability_certification_valid.pdf', @application.disability_certification.blob.filename.to_s
+      assert_equal 0, @application.additional_disability_certifications.count
     end
 
     test 'an upload for a request sent before the latest rejection is kept aside for review' do
@@ -238,24 +238,24 @@ module Applications
 
       assert_predicate result, :success?
       @application.reload
-      assert_predicate @application, :medical_certification_status_rejected?
-      assert_equal 'docuseal_primary.pdf', @application.medical_certification.blob.filename.to_s
+      assert_predicate @application, :disability_certification_status_rejected?
+      assert_equal 'docuseal_primary.pdf', @application.disability_certification.blob.filename.to_s
       assert_equal 'request_predates_rejection',
-                   @application.additional_medical_certifications.first.blob.metadata['retention_reason']
+                   @application.additional_disability_certifications.first.blob.metadata['retention_reason']
     end
 
     test 'an upload after approval never replaces the approved certification' do
-      @application.medical_certification.attach(io: StringIO.new('approved'), filename: 'approved.pdf', content_type: 'application/pdf')
-      @application.update!(medical_certification_status: :approved)
+      @application.disability_certification.attach(io: StringIO.new('approved'), filename: 'approved.pdf', content_type: 'application/pdf')
+      @application.update!(disability_certification_status: :approved)
 
       result = submit_upload
 
       assert_predicate result, :success?
       @application.reload
-      assert_predicate @application, :medical_certification_status_approved?
-      assert_equal 'approved.pdf', @application.medical_certification.blob.filename.to_s
+      assert_predicate @application, :disability_certification_status_approved?
+      assert_equal 'approved.pdf', @application.disability_certification.blob.filename.to_s
       assert_equal 'certification_approved',
-                   @application.additional_medical_certifications.first.blob.metadata['retention_reason']
+                   @application.additional_disability_certifications.first.blob.metadata['retention_reason']
 
       event = Event.find_by!(auditable: @application, action: 'cert_submitted_via_secure_form')
       assert_equal 'certification_approved', event.metadata['retention_reason']
@@ -272,7 +272,7 @@ module Applications
     end
 
     def attach_docuseal_primary
-      @application.medical_certification.attach(
+      @application.disability_certification.attach(
         io: StringIO.new('docuseal primary content'),
         filename: 'docuseal_primary.pdf',
         content_type: 'application/pdf',
@@ -281,9 +281,9 @@ module Applications
     end
 
     def record_certification_rejection(at:)
-      @application.update!(medical_certification_status: :rejected)
+      @application.update!(disability_certification_status: :rejected)
       ApplicationStatusChange.create!(application: @application, user: User.system_user, from_status: 'received',
-                                      to_status: 'rejected', change_type: 'medical_certification', changed_at: at)
+                                      to_status: 'rejected', change_type: 'disability_certification', changed_at: at)
     end
   end
 end

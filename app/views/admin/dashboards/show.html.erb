@@ -317,10 +317,10 @@
           <span>Proofs Needing Review (<%= @metrics[:proofs_needing_review_count] %>)</span>
         <% end %>
         
-        <%= link_to admin_applications_path(filter: 'medical_certs_to_review'),
+        <%= link_to admin_applications_path(filter: 'disability_certs_to_review'),
             class: "btn btn-outline",
             aria: { label: "View applications with disability certifications to review" } do %>
-          <span>Disability Certs to Review (<%= @metrics[:medical_certs_to_review_count] %>)</span>
+          <span>Disability Certs to Review (<%= @metrics[:disability_certs_to_review_count] %>)</span>
         <% end %>
 
         <%= link_to admin_applications_path(filter: 'digitally_signed_needs_review'),

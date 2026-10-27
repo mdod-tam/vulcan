@@ -73,7 +73,7 @@ module Admin
     end
 
     test 'a notification whose email was suppressed shows that without a provider message id' do
-      notification = Notification.create!(recipient: @admin, actor: @admin, action: 'medical_certification_requested',
+      notification = Notification.create!(recipient: @admin, actor: @admin, action: 'disability_certification_requested',
                                           notifiable: create(:application), metadata: {})
       notification.mark_delivery_suppressed!('global_disabled')
       sign_in(@admin)
@@ -96,7 +96,7 @@ module Admin
     end
 
     test 'an untracked notification shows its message without a delivery panel' do
-      create(:notification, recipient: @admin, actor: @admin, action: 'medical_certification_requested', notifiable: create(:application), delivery_status: nil)
+      create(:notification, recipient: @admin, actor: @admin, action: 'disability_certification_requested', notifiable: create(:application), delivery_status: nil)
       sign_in(@admin)
       visit notifications_path
       assert_text 'Disability certification requested'
@@ -132,7 +132,7 @@ module Admin
     test 'a DocuSeal request while email is off explains on the page why nothing was sent' do
       application = create(:application, :in_progress, medical_provider_name: 'Dr. Provider',
                                                        medical_provider_email: 'provider@example.test')
-      application.update_columns(medical_certification_status: Application.medical_certification_statuses[:not_requested])
+      application.update_columns(disability_certification_status: Application.disability_certification_statuses[:not_requested])
       EmailDelivery::ControlWriter.set(name: EmailDelivery::GLOBAL_CONTROL, enabled: false, actor: @admin, operation_id: 'op-1')
       ::Docuseal.expects(:create_submission).never
       sign_in(@admin)

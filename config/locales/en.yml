@@ -560,8 +560,8 @@ en:
         next_step_title: "Next Step"
         next_step_message: "Use at least %{minimum_redemption_amount} before the expiration date to avoid losing unused value."
   document_signing:
-    medical_certification_request:
-      submission_name: "Medical Certification - %{constituent_full_name} (Application %{application_id})"
+    disability_certification_request:
+      submission_name: "Disability Certification - %{constituent_full_name} (Application %{application_id})"
       subject: "Disability Certification Request for %{constituent_full_name}"
       body: |
         Please complete the disability certification request for %{constituent_full_name}.
@@ -574,7 +574,7 @@ en:
         - Address: %{constituent_address_formatted}
         - Application ID: %{application_id}
 
-        Medical certification signing link:
+        Disability certification signing link:
         {{submitter.link}}
 
         If you have questions, please contact %{support_email}.
@@ -776,7 +776,7 @@ en:
         t_schedule_fail: "Failed to schedule training session."
       complete_training:
         t_completed: "Training session marked as completed"
-      resend_medical_certification:
+      resend_disability_certification:
         c_request_pass: "Certification request sent successfully."
       certification_upload_requests:
         create:
@@ -788,9 +788,9 @@ en:
       assign_voucher:
         v_assign_pass: "Voucher assigned successfully"
         v_assign_fail: "Failed to assign voucher. Please ensure all requirements are met."
-      queue_medical_certification_form:
+      queue_disability_certification_form:
         queue_print_pass: "DCF queued for printing."
-      upload_medical_certification:
+      upload_disability_certification:
         m_blank: "Please select whether to accept or reject the certification."
         m_not_allowed: "This certification is awaiting review or already approved. Review it instead of uploading a new file."
         m_rejection_reason: "Please select a rejection reason"
@@ -997,7 +997,7 @@ en:
         application_notifications_proof_received: "Document Verification Received"
         application_notifications_max_rejections_reached: "Important Application Status Update"
         application_notifications_provider_info_requested: "Certifying Professional Information Requested"
-        medical_provider_request_certification: "Request for Medical Certification"
+        medical_provider_request_certification: "Request for Disability Certification"
         voucher_notifications_voucher_assigned: "Your Accessibility Equipment Voucher"
         voucher_notifications_voucher_redeemed: "Voucher Redemption Confirmation"
         evaluator_mailer_evaluation_submission_confirmation: "Evaluation Submission Confirmation"
@@ -1200,7 +1200,7 @@ en:
     item_9: "Failure to comply with these Conditions of Acceptance may result in my being denied the privilege of having specialized telephone access equipment provided by the State of Maryland."
     item_10_title: "10. Approval and Training"
     item_10: "Upon approval of an application form, I understand I will be notified of acceptance in writing. If necessary, I will request training specific to the device I will receive. If I am a minor, a parent/guardian will accompany me to the required training to sign this statement. If I am physically unable to attend training, I can call 800-552-7724 (Voice/TTY) 443-453-5970 (Video Phone) to arrange for alternative site training."
-    conclusion: "Having read the above conditions or having them read and explained to me, I agree to comply with all of the terms and conditions that I, or the minor for whom I am signing, is eligible to receive the requested equipment having (1) the required medical certification of disability; (2) met the income guidelines by currently receiving SSI, SSDI, TDAP or TANF; (3) signed the statement of terms and conditions for acceptance of State property; and (4) am not receiving similar equipment through other State or Federal agencies, or departments."
+    conclusion: "Having read the above conditions or having them read and explained to me, I agree to comply with all of the terms and conditions that I, or the minor for whom I am signing, is eligible to receive the requested equipment having (1) the required certification of disability; (2) met the income guidelines by currently receiving SSI, SSDI, TDAP or TANF; (3) signed the statement of terms and conditions for acceptance of State property; and (4) am not receiving similar equipment through other State or Federal agencies, or departments."
   notification_delivery:
     mark_as_read: "Mark as read"
     check_status: "Check status"

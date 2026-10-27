@@ -82,7 +82,7 @@ module Admin
       assert_no_match(/Translation missing/, response.body)
     end
 
-    # Use non-default actions, especially for medical certification, so defaults cannot mask lost state.
+    # Use non-default actions, especially for disability certification, so defaults cannot mask lost state.
     test 'the retry form restores every proof action and rejection field' do
       ProofAttachmentService.stubs(:attach_proof).returns(
         { success: false, error: StandardError.new('Income proof was rejected by storage') }
@@ -93,7 +93,7 @@ module Admin
 
       {
         'income_proof' => 'reject', 'residency_proof' => 'reject', 'id_proof' => 'reject',
-        'medical_certification' => 'upload_only'
+        'disability_certification' => 'upload_only'
       }.each do |group, action|
         assert_restored "input[name='#{group}_action'][value='#{action}'][checked]",
                         "#{group}_action was not restored"
@@ -104,7 +104,7 @@ module Admin
       %w[income_proof residency_proof id_proof].each do |proof|
         assert_select "textarea[name='#{proof}_custom_rejection_reason']", text: "why #{proof} was refused"
       end
-      assert_select "textarea[name='medical_certification_custom_rejection_reason']",
+      assert_select "textarea[name='disability_certification_custom_rejection_reason']",
                     text: 'why the certification was refused'
     end
 
@@ -307,20 +307,20 @@ module Admin
     end
 
     # A missing retry action must not silently select approval.
-    test 'the medical default applies to a fresh form but not to a retry' do
+    test 'the disability certification default applies to a fresh form but not to a retry' do
       get new_admin_paper_application_path, headers: default_headers
 
-      assert_restored "input[name='medical_certification_action'][value='approved'][checked]",
+      assert_restored "input[name='disability_certification_action'][value='approved'][checked]",
                       'a fresh form should default to approved'
 
       ProofAttachmentService.stubs(:attach_proof).returns(
         { success: false, error: StandardError.new('Income proof was rejected by storage') }
       )
-      # Omit the medical action so staff must choose again.
+      # Omit the disability certification action so staff must choose again.
       post admin_paper_applications_path, headers: default_headers, params: rollback_probe_params
 
-      assert_select "input[name='medical_certification_action'][value='approved'][checked]", false,
-                    'a retry must not silently default the medical disposition to approved'
+      assert_select "input[name='disability_certification_action'][value='approved'][checked]", false,
+                    'a retry must not silently default the disability certification disposition to approved'
     end
 
     # Assert the response destination separately because correct error text alone cannot prevent a bad redirect.
@@ -1760,9 +1760,9 @@ module Admin
     # Use non-default proof decisions and rejection text to expose lost retry state.
     def proof_workflow_params
       params = {
-        medical_certification_action: 'upload_only',
-        medical_certification_rejection_reason: 'none_provided',
-        medical_certification_custom_rejection_reason: 'why the certification was refused'
+        disability_certification_action: 'upload_only',
+        disability_certification_rejection_reason: 'none_provided',
+        disability_certification_custom_rejection_reason: 'why the certification was refused'
       }
       %w[income_proof residency_proof id_proof].each do |proof|
         params[:"#{proof}_action"] = 'reject'

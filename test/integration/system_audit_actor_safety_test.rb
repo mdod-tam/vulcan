@@ -72,7 +72,7 @@ class SystemAuditActorSafetyTest < ActionDispatch::IntegrationTest
       application = create(:application, :in_progress, medical_provider_email: 'provider@example.test')
       token = MedicalProviderSecureRequestForm.generate_public_token
       form = create(:medical_provider_secure_request_form, application: application, raw_token: token)
-      file = fixture_file_upload('medical_certification_valid.pdf', 'application/pdf')
+      file = fixture_file_upload('disability_certification_valid.pdf', 'application/pdf')
       counts = ['User.count', 'Event.count', 'ActiveStorage::Blob.count', 'ActiveStorage::Attachment.count', 'ApplicationStatusChange.count']
 
       assert_no_difference counts do
@@ -83,7 +83,7 @@ class SystemAuditActorSafetyTest < ActionDispatch::IntegrationTest
       assert_select 'input[type=file][name=file]'
       assert_includes response.body, I18n.t('applications.certification_upload.messages.attachment_failed')
       assert_not form.reload.submitted?
-      assert_not application.reload.medical_certification.attached?
+      assert_not application.reload.disability_certification.attached?
       assert_system_identity_unchanged
     end
 
@@ -99,8 +99,8 @@ class SystemAuditActorSafetyTest < ActionDispatch::IntegrationTest
       signature = "#{timestamp}.#{digest}"
 
       assert_no_difference ['User.count', 'Event.count'] do
-        post webhooks_docuseal_medical_certification_path, params: payload,
-                                                           headers: { 'X-Docuseal-Signature' => signature }, as: :json
+        post webhooks_docuseal_disability_certification_path, params: payload,
+                                                              headers: { 'X-Docuseal-Signature' => signature }, as: :json
       end
 
       assert_response :service_unavailable

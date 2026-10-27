@@ -5,34 +5,34 @@ module CertificationManagement
   extend ActiveSupport::Concern
 
   # Rejection details come from ProofReview records.
-  def latest_medical_rejection_review
+  def latest_disability_certification_rejection_review
     proof_reviews
-      .where(proof_type: :medical_certification, status: :rejected)
+      .where(proof_type: :disability_certification, status: :rejected)
       .order(created_at: :desc)
       .first
   end
 
-  def medical_certification_rejection_reason
-    latest_medical_rejection_review&.rejection_reason
+  def disability_certification_rejection_reason
+    latest_disability_certification_rejection_review&.rejection_reason
   end
 
-  def medical_certification_rejection_reason_code
-    latest_medical_rejection_review&.rejection_reason_code
+  def disability_certification_rejection_reason_code
+    latest_disability_certification_rejection_review&.rejection_reason_code
   end
 
-  def medical_certification_requested?
-    medical_certification_requested_at.present? ||
-      medical_certification_status.in?(%w[requested received approved rejected])
+  def disability_certification_requested?
+    disability_certification_requested_at.present? ||
+      disability_certification_status.in?(%w[requested received approved rejected])
   end
 
   # A staff upload must not replace a certification that awaits review or is approved.
   # A rejected certification can be replaced. Secure provider forms have separate request rules.
   def staff_certification_upload_allowed?
-    !medical_certification_status.in?(%w[received approved])
+    !disability_certification_status.in?(%w[received approved])
   end
 
-  def medical_certification_status_approved?
-    medical_certification_status == 'approved'
+  def disability_certification_status_approved?
+    disability_certification_status == 'approved'
   end
 
   # The review modal submits :accepted, which maps to the :approved enum value.

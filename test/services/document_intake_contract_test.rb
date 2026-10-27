@@ -75,9 +75,9 @@ class DocumentIntakeContractTest < ActiveSupport::TestCase
   def prepare_certification_writer
     application = create(:application, :in_progress)
     admin = create(:admin)
-    scanning_submitter(user: admin, purpose: :certification, slot: 'medical_certification') do |file|
-      MedicalCertificationAttachmentService.attach_certification(application: application, blob_or_file: file, admin: admin,
-                                                                 status: :received, submission_method: :admin_upload)
+    scanning_submitter(user: admin, purpose: :certification, slot: 'disability_certification') do |file|
+      DisabilityCertificationAttachmentService.attach_certification(application: application, blob_or_file: file, admin: admin,
+                                                                    status: :received, submission_method: :admin_upload)
       :accepted
     rescue UploadedDocument::Refused => e
       e.reason
@@ -97,7 +97,7 @@ class DocumentIntakeContractTest < ActiveSupport::TestCase
     application = create(:application, :in_progress, medical_provider_name: 'Dr. Provider',
                                                      medical_provider_email: 'provider@example.com')
     form = create(:medical_provider_secure_request_form, application: application)
-    scanning_submitter(secure_form: form, purpose: :certification, slot: 'medical_certification') do |file|
+    scanning_submitter(secure_form: form, purpose: :certification, slot: 'disability_certification') do |file|
       secure_outcome(Applications::SubmitCertificationUpload.new(application: application,
                                                                  medical_provider_secure_request_form: form,
                                                                  file: file).call)

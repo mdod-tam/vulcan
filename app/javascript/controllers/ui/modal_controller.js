@@ -96,7 +96,7 @@ class ModalController extends Controller {
   }
 
   _setProofTypeInModal(modalElement, proofType) {
-    const proofTypeField = modalElement.querySelector('#rejection-proof-type, #medical-rejection-proof-type')
+    const proofTypeField = modalElement.querySelector('#rejection-proof-type, #disability-certification-rejection-proof-type')
     if (proofTypeField) {
       proofTypeField.value = proofType
       

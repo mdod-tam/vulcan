@@ -1,6 +1,6 @@
 # frozen_string_literal: true
 
-class MedicalCertificationFormsController < ApplicationController
+class DisabilityCertificationFormsController < ApplicationController
   skip_before_action :authenticate_user!
 
   def show
@@ -8,17 +8,17 @@ class MedicalCertificationFormsController < ApplicationController
   rescue Errno::ENOENT
     head :not_found
   rescue StandardError => e
-    Rails.logger.error("Failed to deliver medical certification form: #{e.class.name}")
+    Rails.logger.error("Failed to deliver disability certification form: #{e.class.name}")
     head :unprocessable_entity
   end
 
   private
 
   def send_form_pdf
-    form_path = Rails.root.join('app/assets/pdfs/medical_certification_form.pdf')
+    form_path = Rails.root.join('app/assets/pdfs/disability_certification_form.pdf')
 
     send_file form_path,
-              filename: 'medical_certification_form.pdf',
+              filename: 'disability_certification_form.pdf',
               type: 'application/pdf',
               disposition: 'attachment'
   end

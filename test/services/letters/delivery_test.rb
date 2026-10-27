@@ -9,7 +9,7 @@ module Letters
       ensure_system_audit_actor!
       @recipient = create(:constituent)
       @application = create(:application, user: @recipient)
-      @action = 'Letters#medical_certification_form'
+      @action = 'Letters#disability_certification_form'
       @context = EmailDelivery::Policy.capture(mail_action: @action)
     end
 
@@ -134,7 +134,7 @@ module Letters
     private
 
     def queue(request_key: nil, &render)
-      Delivery.queue!(recipient: @recipient, application: @application, letter_type: :medical_certification_form,
+      Delivery.queue!(recipient: @recipient, application: @application, letter_type: :disability_certification_form,
                       context: @context, actor: @admin, request_key: request_key, &render || -> { StringIO.new('%PDF prepared') })
     end
 

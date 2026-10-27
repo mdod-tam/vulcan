@@ -13,8 +13,8 @@
     <div class="request-item mb-2">
       <p class="text-sm text-gray-600 mb-1">
         <span class="text-gray-500">Note:</span> No detailed request history available.
-        <% if @application.medical_certification_requested_at.present? %>
-          Last request sent on <%= @application.medical_certification_requested_at.strftime("%B %d, %Y at %I:%M %p") %>
+        <% if @application.disability_certification_requested_at.present? %>
+          Last request sent on <%= @application.disability_certification_requested_at.strftime("%B %d, %Y at %I:%M %p") %>
         <% end %>
       </p>
     </div>

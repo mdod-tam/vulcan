@@ -111,15 +111,15 @@ module Seeds
       return if stage == :awaiting_dcf
 
       status = stage.in?(%i[certification_received certification_rejected]) ? :received : :approved
-      blob = fixture_document('medical_certification.pdf', purpose: :certification,
-                                                           slot: 'medical_certification', owner: @admin)
-      MedicalCertificationAttachmentService.attach_certification(
+      blob = fixture_document('disability_certification.pdf', purpose: :certification,
+                                                              slot: 'disability_certification', owner: @admin)
+      DisabilityCertificationAttachmentService.attach_certification(
         application: application, blob_or_file: blob, status: status, admin: @admin
       )
 
       case stage
       when :certification_rejected
-        MedicalCertificationAttachmentService.reject_certification(
+        DisabilityCertificationAttachmentService.reject_certification(
           application: application, admin: @admin, reason: 'Provider signature is missing.'
         )
       when :archived
@@ -152,7 +152,7 @@ module Seeds
     end
 
     def with_document(filename)
-      Rails.root.join('test/fixtures/files/medical_certification_valid.pdf').open do |file|
+      Rails.root.join('test/fixtures/files/disability_certification_valid.pdf').open do |file|
         yield ActionDispatch::Http::UploadedFile.new(tempfile: file, filename: filename, type: 'application/pdf')
       end
     end
@@ -161,7 +161,7 @@ module Seeds
     def fixture_document(filename, purpose:, slot:, owner:)
       with_document(filename) do |upload|
         blob = ActiveStorage::Blob.create_and_upload!(io: upload.tempfile, filename: filename, content_type: 'application/pdf')
-        DocumentScanFixtures.clear!(blob, user: owner, purpose: purpose, slot: slot, fixture: 'medical_certification_valid.pdf')
+        DocumentScanFixtures.clear!(blob, user: owner, purpose: purpose, slot: slot, fixture: 'disability_certification_valid.pdf')
       end
     end
 

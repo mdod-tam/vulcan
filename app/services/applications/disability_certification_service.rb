@@ -1,9 +1,9 @@
 # frozen_string_literal: true
 
 module Applications
-  class MedicalCertificationService < BaseService
+  class DisabilityCertificationService < BaseService
     ACTION = 'MedicalProviderMailer#request_certification'
-    STATE_FIELDS = %w[medical_certification_status medical_certification_requested_at medical_certification_request_count].freeze
+    STATE_FIELDS = %w[disability_certification_status disability_certification_requested_at disability_certification_request_count].freeze
 
     attr_reader :application, :actor
 
@@ -38,15 +38,15 @@ module Applications
 
         notification = create_notification
         record_request!(notification: notification, submission_method: 'email',
-                        request_count: application.medical_certification_request_count.to_i + 1,
+                        request_count: application.disability_certification_request_count.to_i + 1,
                         delivery_outcome: 'pending_enqueue')
         context = context.merge('notification_id' => notification.id)
       end
       deferred = ActiveRecord::Base.current_transaction.open?
       job = EmailDelivery::Current.set(context: context, queued: true) do
-        MedicalCertificationEmailJob.perform_later(application_id: application.id,
-                                                   timestamp: application.medical_certification_requested_at.iso8601(6),
-                                                   notification_id: notification.id)
+        DisabilityCertificationEmailJob.perform_later(application_id: application.id,
+                                                      timestamp: application.disability_certification_requested_at.iso8601(6),
+                                                      notification_id: notification.id)
       end
       if job.respond_to?(:successfully_enqueued?) && job.successfully_enqueued?
         return success(deferred ? 'Certification email scheduled after commit.' : 'Certification email queued.',
@@ -68,9 +68,9 @@ module Applications
     # rejection follow-ups retain the existing certification state and request count.
     def prepare_upload_request!(notification:)
       application.with_lock do
-        if application.medical_certification_status_not_requested?
+        if application.disability_certification_status_not_requested?
           record_request!(notification: notification, submission_method: 'secure_form',
-                          request_count: application.medical_certification_request_count)
+                          request_count: application.disability_certification_request_count)
         end
       end
     end
@@ -78,9 +78,9 @@ module Applications
     # JSON's default timestamp format drops microseconds needed for exact restoration.
     def self.request_state(application, previous:)
       {
-        'previous' => previous.merge('medical_certification_requested_at' => previous['medical_certification_requested_at']&.iso8601(6)),
-        'issued_at' => application.medical_certification_requested_at.iso8601(6),
-        'issued_count' => application.medical_certification_request_count
+        'previous' => previous.merge('disability_certification_requested_at' => previous['disability_certification_requested_at']&.iso8601(6)),
+        'issued_at' => application.disability_certification_requested_at.iso8601(6),
+        'issued_count' => application.disability_certification_request_count
       }
     end
 
@@ -93,30 +93,30 @@ module Applications
       application = notification.notifiable
       application.with_lock(requires_new: true) do
         issued_at = Time.iso8601(state.fetch('issued_at'))
-        next unless application.medical_certification_status_requested?
-        next unless application.medical_certification_requested_at == issued_at
-        next unless application.medical_certification_request_count == state['issued_count']
+        next unless application.disability_certification_status_requested?
+        next unless application.disability_certification_requested_at == issued_at
+        next unless application.disability_certification_request_count == state['issued_count']
         next if application.document_signing_requested_at && application.document_signing_requested_at >= issued_at
         next if MedicalProviderSecureRequestForm.open_certification_upload_for_application(application_id: application.id).exists?
 
         Current.instance.set(skip_proof_validation: true) { application.update!(state.fetch('previous')) }
-        metadata = { change_type: 'medical_certification', reason: 'delivery_not_sent', notification_id: notification.id }
+        metadata = { change_type: 'disability_certification', reason: 'delivery_not_sent', notification_id: notification.id }
         request_form_id = notification.metadata['medical_provider_secure_request_form_id']
         metadata[:medical_provider_secure_request_form_id] = request_form_id if request_form_id
         ApplicationStatusChange.create!(application: application, user: notification.actor,
-                                        from_status: 'requested', to_status: application.medical_certification_status,
-                                        change_type: 'medical_certification',
+                                        from_status: 'requested', to_status: application.disability_certification_status,
+                                        change_type: 'disability_certification',
                                         metadata: metadata)
-        AuditEventService.log(action: 'medical_certification_request_not_sent', actor: notification.actor, auditable: application,
-                              metadata: metadata.merge(old_status: 'requested', new_status: application.medical_certification_status,
-                                                       operation_id: "medical-certification-not-sent-#{notification.id}"))
+        AuditEventService.log(action: 'disability_certification_request_not_sent', actor: notification.actor, auditable: application,
+                              metadata: metadata.merge(old_status: 'requested', new_status: application.disability_certification_status,
+                                                       operation_id: "disability-certification-not-sent-#{notification.id}"))
       end
     end
 
     private
 
     def auto_requestable?
-      application.status_awaiting_dcf? && application.required_proofs_for_dcf_approved? && application.medical_certification_status_not_requested?
+      application.status_awaiting_dcf? && application.required_proofs_for_dcf_approved? && application.disability_certification_status_not_requested?
     end
 
     def refusal(decision)
@@ -128,19 +128,19 @@ module Applications
     def record_request!(notification:, submission_method:, request_count:, delivery_outcome: nil)
       previous = application.attributes.slice(*STATE_FIELDS)
       Current.instance.set(skip_proof_validation: true) do
-        application.update!(medical_certification_status: :requested, medical_certification_requested_at: Time.current,
-                            medical_certification_request_count: request_count)
+        application.update!(disability_certification_status: :requested, disability_certification_requested_at: Time.current,
+                            disability_certification_request_count: request_count)
       end
       application.reload
       notification.update_metadata!('certification_request_state', self.class.request_state(application, previous: previous))
       notification.update_metadata!('request_count', request_count)
-      metadata = { notification_id: notification.id, change_type: 'medical_certification',
+      metadata = { notification_id: notification.id, change_type: 'disability_certification',
                    requested_by_id: actor&.id, submission_method: submission_method }
       ApplicationStatusChange.create!(application: application, user: actor,
-                                      from_status: previous['medical_certification_status'], to_status: 'requested',
-                                      change_type: 'medical_certification', metadata: metadata)
-      AuditEventService.log(action: 'medical_certification_requested', actor: actor, auditable: application,
-                            metadata: metadata.merge(old_status: previous['medical_certification_status'], new_status: 'requested',
+                                      from_status: previous['disability_certification_status'], to_status: 'requested',
+                                      change_type: 'disability_certification', metadata: metadata)
+      AuditEventService.log(action: 'disability_certification_requested', actor: actor, auditable: application,
+                            metadata: metadata.merge(old_status: previous['disability_certification_status'], new_status: 'requested',
                                                      delivery_outcome: delivery_outcome).compact)
     end
 
@@ -148,7 +148,7 @@ module Applications
       resolver = Applications::SecureRequestRecipientResolver.new(application: application)
       recipient = resolver.known_recipients.find { |user| user.id == resolver.default_recipient_ids.first } || application.user
       NotificationService.create_and_deliver!(
-        type: 'medical_certification_requested', recipient: recipient, actor: actor, notifiable: application,
+        type: 'disability_certification_requested', recipient: recipient, actor: actor, notifiable: application,
         metadata: { provider: application.medical_provider_name, provider_email: application.medical_provider_email },
         channel: :email, deliver: false
       ) || raise('Could not create certification tracking notification')

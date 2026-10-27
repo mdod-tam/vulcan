@@ -41,25 +41,25 @@ module Applications
       end
       assert_predicate result, :success?
       original = result.data.fetch(:medical_provider_secure_request_form)
-      initial_state = @application.reload.attributes.slice(*MedicalCertificationService::STATE_FIELDS)
+      initial_state = @application.reload.attributes.slice(*DisabilityCertificationService::STATE_FIELDS)
       notification = Notification.find_by!(notifiable: @application, action: 'cert_upload_requested')
-      history = @application.status_changes.where(change_type: :medical_certification).sole
-      audit = Event.where(auditable: @application, action: 'medical_certification_requested').sole
-      assert_equal 0, initial_state['medical_certification_request_count']
+      history = @application.status_changes.where(change_type: :disability_certification).sole
+      audit = Event.where(auditable: @application, action: 'disability_certification_requested').sole
+      assert_equal 0, initial_state['disability_certification_request_count']
       assert_equal notification.id, history.metadata['notification_id']
       assert_equal notification.id, audit.metadata['notification_id']
       assert_equal 'secure_form', history.metadata['submission_method']
       assert_equal 'secure_form', audit.metadata['submission_method']
       state = notification.metadata.fetch('certification_request_state')
-      assert_equal 'not_requested', state.dig('previous', 'medical_certification_status')
+      assert_equal 'not_requested', state.dig('previous', 'disability_certification_status')
       assert_equal 0, state['issued_count']
-      assert_equal @application.medical_certification_requested_at, Time.iso8601(state['issued_at'])
+      assert_equal @application.disability_certification_requested_at, Time.iso8601(state['issued_at'])
       mail = stub(deliver_now: true)
       MedicalProviderMailer.stubs(:with).returns(stub(request_certification: mail))
 
       travel_to original.sent_at + 2.hours do
         assert_no_difference 'ApplicationStatusChange.count' do
-          assert_no_difference "Event.where(action: 'medical_certification_requested').count" do
+          assert_no_difference "Event.where(action: 'disability_certification_requested').count" do
             result = RequestCertificationUpload.new(application: @application, actor: @actor, resend_of: original,
                                                     deliver_email: true).call
             assert_predicate result, :success?
@@ -67,7 +67,7 @@ module Applications
         end
       end
 
-      assert_equal initial_state, @application.reload.attributes.slice(*MedicalCertificationService::STATE_FIELDS)
+      assert_equal initial_state, @application.reload.attributes.slice(*DisabilityCertificationService::STATE_FIELDS)
       assert_predicate original.reload, :revoked?
       replacement_notification = Notification.where(notifiable: @application, action: 'cert_upload_requested').order(:id).last
       assert_nil replacement_notification.metadata['certification_request_state']
@@ -76,11 +76,11 @@ module Applications
 
     %i[history audit].each do |failed_write|
       test "secure preparation rolls back form tracking and state when #{failed_write} fails" do
-        previous = @application.attributes.slice(*MedicalCertificationService::STATE_FIELDS)
+        previous = @application.attributes.slice(*DisabilityCertificationService::STATE_FIELDS)
         if failed_write == :history
           ApplicationStatusChange.any_instance.stubs(:save!).raises(ActiveRecord::RecordInvalid.new(ApplicationStatusChange.new))
         else
-          AuditEventService.expects(:log).with(has_entries(action: 'medical_certification_requested')).raises(StandardError, 'audit unavailable')
+          AuditEventService.expects(:log).with(has_entries(action: 'disability_certification_requested')).raises(StandardError, 'audit unavailable')
         end
 
         result = assert_no_difference ['MedicalProviderSecureRequestForm.count', 'Notification.count', 'ApplicationStatusChange.count', 'Event.count'] do
@@ -88,7 +88,7 @@ module Applications
         end
 
         assert_predicate result, :failure?
-        assert_equal previous, @application.reload.attributes.slice(*MedicalCertificationService::STATE_FIELDS)
+        assert_equal previous, @application.reload.attributes.slice(*DisabilityCertificationService::STATE_FIELDS)
       end
     end
 
@@ -97,29 +97,29 @@ module Applications
       application = @application
       actor = @actor
       mail.define_singleton_method(:deliver_now) do
-        result = MedicalCertificationService.new(application: application, actor: actor).request_certification
+        result = DisabilityCertificationService.new(application: application, actor: actor).request_certification
         raise result.message unless result.success?
 
         raise ApplicationMailer::DeliverySkipped, 'global_disabled'
       end
       MedicalProviderMailer.stubs(:with).returns(stub(request_certification: mail))
 
-      result = assert_no_difference "Event.where(action: 'medical_certification_request_not_sent').count" do
+      result = assert_no_difference "Event.where(action: 'disability_certification_request_not_sent').count" do
         RequestCertificationUpload.new(application: @application, actor: @actor, deliver_email: true).call
       end
 
       assert_predicate result, :failure?
       assert result.data[:delivery_suppressed]
-      assert_predicate @application.reload, :medical_certification_status_requested?
-      assert_equal 1, @application.medical_certification_request_count
+      assert_predicate @application.reload, :disability_certification_status_requested?
+      assert_equal 1, @application.disability_certification_request_count
       secure_notification = Notification.find_by!(notifiable: @application, action: 'cert_upload_requested')
-      provider_notification = Notification.find_by!(notifiable: @application, action: 'medical_certification_requested')
+      provider_notification = Notification.find_by!(notifiable: @application, action: 'disability_certification_requested')
       form = MedicalProviderSecureRequestForm.find(secure_notification.metadata['medical_provider_secure_request_form_id'])
       assert_predicate form, :revoked?
       assert_equal 'suppressed', secure_notification.delivery_status
-      assert_equal @application.medical_certification_requested_at,
+      assert_equal @application.disability_certification_requested_at,
                    Time.iso8601(provider_notification.metadata.dig('certification_request_state', 'issued_at'))
-      assert_enqueued_jobs 1, only: MedicalCertificationEmailJob
+      assert_enqueued_jobs 1, only: DisabilityCertificationEmailJob
     end
 
     test 'fails explicitly when provider email is missing' do
@@ -215,16 +215,16 @@ module Applications
     end
 
     test 'transitions initial not requested status to requested with audit trail' do
-      assert_predicate @application, :medical_certification_status_not_requested?
+      assert_predicate @application, :disability_certification_status_not_requested?
 
-      assert_difference('ApplicationStatusChange.where(change_type: :medical_certification).count', 1) do
-        assert_difference("Event.where(auditable: @application, action: 'medical_certification_requested').count", 1) do
+      assert_difference('ApplicationStatusChange.where(change_type: :disability_certification).count', 1) do
+        assert_difference("Event.where(auditable: @application, action: 'disability_certification_requested').count", 1) do
           RequestCertificationUpload.new(application: @application, actor: @actor).call
         end
       end
 
-      assert_predicate @application.reload, :medical_certification_status_requested?
-      status_change = ApplicationStatusChange.where(application: @application, change_type: :medical_certification).last
+      assert_predicate @application.reload, :disability_certification_status_requested?
+      status_change = ApplicationStatusChange.where(application: @application, change_type: :disability_certification).last
       assert_equal 'not_requested', status_change.from_status
       assert_equal 'requested', status_change.to_status
       assert_equal 'secure_form', status_change.metadata.fetch('submission_method')
@@ -245,7 +245,7 @@ module Applications
       end
 
       assert_predicate result, :success?
-      assert_predicate application.reload, :medical_certification_status_requested?
+      assert_predicate application.reload, :disability_certification_status_requested?
       assert_nil Current.skip_proof_validation
     ensure
       if previous_validation_env.nil?
@@ -257,12 +257,12 @@ module Applications
     end
 
     test 'does not overwrite rejected certification status' do
-      @application.update!(medical_certification_status: :rejected)
+      @application.update!(disability_certification_status: :rejected)
 
       result = RequestCertificationUpload.new(application: @application, actor: @actor).call
 
       assert_predicate result, :success?
-      assert_predicate @application.reload, :medical_certification_status_rejected?
+      assert_predicate @application.reload, :disability_certification_status_rejected?
     end
 
     test 'staff resend during cooldown fails without creating replacement' do
@@ -416,8 +416,8 @@ module Applications
     end
 
     test 'deliver_email uses rejection template for rejected certifications' do
-      @application.update!(medical_certification_status: :rejected)
-      @application.stubs(:latest_medical_rejection_review).returns(stub(rejection_reason: 'Missing signature'))
+      @application.update!(disability_certification_status: :rejected)
+      @application.stubs(:latest_disability_certification_rejection_review).returns(stub(rejection_reason: 'Missing signature'))
 
       delivered_params = nil
       mail = mock('certification-rejected-mail')
@@ -462,7 +462,7 @@ module Applications
       assert_not result.success?
       assert_equal I18n.t('applications.certification_upload.messages.delivery_failed', locale: @actor.effective_locale),
                    result.message
-      assert_predicate @application.reload, :medical_certification_status_requested?
+      assert_predicate @application.reload, :disability_certification_status_requested?
 
       form = result.data.fetch(:medical_provider_secure_request_form)
       notification = Notification.find_by!(notifiable: @application, action: 'cert_upload_requested')

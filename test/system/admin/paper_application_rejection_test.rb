@@ -87,18 +87,18 @@ module Admin
       assert_text 'Applicant prefers to receive Spanish communications. Please ensure any custom rejection reason is translated.'
     end
 
-    test 'medical certification custom reason copy is certificate-signer specific and stays English' do
+    test 'disability certification custom reason copy is certificate-signer specific and stays English' do
       start_new_adult_paper_application
 
       # Certification notes address the certificate signer in English, regardless of the applicant locale.
       select 'Spanish', from: 'constituent_locale'
 
-      find_by_id('reject_medical_certification').click
-      select 'Other', from: 'medical_certification_rejection_reason'
+      find_by_id('reject_disability_certification').click
+      select 'Other', from: 'disability_certification_rejection_reason'
 
       assert_text 'Disability certification communications are sent to the certificate signer in English.'
-      assert_selector "label[for='medical_certification_custom_rejection_reason']", text: 'Custom Rejection Reason'
-      assert_selector "[name='medical_certification_custom_rejection_reason'][placeholder='Enter the rejection reason that will be sent to the certifying professional']"
+      assert_selector "label[for='disability_certification_custom_rejection_reason']", text: 'Custom Rejection Reason'
+      assert_selector "[name='disability_certification_custom_rejection_reason'][placeholder='Enter the rejection reason that will be sent to the certifying professional']"
     end
   end
 end

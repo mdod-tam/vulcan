@@ -50,7 +50,7 @@ class TextEmailLinkAccessibilityTest < ActiveSupport::TestCase
     application_notifications_application_submitted
     application_notifications_income_threshold_exceeded
     application_notifications_max_rejections_reached
-    application_notifications_medical_certification_not_provided
+    application_notifications_disability_certification_not_provided
     application_notifications_proof_approved
     application_notifications_proof_received
     application_notifications_proof_rejected
@@ -98,7 +98,7 @@ class TextEmailLinkAccessibilityTest < ActiveSupport::TestCase
     %w[secure_provider_info_forms sms message],
     %w[secure_proof_forms sms message],
     %w[passwords account_access_sms message],
-    %w[document_signing medical_certification_request body],
+    %w[document_signing disability_certification_request body],
     %w[medical_provider_mailer certification_submission_instructions secure],
     %w[medical_provider_mailer certification_submission_instructions fax],
     %w[medical_provider_mailer certification_resubmission_instructions secure],

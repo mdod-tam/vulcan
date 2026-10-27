@@ -139,9 +139,9 @@ class NotificationComposerTest < ActiveSupport::TestCase
     end
   end
 
-  test 'medical certification request messages end with periods' do
+  test 'disability certification request messages end with periods' do
     message = NotificationComposer.generate(
-      'medical_certification_requested',
+      'disability_certification_requested',
       @application,
       @admin
     )
@@ -161,9 +161,9 @@ class NotificationComposerTest < ActiveSupport::TestCase
     assert_match(%r{</a>\.$}, message)
   end
 
-  test 'generate message for medical_certification_rejected with rejection_reason' do
+  test 'generate message for disability_certification_rejected with rejection_reason' do
     message = NotificationComposer.generate(
-      'medical_certification_rejected',
+      'disability_certification_rejected',
       @application,
       @admin,
       { 'rejection_reason' => 'Provider license missing' }

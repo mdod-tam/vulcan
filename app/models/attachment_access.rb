@@ -3,7 +3,7 @@
 # Owns the audience of ordinary storage downloads. W9s and print letters use their dedicated release paths.
 class AttachmentAccess
   PROOF_NAMES = %w[income_proof residency_proof id_proof].freeze
-  CERTIFICATION_NAMES = %w[medical_certification additional_medical_certifications].freeze
+  CERTIFICATION_NAMES = %w[disability_certification additional_disability_certifications].freeze
 
   def initialize(blob)
     @blob = blob

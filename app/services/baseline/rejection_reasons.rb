@@ -219,10 +219,10 @@ module Baseline
                  'clara y legible de su identificación que muestre toda la información requerida.'
       },
 
-      # Medical Certification
+      # Disability Certification
       {
         code: 'missing_provider_credentials',
-        proof_type: 'medical_certification',
+        proof_type: 'disability_certification',
         en_body: 'The disability certification is missing required provider credentials or ' \
                  'license number. Please ensure the resubmitted form includes the certifying ' \
                  "professional's full credentials and license information.",
@@ -232,7 +232,7 @@ module Baseline
       },
       {
         code: 'incomplete_disability_documentation',
-        proof_type: 'medical_certification',
+        proof_type: 'disability_certification',
         en_body: 'The documentation of the disability is incomplete. The certification must ' \
                  'include a complete description of the disability and how it affects major ' \
                  'life activities.',
@@ -242,7 +242,7 @@ module Baseline
       },
       {
         code: 'outdated_certification',
-        proof_type: 'medical_certification',
+        proof_type: 'disability_certification',
         en_body: 'The disability certification is outdated. Please provide a certification ' \
                  'that has been completed within the last 12 months.',
         es_body: 'La certificación de discapacidad está desactualizada. Por favor, proporcione una certificación ' \
@@ -250,7 +250,7 @@ module Baseline
       },
       {
         code: 'missing_signature',
-        proof_type: 'medical_certification',
+        proof_type: 'disability_certification',
         en_body: 'The disability certification is missing the required signature from the ' \
                  'certifying professional. Please ensure the resubmitted form is properly ' \
                  'signed and dated.',
@@ -260,7 +260,7 @@ module Baseline
       },
       {
         code: 'missing_functional_limitations',
-        proof_type: 'medical_certification',
+        proof_type: 'disability_certification',
         en_body: 'The disability certification lacks sufficient detail about functional ' \
                  'limitations. Please ensure the resubmitted form includes specific ' \
                  'information about how the disability affects daily activities.',
@@ -270,7 +270,7 @@ module Baseline
       },
       {
         code: 'incorrect_form_used',
-        proof_type: 'medical_certification',
+        proof_type: 'disability_certification',
         en_body: 'The wrong certification form was used. Please ensure the certifying ' \
                  'professional completes the official Disability Certification Form for ' \
                  'MAT program eligibility.',
@@ -280,7 +280,7 @@ module Baseline
       },
       {
         code: 'illegible',
-        proof_type: 'medical_certification',
+        proof_type: 'disability_certification',
         en_body: 'The disability certification you provided is illegible or unclear. Please ' \
                  'submit a clear, readable copy of the certification form.',
         es_body: 'La certificación de discapacidad que proporcionó es ilegible o poco clara. Por favor, ' \

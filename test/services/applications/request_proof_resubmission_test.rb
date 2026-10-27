@@ -405,7 +405,7 @@ module Applications
       result = RequestProofResubmission.new(
         application: @application,
         actor: @actor,
-        proof_type: :medical_certification
+        proof_type: :disability_certification
       ).call
 
       assert_not result.success?

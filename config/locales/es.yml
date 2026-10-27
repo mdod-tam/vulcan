@@ -714,8 +714,8 @@ es:
         attachment_failed: "No se pudo adjuntar el W9. Inténtelo de nuevo."
         submitted: "Gracias. Su formulario W9 fue enviado para revisión."
   document_signing:
-    medical_certification_request:
-      submission_name: "Certificación médica - %{constituent_full_name} (Solicitud %{application_id})"
+    disability_certification_request:
+      submission_name: "Certificación de discapacidad - %{constituent_full_name} (Solicitud %{application_id})"
       subject: "Solicitud de certificación de discapacidad para %{constituent_full_name}"
       body: |
         Por favor complete la solicitud de certificación de discapacidad para %{constituent_full_name}.
@@ -728,7 +728,7 @@ es:
         - Dirección: %{constituent_address_formatted}
         - ID de solicitud: %{application_id}
 
-        Enlace de firma de certificación médica:
+        Enlace de firma de certificación de discapacidad:
         {{submitter.link}}
 
         Si tiene preguntas, comuníquese con %{support_email}.
@@ -841,7 +841,7 @@ es:
         application_notifications_proof_received: "Verificación de documentos recibida"
         application_notifications_max_rejections_reached: "Actualización importante del estado de la solicitud"
         application_notifications_provider_info_requested: "Solicitud de información del profesional certificador"
-        medical_provider_request_certification: "Solicitud de certificación médica"
+        medical_provider_request_certification: "Solicitud de certificación de discapacidad"
         voucher_notifications_voucher_assigned: "Su vale para equipo de accesibilidad"
         voucher_notifications_voucher_redeemed: "Confirmación de canje del vale"
         evaluator_mailer_evaluation_submission_confirmation: "Confirmación de envío de evaluación"
@@ -1054,7 +1054,7 @@ es:
     item_9: "El incumplimiento de estas Condiciones de Aceptación puede resultar en que se me deniegue el privilegio de tener equipo de acceso telefónico especializado proporcionado por el Estado de Maryland."
     item_10_title: "10. Aprobación y Capacitación"
     item_10: "Tras la aprobación de un formulario de solicitud, entiendo que se me notificará por escrito la aceptación. Si es necesario, solicitaré capacitación específica para el dispositivo que recibiré. Si soy menor, un padre/tutor me acompañará a la capacitación requerida para firmar esta declaración. Si estoy físicamente incapacitado para asistir a la capacitación, puedo llamar al 800-552-7724 (Voz/TTY) 443-453-5970 (Teléfono de Video) para organizar capacitación en un sitio alternativo."
-    conclusion: "Habiendo leído las condiciones anteriores o habiéndolas leído y explicado, acepto cumplir con todos los términos y condiciones que yo, o el menor por quien firmo, es elegible para recibir el equipo solicitado teniendo (1) la certificación médica requerida de discapacidad; (2) cumplido las directrices de ingresos recibiendo actualmente SSI, SSDI, TDAP o TANF; (3) firmado la declaración de términos y condiciones para la aceptación de propiedad estatal; y (4) no recibiendo equipo similar a través de otras agencias estatales o federales, o departamentos."
+    conclusion: "Habiendo leído las condiciones anteriores o habiéndolas leído y explicado, acepto cumplir con todos los términos y condiciones que yo, o el menor por quien firmo, es elegible para recibir el equipo solicitado teniendo (1) la certificación requerida de discapacidad; (2) cumplido las directrices de ingresos recibiendo actualmente SSI, SSDI, TDAP o TANF; (3) firmado la declaración de términos y condiciones para la aceptación de propiedad estatal; y (4) no recibiendo equipo similar a través de otras agencias estatales o federales, o departamentos."
   notification_delivery:
     mark_as_read: "Marcar como leída"
     check_status: "Consultar estado"

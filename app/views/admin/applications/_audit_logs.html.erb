@@ -131,7 +131,7 @@
                       ProofNotificationCopy.approved_text(log.proof_type)
                     end
                   when log.is_a?(ApplicationStatusChange)
-                    if log.metadata.try(:[], 'change_type') == 'medical_certification'
+                    if log.metadata.try(:[], 'change_type') == 'disability_certification'
                       method = log.metadata.try(:[], 'submission_method')&.titleize || "Unknown"
                       provider = log.metadata.try(:[], 'provider_name')
                       
@@ -181,13 +181,13 @@
                     end
                   when log.is_a?(Notification)
                     case log.action
-                    when "medical_certification_requested"
+                    when "disability_certification_requested"
                       "Disability certification requested from #{@application.medical_provider_name}"
-                    when "medical_certification_received"
+                    when "disability_certification_received"
                       "Disability certification received from provider"
-                    when "medical_certification_approved"
+                    when "disability_certification_approved"
                       "Disability certification approved"
-                    when "medical_certification_rejected"
+                    when "disability_certification_rejected"
                       reason = log.metadata['rejection_reason'].presence
                       "Disability certification rejected#{reason.present? ? " - #{reason}" : ''}"
                     when "review_requested"
@@ -229,7 +229,7 @@
                       "Trainer #{log.metadata['trainer_name']} assigned to application"
                     when "trainer_unassigned", "trainer_reassigned", "trainer_access_removed", "evaluator_access_removed"
                       activity_detail(log)
-                    when "medical_certification_requested"
+                    when "disability_certification_requested"
                       method = log.metadata['submission_method']&.titleize || 'Unknown'
                       provider = log.metadata['provider_name']
                       provider_text = provider.present? ? " from #{provider}" : ""

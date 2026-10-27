@@ -21,6 +21,6 @@ Browser tests also have `SeedLookupHelpers` in [ApplicationSystemTestCase](../ap
 
 [files/](files) holds PDFs, images, and deliberately invalid samples. Use real files for upload, download, rendering, or file-validation behavior.
 
-The application factory's `:with_income_proof`, `:with_residency_proof`, `:with_id_proof`, and `:with_medical_certification` traits attach real fixture PDFs. For a test that depends on a particular file format or invalid content, choose the file explicitly.
+The application factory's `:with_income_proof`, `:with_residency_proof`, `:with_id_proof`, and `:with_disability_certification` traits attach real fixture PDFs. For a test that depends on a particular file format or invalid content, choose the file explicitly.
 
 File fixtures are separate from YAML records: an approved proof status alone does not attach a file. Check both the attachment and the status when setting up proof-review scenarios.

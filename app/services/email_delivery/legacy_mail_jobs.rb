@@ -6,7 +6,7 @@ module EmailDelivery
   # removes them with an audit record each; nothing about them is replayed.
   module LegacyMailJobs
     FRAMEWORK_MAIL_JOB = 'ActionMailer::MailDeliveryJob'
-    CONTEXT_JOBS = %w[MedicalCertificationEmailJob EmailDelivery::MailDeliveryJob].freeze
+    CONTEXT_JOBS = %w[DisabilityCertificationEmailJob EmailDelivery::MailDeliveryJob].freeze
     AUDIT_ACTION = 'email_delivery_legacy_job_removed'
 
     module_function

@@ -68,7 +68,7 @@ module Applications
     def request_form = medical_provider_secure_request_form
 
     def accept_certification
-      MedicalCertificationAttachmentService.accept_submission(
+      DisabilityCertificationAttachmentService.accept_submission(
         application: application,
         blob: secure_upload_blob,
         submission_method: :secure_form,
@@ -82,7 +82,7 @@ module Applications
     end
 
     def secure_upload_blob
-      blob = UploadedDocument.resolve!(file, record: application, name: 'medical_certification',
+      blob = UploadedDocument.resolve!(file, record: application, name: 'disability_certification',
                                              min_bytes: ProofUploadFormats::SECURE_FORM_MIN_BYTES,
                                              scan_owner: medical_provider_secure_request_form)
       blob.update!(metadata: blob.metadata.merge(secure_upload_metadata))
@@ -111,8 +111,8 @@ module Applications
       return {} unless attach_result[:placement] == :additional
 
       {
-        retained_as: 'additional_medical_certification',
-        additional_medical_certification_blob_id: attach_result[:additional_blob_id],
+        retained_as: 'additional_disability_certification',
+        additional_disability_certification_blob_id: attach_result[:additional_blob_id],
         retention_reason: attach_result[:retention_reason]
       }
     end

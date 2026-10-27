@@ -338,7 +338,7 @@ module Admin
       application = create(:application,
                            medical_provider_name: 'Dr. Secure',
                            medical_provider_email: 'secure@example.test',
-                           medical_certification_status: :requested)
+                           disability_certification_status: :requested)
 
       get admin_application_path(application)
 
@@ -352,10 +352,10 @@ module Admin
 
     test 'show page hides secure certification upload link when certification is pending review' do
       application = create(:application,
-                           :with_medical_certification,
+                           :with_disability_certification,
                            medical_provider_name: 'Dr. Secure',
                            medical_provider_email: 'secure@example.test',
-                           medical_certification_status: :received)
+                           disability_certification_status: :received)
 
       get admin_application_path(application)
 
@@ -366,24 +366,24 @@ module Admin
 
     test 'show page hides secure certification upload link when certification is attached before request' do
       application = create(:application,
-                           :with_medical_certification,
+                           :with_disability_certification,
                            medical_provider_name: 'Dr. Secure',
                            medical_provider_email: 'secure@example.test',
-                           medical_certification_status: :not_requested)
+                           disability_certification_status: :not_requested)
 
       get admin_application_path(application)
 
       assert_response :success
-      assert_select '[data-testid="medical-certification"]', text: /medical_certification\.pdf/
+      assert_select '[data-testid="disability-certification"]', text: /disability_certification\.pdf/
       assert_not_includes response.body, 'Send Secure Cert Upload Link'
     end
 
     test 'show page offers secure certification upload link after attached certification is rejected' do
       application = create(:application,
-                           :with_medical_certification,
+                           :with_disability_certification,
                            medical_provider_name: 'Dr. Secure',
                            medical_provider_email: 'secure@example.test',
-                           medical_certification_status: :rejected)
+                           disability_certification_status: :rejected)
 
       get admin_application_path(application)
 
@@ -396,7 +396,7 @@ module Admin
       application = create(:application,
                            medical_provider_name: 'Dr. Secure',
                            medical_provider_email: 'secure@example.test',
-                           medical_certification_status: :requested,
+                           disability_certification_status: :requested,
                            document_signing_status: :opened)
 
       get admin_application_path(application)
@@ -410,7 +410,7 @@ module Admin
       application = create(:application,
                            medical_provider_name: 'Dr. Secure',
                            medical_provider_email: 'secure@example.test',
-                           medical_certification_status: :requested)
+                           disability_certification_status: :requested)
       create(:medical_provider_secure_request_form, application: application)
 
       get admin_application_path(application)
@@ -422,7 +422,7 @@ module Admin
 
     test 'show page surfaces provider email remediation for secure certification upload' do
       application = create(:application, medical_provider_name: 'Dr. Missing')
-      application.update_columns(medical_provider_email: nil, medical_certification_status: :requested)
+      application.update_columns(medical_provider_email: nil, disability_certification_status: :requested)
 
       get admin_application_path(application)
 
@@ -578,15 +578,15 @@ module Admin
     end
 
     test 'show page surfaces additional DocuSeal certification submissions' do
-      application = create(:application, medical_certification_status: :received)
-      application.medical_certification.attach(
+      application = create(:application, disability_certification_status: :received)
+      application.disability_certification.attach(
         io: StringIO.new('secure upload content'),
         filename: 'secure_upload.pdf',
         content_type: 'application/pdf'
       )
-      application.additional_medical_certifications.attach(
+      application.additional_disability_certifications.attach(
         io: StringIO.new('docuseal content'),
-        filename: 'medical_cert_docuseal_additional_123.pdf',
+        filename: 'disability_cert_docuseal_additional_123.pdf',
         content_type: 'application/pdf',
         metadata: { source: 'docuseal' }
       )
@@ -594,15 +594,15 @@ module Admin
       get admin_application_path(application)
 
       assert_response :success
-      assert_select '[data-testid="medical-certification"]', text: /secure_upload\.pdf/
-      assert_select '[data-testid="additional-medical-certifications"]', text: /medical_cert_docuseal_additional_123\.pdf/
-      assert_select '[data-testid="additional-medical-certifications"]', text: /DocuSeal signed form/
+      assert_select '[data-testid="disability-certification"]', text: /secure_upload\.pdf/
+      assert_select '[data-testid="additional-disability-certifications"]', text: /disability_cert_docuseal_additional_123\.pdf/
+      assert_select '[data-testid="additional-disability-certifications"]', text: /DocuSeal signed form/
     end
 
     test 'show page flags additional certifications that need review' do
-      application = create(:application, medical_certification_status: :approved)
-      application.medical_certification.attach(io: StringIO.new('approved'), filename: 'approved.pdf', content_type: 'application/pdf')
-      application.additional_medical_certifications.attach(
+      application = create(:application, disability_certification_status: :approved)
+      application.disability_certification.attach(io: StringIO.new('approved'), filename: 'approved.pdf', content_type: 'application/pdf')
+      application.additional_disability_certifications.attach(
         io: StringIO.new('late docuseal content'),
         filename: 'late_docuseal.pdf',
         content_type: 'application/pdf',
@@ -612,18 +612,18 @@ module Admin
       get admin_application_path(application)
 
       assert_response :success
-      assert_select '[data-testid="additional-medical-certifications"]', text: /DocuSeal signed form \(received after approval, review\)/
+      assert_select '[data-testid="additional-disability-certifications"]', text: /DocuSeal signed form \(received after approval, review\)/
     end
 
     test 'show page labels additional secure upload certification submissions' do
-      application = create(:application, medical_certification_status: :received)
-      application.medical_certification.attach(
+      application = create(:application, disability_certification_status: :received)
+      application.disability_certification.attach(
         io: StringIO.new('docuseal content'),
-        filename: 'medical_cert_docuseal_123.pdf',
+        filename: 'disability_cert_docuseal_123.pdf',
         content_type: 'application/pdf',
         metadata: { source: 'docuseal' }
       )
-      application.additional_medical_certifications.attach(
+      application.additional_disability_certifications.attach(
         io: StringIO.new('secure upload content'),
         filename: 'secure_upload_additional.pdf',
         content_type: 'application/pdf',
@@ -633,16 +633,16 @@ module Admin
       get admin_application_path(application)
 
       assert_response :success
-      assert_select '[data-testid="medical-certification"]', text: /medical_cert_docuseal_123\.pdf/
-      assert_select '[data-testid="additional-medical-certifications"]', text: /secure_upload_additional\.pdf/
-      assert_select '[data-testid="additional-medical-certifications"]', text: /Secure upload/
+      assert_select '[data-testid="disability-certification"]', text: /disability_cert_docuseal_123\.pdf/
+      assert_select '[data-testid="additional-disability-certifications"]', text: /secure_upload_additional\.pdf/
+      assert_select '[data-testid="additional-disability-certifications"]', text: /Secure upload/
     end
 
     test 'secure certification upload request sends mail and redirects with notice' do
       application = create(:application,
                            medical_provider_name: 'Dr. Secure',
                            medical_provider_email: 'secure@example.test',
-                           medical_certification_status: :requested)
+                           disability_certification_status: :requested)
       result = BaseService::Result.new(success: true, message: 'created', data: {})
       Applications::RequestCertificationUpload.any_instance.expects(:call).returns(result)
 
@@ -655,7 +655,7 @@ module Admin
 
     test 'secure certification upload request redirects with service failure message' do
       application = create(:application, medical_provider_name: 'Dr. Missing')
-      application.update_columns(medical_provider_email: nil, medical_certification_status: :requested)
+      application.update_columns(medical_provider_email: nil, disability_certification_status: :requested)
 
       post admin_application_certification_upload_request_path(application)
 

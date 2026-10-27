@@ -49,7 +49,7 @@ module VoucherManagement
     voucher_fulfillment? &&
       status_approved? &&
       required_proofs_approved? &&
-      medical_certification_status_approved? &&
+      disability_certification_status_approved? &&
       !vouchers.exists?
   end
 

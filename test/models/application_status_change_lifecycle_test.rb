@@ -29,12 +29,12 @@ class ApplicationStatusChangeLifecycleTest < ActiveSupport::TestCase
     assert_equal 1, ApplicationStatusChange.lifecycle.where(application: @application, to_status: 'in_progress').count
   end
 
-  test 'lifecycle excludes medical certification rows by change_type' do
+  test 'lifecycle excludes disability certification rows by change_type' do
     ApplicationStatusChange.create!(
       application: @application,
       from_status: 'in_progress',
       to_status: 'approved',
-      change_type: :medical_certification,
+      change_type: :disability_certification,
       changed_at: Time.current,
       user: @admin
     )
@@ -42,7 +42,7 @@ class ApplicationStatusChangeLifecycleTest < ActiveSupport::TestCase
     assert_empty ApplicationStatusChange.lifecycle.where(application: @application)
   end
 
-  test 'lifecycle excludes metadata-only medical certification rows' do
+  test 'lifecycle excludes metadata-only disability certification rows' do
     ApplicationStatusChange.create!(
       application: @application,
       from_status: 'in_progress',
@@ -50,7 +50,7 @@ class ApplicationStatusChangeLifecycleTest < ActiveSupport::TestCase
       change_type: nil,
       changed_at: Time.current,
       user: @admin,
-      metadata: { 'change_type' => 'medical_certification' }
+      metadata: { 'change_type' => 'disability_certification' }
     )
 
     assert_empty ApplicationStatusChange.lifecycle.where(application: @application, to_status: 'approved')
@@ -64,7 +64,7 @@ class ApplicationStatusChangeLifecycleTest < ActiveSupport::TestCase
       application: @application,
       from_status: 'approved',
       to_status: 'approved',
-      change_type: :medical_certification,
+      change_type: :disability_certification,
       changed_at: Time.current,
       user: @admin
     )

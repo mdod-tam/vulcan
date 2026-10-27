@@ -75,14 +75,14 @@ class DevelopmentApplicationsTest < ActiveSupport::TestCase
 
     received = by_email.fetch('james.wilson@example.com')
     assert received.status_awaiting_dcf?
-    assert received.medical_certification_status_received?
-    assert received.medical_certification.attached?
+    assert received.disability_certification_status_received?
+    assert received.disability_certification.attached?
     assert received.proof_reviews.all?(&:submission_method_email?)
-    assert by_email.fetch('elena.garcia@example.com').medical_certification_status_rejected?
+    assert by_email.fetch('elena.garcia@example.com').disability_certification_status_rejected?
 
     approved = by_email.fetch('samuel.reed@example.com')
     assert approved.required_proofs_approved?
-    assert approved.medical_certification_status_approved?
+    assert approved.disability_certification_status_approved?
     assert approved.status_changes.exists?(from_status: 'awaiting_dcf', to_status: 'approved')
     assert approved.events.exists?(action: 'application_status_changed')
     assert_includes Application.with_pending_training_request, by_email.fetch('aisha.johnson@example.com')
@@ -107,7 +107,7 @@ class DevelopmentApplicationsTest < ActiveSupport::TestCase
     assert_equal Application.statuses.keys.sort, applications.map(&:status).uniq.sort
     applications.select(&:status_approved?).each do |application|
       assert application.required_proofs_approved?
-      assert application.medical_certification_status_approved?
+      assert application.disability_certification_status_approved?
     end
   end
 end

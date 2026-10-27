@@ -354,12 +354,12 @@ class ApplicationNotificationsMailer < ApplicationMailer # rubocop:disable Metri
     end
   end
 
-  def medical_certification_not_provided(application, _notification = nil)
-    with_mailer_error_handling("medical_certification_not_provided application=#{application&.id}") do
-      template_name = 'application_notifications_medical_certification_not_provided'
+  def disability_certification_not_provided(application, _notification = nil)
+    with_mailer_error_handling("disability_certification_not_provided application=#{application&.id}") do
+      template_name = 'application_notifications_disability_certification_not_provided'
       locale        = resolve_template_locale(recipient: application.user)
       text_template = find_text_template(template_name, locale: locale)
-      variables     = build_medical_certification_not_provided_variables(application, template: text_template, locale: locale)
+      variables     = build_disability_certification_not_provided_variables(application, template: text_template, locale: locale)
 
       if prefers_letter_delivery?(application.user)
         queue_letter_delivery(
@@ -879,10 +879,10 @@ class ApplicationNotificationsMailer < ApplicationMailer # rubocop:disable Metri
                          }).compact
   end
 
-  def build_medical_certification_not_provided_variables(application, template:, locale: nil)
+  def build_disability_certification_not_provided_variables(application, template:, locale: nil)
     user = application.user
 
-    rejection_reason_message = application.medical_certification_rejection_reason.presence || ''
+    rejection_reason_message = application.disability_certification_rejection_reason.presence || ''
 
     base_variables = build_base_email_variables(
       template: template,

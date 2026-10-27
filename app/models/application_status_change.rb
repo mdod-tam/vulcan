@@ -1,14 +1,14 @@
 # frozen_string_literal: true
 
 class ApplicationStatusChange < ApplicationRecord
-  LIFECYCLE_METADATA_TYPES = %w[medical_certification proof].freeze
+  LIFECYCLE_METADATA_TYPES = %w[disability_certification proof].freeze
   APPLICATION_STATUS_KEYS = Application.statuses.keys.freeze
 
   belongs_to :application
   belongs_to :user, optional: true
 
   enum :change_type, {
-    medical_certification: 0,
+    disability_certification: 0,
     proof: 1,
     status: 2
   }
@@ -20,7 +20,7 @@ class ApplicationStatusChange < ApplicationRecord
   before_validation :set_changed_at
 
   scope :lifecycle, lambda {
-    certified = where(change_type: :medical_certification)
+    certified = where(change_type: :disability_certification)
                 .or(where(change_type: :proof))
                 .or(where("metadata->>'change_type' IN (?)", LIFECYCLE_METADATA_TYPES))
 

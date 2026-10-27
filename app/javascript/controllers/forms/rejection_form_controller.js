@@ -10,7 +10,7 @@ export default class extends Controller {
     "languageNotice",    // Reminder shown only for custom "Other" reasons
     "codeStatus",        // Visible status text for code linkage
     "liveRegion",        // aria-live region for announcing reason selection
-    "medicalOnlyReasons", // Medical-specific rejection reasons container
+    "disabilityCertificationOnlyReasons", // Disability certification rejection reasons container
     "generalReasons"     // General rejection reasons container (income/residency/id)
   ]
 
@@ -67,22 +67,22 @@ export default class extends Controller {
   }
 
   _updateReasonGroupsVisibility(proofType) {
-    if (!this.hasMedicalOnlyReasonsTarget && !this.hasGeneralReasonsTarget) {
+    if (!this.hasDisabilityCertificationOnlyReasonsTarget && !this.hasGeneralReasonsTarget) {
       return
     }
 
     // An empty proof type hides all groups
     if (!proofType) {
-      if (this.hasMedicalOnlyReasonsTarget) setVisible(this.medicalOnlyReasonsTarget, false, { ariaHidden: true, inlineStyleFallback: false })
+      if (this.hasDisabilityCertificationOnlyReasonsTarget) setVisible(this.disabilityCertificationOnlyReasonsTarget, false, { ariaHidden: true, inlineStyleFallback: false })
       if (this.hasGeneralReasonsTarget) setVisible(this.generalReasonsTarget, false, { ariaHidden: true, inlineStyleFallback: false })
       return
     }
 
-    const isMedical = proofType === 'medical'
+    const isDisabilityCertification = proofType === 'disability_certification'
 
     const groups = [
-      { target: this.hasMedicalOnlyReasonsTarget ? this.medicalOnlyReasonsTarget : null, show: isMedical, name: 'medical' },
-      { target: this.hasGeneralReasonsTarget ? this.generalReasonsTarget : null, show: !isMedical, name: 'general' }
+      { target: this.hasDisabilityCertificationOnlyReasonsTarget ? this.disabilityCertificationOnlyReasonsTarget : null, show: isDisabilityCertification, name: 'disability_certification' },
+      { target: this.hasGeneralReasonsTarget ? this.generalReasonsTarget : null, show: !isDisabilityCertification, name: 'general' }
     ]
 
     groups.forEach(({ target, show, name }) => {
@@ -280,7 +280,7 @@ export default class extends Controller {
   _syncGroupInteractivity() {
     const groups = [
       this.hasIncomeOnlyReasonsTarget ? this.incomeOnlyReasonsTarget : null,
-      this.hasMedicalOnlyReasonsTarget ? this.medicalOnlyReasonsTarget : null,
+      this.hasDisabilityCertificationOnlyReasonsTarget ? this.disabilityCertificationOnlyReasonsTarget : null,
       this.hasGeneralReasonsTarget ? this.generalReasonsTarget : null
     ].filter(Boolean)
 

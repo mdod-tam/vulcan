@@ -88,8 +88,8 @@ module Admin
       end
     end
 
-    test 'admin can see medical certification activity in audit log' do
-      @application.update!(medical_certification_status: 'not_requested')
+    test 'admin can see disability certification activity in audit log' do
+      @application.update!(disability_certification_status: 'not_requested')
 
       @application.update!(
         medical_provider_name: 'Dr. Test Provider',
@@ -107,7 +107,7 @@ module Admin
         elsif page.has_button?('Send Secure Cert Upload Link', wait: 5)
           click_button 'Send Secure Cert Upload Link'
         else
-          skip 'No medical certification request buttons available'
+          skip 'No disability certification request buttons available'
         end
       end
       wait_for_turbo
@@ -155,7 +155,7 @@ module Admin
         income_proof_status: 'approved',
         residency_proof_status: 'approved',
         id_proof_status: 'approved',
-        medical_certification_status: 'approved'
+        disability_certification_status: 'approved'
       )
 
       visit admin_application_path(@application)

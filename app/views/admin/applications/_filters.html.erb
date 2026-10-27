@@ -28,10 +28,10 @@
       <span>Proofs Needing Review</span>
     <% end %>
 
-    <%= link_to admin_applications_path(filter: "awaiting_medical_response"),
-        class: "btn btn-outline #{params[:filter] == 'awaiting_medical_response' ? 'bg-gray-50' : ''}",
-        aria: { label: "Show applications awaiting medical response" } do %>
-      <span>Awaiting Medical Response</span>
+    <%= link_to admin_applications_path(filter: "awaiting_disability_certification"),
+        class: "btn btn-outline #{params[:filter] == 'awaiting_disability_certification' ? 'bg-gray-50' : ''}",
+        aria: { label: "Show applications awaiting disability certification" } do %>
+      <span>Awaiting Disability Certification</span>
     <% end %>
 
     <%= link_to admin_applications_path(filter: "pending_provider_info"),

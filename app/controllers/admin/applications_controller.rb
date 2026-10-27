@@ -2,7 +2,7 @@
 
 module Admin
   class ApplicationsController < BaseController
-    WANTED_ATTACHMENT_NAMES = %w[income_proof residency_proof id_proof medical_certification].freeze
+    WANTED_ATTACHMENT_NAMES = %w[income_proof residency_proof id_proof disability_certification].freeze
 
     include ActionView::Helpers::TagHelper
     include ActionView::Helpers::JavaScriptHelper
@@ -17,9 +17,9 @@ module Admin
       show edit update
       review_proof update_proof_status
       approve reject assign_evaluator reassign_evaluator assign_trainer reassign_trainer request_evaluation
-      update_certification_status resend_medical_certification assign_voucher
-      upload_medical_certification send_document_signing_request
-      queue_medical_certification_form
+      update_certification_status resend_disability_certification assign_voucher
+      upload_disability_certification send_document_signing_request
+      queue_disability_certification_form
     ]
 
     def index
@@ -319,21 +319,21 @@ module Admin
     end
 
     # Accepts modal params (rejection_reason, rejection_reason_code) and
-    # upload form params (medical_certification_rejection_reason).
+    # upload form params (disability_certification_rejection_reason).
     def process_certification_rejection
       rejection_reason_code = params[:rejection_reason_code].presence
-      rejection_reason = params[:medical_certification_rejection_reason].presence ||
+      rejection_reason = params[:disability_certification_rejection_reason].presence ||
                          params[:rejection_reason]
 
       if rejection_reason.blank? && rejection_reason_code.present?
         rejection_reason = RejectionReason.resolve_text(
           code: rejection_reason_code,
-          proof_type: 'medical_certification',
+          proof_type: 'disability_certification',
           fallback: nil
         )
       end
 
-      reviewer = Applications::MedicalCertificationReviewer.new(@application, current_user)
+      reviewer = Applications::DisabilityCertificationReviewer.new(@application, current_user)
       result = reviewer.reject(
         rejection_reason: rejection_reason,
         rejection_reason_code: rejection_reason_code
@@ -352,7 +352,7 @@ module Admin
     # Preserves the existing certification file.
     # @param status [Symbol] The normalized certification status
     def update_existing_certification_status(status)
-      result = MedicalCertificationAttachmentService.update_certification_status(
+      result = DisabilityCertificationAttachmentService.update_certification_status(
         application: @application,
         status: status,
         admin: current_user,
@@ -391,8 +391,8 @@ module Admin
       )
     end
 
-    def resend_medical_certification
-      service = Applications::MedicalCertificationService.new(
+    def resend_disability_certification
+      service = Applications::DisabilityCertificationService.new(
         application: @application,
         actor: current_user
       )
@@ -437,16 +437,16 @@ module Admin
       end
     end
 
-    # Without app/assets/pdfs/medical_certification_form.pdf, generate a PDF with application and provider details.
-    def queue_medical_certification_form
-      pregenerated_path = Rails.root.join('app/assets/pdfs/medical_certification_form.pdf')
+    # Without app/assets/pdfs/disability_certification_form.pdf, generate a PDF with application and provider details.
+    def queue_disability_certification_form
+      pregenerated_path = Rails.root.join('app/assets/pdfs/disability_certification_form.pdf')
       pdf_source = if File.exist?(pregenerated_path)
                      { type: :pregenerated, source: pregenerated_path }
                    else
                      { type: :generated }
                    end
 
-      result = Applications::MedicalCertificationPdfService.new(
+      result = Applications::DisabilityCertificationPdfService.new(
         application: @application,
         actor: current_user,
         pdf_source: pdf_source,
@@ -482,8 +482,8 @@ module Admin
       render partial: 'charts_section', layout: false
     end
 
-    def upload_medical_certification
-      status = params[:medical_certification_status]
+    def upload_disability_certification
+      status = params[:disability_certification_status]
 
       if status.blank?
         redirect_to admin_application_path(@application),
@@ -494,7 +494,7 @@ module Admin
       if status == 'approved'
         process_accepted_certification
       elsif status == 'rejected'
-        if params[:medical_certification_rejection_reason].blank? && params[:rejection_reason_code].blank?
+        if params[:disability_certification_rejection_reason].blank? && params[:rejection_reason_code].blank?
           redirect_to admin_application_path(@application), alert: t('.m_rejection_reason')
           return
         end
@@ -503,7 +503,7 @@ module Admin
     end
 
     def process_accepted_certification
-      if params[:medical_certification].blank?
+      if params[:disability_certification].blank?
         redirect_to admin_application_path(@application),
                     alert: t('.c_file_select')
         return
@@ -522,7 +522,7 @@ module Admin
       handle_certification_result(result)
     rescue UploadedDocument::Refused => e
       redirect_to admin_application_path(@application), alert: e.user_message_for('Disability certification')
-    rescue MedicalCertificationAttachmentService::StaffUploadNotAllowed
+    rescue DisabilityCertificationAttachmentService::StaffUploadNotAllowed
       redirect_to admin_application_path(@application), alert: t('.m_not_allowed')
     end
 
@@ -531,9 +531,9 @@ module Admin
     end
 
     def attach_certification_with_status(status)
-      MedicalCertificationAttachmentService.attach_certification(
+      DisabilityCertificationAttachmentService.attach_certification(
         application: @application,
-        blob_or_file: params[:medical_certification],
+        blob_or_file: params[:disability_certification],
         status: status,
         admin: current_user,
         submission_method: extract_submission_method,
@@ -602,8 +602,8 @@ module Admin
                 'created_at, message_id, delivery_status, metadata')
         .where(notifiable_type: 'Application', notifiable_id: @application.id)
         .where(action: %w[
-                 medical_certification_requested medical_certification_received
-                 medical_certification_approved medical_certification_rejected
+                 disability_certification_requested disability_certification_received
+                 disability_certification_approved disability_certification_rejected
                  review_requested documents_requested proof_approved proof_rejected
                ])
         .order(created_at: :desc)

@@ -11,7 +11,7 @@ FactoryBot.define do
     status { :in_progress }
     income_proof_status { :not_reviewed }
     residency_proof_status { :not_reviewed }
-    medical_certification_status { :not_requested }
+    disability_certification_status { :not_requested }
 
     application_date { 4.years.ago }
     maryland_resident { true }
@@ -49,7 +49,7 @@ FactoryBot.define do
       income_proof_status { :approved }
       residency_proof_status { :approved }
       id_proof_status { :approved }
-      medical_certification_status { :approved }
+      disability_certification_status { :approved }
       terms_accepted { true }
       information_verified { true }
       medical_release_authorized { true }
@@ -99,24 +99,24 @@ FactoryBot.define do
       # This trait represents rejected uploads from the constituent portal.
       after(:create) do |application|
         application.income_proof.attach(
-          io: Rails.root.join('test/fixtures/files/medical_certification_valid.pdf').open,
+          io: Rails.root.join('test/fixtures/files/disability_certification_valid.pdf').open,
           filename: 'income_proof.pdf',
           content_type: 'application/pdf'
         )
         if Rails.env.test?
           DocumentScanFixtures.clear!(application.income_proof.blob, user: application.user,
                                                                      purpose: :proof, slot: 'income_proof',
-                                                                     fixture: 'medical_certification_valid.pdf')
+                                                                     fixture: 'disability_certification_valid.pdf')
         end
         application.residency_proof.attach(
-          io: Rails.root.join('test/fixtures/files/medical_certification_valid.pdf').open,
+          io: Rails.root.join('test/fixtures/files/disability_certification_valid.pdf').open,
           filename: 'residency_proof.pdf',
           content_type: 'application/pdf'
         )
         if Rails.env.test?
           DocumentScanFixtures.clear!(application.residency_proof.blob, user: application.user,
                                                                         purpose: :proof, slot: 'residency_proof',
-                                                                        fixture: 'medical_certification_valid.pdf')
+                                                                        fixture: 'disability_certification_valid.pdf')
         end
       end
     end
@@ -143,14 +143,14 @@ FactoryBot.define do
     trait :with_income_proof do
       after(:create) do |application|
         application.income_proof.attach(
-          io: Rails.root.join('test/fixtures/files/medical_certification_valid.pdf').open,
+          io: Rails.root.join('test/fixtures/files/disability_certification_valid.pdf').open,
           filename: 'income_proof.pdf',
           content_type: 'application/pdf'
         )
         if Rails.env.test?
           DocumentScanFixtures.clear!(application.income_proof.blob, user: application.user,
                                                                      purpose: :proof, slot: 'income_proof',
-                                                                     fixture: 'medical_certification_valid.pdf')
+                                                                     fixture: 'disability_certification_valid.pdf')
         end
       end
     end
@@ -158,14 +158,14 @@ FactoryBot.define do
     trait :with_residency_proof do
       after(:create) do |application|
         application.residency_proof.attach(
-          io: Rails.root.join('test/fixtures/files/medical_certification_valid.pdf').open,
+          io: Rails.root.join('test/fixtures/files/disability_certification_valid.pdf').open,
           filename: 'residency_proof.pdf',
           content_type: 'application/pdf'
         )
         if Rails.env.test?
           DocumentScanFixtures.clear!(application.residency_proof.blob, user: application.user,
                                                                         purpose: :proof, slot: 'residency_proof',
-                                                                        fixture: 'medical_certification_valid.pdf')
+                                                                        fixture: 'disability_certification_valid.pdf')
         end
       end
     end
@@ -173,29 +173,29 @@ FactoryBot.define do
     trait :with_id_proof do
       after(:create) do |application|
         application.id_proof.attach(
-          io: Rails.root.join('test/fixtures/files/medical_certification_valid.pdf').open,
+          io: Rails.root.join('test/fixtures/files/disability_certification_valid.pdf').open,
           filename: 'id_proof.pdf',
           content_type: 'application/pdf'
         )
         if Rails.env.test?
           DocumentScanFixtures.clear!(application.id_proof.blob, user: application.user,
                                                                  purpose: :proof, slot: 'id_proof',
-                                                                 fixture: 'medical_certification_valid.pdf')
+                                                                 fixture: 'disability_certification_valid.pdf')
         end
       end
     end
 
-    trait :with_medical_certification do
+    trait :with_disability_certification do
       after(:create) do |application|
-        application.medical_certification.attach(
-          io: Rails.root.join('test/fixtures/files/medical_certification_valid.pdf').open,
-          filename: 'medical_certification.pdf',
+        application.disability_certification.attach(
+          io: Rails.root.join('test/fixtures/files/disability_certification_valid.pdf').open,
+          filename: 'disability_certification.pdf',
           content_type: 'application/pdf'
         )
         if Rails.env.test?
-          DocumentScanFixtures.clear!(application.medical_certification.blob, user: application.user,
-                                                                              purpose: :certification, slot: 'medical_certification',
-                                                                              fixture: 'medical_certification_valid.pdf')
+          DocumentScanFixtures.clear!(application.disability_certification.blob, user: application.user,
+                                                                                 purpose: :certification, slot: 'disability_certification',
+                                                                                 fixture: 'disability_certification_valid.pdf')
         end
       end
     end
@@ -204,11 +204,11 @@ FactoryBot.define do
       with_income_proof
       with_residency_proof
       with_id_proof
-      with_medical_certification
+      with_disability_certification
     end
 
-    trait :with_medical_certification_requested do
-      medical_certification_status { :requested }
+    trait :with_disability_certification_requested do
+      disability_certification_status { :requested }
     end
 
     trait :in_progress_with_pending_proofs do
@@ -219,25 +219,25 @@ FactoryBot.define do
 
       after(:create) do |application|
         application.income_proof.attach(
-          io: Rails.root.join('test/fixtures/files/medical_certification_valid.pdf').open,
+          io: Rails.root.join('test/fixtures/files/disability_certification_valid.pdf').open,
           filename: 'income_proof.pdf',
           content_type: 'application/pdf'
         )
         if Rails.env.test?
           DocumentScanFixtures.clear!(application.income_proof.blob, user: application.user,
                                                                      purpose: :proof, slot: 'income_proof',
-                                                                     fixture: 'medical_certification_valid.pdf')
+                                                                     fixture: 'disability_certification_valid.pdf')
         end
 
         application.residency_proof.attach(
-          io: Rails.root.join('test/fixtures/files/medical_certification_valid.pdf').open,
+          io: Rails.root.join('test/fixtures/files/disability_certification_valid.pdf').open,
           filename: 'residency_proof.pdf',
           content_type: 'application/pdf'
         )
         if Rails.env.test?
           DocumentScanFixtures.clear!(application.residency_proof.blob, user: application.user,
                                                                         purpose: :proof, slot: 'residency_proof',
-                                                                        fixture: 'medical_certification_valid.pdf')
+                                                                        fixture: 'disability_certification_valid.pdf')
         end
 
         # Submission events make needs_proof_type_review? true before any review exists.
@@ -276,24 +276,24 @@ FactoryBot.define do
 
       after(:create) do |application|
         application.income_proof.attach(
-          io: Rails.root.join('test/fixtures/files/medical_certification_valid.pdf').open,
+          io: Rails.root.join('test/fixtures/files/disability_certification_valid.pdf').open,
           filename: 'income_proof.pdf',
           content_type: 'application/pdf'
         )
         if Rails.env.test?
           DocumentScanFixtures.clear!(application.income_proof.blob, user: application.user,
                                                                      purpose: :proof, slot: 'income_proof',
-                                                                     fixture: 'medical_certification_valid.pdf')
+                                                                     fixture: 'disability_certification_valid.pdf')
         end
         application.residency_proof.attach(
-          io: Rails.root.join('test/fixtures/files/medical_certification_valid.pdf').open,
+          io: Rails.root.join('test/fixtures/files/disability_certification_valid.pdf').open,
           filename: 'residency_proof.pdf',
           content_type: 'application/pdf'
         )
         if Rails.env.test?
           DocumentScanFixtures.clear!(application.residency_proof.blob, user: application.user,
                                                                         purpose: :proof, slot: 'residency_proof',
-                                                                        fixture: 'medical_certification_valid.pdf')
+                                                                        fixture: 'disability_certification_valid.pdf')
         end
       end
     end

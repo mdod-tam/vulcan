@@ -48,10 +48,10 @@ module DocumentSigning
       assert_operator @application.document_signing_requested_at, :<=, Time.current
       assert_equal 1, @application.document_signing_request_count
 
-      # Medical certification tracking should also be updated
-      assert_equal 'requested', @application.medical_certification_status
-      assert_not_nil @application.medical_certification_requested_at
-      assert_equal 1, @application.medical_certification_request_count
+      # Disability certification tracking should also be updated
+      assert_equal 'requested', @application.disability_certification_status
+      assert_not_nil @application.disability_certification_requested_at
+      assert_equal 1, @application.disability_certification_request_count
     end
 
     test 'prevents duplicate requests within 30 seconds' do
@@ -207,14 +207,14 @@ module DocumentSigning
       )
 
       original_doc_count = @application.document_signing_request_count
-      original_med_count = @application.medical_certification_request_count
+      original_med_count = @application.disability_certification_request_count
 
       result = service.call
       assert result.success?
 
       @application.reload
       assert_equal original_doc_count + 1, @application.document_signing_request_count
-      assert_equal original_med_count + 1, @application.medical_certification_request_count
+      assert_equal original_med_count + 1, @application.disability_certification_request_count
     end
 
     test 'creates a custom signer email message with applicant context' do
@@ -224,7 +224,7 @@ module DocumentSigning
       )
 
       Docuseal.expects(:create_submission).with do |payload|
-        assert_equal "Medical Certification - #{@application.user.full_name} (Application #{@application.id})", payload[:name]
+        assert_equal "Disability Certification - #{@application.user.full_name} (Application #{@application.id})", payload[:name]
         assert_equal "Disability Certification Request for #{@application.user.full_name}", payload.dig(:message, :subject)
         assert_includes payload.dig(:message, :body), @application.user.full_name
         assert_includes payload.dig(:message, :body), @application.user.date_of_birth.strftime('%m/%d/%Y')
@@ -246,7 +246,7 @@ module DocumentSigning
       )
 
       Docuseal.expects(:create_submission).with do |payload|
-        assert_equal "Certificación médica - #{@application.user.full_name} (Solicitud #{@application.id})", payload[:name]
+        assert_equal "Certificación de discapacidad - #{@application.user.full_name} (Solicitud #{@application.id})", payload[:name]
         assert_equal "Solicitud de certificación de discapacidad para #{@application.user.full_name}", payload.dig(:message, :subject)
         assert_includes payload.dig(:message, :body), 'Información del solicitante'
         assert_includes payload.dig(:message, :body), '{{submitter.link}}'
@@ -267,9 +267,9 @@ module DocumentSigning
       @application.reload
       assert_nil @application.document_signing_requested_at
       assert_nil @application.document_signing_submission_id
-      assert @application.medical_certification_status_not_requested?
+      assert @application.disability_certification_status_not_requested?
       assert_equal 0, @application.document_signing_request_count.to_i
-      assert_equal 0, @application.medical_certification_request_count.to_i
+      assert_equal 0, @application.disability_certification_request_count.to_i
       assert Event.exists?(action: EmailDelivery::Outcome::SUPPRESSED)
       assert_not Event.exists?(action: 'document_signing_request_sent', auditable: @application)
     end

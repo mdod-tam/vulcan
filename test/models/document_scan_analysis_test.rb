@@ -4,9 +4,9 @@ require 'test_helper'
 
 class DocumentScanAnalysisTest < ActiveSupport::TestCase
   setup do
-    @blob = ActiveStorage::Blob.create_and_upload!(io: file_fixture('medical_certification_valid.pdf').open,
+    @blob = ActiveStorage::Blob.create_and_upload!(io: file_fixture('disability_certification_valid.pdf').open,
                                                    filename: 'certification.pdf', content_type: 'application/pdf')
-    mark_document_clean!(@blob, purpose: :certification, slot: 'medical_certification')
+    mark_document_clean!(@blob, purpose: :certification, slot: 'disability_certification')
   end
 
   test 'direct synchronous and queued analysis reject every uncleared state' do

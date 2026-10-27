@@ -375,10 +375,10 @@ module Applications
     def add_proof_review_metrics(data)
       data[:proofs_needing_review_count] = Application.with_proofs_needing_review.distinct.count
 
-      data[:medical_certs_to_review_count] = Application
-                                             .where.not(status: %i[rejected archived])
-                                             .where(medical_certification_status: :received)
-                                             .count
+      data[:disability_certs_to_review_count] = Application
+                                                .where.not(status: %i[rejected archived])
+                                                .where(disability_certification_status: :received)
+                                                .count
     end
 
     def add_training_requests_count(data)

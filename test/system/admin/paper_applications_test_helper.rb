@@ -48,7 +48,7 @@ module PaperApplicationsTestHelper
   end
 
   def attach_and_accept_proofs
-    attach_cleared_document 'medical_certification', Rails.root.join('test/fixtures/files/medical_certification_valid.pdf')
+    attach_cleared_document 'disability_certification', Rails.root.join('test/fixtures/files/disability_certification_valid.pdf')
 
     within_proof_documents_fieldset do
       choose 'accept_income_proof', allow_label_click: true

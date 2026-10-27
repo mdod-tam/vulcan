@@ -80,8 +80,8 @@ module BadgeHelper
     badge(label || badge_label_for(type, status), badge_variant_for(type, status), size: size)
   end
 
-  def medical_certification_label(application)
-    status = application.medical_certification_status.to_s
+  def disability_certification_label(application)
+    status = application.disability_certification_status.to_s
     label = case status
             when 'requested'
               'Disability Certification Request'

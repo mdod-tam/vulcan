@@ -25,7 +25,7 @@ class ApplicationStorageDecorator
 
   delegate :id_proof_status, to: :application
 
-  delegate :medical_certification_status, to: :application
+  delegate :disability_certification_status, to: :application
 
   # These accessors return the decorator. Use the named *_attached? methods for attachment existence.
   def income_proof
@@ -40,7 +40,7 @@ class ApplicationStorageDecorator
     self
   end
 
-  def medical_certification
+  def disability_certification
     self
   end
 
@@ -82,14 +82,14 @@ class ApplicationStorageDecorator
     end
   end
 
-  def medical_certification_attached?
-    if application.respond_to?(:medical_certification_attachment_changes_to_save) &&
-       application.medical_certification_attachment_changes_to_save.present?
+  def disability_certification_attached?
+    if application.respond_to?(:disability_certification_attachment_changes_to_save) &&
+       application.disability_certification_attachment_changes_to_save.present?
       true
-    elsif application.association(:medical_certification_attachment).loaded?
-      application.medical_certification_attachment.present?
+    elsif application.association(:disability_certification_attachment).loaded?
+      application.disability_certification_attachment.present?
     else
-      attachment_exists?('medical_certification')
+      attachment_exists?('disability_certification')
     end
   end
 

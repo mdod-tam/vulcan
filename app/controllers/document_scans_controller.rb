@@ -76,11 +76,11 @@ class DocumentScansController < ApplicationController
     allowed = if @secure_form
                 case params[:secure_form_type]
                 when 'proof' then { 'proof' => ["#{SecureRequestForm::PROOF_TYPES_BY_KIND.fetch(@secure_form.kind)}_proof"] }
-                when 'certification' then { 'certification' => ['medical_certification'] }
+                when 'certification' then { 'certification' => ['disability_certification'] }
                 when 'w9' then { 'w9' => ['w9_form'] }
                 end
               elsif @scan_user.admin?
-                { 'proof' => %w[id_proof income_proof residency_proof], 'certification' => ['medical_certification'], 'product_resource' => ['document'] }
+                { 'proof' => %w[id_proof income_proof residency_proof], 'certification' => ['disability_certification'], 'product_resource' => ['document'] }
               elsif @scan_user.vendor?
                 { 'w9' => ['w9_form'] }
               else

@@ -3,7 +3,7 @@
 class MedicalProviderNotifier
   include SecureErrorSanitizer
 
-  REJECTION_ACTION = 'medical_certification_rejected'
+  REJECTION_ACTION = 'disability_certification_rejected'
   FAX_METHOD = 'fax'
   EMAIL_METHOD = 'email'
   EMAIL_ACTION = 'MedicalProviderMailer#certification_rejected'
@@ -101,7 +101,7 @@ class MedicalProviderNotifier
   end
 
   def queue_callback_fallback(notification, context)
-    reason = notification.metadata['rejection_reason'] || application.medical_certification_rejection_reason
+    reason = notification.metadata['rejection_reason'] || application.disability_certification_rejection_reason
     mail = MedicalProviderMailer.with(application: application, admin: notification.actor, rejection_reason: reason).certification_rejected
     outcome = EmailDelivery.deliver_later(mail, context: context)
     self.class.record_fallback_outcome(context, status: outcome)

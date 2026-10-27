@@ -71,12 +71,12 @@ module AdminTests
                                    self_certify_disability: true)
 
       regular_application.income_proof.attach(
-        io: Rails.root.join('test/fixtures/files/medical_certification_valid.pdf').open,
+        io: Rails.root.join('test/fixtures/files/disability_certification_valid.pdf').open,
         filename: 'income_proof.pdf',
         content_type: 'application/pdf'
       )
       regular_application.residency_proof.attach(
-        io: Rails.root.join('test/fixtures/files/medical_certification_valid.pdf').open,
+        io: Rails.root.join('test/fixtures/files/disability_certification_valid.pdf').open,
         filename: 'residency_proof.pdf',
         content_type: 'application/pdf'
       )

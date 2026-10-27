@@ -148,7 +148,7 @@ module Admin
 
     test 'certification upload link asks before sending and creates one request after confirmation' do
       load_seeded_email_templates('medical_provider_request_certification')
-      application = create(:application, medical_certification_status: :not_requested,
+      application = create(:application, disability_certification_status: :not_requested,
                                          medical_provider_name: 'Dr. CSP', medical_provider_email: 'provider@example.test')
       visit admin_application_path(application)
       request_path = admin_application_certification_upload_request_path(application)
@@ -156,13 +156,13 @@ module Admin
       confirmation = 'Send secure certification upload link to provider@example.test?'
 
       assert_no_difference [-> { application.medical_provider_secure_request_forms.count },
-                            -> { Event.where(auditable: application, action: 'medical_certification_requested').count }] do
+                            -> { Event.where(auditable: application, action: 'disability_certification_requested').count }] do
         within(request_form) do
           dismiss_confirm(confirmation) { click_button 'Send secure certification upload link to Dr. CSP' }
         end
       end
-      assert_equal 'not_requested', application.reload.medical_certification_status
-      assert_not application.medical_certification.attached?
+      assert_equal 'not_requested', application.reload.disability_certification_status
+      assert_not application.disability_certification.attached?
       assert_no_parent_violations
       take_screenshot('default-csp-certification-link-dismissed', full: true, html: true)
 
@@ -173,56 +173,56 @@ module Admin
       assert_text I18n.t('admin.applications.certification_upload_requests.create.success')
       assert_current_path admin_application_path(application)
       assert_selector 'h1#application-title', text: "Application ##{application.id}"
-      assert_equal 'requested', application.reload.medical_certification_status
+      assert_equal 'requested', application.reload.disability_certification_status
       request = application.medical_provider_secure_request_forms.sole
       assert_equal 'provider@example.test', request.provider_email
       assert_equal @admin.id, request.requested_by_id
-      assert_equal @admin.id, Event.where(auditable: application, action: 'medical_certification_requested').sole.user_id
-      assert_not application.medical_certification.attached?
+      assert_equal @admin.id, Event.where(auditable: application, action: 'disability_certification_requested').sole.user_id
+      assert_not application.disability_certification.attached?
       assert_equal(1, page.driver.network_traffic.count { |exchange| URI(exchange.request.url).path == request_path })
       assert_no_parent_violations
       take_screenshot('default-csp-certification-link-confirmed', full: true, html: true)
     end
 
     test 'certification file intake uploads a real PDF and preserves history under the default policy' do
-      application = create(:application, medical_certification_status: :requested)
-      fixture_path = Rails.root.join('test/fixtures/files/medical_certification_valid.pdf')
+      application = create(:application, disability_certification_status: :requested)
+      fixture_path = Rails.root.join('test/fixtures/files/disability_certification_valid.pdf')
       visit admin_application_path(application)
-      upload_path = upload_medical_certification_admin_application_path(application)
+      upload_path = upload_disability_certification_admin_application_path(application)
       assert_selector "form[action='#{upload_path}'][enctype='multipart/form-data']"
       page.driver.clear_network_traffic
 
-      within('[data-testid="medical-certification-upload-form"]') do
+      within('[data-testid="disability-certification-upload-form"]') do
         choose 'Approve Certification and Upload'
         select 'Email', from: 'Submission Method'
-        attach_file 'medical_certification', fixture_path
+        attach_file 'disability_certification', fixture_path
         assert_selector '[data-scan-state="pending"]'
         assert_text I18n.t('documents.upload.scanning', filename: fixture_path.basename.to_s)
-        input = find_field('medical_certification')
+        input = find_field('disability_certification')
         assert_equal I18n.t('documents.upload.wait'), input.evaluate_script('this.validationMessage')
         assert_includes find('noscript', visible: :all).text(:all), I18n.t('documents.upload.javascript_required')
         click_button 'Process Certification'
         assert_current_path admin_application_path(application)
-        assert_not application.reload.medical_certification.attached?
+        assert_not application.reload.disability_certification.attached?
         assert_empty(page.driver.network_traffic.select { |exchange| URI(exchange.request.url).path == upload_path })
         take_screenshot('default-csp-certification-scan-pending', full: true, html: true)
-        scan = DocumentScan.where(user: @admin, slot: 'medical_certification').sole
+        scan = DocumentScan.where(user: @admin, slot: 'disability_certification').sole
         scan.update!(status: :clean, completed_at: Time.current)
         assert_selector '[data-scan-state="clean"]'
         find_button('Process Certification').double_click
       end
 
-      assert_text I18n.t('admin.applications.upload_medical_certification.c_upload_pass')
+      assert_text I18n.t('admin.applications.upload_disability_certification.c_upload_pass')
       assert_current_path admin_application_path(application)
       assert_selector 'h1#application-title', text: "Application ##{application.id}"
-      assert_no_selector '[data-testid="medical-certification-upload-form"]'
-      assert_selector '[data-testid="medical-certification"]', text: fixture_path.basename.to_s
-      assert_equal 'approved', application.reload.medical_certification_status
-      assert_equal File.binread(fixture_path), application.medical_certification.download
-      history = ApplicationStatusChange.where(application: application, change_type: 'medical_certification', to_status: 'approved').sole
+      assert_no_selector '[data-testid="disability-certification-upload-form"]'
+      assert_selector '[data-testid="disability-certification"]', text: fixture_path.basename.to_s
+      assert_equal 'approved', application.reload.disability_certification_status
+      assert_equal File.binread(fixture_path), application.disability_certification.download
+      history = ApplicationStatusChange.where(application: application, change_type: 'disability_certification', to_status: 'approved').sole
       assert_equal @admin.id, history.user_id
       assert_equal 'email', history.metadata.fetch('submission_method')
-      assert_equal @admin.id, Event.where(auditable: application, action: 'medical_certification_status_changed').sole.user_id
+      assert_equal @admin.id, Event.where(auditable: application, action: 'disability_certification_status_changed').sole.user_id
       assert_equal(1, page.driver.network_traffic.count { |exchange| URI(exchange.request.url).path == upload_path })
       assert_no_parent_violations
       take_screenshot('default-csp-certification-file-approved', full: true, html: true)

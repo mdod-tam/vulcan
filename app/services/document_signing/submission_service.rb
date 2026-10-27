@@ -1,7 +1,7 @@
 # frozen_string_literal: true
 
 module DocumentSigning
-  # Asks the certifying provider to sign the medical certification form through DocuSeal and records the request.
+  # Asks the certifying provider to sign the disability certification form through DocuSeal and records the request.
   class SubmissionService < BaseService
     EMAIL_ACTION = 'DocuSeal#signing_request'
 
@@ -43,14 +43,14 @@ module DocumentSigning
           document_signing_submitter_id: submitter&.dig('id').to_s,
           document_signing_status: :sent,
           document_signing_requested_at: Time.current,
-          medical_certification_status: :requested,
-          medical_certification_requested_at: Time.current
+          disability_certification_status: :requested,
+          disability_certification_requested_at: Time.current
         )
 
         # increment! updates each counter in the database, not from the loaded value.
         # rubocop:disable Rails/SkipsModelValidations -- Preserve existing atomic counter behavior.
         @application.increment!(:document_signing_request_count)
-        @application.increment!(:medical_certification_request_count)
+        @application.increment!(:disability_certification_request_count)
         # rubocop:enable Rails/SkipsModelValidations
       end
 
@@ -103,7 +103,7 @@ module DocumentSigning
 
     def request_message_subject
       I18n.t(
-        'document_signing.medical_certification_request.subject',
+        'document_signing.disability_certification_request.subject',
         locale: request_locale,
         constituent_full_name: constituent.full_name
       )
@@ -111,7 +111,7 @@ module DocumentSigning
 
     def request_message_body
       I18n.t(
-        'document_signing.medical_certification_request.body',
+        'document_signing.disability_certification_request.body',
         locale: request_locale,
         constituent_full_name: constituent.full_name,
         constituent_dob_formatted: constituent.date_of_birth&.strftime('%m/%d/%Y') || localized_not_provided,
@@ -125,7 +125,7 @@ module DocumentSigning
 
     def submission_name
       I18n.t(
-        'document_signing.medical_certification_request.submission_name',
+        'document_signing.disability_certification_request.submission_name',
         locale: request_locale,
         constituent_full_name: constituent.full_name,
         application_id: @application.id

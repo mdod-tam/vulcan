@@ -96,7 +96,7 @@ class DeliveryStatusPresenterTest < ActiveSupport::TestCase
   end
 
   test 'pending letter history uses a batch snapshot without per-row render queries' do
-    context = EmailDelivery::Policy.capture(mail_action: 'Letters#medical_certification_form')
+    context = EmailDelivery::Policy.capture(mail_action: 'Letters#disability_certification_form')
     forms = create_list(:secure_request_form, 3, recipient_channel: :letter)
     forms.each do |form|
       identity = PrintQueueItem.identity_for(recipient: form.recipient, application: form.application, secure_request_form: form)
@@ -116,7 +116,7 @@ class DeliveryStatusPresenterTest < ActiveSupport::TestCase
   end
 
   test 'a replacement provider request resolves current attention without deleting old bounce facts' do
-    application = create(:application, medical_certification_status: :requested)
+    application = create(:application, disability_certification_status: :requested)
     old_attempt = EmailDeliveryAttempt.create!(origin: application, application: application, correlation_id: SecureRandom.uuid,
                                                destination: 'old@example.test', recipient_key: EmailDeliveryAttempt.recipient_key('old@example.test'),
                                                server_id: 'default', mail_action: 'MedicalProviderMailer#request_certification',

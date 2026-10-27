@@ -19,7 +19,7 @@ class ProofReviewServiceTest < ActiveSupport::TestCase
       content_type: 'application/pdf'
     )
     @application.id_proof.attach(
-      io: file_fixture('medical_certification_valid.pdf').open,
+      io: file_fixture('disability_certification_valid.pdf').open,
       filename: 'id-proof.pdf',
       content_type: 'application/pdf'
     )
@@ -138,7 +138,7 @@ class ProofReviewServiceTest < ActiveSupport::TestCase
 
   test 'lifecycle audit failure rolls back its status and history with the proof review' do
     @application.update!(residency_proof_status: :approved, id_proof_status: :approved,
-                         medical_certification_status: :approved)
+                         disability_certification_status: :approved)
     original_log = AuditEventService.method(:log)
     audit_failure = lambda do |**attributes|
       next original_log.call(**attributes) unless attributes[:action] == 'application_status_changed'
@@ -184,7 +184,7 @@ class ProofReviewServiceTest < ActiveSupport::TestCase
     invalid_result = ProofReviewService.new(
       @application,
       @admin,
-      { proof_type: 'medical_certification', status: 'approved' }
+      { proof_type: 'disability_certification', status: 'approved' }
     ).call
 
     assert_not invalid_result.success?
@@ -398,11 +398,11 @@ class ProofReviewCommitOutcomeTest < ActiveSupport::TestCase
     @user = create(:constituent)
     @application = create(:application, :in_progress, :income_not_required, user: @user)
     @application.residency_proof.attach(io: file_fixture('residency_proof.pdf').open, filename: 'residency.pdf', content_type: 'application/pdf')
-    @application.id_proof.attach(io: file_fixture('medical_certification_valid.pdf').open, filename: 'id.pdf', content_type: 'application/pdf')
+    @application.id_proof.attach(io: file_fixture('disability_certification_valid.pdf').open, filename: 'id.pdf', content_type: 'application/pdf')
     %w[residency_proof id_proof].each do |slot|
       mark_document_clean!(@application.public_send(slot).blob, user: @user, slot: slot)
     end
-    @application.update!(id_proof_status: :approved, medical_certification_status: :approved)
+    @application.update!(id_proof_status: :approved, disability_certification_status: :approved)
     clear_enqueued_jobs
   end
 

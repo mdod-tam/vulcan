@@ -1,6 +1,6 @@
 # frozen_string_literal: true
 
-EmailTemplate.create_or_find_by!(name: 'application_notifications_medical_certification_not_provided', format: :text, locale: 'en') do |template|
+EmailTemplate.create_or_find_by!(name: 'application_notifications_disability_certification_not_provided', format: :text, locale: 'en') do |template|
   template.subject = 'Disability Certification Required for Your Application'
   template.description = 'Sent to a constituent when they submit an application without providing disability ' \
                          'certification or provider contact information, or when a submitted certification ' \
@@ -41,4 +41,4 @@ EmailTemplate.create_or_find_by!(name: 'application_notifications_medical_certif
   }
   template.version = 1
 end
-Rails.logger.debug 'Seeded application_notifications_medical_certification_not_provided (text)' if ENV['VERBOSE_TESTS'] || Rails.env.development?
+Rails.logger.debug 'Seeded application_notifications_disability_certification_not_provided (text)' if ENV['VERBOSE_TESTS'] || Rails.env.development?

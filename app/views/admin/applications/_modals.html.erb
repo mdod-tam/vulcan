@@ -2,7 +2,7 @@
 <% proof_files   = { income: @application.income_proof,
                      residency: @application.residency_proof,
                      id: @application.id_proof,
-                     medical: @application.medical_certification } %>
+                     disability_certification: @application.disability_certification } %>
 <% proof_urls = proof_files.transform_values { |f| f.attached? ? document_download_path(f, disposition: :inline) : nil } %>
 
 <% address_1 = @application.user&.physical_address_1.to_s %>
@@ -21,7 +21,7 @@
                                   else
                                     'Applicant prefers to receive English communications.'
                                   end %>
-<% medical_custom_language_notice = 'Disability certification communications are sent to the certificate signer in English.' %>
+<% disability_certification_custom_language_notice = 'Disability certification communications are sent to the certificate signer in English.' %>
 
 <% reason_button_classes = "px-3 py-1 rounded border border-gray-300 bg-gray-100 text-gray-800 hover:bg-gray-200" %>
 
@@ -72,7 +72,7 @@ end
      end
      proof_modal_configs << { id: 'residencyProofReviewModal', key: :residency, title: 'Review Residency Proof', approve_path: update_proof_status_admin_application_path(@application), approve_params: { proof_type: 'residency', status: 'approved' }, reject_modal_id: 'proofRejectionModal', reject_proof_type: 'residency', confirm_message: "Approve residency proof?", can_reject: @application.proof_type_reviewable?("residency") }
      proof_modal_configs << { id: 'idProofReviewModal', key: :id, title: 'Review ID Proof', approve_path: update_proof_status_admin_application_path(@application), approve_params: { proof_type: 'id', status: 'approved' }, reject_modal_id: 'proofRejectionModal', reject_proof_type: 'id', confirm_message: "Approve ID proof?", can_reject: @application.proof_type_reviewable?("id") }
-     proof_modal_configs << { id: 'medicalCertificationReviewModal', key: :medical, title: 'Review Disability Certification', approve_path: update_certification_status_admin_application_path(@application), approve_params: { status: 'accepted' }, reject_modal_id: 'medicalCertificationRejectionModal', reject_proof_type: 'medical', confirm_message: "Approve this disability certification?", can_reject: !@application.medical_certification_status_rejected? || @application.medical_certification_status_received? }
+     proof_modal_configs << { id: 'disabilityCertificationReviewModal', key: :disability_certification, title: 'Review Disability Certification', approve_path: update_certification_status_admin_application_path(@application), approve_params: { status: 'accepted' }, reject_modal_id: 'disabilityCertificationRejectionModal', reject_proof_type: 'disability_certification', confirm_message: "Approve this disability certification?", can_reject: !@application.disability_certification_status_rejected? || @application.disability_certification_status_received? }
   %>
   <% proof_modal_configs.each do |cfg| %>
     <dialog id="<%= cfg[:id] %>"
@@ -83,7 +83,7 @@ end
           <h3 id="<%= cfg[:id] %>-heading" class="text-lg font-medium text-gray-900 mb-4"><%= cfg[:title] %></h3>
 
           <%# Guardian context applies to income, residency, and ID proof. %>
-          <% if cfg[:key] != :medical && @application.for_dependent? %>
+          <% if cfg[:key] != :disability_certification && @application.for_dependent? %>
             <div class="mb-4 rounded-md bg-warning-50 p-4 border border-warning-300">
               <div class="flex">
                 <div class="flex-shrink-0">
@@ -157,8 +157,8 @@ end
                 } do %>
               Approve
             <% end %>
-            <% latest_rejected_review = if cfg[:key] == :medical
-                                          @application.latest_medical_rejection_review
+            <% latest_rejected_review = if cfg[:key] == :disability_certification
+                                          @application.latest_disability_certification_rejection_review
                                         else
                                           @application.proof_reviews.where(proof_type: cfg[:key], status: 'rejected').order(created_at: :desc).first
                                         end %>
@@ -208,7 +208,6 @@ end
           <div class="flex flex-wrap gap-2 mb-2 general-reasons" data-rejection-form-target="generalReasons">
             <% rejection_reasons_by_code.each do |(code, proof_type), data| %>
               <% reason = data[:reason] %>
-              <% display_proof_type = proof_type == 'medical_certification' ? 'medical' : proof_type %>
               <% interpolated_body = interpolate_address.call(reason.body) %>
               <% label = RejectionReason.label_for(code) %>
               <button type="button"
@@ -216,7 +215,7 @@ end
                       data-action="click->rejection-form#selectPredefinedReason"
                       data-reason-code="<%= code %>"
                       data-reason-text="<%= interpolated_body %>"
-                      data-proof-types="<%= display_proof_type %>"
+                      data-proof-types="<%= proof_type %>"
                       data-rejection-form-target="reasonButton"
                       aria-label="Select <%= label %> rejection reason"
                       aria-pressed="false">
@@ -227,7 +226,7 @@ end
                     class="<%= reason_button_classes %>"
                     data-action="click->rejection-form#selectOther"
                     data-rejection-form-target="reasonButton"
-                    data-proof-types="income,residency,id,medical"
+                    data-proof-types="income,residency,id,disability_certification"
                     aria-label="Enter a custom rejection reason"
                     aria-pressed="false">
               Other
@@ -281,22 +280,22 @@ end
     </div>
   </dialog>
 
-  <dialog id="medicalCertificationRejectionModal" class="backdrop:bg-gray-500 backdrop:bg-opacity-75 bg-white rounded-lg max-w-lg w-full shadow-elevation-4 p-0" data-controller="modal rejection-form"
-       aria-labelledby="medicalCertificationRejectionModal-heading">
+  <dialog id="disabilityCertificationRejectionModal" class="backdrop:bg-gray-500 backdrop:bg-opacity-75 bg-white rounded-lg max-w-lg w-full shadow-elevation-4 p-0" data-controller="modal rejection-form"
+       aria-labelledby="disabilityCertificationRejectionModal-heading">
     <div class="p-6">
-        <h3 id="medicalCertificationRejectionModal-heading" class="text-lg font-medium text-gray-900 mb-4">Enter Disability Certification Rejection Reason</h3>
+        <h3 id="disabilityCertificationRejectionModal-heading" class="text-lg font-medium text-gray-900 mb-4">Enter Disability Certification Rejection Reason</h3>
         <p class="sr-only" data-rejection-form-target="liveRegion" aria-live="polite" aria-atomic="true"></p>
         <div class="mb-4">
           <p class="text-sm font-medium text-gray-700 mb-1">Predefined Rejection Reasons:</p>
-          <% medical_reasons = RejectionReason.where(proof_type: 'medical_certification', locale: [preferred_locale, 'en'])
+          <% disability_certification_reasons = RejectionReason.where(proof_type: 'disability_certification', locale: [preferred_locale, 'en'])
                                                .where.not(code: %w[none_provided other])
                                                .group_by(&:code)
                                                .transform_values do |reasons|
                                                  preferred_reason = reasons.find { |r| r.locale == preferred_locale } || reasons.first
                                                  preferred_reason
                                                end %>
-          <div class="flex flex-wrap gap-2 mb-2 medical-only-reasons" data-rejection-form-target="medicalOnlyReasons">
-            <% medical_reasons.each do |code, reason| %>
+          <div class="flex flex-wrap gap-2 mb-2 disability-certification-only-reasons" data-rejection-form-target="disabilityCertificationOnlyReasons">
+            <% disability_certification_reasons.each do |code, reason| %>
               <% interpolated_body = interpolate_address.call(reason.body) %>
               <% label = RejectionReason.label_for(code) %>
               <button type="button"
@@ -330,11 +329,11 @@ end
                         } do |f| %>
           <%= f.hidden_field :status, value: "rejected" %>
           <%= f.hidden_field :proof_type,
-              id: "medical-rejection-proof-type",
-              value: "medical",
+              id: "disability-certification-rejection-proof-type",
+              value: "disability_certification",
               data: { rejection_form_target: "proofType" } %>
           <%= f.hidden_field :rejection_reason_code,
-              id: "medical-rejection-reason-code",
+              id: "disability-certification-rejection-reason-code",
               data: { rejection_form_target: "reasonCode" } %>
           <div>
             <%= f.label :rejection_reason, "Reason for Rejection", class: "form-label" %>
@@ -347,7 +346,7 @@ end
                 data: { rejection_form_target: "reasonField" } %>
             <div class="hidden mt-2 rounded-md border border-warning-200 bg-warning-50 px-3 py-2 text-sm text-warning-900"
                  data-rejection-form-target="languageNotice">
-              <%= medical_custom_language_notice %>
+              <%= disability_certification_custom_language_notice %>
             </div>
             <p class="mt-1 text-xs text-gray-500" data-rejection-form-target="codeStatus">
               No predefined rejection reason selected.

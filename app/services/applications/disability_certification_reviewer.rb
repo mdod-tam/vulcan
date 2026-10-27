@@ -2,7 +2,7 @@
 
 module Applications
   # Rejects certifications and requests a corrected document from the provider.
-  class MedicalCertificationReviewer < BaseService
+  class DisabilityCertificationReviewer < BaseService
     attr_reader :application, :admin
 
     def initialize(application, admin)
@@ -17,7 +17,7 @@ module Applications
     # @param rejection_reason_code [String, nil] Stable code for locale-aware resolution (e.g. missing_signature)
     # @return [BaseService::Result] Result object with success status and any error messages
     def reject(rejection_reason:, notes: nil, rejection_reason_code: nil)
-      Rails.logger.info "Rejecting medical certification for Application ##{application.id}"
+      Rails.logger.info "Rejecting disability certification for Application ##{application.id}"
 
       validation_result = validate_rejection_inputs(rejection_reason)
       return validation_result if validation_result.failure?
@@ -57,7 +57,7 @@ module Applications
     end
 
     def reject_certification(rejection_reason, notes, rejection_reason_code)
-      MedicalCertificationAttachmentService.reject_certification(
+      DisabilityCertificationAttachmentService.reject_certification(
         application: application,
         admin: admin,
         reason: rejection_reason,

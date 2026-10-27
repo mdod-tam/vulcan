@@ -28,7 +28,7 @@ class FilterParameterLoggingTest < ActiveSupport::TestCase
   end
 
   test 'upload receipts are filtered under their original file field names' do
-    fields = %w[file income_proof residency_proof id_proof medical_certification w9_form document]
+    fields = %w[file income_proof residency_proof id_proof disability_certification w9_form document]
     filtered = ActiveSupport::ParameterFilter.new(Rails.application.config.filter_parameters).filter(
       'application' => fields.index_with { 'private-upload-receipt' }, 'purpose' => 'proof'
     )

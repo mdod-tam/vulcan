@@ -21,18 +21,18 @@ module Admin
       fill_complete_paper_application('Separate', 'Selections')
       cancel_staging('income_proof')
 
-      within(upload_control('medical_certification')) do
-        assert_selector 'input[type="hidden"][name="medical_certification"]', visible: :all
+      within(upload_control('disability_certification')) do
+        assert_selector 'input[type="hidden"][name="disability_certification"]', visible: :all
         click_button I18n.t('documents.upload.remove')
-        assert_no_selector 'input[type="hidden"][name="medical_certification"]', visible: :all
+        assert_no_selector 'input[type="hidden"][name="disability_certification"]', visible: :all
       end
       attach_cleared_document 'income_proof', file_fixture('income_proof.pdf')
 
       assert_no_difference 'Application.count' do
         click_button 'Submit Paper Application'
-        assert_text 'Please upload a file for medical_certification proof before approving', wait: 20
+        assert_text 'Please upload a file for disability_certification proof before approving', wait: 20
       end
-      assert_no_selector 'input[type="hidden"][name="medical_certification_signed_id"]', visible: :all
+      assert_no_selector 'input[type="hidden"][name="disability_certification_signed_id"]', visible: :all
       assert_selector 'input[type="hidden"][name="income_proof"], input[type="hidden"][name="income_proof_signed_id"]', visible: :all
     end
 
@@ -40,15 +40,15 @@ module Admin
       fill_complete_paper_application('Cleared', 'Selection')
       original = certification_blob
 
-      attach_file 'medical_certification', file_fixture('invalid.exe')
-      within(upload_control('medical_certification')) do
+      attach_file 'disability_certification', file_fixture('invalid.exe')
+      within(upload_control('disability_certification')) do
         assert_text I18n.t('documents.refused.invalid_type', locale: :en)
-        assert_text I18n.t('documents.upload.uploaded', filename: 'medical_certification_valid.pdf')
+        assert_text I18n.t('documents.upload.uploaded', filename: 'disability_certification_valid.pdf')
       end
       assert_equal original, certification_blob
-      within(upload_control('medical_certification')) do
+      within(upload_control('disability_certification')) do
         click_button I18n.t('documents.upload.remove')
-        assert_no_selector 'input[type="hidden"][name="medical_certification"]', visible: :all
+        assert_no_selector 'input[type="hidden"][name="disability_certification"]', visible: :all
         assert_no_button I18n.t('documents.upload.remove')
       end
     end
@@ -58,8 +58,8 @@ module Admin
       original = certification_blob
       siblings = %w[income_proof residency_proof id_proof].index_with { |key| selected_blob(key) }
 
-      attach_file 'medical_certification', active_content_pdf.path
-      within(upload_control('medical_certification')) do
+      attach_file 'disability_certification', active_content_pdf.path
+      within(upload_control('disability_certification')) do
         assert_text I18n.t('documents.refused.suspicious_content'), wait: 20
         assert_text I18n.t('documents.upload.uploaded', filename: original.filename.to_s)
       end
@@ -74,7 +74,7 @@ module Admin
         assert_selector 'h1', text: 'Application #', wait: 20
       end
       application = Application.order(:id).last
-      assert_equal original, application.medical_certification.blob
+      assert_equal original, application.disability_certification.blob
       siblings.each { |key, blob| assert_equal blob, application.public_send(key).blob }
     end
 
@@ -85,19 +85,19 @@ module Admin
         click_button 'Submit Paper Application'
         assert_selector 'h1', text: 'Application #', wait: 20
       end
-      assert_equal original.id, Application.order(:id).last.medical_certification.blob.id
+      assert_equal original.id, Application.order(:id).last.disability_certification.blob.id
       capture_upload_state('retained-certification-unchanged-retry-saved')
     end
 
     test 'a restored certification can be replaced after a form error' do
       original = retained_certification_after_missing_proof('Replace')
-      attach_cleared_document 'medical_certification', file_fixture('income_proof.pdf')
+      attach_cleared_document 'disability_certification', file_fixture('income_proof.pdf')
 
       assert_difference 'Application.count', 1 do
         click_button 'Submit Paper Application'
         assert_selector 'h1', text: 'Application #', wait: 20
       end
-      certification = Application.order(:id).last.medical_certification
+      certification = Application.order(:id).last.disability_certification
       assert_not_equal original.id, certification.blob.id
       assert_equal 'income_proof.pdf', certification.filename.to_s
       capture_upload_state('retained-certification-replacement-saved')
@@ -105,24 +105,24 @@ module Admin
 
     test 'a restored certification can be removed after a form error' do
       retained_certification_after_missing_proof('Remove')
-      within(upload_control('medical_certification')) do
+      within(upload_control('disability_certification')) do
         click_button I18n.t('documents.upload.remove')
-        assert_no_selector 'input[type="hidden"][name="medical_certification"], input[type="hidden"][name="medical_certification_signed_id"]', visible: :all
+        assert_no_selector 'input[type="hidden"][name="disability_certification"], input[type="hidden"][name="disability_certification_signed_id"]', visible: :all
         assert_no_button I18n.t('documents.upload.remove')
       end
 
       assert_no_difference 'Application.count' do
         click_button 'Submit Paper Application'
-        assert_text 'Please upload a file for medical_certification proof before approving', wait: 20
+        assert_text 'Please upload a file for disability_certification proof before approving', wait: 20
       end
       capture_upload_state('retained-certification-removed')
 
-      attach_cleared_document 'medical_certification', file_fixture('income_proof.pdf')
+      attach_cleared_document 'disability_certification', file_fixture('income_proof.pdf')
       assert_difference 'Application.count', 1 do
         click_button 'Submit Paper Application'
         assert_selector 'h1', text: 'Application #', wait: 20
       end
-      assert_equal 'income_proof.pdf', Application.order(:id).last.medical_certification.filename.to_s
+      assert_equal 'income_proof.pdf', Application.order(:id).last.disability_certification.filename.to_s
       capture_upload_state('retained-certification-after-remove-saved')
     end
 
@@ -139,8 +139,8 @@ module Admin
       end
       assert_equal original, certification_blob
       assert_empty original.attachments
-      assert_equal 0, page.evaluate_script("document.getElementById('medical_certification').files.length")
-      within(upload_control('medical_certification')) do
+      assert_equal 0, page.evaluate_script("document.getElementById('disability_certification').files.length")
+      within(upload_control('disability_certification')) do
         assert_text I18n.t('documents.upload.uploaded', filename: original.filename.to_s)
       end
       capture_upload_state("retained-certification-restored-#{next_action.downcase}")
@@ -202,7 +202,7 @@ module Admin
     end
 
     def certification_blob
-      selected_blob('medical_certification')
+      selected_blob('disability_certification')
     end
 
     def selected_blob(field)

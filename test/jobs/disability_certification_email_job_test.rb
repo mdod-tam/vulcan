@@ -2,7 +2,7 @@
 
 require 'test_helper'
 
-class MedicalCertificationEmailJobTest < ActiveJob::TestCase
+class DisabilityCertificationEmailJobTest < ActiveJob::TestCase
   setup do
     ensure_request_certification_template!
 
@@ -19,14 +19,14 @@ class MedicalCertificationEmailJobTest < ActiveJob::TestCase
     notification = Notification.create!(
       recipient: @constituent,
       actor: @admin,
-      action: 'medical_certification_requested',
+      action: 'disability_certification_requested',
       notifiable: @application,
       metadata: { 'timestamp' => timestamp, 'channel' => 'email' }
     )
 
     assert_no_difference 'Notification.count' do
       assert_emails 1 do
-        MedicalCertificationEmailJob.perform_now(
+        DisabilityCertificationEmailJob.perform_now(
           application_id: @application.id,
           timestamp: timestamp,
           notification_id: notification.id
@@ -43,7 +43,7 @@ class MedicalCertificationEmailJobTest < ActiveJob::TestCase
     assert_no_difference 'Notification.count' do
       assert_no_emails do
         assert_raises(ArgumentError) do
-          MedicalCertificationEmailJob.perform_now(application_id: @application.id, timestamp: Time.current.iso8601)
+          DisabilityCertificationEmailJob.perform_now(application_id: @application.id, timestamp: Time.current.iso8601)
         end
       end
     end
@@ -51,15 +51,15 @@ class MedicalCertificationEmailJobTest < ActiveJob::TestCase
 
   test 'transport failure without a linked attempt records one safe notification outcome' do
     notification = Notification.create!(
-      recipient: @constituent, actor: @admin, action: 'medical_certification_requested',
+      recipient: @constituent, actor: @admin, action: 'disability_certification_requested',
       notifiable: @application, metadata: { 'channel' => 'email', 'workflow' => 'preserved' }
     )
     diagnostic = 'Rejected https://example.test/request/secret-token'
     Mail::TestMailer.any_instance.expects(:deliver!).raises(StandardError, diagnostic)
 
     assert_raises(StandardError) do
-      MedicalCertificationEmailJob.perform_now(application_id: @application.id, timestamp: Time.current.iso8601,
-                                               notification_id: notification.id)
+      DisabilityCertificationEmailJob.perform_now(application_id: @application.id, timestamp: Time.current.iso8601,
+                                                  notification_id: notification.id)
     end
 
     notification.reload
@@ -77,7 +77,7 @@ class MedicalCertificationEmailJobTest < ActiveJob::TestCase
 
   def ensure_request_certification_template!
     EmailTemplate.find_or_create_by!(name: 'medical_provider_request_certification', format: :text, locale: 'en') do |template|
-      template.subject = 'Medical Certification Request for %<constituent_full_name>s'
+      template.subject = 'Disability Certification Request for %<constituent_full_name>s'
       template.body = <<~TEXT
         Please complete the requested certification for %<constituent_full_name>s.
         Request: %<request_count_message>s
@@ -109,16 +109,16 @@ class MedicalCertificationEmailJobTest < ActiveJob::TestCase
   end
   test 'a certification email queued before an off and on interval is suppressed, not retried' do
     notification = Notification.create!(
-      recipient: @constituent, actor: @admin, action: 'medical_certification_requested',
+      recipient: @constituent, actor: @admin, action: 'disability_certification_requested',
       notifiable: @application, metadata: { 'channel' => 'email' }
     )
-    MedicalCertificationEmailJob.perform_later(application_id: @application.id, timestamp: Time.current.iso8601,
-                                               notification_id: notification.id)
+    DisabilityCertificationEmailJob.perform_later(application_id: @application.id, timestamp: Time.current.iso8601,
+                                                  notification_id: notification.id)
     EmailDelivery::ControlWriter.set(name: EmailDelivery::GLOBAL_CONTROL, enabled: false, actor: @admin, operation_id: 'op-1')
     EmailDelivery::ControlWriter.set(name: EmailDelivery::GLOBAL_CONTROL, enabled: true, actor: @admin, operation_id: 'op-2')
 
     assert_no_emails do
-      assert_nothing_raised { perform_enqueued_jobs(only: MedicalCertificationEmailJob) }
+      assert_nothing_raised { perform_enqueued_jobs(only: DisabilityCertificationEmailJob) }
     end
 
     assert_equal 'pending_canceled', notification.reload.metadata.dig('delivery_suppressed', 'reason')

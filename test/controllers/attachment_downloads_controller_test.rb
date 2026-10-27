@@ -201,10 +201,10 @@ class AttachmentDownloadsControllerTest < ActionDispatch::IntegrationTest
   end
 
   test 'administrators can read proofs and certifications while constituent access stays limited to proof slots' do
-    @application.medical_certification.attach(io: file_fixture('medical_certification_valid.pdf').open,
-                                              filename: 'certification.pdf', content_type: 'application/pdf')
-    certification = @application.medical_certification.blob
-    mark_document_clean!(certification, user: @application.user, purpose: :certification, slot: 'medical_certification')
+    @application.disability_certification.attach(io: file_fixture('disability_certification_valid.pdf').open,
+                                                 filename: 'certification.pdf', content_type: 'application/pdf')
+    certification = @application.disability_certification.blob
+    mark_document_clean!(certification, user: @application.user, purpose: :certification, slot: 'disability_certification')
     authenticate(@application.user)
     get rails_blob_path(certification)
     assert_response :not_found
@@ -351,7 +351,7 @@ class AttachmentDownloadsControllerTest < ActionDispatch::IntegrationTest
     assert_private_response
   end
 
-  test 'published product guidance remains public while blank medical forms keep their own route' do
+  test 'published product guidance remains public while blank disability certification forms keep their own route' do
     guidance = build(:product_resource, url: nil)
     guidance.document.attach(io: file_fixture('sample.pdf').open, filename: 'guide.pdf', content_type: 'application/pdf')
     guidance.save!
@@ -366,7 +366,7 @@ class AttachmentDownloadsControllerTest < ActionDispatch::IntegrationTest
     assert_response :not_found
     assert_empty response.body
 
-    get medical_certification_form_path
+    get disability_certification_form_path
     assert_response :success
     assert_equal 'application/pdf', response.media_type
   end

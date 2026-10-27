@@ -16,8 +16,8 @@ module Admin
                                        income_proof_status: 'not_reviewed',
                                        residency_proof_status: 'not_reviewed')
 
-      @app_with_medical_cert = create(:application, :in_progress)
-      @app_with_medical_cert.update!(medical_certification_status: :received)
+      @app_with_disability_cert = create(:application, :in_progress)
+      @app_with_disability_cert.update!(disability_certification_status: :received)
 
       system_test_sign_in(@admin)
     end
@@ -67,7 +67,7 @@ module Admin
 
       click_on 'Disability Certs to Review'
 
-      assert_current_path admin_applications_path(filter: 'medical_certs_to_review')
+      assert_current_path admin_applications_path(filter: 'disability_certs_to_review')
       assert_selector 'h1', text: 'Applications', wait: 10
 
       visit admin_dashboard_path

@@ -8,7 +8,7 @@ module Admin
 
     setup do
       sign_in_for_integration_test(create(:admin))
-      @application = create(:application, :in_progress, medical_certification_status: :requested)
+      @application = create(:application, :in_progress, disability_certification_status: :requested)
     end
 
     test 'provider-info attention links to the affected request row' do
@@ -46,13 +46,13 @@ module Admin
     end
 
     test 'certification email attention links to the displayed certification delivery' do
-      notification = create(:notification, notifiable: @application, action: 'medical_certification_requested')
+      notification = create(:notification, notifiable: @application, action: 'disability_certification_requested')
       assert_attention_target(@application, 'MedicalProviderMailer#request_certification', notification: notification)
     end
 
     test 'rejection attention links to the exact bounced attempt despite a newer request notification' do
-      rejection = create(:notification, notifiable: @application, action: 'medical_certification_rejected', created_at: 1.hour.ago)
-      newer_request = create(:notification, notifiable: @application, action: 'medical_certification_requested', delivery_status: :queued)
+      rejection = create(:notification, notifiable: @application, action: 'disability_certification_rejected', created_at: 1.hour.ago)
+      newer_request = create(:notification, notifiable: @application, action: 'disability_certification_requested', delivery_status: :queued)
 
       attempt = assert_attention_target(@application, 'MedicalProviderMailer#certification_rejected', notification: rejection)
 
@@ -62,7 +62,7 @@ module Admin
     end
 
     test 'certification attempt still has an attention destination after its notification is deleted' do
-      notification = create(:notification, notifiable: @application, action: 'medical_certification_requested')
+      notification = create(:notification, notifiable: @application, action: 'disability_certification_requested')
       attempt = assert_attention_target(@application, 'MedicalProviderMailer#request_certification', notification: notification)
       notification.destroy!
       assert_nil attempt.reload.notification_id
@@ -71,10 +71,10 @@ module Admin
     end
 
     test 'certification delivery keeps queued suppressed and failed notifications without provider attempts' do
-      queued = create(:notification, notifiable: @application, action: 'medical_certification_requested', delivery_status: :queued)
-      suppressed = create(:notification, notifiable: @application, action: 'medical_certification_rejected')
+      queued = create(:notification, notifiable: @application, action: 'disability_certification_requested', delivery_status: :queued)
+      suppressed = create(:notification, notifiable: @application, action: 'disability_certification_rejected')
       suppressed.mark_delivery_suppressed!('global_disabled')
-      failed = create(:notification, notifiable: @application, action: 'medical_certification_approved')
+      failed = create(:notification, notifiable: @application, action: 'disability_certification_approved')
       failed.mark_delivery_enqueue_failed!(RuntimeError.new('private provider diagnostics'))
 
       get admin_application_path(@application)
@@ -86,7 +86,7 @@ module Admin
     end
 
     test 'legacy certification notification with only a placeholder message id does not show a delivery panel' do
-      notification = create(:notification, notifiable: @application, action: 'medical_certification_requested',
+      notification = create(:notification, notifiable: @application, action: 'disability_certification_requested',
                                            message_id: 'backfilled-123', delivery_status: :delivered)
 
       get admin_application_path(@application)

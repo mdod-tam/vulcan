@@ -8,9 +8,9 @@ class SecureRequestFormsHelperTest < ActionView::TestCase
   test 'blocked letter label differs from durable cancellation in both locales' do
     owner = create(:constituent)
     form = create(:secure_request_form, recipient: owner, delivery_owner: owner, recipient_channel: :letter)
-    context = EmailDelivery::Policy.capture(mail_action: 'Letters#medical_certification_form')
+    context = EmailDelivery::Policy.capture(mail_action: 'Letters#disability_certification_form')
     item = Letters::Delivery.queue!(recipient: owner, application: form.application, secure_request_form: form,
-                                    letter_type: :medical_certification_form, context: context) { StringIO.new('%PDF label') }
+                                    letter_type: :disability_certification_form, context: context) { StringIO.new('%PDF label') }
     owner.update!(first_name: 'Changed')
     %i[en es].each do |locale|
       I18n.with_locale(locale) do

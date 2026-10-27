@@ -9,7 +9,7 @@ module Webhooks
       @admin = create(:admin)
       ensure_system_audit_actor!
       @notification = create(:notification, recipient: @application.user, actor: @admin, notifiable: @application,
-                                            action: 'medical_certification_rejected',
+                                            action: 'disability_certification_rejected',
                                             metadata: { 'fax_sid' => 'FX_TEST_123', 'rejection_reason' => 'Missing signature',
                                                         'provider_delivery_contexts' => {
                                                           'email' => EmailDelivery::Policy.capture(mail_action: MedicalProviderNotifier::EMAIL_ACTION)

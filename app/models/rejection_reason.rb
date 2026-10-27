@@ -3,7 +3,7 @@
 # DB-stored, admin-editable rejection reasons for proof reviews.
 # Each record is uniquely identified by (code, proof_type, locale).
 # Proof type is stored as a plain string ("income", "residency", or
-# "medical_certification") so medical cert rejections can share the model.
+# "disability_certification") so disability cert rejections can share the model.
 class RejectionReason < ApplicationRecord
   belongs_to :updated_by, class_name: 'User', optional: true
 
@@ -51,7 +51,7 @@ class RejectionReason < ApplicationRecord
   # Block non-content saves while out of sync; a body change always resolves it.
   validate :counterpart_locales_are_synced, on: :update
 
-  VALID_PROOF_TYPES = %w[income residency id medical_certification].freeze
+  VALID_PROOF_TYPES = %w[income residency id disability_certification].freeze
 
   # Returns the best-matching record for (code, proof_type, locale), falling
   # back to English when no locale-specific record exists.

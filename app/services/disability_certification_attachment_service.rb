@@ -3,7 +3,7 @@
 # Coordinates certification attachment, status history, audit, and notifications.
 # Staff uploads pass through UploadedDocument.
 # Provider submissions share primary/additional placement rules.
-class MedicalCertificationAttachmentService
+class DisabilityCertificationAttachmentService
   # Staff may not replace a certification that awaits review or is already approved
   class StaffUploadNotAllowed < StandardError
     def initialize(msg = 'This certification is awaiting review or already approved.')
@@ -25,9 +25,9 @@ class MedicalCertificationAttachmentService
     result = { success: false, error: nil, duration_ms: 0 }
 
     begin
-      raise 'Cannot update certification status: No certification is attached' unless application.medical_certification.attached?
+      raise 'Cannot update certification status: No certification is attached' unless application.disability_certification.attached?
 
-      DocumentScan.require_clean!(application.medical_certification.blob) if status.to_s == 'approved'
+      DocumentScan.require_clean!(application.disability_certification.blob) if status.to_s == 'approved'
 
       Rails.logger.info "Updating disability certification status to #{status} for application #{application.id}"
 
@@ -56,7 +56,7 @@ class MedicalCertificationAttachmentService
       application.with_lock do
         raise StaffUploadNotAllowed unless application.staff_certification_upload_allowed?
 
-        blob = UploadedDocument.resolve!(blob_or_file, record: application, name: 'medical_certification', scan_owner: admin)
+        blob = UploadedDocument.resolve!(blob_or_file, record: application, name: 'disability_certification', scan_owner: admin)
         process_attachment(application: application, blob: blob, status: status, admin: admin,
                            submission_method: submission_method, metadata: metadata)
       end
@@ -87,9 +87,9 @@ class MedicalCertificationAttachmentService
       end
 
       blob.update!(metadata: blob.metadata.merge('retention_reason' => retention_reason))
-      application.additional_medical_certifications.attach(blob)
+      application.additional_disability_certifications.attach(blob)
       {
-        success: application.additional_medical_certifications.attachments.any? { |attachment| attachment.blob_id == blob.id },
+        success: application.additional_disability_certifications.attachments.any? { |attachment| attachment.blob_id == blob.id },
         placement: :additional,
         additional_blob_id: blob.id,
         retention_reason: retention_reason
@@ -98,7 +98,7 @@ class MedicalCertificationAttachmentService
   end
 
   def self.submission_retention_reason(application, requested_at)
-    case application.medical_certification_status.to_s
+    case application.disability_certification_status.to_s
     when 'approved' then 'certification_approved'
     when 'received' then 'certification_received'
     when 'rejected'
@@ -109,8 +109,8 @@ class MedicalCertificationAttachmentService
   end
 
   def self.latest_rejection_at(application)
-    ApplicationStatusChange.where(application: application, change_type: 'medical_certification', to_status: 'rejected')
-                           .maximum(:changed_at) || application.medical_certification_verified_at
+    ApplicationStatusChange.where(application: application, change_type: 'disability_certification', to_status: 'rejected')
+                           .maximum(:changed_at) || application.disability_certification_verified_at
   end
 
   # Rejects the certification. An attached file is not necessary.
@@ -132,8 +132,8 @@ class MedicalCertificationAttachmentService
   end
 
   def self.attachment_verified?(application)
-    if application.medical_certification.attached?
-      attachment = application.medical_certification.attachment
+    if application.disability_certification.attached?
+      attachment = application.disability_certification.attachment
       Rails.logger.info "Attachment confirmed - ID: #{attachment.id}, Blob ID: #{attachment.blob_id}"
       return true
     end
@@ -142,33 +142,33 @@ class MedicalCertificationAttachmentService
     # Check the database before reporting failure.
     attachment_exists = ActiveStorage::Attachment.exists?(record_type: 'Application',
                                                           record_id: application.id,
-                                                          name: 'medical_certification')
+                                                          name: 'disability_certification')
 
     return false unless attachment_exists
 
     Rails.logger.warn 'Attachment exists in DB but not detected in model - forcing reset'
-    application.medical_certification.reset
+    application.disability_certification.reset
     true
   end
 
   # Writes the status, status history, audit event, and notification. The attachment does not change.
   def self.update_certification_status_only(application, status, admin, submission_method, metadata)
     ActiveRecord::Base.transaction do
-      old_status = application.medical_certification_status || 'requested'
+      old_status = application.disability_certification_status || 'requested'
 
-      Rails.logger.info "[MedicalCertService] Updating status from #{old_status} to #{status} for app #{application.id}"
+      Rails.logger.info "[DisabilityCertService] Updating status from #{old_status} to #{status} for app #{application.id}"
 
       # update_columns bypasses Application validations and callbacks.
       # This service owns status history, audit, notifications, and approved-workflow reconciliation.
       # Before you add callback-dependent behavior, remove this bypass or extend the manual bookkeeping.
       update_result = application.update_columns( # rubocop:disable Rails/SkipsModelValidations
-        medical_certification_status: status.to_s,
-        medical_certification_verified_at: Time.current,
-        medical_certification_verified_by_id: admin&.id,
+        disability_certification_status: status.to_s,
+        disability_certification_verified_at: Time.current,
+        disability_certification_verified_by_id: admin&.id,
         updated_at: Time.current
       )
 
-      Rails.logger.info "[MedicalCertService] update_columns returned: #{update_result}"
+      Rails.logger.info "[DisabilityCertService] update_columns returned: #{update_result}"
 
       application.reload
 
@@ -179,9 +179,9 @@ class MedicalCertificationAttachmentService
         user: admin,
         from_status: old_status,
         to_status: status.to_s,
-        change_type: 'medical_certification',
+        change_type: 'disability_certification',
         metadata: {
-          change_type: 'medical_certification',
+          change_type: 'disability_certification',
           submission_method: submission_method.to_s,
           verified_at: Time.current.iso8601,
           verified_by_id: admin&.id
@@ -189,20 +189,20 @@ class MedicalCertificationAttachmentService
       )
 
       AuditEventService.log(
-        action: 'medical_certification_status_changed',
+        action: 'disability_certification_status_changed',
         actor: admin,
         auditable: application,
         metadata: {
-          old_status: application.medical_certification_status_was || 'requested',
+          old_status: application.disability_certification_status_was || 'requested',
           new_status: status.to_s,
-          change_type: 'medical_certification'
+          change_type: 'disability_certification'
         }
       )
 
       action_mapping = {
-        approved: 'medical_certification_approved',
-        rejected: 'medical_certification_rejected',
-        received: 'medical_certification_received'
+        approved: 'disability_certification_approved',
+        rejected: 'disability_certification_rejected',
+        received: 'disability_certification_received'
       }
 
       notification_action = action_mapping[status.to_sym]
@@ -212,7 +212,7 @@ class MedicalCertificationAttachmentService
       if status.to_sym == :approved
         application.reload
         actor = admin.presence || application.user
-        application.reconcile_workflow_state!(actor: actor, trigger: :medical_certification_approved) if actor.present?
+        application.reconcile_workflow_state!(actor: actor, trigger: :disability_certification_approved) if actor.present?
       end
 
       if notification_action.present?
@@ -223,7 +223,7 @@ class MedicalCertificationAttachmentService
           notifiable: application,
           metadata: metadata,
           channel: :email,
-          deliver: notification_action != 'medical_certification_approved'
+          deliver: notification_action != 'disability_certification_approved'
         )
       end
     end
@@ -234,7 +234,7 @@ class MedicalCertificationAttachmentService
 
     begin
       AuditEventService.log(
-        action: 'medical_certification_attachment_failed',
+        action: 'disability_certification_attachment_failed',
         actor: admin,
         auditable: application,
         metadata: {
@@ -300,15 +300,15 @@ class MedicalCertificationAttachmentService
   end
 
   def self.update_rejection_status(params)
-    old_status = params[:application].medical_certification_status || 'requested'
+    old_status = params[:application].disability_certification_status || 'requested'
     params[:old_status] = old_status
 
     # This branch shares the callback bypass in update_certification_status_only
     # and must maintain its own audit trail.
     update_attrs = {
-      medical_certification_status: 'rejected',
-      medical_certification_verified_at: Time.current,
-      medical_certification_verified_by_id: params[:admin].id,
+      disability_certification_status: 'rejected',
+      disability_certification_verified_at: Time.current,
+      disability_certification_verified_by_id: params[:admin].id,
       updated_at: Time.current
     }
 
@@ -319,7 +319,7 @@ class MedicalCertificationAttachmentService
   def self.upsert_medical_rejection_review(params)
     app = params[:application]
     review = app.proof_reviews.find_or_initialize_by(
-      proof_type: :medical_certification,
+      proof_type: :disability_certification,
       status: :rejected
     )
 
@@ -342,9 +342,9 @@ class MedicalCertificationAttachmentService
       user: admin,
       from_status: params[:old_status] || 'requested',
       to_status: 'rejected',
-      change_type: 'medical_certification',
+      change_type: 'disability_certification',
       metadata: {
-        change_type: 'medical_certification',
+        change_type: 'disability_certification',
         submission_method: params[:submission_method],
         verified_at: Time.current.iso8601,
         verified_by_id: admin.id,
@@ -356,14 +356,14 @@ class MedicalCertificationAttachmentService
 
     AuditEventService.log(
       actor: admin,
-      action: 'medical_certification_status_changed',
+      action: 'disability_certification_status_changed',
       auditable: app,
       metadata: {
         application_id: app.id,
-        old_status: app.medical_certification_status_was || 'requested',
+        old_status: app.disability_certification_status_was || 'requested',
         new_status: 'rejected',
         timestamp: Time.current.iso8601,
-        change_type: 'medical_certification',
+        change_type: 'disability_certification',
         reason: params[:resolved_reason]
       }
     )
@@ -371,7 +371,7 @@ class MedicalCertificationAttachmentService
 
   def self.send_rejection_notification(params)
     NotificationService.create_and_deliver!(
-      type: 'medical_certification_rejected',
+      type: 'disability_certification_rejected',
       recipient: params[:application].user,
       actor: params[:admin],
       notifiable: params[:application],
@@ -387,16 +387,16 @@ class MedicalCertificationAttachmentService
   def self.resolve_rejection_reason_text(params)
     RejectionReason.resolve_text(
       code: params[:reason_code].presence,
-      proof_type: 'medical_certification',
+      proof_type: 'disability_certification',
       fallback: params[:reason]
     )
   end
 
   def self.log_operation_result(result, status)
     if result[:success]
-      Rails.logger.info "Medical certification #{status} completed in #{result[:duration_ms]}ms"
+      Rails.logger.info "Disability certification #{status} completed in #{result[:duration_ms]}ms"
     else
-      Rails.logger.error "Medical certification #{status} failed in #{result[:duration_ms]}ms: #{result[:error]&.class&.name}"
+      Rails.logger.error "Disability certification #{status} failed in #{result[:duration_ms]}ms: #{result[:error]&.class&.name}"
     end
   end
 
@@ -418,27 +418,27 @@ class MedicalCertificationAttachmentService
   end
 
   def self.perform_attachment(application, attachment_param)
-    Rails.logger.info "EXECUTING ATTACHMENT: medical_certification to application #{application.id}"
+    Rails.logger.info "EXECUTING ATTACHMENT: disability_certification to application #{application.id}"
 
     fresh_application = Application.unscoped.find(application.id)
-    fresh_application.medical_certification.attach(attachment_param)
+    fresh_application.disability_certification.attach(attachment_param)
 
     # Verify the persisted attachment rather than relying on attach's return value.
-    Rails.logger.error "Failed to attach certification for application #{fresh_application.id}" unless fresh_application.medical_certification.attached?
+    Rails.logger.error "Failed to attach certification for application #{fresh_application.id}" unless fresh_application.disability_certification.attached?
 
     reloaded_app = Application.unscoped.find(application.id)
-    raise 'Failed to verify attachment: medical_certification not attached after direct attachment' unless attachment_verified?(reloaded_app)
+    raise 'Failed to verify attachment: disability_certification not attached after direct attachment' unless attachment_verified?(reloaded_app)
 
-    Rails.logger.info "Successfully verified medical certification attachment for application #{application.id}"
+    Rails.logger.info "Successfully verified disability certification attachment for application #{application.id}"
     reloaded_app
   end
 
   def self.verify_final_attachment(application)
     application.reload
-    raise 'Critical error: Attachment disappeared after status update' unless application.medical_certification.attached?
+    raise 'Critical error: Attachment disappeared after status update' unless application.disability_certification.attached?
   end
 
   def self.log_metrics(context)
-    Rails.logger.info("METRICS: medical_certification #{context.to_json}")
+    Rails.logger.info("METRICS: disability_certification #{context.to_json}")
   end
 end

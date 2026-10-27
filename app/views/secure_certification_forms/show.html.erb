@@ -44,7 +44,7 @@
       <% end %>
       <p id="file_help" class="form-hint"><%= t('.file_help', max_size: ProofUploadFormats.max_megabytes(:certification)) %></p>
       <%= render 'shared/document_upload', form: form, model: @secure_request_form, field: :file,
-                                           input_id: 'file', purpose: :certification, slot: 'medical_certification', secure_form_type: 'certification',
+                                           input_id: 'file', purpose: :certification, slot: 'disability_certification', secure_form_type: 'certification',
                                            required: true, described_by: ['file_help', ('file_error' if file_errors.any?)].compact.join(' '),
                                            input_aria: { invalid: file_errors.any? ? 'true' : nil } %>
       <% if file_errors.any? %>

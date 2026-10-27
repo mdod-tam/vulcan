@@ -25,7 +25,7 @@ module Letters
       'application_notifications_proof_received' => 'Document Verification Received',
       'application_notifications_max_rejections_reached' => 'Important Application Status Update',
       'application_notifications_provider_info_requested' => 'Certifying Professional Information Requested',
-      'medical_provider_request_certification' => 'Request for Medical Certification',
+      'medical_provider_request_certification' => 'Request for Disability Certification',
       'voucher_notifications_voucher_assigned' => 'Your Accessibility Equipment Voucher',
       'voucher_notifications_voucher_redeemed' => 'Voucher Redemption Confirmation',
       'evaluator_mailer_evaluation_submission_confirmation' => 'Evaluation Submission Confirmation',

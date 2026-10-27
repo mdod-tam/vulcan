@@ -41,27 +41,27 @@ module Admin
       mark_proofs_approved(@app_with_id_proof)
       @app_with_id_proof.update_columns(id_proof_status: Application.id_proof_statuses[:not_reviewed])
 
-      email = "medical_cert#{@admin.email}"
-      @app_with_medical_cert = create(:application, :in_progress, user: create(:constituent, email: email))
-      mark_proofs_approved(@app_with_medical_cert)
-      @app_with_medical_cert.medical_certification.attach(
-        io: Rails.root.join('test/fixtures/files/medical_certification_valid.pdf').open,
-        filename: 'medical_certification_valid.pdf',
+      email = "disability_cert#{@admin.email}"
+      @app_with_disability_cert = create(:application, :in_progress, user: create(:constituent, email: email))
+      mark_proofs_approved(@app_with_disability_cert)
+      @app_with_disability_cert.disability_certification.attach(
+        io: Rails.root.join('test/fixtures/files/disability_certification_valid.pdf').open,
+        filename: 'disability_certification_valid.pdf',
         content_type: 'application/pdf'
       )
-      @app_with_medical_cert.update_columns(medical_certification_status: Application.medical_certification_statuses[:received])
+      @app_with_disability_cert.update_columns(disability_certification_status: Application.disability_certification_statuses[:received])
     end
 
-    def test_dashboard_still_reports_proof_and_medical_review_metrics
+    def test_dashboard_still_reports_proof_and_disability_certification_review_metrics
       get admin_dashboard_path
       assert_response :success
 
       expected_proofs_count = Application.with_proofs_needing_review.count
-      expected_medical_certs_count = Application.where(medical_certification_status: 'received').count
+      expected_disability_certs_count = Application.where(disability_certification_status: 'received').count
 
       assert_equal expected_proofs_count, assigns(:metrics)[:proofs_needing_review_count]
       assert_includes Application.with_proofs_needing_review, @app_with_id_proof
-      assert_equal expected_medical_certs_count, assigns(:metrics)[:medical_certs_to_review_count]
+      assert_equal expected_disability_certs_count, assigns(:metrics)[:disability_certs_to_review_count]
     end
 
     def test_filter_by_proofs_needing_review
@@ -78,14 +78,14 @@ module Admin
       end
     end
 
-    def test_filter_by_medical_certs_to_review
-      get admin_applications_path, params: { filter: 'medical_certs_to_review' }
+    def test_filter_by_disability_certs_to_review
+      get admin_applications_path, params: { filter: 'disability_certs_to_review' }
       assert_response :success
 
       applications = assigns(:applications)
       applications.each do |app|
-        assert_equal 'received', app.medical_certification_status,
-                     "Application #{app.id} does not have a received medical certification"
+        assert_equal 'received', app.disability_certification_status,
+                     "Application #{app.id} does not have a received disability certification"
       end
     end
 
@@ -188,7 +188,7 @@ module Admin
         status: Application.statuses[:approved],
         income_proof_status: Application.income_proof_statuses[:approved],
         residency_proof_status: Application.residency_proof_statuses[:approved],
-        medical_certification_status: Application.medical_certification_statuses[:approved],
+        disability_certification_status: Application.disability_certification_statuses[:approved],
         updated_at: Time.current
       )
       application.reload

@@ -1,6 +1,6 @@
 # frozen_string_literal: true
 
-class MedicalCertificationEmailJob < ApplicationJob
+class DisabilityCertificationEmailJob < ApplicationJob
   include EmailDeliveryContextJob
 
   queue_as :default
@@ -32,7 +32,7 @@ class MedicalCertificationEmailJob < ApplicationJob
 
   def delivery_not_sent
     notification = Notification.find_by(id: email_delivery_context&.dig('notification_id'))
-    Applications::MedicalCertificationService.restore_unsent_request(notification) if notification
+    Applications::DisabilityCertificationService.restore_unsent_request(notification) if notification
   end
 
   private
@@ -41,7 +41,7 @@ class MedicalCertificationEmailJob < ApplicationJob
     # Legacy queued requests are rejected by the context callback; never bind to a newer notice.
     return unless notification_id
 
-    Notification.find_by!(id: notification_id, notifiable: application, action: 'medical_certification_requested')
+    Notification.find_by!(id: notification_id, notifiable: application, action: 'disability_certification_requested')
   end
 
   def send_request_email(application, timestamp, notification)

@@ -132,7 +132,7 @@ class UploadedDocumentTest < ActiveSupport::TestCase
 
   test 'takes the size limit from the purpose the model declares for the slot' do
     assert_equal :proof, UploadedDocument.declared_purpose(@application, 'income_proof')
-    assert_equal :certification, UploadedDocument.declared_purpose(Application, 'medical_certification')
+    assert_equal :certification, UploadedDocument.declared_purpose(Application, 'disability_certification')
     assert_equal :w9, UploadedDocument.declared_purpose(Users::Vendor, 'w9_form')
     assert_raises(ArgumentError) { UploadedDocument.declared_purpose(PrintQueueItem, 'pdf_letter') }
   end

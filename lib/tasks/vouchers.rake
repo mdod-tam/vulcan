@@ -9,7 +9,7 @@ namespace :vouchers do
         status: Application.statuses.fetch('approved'),
         residency_proof_status: Application.residency_proof_statuses.fetch('approved'),
         id_proof_status: Application.id_proof_statuses.fetch('approved'),
-        medical_certification_status: Application.medical_certification_statuses.fetch('approved')
+        disability_certification_status: Application.disability_certification_statuses.fetch('approved')
       )
       .where(
         'applications.income_proof_required = ? OR applications.income_proof_status = ?',

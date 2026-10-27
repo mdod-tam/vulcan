@@ -130,7 +130,7 @@ module Admin
     private
 
     def cleared_pdf
-      scanned_upload(fixture_file_upload('medical_certification_valid.pdf', 'application/pdf'),
+      scanned_upload(fixture_file_upload('disability_certification_valid.pdf', 'application/pdf'),
                      user: @admin, purpose: :product_resource, slot: 'document')
     end
 

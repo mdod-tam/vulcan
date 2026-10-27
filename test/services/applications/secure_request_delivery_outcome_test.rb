@@ -183,7 +183,7 @@ class SecureRequestDeliveryOutcomeTest < ActiveSupport::TestCase
       end
 
       assert_predicate result, :failure?
-      assert_predicate owner.reload, :medical_certification_status_not_requested? if service_class == Applications::RequestCertificationUpload
+      assert_predicate owner.reload, :disability_certification_status_not_requested? if service_class == Applications::RequestCertificationUpload
     end
 
     test "#{service_class} restores and revokes on late configuration refusal" do
@@ -211,11 +211,11 @@ class SecureRequestDeliveryOutcomeTest < ActiveSupport::TestCase
       assert_equal 'missing_control', notification.metadata.dig('delivery_error', 'reason')
       next unless service_class == Applications::RequestCertificationUpload
 
-      assert_predicate owner.reload, :medical_certification_status_not_requested?
-      assert_equal 0, owner.medical_certification_request_count
-      assert_nil owner.medical_certification_requested_at
+      assert_predicate owner.reload, :disability_certification_status_not_requested?
+      assert_equal 0, owner.disability_certification_request_count
+      assert_nil owner.disability_certification_requested_at
       assert_equal 'delivery_not_sent', owner.status_changes.order(:id).last.metadata['reason']
-      assert Event.exists?(action: 'medical_certification_request_not_sent', auditable: owner)
+      assert Event.exists?(action: 'disability_certification_request_not_sent', auditable: owner)
     end
 
     test "#{service_class} revokes despite failure tracking being unavailable" do

@@ -130,7 +130,7 @@ class NotificationComposer
     proof_attached_message('residency')
   end
 
-  def message_for_medical_certification_requested
+  def message_for_disability_certification_requested
     safe_join(['Disability certification requested for ', sentence_application_reference, '.'])
   end
 
@@ -153,15 +153,15 @@ class NotificationComposer
     safe_join(['Certifying professional information requested for ', sentence_application_reference])
   end
 
-  def message_for_medical_certification_received
+  def message_for_disability_certification_received
     safe_join(['Disability certification received for ', sentence_application_reference])
   end
 
-  def message_for_medical_certification_approved
+  def message_for_disability_certification_approved
     safe_join(['Disability certification approved for ', sentence_application_reference])
   end
 
-  def message_for_medical_certification_rejected
+  def message_for_disability_certification_rejected
     reason = metadata_value('rejection_reason')
     reason_text = reason.present? ? " - #{reason}" : ''
     safe_join(['Disability certification rejected for ', sentence_application_reference, reason_text, '.'])

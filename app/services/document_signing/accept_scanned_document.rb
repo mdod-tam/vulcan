@@ -80,7 +80,7 @@ module DocumentSigning
       return :completed if attached?(application)
 
       @scan.blob.update!(metadata: @scan.blob.metadata.merge('source' => 'docuseal'))
-      outcome = MedicalCertificationAttachmentService.accept_submission(
+      outcome = DisabilityCertificationAttachmentService.accept_submission(
         application: application, blob: @scan.blob, submission_method: :docuseal,
         requested_at: parsed_time('requested_at'), admin: actor, metadata: document_metadata
       )
@@ -124,8 +124,8 @@ module DocumentSigning
     end
 
     def attached?(application)
-      application.medical_certification.blob&.id == @scan.blob_id ||
-        application.additional_medical_certifications.blobs.exists?(id: @scan.blob_id)
+      application.disability_certification.blob&.id == @scan.blob_id ||
+        application.additional_disability_certifications.blobs.exists?(id: @scan.blob_id)
     end
 
     def parsed_time(key)
@@ -146,8 +146,8 @@ module DocumentSigning
       return {} unless outcome[:placement] == :additional
 
       {
-        'retained_as' => 'additional_medical_certification',
-        'additional_medical_certification_blob_id' => outcome[:additional_blob_id],
+        'retained_as' => 'additional_disability_certification',
+        'additional_disability_certification_blob_id' => outcome[:additional_blob_id],
         'retention_reason' => outcome[:retention_reason]
       }
     end

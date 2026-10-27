@@ -28,24 +28,24 @@ class ApplicationLifecycleFlowTest < ActiveSupport::TestCase
         income_proof_status: :approved,
         residency_proof_status: :approved,
         id_proof_status: :approved,
-        medical_certification_status: :requested
+        disability_certification_status: :requested
       )
       application.update_columns(
-        medical_certification_requested_at: 2.days.ago,
-        medical_certification_request_count: 1,
+        disability_certification_requested_at: 2.days.ago,
+        disability_certification_request_count: 1,
         updated_at: Time.current
       )
 
-      service = Applications::MedicalCertificationService.new(
+      service = Applications::DisabilityCertificationService.new(
         application: application,
         actor: admin
       )
 
-      assert_difference -> { application.reload.medical_certification_request_count }, 1 do
-        assert_difference -> { Notification.where(notifiable: application, action: 'medical_certification_requested').count }, 1 do
-          assert_difference -> { Event.where(auditable: application, action: 'medical_certification_requested').count }, 1 do
+      assert_difference -> { application.reload.disability_certification_request_count }, 1 do
+        assert_difference -> { Notification.where(notifiable: application, action: 'disability_certification_requested').count }, 1 do
+          assert_difference -> { Event.where(auditable: application, action: 'disability_certification_requested').count }, 1 do
             assert_difference -> { ApplicationStatusChange.where(application: application).count }, 1 do
-              assert_enqueued_with(job: MedicalCertificationEmailJob) do
+              assert_enqueued_with(job: DisabilityCertificationEmailJob) do
                 result = service.request_certification
                 assert result.success?, result.message
               end
@@ -56,15 +56,15 @@ class ApplicationLifecycleFlowTest < ActiveSupport::TestCase
 
       application.reload
 
-      assert_equal 'requested', application.medical_certification_status
+      assert_equal 'requested', application.disability_certification_status
       assert_equal 'awaiting_dcf', application.status
 
-      latest_notification = Notification.where(notifiable: application, action: 'medical_certification_requested').order(:created_at).last
+      latest_notification = Notification.where(notifiable: application, action: 'disability_certification_requested').order(:created_at).last
       assert_equal 2, latest_notification.metadata['request_count']
 
       latest_status_change = ApplicationStatusChange.where(application: application).order(:created_at).last
       assert_equal 'requested', latest_status_change.to_status
-      assert_equal 'medical_certification', latest_status_change.metadata['change_type']
+      assert_equal 'disability_certification', latest_status_change.metadata['change_type']
     end
   end
 
@@ -78,7 +78,7 @@ class ApplicationLifecycleFlowTest < ActiveSupport::TestCase
         income_proof_status: :approved,
         residency_proof_status: :not_reviewed,
         id_proof_status: :approved,
-        medical_certification_status: :not_requested
+        disability_certification_status: :not_requested
       )
 
       MedicalProviderMailer.expects(:request_certification).never
@@ -93,7 +93,7 @@ class ApplicationLifecycleFlowTest < ActiveSupport::TestCase
 
       assert_equal 'approved', application.residency_proof_status
       assert_equal 'awaiting_dcf', application.status
-      assert_equal 'not_requested', application.medical_certification_status
+      assert_equal 'not_requested', application.disability_certification_status
 
       dcf_status_changes = ApplicationStatusChange.where(application: application, to_status: 'awaiting_dcf')
       assert_equal 1, dcf_status_changes.count
@@ -105,7 +105,7 @@ class ApplicationLifecycleFlowTest < ActiveSupport::TestCase
       admin = create(:admin)
       FeatureFlag.enable!(:vouchers_enabled)
       application = create_application_with_documents(
-        attach_medical_certification: true
+        attach_disability_certification: true
       )
       set_application_state(
         application,
@@ -113,7 +113,7 @@ class ApplicationLifecycleFlowTest < ActiveSupport::TestCase
         income_proof_status: :approved,
         id_proof_status: :approved,
         residency_proof_status: :not_reviewed,
-        medical_certification_status: :approved
+        disability_certification_status: :approved
       )
 
       reviewer = Applications::ProofReviewer.new(application, admin)
@@ -157,7 +157,7 @@ class ApplicationLifecycleFlowTest < ActiveSupport::TestCase
       admin = create(:admin)
       FeatureFlag.enable!(:vouchers_enabled)
       application = create_application_with_documents(
-        attach_medical_certification: true
+        attach_disability_certification: true
       )
       set_application_state(
         application,
@@ -165,13 +165,13 @@ class ApplicationLifecycleFlowTest < ActiveSupport::TestCase
         income_proof_status: :approved,
         residency_proof_status: :approved,
         id_proof_status: :approved,
-        medical_certification_status: :requested
+        disability_certification_status: :requested
       )
 
       assert_difference -> { Voucher.where(application: application).count }, 1 do
         assert_difference -> { Event.where(action: 'voucher_assigned', auditable_type: 'Voucher').count }, 1 do
           perform_enqueued_jobs(only: IssueInitialVoucherJob) do
-            result = MedicalCertificationAttachmentService.update_certification_status(
+            result = DisabilityCertificationAttachmentService.update_certification_status(
               application: application,
               status: :approved,
               admin: admin,
@@ -185,7 +185,7 @@ class ApplicationLifecycleFlowTest < ActiveSupport::TestCase
 
       application.reload
 
-      assert_equal 'approved', application.medical_certification_status
+      assert_equal 'approved', application.disability_certification_status
       assert_equal 'approved', application.status
 
       # One lifecycle change to approved, written by the reconciler via transition_status!.
@@ -213,7 +213,7 @@ class ApplicationLifecycleFlowTest < ActiveSupport::TestCase
     with_after_commit_callbacks do
       admin = create(:admin)
       application = create_application_with_documents(
-        attach_medical_certification: true
+        attach_disability_certification: true
       )
       set_application_state(
         application,
@@ -221,7 +221,7 @@ class ApplicationLifecycleFlowTest < ActiveSupport::TestCase
         income_proof_status: :approved,
         residency_proof_status: :not_reviewed,
         id_proof_status: :approved,
-        medical_certification_status: :approved
+        disability_certification_status: :approved
       )
 
       reviewer = Applications::ProofReviewer.new(application, admin)
@@ -254,7 +254,7 @@ class ApplicationLifecycleFlowTest < ActiveSupport::TestCase
       FeatureFlag.enable!(:vouchers_enabled)
 
       application = create_application_with_documents(
-        attach_medical_certification: true
+        attach_disability_certification: true
       )
       set_application_state(
         application,
@@ -262,7 +262,7 @@ class ApplicationLifecycleFlowTest < ActiveSupport::TestCase
         income_proof_status: :approved,
         residency_proof_status: :approved,
         id_proof_status: :approved,
-        medical_certification_status: :approved
+        disability_certification_status: :approved
       )
 
       service = Applications::Approver.new(application, by: admin)
@@ -313,7 +313,7 @@ class ApplicationLifecycleFlowTest < ActiveSupport::TestCase
         income_proof_status: :approved,
         residency_proof_status: :approved,
         id_proof_status: :approved,
-        medical_certification_status: :not_requested
+        disability_certification_status: :not_requested
       )
 
       assert_difference -> { ApplicationStatusChange.where(application: application).count }, 1 do
@@ -354,7 +354,7 @@ class ApplicationLifecycleFlowTest < ActiveSupport::TestCase
     attach_income_proof: true,
     attach_residency_proof: true,
     attach_id_proof: true,
-    attach_medical_certification: false
+    attach_disability_certification: false
   )
     application = create(
       :application,
@@ -363,24 +363,24 @@ class ApplicationLifecycleFlowTest < ActiveSupport::TestCase
       income_proof_status: :not_reviewed,
       residency_proof_status: :not_reviewed,
       id_proof_status: :not_reviewed,
-      medical_certification_status: :not_requested
+      disability_certification_status: :not_requested
     )
 
     attach_pdf(application.income_proof, 'income.pdf') if attach_income_proof
     attach_pdf(application.residency_proof, 'residency.pdf') if attach_residency_proof
     attach_pdf(application.id_proof, 'id-proof.pdf') if attach_id_proof
-    attach_pdf(application.medical_certification, 'medical-certification.pdf', purpose: :certification) if attach_medical_certification
+    attach_pdf(application.disability_certification, 'disability-certification.pdf', purpose: :certification) if attach_disability_certification
 
     application.reload
   end
 
-  def set_application_state(application, status:, income_proof_status:, residency_proof_status:, id_proof_status:, medical_certification_status:)
+  def set_application_state(application, status:, income_proof_status:, residency_proof_status:, id_proof_status:, disability_certification_status:)
     application.update_columns(
       status: Application.statuses.fetch(status.to_s),
       income_proof_status: Application.income_proof_statuses.fetch(income_proof_status.to_s),
       residency_proof_status: Application.residency_proof_statuses.fetch(residency_proof_status.to_s),
       id_proof_status: Application.id_proof_statuses.fetch(id_proof_status.to_s),
-      medical_certification_status: Application.medical_certification_statuses.fetch(medical_certification_status.to_s),
+      disability_certification_status: Application.disability_certification_statuses.fetch(disability_certification_status.to_s),
       updated_at: Time.current
     )
 
@@ -389,7 +389,7 @@ class ApplicationLifecycleFlowTest < ActiveSupport::TestCase
 
   def attach_pdf(attachment, filename, purpose: :proof)
     attachment.attach(
-      io: file_fixture('medical_certification_valid.pdf').open,
+      io: file_fixture('disability_certification_valid.pdf').open,
       filename: filename,
       content_type: 'application/pdf'
     )

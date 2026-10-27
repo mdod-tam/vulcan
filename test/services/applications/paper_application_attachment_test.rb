@@ -85,9 +85,9 @@ module Applications
       disguised.write("MZ\x90\x00#{'x' * 4096}")
       disguised.rewind
       params = direct_upload_params(income_blob.signed_id, residency_blob.signed_id).merge(
-        medical_certification_action: 'accept',
-        medical_certification: ActionDispatch::Http::UploadedFile.new(tempfile: disguised, filename: 'certification.pdf',
-                                                                      type: 'application/pdf')
+        disability_certification_action: 'accept',
+        disability_certification: ActionDispatch::Http::UploadedFile.new(tempfile: disguised, filename: 'certification.pdf',
+                                                                         type: 'application/pdf')
       )
       mock_policy
       service = PaperApplicationService.new(params: confirmed_paper_params(params, admin: @admin), admin: @admin)

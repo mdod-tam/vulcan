@@ -49,7 +49,7 @@ module Applications
       # Create a Notification (low priority) - same timestamp for deduplication
       notification = create(:notification,
                             notifiable: @application,
-                            action: 'medical_certification_requested',
+                            action: 'disability_certification_requested',
                             actor: notification_user,
                             recipient: @application.user,
                             created_at: time)
@@ -58,7 +58,7 @@ module Applications
       event = Event.create!(
         user: event_user,
         auditable: @application,
-        action: 'medical_certification_requested',
+        action: 'disability_certification_requested',
         metadata: {},
         created_at: time
       )
@@ -69,7 +69,7 @@ module Applications
         user: @admin,
         from_status: 'submitted',
         to_status: 'requested',
-        metadata: { change_type: 'medical_certification' },
+        metadata: { change_type: 'disability_certification' },
         created_at: time
       )
 

@@ -19,7 +19,7 @@ class Notification < ApplicationRecord
 
   scope :unread_notifications, -> { where(read_at: nil) }
   scope :read_notifications, -> { where.not(read_at: nil) }
-  scope :medical_certification_requests, -> { where(action: 'medical_certification_requested') }
+  scope :disability_certification_requests, -> { where(action: 'disability_certification_requested') }
 
   def self.proof_resubmission_rejected_metadata?(metadata)
     mode = metadata_value(metadata, 'proof_request_display_mode') || metadata_value(metadata, 'display_mode')
@@ -31,7 +31,7 @@ class Notification < ApplicationRecord
     update!(read_at: Time.current)
   end
 
-  # Email status methods for medical certification requests.
+  # Email status methods for disability certification requests.
   # Refresh only linked attempts with remaining checks; legacy IDs do not prove a send.
   def email_tracking?
     email_delivery_attempts.any?(&:check_available?)

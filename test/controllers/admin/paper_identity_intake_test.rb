@@ -23,11 +23,11 @@ module Admin
           information_verified: true, medical_release_authorized: true
         }
       }
-      @blobs = %w[income_proof residency_proof id_proof medical_certification].to_h do |key|
+      @blobs = %w[income_proof residency_proof id_proof disability_certification].to_h do |key|
         blob = ActiveStorage::Blob.create_and_upload!(
           io: File.open(file_fixture('income_proof.pdf')), filename: "#{key}.pdf", content_type: 'application/pdf'
         )
-        purpose = key == 'medical_certification' ? :certification : :proof
+        purpose = key == 'disability_certification' ? :certification : :proof
         DocumentScanFixtures.clear!(blob, user: @admin, purpose: purpose, slot: key, fixture: 'income_proof.pdf')
         @params["#{key}_action"] = 'upload_only'
         @params["#{key}_signed_id"] = blob.signed_id
