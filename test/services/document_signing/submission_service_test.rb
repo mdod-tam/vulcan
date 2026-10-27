@@ -27,7 +27,6 @@ module DocumentSigning
     end
 
     test 'successfully creates document signing submission' do
-      # Mock the DocuSeal API call
       DocumentSigning::SubmissionService.any_instance.stubs(:create_submission!).returns(@mock_submission)
 
       service = DocumentSigning::SubmissionService.new(
@@ -207,7 +206,6 @@ module DocumentSigning
         actor: @admin
       )
 
-      # Ensure both counters increment together
       original_doc_count = @application.document_signing_request_count
       original_med_count = @application.medical_certification_request_count
 

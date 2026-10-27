@@ -1,7 +1,5 @@
 # frozen_string_literal: true
 
-# Seed File for "application_notifications_application_submitted"
-# --------------------------------------------------
 EmailTemplate.create_or_find_by!(name: 'application_notifications_application_submitted', format: :text, locale: 'en') do |template|
   template.subject = 'Your Application Has Been Submitted'
   template.description = 'Sent when an application is submitted.'

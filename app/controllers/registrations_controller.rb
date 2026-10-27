@@ -142,7 +142,6 @@ class RegistrationsController < ApplicationController
   end
 
   def send_registration_confirmation
-    # Delegate confirmation logic to RegistrationConfirmationService
     result = Users::RegistrationConfirmationService.new(user: @user, request: request).call
 
     return if result.success?

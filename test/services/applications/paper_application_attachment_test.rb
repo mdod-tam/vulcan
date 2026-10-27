@@ -23,13 +23,11 @@ module Applications
       params = direct_upload_params(income_blob.signed_id, residency_blob.signed_id)
       mock_policy
 
-      # Verify we have valid blobs
       assert income_blob.persisted?, 'Income blob not persisted'
       assert residency_blob.persisted?, 'Residency blob not persisted'
       assert_not_nil income_blob.signed_id, 'Income blob missing signed_id'
       assert_not_nil residency_blob.signed_id, 'Residency blob missing signed_id'
 
-      # Mock ProofAttachmentService for testing
       ProofAttachmentService.expects(:attach_proof).with(
         has_entries(
           proof_type: :income,
@@ -147,7 +145,6 @@ module Applications
     end
 
     teardown do
-      # Clean up Current context after the test
       Current.reset
       @income_proof.tempfile.close
       @residency_proof.tempfile.close

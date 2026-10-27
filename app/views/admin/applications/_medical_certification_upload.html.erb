@@ -1,11 +1,11 @@
 <%# Certifications can arrive unexpectedly (mail, fax, email) without a formal request, so the form
     stays available until one awaits review or is approved. %>
 <% if @application.staff_certification_upload_allowed? %>
-  <div class="mb-4 p-4 bg-blue-50 border-l-4 border-blue-500 rounded-md" 
+  <div class="mb-4 p-4 bg-info-50 border-l-4 border-info-500 rounded-md"
        id="medical-certification-upload-form"
        data-testid="medical-certification-upload-form">
-    <h3 class="text-sm font-medium text-blue-700 mb-2">Upload Disability Certification</h3>
-    <p class="text-sm text-blue-600 mb-2">
+    <h3 class="text-sm font-medium text-info-700 mb-2">Upload Disability Certification</h3>
+    <p class="text-sm text-info-600 mb-2">
       Use this form to attach a medical certification received for this application.
     </p>
     
@@ -16,12 +16,11 @@
                   multipart: true,
                   data: { controller: 'document-proof-handler' } do |f| %>
     
-      <!-- Status Selection -->
       <div class="flex items-center space-x-4 mb-4">
         <div>
           <%= f.radio_button "medical_certification_status", "approved",
               checked: true,
-              class: "focus:ring-indigo-500 h-4 w-4 text-indigo-600 border-gray-300",
+              class: "h-4 w-4 text-primary-600 border-gray-300",
               "aria-describedby": "certification_status_help",
               id: "accept_medical_certification",
               data: { document_proof_handler_target: 'acceptRadio', action: 'change->document-proof-handler#toggleProofAction' } %>
@@ -30,7 +29,7 @@
         </div>
         <div>
           <%= f.radio_button "medical_certification_status", "rejected",
-              class: "focus:ring-indigo-500 h-4 w-4 text-indigo-600 border-gray-300",
+              class: "h-4 w-4 text-primary-600 border-gray-300",
               "aria-describedby": "certification_status_help",
               id: "reject_medical_certification",
               data: { document_proof_handler_target: 'rejectRadio', action: 'change->document-proof-handler#toggleProofAction' } %>
@@ -42,12 +41,10 @@
         Choose whether to approve this medical certification and upload a document, or reject it and provide a reason
       </p>
       
-      <!-- File Upload Section -->
       <div id="medical_certification_upload" class="mt-4" data-document-proof-handler-target="uploadSection">
-        <!-- Submission Method Dropdown -->
         <div class="mb-4">
           <%= f.label "submission_method", "Submission Method",
-              class: "block text-sm font-medium text-gray-700" %>
+              class: "form-label" %>
           <p id="submission_method_hint" class="text-xs text-gray-700 mb-2">
             Select how this certification was received
           </p>
@@ -60,14 +57,14 @@
                 ["Other", "other"]
               ], "fax"),
               {},
-              { class: "mt-1 block w-full pl-3 pr-10 py-2 text-base border-gray-300 focus:outline-none focus:ring-indigo-500 focus:border-indigo-500 sm:text-sm rounded-md",
+              { class: "form-input mt-1 pr-10",
                 "aria-describedby": "submission_method_hint" } %>
         </div>
         
         
         <div>
           <%= f.label "medical_certification", "Certification Document",
-              class: "block text-sm font-medium text-gray-700" %>
+              class: "form-label" %>
           <p id="certification_hint" class="text-xs text-gray-700 mb-2">
             Upload the medical certification document. Accepted formats: <%= proof_upload_formats_label %>, <%= ProofUploadFormats.max_megabytes(:certification) %> MB or smaller.
           </p>
@@ -82,7 +79,6 @@
         </div>
       </div>
       
-      <!-- Rejection Section -->
       <%
         address_1 = @application.user&.physical_address_1.to_s
         address_2 = @application.user&.physical_address_2.presence || ''
@@ -101,13 +97,13 @@
         <div class="space-y-4">
           <div>
             <%= f.label "rejection_reason_code", "Rejection Reason",
-                class: "block text-sm font-medium text-gray-700" %>
+                class: "form-label" %>
             <p id="certification_rejection_hint" class="text-xs text-gray-700 mb-2">
               Select the reason why this medical certification cannot be accepted
             </p>
             <select name="rejection_reason_code"
                     id="rejection_reason_code_select"
-                    class="mt-1 block w-full pl-3 pr-10 py-2 text-base border-gray-300 focus:outline-none focus:ring-indigo-500 focus:border-indigo-500 sm:text-sm rounded-md"
+                    class="form-input mt-1 pr-10"
                     aria-describedby="certification_rejection_hint"
                     data-action="change->document-proof-handler#handleReasonSelectionChanged"
                     data-document-proof-handler-target="rejectionReasonSelect">
@@ -124,13 +120,13 @@
             </div>
 
             <div id="cert-custom-reason-area" class="hidden mt-2" data-document-proof-handler-target="customReasonSection">
-              <label for="medical_certification_rejection_reason" class="block text-sm font-medium text-gray-700">Custom Rejection Reason</label>
+              <label for="medical_certification_rejection_reason" class="form-label">Custom Rejection Reason</label>
               <textarea name="medical_certification_rejection_reason"
                         id="medical_certification_rejection_reason"
                         rows="3"
                         disabled
                         data-document-proof-handler-target="customReasonField"
-                        class="mt-1 shadow-sm focus:ring-indigo-500 focus:border-indigo-500 block w-full sm:text-sm border-gray-300 rounded-md"
+                        class="form-input mt-1"
                         placeholder="Enter the rejection reason that will be sent to the certifying professional..."></textarea>
             </div>
           </div>
@@ -140,16 +136,12 @@
       
       <div class="mt-4">
         <%= f.submit "Process Certification", 
-                    class: "inline-flex justify-center py-2 px-4 border border-transparent
-                          shadow-sm text-sm font-medium rounded-md text-white
-                          bg-blue-600 hover:bg-blue-700 focus:outline-none focus:ring-2
-                          focus:ring-offset-2 focus:ring-blue-500" %>
+                    class: "btn btn-primary" %>
       </div>
     <% end %>
   </div>
 <% end %>
 
-<!-- Always show certification history section, regardless of upload form or attachment status -->
 <div class="mb-4">
   <div class="flex justify-between items-center">
     <h3 class="text-sm font-medium text-gray-700 mb-2">
@@ -159,7 +151,7 @@
   
   <% if @application.medical_certification.attached? %>
     <% if @application.medical_certification_status == "approved" %>
-      <div class="mt-4"> <%# Add margin-top to position button at the bottom %>
+      <div class="mt-4">
         <%= medical_certification_link(@application, :button) %>
       </div>
     <% else %>
@@ -167,10 +159,8 @@
     <% end %>
   <% end %>
   
-  <!-- Combined Status Changes and Request History -->
   <div class="mt-4 pl-4 border-l-2 border-gray-200">
     <% 
-      # First try to get status changes
       status_changes = ApplicationStatusChange.where(application_id: @application.id)
                         .where("metadata->>'change_type' = ? OR metadata->>'submission_method' IS NOT NULL", 'medical_certification')
                         .order(created_at: :desc)
@@ -182,11 +172,11 @@
           <p class="text-sm text-gray-600 mb-1">
             <% case change.to_status %>
             <% when 'approved' %>
-              <span class="text-green-600">✓</span> Approved on 
+              <span class="text-success-600">✓</span> Approved on 
             <% when 'rejected' %>
-              <span class="text-red-600">×</span> Rejected on 
+              <span class="text-danger-600">×</span> Rejected on 
             <% when 'received', 'requested' %>
-              <span class="text-blue-600">→</span> <%= change.to_status.titleize %> on
+              <span class="text-info-600">→</span> <%= change.to_status.titleize %> on
             <% end %>
             <%= change.created_at&.strftime("%B %d, %Y at %I:%M %p") %>
             <% if change.user.present? %>
@@ -210,10 +200,9 @@
         </div>
       <% end %>
     <% elsif @application.medical_certification.attached? %>
-      <!-- Fallback when no status change records exist but certification is attached -->
       <div class="history-item mb-2">
         <p class="text-sm text-gray-600 mb-1">
-          <span class="text-blue-600">→</span> Submitted on 
+          <span class="text-info-600">→</span> Submitted on 
           <%= @application.medical_certification.created_at.strftime("%B %d, %Y at %I:%M %p") %>
           <span class="text-xs text-gray-500">(via <%= medical_certification_submission_method(@application) %>)</span>
         </p>

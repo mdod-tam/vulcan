@@ -24,13 +24,11 @@ module Evaluations
     end
 
     def call
-      @evaluation.application.with_lock do
-        @evaluation.with_lock do
-          prepare_evaluation
-          save_evaluation!
-          EquipmentNeeds::Writer.initialize_from!(@evaluation, actor: @actor)
-          create_event!
-        end
+      @evaluation.with_actor_and_application_lock(@actor) do
+        prepare_evaluation
+        save_evaluation!
+        EquipmentNeeds::Writer.initialize_from!(@evaluation, actor: @actor)
+        create_event!
       end
 
       # The submission is committed; a confirmation that cannot be queued does not undo it.
@@ -59,8 +57,6 @@ module Evaluations
     end
 
     def validate_status!(source)
-      raise ArgumentError, 'Only the assigned evaluator can update this evaluation.' unless @evaluation.evaluator_id == @actor&.id
-
       @evaluation.require_approved_application!
       if source == 'outside_specialist' && !@evaluation.outside_specialist_report_allowed?(@actor)
         raise ArgumentError, 'Outside-specialist reports are only available to the assigned administrator.'

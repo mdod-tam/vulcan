@@ -5,7 +5,6 @@ class MobileMenuController extends Controller {
   static targets = [ "menu", "button" ]
   
   toggle() {
-    // Use target safety to check for required targets
     if (!this.hasMenuTarget || !this.hasButtonTarget) {
       return;
     }

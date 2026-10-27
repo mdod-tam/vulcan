@@ -1,7 +1,7 @@
 # frozen_string_literal: true
 
 module VendorPortal
-  # Controller for vendor profile management
+  # Vendor profile edit and W-9 replacement.
   class ProfilesController < BaseController
     def edit
       @vendor = current_user

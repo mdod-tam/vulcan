@@ -25,21 +25,17 @@ class MailerHelperTest < ActionView::TestCase
   end
 
   test 'format_date handles string dates without time components' do
-    # Valid string date without time
     assert_equal 'March 10 2025', format_date('2025-03-10')
     assert_equal '03/10/2025', format_date('2025-03-10', :short)
     assert_equal 'March 10 2025 at 12:00 AM', format_date('2025-03-10', :full)
   end
 
   test 'format_date handles string dates with time components' do
-    # Valid datetime string with time
     assert_equal 'March 10 2025', format_date('2025-03-10 15:30:00')
     assert_equal '03/10/2025', format_date('2025-03-10 15:30:00', :short)
 
-    # With our fixed implementation, time components should be preserved when using :full format
     assert_equal 'March 10 2025 at 03:30 PM', format_date('2025-03-10 15:30:00', :full)
 
-    # Test with different time formats
     assert_equal 'March 10 2025 at 03:30 PM', format_date('2025-03-10T15:30:00', :full)
     assert_equal 'March 10 2025 at 03:30 PM', format_date('2025-03-10 15:30', :full)
   end

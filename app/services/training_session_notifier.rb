@@ -1,7 +1,9 @@
 # frozen_string_literal: true
 
 class TrainingSessionNotifier
-  ACTIONS = %w[trainer_assigned training_scheduled training_rescheduled training_cancelled training_missed training_completed].freeze
+  ACTIONS = %w[trainer_assigned trainer_reassigned training_trainer_changed training_scheduled training_rescheduled training_cancelled
+               training_missed training_completed].freeze
+  TRAINER_ADDRESSED_ACTIONS = %w[trainer_assigned trainer_reassigned].freeze
   DeliveryOutcome = Struct.new(:status, :notification_id, :error_class, keyword_init: true) do
     def warning? = %i[failed suppressed].include?(status)
   end
@@ -12,6 +14,7 @@ class TrainingSessionNotifier
     @training_session = training_session
     @actor = actor
     @action = action.to_s
+    @recipient = TRAINER_ADDRESSED_ACTIONS.include?(@action) ? training_session.trainer : training_session.constituent
     @metadata = {
       training_session_id: training_session.id,
       application_id: training_session.application_id,
@@ -22,7 +25,10 @@ class TrainingSessionNotifier
       cancellation_initiator: training_session.cancellation_initiator,
       trainer_name: training_session.trainer.full_name,
       location: training_session.location
-    }.freeze
+    }
+    # An assignment notice carries its operation, so the delivery guard can supersede it after a later transfer.
+    @metadata[:operation_id] = training_session.assignment_operation_id if EmailDelivery::Catalog.notification_action(@action).adapter == :assignment
+    @metadata.freeze
   end
 
   def deliver_after_commit
@@ -36,7 +42,7 @@ class TrainingSessionNotifier
   def deliver(outcome)
     notification = NotificationService.create_and_deliver!(
       type: @action,
-      recipient: @action == 'trainer_assigned' ? @training_session.trainer : @training_session.constituent,
+      recipient: @recipient,
       actor: @actor,
       notifiable: @training_session,
       metadata: @metadata,

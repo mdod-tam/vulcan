@@ -10,12 +10,10 @@ module Evaluations
     end
 
     def call
-      @evaluation.application.with_lock do
-        @evaluation.with_lock do
-          validate_params!
-          schedule_evaluation!
-          create_event!
-        end
+      @evaluation.with_actor_and_application_lock(@actor) do
+        validate_params!
+        schedule_evaluation!
+        create_event!
       end
 
       success('Evaluation scheduled successfully.', { evaluation: @evaluation })
@@ -33,8 +31,6 @@ module Evaluations
     private
 
     def validate_params!
-      raise ArgumentError, 'Only the assigned evaluator can update this evaluation.' unless @evaluation.evaluator_id == @actor&.id
-
       @evaluation.require_approved_application!
       raise ArgumentError, 'Only requested evaluations can be scheduled.' unless @evaluation.status_requested?
 

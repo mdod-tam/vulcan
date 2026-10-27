@@ -2,15 +2,15 @@
 
 require 'test_helper'
 
-# Focused concurrency evidence for the primary contact/profile edit boundary (plan section 4,
-# row 3): UsersController#update (self-service constituent profile edit) and the merge
-# service must serialize through User.lock_for_merge_integrity! on the target user.
+# Concurrency tests for the primary contact/profile edit boundary: UsersController#update
+# (self-service constituent profile edit) and the merge service must serialize through
+# User.lock_for_merge_integrity! on the target user.
 #
-# Exercises the real, private controller method directly (via a minimal
-# ActionDispatch::TestRequest/TestResponse pair, using set_request!/set_response! -- see
-# passwords_controller_concurrency_test.rb for why -- and injecting current_user directly via
-# @current_user, the same memoized ivar Authentication#current_user itself reads) rather than
-# through routing. Both sides of every race are real production code.
+# The tests call the real controller method directly with a minimal
+# ActionDispatch::TestRequest/TestResponse pair (set_request!/set_response!; see
+# passwords_controller_concurrency_test.rb for why) instead of dispatching through routing. They
+# inject current_user through @current_user, the memoized ivar Authentication#current_user reads.
+# Both sides of every race are production code.
 class UsersControllerConcurrencyTest < ActiveSupport::TestCase
   self.use_transactional_tests = false
 

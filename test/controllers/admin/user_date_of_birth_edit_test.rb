@@ -43,12 +43,12 @@ module Admin
       trainer = create(:trainer)
       trainer.update_column(:date_of_birth, nil)
 
-      patch update_role_admin_user_path(trainer), params: { role: 'Constituent' }, as: :json
+      patch update_role_admin_user_path(trainer), params: { role: 'Constituent' }, headers: { 'Accept' => Mime[:turbo_stream].to_s }
       assert_response :unprocessable_content
       assert_equal 'Users::Trainer', trainer.reload.type
 
       trainer.update!(date_of_birth: '09/10/1980')
-      patch update_role_admin_user_path(trainer), params: { role: 'Constituent' }, as: :json
+      patch update_role_admin_user_path(trainer), params: { role: 'Constituent' }, headers: { 'Accept' => Mime[:turbo_stream].to_s }
       assert_equal 'Users::Constituent', User.find(trainer.id).type
     end
 

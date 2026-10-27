@@ -1,7 +1,7 @@
 # frozen_string_literal: true
 
 module VendorPortal
-  # Controller for managing vouchers
+  # Vendor-side voucher lookup, date-of-birth verification, and redemption.
   class VouchersController < BaseController
     include ActionView::Helpers::NumberHelper # For number_to_currency
 
@@ -25,10 +25,7 @@ module VendorPortal
       end
     end
 
-    def show
-      # @voucher is set by before_action :set_voucher
-      # Show voucher details for vendor
-    end
+    def show; end
 
     # Viewing the form never resets the failure count; only a successful check or the lockout
     # period does.
@@ -59,8 +56,7 @@ module VendorPortal
 
     # Each visit starts a new purchase with its own submission ID; process_redemption keeps it on a retry.
     def redeem
-      # check_voucher_active and check_identity_verified before actions
-      # will redirect if necessary
+      # The before actions redirect when the voucher is inactive or the identity is unverified.
       render_redemption_form(submission_id: SecureRandom.uuid)
     end
 
@@ -101,8 +97,7 @@ module VendorPortal
     end
 
     def set_voucher
-      # Voucher lookup gracefully handles invalid codes by redirecting with error message
-      # This prevents RecordNotFound exceptions from bubbling up to the UI
+      # An unknown code redirects to the voucher list.
       @voucher = Voucher.find_by(code: params[:code])
       return if @voucher
 

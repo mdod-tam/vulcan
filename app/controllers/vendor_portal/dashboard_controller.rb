@@ -2,7 +2,6 @@
 
 module VendorPortal
   class DashboardController < VendorPortal::BaseController
-    # Authenticate_vendor! is inherited from BaseController, but let's be explicit for clarity
     before_action :authenticate_vendor!
 
     def show
@@ -16,7 +15,6 @@ module VendorPortal
       @monthly_totals = current_user.total_transactions_by_period(@months.first.in_time_zone(now.time_zone), now)
       @highest_month, @highest_month_total = @monthly_totals.max_by { |_month, total| total }
 
-      # For the chart data
       @monthly_totals_chart = @monthly_totals.transform_keys do |date|
         date.strftime('%B %Y')
       end

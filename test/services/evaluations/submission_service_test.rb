@@ -279,6 +279,20 @@ module Evaluations
       assert_nil @evaluation.report_submitted_at
     end
 
+    test 'a request holding an evaluator loaded before access was lost cannot submit' do
+      stale_actor = User.find(@evaluator.id)
+      @evaluator.update_columns(type: 'Users::Constituent')
+
+      assert_no_difference('Event.where(action: "evaluation_completed").count') do
+        result = SubmissionService.new(@evaluation, submission_params, actor: stale_actor).call
+
+        assert result.failure?
+        assert_equal 'Only the assigned evaluator can update this evaluation.', result.message
+      end
+      assert_equal 'scheduled', @evaluation.reload.status
+      assert_nil @evaluation.report_submitted_at
+    end
+
     test 'completion audit failure rolls back report timestamps recommendations and application review change' do
       application = @evaluation.application
       application.update!(needs_review_since: Time.current)

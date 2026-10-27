@@ -6,14 +6,13 @@
       </div>
       <div class="mt-4 flex md:mt-0 md:ml-4">
         <%= link_to vendor_portal_dashboard_path,
-            class: "inline-flex items-center px-4 py-2 border border-gray-300 rounded-md shadow-sm text-sm font-medium text-gray-700 bg-white hover:bg-gray-50 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-indigo-500" do %>
+            class: 'btn btn-outline' do %>
           Back to Dashboard
         <% end %>
       </div>
     </div>
 
-    <!-- Voucher Details -->
-    <div class="bg-white shadow rounded-lg p-6 mb-6">
+    <div class="card p-6 mb-6">
     <h2 class="text-xl font-semibold mb-4">Voucher Details</h2>
     <div class="grid grid-cols-1 md:grid-cols-2 gap-4">
       <div>
@@ -25,7 +24,7 @@
         <p class="mb-1"><strong>Original Amount:</strong> <%= number_to_currency(@voucher.initial_value) %></p>
         <p class="mb-1">
           <strong>Current Balance:</strong>
-          <span class="text-green-600 font-semibold"><%= number_to_currency(@voucher.remaining_value) %></span>
+          <span class="text-success-600 font-semibold"><%= number_to_currency(@voucher.remaining_value) %></span>
         </p>
       </div>
     </div>
@@ -36,35 +35,33 @@
                 data: { controller: 'voucher-redemption', action: 'submit->voucher-redemption#submit' }) do |f| %>
     <%# One purchase per submission: a retried or repeated submit returns the purchase already recorded. %>
     <%= hidden_field_tag :submission_id, @submission_id, id: nil %>
-    <!-- Redemption Amount -->
-    <div class="bg-white shadow rounded-lg p-6 mb-6">
+    <div class="card p-6 mb-6">
       <h2 class="text-xl font-semibold mb-4">Redemption Details</h2>
       <div class="mb-4">
-        <%= f.label :amount, 'Redemption Amount', for: 'redemption-amount', class: 'block text-sm font-medium text-gray-700' %>
-        <div class="mt-1 relative rounded-md shadow-sm">
+        <%= f.label :amount, 'Redemption Amount', for: 'redemption-amount', class: 'form-label' %>
+        <div class="mt-1 relative rounded-md shadow-elevation-1">
           <div class="pointer-events-none absolute inset-y-0 left-0 flex items-center pl-3">
             <span class="text-gray-500 sm:text-sm">$</span>
           </div>
           <%= f.text_field :amount, value: @amount_input, inputmode: 'decimal', autocomplete: 'off', required: true,
                                     id: 'redemption-amount', placeholder: '0.00', 'aria-describedby': 'redemption-amount-hint',
-                                    class: 'block w-full rounded-md border-gray-300 pl-7 pr-12 focus:border-indigo-500 focus:ring-indigo-500 sm:text-sm' %>
+                                    class: 'form-input pl-7 pr-12' %>
         </div>
-        <p id="redemption-amount-hint" class="mt-1 text-sm text-gray-500">Enter dollars and cents, for example 125.50. The amount cannot exceed the current balance.</p>
+        <p id="redemption-amount-hint" class="form-hint">Enter dollars and cents, for example 125.50. The amount cannot exceed the current balance.</p>
       </div>
     </div>
 
-    <!-- Product Selection -->
-    <div class="bg-white shadow rounded-lg p-6 mb-6">
+    <div class="card p-6 mb-6">
       <div class="mb-4">
         <h2 class="text-xl font-semibold">Select Products</h2>
-        <p class="text-sm text-gray-500">Choose which products the constituent is purchasing with this voucher. (This is for documentation only.)</p>
+        <p class="text-sm text-gray-500">Choose which products the constituent is purchasing with this voucher. The selection is recorded for reference only.</p>
       </div>
       <div class="grid grid-cols-1 md:grid-cols-2 gap-4">
         <% @products.each do |product| %>
-          <div class="border rounded-lg p-4 hover:border-indigo-300 transition-colors">
+          <div class="border rounded-lg p-4 hover:border-primary-300 transition-colors">
             <div class="flex items-start">
               <%= check_box_tag 'product_ids[]', product.id, @selected_product_ids.include?(product.id.to_s),
-                                { class: 'form-checkbox product-checkbox h-5 w-5 text-indigo-600 mt-0.5 flex-shrink-0',
+                                { class: 'form-checkbox product-checkbox h-5 w-5 text-primary-600 mt-0.5 flex-shrink-0',
                                   id: "product_#{product.id}",
                                   data: { product_name: product.name, voucher_redemption_target: 'product', action: 'change->voucher-redemption#update' } } %>
               <label for="product_<%= product.id %>" class="ml-3 block text-sm cursor-pointer flex-1">
@@ -75,26 +72,21 @@
           </div>
         <% end %>
       </div>
-      <div id="no-products-warning" data-voucher-redemption-target="warning" role="alert" class="mt-4 p-3 bg-red-50 border border-red-200 rounded-md text-sm text-red-700 hidden">
-        <strong>⚠️ Please select at least one product</strong> for this voucher redemption.
+      <div id="no-products-warning" data-voucher-redemption-target="warning" role="alert" class="mt-4 p-3 bg-danger-50 border border-danger-200 rounded-md text-sm text-danger-700 hidden">
+        <strong>Please select at least one product</strong> for this voucher redemption.
       </div>
 
-      <!-- Selected Products Summary -->
-      <div id="selected-products-summary" data-voucher-redemption-target="summary" class="mt-6 p-4 border-2 border-indigo-200 rounded-lg bg-indigo-50 hidden">
-        <h4 class="text-lg font-semibold text-indigo-900 mb-3">Selected Products</h4>
-        <ul id="selected-products-list" data-voucher-redemption-target="list" class="space-y-2">
-          <!-- JavaScript will populate this -->
-        </ul>
+      <div id="selected-products-summary" data-voucher-redemption-target="summary" class="mt-6 p-4 border-2 border-primary-200 rounded-lg bg-primary-50 hidden">
+        <h4 class="text-lg font-semibold text-primary-900 mb-3">Selected Products</h4>
+        <ul id="selected-products-list" data-voucher-redemption-target="list" class="space-y-2"></ul>
       </div>
     </div>
 
-    <!-- Action Buttons -->
     <div class="flex justify-end space-x-4">
       <%= f.submit 'Process Redemption', id: 'submit-redemption',
-                                         class: 'inline-flex items-center px-6 py-3 border border-transparent rounded-md shadow-sm text-base font-medium ' \
-                                                'text-white bg-indigo-600 hover:bg-indigo-700 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-indigo-500',
+                                         class: 'btn btn-primary',
                                          data: { disable_with: 'Processing...', voucher_redemption_target: 'submit' } %>
-      <%= link_to "Cancel", vendor_portal_vouchers_path, class: "inline-flex items-center px-6 py-3 border border-gray-300 rounded-md text-base font-medium text-gray-700 bg-white hover:bg-gray-50 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-indigo-500" %>
+      <%= link_to "Cancel", vendor_portal_vouchers_path, class: 'btn btn-outline' %>
     </div>
   <% end %>
 </div>

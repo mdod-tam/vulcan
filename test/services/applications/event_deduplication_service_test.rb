@@ -73,10 +73,8 @@ module Applications
         created_at: time
       )
 
-      # Execute
       result = service.deduplicate([notification, event, status_change])
 
-      # Verify: Only the highest priority event should remain
       assert_equal 1, result.size
       assert_equal status_change, result.first
     end
@@ -119,7 +117,6 @@ module Applications
 
       result = service.deduplicate([event1, event2, event3])
 
-      # Verify: The first two events are deduplicated, the third is separate
       assert_equal 2, result.size
       assert_includes result, event3
       assert(result.include?(event1) || result.include?(event2))

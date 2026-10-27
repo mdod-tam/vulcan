@@ -18,7 +18,6 @@ module AdminNamespace
 
       @application.update!(training_requested_at: Time.current)
 
-      # Sign in as admin
       sign_in(@admin)
     end
 
@@ -30,7 +29,6 @@ module AdminNamespace
       visit admin_applications_path
       assert_selector 'h1', text: 'Applications'
 
-      # Basic verification that the page loaded
       assert_selector '.bg-white'
     end
   end

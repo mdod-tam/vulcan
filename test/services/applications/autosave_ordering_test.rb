@@ -158,13 +158,13 @@ module Applications
     end
 
     def form(**attributes)
-      ApplicationForm.new(current_user: @user, application: @draft, params: {
+      ApplicationForm.new(current_user: @user, application: @draft, params: ActionController::Parameters.new(
         application: { annual_income: '50000', household_size: attributes[:household_size],
                        vision_disability: true, terms_accepted: true, information_verified: true,
                        medical_release_authorized: true,
                        medical_provider_attributes: { name: 'Test Provider', phone: '2025550123' } },
         autosave_context: @context, autosave_revision: attributes[:autosave_revision]
-      }.with_indifferent_access)
+      ))
     end
   end
 end

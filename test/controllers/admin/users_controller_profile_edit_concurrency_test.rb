@@ -3,9 +3,9 @@
 require 'test_helper'
 
 module Admin
-  # Focused both-order concurrency evidence for the primary contact/profile edit boundary
-  # (plan section 4, row 3), admin-edit variant: Admin::UsersController#update and the merge
-  # service serialize through User.lock_for_merge_integrity! on the actor and target rows.
+  # Concurrency tests, in both orders, for the admin variant of the primary contact/profile edit
+  # boundary: Admin::UsersController#update and the merge service serialize through
+  # User.lock_for_merge_integrity! on the actor and target rows.
   class UsersControllerProfileEditConcurrencyTest < ActiveSupport::TestCase
     self.use_transactional_tests = false
 

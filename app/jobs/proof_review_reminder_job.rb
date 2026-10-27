@@ -12,7 +12,6 @@ class ProofReviewReminderJob < ApplicationJob
 
     return if stale_applications.empty?
 
-    # Send reminders to all administrators
     User.where(type: 'Users::Administrator').find_each do |admin|
       ApplicationNotificationsMailer.proof_needs_review_reminder(admin, stale_applications.to_a).deliver_now
     end

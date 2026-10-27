@@ -3,18 +3,17 @@
     <h1 class="text-3xl font-bold text-gray-900">Invoices</h1>
     <div class="flex flex-wrap gap-3">
       <%= link_to 'Back to Dashboard', admin_applications_path,
-                  data: { turbo_frame: '_top' }, class: 'inline-flex items-center px-4 py-2 border border-gray-300 rounded-md shadow-sm ' \
-                                                        'text-sm font-medium text-gray-700 bg-white hover:bg-gray-50' %>
+                  data: { turbo_frame: '_top' }, class: 'btn btn-outline' %>
       <%= link_to 'Export CSV (all matching invoices)', admin_invoices_path(format: :csv, **request.query_parameters.except('page')),
-                  class: 'inline-flex items-center px-4 py-2 border border-gray-300 rounded-md shadow-sm text-sm font-medium text-gray-700 bg-white hover:bg-gray-50' %>
+                  class: 'btn btn-outline' %>
     </div>
   </div>
 
   <% if @generation_failures.any? %>
-    <section aria-labelledby="failures-heading" class="mb-6 rounded-lg border border-red-200 bg-red-50 p-6">
-      <h2 id="failures-heading" class="text-lg font-medium text-red-900 mb-1">Invoicing failed for <%= pluralize(@generation_failures.size, 'vendor') %></h2>
-      <p class="text-sm text-red-800 mb-4">Their voucher redemptions are still waiting. Retry once the cause is fixed. A retry that runs without an error clears the vendor from this list, whether or not it creates an invoice.</p>
-      <ul role="list" class="divide-y divide-red-200">
+    <section aria-labelledby="failures-heading" class="mb-6 rounded-lg border border-danger-200 bg-danger-50 p-6">
+      <h2 id="failures-heading" class="text-lg font-medium text-danger-900 mb-1">Invoicing failed for <%= pluralize(@generation_failures.size, 'vendor') %></h2>
+      <p class="text-sm text-danger-800 mb-4">Their voucher redemptions are still waiting. Retry once the cause is fixed. A retry that runs without an error clears the vendor from this list, whether or not it creates an invoice.</p>
+      <ul role="list" class="divide-y divide-danger-200">
         <% @generation_failures.each do |failure| %>
           <li class="py-3 flex flex-wrap items-center justify-between gap-2 text-sm">
             <span>
@@ -30,7 +29,7 @@
     </section>
   <% end %>
 
-  <section aria-labelledby="not-invoiced-heading" class="bg-white shadow rounded-lg p-6 mb-6">
+  <section aria-labelledby="not-invoiced-heading" class="card p-6 mb-6">
     <h2 id="not-invoiced-heading" class="text-lg font-medium text-gray-900 mb-1">Not yet invoiced</h2>
     <p class="text-sm text-gray-600 mb-4">
       Invoices are created automatically every 14 days for voucher redemptions made before the run day.
@@ -44,7 +43,7 @@
               <span class="font-medium text-gray-900"><%= business_name %></span>
               <span class="text-gray-700">· <%= number_to_currency(billable_total) %> in <%= pluralize(billable_count, 'voucher redemption') %></span>
               <% if held_count.positive? %>
-                <span class="text-amber-800">· <%= held_count %> on hold</span>
+                <span class="text-warning-800">· <%= held_count %> on hold</span>
               <% end %>
             </span>
             <% if billable_count.positive? %>
@@ -60,42 +59,41 @@
     <% end %>
   </section>
 
-  <section aria-labelledby="filters-heading" class="bg-white shadow rounded-lg p-6 mb-6">
+  <section aria-labelledby="filters-heading" class="card p-6 mb-6">
     <h2 id="filters-heading" class="text-lg font-medium text-gray-900 mb-4">Find invoices</h2>
     <%= form_with url: admin_invoices_path, method: :get, class: 'space-y-4' do |f| %>
       <div class="grid grid-cols-1 gap-4 md:grid-cols-5">
         <div>
-          <%= f.label :status, 'Status', class: 'block text-sm font-medium text-gray-700' %>
+          <%= f.label :status, 'Status', class: 'form-label' %>
           <%= f.select :status, [['All statuses', '']] + Invoices::ListFilter::STATUSES.map { |key, status| [InvoicesHelper::STATUS_LABELS[status], key] },
                        { selected: params[:status] }, class: invoice_form_class(:input) %>
         </div>
         <div>
-          <%= f.label :vendor_id, 'Vendor', class: 'block text-sm font-medium text-gray-700' %>
+          <%= f.label :vendor_id, 'Vendor', class: 'form-label' %>
           <%= f.select :vendor_id, options_from_collection_for_select(Users::Vendor.order(:business_name), :id, :business_name, params[:vendor_id]),
                        { include_blank: 'All vendors' }, class: invoice_form_class(:input) %>
         </div>
         <div>
-          <%= f.label :date_basis, 'Dates refer to', class: 'block text-sm font-medium text-gray-700' %>
+          <%= f.label :date_basis, 'Dates refer to', class: 'form-label' %>
           <%= f.select :date_basis, Invoices::ListFilter::DATE_BASES.map { |key, label| [label, key] },
                        { selected: @filter.date_basis }, class: invoice_form_class(:input) %>
         </div>
         <div>
-          <%= f.label :from, 'From', class: 'block text-sm font-medium text-gray-700' %>
+          <%= f.label :from, 'From', class: 'form-label' %>
           <%= f.text_field :from, typed_date_field_options(value: params[:from], class: invoice_form_class(:input), 'aria-describedby': 'filter-dates-hint') %>
         </div>
         <div>
-          <%= f.label :through, 'Through', class: 'block text-sm font-medium text-gray-700' %>
+          <%= f.label :through, 'Through', class: 'form-label' %>
           <%= f.text_field :through, typed_date_field_options(value: params[:through], class: invoice_form_class(:input), 'aria-describedby': 'filter-dates-hint') %>
         </div>
       </div>
-      <p id="filter-dates-hint" class="text-xs text-gray-500">Enter dates as MM/DD/YYYY. "Invoice period" finds invoices covering those days; "Payment date" finds invoices paid on them.</p>
+      <p id="filter-dates-hint" class="form-hint">Enter dates as MM/DD/YYYY. "Invoice period" finds invoices covering those days; "Payment date" finds invoices paid on them.</p>
       <%= f.submit 'Apply filters',
-                   class: 'inline-flex items-center px-4 py-2 border border-transparent shadow-sm text-sm ' \
-                          'font-medium rounded-md text-white bg-indigo-600 hover:bg-indigo-700' %>
+                   class: 'btn btn-primary' %>
     <% end %>
   </section>
 
-  <section aria-labelledby="invoices-heading" class="bg-white shadow rounded-lg overflow-hidden">
+  <section aria-labelledby="invoices-heading" class="card overflow-hidden">
     <h2 id="invoices-heading" class="px-6 pt-6 text-lg font-medium text-gray-900">Invoices (<%= @pagy.count %>)</h2>
     <div class="overflow-x-auto">
       <table class="min-w-full divide-y divide-gray-200 mt-4">
@@ -109,7 +107,7 @@
         <tbody class="bg-white divide-y divide-gray-200">
           <% @invoices.each do |invoice| %>
             <tr>
-              <td class="px-6 py-4 whitespace-nowrap text-sm"><%= link_to invoice.invoice_number, [:admin, invoice], class: 'text-indigo-600 hover:text-indigo-900' %></td>
+              <td class="px-6 py-4 whitespace-nowrap text-sm"><%= link_to invoice.invoice_number, [:admin, invoice], class: 'text-primary-600 hover:text-primary-900' %></td>
               <td class="px-6 py-4 whitespace-nowrap text-sm text-gray-900"><%= invoice.vendor.business_name.presence || invoice.vendor.email %></td>
               <td class="px-6 py-4 whitespace-nowrap text-sm text-gray-900"><%= number_to_currency(invoice.total_amount) %></td>
               <td class="px-6 py-4 whitespace-nowrap text-sm"><%= invoice_status_badge(invoice) %></td>

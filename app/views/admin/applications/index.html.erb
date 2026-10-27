@@ -1,24 +1,20 @@
 <main class="container mx-auto px-4 py-8" role="main" id="main-content">
   <div class="max-w-7xl mx-auto mb-4 flex gap-4">
-    <%= link_to 'Equipment', admin_equipment_index_path, class: 'text-indigo-700 underline' %>
-    <%= link_to 'Purchase Orders', admin_purchase_orders_path, class: 'text-indigo-700 underline' %>
+    <%= link_to 'Equipment', admin_equipment_index_path, class: 'text-primary-700 underline' %>
+    <%= link_to 'Purchase Orders', admin_purchase_orders_path, class: 'text-primary-700 underline' %>
   </div>
   <div class="max-w-7xl mx-auto">
-    
-    <%# Applications Header Section %>
     <div class="mb-6">
       <h1 class="text-3xl font-bold mb-4" id="page-title">
         Applications
       </h1>
     </div>
 
-    
-    <%# Applications List Section with Integrated Filters %>
-    <section aria-labelledby="applications-heading" class="bg-white rounded-lg shadow mb-6" id="application-table">      
+    <section aria-labelledby="applications-heading" class="card mb-6" id="application-table">
       <div class="p-4 border-b">
         <%= form_tag admin_applications_path, method: :get, class: "flex flex-wrap items-center gap-4", data: { turbo_frame: "applications_list", turbo_action: "advance", controller: "autosubmit" } do %>
           <div class="flex items-center gap-2">
-            <%= label_tag :status, "Status:", class: "text-sm font-medium text-gray-700" %>
+            <%= label_tag :status, "Status:", class: "form-label" %>
             <%= select_tag :status,
                            options_for_select(
                              [
@@ -31,12 +27,12 @@
                              ],
                              params[:status]
                            ),
-                           class: 'rounded-md border-gray-300 shadow-sm focus:border-indigo-300 focus:ring focus:ring-indigo-200 focus:ring-opacity-50',
+                           class: 'form-input w-auto',
                            data: { action: 'change->autosubmit#submit' } %>
           </div>
           
           <div class="flex items-center gap-2">
-            <%= label_tag :date_range, "Date Range:", class: "text-sm font-medium text-gray-700" %>
+            <%= label_tag :date_range, "Date Range:", class: "form-label" %>
             <%= select_tag :date_range,
                            options_for_select(
                              [
@@ -48,16 +44,16 @@
                              ],
                              params[:date_range]
                            ),
-                           class: 'rounded-md border-gray-300 shadow-sm focus:border-indigo-300 focus:ring focus:ring-indigo-200 focus:ring-opacity-50',
+                           class: 'form-input w-auto',
                            data: { action: 'change->autosubmit#submit' } %>
           </div>
           
           <div class="flex items-center gap-2">
             <%= label_tag :q, "Search:", class: "sr-only" %>
-            <div class="relative rounded-md shadow-sm">
-              <%= text_field_tag :q, params[:q], placeholder: "Application, name, or email...", data: { action: "input->autosubmit#search" }, class: "focus:ring-indigo-500 focus:border-indigo-500 block w-full pl-3 pr-10 py-2 sm:text-sm border-gray-300 rounded-md" %>
+            <div class="relative rounded-md shadow-elevation-1">
+              <%= text_field_tag :q, params[:q], placeholder: "Application, name, or email...", data: { action: "input->autosubmit#search" }, class: "form-input pr-10" %>
               <div class="absolute inset-y-0 right-0 pr-3 flex items-center pointer-events-none">
-                <svg class="h-5 w-5 text-gray-400" xmlns="http://www.w3.org/2000/svg" viewBox="0 0 20 20" fill="currentColor" aria-hidden="true">
+                <svg class="h-5 w-5 text-gray-500" xmlns="http://www.w3.org/2000/svg" viewBox="0 0 20 20" fill="currentColor" aria-hidden="true">
                   <path fill-rule="evenodd" d="M8 4a4 4 0 100 8 4 4 0 000-8zM2 8a6 6 0 1110.89 3.476l4.817 4.817a1 1 0 01-1.414 1.414l-4.816-4.816A6 6 0 012 8z" clip-rule="evenodd" />
                 </svg>
               </div>
@@ -65,11 +61,15 @@
           </div>
 
           <div class="flex items-center gap-2">
-            <%= label_tag :managing_guardian_q, "Managing Guardian:", class: "text-sm font-medium text-gray-700" %>
-            <div class="relative rounded-md shadow-sm">
-              <%= text_field_tag :managing_guardian_q, params[:managing_guardian_q], placeholder: "Guardian name or email...", data: { action: "input->autosubmit#search" }, class: "focus:ring-indigo-500 focus:border-indigo-500 block w-full pl-3 pr-10 py-2 sm:text-sm border-gray-300 rounded-md" %>
+            <%= label_tag :managing_guardian_q, "Managing Guardian:", class: "form-label" %>
+            <div class="relative rounded-md shadow-elevation-1">
+              <%= text_field_tag :managing_guardian_q,
+                                 params[:managing_guardian_q],
+                                 placeholder: "Guardian name or email...",
+                                 data: { action: "input->autosubmit#search" },
+                                 class: "form-input pr-10" %>
               <div class="absolute inset-y-0 right-0 pr-3 flex items-center pointer-events-none">
-                <svg class="h-5 w-5 text-gray-400" xmlns="http://www.w3.org/2000/svg" viewBox="0 0 20 20" fill="currentColor" aria-hidden="true">
+                <svg class="h-5 w-5 text-gray-500" xmlns="http://www.w3.org/2000/svg" viewBox="0 0 20 20" fill="currentColor" aria-hidden="true">
                   <path fill-rule="evenodd" d="M8 4a4 4 0 100 8 4 4 0 000-8zM2 8a6 6 0 1110.89 3.476l4.817 4.817a1 1 0 01-1.414 1.414l-4.816-4.816A6 6 0 012 8z" clip-rule="evenodd" />
                 </svg>
               </div>
@@ -78,12 +78,12 @@
 
           <div class="flex items-center gap-2">
             <%= check_box_tag :for_minors, 'true', params[:for_minors].present?,
-                              class: 'h-4 w-4 text-indigo-600 focus:ring-indigo-500 border-gray-300 rounded',
+                              class: 'h-4 w-4 text-primary-600 border-gray-300 rounded',
                               data: { action: 'change->autosubmit#submit' } %>
-            <%= label_tag :for_minors, "Show only dependent applications", class: "text-sm font-medium text-gray-700" %>
+            <%= label_tag :for_minors, "Show only dependent applications", class: "form-label" %>
           </div>
           <%= submit_tag "Search", class: "sr-only" %>
-          <%= link_to "Clear Filters", admin_applications_path, class: "inline-flex items-center px-3 py-2 border border-gray-300 shadow-sm text-sm leading-4 font-medium rounded-md text-gray-700 bg-white hover:bg-gray-50 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-indigo-500", data: { turbo_frame: "applications_list" } %>
+          <%= link_to "Clear Filters", admin_applications_path, class: "btn btn-outline", data: { turbo_frame: "applications_list" } %>
         <% end %>
       </div>
 
@@ -107,7 +107,6 @@
           <% end %>
         </div>
 
-        <%# Pagination %>
         <% if @pagy && @pagy.pages > 1 %>
           <div class="px-4 py-3 border-t">
             <%== pagy_nav(@pagy) %>
@@ -116,12 +115,11 @@
       <% end %>
     </section>
 
-    <%# Notifications Section - Moved below applications table %>
-    <section aria-labelledby="notifications-heading" class="bg-white rounded-lg shadow p-4 mb-6">
+    <section aria-labelledby="notifications-heading" class="card p-4 mb-6">
       <div class="flex items-center justify-between mb-4">
         <h2 id="notifications-heading" class="text-lg font-medium text-gray-900">Recent Notifications</h2>
         <%= link_to notifications_path(scope: 'all'), 
-            class: "text-sm font-medium text-indigo-600 hover:text-indigo-500 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-indigo-500 flex items-center",
+            class: "text-sm font-medium text-primary-600 hover:text-primary-500 flex items-center",
             aria: { label: "View all notifications" } do %>
           View All
           <svg class="ml-1 h-4 w-4" fill="none" stroke="currentColor" viewBox="0 0 24 24" aria-hidden="true">
@@ -133,7 +131,7 @@
       <% if @recent_notifications.present? %>
         <ul class="divide-y divide-gray-200">
           <% @recent_notifications.each do |notification| %>
-            <!-- Use render instead of inline partial to avoid implicit loading of notifiable association -->
+            <%# Render the partial explicitly so the notifiable association is not loaded implicitly. %>
             <%= render "notifications/notification", notification: notification %>
           <% end %>
         </ul>
@@ -142,11 +140,10 @@
       <% end %>
     </section>
 
-    <%# Charts Section - Lazy-loaded via Turbo Frame for better performance %>
     <%= turbo_frame_tag "charts_section", src: charts_admin_applications_path, loading: "lazy" do %>
-      <div class="mb-6 bg-white rounded-lg shadow p-6">
+      <div class="card mb-6 p-6">
         <div class="flex items-center justify-center">
-          <svg class="animate-spin h-8 w-8 text-indigo-600" xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24">
+          <svg class="animate-spin h-8 w-8 text-primary-600" xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24">
             <circle class="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" stroke-width="4"></circle>
             <path class="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z"></path>
           </svg>

@@ -6,21 +6,18 @@ class RegistrationsMailerTest < ActiveSupport::TestCase
   include ActiveJob::TestHelper
 
   setup do
-    # Create templates needed for the test
     create_email_templates
   end
 
   test 'registration_confirmation email should be sent' do
-    # Create a test user directly (not saved to DB)
     user = Users::Constituent.new(
       first_name: 'Test',
       last_name: 'User',
-      email: 'test.reg.mailer@example.com', # Unique to avoid collisions
+      email: 'test.reg.mailer@example.com',
       phone: '555-123-4567',
       communication_preference: 'email'
     )
 
-    # Create a mock template that returns text-only content
     mock_template = mock('EmailTemplate')
     subject = 'Welcome to the Maryland Accessible Telecommunications Program'
     body = "Dear Test,\n\nWelcome to the program.\n\nThank you,\nThe MAT Team"
@@ -30,25 +27,21 @@ class RegistrationsMailerTest < ActiveSupport::TestCase
     mock_template.stubs(:enabled?).returns(true)
     EmailTemplate.stubs(:find_by!).returns(mock_template)
 
-    # Clear any emails from previous tests
     ActionMailer::Base.deliveries.clear
 
-    # Generate and deliver the email
     email = ApplicationNotificationsMailer.registration_confirmation(user).deliver_now
 
-    # Basic assertions
     assert_equal ['no_reply@mdmat.org'], email.from
     assert_equal ['test.reg.mailer@example.com'], email.to
     assert_equal 'Welcome to the Maryland Accessible Telecommunications Program', email.subject
 
-    # Check text-only email (no longer multipart)
+    # The email is text-only, not multipart.
     assert_equal 'text/plain; charset=UTF-8', email.content_type
     assert_includes email.body.to_s, 'Dear Test,'
     assert_includes email.body.to_s, 'Welcome to the program'
   end
 
   test 'registrations controller should send email' do
-    # Create a user with unique email
     user = Users::Constituent.new(
       first_name: 'New',
       last_name: 'User',
@@ -56,7 +49,7 @@ class RegistrationsMailerTest < ActiveSupport::TestCase
       communication_preference: 'email'
     )
 
-    # Use old-style expectation (instead of enqueued assertions) to avoid serialization issues with unsaved records
+    # A Mocha expectation instead of enqueued-job assertions, which cannot serialize unsaved records.
     mail_message = mock('MailMessage')
     mail_message.expects(:deliver_later).returns(true)
 
@@ -71,7 +64,6 @@ class RegistrationsMailerTest < ActiveSupport::TestCase
   private
 
   def create_email_templates
-    # Create the required templates for the mailer to work
     unless EmailTemplate.exists?(name: 'application_notifications_registration_confirmation', format: :text)
       EmailTemplate.create!(
         name: 'application_notifications_registration_confirmation',

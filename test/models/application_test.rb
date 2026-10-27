@@ -7,6 +7,7 @@ class ApplicationTest < ActiveSupport::TestCase
 
   def setup
     @admin = create(:admin)
+    Current.user = @admin
 
     setup_paper_application_context
 

@@ -13,10 +13,10 @@
       <div class="rounded border border-gray-200 p-3">
         <%= hidden_field_tag 'purchase_order[needs][][id]', row[:id], id: nil %><%= hidden_field_tag 'purchase_order[needs][][lock_version]', row[:lock_version], id: nil %>
         <% if need %><p><%= equipment_catalog_label(need.product) %> · Application #<%= need.application_id %> · <%= need.remaining_quantity %> currently remaining</p><% else %><p>Selected need is unavailable. Return to Equipment to refresh.</p><% end %>
-        <%= label_tag "quantity_#{row[:id]}", 'New quantity to order', class: 'block font-medium' %>
+        <%= label_tag "quantity_#{row[:id]}", 'New quantity to order', class: 'form-label' %>
         <%= number_field_tag 'purchase_order[needs][][quantity]', row[:quantity],
                              id: "quantity_#{row[:id]}", min: 1, max: need&.remaining_quantity,
-                             required: true, autocomplete: 'off', class: 'rounded border-gray-300',
+                             required: true, autocomplete: 'off', class: 'form-input w-32',
                              data: { equipment_selection_target: 'quantity', action: 'input->equipment-selection#updateQuantities' } %>
       </div>
     <% end %>
@@ -30,14 +30,14 @@
     <fieldset class="rounded border border-gray-200 p-4 space-y-4">
       <legend class="font-semibold">Purchase order</legend>
       <div>
-        <%= form.label :existing, 'Link to an existing PO (leave blank to create one)', class: 'block font-medium' %>
+        <%= form.label :existing, 'Link to an existing PO (leave blank to create one)', class: 'form-label' %>
         <%= form.select :existing, options_for_select(@existing_options, @existing),
-                        { include_blank: 'Create a new PO' }, class: 'rounded border-gray-300 w-full' %>
+                        { include_blank: 'Create a new PO' }, class: 'form-input' %>
       </div>
       <p class="text-sm text-gray-600">New PO fields apply when no existing PO is selected. Duplicate vendor/PO numbers must be linked explicitly to the existing order.</p>
       <%= render 'admin/purchase_orders/fields', form: form, purchase_order: @purchase_order, vendors: @vendors %>
     </fieldset>
-    <%= form.submit 'Record purchase order', class: 'rounded bg-indigo-700 px-4 py-2 text-white' %>
-    <%= link_to 'Back to Equipment', equipment_return_path(@return_context), class: 'text-indigo-700 underline' %>
+    <%= form.submit 'Record purchase order', class: 'btn btn-primary' %>
+    <%= link_to 'Back to Equipment', equipment_return_path(@return_context), class: 'text-primary-700 underline' %>
   <% end %>
 </div>

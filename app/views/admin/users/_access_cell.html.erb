@@ -1,0 +1,64 @@
+<%# locals: (user:) %>
+<td id="<%= access_dom_id(user, :access) %>" class="px-6 py-4">
+  <% if user == current_user %>
+    <div class="text-sm text-gray-500 italic">
+      Cannot modify own role
+    </div>
+  <% else %>
+    <% capabilities = RoleCapability::CAPABILITIES.select { |capability| user.role_provided_capabilities.include?(capability) || user.grantable_capabilities.include?(capability) } %>
+    <%= form_with url: update_role_admin_user_path(user), method: :patch, id: access_dom_id(user, :access_form), class: "space-y-4",
+          data: { controller: "role-select",
+                  action: "turbo:submit-start->role-select#lock turbo:submit-end->role-select#unlock modal:closed@window->role-select#restore",
+                  role_select_user_id_value: user.id,
+                  role_select_update_role_url_value: update_role_admin_user_path(user),
+                  role_select_update_capabilities_url_value: update_capabilities_admin_user_path(user),
+                  role_select_current_role_value: user.type,
+                  role_select_conversion_warning_value: (vendor_conversion_warning if user.vendor?) } do %>
+      <%= hidden_field_tag :operation_id, nil, id: nil, data: { role_select_target: "operation" } %>
+      <%= hidden_field_tag :role, nil, id: nil, data: { role_select_target: "role" } %>
+      <%= hidden_field_tag :capability, nil, id: nil, data: { role_select_target: "capabilityField" } %>
+      <%= hidden_field_tag :enabled, nil, id: nil, data: { role_select_target: "enabled" } %>
+
+      <div class="role-section">
+        <label for="role_<%= user.id %>" class="form-label mb-1">
+          Primary Role
+        </label>
+        <%# The user's own role is always listed, so the select shows it and a cancelled change can return to it. %>
+        <%= select_tag "role_#{user.id}", options_for_select(access_role_options | [user.type], selected: user.type),
+            name: nil,
+            data: { role_select_target: "select", action: "change->role-select#roleChanged" },
+            class: "form-input pr-10 text-base text-gray-900 bg-gray-100 cursor-pointer" %>
+      </div>
+
+      <% if capabilities.any? %>
+        <div class="capabilities-section">
+          <p class="form-label mb-2">
+            Capabilities
+          </p>
+
+          <div class="space-y-2">
+            <% capabilities.each do |capability| %>
+              <% from_role = user.role_provided_capabilities.include?(capability) %>
+              <% checkbox_id = "capability_#{capability}_#{user.id}" %>
+              <div class="relative flex items-start">
+                <div class="flex items-center h-5">
+                  <%= tag.input type: "checkbox", id: checkbox_id, checked: user.effective_capability?(capability), disabled: from_role,
+                      data: { role_select_target: "capability", action: "click->role-select#toggleCapability", capability: capability, from_role: from_role },
+                      class: "h-4 w-4 rounded border-gray-300 text-primary-600 cursor-pointer #{'opacity-50' if from_role}" %>
+                </div>
+                <div class="ml-3 text-sm">
+                  <label for="<%= checkbox_id %>" class="font-medium text-gray-700 cursor-pointer">
+                    <%= capability.titleize %>
+                    <% if from_role %>
+                      <span class="text-sm text-gray-500 italic ml-1">(from role)</span>
+                    <% end %>
+                  </label>
+                </div>
+              </div>
+            <% end %>
+          </div>
+        </div>
+      <% end %>
+    <% end %>
+  <% end %>
+</td>

@@ -4,44 +4,38 @@ require 'test_helper'
 
 class UrlHelpersInMailersTest < ActionMailer::TestCase
   setup do
-    # Generate random unique emails to avoid duplication
+    # Unique emails keep records from colliding across tests.
     random_suffix = SecureRandom.hex(6)
 
-    # Set up application and related objects using factories with unique emails
     @user = create(:constituent, email: "url_test_user_#{random_suffix}@example.com")
     @application = create(:application, user: @user)
 
-    # Create a proof review with approved status for the application
     @proof_review = create(:proof_review,
                            application: @application,
                            proof_type: 'income',
                            status: :approved,
                            admin: create(:admin, email: "url_test_admin_#{random_suffix}@example.com"))
 
-    # Set up evaluation and related objects
     @evaluator = create(:evaluator, email: "url_test_evaluator_#{random_suffix}@example.com")
     @constituent = create(:constituent, email: "url_test_constituent_#{random_suffix}@example.com")
 
-    # Create a separate application for the evaluation to avoid associations reusing the same email
+    # A separate application keeps associations from reusing the same email.
     @eval_application = create(:application,
                                user: @constituent,
                                status: :in_progress)
 
-    # Create evaluation with all explicit associations to avoid any factory defaults
+    # Explicit associations keep factory defaults out of the evaluation.
     @evaluation = create(:evaluation,
                          evaluator: @evaluator,
                          constituent: @constituent,
                          application: @eval_application,
                          status: :requested)
 
-    # Set up vendor with unique email
     @vendor = create(:vendor, email: "url_test_vendor_#{random_suffix}@example.com")
 
-    # Configure default URL options for testing
     @original_default_url_options = Rails.application.config.action_mailer.default_url_options&.dup
     Rails.application.config.action_mailer.default_url_options = { host: 'test.example.com' }
 
-    # Create the required text templates for URL-bearing emails.
     create_templates_if_missing
   end
 
@@ -50,7 +44,6 @@ class UrlHelpersInMailersTest < ActionMailer::TestCase
   end
 
   test 'proof_rejected email contains absolute URLs' do
-    # Create a mock for the text template that returns text-only content
     mock_template = mock('EmailTemplate')
     subject = 'Your Proof Was Rejected'
     body = "Proof resubmission link:\nhttp://test.example.com/dashboard"
@@ -66,7 +59,6 @@ class UrlHelpersInMailersTest < ActionMailer::TestCase
   end
 
   test 'new_evaluation_assigned email contains absolute URLs' do
-    # Create a mock for the text template that returns text-only content with all required variables
     mock_template = mock('EmailTemplate')
     subject = 'New Evaluation Assigned'
     body = "Evaluator evaluation link:\nhttp://test.example.com/evaluations/123"
@@ -76,10 +68,9 @@ class UrlHelpersInMailersTest < ActionMailer::TestCase
     mock_template.stubs(:enabled?).returns(true)
     EmailTemplate.stubs(:find_by!).returns(mock_template)
 
-    # Override status_box_text method to provide the missing value
     EvaluatorMailer.any_instance.stubs(:status_box_text).returns('[STATUS] New Assignment: Please review')
 
-    email = EvaluatorMailer.with(evaluation: @evaluation).new_evaluation_assigned
+    email = EvaluatorMailer.with(assignment_notice_params(@evaluation, @evaluation.evaluator)).new_evaluation_assigned
 
     assert_match(%r{http://test\.example\.com}, decoded_text_part(email))
   end
@@ -116,7 +107,6 @@ class UrlHelpersInMailersTest < ActionMailer::TestCase
 
   private
 
-  # Create any missing templates to ensure the tests can run
   def create_templates_if_missing
     template_names = %w[
       application_notifications_proof_rejected

@@ -19,8 +19,9 @@ module Admin
     end
 
     def set_current_attributes
-      # Always use the current_user, even in test environment
-      Current.set(request, current_user)
+      Current.user_agent = request.user_agent
+      Current.ip_address = request.remote_ip
+      Current.user = current_user
     end
   end
 end

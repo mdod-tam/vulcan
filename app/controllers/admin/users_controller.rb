@@ -1,7 +1,7 @@
 # frozen_string_literal: true
 
 module Admin
-  class UsersController < BaseController # rubocop:disable Metrics/ClassLength
+  class UsersController < BaseController
     include ParamCasting
     include UserServiceIntegration
     include PaperQuickCreatePortalMarkers
@@ -30,6 +30,13 @@ module Admin
       'Trainer' => 'Users::Trainer'
     }.freeze
 
+    # Everything the index, show and search views read about a user. Each reflection caches separately, so
+    # :guardians is listed beside the join collections that dependent contact resolution does not read.
+    USER_PRELOADS = [
+      :role_capabilities, :guardians,
+      { guardian_relationships_as_guardian: :dependent_user, guardian_relationships_as_dependent: :guardian_user }
+    ].freeze
+
     def index
       if turbo_frame_request_for_search_results?
         handle_search_frame_request
@@ -38,11 +45,8 @@ module Admin
 
       load_user_metrics
 
-      base_scope = User.all
-      filtered_scope = apply_user_filters(base_scope)
+      filtered_scope = apply_user_filters(User.preload(*USER_PRELOADS))
       @pagy, @users = paginate_users(filtered_scope)
-
-      optimize_users_for_index_view(@users.to_a)
 
       respond_to do |format|
         format.html
@@ -84,7 +88,6 @@ module Admin
 
       if @q.present?
         @users = users_for_paper_search(@q, @role_filter, limit: 10)
-        enhance_constituent_users(@users)
         enhance_constituent_eligibility(@users) if @role_filter == 'constituent'
       else
         @users = []
@@ -101,88 +104,10 @@ module Admin
     public
 
     def show
-      @user = User.find(params[:id])
+      @user = User.preload(*USER_PRELOADS).find(params[:id])
       @contact_delivery_attention = EmailDelivery::Visibility.contact_attention(@user)
-      return unless @user.is_a?(Users::Constituent)
-
-      load_and_enhance_user_relationships
-    end
-
-    def load_and_enhance_user_relationships
-      relationship_data = load_user_relationships
-      enhance_relationships_with_users(relationship_data)
-      view_instance_variables(relationship_data)
-      add_helper_methods_to_user(relationship_data)
-    end
-
-    def load_user_relationships
-      dependent_rels = GuardianRelationship.where(guardian_id: @user.id)
-                                           .select(:id, :guardian_id, :dependent_id, :relationship_type)
-                                           .to_a
-
-      guardian_rels = GuardianRelationship.where(dependent_id: @user.id)
-                                          .select(:id, :guardian_id, :dependent_id, :relationship_type)
-                                          .to_a
-
-      { dependent_rels: dependent_rels, guardian_rels: guardian_rels }
-    end
-
-    def enhance_relationships_with_users(relationship_data)
-      dependent_rels = relationship_data[:dependent_rels]
-      guardian_rels = relationship_data[:guardian_rels]
-
-      all_user_ids = dependent_rels.map(&:dependent_id) + guardian_rels.map(&:guardian_id)
-      return unless all_user_ids.any?
-
-      related_users = User.where(id: all_user_ids).index_by(&:id)
-      attach_users_to_relationships(dependent_rels, guardian_rels, related_users)
-    end
-
-    def attach_users_to_relationships(dependent_rels, guardian_rels, related_users)
-      dependent_rels.each do |rel|
-        rel.define_singleton_method(:dependent_user) do
-          related_users[rel.dependent_id]
-        end
-      end
-
-      guardian_rels.each do |rel|
-        rel.define_singleton_method(:guardian_user) do
-          related_users[rel.guardian_id]
-        end
-      end
-    end
-
-    def view_instance_variables(relationship_data)
-      dependent_rels = relationship_data[:dependent_rels]
-      guardian_rels = relationship_data[:guardian_rels]
-
-      @dependents_count = dependent_rels.size
-      @has_guardian = guardian_rels.any?
-      @guardian_relationships = guardian_rels
-      @dependent_relationships = dependent_rels
-    end
-
-    def add_helper_methods_to_user(_relationship_data)
-      @user.instance_variable_set(:@dependents_count, @dependents_count)
-      @user.instance_variable_set(:@has_guardian, @has_guardian)
-
-      add_relationship_helper_methods_to_user(@user)
-    end
-
-    def add_relationship_helper_methods_to_user(user)
-      class << user
-        def dependents_count
-          @dependents_count || 0
-        end
-
-        def guardian?
-          (@dependents_count || 0).positive?
-        end
-
-        def dependent?
-          @has_guardian || false
-        end
-      end
+      @access_events = Event.where(auditable: @user, action: %w[capability_granted capability_removed]).includes(:user)
+                            .order(created_at: :desc, id: :desc).limit(25)
     end
 
     def edit
@@ -190,7 +115,6 @@ module Admin
     end
 
     def create
-      Current.paper_context = true
       response.headers['Cache-Control'] = 'no-store'
       service = Applications::PaperGuardianQuickCreateService.new(
         attrs: user_create_params.to_h,
@@ -199,7 +123,7 @@ module Admin
         submitted_token: params[:identity_review_receipt],
         selected_candidate_id: params[:selected_candidate_id]
       )
-      result = service.call
+      result = Current.set(paper_context: true) { service.call }
 
       if result.success?
         user = result.data.fetch(:user)
@@ -210,8 +134,6 @@ module Admin
       render partial: 'admin/paper_applications/guardian_review', formats: [:html], content_type: 'text/html',
              locals: { review: service.review, message: result.message, submitted: params },
              status: :unprocessable_content
-    ensure
-      Current.reset
     end
 
     def search
@@ -225,91 +147,23 @@ module Admin
                  []
                end
 
-      enhance_constituent_users(@users)
       enhance_constituent_eligibility(@users) if @role_filter == 'constituent'
       render 'admin/users/search'
     end
 
+    # Access changes answer with Turbo Streams: a confirmation dialog when removing access would strand open
+    # work, otherwise the refreshed row and flash. Refusals and stale impact answer 422 so the dialog stays open.
     def update_role
-      user = User.find(params[:id])
-      Rails.logger.info "Admin::UsersController#update_role - Received role update for user_id: #{user.id}"
+      role_class = role_class_for(params[:role])
+      return render_access_refusal("Invalid role specified: '#{params[:role]}'. Please select a valid role.") unless role_class
 
-      namespaced_role = validate_and_normalize_role(params[:role], user.id)
-      return if performed?
-
-      unless user.prevent_self_role_update?(current_user, namespaced_role)
-        Rails.logger.warn "Admin::UsersController#update_role - Denied self role change attempt by user_id: #{current_user.id}"
-        render json: { success: false, message: 'You cannot change your own role.' }, status: :forbidden
-        return
-      end
-
-      if user.type == namespaced_role
-        handle_unchanged_role(user, namespaced_role)
-      else
-        handle_role_change(user, namespaced_role)
-      end
+      change_access(Users::CapabilityWriter::Intent.change_role(role_class))
     end
 
     def update_capabilities
-      @user = User.find(params[:id])
-      capability = params[:capability]
-      enabled = to_boolean(params[:enabled])
-
-      if enabled
-        handle_add_capability(capability)
-      else
-        handle_remove_capability(capability)
-      end
-    rescue StandardError => e
-      handle_capability_error(e)
-    end
-
-    def handle_add_capability(capability)
-      result = @user.add_capability(capability)
-      log_capability_action('Adding', capability, result)
-
-      if result.is_a?(RoleCapability)
-        render_capability_success("Added #{capability.titleize} Capability")
-      else
-        error_message = extract_error_message(result)
-        Rails.logger.error 'Failed to add capability: validation_failed'
-        render_capability_error(error_message || 'Failed to add capability')
-      end
-    end
-
-    def handle_remove_capability(capability)
-      result = @user.remove_capability(capability)
-      log_capability_action('Removing', capability, result)
-
-      if result
-        render_capability_success("Removed #{capability.titleize} Capability")
-      else
-        render_capability_error('Failed to remove capability')
-      end
-    end
-
-    def log_capability_action(action, _capability, result)
-      Rails.logger.info "#{action} capability for user #{@user.id}: #{result.class.name}"
-    end
-
-    def extract_error_message(result)
-      result.errors.full_messages.join(', ') if result.respond_to?(:errors)
-    end
-
-    def render_capability_success(message)
-      render json: { message: message, success: true }
-    end
-
-    def render_capability_error(message)
-      render json: { message: message, success: false }, status: :unprocessable_content
-    end
-
-    def handle_capability_error(error)
-      Rails.logger.error "Error in update_capabilities: #{error.class.name}"
-      render json: {
-        success: false,
-        message: error.message
-      }, status: :unprocessable_content
+      capability = params[:capability].to_s
+      intent = to_boolean(params[:enabled]) ? Users::CapabilityWriter::Intent.grant(capability) : Users::CapabilityWriter::Intent.revoke(capability)
+      change_access(intent)
     end
 
     # Share User locks with merge. If merge commits first, reject the retired profile.
@@ -671,17 +525,17 @@ module Admin
     # The constituent filter includes legacy "Constituent" STI records that satisfy +paper_applicant_candidate?+.
     def users_for_paper_search(query, role_filter, limit: 10)
       if role_filter == 'constituent'
-        result = Users::FilterService.new(User.all, q: query, role: nil).apply_filters
+        result = Users::FilterService.new(User.preload(*USER_PRELOADS), q: query, role: nil).apply_filters
         pool = result.success? ? result.data.limit(50).to_a : []
         return [] if pool.empty?
 
         pool.select(&:paper_applicant_candidate?).first(limit)
       elsif role_filter == 'guardian'
-        result = Users::FilterService.new(User.all, q: query, role: nil).apply_filters
+        result = Users::FilterService.new(User.preload(*USER_PRELOADS), q: query, role: nil).apply_filters
         pool = result.success? ? result.data.limit(50).to_a : []
         pool.select(&:paper_guardian_candidate?).first(limit)
       else
-        result = Users::FilterService.new(User.all, q: query, role: role_filter).apply_filters
+        result = Users::FilterService.new(User.preload(*USER_PRELOADS), q: query, role: role_filter).apply_filters
         result.success? ? result.data.limit(limit).to_a : []
       end
     end
@@ -709,161 +563,60 @@ module Admin
       user.define_singleton_method(:last_received_products) { last_app&.products&.pluck(:name).presence || [] }
     end
 
-    # Batch relationship counts before the search view renders.
-    def enhance_constituent_users(users)
-      constituent_ids = users.grep(Users::Constituent).map(&:id)
-      return unless constituent_ids.any?
-
-      constituent_records = load_enhanced_constituents(constituent_ids)
-      replace_users_with_enhanced_versions(users, constituent_records)
+    def role_class_for(raw_role)
+      name = raw_role.to_s.include?('::') ? VALID_USER_TYPES.values.find { |value| value == raw_role } : VALID_USER_TYPES[raw_role.to_s.classify]
+      name&.safe_constantize
     end
 
-    def load_enhanced_constituents(constituent_ids)
-      constituent_records = {}
-      relationship_data = load_relationship_data(constituent_ids)
-
-      Users::Constituent.where(id: constituent_ids).find_each do |user|
-        enhance_user_with_relationship_data(user, relationship_data)
-        constituent_records[user.id] = user
-      end
-
-      constituent_records
+    def change_access(intent)
+      user = User.find(params[:id])
+      result = Users::CapabilityWriter.call(
+        actor: current_user, user: user, intent: intent,
+        operation_id: params[:operation_id].presence || SecureRandom.uuid, confirmation: params[:confirmation]
+      )
+      render_access_result(result, intent)
+    rescue ActiveRecord::RecordNotFound
+      raise
+    rescue StandardError => e
+      Rails.logger.error "Admin::UsersController access change failed: #{e.class.name}"
+      render_access_refusal('The change could not be saved and nothing was changed. Try again.', user: user)
     end
 
-    def load_relationship_data(constituent_ids)
-      {
-        dependents_counts: GuardianRelationship.where(guardian_id: constituent_ids)
-                           .group(:guardian_id)
-                                               .count,
-        has_guardian: GuardianRelationship.where(dependent_id: constituent_ids)
-                      .distinct
-                                          .pluck(:dependent_id)
-      }
-    end
-
-    def enhance_user_with_relationship_data(user, relationship_data)
-      user.instance_variable_set(:@dependents_count, relationship_data[:dependents_counts][user.id] || 0)
-      user.instance_variable_set(:@has_guardian, relationship_data[:has_guardian].include?(user.id))
-      add_relationship_helper_methods_to_user(user)
-    end
-
-    def replace_users_with_enhanced_versions(users, constituent_records)
-      users.each_with_index do |user, index|
-        users[index] = constituent_records[user.id] if user.is_a?(Users::Constituent) && constituent_records[user.id]
+    def render_access_result(result, intent)
+      case result.status
+      when :confirmation_required then render_access_dialog(result, intent, status: :ok)
+      when :stale then render_access_dialog(result, intent, status: :unprocessable_content)
+      when :refused then render_access_refusal(result.message, user: result.user)
+      else render_access_row(result.user, result.message, :notice, status: :ok)
       end
     end
 
-    def validate_and_normalize_role(raw_role_param, user_id)
-      return nil if raw_role_param.blank?
-
-      namespaced_role = if raw_role_param.include?('::')
-                          VALID_USER_TYPES.values.find { |v| v == raw_role_param }
-                        else
-                          VALID_USER_TYPES[raw_role_param.classify]
-                        end
-
-      if namespaced_role.blank?
-        Rails.logger.warn "Admin::UsersController#update_role - Invalid role for user_id: #{user_id}"
-        render json: {
-          success: false,
-          message: "Invalid role specified: '#{raw_role_param}'. Please select a valid role."
-        }, status: :unprocessable_content
-        return nil
-      end
-
-      Rails.logger.info "Admin::UsersController#update_role - Determined namespaced_role: #{namespaced_role.inspect} for user_id: #{user_id}"
-      namespaced_role
+    def render_access_dialog(result, intent, status:)
+      render turbo_stream: turbo_stream.update(
+        'staff_access_dialog',
+        partial: 'admin/users/staff_access_dialog',
+        locals: { result: result, intent: intent, operation_id: params[:operation_id].presence }
+      ), status: status
     end
 
-    def handle_unchanged_role(user, namespaced_role)
-      update_user_capabilities(user, params[:capabilities]) if params[:capabilities].present?
-      Rails.logger.info "Admin::UsersController#update_role - Type #{user.type} not changed. Capabilities updated if provided."
-      render json: {
-        success: true,
-        message: "#{user.full_name}'s role is already #{namespaced_role.demodulize.titleize}."
-      }
+    # A refusal from the open dialog stays in the dialog. Otherwise the row returns to its stored state.
+    def render_access_refusal(message, user: nil)
+      return render(turbo_stream: turbo_stream.update('staff_access_error', message), status: :unprocessable_content) if params[:confirmation].present?
+      return render_access_row(user, message, :alert, status: :unprocessable_content) if user
+
+      flash.now[:alert] = message
+      render turbo_stream: turbo_stream.update('flash', partial: 'shared/flash'), status: :unprocessable_content
     end
 
-    def handle_role_change(user, namespaced_role)
-      new_klass = validate_target_class(namespaced_role)
-      return if performed?
-
-      # Share the merge lock before role conversion. Reject a record that merge retired first.
-      # save(validate: false) bypasses the merged-record validation, so the explicit merged? guard is required.
-      # Role conversion can fail unrelated validations for the target STI type.
-      ActiveRecord::Base.transaction do
-        locked_user = User.lock_for_merge_integrity!(user).fetch(user.id)
-
-        if locked_user.merged?
-          render json: { success: false, message: 'This record is no longer an eligible active record.' },
-                 status: :unprocessable_content
-          raise ActiveRecord::Rollback
-        end
-
-        # save(validate: false) below skips Users::Constituent's date-of-birth rule, so it is applied
-        # here: a constituent created by conversion needs one like any other.
-        if new_klass <= Users::Constituent && locked_user.date_of_birth.blank?
-          render json: { success: false, message: 'Add a date of birth before making this user a constituent.' },
-                 status: :unprocessable_content
-          raise ActiveRecord::Rollback
-        end
-
-        converted_user = convert_user_to_new_type(locked_user, new_klass)
-        save_converted_user(converted_user, locked_user)
-      end
-    end
-
-    def validate_target_class(namespaced_role)
-      new_klass = namespaced_role.safe_constantize
-      if new_klass.blank? || new_klass.ancestors.exclude?(User)
-        Rails.logger.error "Admin::UsersController#update_role - Invalid target class for STI: #{namespaced_role}"
-        render json: { success: false, message: 'Invalid target role class.' }, status: :unprocessable_content
-        return nil
-      end
-      new_klass
-    end
-
-    def convert_user_to_new_type(user, new_klass)
-      converted_user = user.becomes(new_klass)
-      converted_user.type = new_klass.name
-      clear_type_specific_fields(user, converted_user)
-      converted_user
-    end
-
-    def clear_type_specific_fields(original_user, converted_user)
-      return unless original_user.type_was == 'Users::Vendor' && !converted_user.is_a?(Users::Vendor)
-
-      Rails.logger.info "Admin::UsersController#update_role - Resetting vendor-only fields for user_id: #{original_user.id}"
-      # Column defaults, not nil: w9_status and w9_rejections_count are NOT NULL.
-      Users::Vendor::VENDOR_ONLY_ATTRIBUTES.each do |attribute|
-        converted_user[attribute] = User.column_defaults[attribute]
-      end
-    end
-
-    def save_converted_user(converted_user, original_user)
-      if converted_user.save(validate: false)
-        handle_successful_user_conversion(converted_user)
-      else
-        handle_failed_user_conversion(converted_user, original_user)
-      end
-    end
-
-    def handle_successful_user_conversion(converted_user)
-      update_user_capabilities(converted_user, params[:capabilities]) if params[:capabilities].present?
-      Rails.logger.info "Admin::UsersController#update_role - Successfully updated user_id: #{converted_user.id} to type: #{converted_user.type}"
-      render json: {
-        success: true,
-        message: "#{converted_user.full_name}'s role updated to #{converted_user.type.demodulize.titleize}."
-      }
-    end
-
-    def handle_failed_user_conversion(converted_user, original_user)
-      Rails.logger.error "Admin::UsersController#update_role - Failed to save converted_user_id: #{original_user.id} " \
-                         "as type #{converted_user.type}: validation_failed"
-      render json: {
-        success: false,
-        message: converted_user.errors.full_messages.join(', ')
-      }, status: :unprocessable_content
+    def render_access_row(user, message, type, status:)
+      user = User.preload(:role_capabilities).find(user.id)
+      flash.now[type] = message
+      render turbo_stream: [
+        turbo_stream.update('flash', partial: 'shared/flash'),
+        turbo_stream.replace(helpers.access_dom_id(user, :badges), partial: 'admin/users/access_badges', locals: { user: user }),
+        turbo_stream.replace(helpers.access_dom_id(user, :access), partial: 'admin/users/access_cell', locals: { user: user }),
+        turbo_stream.update('staff_access_dialog', '')
+      ], status: status
     end
 
     def admin_user_params
@@ -872,16 +625,6 @@ module Admin
                  physical_address_1 physical_address_2 city state zip_code
                  communication_preference newsletter_signup date_of_birth]
       )
-    end
-
-    def update_user_capabilities(user, capabilities)
-      return if capabilities.blank?
-
-      user.role_capabilities.destroy_all
-
-      capabilities.each do |capability|
-        user.add_capability(capability)
-      end
     end
 
     def user_create_params
@@ -939,137 +682,6 @@ module Admin
       else
         clean_msg.split.first.downcase.gsub(/[^a-z0-9_]/, '')
       end
-    end
-
-    # The index renders relationship and capability data from these batches.
-    def optimize_users_for_index_view(users)
-      user_ids = users.map(&:id)
-      return if user_ids.empty?
-
-      preloaded_data = preload_user_index_data(user_ids)
-      enhance_users_with_preloaded_data(users, preloaded_data)
-    end
-
-    def preload_user_index_data(user_ids)
-      guardian_rels = load_guardian_relationships(user_ids)
-      dependent_rels = load_dependent_relationships(user_ids)
-
-      {
-        guardian_counts: load_guardian_counts(user_ids),
-        has_guardian_ids: load_has_guardian_ids(user_ids),
-        guardian_rels: guardian_rels,
-        guardian_users: load_related_users_from_relationships(guardian_rels, :guardian_id),
-        dependent_rels: dependent_rels,
-        dependent_users: load_related_users_from_relationships(dependent_rels, :dependent_id),
-        capabilities_by_user: load_capabilities_by_user(user_ids)
-      }
-    end
-
-    def load_guardian_counts(user_ids)
-      GuardianRelationship.where(guardian_id: user_ids).group(:guardian_id).count
-    end
-
-    def load_has_guardian_ids(user_ids)
-      GuardianRelationship.where(dependent_id: user_ids).pluck(:dependent_id)
-    end
-
-    def load_guardian_relationships(user_ids)
-      GuardianRelationship.where(dependent_id: user_ids).group_by(&:dependent_id)
-    end
-
-    def load_dependent_relationships(user_ids)
-      GuardianRelationship.where(guardian_id: user_ids).group_by(&:guardian_id)
-    end
-
-    def load_related_users_from_relationships(relationships, user_id_field)
-      user_ids = relationships.values.flatten.map(&user_id_field).uniq
-      return {} unless user_ids.any?
-
-      User.where(id: user_ids).index_by(&:id)
-    end
-
-    def load_capabilities_by_user(user_ids)
-      RoleCapability.where(user_id: user_ids)
-                    .pluck(:user_id, :capability)
-                    .group_by(&:first)
-                    .transform_values { |caps| caps.map(&:second) }
-    end
-
-    def enhance_users_with_preloaded_data(users, preloaded_data)
-      users.each do |user|
-        add_guardian_methods(user, preloaded_data)
-        add_capability_methods(user, preloaded_data[:capabilities_by_user])
-        add_role_methods(user)
-      end
-    end
-
-    def add_guardian_methods(user, preloaded_data)
-      guardian_counts = preloaded_data[:guardian_counts]
-      has_guardian_ids = preloaded_data[:has_guardian_ids]
-      guardian_rels = preloaded_data[:guardian_rels]
-      guardian_users = preloaded_data[:guardian_users]
-      dependent_rels = preloaded_data[:dependent_rels]
-      dependent_users = preloaded_data[:dependent_users]
-
-      user.define_singleton_method(:dependents_count) { guardian_counts[id] || 0 }
-      user.define_singleton_method(:guardian?) { (guardian_counts[id] || 0).positive? }
-      user.define_singleton_method(:dependent?) { has_guardian_ids.include?(id) }
-
-      add_guardian_relationship_methods(user, guardian_rels, guardian_users, dependent_rels, dependent_users)
-    end
-
-    def add_guardian_relationship_methods(user, guardian_rels, guardian_users, dependent_rels, dependent_users)
-      user.define_singleton_method(:guardian_relationships_as_dependent) do
-        rels = guardian_rels[id] || []
-        rels.each do |rel|
-          rel.define_singleton_method(:guardian_user) do
-            guardian_users&.fetch(guardian_id, nil)
-          end
-        end
-        rels
-      end
-
-      user.define_singleton_method(:guardians) do
-        guardian_relationships_as_dependent.map(&:guardian_user).compact
-      end
-
-      user.define_singleton_method(:guardian_for_contact) do
-        return nil unless dependent?
-
-        @guardian_for_contact ||= guardian_relationships_as_dependent.first&.guardian_user
-      end
-
-      user.define_singleton_method(:guardian_relationships_as_guardian) do
-        rels = dependent_rels[id] || []
-        rels.each do |rel|
-          rel.define_singleton_method(:dependent_user) do
-            dependent_users&.fetch(dependent_id, nil)
-          end
-        end
-        rels
-      end
-
-      user.define_singleton_method(:dependents) do
-        guardian_relationships_as_guardian.map(&:dependent_user).compact
-      end
-    end
-
-    def add_capability_methods(user, capabilities_by_user)
-      user.define_singleton_method(:has_capability?) do |capability|
-        (capabilities_by_user[id] || []).include?(capability)
-      end
-
-      user.define_singleton_method(:available_capabilities) do
-        User.available_capabilities_for_type(type)
-      end
-
-      user.define_singleton_method(:inherent_capabilities) do
-        User.inherent_capabilities_for_type(type)
-      end
-    end
-
-    def add_role_methods(user)
-      user.define_singleton_method(:role_type) { type&.demodulize || 'Unknown' }
     end
   end
 end

@@ -1,6 +1,5 @@
 # Applications Fixtures
 
-# Original basic fixtures
 active:
   user: confirmed_user
   status: in_progress
@@ -117,7 +116,6 @@ two:
   needs_review_since: null
   submission_method: web
 
-# Additional applications from previous fixture
 draft_application:
   user: constituent_john
   application_date: <%= 2.days.ago.strftime("%F %T") %>

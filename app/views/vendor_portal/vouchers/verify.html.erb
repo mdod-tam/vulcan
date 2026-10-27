@@ -6,14 +6,13 @@
       </div>
       <div class="mt-4 flex md:mt-0 md:ml-4">
         <%= link_to vendor_portal_dashboard_path,
-            class: "inline-flex items-center px-4 py-2 border border-gray-300 rounded-md shadow-sm text-sm font-medium text-gray-700 bg-white hover:bg-gray-50 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-indigo-500" do %>
+            class: 'btn btn-outline' do %>
           Back to Dashboard
         <% end %>
       </div>
     </div>
 
-    <!-- Voucher Basic Details -->
-    <div class="bg-white shadow rounded-lg p-6 mb-6">
+    <div class="card p-6 mb-6">
     <h2 class="text-xl font-semibold mb-4">Voucher Details</h2>
     <div class="grid grid-cols-1 md:grid-cols-2 gap-4">
       <div>
@@ -23,30 +22,29 @@
     </div>
   </div>
 
-  <!-- Identity Verification Form -->
-  <div class="bg-white shadow rounded-lg p-6 mb-6">
+  <div class="card p-6 mb-6">
     <h2 class="text-xl font-semibold mb-4">Identity Verification</h2>
     <p class="mb-4 text-gray-700">Please ask the constituent to provide their date of birth to verify their identity.</p>
     
     <%= form_with(url: verify_dob_vendor_portal_voucher_path(@voucher), method: :post, id: "verification-form", class: "space-y-6") do |f| %>
       <div class="mb-4">
-        <%= f.label :date_of_birth, t('shared.date_of_birth.label'), class: 'block text-sm font-medium text-gray-700' %>
+        <%= f.label :date_of_birth, t('shared.date_of_birth.label'), class: 'form-label' %>
         <div class="mt-1">
           <%= date_of_birth_text_field f,
                                        autocomplete: 'off',
-                                       class: 'block w-full rounded-md border-gray-300 shadow-sm focus:border-indigo-500 focus:ring-indigo-500',
+                                       class: 'form-input',
                                        required: true,
                                        aria: { describedby: 'voucher_dob_hint' } %>
         </div>
-        <p id="voucher_dob_hint" class="mt-1 text-sm text-gray-500"><%= t('shared.date_of_birth.hint') %></p>
+        <p id="voucher_dob_hint" class="form-hint"><%= t('shared.date_of_birth.hint') %></p>
       </div>
 
       <div class="flex justify-end space-x-4">
         <%= f.submit "Verify Identity", 
-                    class: "inline-flex items-center px-6 py-3 border border-transparent rounded-md shadow-sm text-base font-medium text-white bg-indigo-600 hover:bg-indigo-700 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-indigo-500", 
+                    class: 'btn btn-primary', 
                     data: { disable_with: "Verifying..." } %>
         <%= link_to "Cancel", vendor_portal_vouchers_path, 
-                  class: "inline-flex items-center px-6 py-3 border border-gray-300 rounded-md text-base font-medium text-gray-700 bg-white hover:bg-gray-50 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-indigo-500" %>
+                  class: 'btn btn-outline' %>
       </div>
     <% end %>
   </div>

@@ -10,7 +10,7 @@
           </li>
           <li>
             <div class="flex items-center">
-              <svg class="flex-shrink-0 h-5 w-5 text-gray-400" viewBox="0 0 20 20" fill="currentColor" aria-hidden="true">
+              <svg class="flex-shrink-0 h-5 w-5 text-gray-500" viewBox="0 0 20 20" fill="currentColor" aria-hidden="true">
                 <path fill-rule="evenodd" d="M7.21 14.77a.75.75 0 01.02-1.06L11.168 10 7.23 6.29a.75.75 0 111.04-1.08l4.5 4.25a.75.75 0 010 1.08l-4.5 4.25a.75.75 0 01-1.06-.02z" clip-rule="evenodd" />
               </svg>
               <span class="ml-4 text-sm font-medium text-gray-500"><%= @voucher.code %></span>
@@ -25,7 +25,7 @@
         <%= button_to "Cancel Voucher",
             cancel_admin_voucher_path(@voucher),
             method: :patch,
-            class: "inline-flex items-center px-4 py-2 border border-red-300 rounded-md shadow-sm text-sm font-medium text-red-700 bg-white hover:bg-red-50 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-red-500",
+            class: "btn btn-danger-outline",
             data: {
               turbo_confirm: "Are you sure you want to cancel this voucher?"
             } %>
@@ -34,8 +34,7 @@
   </div>
 
   <div class="grid grid-cols-1 gap-6 lg:grid-cols-2">
-    <!-- Voucher Information -->
-    <div class="bg-white shadow rounded-lg">
+    <div class="card">
       <div class="px-4 py-5 sm:p-6">
         <h2 class="text-lg font-medium text-gray-900 mb-4">Voucher Information</h2>
         
@@ -88,9 +87,9 @@
               <% if @voucher.vendor %>
                 <%= link_to @voucher.vendor.business_name,
                             admin_vendor_path(@voucher.vendor),
-                            class: 'text-indigo-600 hover:text-indigo-900' %>
+                            class: 'text-primary-600 hover:text-primary-900' %>
               <% else %>
-                <span class="text-gray-400">Unassigned</span>
+                <span class="text-gray-500">Unassigned</span>
               <% end %>
             </dd>
           </div>
@@ -105,8 +104,7 @@
       </div>
     </div>
 
-    <!-- Transaction History -->
-    <div class="bg-white shadow rounded-lg">
+    <div class="card">
       <div class="px-4 py-5 sm:p-6">
         <h2 class="text-lg font-medium text-gray-900 mb-4">Transaction History</h2>
         
@@ -124,15 +122,15 @@
                         <span class="h-8 w-8 rounded-full flex items-center justify-center ring-8 ring-white">
                           <% case transaction.status %>
                           <% when "completed" %>
-                            <svg class="h-5 w-5 text-green-500" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                            <svg class="h-5 w-5 text-success-500" fill="none" viewBox="0 0 24 24" stroke="currentColor">
                               <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M5 13l4 4L19 7"/>
                             </svg>
                           <% when "pending" %>
-                            <svg class="h-5 w-5 text-yellow-500" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                            <svg class="h-5 w-5 text-warning-500" fill="none" viewBox="0 0 24 24" stroke="currentColor">
                               <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 8v4l3 3m6-3a9 9 0 11-18 0 9 9 0 0118 0z"/>
                             </svg>
                           <% when "failed" %>
-                            <svg class="h-5 w-5 text-red-500" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                            <svg class="h-5 w-5 text-danger-500" fill="none" viewBox="0 0 24 24" stroke="currentColor">
                               <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M6 18L18 6M6 6l12 12"/>
                             </svg>
                           <% end %>
@@ -154,7 +152,7 @@
                             <span class="mx-2">&middot;</span>
                             <%= link_to "Invoice ##{transaction.invoice.invoice_number}",
                                 [:admin, transaction.invoice],
-                                class: "text-indigo-600 hover:text-indigo-900" %>
+                                class: "text-primary-600 hover:text-primary-900" %>
                           <% end %>
                         </div>
                         <% if transaction.fulfillable? %>
@@ -166,27 +164,25 @@
                           </div>
                         <% end %>
                         <% if transaction.on_billing_hold? %>
-                          <div class="mt-2 rounded border border-amber-200 bg-amber-50 p-2 text-sm text-amber-900">
+                          <div class="mt-2 rounded border border-warning-200 bg-warning-50 p-2 text-sm text-warning-900">
                             On hold since <%= l(transaction.billing_hold_at.to_date, format: :long) %>
                             by <%= transaction.billing_hold_by&.full_name || 'staff' %>: <%= transaction.billing_hold_reason %>
                             <%= button_to 'Release hold', admin_voucher_transaction_billing_hold_path(transaction),
                                           method: :delete,
-                                          class: 'mt-2 inline-flex items-center px-3 py-1.5 border border-gray-300 rounded-md text-xs font-medium ' \
-                                                 'text-gray-700 bg-white hover:bg-gray-50',
+                                          class: 'btn btn-outline btn-sm mt-2',
                                           form: { 'aria-label': "Release hold on voucher redemption #{transaction.reference_number}" } %>
                           </div>
                         <% elsif transaction.transaction_completed? && transaction.invoice_id.nil? %>
                           <%= form_with url: admin_voucher_transaction_billing_hold_path(transaction), method: :post,
                                         class: 'mt-2 flex flex-wrap items-end gap-2' do |f| %>
                             <div>
-                              <%= label_tag "hold_reason_#{transaction.id}", 'Hold from billing — reason', class: 'block text-xs font-medium text-gray-700' %>
+                              <%= label_tag "hold_reason_#{transaction.id}", 'Hold from billing — reason', class: 'form-label text-xs' %>
                               <%= text_field_tag :reason, nil,
                                                  id: "hold_reason_#{transaction.id}", required: true, autocomplete: 'off',
-                                                 class: 'mt-1 block rounded-md border-gray-300 shadow-sm sm:text-sm' %>
+                                                 class: 'form-input mt-1' %>
                             </div>
                             <%= submit_tag 'Hold from billing',
-                                           class: 'inline-flex items-center px-3 py-1.5 border border-gray-300 rounded-md text-xs font-medium ' \
-                                                  'text-gray-700 bg-white hover:bg-gray-50' %>
+                                           class: 'btn btn-outline btn-sm' %>
                           <% end %>
                         <% end %>
                       </div>
@@ -202,8 +198,7 @@
       </div>
     </div>
 
-    <!-- Audit Log -->
-    <div class="bg-white shadow rounded-lg lg:col-span-2">
+    <div class="card lg:col-span-2">
       <div class="px-4 py-5 sm:p-6">
         <h2 class="text-lg font-medium text-gray-900 mb-4">Audit Log</h2>
         
@@ -247,9 +242,9 @@
                                     .each do |attribute, (before, after)| %>
                               <div class="text-gray-500">
                                 <span class="font-medium"><%= attribute.humanize %>:</span>
-                                <span class="line-through text-red-500"><%= before || "nil" %></span>
+                                <span class="line-through text-danger-500"><%= before || "nil" %></span>
                                 <span class="mx-1">&rarr;</span>
-                                <span class="text-green-500"><%= after || "nil" %></span>
+                                <span class="text-success-500"><%= after || "nil" %></span>
                               </div>
                             <% end %>
                           </div>

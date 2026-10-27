@@ -28,9 +28,9 @@ module Admin
 
     def vendor_w9_history_item_icon_class(item)
       if item.type == :review && item.record.status_approved?
-        'bg-green-500'
+        'bg-success-500'
       elsif item.type == :review
-        'bg-red-500'
+        'bg-danger-500'
       else
         'bg-gray-500'
       end

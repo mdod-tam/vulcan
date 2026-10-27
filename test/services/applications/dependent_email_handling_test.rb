@@ -7,7 +7,6 @@ module Applications
     include ActionDispatch::TestProcess::FixtureFile
 
     setup do
-      # Set up FPL policies for income validation
       setup_fpl_policies
 
       @admin = create(:admin)
@@ -15,13 +14,12 @@ module Applications
     end
 
     test 'creates dependent using guardian email when email_strategy is guardian' do
-      # Create parameters for a paper application with email_strategy set to 'guardian'
       service = PaperApplicationService.new(
         params: {
           applicant_type: 'dependent',
           guardian_id: @guardian.id,
-          email_strategy: 'guardian', # Use guardian's email
-          phone_strategy: 'guardian', # Use guardian's phone
+          email_strategy: 'guardian',
+          phone_strategy: 'guardian',
           relationship_type: 'Parent',
           constituent: {
             first_name: 'Dependent',
@@ -47,17 +45,14 @@ module Applications
         admin: @admin
       )
 
-      # Mock just enough for proof upload
       ProofAttachmentService.stubs(:attach_proof).returns({ success: true })
       ProofAttachmentService.stubs(:reject_proof_without_attachment).returns({ success: true })
 
       assert service.create, "Paper application creation failed: #{service.errors.join('; ')}"
 
-      # Verify the dependent was created
       dependent = service.constituent
       assert_not_nil dependent, 'Dependent should have been created'
 
-      # Key assertions: The dependent should have a system email but the guardian's email in dependent_email
       assert_match(/dependent-.*@system\.matvulcan\.local/, dependent.email,
                    'Dependent should have a system-generated email to avoid uniqueness conflicts')
       assert_equal @guardian.email, dependent.dependent_email,
@@ -83,19 +78,18 @@ module Applications
       dependent_email = "dependent_#{Time.now.to_i}@example.com"
       dependent_phone = "410-555-#{SecureRandom.random_number(9000) + 1000}"
 
-      # Create parameters for a paper application with email_strategy set to 'dependent'
       service = PaperApplicationService.new(
         params: {
           applicant_type: 'dependent',
           guardian_id: @guardian.id,
-          email_strategy: 'dependent', # Use dependent's own email
-          phone_strategy: 'dependent', # Use dependent's own phone
+          email_strategy: 'dependent',
+          phone_strategy: 'dependent',
           relationship_type: 'Parent',
           constituent: {
             first_name: 'Dependent',
             last_name: 'User',
             date_of_birth: '2015-01-01',
-            dependent_email: dependent_email, # Providing a distinct email for the dependent
+            dependent_email: dependent_email,
             dependent_phone: dependent_phone,
             hearing_disability: '1' # Ensure at least one disability
           },
@@ -116,13 +110,11 @@ module Applications
         admin: @admin
       )
 
-      # Mock proof uploads
       ProofAttachmentService.stubs(:attach_proof).returns({ success: true })
       ProofAttachmentService.stubs(:reject_proof_without_attachment).returns({ success: true })
 
       assert service.create, "Paper application creation failed: #{service.errors.join('; ')}"
 
-      # Verify the dependent was created with their own email
       dependent = service.constituent
       assert_not_nil dependent, 'Dependent should have been created'
       assert_equal dependent_email, dependent.email,

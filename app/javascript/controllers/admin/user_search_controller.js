@@ -213,7 +213,7 @@ class UserSearchController extends Controller {
     let html = `<span class="font-medium">${userName}</span>`
 
     const contactInfo = []
-    if (safeEmail) contactInfo.push(`<span class="text-indigo-700">${safeEmail}</span>`)
+    if (safeEmail) contactInfo.push(`<span class="text-primary-700">${safeEmail}</span>`)
     if (safePhone) contactInfo.push(`<span class="text-gray-600">Phone: ${safePhone}</span>`)
 
     if (contactInfo.length > 0) {
@@ -253,7 +253,7 @@ class UserSearchController extends Controller {
     }
 
     const contactInfo = []
-    if (safeEmail) contactInfo.push(`<span class="text-indigo-700">${safeEmail}</span>`)
+    if (safeEmail) contactInfo.push(`<span class="text-primary-700">${safeEmail}</span>`)
     if (safePhone) contactInfo.push(`<span class="text-gray-600">Phone: ${safePhone}</span>`)
     if (contactInfo.length > 0) {
       html += `<div class="text-sm text-gray-600 mt-1">${contactInfo.join(' &bull; ')}</div>`
@@ -316,8 +316,8 @@ class UserSearchController extends Controller {
   }
 
   clearFieldErrors() {
-    this.element.querySelectorAll('input.border-red-500').forEach(input => {
-      input.classList.remove('border-red-500')
+    this.element.querySelectorAll('input.border-danger-500').forEach(input => {
+      input.classList.remove('border-danger-500')
     })
 
     this.element.querySelectorAll('.field-error-message').forEach(errorEl => {
@@ -327,7 +327,7 @@ class UserSearchController extends Controller {
 
   showGeneralError(message) {
     const errorEl = document.createElement('p')
-    errorEl.className = 'field-error-message text-red-600 text-sm mt-2'
+    errorEl.className = 'field-error-message text-danger-600 text-sm mt-2'
     errorEl.setAttribute('role', 'alert')
     errorEl.textContent = message
     const container = this.hasCreateButtonTarget
@@ -343,7 +343,7 @@ class UserSearchController extends Controller {
       if (message) {
         const input = this.element.querySelector(`input[name="guardian_attributes[${field}]"], select[name="guardian_attributes[${field}]"], textarea[name="guardian_attributes[${field}]"]`)
         if (input) {
-          input.classList.add('border-red-500', 'border-2')
+          input.classList.add('border-danger-500', 'border-2')
           input.setAttribute('aria-invalid', 'true')
 
           const existingError = input.parentElement.querySelector('.field-error-message')
@@ -352,7 +352,7 @@ class UserSearchController extends Controller {
           }
 
           const errorEl = document.createElement('div')
-          errorEl.className = 'field-error-message text-red-600 text-sm mt-1 flex items-start gap-1'
+          errorEl.className = 'field-error-message text-danger-600 text-sm mt-1 flex items-start gap-1'
           errorEl.setAttribute('role', 'alert')
           errorEl.innerHTML = `
             <svg class="w-4 h-4 flex-shrink-0 mt-0.5" fill="currentColor" viewBox="0 0 20 20" aria-hidden="true">

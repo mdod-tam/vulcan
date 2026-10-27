@@ -1,5 +1,4 @@
 import { application } from "./application"
-import RecommendationOutcomeController from "./evaluators/recommendation_outcome_controller"
 
 // Admin Controllers
 import RoleSelectController from "./admin/role_select_controller"
@@ -12,7 +11,6 @@ import EquipmentSelectionController from "./admin/equipment_selection_controller
 // Auth Controllers
 import AddCredentialController from "./auth/add_credential_controller"
 import CredentialAuthenticatorController from "./auth/credential_authenticator_controller"
-import TotpFormController from "./auth/totp_form_controller"
 import SessionActivityController from "./auth/session_activity_controller"
 
 // Chart Controllers
@@ -33,9 +31,11 @@ import FinalSubmitGateController from "./forms/final_submit_gate_controller"
 import PaperApplicationController from "./forms/paper_application_controller"
 import RejectionFormController from "./forms/rejection_form_controller"
 import TrainingDurationConfirmationController from "./forms/training_duration_confirmation_controller"
+import TrainingOutcomeController from "./forms/training_outcome_controller"
 import VoucherRedemptionController from "./forms/voucher_redemption_controller"
 
 // Review Controllers
+import RecommendationOutcomeController from "./evaluators/recommendation_outcome_controller"
 import W9ReviewController from "./reviews/w9_review_controller"
 
 // UI Controllers
@@ -67,7 +67,6 @@ application.register("equipment-selection", EquipmentSelectionController)
 // Auth Controllers
 application.register("add-credential", AddCredentialController)
 application.register("credential-authenticator", CredentialAuthenticatorController)
-application.register("totp-form", TotpFormController)
 application.register("session-activity", SessionActivityController)
 
 // Chart Controllers
@@ -88,6 +87,7 @@ application.register("final-submit-gate", FinalSubmitGateController)
 application.register("paper-application", PaperApplicationController)
 application.register("rejection-form", RejectionFormController)
 application.register("training-duration-confirmation", TrainingDurationConfirmationController)
+application.register("training-outcome", TrainingOutcomeController)
 application.register("voucher-redemption", VoucherRedemptionController)
 
 // Review Controllers
@@ -111,6 +111,3 @@ application.register("adult-picker", AdultPickerController)
 application.register("applicant-type", ApplicantTypeController)
 application.register("document-proof-handler", DocumentProofHandlerController)
 application.register("guardian-picker", GuardianPickerController)
-
-import TrainingOutcomeController from "./forms/training_outcome_controller"
-application.register("training-outcome", TrainingOutcomeController)

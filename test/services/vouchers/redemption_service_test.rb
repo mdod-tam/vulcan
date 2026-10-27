@@ -3,8 +3,7 @@
 require 'test_helper'
 
 module Vouchers
-  # Eligibility used to be relaxed in the test environment, so no test could catch a regression in
-  # the W9 requirement. It is now the same rule everywhere.
+  # Eligibility, including the W9 requirement, is the same rule in every environment.
   class RedemptionServiceTest < ActiveSupport::TestCase
     setup do
       FeatureFlag.enable!(:vouchers_enabled)

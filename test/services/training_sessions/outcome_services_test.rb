@@ -190,6 +190,31 @@ module TrainingSessions
       assert_equal 'PRIVATE preparation', @session.internal_notes
     end
 
+    test 'a request holding a trainer loaded before access was lost cannot complete the session' do
+      stale_actor = User.find(@trainer.id)
+      @trainer.update_columns(type: 'Users::Evaluator')
+
+      assert_no_difference 'Event.count' do
+        result = CompleteService.new(@session, stale_actor, completion_params).call
+
+        assert_not result.success?
+        assert_equal I18n.t('training_rules.current_trainer_change'), result.message
+      end
+      assert @session.reload.status_scheduled?
+      assert_equal @trainer.id, @session.trainer_id
+      assert_nil @session.report_submitted_at
+    end
+
+    test 'cancelling an appointment supersedes the operation its transfer notices were queued for' do
+      @session.update_columns(assignment_operation_id: 'queued-transfer')
+
+      result = CancelService.new(@session, @trainer, cancellation_reason: 'Requested cancellation', cancellation_initiator: 'constituent').call
+
+      assert result.success?, result.message
+      assert_predicate @session.reload.assignment_operation_id, :present?
+      assert_not_equal 'queued-transfer', @session.assignment_operation_id
+    end
+
     test 'audit failure rolls back state and report fields' do
       invalid_event = Event.new
       invalid_event.errors.add(:base, 'Unavailable')

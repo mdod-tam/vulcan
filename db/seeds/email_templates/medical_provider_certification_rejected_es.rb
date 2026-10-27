@@ -1,6 +1,5 @@
 # frozen_string_literal: true
 
-# Seed File for Spanish "medical_provider_certification_rejected"
 scope = { name: 'medical_provider_certification_rejected', format: :text }
 scope[:locale] = 'es' if EmailTemplate.column_names.include?('locale')
 

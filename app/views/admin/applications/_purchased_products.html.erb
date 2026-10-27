@@ -16,7 +16,6 @@
             </thead>
             <tbody class="divide-y divide-gray-200">
               <% @application.products.distinct.each do |product| %>
-                <% # Find the most recent transaction for this product %>
                 <% transaction = VoucherTransaction.joins(:voucher_transaction_products)
                      .where(voucher_transaction_products: { product_id: product.id })
                      .where(voucher_id: @application.vouchers.pluck(:id))

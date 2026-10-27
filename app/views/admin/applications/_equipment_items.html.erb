@@ -10,14 +10,14 @@
           <dt class="font-medium">Application</dt>
           <dd><%= link_to "##{item.application_id}",
                           admin_application_path(item.application_id, anchor: "equipment-item-#{item.id}", return_context: return_context),
-                          class: 'text-indigo-700 underline' %></dd>
+                          class: 'text-primary-700 underline' %></dd>
         </div>
         <div>
           <dt class="font-medium">Purchase order</dt>
           <dd>
             <% if item.purchase_order %>
               <%= link_to "#{item.purchase_order.vendor.business_name} / #{item.purchase_order.number}",
-                          admin_purchase_order_path(item.purchase_order, return_context: return_context), class: 'text-indigo-700 underline' %>
+                          admin_purchase_order_path(item.purchase_order, return_context: return_context), class: 'text-primary-700 underline' %>
               — sent <%= accessible_date_value(item.purchase_order.sent_at) %>
             <% else %>No current purchase order<% end %>
           </dd>
@@ -29,7 +29,7 @@
       </dl>
       <% unless item.withdrawn_at? %>
         <p><%= link_to 'Correct device / record shipment',
-                       edit_admin_equipment_item_path(item, return_context: return_context), class: 'text-indigo-700 underline' %></p>
+                       edit_admin_equipment_item_path(item, return_context: return_context), class: 'text-primary-700 underline' %></p>
       <% end %>
       <%= render 'admin/equipment_items/history', events: item.events.sort_by(&:created_at).reverse, audit_records: audit_records %>
     </article>

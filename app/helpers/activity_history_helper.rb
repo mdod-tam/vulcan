@@ -17,14 +17,22 @@ module ActivityHistoryHelper
     'requested_additional_info' => 'Additional Info Requested',
     'evaluator_assigned' => 'Evaluator Assigned',
     'evaluator_reassigned' => 'Evaluator Reassigned',
-    'evaluation_working_notes_updated' => 'Working Notes Updated'
+    'evaluation_working_notes_updated' => 'Working Notes Updated',
+    'trainer_unassigned' => 'Trainer Unassigned',
+    'trainer_reassigned' => 'Trainer Reassigned',
+    'trainer_access_removed' => 'Trainer Access Removed',
+    'evaluator_access_removed' => 'Evaluator Access Removed',
+    'capability_granted' => 'Capability Granted',
+    'capability_removed' => 'Capability Removed'
   }.freeze
 
-  APPLICATION_ACTIONS = %w[evaluator_assigned].freeze
+  APPLICATION_ACTIONS = %w[evaluator_assigned trainer_unassigned trainer_reassigned trainer_access_removed evaluator_access_removed].freeze
   STATIC_ACTIVITY_DETAILS = {
     'requested_additional_info' => 'Additional information requested from the constituent',
     'evaluator_reassigned' => 'Evaluation transferred to another evaluator',
-    'evaluation_working_notes_updated' => 'Internal working notes updated'
+    'evaluation_working_notes_updated' => 'Internal working notes updated',
+    'trainer_unassigned' => 'Trainer coverage removed from the application',
+    'trainer_reassigned' => 'Open training transferred to another trainer'
   }.freeze
 
   def activity_label(event)
@@ -62,6 +70,10 @@ module ActivityHistoryHelper
                 completed_evaluation_detail(metadata)
               when 'evaluator_assigned'
                 evaluator_assigned_detail(metadata)
+              when 'trainer_access_removed', 'evaluator_access_removed'
+                access_removed_detail(event.action, metadata)
+              when 'capability_granted', 'capability_removed'
+                capability_change_detail(event.action, metadata)
               end
 
     details.presence || STATIC_ACTIVITY_DETAILS.fetch(event.action, I18n.t('activity_history.table.no_details'))
@@ -184,6 +196,19 @@ module ActivityHistoryHelper
     parts << "Reason: #{reason}" if reason
     parts << "Location: #{metadata_value(metadata, 'location')}" if metadata_value(metadata, 'location')
     parts.join('. ')
+  end
+
+  # The assignment stays with the former practitioner until staff reassign it.
+  def access_removed_detail(action, metadata)
+    discipline = action == 'trainer_access_removed' ? 'training' : 'evaluation'
+    reason = metadata_value(metadata, 'reason') == 'role_changed' ? 'role change' : 'capability removal'
+    "The assigned practitioner lost #{discipline} access through a #{reason}; the assignment awaits reassignment"
+  end
+
+  def capability_change_detail(action, metadata)
+    verb = action == 'capability_granted' ? 'granted' : 'removed'
+    source = metadata_value(metadata, 'source') == 'role' ? 'with the role' : 'as an explicit grant'
+    "#{metadata_value(metadata, 'capability').to_s.titleize} #{verb} #{source}"
   end
 
   def evaluator_assigned_detail(metadata)

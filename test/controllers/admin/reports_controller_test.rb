@@ -93,6 +93,25 @@ module Admin
       assert_match(/Vouchers issued during FY/, response.body)
     end
 
+    test 'referral sources for the current fiscal quarter cover the whole calendar quarter' do
+      travel_to Time.zone.local(2026, 6, 15, 12, 0, 0) do
+        {
+          'Before quarter' => Time.zone.local(2026, 3, 31, 23, 59, 59),
+          'First day' => Time.zone.local(2026, 4, 1),
+          'Last day' => Time.zone.local(2026, 6, 30, 23, 59, 59),
+          'After quarter' => Time.zone.local(2026, 7, 1)
+        }.each do |source, created_at|
+          create(:application, user: create(:constituent, referral_source: source), created_at: created_at)
+        end
+
+        get admin_reports_path
+
+        assert_response :success
+        assert_select '#referral-quarter-heading', text: 'Q4 FY26'
+        assert_equal({ 'First day' => 1, 'Last day' => 1 }, assigns(:referral_quarter_data))
+      end
+    end
+
     test 'equipment by type defaults to current fiscal year and counts actual ordered device units' do
       travel_to Time.zone.local(2026, 6, 15, 12, 0, 0) do
         tablet = create(:product, name: 'FY Tablet', device_types: ['Tablet'])

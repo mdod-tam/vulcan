@@ -15,39 +15,33 @@ class ApplicationModalController extends Controller {
     const button = event.currentTarget
     const applicationId = button.dataset.applicationId
     const modalId = button.dataset.modalId
-        
-    // Find the dialog element
+
     const dialog = document.getElementById(modalId)
     if (!dialog) {
       console.error("Modal not found:", modalId)
       return
     }
-    
-    // Update the "View Full Application" link
+
     const viewFullLink = dialog.querySelector('#modal-view-full-link')
     if (viewFullLink) {
       viewFullLink.href = `/admin/applications/${applicationId}`
     }
-    
-    // Update the edit button with the application ID
+
     const editButton = dialog.querySelector('#modal-edit-button')
     if (editButton) {
       editButton.dataset.applicationId = applicationId
     }
-    
-    // Load application content into the modal frame
+
     const frameId = "application-modal-content"
     const frame = dialog.querySelector(`[id="${frameId}"]`)
     if (frame) {
-      // Use Turbo to load the application show page into the frame
       Turbo.visit(`/admin/applications/${applicationId}?modal=true`, { 
         frame: frameId
       })
     } else {
       console.error("Frame not found with ID:", frameId)
     }
-    
-    // Show the dialog
+
     if (dialog.tagName === "DIALOG") {
       dialog.showModal()
     }

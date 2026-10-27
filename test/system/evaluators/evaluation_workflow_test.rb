@@ -79,7 +79,7 @@ module Evaluators
       requested = create(:evaluation, evaluator: @evaluator, status: :requested, evaluation_date: nil)
       past_time = 1.hour.ago.strftime('%Y-%m-%dT%H:%M')
       visit evaluators_evaluation_path(requested)
-      assert_selector 'label[for="schedule_evaluation_evaluation_date"] .text-red-600', text: '*'
+      assert_selector 'label[for="schedule_evaluation_evaluation_date"] .text-danger-600', text: '*'
       assert_selector 'label[for="schedule_evaluation_evaluation_date"] .sr-only', text: '(required)', visible: :all
       assert_selector '#schedule_evaluation_evaluation_date[required]'
 

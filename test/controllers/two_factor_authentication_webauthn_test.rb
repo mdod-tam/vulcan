@@ -20,12 +20,10 @@ class TwoFactorAuthenticationWebauthnTest < ActionDispatch::IntegrationTest
   end
 
   test 'should get new form for WebAuthn authentication after password step' do
-    # Step 1: Sign in, expect redirect to 2FA verify page
     post sign_in_path, params: { email: @user.email, password: 'password1234' }
     assert_response :redirect
     assert_redirected_to verify_method_two_factor_authentication_path(type: 'webauthn')
 
-    # Step 2: Follow the redirect explicitly
     get verify_method_two_factor_authentication_path(type: 'webauthn')
     assert_response :success
 
@@ -33,16 +31,13 @@ class TwoFactorAuthenticationWebauthnTest < ActionDispatch::IntegrationTest
   end
 
   test 'should generate options for WebAuthn authentication' do
-    # Step 1: Sign in, expect redirect to 2FA verify page
     post sign_in_path, params: { email: @user.email, password: 'password1234' }
     assert_response :redirect
     assert_redirected_to verify_method_two_factor_authentication_path(type: 'webauthn')
 
-    # Step 2: Follow the redirect explicitly
     get verify_method_two_factor_authentication_path(type: 'webauthn')
     assert_response :success
 
-    # Step 3: Get the options JSON
     get verification_options_two_factor_authentication_path(type: 'webauthn'), xhr: true,
                                                                                headers: { 'X-Requested-With' => 'XMLHttpRequest' }
     assert_response :success
@@ -61,16 +56,13 @@ class TwoFactorAuthenticationWebauthnTest < ActionDispatch::IntegrationTest
   end
 
   test 'should correctly route WebAuthn credential verification requests' do
-    # Step 1: Sign in, expect redirect to 2FA verify page
     post sign_in_path, params: { email: @user.email, password: 'password1234' }
     assert_response :redirect
     assert_redirected_to verify_method_two_factor_authentication_path(type: 'webauthn')
 
-    # Step 2: Follow the redirect explicitly
     get verify_method_two_factor_authentication_path(type: 'webauthn')
     assert_response :success
 
-    # Step 3: Submit an assertion for a credential the user does not own
     mock_credential = Minitest::Mock.new
     mock_credential.expect :id, 'nonexistent-credential-id'
 
@@ -141,16 +133,13 @@ class TwoFactorAuthenticationWebauthnTest < ActionDispatch::IntegrationTest
   end
 
   test 'should have proper error handling for malformed credentials' do
-    # Step 1: Sign in, expect redirect to 2FA verify page
     post sign_in_path, params: { email: @user.email, password: 'password1234' }
     assert_response :redirect
     assert_redirected_to verify_method_two_factor_authentication_path(type: 'webauthn')
 
-    # Step 2: Follow the redirect explicitly
     get verify_method_two_factor_authentication_path(type: 'webauthn')
     assert_response :success
 
-    # Step 3: Submit bad credential data
     mock_credential = Minitest::Mock.new
     mock_credential.expect :id, 'malformed-credential-id'
 

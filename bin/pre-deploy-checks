@@ -1,34 +1,30 @@
 #!/usr/bin/env ruby
 # frozen_string_literal: true
 
-# Script to run pre-deployment checks
-# This ensures that the application is in a consistent state before deployment
+# Reports sequence values, proof status inconsistencies and missing database constraints. It only reads.
 # Usage: bin/pre-deploy-checks
 
 require_relative '../config/environment'
 
 puts 'Running pre-deployment checks...'
 
-# Check database sequences
 begin
   if ActiveRecord::Base.connection.adapter_name.downcase.include?('postgresql')
     puts 'Checking database sequences...'
 
-    # Check applications sequence
     sequence_value = ActiveRecord::Base.connection.execute('SELECT last_value FROM applications_id_seq').first['last_value']
 
     if sequence_value < 980_000_000
       puts "WARNING: applications_id_seq is too low (#{sequence_value}), should be at least 980,000,000"
       puts 'Consider running: ALTER SEQUENCE applications_id_seq RESTART WITH 980000000;'
     else
-      puts "✓ applications_id_seq is at a safe value (#{sequence_value})"
+      puts "OK: applications_id_seq is at a safe value (#{sequence_value})"
     end
   end
 rescue StandardError => e
   puts "ERROR checking sequences: #{e.message}"
 end
 
-# Check for inconsistent proof attachments/statuses
 begin
   puts 'Checking for proof status inconsistencies...'
 
@@ -45,16 +41,15 @@ begin
   if approved_without_attachment.positive?
     puts "WARNING: Found #{approved_without_attachment} applications with approved income proof but no attachment"
   else
-    puts '✓ No applications with approved income proof and missing attachment'
+    puts 'OK: No applications with approved income proof and missing attachment'
   end
 
   if attached_not_reviewed.positive?
     puts "WARNING: Found #{attached_not_reviewed} applications with income proof attached but status not_reviewed"
   else
-    puts '✓ No applications with attached income proof and not_reviewed status'
+    puts 'OK: No applications with attached income proof and not_reviewed status'
   end
 
-  # Similar checks for residency proof
   approved_without_attachment = Application.where(residency_proof_status: :approved)
                                            .joins("LEFT JOIN active_storage_attachments ON active_storage_attachments.record_id = applications.id AND active_storage_attachments.record_type = 'Application' AND active_storage_attachments.name = 'residency_proof'")
                                            .where('active_storage_attachments.id IS NULL')
@@ -68,19 +63,18 @@ begin
   if approved_without_attachment.positive?
     puts "WARNING: Found #{approved_without_attachment} applications with approved residency proof but no attachment"
   else
-    puts '✓ No applications with approved residency proof and missing attachment'
+    puts 'OK: No applications with approved residency proof and missing attachment'
   end
 
   if attached_not_reviewed.positive?
     puts "WARNING: Found #{attached_not_reviewed} applications with residency proof attached but status not_reviewed"
   else
-    puts '✓ No applications with attached residency proof and not_reviewed status'
+    puts 'OK: No applications with attached residency proof and not_reviewed status'
   end
 rescue StandardError => e
   puts "ERROR checking proof consistency: #{e.message}"
 end
 
-# Check database constraints
 begin
   if ActiveRecord::Base.connection.adapter_name.downcase.include?('postgresql')
     puts 'Checking database constraints...'
@@ -93,13 +87,13 @@ begin
     ").map { |row| row['conname'] }
 
     if constraints.include?('income_proof_status_check')
-      puts '✓ income_proof_status_check constraint exists'
+      puts 'OK: income_proof_status_check constraint exists'
     else
       puts 'WARNING: income_proof_status_check constraint is missing'
     end
 
     if constraints.include?('residency_proof_status_check')
-      puts '✓ residency_proof_status_check constraint exists'
+      puts 'OK: residency_proof_status_check constraint exists'
     else
       puts 'WARNING: residency_proof_status_check constraint is missing'
     end

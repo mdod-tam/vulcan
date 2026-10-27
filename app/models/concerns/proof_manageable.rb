@@ -2,16 +2,8 @@
 
 # Provides proof eligibility, required-attachment validation, approval checks, and review timestamps.
 # Application declares attachments. DocumentValidator enforces type and size policy.
-# Attachment and review services own their workflows.
-#
-# @example Basic usage
-#   application = Application.find(123)
-#   application.all_proofs_approved?  # => true/false
-#   application.can_submit_proof?     # => true/false
-#
-# @see ProofAttachmentService For file upload operations
-# @see Applications::ProofReviewer For review workflow management
-# @see ProofReview For review record management
+# ProofAttachmentService owns file uploads, Applications::ProofReviewer owns the review workflow, and ProofReview
+# records each review.
 module ProofManageable
   extend ActiveSupport::Concern
 
@@ -68,7 +60,6 @@ module ProofManageable
   # @param admin_user [User] must be an admin
   # @return [Boolean] false if the purge fails
   def purge_proofs(admin_user)
-    # TODO: Create ProofPurgeService to handle this logic
     raise ArgumentError, 'Admin user required' unless admin_user&.admin?
 
     transaction do

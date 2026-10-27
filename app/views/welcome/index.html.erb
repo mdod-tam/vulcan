@@ -1,7 +1,7 @@
-<a href="#main-content" class="sr-only focus:not-sr-only focus:absolute focus:p-4 focus:bg-white focus:z-50">Skip to main content</a>
+<a href="#main-content" class="skip-link">Skip to main content</a>
 <main id="main-content" aria-labelledby="page-title">
   <div class="max-w-4xl mx-auto px-4 py-12">
-    <div class="bg-white rounded-lg shadow-md p-8">
+    <div class="card p-8">
       <header class="text-center mb-8">
         <h1 id="page-title" class="text-3xl font-bold text-gray-800">Welcome to Maryland Accessible Telecommunications</h1>
         <p class="mt-3 text-gray-600">Thank you for creating your account. Let's secure your account and get you started.</p>
@@ -11,16 +11,18 @@
         <ol class="flex items-center space-x-2 sm:space-x-4">
           <li class="flex flex-col items-center">
             <span class="sr-only">Step 1 of 3: Account Created</span>
-            <div aria-hidden="true" class="w-8 h-8 rounded-full bg-indigo-600 flex items-center justify-center text-white font-semibold">1</div>
-            <span class="mt-2 text-sm text-indigo-600 font-medium">Account Created</span>
+            <div aria-hidden="true" class="w-8 h-8 rounded-full bg-primary-600 flex items-center justify-center text-white font-semibold">1</div>
+            <span class="mt-2 text-sm text-primary-600 font-medium">Account Created</span>
           </li>
-          <div aria-hidden="true" class="w-12 sm:w-16 h-1 bg-indigo-600"></div>
+          <div aria-hidden="true" class="w-12 sm:w-16 h-1 bg-primary-600"></div>
           <li class="flex flex-col items-center" aria-current="step">
             <span class="sr-only">Current step: Security Setup</span>
-            <div aria-hidden="true" class="w-8 h-8 rounded-full <%= @has_second_factor ? 'bg-indigo-600' : 'bg-gray-200' %> flex items-center justify-center <%= @has_second_factor ? 'text-white' : 'text-gray-600' %> font-semibold">2</div>
-            <span class="mt-2 text-sm <%= @has_second_factor ? 'text-indigo-600' : 'text-gray-600' %> font-medium">Security Setup</span>
+            <div aria-hidden="true"
+                 class="w-8 h-8 rounded-full flex items-center justify-center font-semibold
+                        <%= @has_second_factor ? 'bg-primary-600 text-white' : 'bg-gray-200 text-gray-600' %>">2</div>
+            <span class="mt-2 text-sm <%= @has_second_factor ? 'text-primary-600' : 'text-gray-600' %> font-medium">Security Setup</span>
           </li>
-          <div aria-hidden="true" class="w-12 sm:w-16 h-1 <%= @has_second_factor ? 'bg-indigo-600' : 'bg-gray-200' %>"></div>
+          <div aria-hidden="true" class="w-12 sm:w-16 h-1 <%= @has_second_factor ? 'bg-primary-600' : 'bg-gray-200' %>"></div>
           <li class="flex flex-col items-center">
             <span class="sr-only">Step 3 of 3: Start Application</span>
             <div aria-hidden="true" class="w-8 h-8 rounded-full bg-gray-200 flex items-center justify-center text-gray-600 font-semibold">3</div>
@@ -29,17 +31,17 @@
         </ol>
       </nav>
 
-      <section aria-labelledby="secure-account-heading" class="bg-indigo-50 rounded-lg p-6 mb-6">
+      <section aria-labelledby="secure-account-heading" class="bg-primary-50 rounded-lg p-6 mb-6">
         <h2 id="secure-account-heading" class="text-xl font-semibold text-gray-800 mb-4">Secure Your Account</h2>
         <div class="flex items-start">
           <div class="flex-shrink-0 mt-1" aria-hidden="true">
             <% if @has_second_factor %>
-              <svg aria-hidden="true" class="w-5 h-5 text-green-500" fill="currentColor" viewBox="0 0 20 20" xmlns="http://www.w3.org/2000/svg">
+              <svg aria-hidden="true" class="w-5 h-5 text-success-500" fill="currentColor" viewBox="0 0 20 20" xmlns="http://www.w3.org/2000/svg">
                 <title>Success icon</title>
                 <path fill-rule="evenodd" d="M10 18a8 8 0 100-16 8 8 0 000 16zm3.707-9.293a1 1 0 00-1.414-1.414L9 10.586 7.707 9.293a1 1 0 00-1.414 1.414l2 2a1 1 0 001.414 0l4-4z" clip-rule="evenodd"></path>
               </svg>
             <% else %>
-              <svg aria-hidden="true" class="w-5 h-5 text-yellow-500" fill="currentColor" viewBox="0 0 20 20" xmlns="http://www.w3.org/2000/svg">
+              <svg aria-hidden="true" class="w-5 h-5 text-warning-500" fill="currentColor" viewBox="0 0 20 20" xmlns="http://www.w3.org/2000/svg">
                 <title>Warning icon</title>
                 <path fill-rule="evenodd" d="M8.257 3.099c.765-1.36 2.722-1.36 3.486 0l5.58 9.92c.75 1.334-.213 2.98-1.742 2.98H4.42c-1.53 0-2.493-1.646-1.743-2.98l5.58-9.92zM11 13a1 1 0 11-2 0 1 1 0 012 0zm-1-8a1 1 0 00-1 1v3a1 1 0 002 0V6a1 1 0 00-1-1z" clip-rule="evenodd" />
               </svg>
@@ -50,7 +52,7 @@
               <h3 class="text-lg font-medium text-gray-800">Two-Factor Authentication Enabled</h3>
               <p class="mt-1 text-gray-600">Your account is protected with two-factor authentication. This provides an extra layer of security to keep your account safe.</p>
               <div class="mt-4">
-                <div class="inline-flex items-center px-4 py-2 border border-green-500 text-green-700 bg-green-50 rounded-md">
+                <div class="inline-flex items-center px-4 py-2 border border-success-500 text-success-700 bg-success-50 rounded-md">
                   <svg aria-hidden="true" class="w-4 h-4 mr-2" fill="currentColor" viewBox="0 0 20 20" xmlns="http://www.w3.org/2000/svg">
                     <title>Checkmark icon</title>
                     <path fill-rule="evenodd" d="M16.707 5.293a1 1 0 010 1.414l-8 8a1 1 0 01-1.414 0l-4-4a1 1 0 011.414-1.414L8 12.586 15.293 5.293a1 1 0 011.414 0z" clip-rule="evenodd"></path>
@@ -63,14 +65,14 @@
                   <% if @has_sms %><li>SMS Verification Configured</li><% end %>
                 </ul>
                 <p class="mt-3">
-                  <a href="<%= setup_two_factor_authentication_path %>" class="text-indigo-600 hover:text-indigo-800 font-medium focus:outline-none focus:ring-2 focus:ring-indigo-500 focus:ring-offset-2">Manage two-factor settings</a>
+                  <a href="<%= setup_two_factor_authentication_path %>" class="text-primary-600 hover:text-primary-800 font-medium">Manage two-factor settings</a>
                 </p>
               </div>
             <% else %>
               <h3 class="text-lg font-medium text-gray-800">Your Account Needs Protection</h3>
               <p class="mt-1 text-gray-600">Two-factor authentication adds an essential layer of security to your account. Even if someone discovers your password, they won't be able to sign in without your second factor.</p>
               <div class="mt-4">
-                <a href="<%= setup_two_factor_authentication_path %>" class="block w-full text-center bg-indigo-600 text-white px-4 py-3 rounded-md hover:bg-indigo-700 focus:outline-none focus:ring-2 focus:ring-indigo-500 transition font-medium">Set Up Two-Factor Authentication</a>
+                <a href="<%= setup_two_factor_authentication_path %>" class="btn btn-primary min-h-11 w-full">Set Up Two-Factor Authentication</a>
                 <p class="mt-3 text-sm text-center text-gray-600">Recommended by the State of Maryland for all accounts to ensure maximum security. Without two-factor authentication, your account is at higher risk of unauthorized access.</p>
               </div>
             <% end %>
@@ -86,13 +88,12 @@
         </div>
         <div>
           <% if @has_second_factor %>
-            <a href="<%= dashboard_path_for_current_user %>" class="inline-block bg-indigo-600 text-white px-6 py-3 rounded-md hover:bg-indigo-700 focus:outline-none focus:ring-2 focus:ring-indigo-500 transition">Continue to Dashboard</a>
+            <a href="<%= dashboard_path_for_current_user %>" class="btn btn-primary min-h-11">Continue to Dashboard</a>
           <% else %>
-            <a href="<%= dashboard_path_for_current_user %>" class="inline-block bg-gray-600 text-white px-6 py-3 rounded-md hover:bg-gray-700 focus:outline-none focus:ring-2 focus:ring-gray-500 transition">Skip and Continue to Dashboard</a>
+            <a href="<%= dashboard_path_for_current_user %>" class="btn btn-outline min-h-11">Skip and Continue to Dashboard</a>
           <% end %>
         </div>
       </nav>
     </div>
   </div>
 </main>
-<!-- End of the main content area -->

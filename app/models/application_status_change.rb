@@ -32,7 +32,7 @@ class ApplicationStatusChange < ApplicationRecord
     lifecycle_status.or(legacy_lifecycle).where.not(id: certified.select(:id))
   }
 
-  # Normalize legacy status names for backward compatibility
+  # Maps the retired status names awaiting_documents and needs_information to their current equivalents.
   def normalized_from_status
     case from_status
     when 'awaiting_documents' then 'awaiting_dcf'

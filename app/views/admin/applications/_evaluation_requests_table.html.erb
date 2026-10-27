@@ -2,7 +2,7 @@
     Driven by applications.evaluation_requested_at. A pending row is explicitly
     flagged by an admin and has no evaluation created after the request.
     Locals: applications %>
-<div class="bg-white shadow overflow-x-auto sm:rounded-lg" data-testid="evaluation-requests-queue">
+<div class="card overflow-x-auto" data-testid="evaluation-requests-queue">
   <table class="min-w-full divide-y divide-gray-200 applications-table" role="table">
     <thead class="bg-gray-50" role="rowgroup">
       <tr role="row">
@@ -20,7 +20,7 @@
             <% if application.user.present? %>
               <%= link_to application.user.full_name,
                   admin_user_path(application.user),
-                  class: "font-semibold text-indigo-600 hover:text-indigo-500",
+                  class: "font-semibold text-primary-600 hover:text-primary-500",
                   data: { turbo_frame: "_top" } %>
             <% else %>
               Unknown Applicant
@@ -31,18 +31,18 @@
             <% if application.evaluation_requested_at.present? %>
               <%= application.evaluation_requested_at.strftime("%b %d, %Y") %>
             <% else %>
-              <span class="text-gray-400">Unknown</span>
+              <span class="text-gray-500">Unknown</span>
             <% end %>
           </td>
           <td class="px-4 py-2 text-sm text-gray-900" role="cell">
-            <span class="px-2 inline-flex text-xs leading-5 font-semibold rounded-full bg-yellow-100 text-yellow-800">
+            <span class="badge badge-warning">
               Awaiting Evaluator Assignment
             </span>
           </td>
           <td class="px-4 py-2 text-sm font-medium" role="cell">
             <%= link_to "View Application",
                 admin_application_path(application),
-                class: "text-indigo-600 hover:text-indigo-900",
+                class: "text-primary-600 hover:text-primary-900",
                 data: { turbo_frame: "_top" } %>
           </td>
         </tr>

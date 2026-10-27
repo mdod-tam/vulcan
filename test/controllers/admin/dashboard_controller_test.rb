@@ -9,14 +9,12 @@ module Admin
       sign_in_as(@admin)
       Rails.cache.clear
 
-      # Create applications with different statuses for testing
       @draft_app = create(:application, :draft, user: create(:constituent, email: "draft#{@admin.email}"))
       mark_proofs_approved(@draft_app)
       @in_progress_app = create(:application, :in_progress, user: create(:constituent, email: "in_progress#{@admin.email}"))
       mark_proofs_approved(@in_progress_app)
       @approved_app = create(:application, :approved, user: create(:constituent, email: "approved#{@admin.email}"))
 
-      # Create applications with proofs needing review
       @app_with_income_proof = create(:application, :in_progress,
                                       user: create(:constituent, email: "income_proof#{@admin.email}"),
                                       income_proof_required: true)
@@ -26,7 +24,6 @@ module Admin
         filename: 'income_proof.pdf',
         content_type: 'application/pdf'
       )
-      # Use correct enum value :not_reviewed instead of :pending
       @app_with_income_proof.update_columns(income_proof_status: Application.income_proof_statuses[:not_reviewed])
 
       email = "residency_proof#{@admin.email}"
@@ -37,7 +34,6 @@ module Admin
         filename: 'residency_proof.pdf',
         content_type: 'application/pdf'
       )
-      # Use correct enum value :not_reviewed instead of :pending
       @app_with_residency_proof.update_columns(residency_proof_status: Application.residency_proof_statuses[:not_reviewed])
 
       email = "id_proof#{@admin.email}"
@@ -45,7 +41,6 @@ module Admin
       mark_proofs_approved(@app_with_id_proof)
       @app_with_id_proof.update_columns(id_proof_status: Application.id_proof_statuses[:not_reviewed])
 
-      # Create application with medical certification received
       email = "medical_cert#{@admin.email}"
       @app_with_medical_cert = create(:application, :in_progress, user: create(:constituent, email: email))
       mark_proofs_approved(@app_with_medical_cert)
@@ -55,10 +50,6 @@ module Admin
         content_type: 'application/pdf'
       )
       @app_with_medical_cert.update_columns(medical_certification_status: Application.medical_certification_statuses[:received])
-
-      # Skip training request for now since the columns don't exist in the database
-      # @app_with_training = create(:application, :in_progress)
-      # @app_with_training.user.update!(training_requested: true, training_completed: false)
     end
 
     def test_dashboard_still_reports_proof_and_medical_review_metrics
@@ -127,6 +118,40 @@ module Admin
       assert_not_includes apps.map(&:id), fulfilled_request.id
       assert_not_includes apps.map(&:id), notification_only.id
       assert_equal dashboard_count, apps.size
+    end
+
+    def test_reassignment_counts_are_fresh_distinct_applications_and_match_their_filters
+      trainer = create(:trainer)
+      stranded = create_reviewed_application(user: create(:constituent, email: 'dashboard_stranded_training@example.com'))
+      stranded.update!(assigned_trainer: trainer)
+      create(:training_session, :no_show, application: stranded, trainer: trainer)
+      create(:training_session, :scheduled, application: stranded, trainer: trainer)
+      covered = create_reviewed_application(user: create(:constituent, email: 'dashboard_covered_training@example.com'))
+      covered.update!(assigned_trainer: create(:trainer))
+      create(:training_session, :scheduled, application: covered, trainer: covered.assigned_trainer)
+      evaluator = create(:evaluator)
+      stranded_evaluation = create_reviewed_application(user: create(:constituent, email: 'dashboard_stranded_evaluation@example.com'))
+      create(:evaluation, application: stranded_evaluation, constituent: stranded_evaluation.user, evaluator: evaluator, status: :scheduled)
+
+      get admin_dashboard_path
+      assert_equal [0, 0], assigns(:metrics).values_at(:training_needing_reassignment_count, :evaluations_needing_reassignment_count)
+
+      trainer.update_columns(status: User.statuses[:suspended])
+      evaluator.update_columns(status: User.statuses[:suspended])
+      get admin_dashboard_path
+      assert_equal [1, 1], assigns(:metrics).values_at(:training_needing_reassignment_count, :evaluations_needing_reassignment_count)
+
+      get admin_applications_path, params: { filter: 'training_needing_reassignment' }
+      assert_equal [stranded.id], assigns(:applications).map(&:id)
+      get admin_applications_path, params: { filter: 'evaluations_needing_reassignment' }
+      assert_equal [stranded_evaluation.id], assigns(:applications).map(&:id)
+
+      replacement = create(:trainer)
+      stranded.update!(assigned_trainer: replacement)
+      stranded.open_training_assignments.update_all(trainer_id: replacement.id)
+      get admin_dashboard_path
+      assert_equal 0, assigns(:metrics)[:training_needing_reassignment_count]
+      assert_select 'a[href=?]', admin_applications_path(filter: 'training_needing_reassignment'), text: /Training Needing Reassignment \(0\)/
     end
 
     def teardown

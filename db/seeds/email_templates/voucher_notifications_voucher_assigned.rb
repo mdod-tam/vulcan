@@ -1,7 +1,5 @@
 # frozen_string_literal: true
 
-# Seed File for "voucher_notifications_voucher_assigned"
-# --------------------------------------------------
 EmailTemplate.create_or_find_by!(name: 'voucher_notifications_voucher_assigned', format: :text, locale: 'en') do |template|
   template.subject = 'Your Voucher Has Been Assigned'
   template.description = 'Sent to the constituent when a voucher has been generated and assigned to their approved application.'

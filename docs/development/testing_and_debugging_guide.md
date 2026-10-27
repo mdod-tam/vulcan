@@ -17,7 +17,7 @@ CI runs the full system suite. Locally, browser runs share the test database, so
 
 [`test_helper.rb`](../../test/test_helper.rb) loads factories and support helpers, seeds shared data, configures mail and job adapters, and resets request state between tests. Ordinary tests run in transactions; [`ApplicationSystemTestCase`](../../test/application_system_test_case.rb) truncates instead, which is why adding a cleaning strategy to an individual test causes trouble rather than fixing it.
 
-The [initialization tasks](../infrastructure/setup_and_maintenance.md#baseline-seeds) are for setting up an environment. Tests should use the shared seed and scenario-specific policy records/helpers. Policy defaults are declared separately in `db/seeds.rb#create_policies` and `lib/tasks/seed_policies.rake`; update both when an initialization default changes.
+The [initialization tasks](../infrastructure/setup_and_maintenance.md#baseline-tasks) are for setting up an environment. Tests should use the shared seed and scenario-specific policy records/helpers. Policy defaults are declared once, in `Baseline::Policies`, which the demo seed and the tasks share.
 
 Four pieces of that setup surprise people:
 

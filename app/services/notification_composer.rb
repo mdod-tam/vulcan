@@ -37,7 +37,7 @@ class NotificationComposer
     link_to(
       application_label(application),
       application_path_for_viewer(application),
-      class: 'text-indigo-600 hover:text-indigo-500 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-indigo-500',
+      class: 'text-primary-600 hover:text-primary-500',
       aria: { label: "View #{application_label(application)}" }
     )
   end
@@ -62,6 +62,19 @@ class NotificationComposer
     constituent_name = session.constituent.full_name
     reference = link_to("training session for #{constituent_name}", Rails.application.routes.url_helpers.trainers_training_session_path(session))
     safe_join([trainer_name, ' assigned to ', reference, '.'])
+  end
+
+  def message_for_trainer_reassigned
+    return default_message unless @notifiable.is_a?(TrainingSession)
+
+    reference = link_to("training for #{@notifiable.constituent.full_name}",
+                        Rails.application.routes.url_helpers.trainers_training_session_path(@notifiable))
+    safe_join(['Open ', reference, ' was transferred to you.'])
+  end
+
+  def message_for_training_trainer_changed
+    trainer_name = @metadata['trainer_name'].presence || 'another trainer'
+    safe_join(['Your training is now with ', trainer_name, '. Any scheduled appointment has not changed.'])
   end
 
   def message_for_training_requested
@@ -264,10 +277,15 @@ class NotificationComposer
     key.to_s == 'proof_type' ? 'proof_type_formatted' : nil
   end
 
+  # A trainer, or an evaluator granted training. Administrators keep the admin application page.
+  def trainer_viewer?
+    @viewer.can_train? && !@viewer.admin?
+  end
+
   def application_path_for_viewer(application)
     routes = Rails.application.routes.url_helpers
 
-    if application.current_trainer?(@viewer) && (@viewer.trainer? || (@action == 'training_requested' && metadata_value('recipient_audience') == 'assigned_trainer'))
+    if application.current_trainer?(@viewer) && (trainer_viewer? || (@action == 'training_requested' && metadata_value('recipient_audience') == 'assigned_trainer'))
       routes.trainers_training_session_path(application.latest_training_session)
     elsif @viewer.blank? || @viewer.admin?
       routes.admin_application_path(application)

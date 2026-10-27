@@ -3,13 +3,12 @@
 require 'test_helper'
 
 class ProofAttachmentFallbackTest < ActiveSupport::TestCase
-  # Since both tests modify the database similarly, run them one at a time
   self.use_transactional_tests = true
 
   setup do
-    @application = create(:application) # Use basic FactoryBot application factory
+    @application = create(:application)
     @admin = create(:admin)
-    # Clear out any existing audit records to ensure our tests are isolated
+    # Event.last in each test must be the event that test records.
     Event.where(action: 'proof_attachment_failed').delete_all
   end
 
@@ -17,14 +16,11 @@ class ProofAttachmentFallbackTest < ActiveSupport::TestCase
     Rails.logger.stubs(:error)
     Rails.logger.expects(:error).with("[TEST_ATTACHMENT] Proof attachment error for application #{@application.id}: StandardError").once
 
-    # Generate a test-specific proof type to avoid conflicts
     proof_type = "income_#{Time.now.to_i}"
 
-    # Deliberately passing nil as submission_method to test fallback
     error = StandardError.new('Test error')
     metadata = { ip_address: '127.0.0.1' }
 
-    # Build context hash as expected by the current method signature
     context = {
       application: @application,
       proof_type: proof_type,
@@ -33,12 +29,10 @@ class ProofAttachmentFallbackTest < ActiveSupport::TestCase
       metadata: metadata
     }
 
-    # This should not raise an error due to our fallback handling
     assert_nothing_raised do
       ProofAttachmentService.record_failure(error, context)
     end
 
-    # Verify audit event was created with fallback submission method
     event = Event.last
     assert_equal "#{proof_type}_proof_attachment_failed", event.action
     assert_equal @application.id, event.auditable_id
@@ -54,28 +48,23 @@ class ProofAttachmentFallbackTest < ActiveSupport::TestCase
     Rails.logger.stubs(:error)
     Rails.logger.expects(:error).with("[TEST_ATTACHMENT] Proof attachment error for application #{@application.id}: StandardError").once
 
-    # Generate a test-specific proof type to avoid conflicts
     proof_type = "residency_#{Time.now.to_i}"
 
-    # Deliberately passing an invalid submission_method to test fallback
     error = StandardError.new('Test error')
     metadata = { ip_address: '127.0.0.1' }
 
-    # Build context hash as expected by the current method signature
     context = {
       application: @application,
       proof_type: proof_type,
       admin: @admin,
-      submission_method: :invalid_method, # Invalid submission method
+      submission_method: :invalid_method,
       metadata: metadata
     }
 
-    # This should not raise an error due to our fallback handling
     assert_nothing_raised do
       ProofAttachmentService.record_failure(error, context)
     end
 
-    # Verify audit event was created with fallback submission method
     event = Event.last
     assert_equal "#{proof_type}_proof_attachment_failed", event.action
     assert_equal @application.id, event.auditable_id

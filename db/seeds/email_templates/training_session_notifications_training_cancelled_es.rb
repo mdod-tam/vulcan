@@ -1,7 +1,5 @@
 # frozen_string_literal: true
 
-# Seed File for "training_session_notifications_training_cancelled"
-# --------------------------------------------------
 template = EmailTemplate.find_or_initialize_by(name: 'training_session_notifications_training_cancelled', format: :text, locale: 'es')
 template.assign_attributes(
   subject: 'Sesión de capacitación cancelada',

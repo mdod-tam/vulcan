@@ -1,10 +1,8 @@
 # frozen_string_literal: true
 
-# Seed File for "voucher_notifications_voucher_expiring_soon"
-# --------------------------------------------------
 EmailTemplate.create_or_find_by!(name: 'voucher_notifications_voucher_expiring_soon', format: :text, locale: 'es') do |template|
   template.subject = 'Importante: Su Vale Expirará Pronto'
-  template.description = 'Enviado al proveedor como recordatorio de que su vale se acerca a su fecha de vencimiento.'
+  template.description = 'Enviado a la persona solicitante como recordatorio de que su vale se acerca a su fecha de vencimiento.'
   template.body = <<~TEXT
     Importante: Su Vale Expirará Pronto
 

@@ -11,7 +11,7 @@
     </div>
 
     <% if template.html? %>
-      <%= tag.div class: 'rounded-md border border-red-300 bg-red-50 p-3 text-sm text-red-800',
+      <%= tag.div class: 'rounded-md border border-danger-300 bg-danger-50 p-3 text-sm text-danger-800',
                   role: 'alert', aria: { atomic: true }, data: { 'email-preview-target': 'error' },
                   hidden: error_message.blank? do %>
         <%= 'Preview unavailable. Review the error below, correct the draft, and try again.' if error_message.present? %>
@@ -19,25 +19,25 @@
     <% end %>
 
     <% if error_message.present? && !template.html? %>
-      <div class="rounded-md border border-red-300 bg-red-50 p-3 text-sm text-red-800" role="alert">
+      <div class="rounded-md border border-danger-300 bg-danger-50 p-3 text-sm text-danger-800" role="alert">
         <p><%= error_message %></p>
       </div>
     <% else %>
       <div role="status">
         <% unless template.html? %>
           <div class="mb-4">
-            <h4 class="text-md font-medium text-gray-600 mb-2">
+            <h4 class="text-base font-medium text-gray-600 mb-2">
               Subject Preview: <span class="font-normal"><%= rendered_subject %></span>
             </h4>
           </div>
         <% end %>
 
         <div class="prose max-w-none mb-4">
-          <h4 class="text-md font-medium text-gray-600 mb-2">
+          <h4 class="text-base font-medium text-gray-600 mb-2">
             Body Preview
           </h4>
 
-          <div class="border border-gray-300 rounded-lg shadow-sm p-4 bg-white">
+          <div class="border border-gray-300 rounded-lg shadow-elevation-1 p-4 bg-white">
             <% if template.format == 'html' %>
               <%= render 'admin/email_templates/html_preview',
                          template: template,

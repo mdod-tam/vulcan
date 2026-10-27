@@ -22,7 +22,8 @@ class EvaluationReassignmentTest < ActiveSupport::TestCase
   end
 
   test 'transfer preserves the appointment and report context and records both evaluator identities' do
-    before = @evaluation.attributes.except('evaluator_id', 'updated_at')
+    before = @evaluation.attributes.except('evaluator_id', 'updated_at', 'assignment_operation_id')
+    previous_operation = @evaluation.assignment_operation_id
     products = @evaluation.recommended_product_ids
 
     assert_no_difference('Evaluation.count') do
@@ -32,22 +33,44 @@ class EvaluationReassignmentTest < ActiveSupport::TestCase
     end
 
     assert_equal @replacement.id, @evaluation.reload.evaluator_id
-    assert_equal before, @evaluation.attributes.except('evaluator_id', 'updated_at')
+    assert_equal before, @evaluation.attributes.except('evaluator_id', 'updated_at', 'assignment_operation_id')
     assert_equal products, @evaluation.recommended_product_ids
     event = Event.find_by!(action: 'evaluator_reassigned', auditable: @evaluation)
+    assert_equal @evaluation.assignment_operation_id, event.metadata['operation_id']
+    assert_not_equal previous_operation, @evaluation.assignment_operation_id
     assert_equal @evaluator.id, event.metadata['previous_evaluator_id']
     assert_equal @replacement.id, event.metadata['evaluator_id']
     assert_equal @admin.id, event.user_id
   end
 
-  test 'cancelled and no-show assignments can transfer without losing their outcome history' do
-    %i[cancelled no_show].each do |status|
-      @evaluation.update!(status: status)
-      current = @evaluation.evaluator_id == @replacement.id ? @evaluator : @replacement
-      assert @application.reassign_evaluator!(current, actor: @admin)
-      assert_equal status.to_s, @evaluation.reload.status
-      assert_equal 'Interpreter arrangements', @evaluation.notes
+  test 'a no-show assignment is still open and transfers without losing its outcome history' do
+    @evaluation.update!(status: :no_show)
+    assert @application.reassign_evaluator!(@replacement, actor: @admin)
+    assert_equal 'no_show', @evaluation.reload.status
+    assert_equal @replacement.id, @evaluation.evaluator_id
+    assert_equal 'Interpreter arrangements', @evaluation.notes
+  end
+
+  test 'a cancelled assignment is closed and does not transfer' do
+    @evaluation.update!(status: :cancelled)
+    evaluation_attributes = @evaluation.reload.attributes
+
+    assert_no_difference ['Event.count', 'Notification.count'] do
+      assert_no_enqueued_jobs do
+        assert_equal false, @application.reassign_evaluator!(@replacement, actor: @admin)
+      end
     end
+
+    assert_equal [I18n.t('activerecord.errors.models.application.attributes.base.evaluation_assignment_closed')], @application.errors[:base]
+    assert_equal evaluation_attributes, @evaluation.reload.attributes
+  end
+
+  test 'a historical completed evaluation does not block transfer of a separate open evaluation' do
+    create(:evaluation, :completed, application: @application, constituent: @application.user, evaluator: @evaluator)
+
+    assert @application.reassign_evaluator!(@replacement, actor: @admin)
+    assert_equal @replacement.id, @evaluation.reload.evaluator_id
+    assert_equal [@evaluator.id], @application.evaluations.completed_sessions.pluck(:evaluator_id)
   end
 
   test 'completed reports cannot transfer' do
@@ -137,7 +160,7 @@ class EvaluationReassignmentTest < ActiveSupport::TestCase
   test 'evaluation validation failure returns false without changing either record' do
     invalid_evaluation = Evaluation.new
     invalid_evaluation.errors.add(:evaluator, 'is invalid')
-    @application.stubs(:latest_evaluation).returns(@evaluation)
+    @application.stubs(:open_evaluation).returns(@evaluation)
     @evaluation.stubs(:update!).raises(ActiveRecord::RecordInvalid.new(invalid_evaluation))
     evaluation_attributes = @evaluation.reload.attributes
     application_attributes = @application.reload.attributes

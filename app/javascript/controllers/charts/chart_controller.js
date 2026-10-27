@@ -44,7 +44,6 @@ export default class extends Controller {
     }
     const valueAxis = this.indexAxisValue === "y" ? "x" : "y"
     const options = {
-      // Do not stub getComputedStyle; Chart.js needs real measurements for resizing and tooltips.
       responsive: true,
       maintainAspectRatio: false,
       animation: false,

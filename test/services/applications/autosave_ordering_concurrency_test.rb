@@ -129,14 +129,14 @@ module Applications
       form = ApplicationForm.new(
         current_user: User.find(@user.id),
         application: application_id ? Application.find(application_id) : nil,
-        params: {
+        params: ActionController::Parameters.new(
           application: {
             annual_income: '50000', household_size: value, vision_disability: true,
             terms_accepted: true, information_verified: true, medical_release_authorized: true,
             medical_provider_attributes: { name: 'Test Provider', phone: '2025550123', email: 'provider@example.com' }
           },
           save_draft: 'Save Application', autosave_context: @context, autosave_revision: revision
-        }.with_indifferent_access
+        )
       )
       ApplicationCreator.call(form)
     end

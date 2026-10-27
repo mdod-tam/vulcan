@@ -1,8 +1,5 @@
 # frozen_string_literal: true
 
-# Seed File for "application_notifications_income_threshold_exceeded"
-# (Suggest saving as db/seeds/email_templates/application_notifications_income_threshold_exceeded.rb)
-# --------------------------------------------------
 EmailTemplate.create_or_find_by!(name: 'application_notifications_income_threshold_exceeded', format: :text, locale: 'es') do |template|
   template.subject = 'Información Importante Sobre Su Solicitud MAT'
   template.description = 'Enviado cuando se rechaza una solicitud porque los ingresos superan el umbral de elegibilidad.'

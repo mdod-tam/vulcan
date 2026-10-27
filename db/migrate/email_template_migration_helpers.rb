@@ -1,8 +1,8 @@
 # frozen_string_literal: true
 
-# Shared helpers for email template data migrations. Use a bare AR record
-# instead of EmailTemplate so pending migrations stay safe when later PRs change
-# model callbacks, validations, or column names (e.g. needs_sync rename in PR #176).
+# Shared helpers for email template data migrations. They use a bare Active Record class
+# instead of EmailTemplate so a migration still runs after the model's callbacks, validations,
+# or column names change (needs_sync became locale_needs_sync).
 module EmailTemplateMigrationHelpers
   TEXT_EMAIL_FORMAT = 1
 
@@ -20,8 +20,8 @@ module EmailTemplateMigrationHelpers
     scope.delete_all
   end
 
-  # PR #176 adds email_template_snapshots with a non-cascading FK. Older-timestamp
-  # migrations may still be pending after snapshots exist.
+  # email_template_snapshots has a non-cascading foreign key to email_templates, so its rows are deleted first.
+  # The table may not exist yet when an older migration runs.
   def delete_email_template_snapshots_for!(template_ids)
     return unless connection.table_exists?(:email_template_snapshots)
 
@@ -73,7 +73,7 @@ module EmailTemplateMigrationHelpers
     end
   end
 
-  # PR #176 renames needs_sync → locale_needs_sync for clarity
+  # The column is needs_sync before the rename migration and locale_needs_sync after it.
   def locale_sync_column_name
     connection.column_exists?(:email_templates, :locale_needs_sync) ? :locale_needs_sync : :needs_sync
   end

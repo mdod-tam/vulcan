@@ -1,27 +1,25 @@
 <%# locals: (evaluation:) -%>
 <% form_values = @evaluation_form_values.fetch(:supplemental_notes, {}) # rubocop:disable Lint/UselessAssignment -- Used by later ERB fragments. %>
-<%# Prominent completion banner %>
-<div class="mt-8 rounded-lg bg-green-50 border-2 border-green-300 px-6 py-5">
+<div class="mt-8 rounded-lg bg-success-50 border-2 border-success-300 px-6 py-5">
   <div class="flex items-start gap-4">
     <div class="flex-shrink-0 mt-0.5">
-      <svg class="h-7 w-7 text-green-500" fill="currentColor" viewBox="0 0 20 20" aria-hidden="true">
+      <svg class="h-7 w-7 text-success-500" fill="currentColor" viewBox="0 0 20 20" aria-hidden="true">
         <path fill-rule="evenodd" d="M10 18a8 8 0 100-16 8 8 0 000 16zm3.707-9.293a1 1 0 00-1.414-1.414L9 10.586 7.707 9.293a1 1 0 00-1.414 1.414l2 2a1 1 0 001.414 0l4-4z" clip-rule="evenodd" />
       </svg>
     </div>
     <div>
-      <p class="text-lg font-bold text-green-900">Evaluation Completed</p>
-      <p class="mt-1 text-sm text-green-700">
+      <p class="text-lg font-bold text-success-900">Evaluation Completed</p>
+      <p class="mt-1 text-sm text-success-700">
         <%= t('evaluators.evaluations.forms.completed_report_help') %>
       </p>
     </div>
   </div>
 </div>
 
-<%# Post-completion notes %>
-<div class="mt-6 bg-white shadow rounded-lg border border-gray-200">
+<div class="mt-6 card border border-gray-200">
   <div class="px-4 py-4 sm:px-6 border-b border-gray-200">
     <h3 class="text-base font-semibold text-gray-900"><%= t('evaluators.evaluations.working_notes.title') %></h3>
-    <p id="supplemental-notes-help" class="mt-1 text-sm text-gray-500">
+    <p id="supplemental-notes-help" class="form-hint">
       <strong><%= t('evaluators.evaluations.forms.internal_notes_only') %></strong>
       Add supplemental notes to this completed evaluation record. This does not modify the previously submitted report.
     </p>
@@ -44,13 +42,12 @@
           ) %>
       <div>
         <%= f.label :post_completion_notes, t('evaluators.evaluations.working_notes.label'),
-                    class: 'block text-sm font-medium text-gray-700' %>
+                    class: 'form-label' %>
         <%= f.text_area :post_completion_notes,
                         value: form_values.fetch(:post_completion_notes, evaluation.post_completion_notes),
                         rows: 5,
                         placeholder: 'Add follow-up observations, next steps, or supplemental information...',
-                        class: 'mt-1 block w-full border border-gray-300 rounded-md shadow-sm py-2 px-3 ' \
-                               'focus:outline-none focus:ring-indigo-500 focus:border-indigo-500 sm:text-sm',
+                        class: 'form-input mt-1',
                         aria: action_form_field_aria(:supplemental_notes, :post_completion_notes,
                                                      describedby: 'supplemental-notes-help', form_errors: @evaluation_form_errors) %>
         <%= render 'shared/field_errors', action: :supplemental_notes, attribute: :post_completion_notes, form_errors: @evaluation_form_errors %>
@@ -58,9 +55,7 @@
 
       <%= f.submit evaluation.post_completion_notes.present? ? 'Update Note' : 'Add Note',
                    data: { turbo_submits_with: 'Saving supplemental notes...' },
-                   class: 'inline-flex justify-center py-2 px-4 border border-transparent shadow-sm text-sm font-medium ' \
-                          'rounded-md text-white bg-indigo-600 hover:bg-indigo-700 focus:outline-none focus:ring-2 ' \
-                          'focus:ring-offset-2 focus:ring-indigo-500' %>
+                   class: 'btn btn-primary' %>
     <% end %>
   </div>
 </div>

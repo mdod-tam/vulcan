@@ -99,13 +99,32 @@ class EvaluationTest < ActiveSupport::TestCase
     assert evaluation.valid?, -> { evaluation.errors.full_messages.join(', ') }
   end
 
-  test 'does not allow trainers as evaluators even with explicit can_evaluate capability' do
+  test 'allows a trainer granted can_evaluate as an evaluator' do
     trainer = create(:trainer)
     create(:role_capability, user: trainer, capability: 'can_evaluate')
     evaluation = build(:evaluation, evaluator: trainer)
 
+    assert evaluation.valid?, -> { evaluation.errors.full_messages.join(', ') }
+  end
+
+  test 'does not allow a trainer without the can_evaluate grant as an evaluator' do
+    evaluation = build(:evaluation, evaluator: create(:trainer))
+
     assert_not evaluation.valid?
-    assert_includes evaluation.errors[:evaluator], 'must be an Evaluator or an administrator with evaluation capability'
+    assert_includes evaluation.errors[:evaluator], 'must be an active staff member with evaluation capability'
+  end
+
+  test 'a former evaluator who lost eligibility keeps unrelated edits and cancellation but cannot be newly assigned' do
+    evaluator = create(:evaluator)
+    evaluation = create(:evaluation, evaluator: evaluator)
+    evaluator.update!(status: :inactive)
+
+    assert evaluation.reload.update(working_notes: 'Unrelated note'), -> { evaluation.errors.full_messages.join(', ') }
+    assert evaluation.update(status: :cancelled), -> { evaluation.errors.full_messages.join(', ') }
+
+    reassigned = create(:evaluation)
+    assert_not reassigned.update(evaluator: evaluator)
+    assert_includes reassigned.errors[:evaluator], 'must be an active staff member with evaluation capability'
   end
 
   test 'new completion requires separately recorded actual appointment and submission times' do

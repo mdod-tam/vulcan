@@ -49,7 +49,7 @@ en:
       wait: "Please wait %{seconds} seconds before requesting another code."
     errors:
       key_unavailable: "No security keys are registered. Please set up a security key first."
-      totp_unavailable: "No authenticator app is set up. Please set up TOTP authentication first."
+      totp_unavailable: "No authenticator app is set up. Please set up an authenticator app first."
       invalid_method: "Invalid verification method"
       invalid_type: "Invalid credential type"
       no_code: "No code provided"

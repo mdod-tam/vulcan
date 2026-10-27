@@ -331,12 +331,12 @@ FactoryBot.define do
       end
     end
 
-    # DEPRECATED: Use :for_dependent.
+    # Alias for :for_dependent.
     trait :submitted_by_guardian do
       for_dependent
     end
 
-    # DEPRECATED: Use :for_dependent with relationship_type: 'Legal Guardian'.
+    # Alias for :for_dependent with relationship_type: 'Legal Guardian'.
     trait :submitted_by_legal_guardian do
       for_dependent { { relationship_type: 'Legal Guardian' } }
     end

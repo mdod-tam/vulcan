@@ -12,17 +12,13 @@ module Admin
 
     private
 
-    # Dashboard metrics loading is handled in the DashboardMetricsLoading concern
-
     def calculate_training_requests
       Application.with_pending_training_request.count
     end
 
-    # Safely assigns a value to an instance variable after sanitizing the key
-    # @param key [String, Symbol] The variable name, without the '@' prefix
-    # @param value [Object] The value to assign
+    # Sets @key to value. A leading @ on key is dropped and characters that are not valid in an
+    # instance variable name become underscores.
     def safe_assign(key, value)
-      # Strip leading @ if present and sanitize key to ensure valid Ruby variable name
       sanitized_key = key.to_s.sub(/\A@/, '').gsub(/[^0-9a-zA-Z_]/, '_')
       instance_variable_set("@#{sanitized_key}", value)
     end

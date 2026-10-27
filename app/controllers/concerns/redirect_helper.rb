@@ -1,7 +1,6 @@
 # frozen_string_literal: true
 
-# Provides standardized redirect methods with flash messages
-# Can be included in any controller that needs consistent redirect behavior
+# Redirect shortcuts that set a notice or an alert.
 module RedirectHelper
   extend ActiveSupport::Concern
 

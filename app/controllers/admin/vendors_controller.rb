@@ -62,7 +62,7 @@ module Admin
     private
 
     def set_vendor
-      # Use Users::Vendor to match the STI type column
+      # Users::Vendor limits the lookup to vendor records.
       @vendor = Users::Vendor.find(params[:id])
     end
 

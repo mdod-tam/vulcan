@@ -30,7 +30,11 @@
                   <span class="block text-gray-500">
                     Applications:
                     <% dependent.applications.each_with_index do |application, index| %>
-                      <%= ' · ' unless index.zero? %><%= link_to "##{application.id} #{application.status.humanize}", admin_application_path(application), class: 'text-indigo-600 hover:text-indigo-900', target: '_blank', rel: 'noopener' %>
+                      <%= ' · ' unless index.zero? %><%= link_to "##{application.id} #{application.status.humanize}",
+                                                                 admin_application_path(application),
+                                                                 class: 'text-primary-600 hover:text-primary-900',
+                                                                 target: '_blank',
+                                                                 rel: 'noopener' %>
                     <% end %>
                     <% if dependent.application_count > dependent.applications.size %>
                       · and <%= dependent.application_count - dependent.applications.size %> more
@@ -55,7 +59,7 @@
   </div>
 
   <% if preview.any? %>
-    <div class="mt-2 rounded-md bg-blue-50 p-3 text-xs text-blue-900" data-testid="merge-relationship-outcome">
+    <div class="mt-2 rounded-md bg-info-50 p-3 text-xs text-info-900" data-testid="merge-relationship-outcome">
       <h4 class="font-medium">After this merge</h4>
       <ul class="mt-1 list-disc space-y-1 pl-4">
         <% preview.direct_relationships.each do |relationship| %>

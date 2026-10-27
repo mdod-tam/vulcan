@@ -21,7 +21,6 @@ class User < ApplicationRecord
   end
   private :reconcile_pending_letters_after_identity_change
 
-  attr_accessor :needs_duplicate_review unless column_names.include?('needs_duplicate_review')
   attr_accessor :portal_self_registration
 
   def self.normalize_email(email_value)
@@ -157,8 +156,6 @@ class User < ApplicationRecord
     false
   end
 
-  after_save :reset_all_caches
-
   has_many :document_scans, dependent: :nullify
   has_many :events, dependent: :destroy
   has_many :received_notifications,
@@ -167,6 +164,13 @@ class User < ApplicationRecord
            dependent: :destroy,
            inverse_of: :recipient
   has_many :applications, inverse_of: :user, dependent: :nullify
+  # Work assigned to this user as a practitioner, by discipline. A grant gives either discipline to its other role.
+  has_many :assigned_training_sessions, class_name: 'TrainingSession', foreign_key: :trainer_id,
+                                        inverse_of: :trainer, dependent: :restrict_with_error
+  has_many :assigned_evaluations, class_name: 'Evaluation', foreign_key: :evaluator_id,
+                                  inverse_of: :evaluator, dependent: :restrict_with_error
+  has_many :assigned_training_constituents, through: :assigned_training_sessions, source: :constituent
+  has_many :assigned_evaluation_constituents, through: :assigned_evaluations, source: :constituent
   has_many :recovery_requests, dependent: :restrict_with_exception
   has_many :subject_duplicate_review_cases,
            class_name: 'DuplicateReviewCase',
@@ -243,12 +247,6 @@ class User < ApplicationRecord
   end
 
   private
-
-  def reset_all_caches
-    @available_capabilities = nil
-    @inherent_capabilities = nil
-    @loaded_capabilities = nil
-  end
 
   def active_application
     applications.where.not(status: 'draft').order(created_at: :desc).first

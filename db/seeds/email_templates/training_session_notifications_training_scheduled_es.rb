@@ -1,8 +1,5 @@
 # frozen_string_literal: true
 
-# Seed File for "training_session_notifications_training_scheduled"
-# (Suggest saving as db/seeds/email_templates/training_session_notifications_training_scheduled.rb)
-# --------------------------------------------------
 EmailTemplate.create_or_find_by!(name: 'training_session_notifications_training_scheduled', format: :text, locale: 'es') do |template|
   template.subject = 'Sesión de Entrenamiento Programada'
   template.description = 'Enviado al usuario cuando se ha programado su sesión de capacitación.'

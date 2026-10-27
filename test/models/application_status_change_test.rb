@@ -16,16 +16,12 @@ class ApplicationStatusChangeTest < ActiveSupport::TestCase
   test 'transition_status! creates single ApplicationStatusChange record' do
     application = create(:application, :draft, user: @constituent)
 
-    # Track initial count
     initial_count = ApplicationStatusChange.count
 
-    # Update status via transition_status!
     application.transition_status!(:in_progress, actor: @admin, metadata: { trigger: 'test' })
 
-    # Verify exactly one record was created
     assert_equal initial_count + 1, ApplicationStatusChange.count
 
-    # Verify the record has correct data
     change = ApplicationStatusChange.last
     assert_equal 'draft', change.from_status
     assert_equal 'in_progress', change.to_status
@@ -35,16 +31,12 @@ class ApplicationStatusChangeTest < ActiveSupport::TestCase
   test 'transition_status! method creates single record with notes' do
     application = create(:application, :draft, user: @constituent)
 
-    # Track initial count
     initial_count = ApplicationStatusChange.count
 
-    # Use transition_status! with user and notes
     application.transition_status!(:in_progress, actor: @admin, notes: 'Test status change', metadata: { trigger: 'test' })
 
-    # Verify exactly one record was created
     assert_equal initial_count + 1, ApplicationStatusChange.count
 
-    # Verify the record includes notes
     change = ApplicationStatusChange.last
     assert_equal 'draft', change.from_status
     assert_equal 'in_progress', change.to_status
@@ -93,7 +85,6 @@ class ApplicationStatusChangeTest < ActiveSupport::TestCase
     application.transition_status!(:in_progress, actor: @admin, metadata: { trigger: 'test' })
     assert_equal initial_count + 3, ApplicationStatusChange.count
 
-    # Verify all changes are distinct
     changes = ApplicationStatusChange.where(application: application).order(created_at: :asc)
     assert_equal 3, changes.count
     assert_equal %w[draft in_progress awaiting_proof], changes.map(&:from_status)
@@ -106,7 +97,6 @@ class ApplicationStatusChangeTest < ActiveSupport::TestCase
 
     initial_count = ApplicationStatusChange.count
 
-    # Update status via transition_status!
     application.transition_status!(:in_progress, actor: @constituent, metadata: { trigger: 'test' })
 
     assert_equal initial_count + 1, ApplicationStatusChange.count

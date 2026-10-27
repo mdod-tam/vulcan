@@ -4,12 +4,10 @@ require 'test_helper'
 
 module Admin
   class ApplicationNotesControllerTest < ActionDispatch::IntegrationTest
-    # AuthenticationTestHelper is included globally via test_helper
-
     setup do
-      @admin = create(:admin) # Use the dedicated :admin factory
+      @admin = create(:admin)
       @application = create(:application, user: create(:constituent, email: "constituent#{@admin.email}"))
-      sign_in_as(@admin) # Use the standard helper for authentication
+      sign_in_as(@admin)
     end
 
     test 'should create internal note' do
@@ -66,10 +64,7 @@ module Admin
       assert_match(/Failed to add note/, flash[:alert])
     end
 
-    # Authentication is skipped in test environment in Admin::BaseController
-    # So we can't test authentication requirements directly
     test 'should set current user from authentication' do
-      # Verify that the current_user is set correctly
       post admin_application_notes_path(@application), params: {
         application_note: {
           content: 'Test note with authentication',

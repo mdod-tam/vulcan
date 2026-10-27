@@ -4,9 +4,8 @@ Rails.application.configure do
   # Enable parameter filtering for encrypted columns
   config.active_record.encryption.add_to_filter_parameters = true
 
-  # Disable extend_queries - causing issues in Rails 8.0
-  # When false, queries must use the logical attribute names (email, phone)
-  # and Rails will handle the translation to encrypted columns transparently
+  # With extend_queries off, queries use the logical attribute names (email, phone) and Rails
+  # translates them for the encrypted columns.
   config.active_record.encryption.extend_queries = false
 
   # Persistent environments must reuse saved encryption credentials.
@@ -36,7 +35,6 @@ Rails.application.configure do
   # Encrypted attributes must not silently accept plaintext from storage.
   config.active_record.encryption.support_unencrypted_data = false
 
-  # Other encryption configuration
   config.active_record.encryption.encrypt_fixtures = true
   config.active_record.encryption.store_key_references = true
 end

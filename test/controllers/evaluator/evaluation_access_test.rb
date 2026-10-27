@@ -77,6 +77,27 @@ class EvaluatorEvaluationAccessTest < ActionDispatch::IntegrationTest
     assert_nil @evaluation.reload.post_completion_notes
   end
 
+  test 'supplemental notes are refused when evaluation access is revoked after the request was authorized' do
+    holder = create(:trainer)
+    create(:role_capability, user: holder, capability: 'can_evaluate')
+    evaluation = create(:evaluation, :completed, evaluator: holder)
+    sign_in_for_controller_test(holder)
+    constructor = Evaluations::SupplementalNotesService.method(:new)
+    revoke_before_service = lambda do |*arguments|
+      revoked = Users::CapabilityWriter.call(actor: @admin, user: holder, intent: Users::CapabilityWriter::Intent.revoke('can_evaluate'),
+                                             operation_id: SecureRandom.uuid, confirmation: nil)
+      assert revoked.changed?, revoked.message
+      constructor.call(*arguments)
+    end
+
+    Evaluations::SupplementalNotesService.stub(:new, revoke_before_service) do
+      patch evaluators_evaluation_path(evaluation), params: { evaluation: { post_completion_notes: 'Written after revocation' } }
+    end
+
+    assert_response :unprocessable_content
+    assert_nil evaluation.reload.post_completion_notes
+  end
+
   test 'a request overtaken by reassignment cannot render the former evaluator contact details' do
     @evaluation.update!(status: :requested, evaluation_date: nil)
     replacement = create(:evaluator)

@@ -3,11 +3,8 @@ import { railsRequest } from "../../services/rails_request"
 import { registerWebAuthn } from "../../auth.js"
 
 class AddCredentialController extends Controller {
-  // Define the expected value for the callback URL
   static values = { callbackUrl: String }
-  // Define the target for the nickname input
   static targets = ["nicknameInput", "submitButton", "statusMessage"]
-
 
   connect() {
     if (process.env.NODE_ENV !== 'production') {
@@ -18,23 +15,19 @@ class AddCredentialController extends Controller {
       console.error("AddCredentialController requires a callback-url value.")
     }
 
-    // Request key for tracking
     this.requestKey = `add-credential-${this.identifier}-${Date.now()}`
 
-    // Get the form element but don't attach a submit handler (using button click)
+    // The register button's click starts registration, so the form has no submit handler.
     this.form = this.element;
   }
 
   disconnect() {
-    // Cancel any pending credential options request
     railsRequest.cancel(this.requestKey)
   }
 
-  // Handle button click  (not form submission)
   async register(event) {
-    event.preventDefault(); // Prevent default button click / form submission
+    event.preventDefault();
 
-    // Show loading state
     if (process.env.NODE_ENV !== 'production') {
       console.log("Preparing your security key...")
     }
@@ -42,7 +35,6 @@ class AddCredentialController extends Controller {
       this.submitButtonTarget.disabled = true;
     }
 
-    // Get the nickname
     const nickname = this.hasNicknameInputTarget ? this.nicknameInputTarget.value : null;
     if (!nickname) {
       this.showNicknameError("Please enter a name so you can recognize this device later.")
@@ -57,7 +49,6 @@ class AddCredentialController extends Controller {
         console.log("Form action:", this.form.action)
       }
 
-      // Step 1: Use centralized rails request service to get credential options
       const result = await railsRequest.perform({
         method: 'post',
         url: this.form.action,
@@ -66,7 +57,6 @@ class AddCredentialController extends Controller {
       })
 
       if (result.success) {
-        // Parse the credential options
         const credentialOptions = result.data;
         if (process.env.NODE_ENV !== 'production') {
           console.log("Received credential options:", credentialOptions)
@@ -75,7 +65,6 @@ class AddCredentialController extends Controller {
           console.log("Please follow your browser's prompts to register your security key...")
         }
 
-        // Check if we have the callback URL value
         if (!this.hasCallbackUrlValue) {
           console.error("Missing callback URL value. Check the data attribute in the view.");
           console.error("Configuration error. Please try again or contact support.");
@@ -85,17 +74,14 @@ class AddCredentialController extends Controller {
           return;
         }
 
-        // Step 2: Construct the callback URL with nickname
         const callbackUrl = `${this.callbackUrlValue}?credential_nickname=${encodeURIComponent(nickname)}`;
         if (process.env.NODE_ENV !== 'production') {
           console.log("Using callback URL:", callbackUrl)
         }
 
-        // Step 3: Call the WebAuthn API using the Auth module, passing nickname explicitly
-        // Pass null for the feedback element as we're using the flash outlet now
+        // No feedback element is passed, so a failure here is only logged to the console.
         const webauthnResult = await registerWebAuthn(callbackUrl, credentialOptions, nickname, null);
 
-        // Step 4: Handle non-redirect result (errors)
         if (!webauthnResult.success) {
           console.error("Security key registration failed:", webauthnResult.message || "Unknown error");
           console.error("Error details:", webauthnResult.details);
@@ -104,7 +90,7 @@ class AddCredentialController extends Controller {
             this.submitButtonTarget.disabled = false;
           }
         }
-        // Successful registrations will redirect automatically from auth.js
+        // A successful registration redirects from auth.js.
       } else {
         this.showNicknameError(result.message || "Could not prepare your device or security key. Please try again.")
         if (this.hasSubmitButtonTarget) {
@@ -125,7 +111,7 @@ class AddCredentialController extends Controller {
   clearNicknameError() {
     if (!this.hasNicknameInputTarget) return;
 
-    this.nicknameInputTarget.classList.remove("border-red-500", "focus:border-red-500", "focus:ring-red-500");
+    this.nicknameInputTarget.classList.remove("border-danger-500");
     if (this.hasStatusMessageTarget) {
       this.statusMessageTarget.textContent = "";
       this.statusMessageTarget.classList.add("hidden");
@@ -135,7 +121,7 @@ class AddCredentialController extends Controller {
   showNicknameError(message) {
     if (this.hasNicknameInputTarget) {
       this.nicknameInputTarget.focus();
-      this.nicknameInputTarget.classList.add("border-red-500", "focus:border-red-500", "focus:ring-red-500");
+      this.nicknameInputTarget.classList.add("border-danger-500");
     }
 
     if (this.hasStatusMessageTarget) {

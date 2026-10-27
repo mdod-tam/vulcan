@@ -6,7 +6,6 @@ module ConstituentPortal
 
     around_action :with_viewer_locale, only: :request_training
 
-    include ParamCasting
     include ApplicationFormHandling
     include ApplicationDataStructures
     include AddressHelper
@@ -22,7 +21,6 @@ module ConstituentPortal
     before_action :ensure_editable, only: %i[edit update]
     before_action :setup_address_for_form, only: %i[new edit]
     before_action :flag_pending_identity_review, only: %i[new edit]
-    before_action :cast_boolean_params, only: %i[create update]
     before_action :set_paper_application_context, if: -> { Rails.env.test? }
 
     # Test identity can come from ENV or Current instead of the session.

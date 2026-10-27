@@ -190,6 +190,7 @@ Rails.application.routes.draw do
         post :assign_evaluator
         post :reassign_evaluator
         post :assign_trainer
+        post :reassign_trainer
         post :unassign_trainer
         post :request_evaluation
         patch :update_proof_status

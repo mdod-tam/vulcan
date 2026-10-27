@@ -31,6 +31,9 @@ module Users
 
     private
 
+    # The challenge, new password, and confirmation live in plain ivars; keep them out of #inspect.
+    def instance_variables_to_inspect = []
+
     # Locks the user row before re-running the password challenge and writing, so a concurrent
     # merge and a concurrent password change can never interleave: either the merge commits
     # first and this reload sees the retired record and refuses, or the password change commits

@@ -16,7 +16,7 @@ module Admin
       teardown_paper_application_context
     end
 
-    # --- adult_application_context endpoint ---
+    # adult_application_context endpoint
 
     test 'adult_application_context returns user profile and eligibility' do
       constituent = create(:constituent, email: generate(:email), city: 'Baltimore', state: 'MD')
@@ -82,7 +82,7 @@ module Admin
       end
     end
 
-    # --- search endpoint with role=constituent ---
+    # search endpoint with role=constituent
 
     test 'search filters by constituent role when passed' do
       constituent = create(:constituent, email: generate(:email), first_name: 'UniqueSearchName')
@@ -129,7 +129,7 @@ module Admin
       assert_equal false, json['success']
     end
 
-    # --- compute_applicant_type normalization ---
+    # compute_applicant_type normalization
 
     test 'applicant_type guardian without guardian_id normalizes to self' do
       controller = Admin::PaperApplicationsController.new

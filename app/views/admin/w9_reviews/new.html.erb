@@ -2,13 +2,12 @@
   <div class="flex justify-between items-center mb-6">
     <h1 class="text-2xl font-bold">Review W9 Form</h1>
     <div class="flex space-x-2">
-      <%= link_to "Back to Vendor", admin_vendor_path(@vendor), class: "inline-flex items-center px-4 py-2 border border-gray-300 rounded-md shadow-sm text-sm font-medium text-gray-700 bg-white hover:bg-gray-50 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-indigo-500" %>
+      <%= link_to "Back to Vendor", admin_vendor_path(@vendor), class: "btn btn-outline" %>
     </div>
   </div>
 
   <div class="grid grid-cols-1 md:grid-cols-2 gap-6">
-    <!-- W9 Form Preview -->
-    <div class="bg-white shadow overflow-hidden rounded-lg">
+    <div class="card overflow-hidden">
       <div class="px-4 py-5 sm:px-6 bg-gray-50">
         <h3 class="text-lg leading-6 font-medium text-gray-900">W9 Form Preview</h3>
         <p class="mt-1 max-w-2xl text-sm text-gray-500">
@@ -21,28 +20,23 @@
           <div class="w-full h-[600px] overflow-hidden" data-controller="pdf-loader"
                data-pdf-loader-pdf-url-value="<%= vendor_w9_document_path(@vendor,
                                                                           @w9_form.is_a?(ActiveStorage::Blob) ? @w9_form : @w9_form.blob) %>">
-            <%# PDF Preview Placeholder (shown initially) %>
             <div data-pdf-loader-target="placeholder" class="flex flex-col items-center justify-center h-full bg-gray-100">
               <div class="text-center mb-4">
                 <h3 class="text-lg font-medium text-gray-700">W9 Form Ready to Preview</h3>
                 <p class="text-sm text-gray-500">Click the button below to load the PDF preview</p>
               </div>
-              <button data-action="click->pdf-loader#loadPdf" class="inline-flex items-center px-4 py-2 border border-transparent rounded-md shadow-sm text-sm font-medium text-white bg-indigo-600 hover:bg-indigo-700 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-indigo-500">
+              <button data-action="click->pdf-loader#loadPdf" class="btn btn-primary">
                 Load PDF Preview
               </button>
             </div>
             
-            <%# PDF Container (hidden initially, shown after loading) %>
-            <div data-pdf-loader-target="container" class="hidden h-full">
-              <%# PDF will be loaded here by the controller %>
-            </div>
+            <div data-pdf-loader-target="container" class="hidden h-full"></div>
           </div>
           <div class="mt-4 flex justify-center">
             <%= link_to 'Open in New Tab',
                         vendor_w9_document_path(@vendor, @w9_form.is_a?(ActiveStorage::Blob) ? @w9_form : @w9_form.blob, disposition: 'inline'),
                         target: '_blank', rel: 'noopener',
-                        class: 'inline-flex items-center px-4 py-2 border border-gray-300 rounded-md shadow-sm text-sm font-medium ' \
-                               'text-gray-700 bg-white hover:bg-gray-50 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-indigo-500' %>
+                        class: 'btn btn-outline' %>
           </div>
         <% else %>
           <div class="flex items-center justify-center h-[600px] bg-gray-100">
@@ -52,8 +46,7 @@
       </div>
     </div>
 
-    <!-- Review Form -->
-    <div class="bg-white shadow overflow-hidden rounded-lg">
+    <div class="card overflow-hidden">
       <div class="px-4 py-5 sm:px-6 bg-gray-50">
         <h3 class="text-lg leading-6 font-medium text-gray-900">Review Decision</h3>
         <p class="mt-1 max-w-2xl text-sm text-gray-500">
@@ -63,18 +56,18 @@
       <div class="border-t border-gray-200 p-4">
         <%= form_with(model: [@vendor, @w9_review], url: admin_vendor_w9_reviews_path(@vendor), local: true, class: "space-y-6", id: "review-form", data: { w9_review_target: "form" }) do |f| %>
           <% if @w9_review.errors.any? %>
-            <div class="bg-red-50 border-l-4 border-red-400 p-4 mb-4">
+            <div class="bg-danger-50 border-l-4 border-danger-400 p-4 mb-4">
               <div class="flex">
                 <div class="flex-shrink-0">
-                  <svg class="h-5 w-5 text-red-400" xmlns="http://www.w3.org/2000/svg" viewBox="0 0 20 20" fill="currentColor">
+                  <svg class="h-5 w-5 text-danger-400" xmlns="http://www.w3.org/2000/svg" viewBox="0 0 20 20" fill="currentColor">
                     <path fill-rule="evenodd" d="M10 18a8 8 0 100-16 8 8 0 000 16zM8.707 7.293a1 1 0 00-1.414 1.414L8.586 10l-1.293 1.293a1 1 0 101.414 1.414L10 11.414l1.293 1.293a1 1 0 001.414-1.414L11.414 10l1.293-1.293a1 1 0 00-1.414-1.414L10 8.586 8.707 7.293z" clip-rule="evenodd" />
                   </svg>
                 </div>
                 <div class="ml-3">
-                  <h3 class="text-sm font-medium text-red-800">
+                  <h3 class="text-sm font-medium text-danger-800">
                     <%= pluralize(@w9_review.errors.count, "error") %> prohibited this review from being saved:
                   </h3>
-                  <div class="mt-2 text-sm text-red-700">
+                  <div class="mt-2 text-sm text-danger-700">
                     <ul class="list-disc pl-5 space-y-1">
                       <% @w9_review.errors.full_messages.each do |message| %>
                         <li><%= message %></li>
@@ -89,26 +82,25 @@
           <%= f.hidden_field :reviewed_blob_id %>
           <%= f.hidden_field :status, id: "w9_review_status", data: { w9_review_target: "status" } %>
 
-          <!-- Rejection Reason (only applicable if rejecting) -->
           <div class="rejection-reason hidden" data-w9-review-target="rejectionReason">
             <div>
-              <label class="block text-sm font-medium text-gray-700">Rejection Reason</label>
+              <label class="form-label">Rejection Reason</label>
               <div class="mt-2 space-y-4">
                 <div class="flex items-center">
-                  <%= f.radio_button :rejection_reason_code, :address_mismatch, class: "h-4 w-4 text-indigo-600 focus:ring-indigo-500 border-gray-300" %>
-                  <label for="w9_review_rejection_reason_code_address_mismatch" class="ml-3 block text-sm font-medium text-gray-700">
+                  <%= f.radio_button :rejection_reason_code, :address_mismatch, class: "h-4 w-4 text-primary-600 border-gray-300" %>
+                  <label for="w9_review_rejection_reason_code_address_mismatch" class="form-label ml-3">
                     Address Mismatch
                   </label>
                 </div>
                 <div class="flex items-center">
-                  <%= f.radio_button :rejection_reason_code, :tax_id_mismatch, class: "h-4 w-4 text-indigo-600 focus:ring-indigo-500 border-gray-300" %>
-                  <label for="w9_review_rejection_reason_code_tax_id_mismatch" class="ml-3 block text-sm font-medium text-gray-700">
+                  <%= f.radio_button :rejection_reason_code, :tax_id_mismatch, class: "h-4 w-4 text-primary-600 border-gray-300" %>
+                  <label for="w9_review_rejection_reason_code_tax_id_mismatch" class="form-label ml-3">
                     Tax ID Mismatch
                   </label>
                 </div>
                 <div class="flex items-center">
-                  <%= f.radio_button :rejection_reason_code, :other, class: "h-4 w-4 text-indigo-600 focus:ring-indigo-500 border-gray-300" %>
-                  <label for="w9_review_rejection_reason_code_other" class="ml-3 block text-sm font-medium text-gray-700">
+                  <%= f.radio_button :rejection_reason_code, :other, class: "h-4 w-4 text-primary-600 border-gray-300" %>
+                  <label for="w9_review_rejection_reason_code_other" class="form-label ml-3">
                     Other
                   </label>
                 </div>
@@ -116,11 +108,11 @@
             </div>
 
             <div class="mt-4">
-              <label for="w9_review_rejection_reason" class="block text-sm font-medium text-gray-700">
+              <label for="w9_review_rejection_reason" class="form-label">
                 Detailed Explanation
               </label>
               <div class="mt-1">
-                <%= f.text_area :rejection_reason, rows: 4, class: "shadow-sm focus:ring-indigo-500 focus:border-indigo-500 block w-full sm:text-sm border-gray-300 rounded-md", id: "w9_review_rejection_reason" %>
+                <%= f.text_area :rejection_reason, rows: 4, class: "form-input", id: "w9_review_rejection_reason" %>
               </div>
               <p class="mt-2 text-sm text-gray-500">
                 Please provide a detailed explanation of why the W9 form is being rejected. This will be sent to the vendor.
@@ -130,11 +122,11 @@
 
           <div class="pt-5">
             <div class="flex justify-end">
-              <%= link_to "Cancel", admin_vendor_path(@vendor), class: "inline-flex items-center px-4 py-2 border border-gray-300 rounded-md shadow-sm text-sm font-medium text-gray-700 bg-white hover:bg-gray-50 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-indigo-500 mr-3" %>
-              <button type="button" data-w9-review-target="approveButton" data-action="click->w9-review#approve" class="inline-flex items-center px-4 py-2 border border-transparent rounded-md shadow-sm text-sm font-medium text-white bg-indigo-600 hover:bg-indigo-700 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-indigo-500">
+              <%= link_to "Cancel", admin_vendor_path(@vendor), class: "btn btn-outline mr-3" %>
+              <button type="button" data-w9-review-target="approveButton" data-action="click->w9-review#approve" class="btn btn-primary">
                 Approve
               </button>
-              <button type="button" data-w9-review-target="rejectButton" data-action="click->w9-review#reject" class="ml-2 inline-flex items-center px-4 py-2 border border-transparent rounded-md shadow-sm text-sm font-medium text-white bg-red-600 hover:bg-red-700 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-red-500">
+              <button type="button" data-w9-review-target="rejectButton" data-action="click->w9-review#reject" class="btn btn-danger ml-2">
                 Reject
               </button>
             </div>

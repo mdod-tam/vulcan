@@ -31,7 +31,7 @@ module TrainingSessions
 
       trainer = create(:trainer, locale: 'es')
       session = create(:training_session, trainer: trainer)
-      email = TrainingSessionNotificationsMailer.trainer_assigned(session).message
+      email = TrainingSessionNotificationsMailer.with(assignment_notice_params(session, trainer)).trainer_assigned.message
       assert_equal [trainer.email], email.to
       assert_equal seed_contract.fetch('subject'), email.subject
       assert_includes email.body.decoded, trainer.full_name

@@ -1,32 +1,26 @@
 # frozen_string_literal: true
 
 module Applications
-  # Service for handling certification-related event processing
-  # Centralizes certification event filtering, deduplication, and formatting
-  # for consistent display across different views
+  # Selects the certification-related events from an application's audit log and formats request events for display.
   class CertificationEventsService
     def initialize(application)
       @application = application
       @audit_log_builder = AuditLogBuilder.new(application)
     end
 
-    # Return basic certification events (already deduplicated)
+    # Certification-related events from the deduplicated audit log.
     def certification_events
-      # Start with deduplicated logs for efficiency
       deduplicated_logs = @audit_log_builder.build_deduplicated_audit_logs
 
-      # Filter for certification-related events
       deduplicated_logs.select { |event| certification_related_event?(event) }
     end
 
-    # Return request events identified and processed for display
+    # The request events among the certification events, as the hashes the admin views expect.
     def request_events
       events = certification_events
 
-      # Identify which are request events
       request_events = events.select { |event| request_event?(event) }
 
-      # Process these events for display (admin views expect hash objects)
       process_request_events_for_display(request_events)
     end
 
@@ -122,7 +116,7 @@ module Applications
         begin
           timestamp = Time.zone.parse(event.metadata['timestamp'])
         rescue StandardError
-          # fall back to the original timestamp if parsing fails
+          # An unparseable timestamp keeps the event's created_at.
         end
       end
       timestamp

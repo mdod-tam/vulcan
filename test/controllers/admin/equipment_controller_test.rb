@@ -20,7 +20,7 @@ module Admin
       assert_response :success
       assert_select 'section[data-equipment-selection-target=group]', count: 1
       assert_select 'section[data-equipment-selection-target=group] p', text: /3 units across\s+1 application/
-      assert_select 'a[aria-current=page].bg-indigo-700', text: 'Needs Ordering'
+      assert_select 'a[aria-current=page].bg-primary-700', text: 'Needs Ordering'
       assert_select 'label', text: /Select group:\s*#{Regexp.escape(@product.manufacturer)}.*#{Regexp.escape(@product.name)}/
       assert_includes response.body, '2 new devices still needed'
       assert_includes response.body, 'Previously ordered device awaiting reorder'

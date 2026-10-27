@@ -1,7 +1,7 @@
 # frozen_string_literal: true
 
 class UserMailer < ApplicationMailer
-  # NOTE: These simple emails don't use shared partials like header/footer.
+  # These emails do not use the shared header and footer partials.
 
   def password_reset
     user = params[:user]

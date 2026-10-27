@@ -3,20 +3,19 @@
     <h1 class="text-2xl font-bold"><%= @vendor.business_name %></h1>
     <div class="flex space-x-2">
       <%= link_to admin_vendors_path,
-          class: "inline-flex items-center px-4 py-2 border border-gray-300 rounded-md shadow-sm text-sm font-medium text-gray-700 bg-white hover:bg-gray-50 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-indigo-500",
+          class: "btn btn-outline",
           aria: { label: "Return to vendors list" } do %>
         <span>Back to Vendors</span>
       <% end %>
       <%= link_to edit_admin_vendor_path(@vendor),
-          class: "inline-flex items-center px-4 py-2 border border-transparent rounded-md shadow-sm text-sm font-medium text-white bg-indigo-600 hover:bg-indigo-700 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-indigo-500",
+          class: "btn btn-primary",
           aria: { label: "Edit vendor" } do %>
         <span>Edit</span>
       <% end %>
     </div>
   </div>
 
-  <!-- Vendor Information Section -->
-  <div class="bg-white shadow overflow-hidden rounded-lg mb-6">
+  <div class="card overflow-hidden mb-6">
     <div class="px-4 py-5 sm:px-6 bg-gray-50">
       <h3 class="text-lg leading-6 font-medium text-gray-900">Vendor Information</h3>
     </div>
@@ -41,10 +40,7 @@
         <div class="bg-white px-4 py-5 sm:grid sm:grid-cols-3 sm:gap-4 sm:px-6">
           <dt class="text-sm font-medium text-gray-500">Vendor Approval Status</dt>
           <dd class="mt-1 text-sm sm:mt-0 sm:col-span-2">
-            <span class="px-2 inline-flex text-xs leading-5 font-semibold rounded-full 
-              <%= @vendor.vendor_approved? ? 'bg-green-100 text-green-800' : 
-                  @vendor.vendor_pending? ? 'bg-yellow-100 text-yellow-800' : 
-                  'bg-red-100 text-red-800' %>">
+            <span class="badge <%= @vendor.vendor_approved? ? 'badge-success' : @vendor.vendor_pending? ? 'badge-warning' : 'badge-danger' %>">
               <%= @vendor.vendor_authorization_status.titleize %>
             </span>
           </dd>
@@ -52,15 +48,11 @@
         <div class="bg-gray-50 px-4 py-5 sm:grid sm:grid-cols-3 sm:gap-4 sm:px-6">
           <dt class="text-sm font-medium text-gray-500">Tax Form (W9) Status</dt>
           <dd class="mt-1 text-sm sm:mt-0 sm:col-span-2">
-            <span class="px-2 inline-flex text-xs leading-5 font-semibold rounded-full 
-              <%= @vendor.w9_status_approved? ? 'bg-green-100 text-green-800' : 
-                  @vendor.w9_status_pending_review? ? 'bg-yellow-100 text-yellow-800' : 
-                  @vendor.w9_status_rejected? ? 'bg-red-100 text-red-800' : 
-                  'bg-gray-100 text-gray-800' %>">
+            <span class="<%= badge_class_for(:w9, @vendor.w9_status) %>">
               <%= @vendor.w9_status.to_s.titleize %>
             </span>
             <% if @vendor.w9_status_pending_review? && @vendor.w9_form.attached? %>
-              <%= link_to "Review W9", new_admin_vendor_w9_review_path(@vendor), class: "ml-3 text-sm text-indigo-600 hover:text-indigo-900" %>
+              <%= link_to "Review W9", new_admin_vendor_w9_review_path(@vendor), class: "ml-3 text-sm text-primary-600 hover:text-primary-900" %>
             <% end %>
           </dd>
         </div>
@@ -69,15 +61,15 @@
           <dd class="mt-1 text-sm text-gray-900 sm:mt-0 sm:col-span-2">
             <% if @vendor.w9_form.attached? %>
               <div class="flex items-center">
-                <svg class="h-5 w-5 text-gray-400 mr-2" xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                <svg class="h-5 w-5 text-gray-500 mr-2" xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" stroke="currentColor">
                   <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M7 21h10a2 2 0 002-2V9.414a1 1 0 00-.293-.707l-5.414-5.414A1 1 0 0012.586 3H7a2 2 0 00-2 2v14a2 2 0 002 2z" />
                 </svg>
                 <%= link_to 'View W9 Form', vendor_w9_document_path(@vendor, @vendor.w9_form.blob, disposition: 'inline'),
-                            target: '_blank', rel: 'noopener', class: 'text-indigo-600 hover:text-indigo-900' %>
+                            target: '_blank', rel: 'noopener', class: 'text-primary-600 hover:text-primary-900' %>
               </div>
               <%= render 'shared/document_scan_status', document: @vendor.w9_form %>
             <% else %>
-              <span class="text-red-500">No W9 form uploaded</span>
+              <span class="text-danger-600">No W9 form uploaded</span>
             <% end %>
           </dd>
         </div>
@@ -87,7 +79,7 @@
             <% if @vendor.terms_accepted_at.present? %>
               <%= @vendor.terms_accepted_at.strftime("%B %d, %Y") %>
             <% else %>
-              <span class="text-red-500">Not accepted</span>
+              <span class="text-danger-600">Not accepted</span>
             <% end %>
           </dd>
         </div>
@@ -97,8 +89,7 @@
 
   <%= render "secure_request_forms" %>
 
-  <!-- W9 Review History Section -->
-  <div class="bg-white shadow overflow-hidden rounded-lg">
+  <div class="card overflow-hidden">
     <div class="px-4 py-5 sm:px-6 bg-gray-50">
       <h3 class="text-lg leading-6 font-medium text-gray-900">W9 Review History</h3>
     </div>

@@ -1,4 +1,4 @@
-<div class="bg-white shadow overflow-hidden rounded-lg mb-6">
+<div class="card overflow-hidden mb-6">
   <div class="px-4 py-5 sm:px-6 bg-gray-50">
     <div class="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
       <div>
@@ -13,9 +13,9 @@
                         method: :post,
                         form: { data: { turbo: false } },
                         form_class: 'inline',
-                        class: "inline-flex items-center rounded-md bg-indigo-600 px-4 py-2 text-sm font-medium text-white shadow-sm hover:bg-indigo-700 focus:outline-none focus:ring-2 focus:ring-indigo-500 focus:ring-offset-2" %>
+                        class: "btn btn-primary" %>
         <% else %>
-          <p class="text-sm text-red-700"><%= t('admin.vendors.vendor_secure_request_forms.panel.no_email') %></p>
+          <p class="text-sm text-danger-700"><%= t('admin.vendors.vendor_secure_request_forms.panel.no_email') %></p>
         <% end %>
       <% end %>
     </div>
@@ -55,7 +55,7 @@
                                   },
                                   'aria-label': secure_link_row_action_label(t('admin.vendors.vendor_secure_request_forms.table.revoke'), form,
                                                                              recipient: secure_request_masked_email(form.recipient_email)),
-                                  class: 'inline-flex items-center rounded-md border border-red-300 bg-white px-2.5 py-1.5 text-sm font-medium text-red-700 hover:bg-red-50 focus:outline-none focus:ring-2 focus:ring-red-600 focus:ring-offset-2' %>
+                                  class: 'btn btn-danger-outline btn-sm' %>
                   <% elsif vendor_secure_w9_upload_requestable?(@vendor) && (form.revoked? || (form.status_sent? && form.expired?)) %>
                     <%= button_to t('admin.vendors.vendor_secure_request_forms.table.send_new_link'),
                                   admin_vendor_vendor_secure_request_forms_path(@vendor, resend_of_id: form.id),
@@ -64,7 +64,7 @@
                                   form_class: 'inline',
                                   'aria-label': secure_link_row_action_label(t('admin.vendors.vendor_secure_request_forms.table.send_new_link'), form,
                                                                              recipient: secure_request_masked_email(form.recipient_email)),
-                                  class: 'inline-flex items-center rounded-md border border-gray-300 bg-white px-2.5 py-1.5 text-sm font-medium text-gray-700 hover:bg-gray-50 focus:outline-none focus:ring-2 focus:ring-indigo-500 focus:ring-offset-2' %>
+                                  class: 'btn btn-outline btn-sm' %>
                   <% else %>
                     <span class="text-gray-500"><%= t('admin.vendors.vendor_secure_request_forms.table.no_actions') %></span>
                   <% end %>

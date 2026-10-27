@@ -1,26 +1,23 @@
 # frozen_string_literal: true
 
 module Applications
-  # Service object to handle the application approval process
+  # Moves an application to approved and records the approval event.
   class Approver < BaseService
     attr_reader :application, :actor
 
-    # Initializes the service
     # @param application [Application] The application to approve
     # @param by [User] The user performing the action
     def initialize(application, by:)
-      super() # Initialize BaseService errors array
+      super()
       @application = application
       @actor = by
     end
 
-    # Executes the approval process
     # @return [Boolean] True if successful, false otherwise
     def call
       ApplicationRecord.transaction do
         application.transition_status!(:approved, actor: actor)
 
-        # Create event for approval
         AuditEventService.log(
           actor: actor,
           action: 'application_approved',
@@ -31,11 +28,11 @@ module Applications
           }
         )
 
-        true # Indicate success
+        true
       end
     rescue StandardError => e
       log_error(e, context: { application_id: application.id, actor_id: actor.id })
-      # The add_error is called within log_error, which returns false
+      # log_error records the error and returns false.
     end
   end
 end

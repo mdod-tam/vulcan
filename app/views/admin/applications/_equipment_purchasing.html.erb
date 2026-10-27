@@ -1,11 +1,11 @@
 <%# locals: (application:) -%>
-<section id="equipment" class="bg-white rounded-lg shadow p-6 mb-6" aria-labelledby="equipment-title">
+<section id="equipment" class="card p-6 mb-6" aria-labelledby="equipment-title">
   <div class="flex flex-wrap items-center justify-between gap-4 mb-4">
     <div class="flex flex-wrap items-center gap-3">
       <h2 id="equipment-title" class="text-xl font-semibold text-gray-900">Equipment</h2>
       <%= admin_fulfillment_badge(application) %>
     </div>
-    <%= link_to 'Back to Equipment', equipment_return_path(@return_context), class: 'text-sm text-indigo-600 underline',
+    <%= link_to 'Back to Equipment', equipment_return_path(@return_context), class: 'text-sm text-primary-600 underline',
                                                                              data: { turbo_frame: '_top' } %>
   </div>
   <%= render 'equipment_recommendations', application: application %>
@@ -29,7 +29,7 @@
   <% end %>
   <% if application.equipment_procurement_eligible? %>
     <%= link_to 'Edit equipment needs', edit_admin_application_equipment_needs_path(application, return_context: @return_context),
-                class: 'text-sm text-indigo-600 underline', data: { turbo_frame: '_top' } %>
+                class: 'text-sm text-primary-600 underline', data: { turbo_frame: '_top' } %>
   <% end %>
   <%= render 'equipment_items', items: @equipment_items, audit_records: @equipment_audit_records, return_context: @return_context %>
 </section>

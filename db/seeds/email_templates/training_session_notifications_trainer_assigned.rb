@@ -1,7 +1,5 @@
 # frozen_string_literal: true
 
-# Seed File for "training_session_notifications_trainer_assigned"
-# --------------------------------------------------
 EmailTemplate.create_or_find_by!(name: 'training_session_notifications_trainer_assigned', format: :text, locale: 'en') do |template|
   template.subject = 'New Training Assignment'
   template.description = 'Sent to a trainer when a training session has been assigned to them.'

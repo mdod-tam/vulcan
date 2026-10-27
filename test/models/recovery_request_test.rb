@@ -4,7 +4,6 @@ require 'test_helper'
 
 class RecoveryRequestTest < ActiveSupport::TestCase
   setup do
-    # Use a sequence for the email to avoid collisions
     @user = FactoryBot.create(:user, email: "recovery-user-#{SecureRandom.hex(4)}@example.com")
     @admin = FactoryBot.create(:admin, email: "recovery-admin-#{SecureRandom.hex(4)}@example.com")
   end
@@ -54,13 +53,10 @@ class RecoveryRequestTest < ActiveSupport::TestCase
   end
 
   test 'should approve request and clear user credentials' do
-    # Set up WebAuthn credential for the user
     create_webauthn_credential_for(@user)
 
-    # Create recovery request
     request = FactoryBot.create(:recovery_request, user: @user)
 
-    # Process the recovery request
     request.update!(
       status: 'approved',
       resolved_at: Time.current,
@@ -70,7 +66,6 @@ class RecoveryRequestTest < ActiveSupport::TestCase
     # Delete credentials as part of approval (simulating what controller would do)
     @user.webauthn_credentials.destroy_all
 
-    # Assertions
     assert_equal 'approved', request.status
     assert_not_nil request.resolved_at
     assert_equal @admin.id, request.resolved_by_id

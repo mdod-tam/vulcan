@@ -64,6 +64,22 @@ module Admin
       end
     end
 
+    test 'index drops only the exact pairs that already have an open case, whichever record is the subject' do
+      first, second = create_review_pair
+      unrelated = [
+        create(:constituent, first_name: 'Other', last_name: 'Household', date_of_birth: Date.new(1979, 1, 2)),
+        create(:constituent, first_name: 'other', last_name: 'household', date_of_birth: Date.new(1979, 1, 2))
+      ]
+      open_case(second, first)
+      open_case(first, second)
+
+      get admin_duplicate_reviews_path
+
+      pair_ids = assigns(:unreviewed_pairs).map(&:ids)
+      assert_not_includes pair_ids, [first.id, second.id].sort
+      assert_includes pair_ids, unrelated.map(&:id).sort
+    end
+
     test 'index preloads every user rendered in an open case' do
       get admin_duplicate_reviews_path
 

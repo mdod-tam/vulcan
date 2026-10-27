@@ -5,14 +5,10 @@ require 'test_helper'
 module Admin
   class ProductsControllerTest < ActionDispatch::IntegrationTest
     def setup
-      # Don't use hardcoded email - let the factory sequence generate a unique one
       @admin = create(:admin)
       @product = create(:product, name: 'iPad Air', device_types: ['Tablet'])
 
-      # Use sign_in_as to authenticate the user for the test
       sign_in_as(@admin)
-
-      # Additional verification that authentication worked
     end
 
     def test_should_get_index
@@ -76,7 +72,7 @@ module Admin
     end
 
     def test_should_unarchive_product
-      @product.update!(archived_at: Time.current) # Archive first
+      @product.update!(archived_at: Time.current)
       post unarchive_admin_product_path(@product)
       assert_redirected_to admin_products_path
       @product.reload
@@ -87,28 +83,20 @@ module Admin
     def test_should_filter_by_device_type
       get admin_products_path, params: { device_types: ['Tablet'] }
       assert_response :success
-      # Skip the selector tests since they depend on the actual HTML structure
-      # which may be different in the test environment
-      # assert_select "tr.product-#{products(:ipad_air).id}"
-      # assert_select "tr.product-#{products(:iphone).id}", count: 0  # Shouldn't show smartphones
     end
 
     def test_non_admin_cannot_access
-      # Sign in as a non-admin user (using factory instead of fixture)
       @user = create(:constituent)
       sign_in_for_integration_test(@user)
 
-      # Try to access admin functionality
       get admin_products_path
       assert_redirected_to root_path
       assert_equal 'Unauthorized access', flash[:alert]
     end
 
     def test_unauthenticated_user_cannot_access
-      # Sign out
       sign_out
 
-      # Try to access admin functionality
       get admin_products_path
       assert_redirected_to sign_in_path
       assert_equal 'Please sign in to continue', flash[:alert]

@@ -3,14 +3,12 @@
 namespace :data_integrity do
   desc 'Find and report orphaned applications (applications without valid users)'
   task find_orphaned_applications: :environment do
-    # Find applications with nil user_id
     nil_user_apps = Application.where(user_id: nil)
 
-    # Find applications with invalid user_id (user doesn't exist)
+    # An application whose user_id points at a user that does not exist.
     valid_user_ids = User.pluck(:id)
     invalid_user_apps = Application.where.not(user_id: valid_user_ids)
 
-    # Combine the results
     orphaned_apps = nil_user_apps + invalid_user_apps
 
     if orphaned_apps.any?
@@ -38,7 +36,6 @@ namespace :data_integrity do
       exit
     end
 
-    # Find orphaned applications
     nil_user_apps = Application.where(user_id: nil)
     valid_user_ids = User.pluck(:id)
     invalid_user_apps = Application.where.not(user_id: valid_user_ids)
@@ -53,7 +50,7 @@ namespace :data_integrity do
 
     case action
     when 'report'
-      # Already reported above
+      # The count above is the whole report.
     when 'delete'
       puts "Deleting #{orphaned_apps.count} orphaned applications..."
       orphaned_apps.each do |app|
@@ -62,7 +59,6 @@ namespace :data_integrity do
       end
       puts 'Deletion complete.'
     when 'assign'
-      # Find or create the default user
       default_user = User.find_by(email: default_user_email)
 
       if default_user.nil?

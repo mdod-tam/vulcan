@@ -1,15 +1,13 @@
-<%# app/views/constituent_portal/dependents/new.html.erb %>
 <div class="min-h-screen bg-gray-100 py-12">
   <div class="form-container max-w-2xl mx-auto">
-    <a href="#main-content" class="sr-only focus:not-sr-only focus:absolute focus:p-2 focus:bg-indigo-600 focus:text-white focus:z-10">
+    <a href="#main-content" class="skip-link">
       Skip to main content
     </a>
-    <div id="main-content" tabindex="-1" class="bg-white p-4 sm:p-8 rounded shadow-md">
+    <div id="main-content" tabindex="-1" class="card p-4 sm:p-8">
       <h1 class="text-2xl font-semibold mb-6 text-center" id="form-title">Add New Dependent</h1>
 
-      <%# The layout already renders flash through shared/_flash. Repeating it here showed every
-          alert on this page twice, which the long duplicate-identity refusal made conspicuous. %>
-      
+      <%# The layout renders flash through shared/_flash; rendering it here would show every alert twice. %>
+
       <p class="text-sm text-gray-600 mb-6 text-center">
         Provide the information for the dependent you are adding. This will establish you (<%= current_user.email %>) as their guardian.
       </p>

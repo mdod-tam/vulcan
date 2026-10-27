@@ -37,24 +37,6 @@ class ParamCastingTest < ActiveSupport::TestCase
     assert_equal @controller.to_boolean('0'), @controller.safe_boolean_cast('0')
   end
 
-  test 'cast_boolean_params works with standard application structure' do
-    @controller.params = ActionController::Parameters.new({
-                                                            application: {
-                                                              maryland_resident: '1',
-                                                              hearing_disability: '0',
-                                                              terms_accepted: 'true',
-                                                              some_other_field: 'not a boolean'
-                                                            }
-                                                          })
-
-    @controller.cast_boolean_params
-
-    assert_equal true, @controller.params[:application][:maryland_resident]
-    assert_equal false, @controller.params[:application][:hearing_disability]
-    assert_equal true, @controller.params[:application][:terms_accepted]
-    assert_equal 'not a boolean', @controller.params[:application][:some_other_field]
-  end
-
   test 'cast_complex_boolean_params works with nested structures' do
     @controller.params = ActionController::Parameters.new({
                                                             application: {
@@ -75,17 +57,6 @@ class ParamCastingTest < ActiveSupport::TestCase
     assert_equal false, @controller.params[:applicant_attributes][:vision_disability]
     assert_equal true, @controller.params[:use_guardian_email]
     assert_equal false, @controller.params[:use_guardian_phone]
-  end
-
-  test 'cast_boolean_params handles missing application params gracefully' do
-    @controller.params = ActionController::Parameters.new({
-                                                            some_other: 'value'
-                                                          })
-
-    # Should not raise an error
-    assert_nothing_raised do
-      @controller.cast_boolean_params
-    end
   end
 
   test 'cast_boolean_for handles array workaround for hidden checkboxes' do

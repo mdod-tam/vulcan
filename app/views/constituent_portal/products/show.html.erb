@@ -8,9 +8,9 @@
   <% if (documentation_url = safe_manufacturer_documentation_url(@product)) %>
     <p class="mt-5">
       <%= link_to t('product_resources.manufacturer_documentation'), documentation_url, target: '_blank',
-                                                                                        rel: 'noopener noreferrer', class: 'text-indigo-700 underline' %>
+                                                                                        rel: 'noopener noreferrer', class: 'text-primary-700 underline' %>
       <%= t('product_resources.external_link') %>
     </p>
   <% end %>
-  <%= link_to t('product_resources.devices.back'), constituent_portal_products_path, class: 'mt-6 inline-block text-indigo-700 underline' %>
+  <%= link_to t('product_resources.devices.back'), constituent_portal_products_path, class: 'mt-6 inline-block text-primary-700 underline' %>
 </div>

@@ -1,8 +1,7 @@
 # frozen_string_literal: true
 
 module Admin
-  # Manages application notes for admin users, allowing them to create and attach
-  # notes to application records for internal communication and tracking purposes
+  # Internal admin notes on an application: create, assign, and mark done.
   class ApplicationNotesController < BaseController
     before_action :set_application
     before_action :set_note, only: %i[update]

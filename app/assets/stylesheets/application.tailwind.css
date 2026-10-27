@@ -4,13 +4,12 @@
 @tailwind components;
 @tailwind utilities;
 
-/* Form fields across the app are written for @tailwindcss/forms ("rounded-md border-gray-300
-   shadow-sm focus:border-indigo-500"), which this build does not use. Tailwind's reset sets border
-   width and padding to 0, so those fields rendered with no visible edge and no inner space. This
-   supplies the missing defaults. Each selector is one element (input:where(...), select, textarea):
-   that outranks the reset's element rules by coming later, while any class utility on a field
-   (padding, border, radius) still outranks it. */
 @layer base {
+  /* Form fields across the app are written for @tailwindcss/forms, which this build does not use.
+     Tailwind's reset sets border width and padding to 0, so fields would render with no visible edge
+     and no inner space. This supplies the defaults. Each selector is one element (input:where(...),
+     select, textarea): that outranks the reset's element rules by coming later, while any class
+     utility on a field (padding, border, radius) still outranks it. */
   input:where(:not([type]), [type='text'], [type='email'], [type='password'], [type='tel'],
               [type='number'], [type='search'], [type='url'], [type='date'], [type='datetime-local'],
               [type='time'], [type='month']),
@@ -19,63 +18,152 @@
     @apply rounded-md border border-gray-300 bg-white px-3 py-2;
   }
 
+  /* One focus color for the whole app. Fields show it as a border and ring; every other control as an
+     outline. :focus-visible keeps the outline off mouse clicks and on for keyboard users. */
   input:where(:not([type]), [type='text'], [type='email'], [type='password'], [type='tel'],
               [type='number'], [type='search'], [type='url'], [type='date'], [type='datetime-local'],
               [type='time'], [type='month']):focus,
   select:focus,
   textarea:focus {
-    @apply border-indigo-500 outline-none ring-1 ring-indigo-500;
+    @apply border-primary-500 outline-none ring-1 ring-primary-500;
+  }
+
+  :where(a, button, summary, [tabindex], input[type='checkbox'], input[type='radio'], input[type='file']):focus-visible {
+    @apply outline outline-2 outline-offset-2 outline-primary-500;
+  }
+
+  /* Honor the operating-system setting: no animated transitions or smooth scrolling. */
+  @media (prefers-reduced-motion: reduce) {
+    *,
+    ::before,
+    ::after {
+      animation-duration: 0.01ms !important;
+      animation-iteration-count: 1 !important;
+      scroll-behavior: auto !important;
+      transition-duration: 0.01ms !important;
+    }
   }
 }
-
 
 @layer components {
+  /* Buttons: .btn plus one variant, and .btn-sm for a compact size. */
   .btn {
-    @apply px-4 py-2 rounded font-medium text-sm focus:outline-none focus:ring-2 focus:ring-offset-2 transition-colors;
+    @apply inline-flex items-center justify-center gap-2 rounded-md border border-transparent px-4 py-2 text-sm font-medium shadow-elevation-1 transition-colors disabled:cursor-not-allowed disabled:opacity-50;
   }
-  
+
   .btn-primary {
-    @apply bg-indigo-600 text-white hover:bg-indigo-700 focus:ring-indigo-500;
+    @apply bg-primary-600 text-white hover:bg-primary-700;
   }
-  
+
+  .btn-secondary {
+    @apply border-primary-200 bg-primary-50 text-primary-700 hover:bg-primary-100;
+  }
+
   .btn-outline {
-    @apply border border-gray-300 bg-white text-gray-700 hover:bg-gray-50 focus:ring-indigo-500;
+    @apply border-gray-300 bg-white text-gray-700 hover:bg-gray-50;
   }
 
-  /* Flash Messages - Traditional Rails style */
+  .btn-success {
+    @apply bg-success-700 text-white hover:bg-success-800;
+  }
+
+  .btn-danger {
+    @apply bg-danger-600 text-white hover:bg-danger-700;
+  }
+
+  .btn-danger-outline {
+    @apply border-danger-300 bg-white text-danger-700 hover:bg-danger-50;
+  }
+
+  .btn-sm {
+    @apply px-3 py-1.5 text-xs;
+  }
+
+  /* Badges: .badge plus one variant. .badge-lg is the larger size used for page-level status. */
+  .badge {
+    @apply inline-flex items-center whitespace-nowrap rounded-full px-2.5 py-0.5 text-xs font-medium;
+  }
+
+  .badge-lg {
+    @apply px-3 py-2 text-sm;
+  }
+
+  .badge-neutral {
+    @apply bg-gray-100 text-gray-800;
+  }
+
+  .badge-primary {
+    @apply bg-primary-100 text-primary-800;
+  }
+
+  .badge-success {
+    @apply bg-success-100 text-success-800;
+  }
+
+  .badge-info {
+    @apply bg-info-100 text-info-800;
+  }
+
+  .badge-warning {
+    @apply bg-warning-100 text-warning-800;
+  }
+
+  .badge-attention {
+    @apply bg-orange-100 text-orange-800;
+  }
+
+  .badge-danger {
+    @apply bg-danger-100 text-danger-800;
+  }
+
+  .badge-accent {
+    @apply bg-purple-100 text-purple-800;
+  }
+
+  /* Flash messages. Rails' notice and alert keys share the success and error looks. */
   .flash-message {
-    @apply px-4 py-3 rounded-md border text-sm;
+    @apply mb-4 rounded-md border border-gray-300 bg-gray-50 px-4 py-3 text-sm text-gray-800;
   }
-  
-  .flash-notice {
-    @apply bg-green-50 border-green-200 text-green-800;
-  }
-  
-  .flash-success {
-    @apply bg-green-50 border-green-200 text-green-800;
-  }
-  
-  .flash-alert {
-    @apply bg-red-50 border-red-200 text-red-800;
-  }
-  
-  .flash-error {
-    @apply bg-red-50 border-red-200 text-red-800;
-  }
-  
-  .flash-warning {
-    @apply bg-yellow-50 border-yellow-200 text-yellow-800;
-  }
-  
-  .flash-info {
-    @apply bg-blue-50 border-blue-200 text-blue-800;
-  }
-}
 
-/* Keep shared browser styles in the asset so Turbo responses need no inline nonce. */
-a:focus, button:focus {
-  outline: 2px solid #4a90e2;
-  outline-offset: 2px;
+  .flash-success,
+  .flash-notice {
+    @apply border-success-200 bg-success-50 text-success-800;
+  }
+
+  .flash-error,
+  .flash-alert {
+    @apply border-danger-200 bg-danger-50 text-danger-800;
+  }
+
+  .flash-warning {
+    @apply border-warning-200 bg-warning-50 text-warning-800;
+  }
+
+  .flash-info {
+    @apply border-info-200 bg-info-50 text-info-800;
+  }
+
+  /* Surfaces. Add padding and spacing with utilities. */
+  .card {
+    @apply rounded-lg bg-white shadow-elevation-2;
+  }
+
+  /* Form controls. Focus styling comes from the base layer. */
+  .form-label {
+    @apply block text-sm font-medium text-gray-700;
+  }
+
+  .form-input {
+    @apply block w-full rounded-md border-gray-300 shadow-elevation-1 sm:text-sm;
+  }
+
+  .form-hint {
+    @apply mt-1 text-sm text-gray-500;
+  }
+
+  .skip-link {
+    @apply sr-only focus:not-sr-only focus:absolute focus:left-2 focus:top-2 focus:z-50 focus:rounded focus:bg-primary-700 focus:p-2 focus:text-white;
+  }
 }
 
 .protected-variable {

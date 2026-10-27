@@ -6,27 +6,22 @@ class PaperApplicationScannedUploadTest < ActionDispatch::IntegrationTest
   include ActiveJob::TestHelper
 
   setup do
-    # Use factory bot instead of fixture
     @admin = create(:admin)
     sign_in_for_integration_test(@admin)
 
-    # Set up FPL policies for income threshold validation
     setup_fpl_policies
   end
 
   test 'paper intake accepts cleared uploads through retained signed IDs' do
-    # Set up sample proof files using existing fixtures in test/fixtures/files/
     income_proof = fixture_file_upload('income_proof.pdf', 'application/pdf')
     residency_proof = fixture_file_upload('residency_proof.pdf', 'application/pdf')
 
     income_blob = scanned_upload(income_proof, user: @admin, slot: 'income_proof')
     residency_blob = scanned_upload(residency_proof, user: @admin, slot: 'residency_proof')
 
-    # Verify blobs were created
     assert_not_nil income_blob.signed_id
     assert_not_nil residency_blob.signed_id
 
-    # Submit paper application with signed_ids
     assert_difference('Application.count') do
       post admin_paper_applications_path, params: {
         constituent: {
@@ -59,15 +54,12 @@ class PaperApplicationScannedUploadTest < ActionDispatch::IntegrationTest
       }
     end
 
-    # Check for successful redirects
     assert_redirected_to admin_application_path(Application.last)
 
-    # Verify attachment was successful
     application = Application.last
     assert application.income_proof.attached?
     assert application.residency_proof.attached?
 
-    # Verify statuses were set correctly
     assert_equal 'approved', application.income_proof_status
     assert_equal 'approved', application.residency_proof_status
   end

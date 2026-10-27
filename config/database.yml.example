@@ -1,26 +1,22 @@
 default: &default
   adapter: postgresql
   encoding: unicode
-  # For details on connection pooling, see Rails configuration guide
-  # https://guides.rubyonrails.org/configuring.html#database-pooling
+  # Pool sizing: https://guides.rubyonrails.org/configuring.html#database-pooling
   pool: <%= ENV.fetch("RAILS_MAX_THREADS") { 5 } %>
 
 development:
   <<: *default
   database: mat_vulcan_development
-  # Sequence ranges ensure IDs don't collide between environments
-  # This helps prevent bugs when redirecting to application IDs
+  # sequence_ranges is not a Rails option and no code in this repository reads it.
   sequence_ranges:
     applications: [1, 999999]
 
 test:
   <<: *default
   database: mat_vulcan_test
-  # Test environment should use its own range too
   sequence_ranges:
     applications: [5000000, 5999999]
 
-# Production has higher ID ranges to avoid collisions
 production:
   <<: *default
   database: mat_vulcan_production
@@ -31,7 +27,6 @@ production:
   sequence_ranges:
     applications: [1000000, 1999999]
 
-# Staging should have its own range
 staging:
   <<: *default
   database: mat_vulcan_staging

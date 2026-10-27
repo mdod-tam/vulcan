@@ -4,7 +4,6 @@ module Admin
   class W9ReviewsController < Admin::BaseController
     before_action :set_vendor
     before_action :set_w9_review, only: [:show]
-    # Don't skip checking for w9_form in tests - we need consistent behavior
     before_action :check_w9_form, only: %i[new create]
     before_action :load_delivery_history, only: %i[new show create]
 
@@ -13,12 +12,10 @@ module Admin
     end
 
     def show
-      # Set @w9_form for the view for consistency
       @w9_form = @w9_review.reviewed_blob
     end
 
     def new
-      # Set up the new review form
       @w9_review = @vendor.w9_reviews.build(reviewed_blob: @vendor.w9_form.blob)
       @w9_form = @vendor.w9_form
     end
@@ -49,12 +46,11 @@ module Admin
     def check_w9_form
       @w9_form = @vendor.w9_form
 
-      # Check if w9_form is attached and redirect if it's not
       redirect_to admin_vendors_path, alert: t('alerts.w9_missing') unless @w9_form&.attached?
     end
 
     def set_vendor
-      # Use Users::Vendor to match the STI type column
+      # Users::Vendor limits the lookup to vendor records.
       @vendor = Users::Vendor.find(params[:vendor_id])
     rescue ActiveRecord::RecordNotFound
       redirect_to admin_vendors_path, alert: t('admin.w9_reviews.set_vendor.vendor_not_found')
@@ -63,7 +59,6 @@ module Admin
     def set_w9_review
       @w9_review = @vendor.w9_reviews.find(params[:id])
     rescue ActiveRecord::RecordNotFound
-      # We always want to redirect to the vendor page if review not found
       redirect_to admin_vendor_path(@vendor), alert: t('alerts.review_not_found')
     end
 

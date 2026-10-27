@@ -16,14 +16,12 @@ module Evaluators
     before_action :require_evaluator!
 
     def show
-      # Load data based on user type
       if current_user.admin?
         load_admin_data
       else
         load_evaluator_data
       end
 
-      # Load display data (always needed)
       load_display_data
       load_recent_activity
     end
@@ -31,7 +29,7 @@ module Evaluators
     private
 
     def load_admin_data
-      # For admins, show all evaluations
+      # Admins see every evaluation.
       @requested_evaluations = Evaluation.requested_sessions
       @scheduled_evaluations = Evaluation.active
       @completed_evaluations = Evaluation.completed_sessions
@@ -40,27 +38,27 @@ module Evaluators
     end
 
     def load_evaluator_data
-      # For evaluators, show only their evaluations
-      @requested_evaluations = current_user.evaluations.requested_sessions
-      @scheduled_evaluations = current_user.evaluations.active
-      @completed_evaluations = current_user.evaluations.completed_sessions
-      @followup_evaluations = current_user.evaluations.needing_followup
-      @assigned_constituents = current_user.assigned_constituents.to_a.uniq(&:id)
+      # Evaluators see only their own evaluations.
+      @requested_evaluations = current_user.assigned_evaluations.requested_sessions
+      @scheduled_evaluations = current_user.assigned_evaluations.active
+      @completed_evaluations = current_user.assigned_evaluations.completed_sessions
+      @followup_evaluations = current_user.assigned_evaluations.needing_followup
+      @assigned_constituents = current_user.assigned_evaluation_constituents.to_a.uniq(&:id)
     end
 
     def load_display_data
-      # Always initialize these variables to empty arrays
+      # Empty defaults. Only admins get @my_scheduled_evaluations_display filled in.
       @requested_evaluations_display = []
       @upcoming_evaluations = []
       @recent_evaluations = []
       @my_scheduled_evaluations_display = []
 
-      # Data for dashboard tables - limit to 5 items for each section
+      # Each dashboard table shows at most five rows.
       @requested_evaluations_display = @requested_evaluations.includes(:constituent, :evaluator).order(created_at: :desc).limit(5)
       @followup_evaluations_display = @followup_evaluations.includes(:constituent, :evaluator).order(updated_at: :desc).limit(5)
-      @upcoming_evaluations = (current_user.admin? ? Evaluation.active : current_user.evaluations.active)
+      @upcoming_evaluations = (current_user.admin? ? Evaluation.active : current_user.assigned_evaluations.active)
                               .includes(:constituent, :evaluator).order(evaluation_date: :asc).limit(5)
-      @recent_evaluations = (current_user.admin? ? Evaluation.completed_sessions : current_user.evaluations.completed_sessions)
+      @recent_evaluations = (current_user.admin? ? Evaluation.completed_sessions : current_user.assigned_evaluations.completed_sessions)
                             .includes(:constituent, :evaluator, :application).by_report_submission.limit(5).to_a
       Application.preload_equipment_fulfillment(@recent_evaluations.map(&:application))
 
@@ -98,8 +96,8 @@ module Evaluators
     end
 
     def evaluator_recent_activity
-      evaluation_ids = current_user.evaluations.pluck(:id)
-      application_ids = current_user.evaluations.distinct.pluck(:application_id)
+      evaluation_ids = current_user.assigned_evaluations.pluck(:id)
+      application_ids = current_user.assigned_evaluations.distinct.pluck(:application_id)
 
       return [] if evaluation_ids.blank? && application_ids.blank?
 
@@ -147,12 +145,6 @@ module Evaluators
       ActiveRecord::Associations::Preloader.new(records: by_type[Application], associations: [:user]).call if by_type[Application]
       ActiveRecord::Associations::Preloader.new(records: by_type[Evaluation], associations: [:constituent]).call if by_type[Evaluation]
       ActiveRecord::Associations::Preloader.new(records: by_type[TrainingSession], associations: [:constituent]).call if by_type[TrainingSession]
-    end
-
-    def require_evaluator!
-      return if current_user&.evaluator? || current_user&.admin?
-
-      redirect_to root_path, alert: 'Access denied'
     end
   end
 end

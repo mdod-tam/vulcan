@@ -2,9 +2,7 @@
 
 class Policy < ApplicationRecord
   validates :key, presence: true, uniqueness: true
-  # IMPORTANT: Policy values are INTEGER ONLY - cannot store strings like emails
-  # If you need to store string values, use a different approach (environment variables, constants, etc.)
-  # This validation will cause failures if you try to store non-integer values
+  # Policy values are integers. Text settings such as support_email cannot be stored here.
   validates :value, presence: true, numericality: { only_integer: true }
   validates :value, numericality: {
     greater_than: 0,
@@ -52,11 +50,10 @@ class Policy < ApplicationRecord
     max_value = get("#{action}_rate_limit_#{method}")
     period_value = get("#{action}_rate_period")
 
-    # Return nil if we don't have any rate limit configuration
-    # This allows callers to handle the case appropriately
+    # Callers treat nil as no configured limit.
     return nil if max_value.nil? && period_value.nil?
 
-    # Use reasonable defaults if either value is missing
+    # Fill in whichever of the two values is missing.
     max_value ||= 10 # Default to 10 submissions
     period_value ||= 24 # Default to 24 hours
 
@@ -73,10 +70,7 @@ class Policy < ApplicationRecord
   end
 
   def self.get(key)
-    # IMPORTANT: This method performs a REAL DATABASE QUERY, not a simple method call
-    # Stubbing Policy.get() in tests will NOT work because find_by() hits the database
-    # Tests must create actual Policy records in the database instead of stubbing
-    # Example: Policy.find_or_create_by!(key: 'max_proof_rejections') { |p| p.value = 3 }
+    # Reads the database on every call.
     find_by(key: key)&.value
   end
 
@@ -110,7 +104,7 @@ class Policy < ApplicationRecord
     return unless saved_change_to_value?
 
     policy_changes.create!(
-      user: updated_by, # Changed from Current.user to updated_by
+      user: updated_by,
       previous_value: value_before_last_save,
       new_value: value
     )

@@ -1,25 +1,18 @@
 <main class="container mx-auto px-4 py-8" role="main">
   <div class="max-w-7xl mx-auto">
-    <!-- Header -->
     <div class="mb-8 flex flex-col gap-4 sm:flex-row sm:items-center sm:justify-between">
       <h1 class="text-3xl font-bold text-gray-900">Vendor Dashboard</h1>
       <div class="flex flex-wrap items-start gap-4">
-        <%= link_to vendor_portal_dashboard_path,
-            class: "inline-flex items-center px-4 py-2 border border-gray-300 rounded-md shadow-sm text-sm font-medium text-gray-700 bg-white hover:bg-gray-50 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-indigo-500" do %>
-          Back to Dashboard
-        <% end %>
         <% if current_user.can_process_vouchers? %>
           <%= link_to vendor_portal_vouchers_path,
-                      class: 'inline-flex items-center px-5 py-3 border border-transparent rounded-md shadow-sm text-base ' \
-                             'font-medium text-white bg-indigo-600 hover:bg-indigo-700 focus:outline-none focus:ring-2 ' \
-                             'focus:ring-offset-2 focus:ring-indigo-500' do %>
+                      class: 'btn btn-primary' do %>
             Process Voucher
           <% end %>
         <% else %>
           <%# The server refuses voucher work for an unapproved vendor anyway; this says so up front. %>
           <div class="flex flex-col items-end">
             <span aria-disabled="true" aria-describedby="process-voucher-unavailable"
-                  class="inline-flex items-center px-5 py-3 rounded-md text-base font-medium text-gray-600 bg-gray-200 cursor-not-allowed">
+                  class="btn bg-gray-200 text-gray-600 shadow-none cursor-not-allowed">
               Process Voucher
             </span>
             <p id="process-voucher-unavailable" class="mt-1 text-sm text-gray-600"><%= t('alerts.vendor_not_approved_for_vouchers') %></p>
@@ -28,12 +21,11 @@
       </div>
     </div>
 
-    <!-- Business Information Summary -->
-    <div class="bg-white shadow rounded-lg mb-8">
+    <div class="card mb-8">
       <div class="px-4 py-5 sm:p-6">
         <div class="flex justify-between items-center mb-4">
           <h2 class="text-lg font-medium text-gray-900">Business Information</h2>
-          <%= link_to "Edit Profile", edit_vendor_portal_profile_path, class: "text-sm font-medium text-indigo-600 hover:text-indigo-500" %>
+          <%= link_to "Edit Profile", edit_vendor_portal_profile_path, class: 'text-sm font-medium text-primary-600 hover:text-primary-500' %>
         </div>
         <div class="grid grid-cols-1 gap-y-6 gap-x-4 sm:grid-cols-6">
           <div class="sm:col-span-3">
@@ -44,7 +36,7 @@
             <div class="sm:col-span-3">
               <h3 class="text-sm font-medium text-gray-500">Website</h3>
               <p class="mt-1 text-sm text-gray-900">
-                <%= link_to current_user.website_url, current_user.website_url, class: "text-indigo-600 hover:text-indigo-500", target: "_blank" %>
+                <%= link_to current_user.website_url, current_user.website_url, class: 'text-primary-600 hover:text-primary-500', target: "_blank" %>
               </p>
             </div>
           <% end %>
@@ -54,10 +46,9 @@
 
     <%= render 'vendor_portal/shared/onboarding_guidance', vendor: current_user %>
 
-    <!-- Stats Overview -->
     <div class="grid grid-cols-1 gap-5 sm:grid-cols-2 lg:grid-cols-3 mb-8">
-      <!-- What the vendor is owed: not yet on an invoice, and invoiced but unpaid. -->
-      <div class="bg-white overflow-hidden shadow rounded-lg">
+      <%# What the vendor is owed: not yet on an invoice, and invoiced but unpaid. %>
+      <div class="card overflow-hidden">
         <div class="p-5">
           <dl>
             <dt class="text-sm font-medium text-gray-500">Not yet invoiced</dt>
@@ -69,11 +60,11 @@
           </p>
         </div>
         <div class="bg-gray-50 px-5 py-3">
-          <%= link_to 'View transactions', vendor_portal_transactions_path, class: 'text-sm font-medium text-indigo-700 hover:text-indigo-900' %>
+          <%= link_to 'View transactions', vendor_portal_transactions_path, class: 'text-sm font-medium text-primary-700 hover:text-primary-900' %>
         </div>
       </div>
 
-      <div class="bg-white overflow-hidden shadow rounded-lg">
+      <div class="card overflow-hidden">
         <div class="p-5">
           <dl>
             <dt class="text-sm font-medium text-gray-500">Invoiced, awaiting payment</dt>
@@ -82,16 +73,15 @@
           <p class="mt-1 text-sm text-gray-500">On invoices not yet paid.</p>
         </div>
         <div class="bg-gray-50 px-5 py-3">
-          <%= link_to 'View invoices', vendor_portal_invoices_path, class: 'text-sm font-medium text-indigo-700 hover:text-indigo-900' %>
+          <%= link_to 'View invoices', vendor_portal_invoices_path, class: 'text-sm font-medium text-primary-700 hover:text-primary-900' %>
         </div>
       </div>
 
-      <!-- This Month's Total -->
-      <div class="bg-white overflow-hidden shadow rounded-lg">
+      <div class="card overflow-hidden">
         <div class="p-5">
           <div class="flex items-center">
             <div class="flex-shrink-0">
-              <svg class="h-6 w-6 text-gray-400" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+              <svg class="h-6 w-6 text-gray-500" fill="none" viewBox="0 0 24 24" stroke="currentColor">
                 <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 8c-1.657 0-3 .895-3 2s1.343 2 3 2 3 .895 3 2-1.343 2-3 2m0-8c1.11 0 2.08.402 2.599 1M12 8V7m0 1v8m0 0v1m0-1c-1.11 0-2.08-.402-2.599-1M21 12a9 9 0 11-18 0 9 9 0 0118 0z"/>
               </svg>
             </div>
@@ -108,18 +98,17 @@
           </div>
         </div>
         <div class="bg-gray-50 px-5 py-3">
-          <%= link_to vendor_portal_transactions_path(period: "month"), class: "text-sm font-medium text-indigo-700 hover:text-indigo-900" do %>
+          <%= link_to vendor_portal_transactions_path(period: "month"), class: 'text-sm font-medium text-primary-700 hover:text-primary-900' do %>
             View month details
           <% end %>
         </div>
       </div>
     </div>
 
-    <!-- Recent Transactions -->
-    <div class="bg-white shadow rounded-lg mb-8">
+    <div class="card mb-8">
       <div class="px-4 py-5 sm:px-6 flex justify-between items-center">
         <h2 class="text-lg font-medium text-gray-900">Recent Transactions</h2>
-        <%= link_to "View All", vendor_portal_transactions_path, class: "text-sm font-medium text-indigo-600 hover:text-indigo-500" %>
+        <%= link_to "View All", vendor_portal_transactions_path, class: 'text-sm font-medium text-primary-600 hover:text-primary-500' %>
       </div>
       <div class="border-t border-gray-200">
         <div class="overflow-x-auto">
@@ -158,8 +147,7 @@
       </div>
     </div>
 
-    <!-- Monthly Totals Table and Chart -->
-    <div class="bg-white shadow rounded-lg" data-controller="chart-toggle">
+    <div class="card" data-controller="chart-toggle">
       <div class="px-4 py-5 sm:px-6 flex justify-between items-center">
         <h2 id="monthly-totals-heading" class="text-lg font-medium text-gray-900">Monthly Totals</h2>
         <button type="button" 
@@ -167,12 +155,11 @@
                 aria-expanded="false"
                 aria-controls="monthly-totals-chart"
                 data-action="chart-toggle#toggle" 
-                class="text-sm font-medium text-indigo-600 hover:text-indigo-500 focus:outline-none focus:ring-2 focus:ring-indigo-500 focus:ring-offset-2">
+                class="text-sm font-medium text-primary-600 hover:text-primary-500">
           Show Chart
         </button>
       </div>
       
-      <!-- Monthly Totals Table -->
       <div class="border-t border-gray-200">
         <div class="overflow-x-auto">
           <table id="monthly-totals-table" aria-labelledby="monthly-totals-heading" class="min-w-full divide-y divide-gray-200">
@@ -193,7 +180,7 @@
                         period: "custom",
                         start_date: month.beginning_of_month.strftime("%Y-%m-%d"),
                         end_date: month.end_of_month.strftime("%Y-%m-%d")
-                      ), class: "text-indigo-600 hover:text-indigo-900" %>
+                      ), class: 'text-primary-600 hover:text-primary-900' %>
                     </td>
                     <td class="px-6 py-4 whitespace-nowrap text-sm text-gray-900">
                       <%= number_to_currency(month_total) %>
@@ -206,7 +193,6 @@
         </div>
       </div>
       
-      <!-- Chart description for screen readers -->
       <div id="chart-description" class="sr-only">
         This chart displays the total voucher amounts processed each month for the past 6 months.
         <% if @monthly_totals_chart.present? %>
@@ -216,7 +202,6 @@
         <% end %>
       </div>
       
-      <!-- Chart (hidden by default) -->
       <div id="monthly-totals-chart" data-chart-toggle-target="chart" class="hidden p-6 border-t border-gray-200">
         <div data-controller="chart"
              data-chart-data-value="<%= @monthly_totals_chart.to_json %>"

@@ -10,9 +10,7 @@ module Admin
       @recovery_requests = RecoveryRequest.includes(:user).where(status: 'pending').order(created_at: :desc)
     end
 
-    def show
-      # Simply renders the show view with the recovery request found by set_recovery_request
-    end
+    def show; end
 
     def approve
       approval_result = approve_pending_request
@@ -74,7 +72,6 @@ module Admin
     def create_approval_notification(approved_at)
       metadata = approval_notification_metadata(approved_at)
 
-      # Log the audit event first
       AuditEventService.log(
         action: 'security_key_recovery_approved',
         actor: current_user,
@@ -82,7 +79,7 @@ module Admin
         metadata: metadata
       )
 
-      # Then, send the notification without the audit flag
+      # The audit event is logged above, so the notification is not audited again.
       NotificationService.create_and_deliver!(
         type: 'security_key_recovery_approved',
         recipient: @recovery_request.user,

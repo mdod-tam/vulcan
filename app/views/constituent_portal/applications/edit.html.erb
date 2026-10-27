@@ -1,7 +1,7 @@
 <main class="container mx-auto px-4 py-8" role="main">
  <header class="mb-6">
    <h1 class="text-3xl font-bold text-gray-900">Edit Application</h1>
-   <p class="text-l text-gray-900"><span class="text-[#ff0000]">*</span> Indicates a required field</p>
+   <p class="text-base text-gray-900"><span class="text-danger-700">*</span> Indicates a required field</p>
  </header>
 
  <% edit_form_data = {
@@ -39,25 +39,25 @@
    
    <%= render 'autosave_fields', state: autosave_form_state %>
    <div data-autosave-target="status" class="text-sm mt-2 min-h-10 sm:min-h-5" role="status" aria-live="polite"></div>
-   <div class="bg-white shadow sm:rounded-lg">
+   <div class="card">
      <h2 id="application_form_heading" class="sr-only">Application Details Form</h2>
 
     <%= render "pending_review_notice" %>
 
     <% if @application.errors.any? %>
       <div id="error-summary"
-           class="bg-red-50 p-4 rounded-t-lg focus:outline-none focus:ring-2 focus:ring-red-500"
+           class="bg-danger-50 p-4 rounded-t-lg"
            role="alert"
            aria-live="assertive"
            aria-labelledby="error_messages"
            aria-atomic="true"
            tabindex="-1"
            data-controller="error-summary">
-        <h3 id="error_messages" class="text-red-800 font-medium">
+        <h3 id="error_messages" class="text-danger-800 font-medium">
           <%= pluralize(@application.errors.count, "error") %> prohibited this application from being saved:
         </h3>
-        <ul class="mt-2 list-disc list-inside text-sm text-red-700">
-          <% @application.errors.full_messages.each do |msg| %>
+        <ul class="mt-2 list-disc list-inside text-sm text-danger-700">
+          <% I18n.with_locale(form_message_locale) { @application.errors.full_messages }.each do |msg| %>
             <li><%= msg %></li>
           <% end %>
         </ul>
@@ -66,9 +66,9 @@
 
      <div class="p-6 space-y-6">
        <div>
-         <label class="block text-sm font-medium text-gray-700">Application Status</label>
+         <label class="form-label">Application Status</label>
          <div class="mt-1">
-           <span class="inline-flex items-center px-3 py-2 rounded-md text-sm font-medium bg-gray-100 text-gray-800">
+           <span class="<%= badge_class_for(:application, @application.status, size: :lg) %>">
              <%= @application.status.titleize %>
            </span>
          </div>
@@ -82,7 +82,7 @@
          
          <div class="flex items-start">
            <%= f.check_box :maryland_resident,
-               class: "mt-1 h-4 w-4 text-indigo-600 focus:ring-indigo-500 border-gray-300 rounded",
+               class: "mt-1 h-4 w-4 text-primary-600 border-gray-300 rounded",
                required: true,
                "aria-required": "true" %>
            <%= f.label :maryland_resident, "I certify that I am a resident of Maryland",
@@ -95,35 +95,35 @@
         <legend class="text-lg font-medium text-gray-900">Household Information</legend>
         
         <div>
-          <%= f.label :household_size, "Household Size", class: "block text-sm font-medium text-gray-700" %>
+          <%= f.label :household_size, "Household Size", class: "form-label" %>
           <div class="mt-1">
             <%= f.number_field :household_size,
                 min: 1,
-                class: "focus:ring-indigo-500 focus:border-indigo-500 block w-full sm:text-sm border-gray-300 rounded-md",
+                class: "form-input",
                 "aria-describedby": "household_size_help",
                 required: true,
                 data: { "income-validation-target": "householdSize" } %>
           </div>
-          <p class="mt-2 text-sm text-gray-500 required-label" id="household_size_help">
+          <p class="form-hint required-label" id="household_size_help">
             Total number of people living in your household
           </p>
         </div>
 
         <div>
-          <%= f.label :annual_income, "Annual Income", class: "block text-sm font-medium text-gray-700" %>
-          <div class="mt-1 relative rounded-md shadow-sm">
+          <%= f.label :annual_income, "Annual Income", class: "form-label" %>
+          <div class="mt-1 relative rounded-md">
             <div class="absolute inset-y-0 left-0 pl-3 flex items-center pointer-events-none">
               <span class="text-gray-500 sm:text-sm">$</span>
             </div>
             <%= f.number_field :annual_income,
                 step: "0.01",
-                class: "pl-7 focus:ring-indigo-500 focus:border-indigo-500 block w-full sm:text-sm border-gray-300 rounded-md",
+                class: "form-input pl-7",
                 "aria-describedby": "annual_income_help",
                 required: true,
                 data: { "income-validation-target": "annualIncome", currency_formatter_target: "input" } %>
           </div>
           <div class="mt-2">
-            <p class="text-sm text-gray-500 required-label" id="annual_income_help">
+            <p class="form-hint required-label" id="annual_income_help">
               Total yearly household income before taxes
             </p>
           </div>
@@ -164,20 +164,20 @@
          <div class="flex items-start">
            <%= f.check_box :self_certify_disability,
                { 
-                 class: "mt-1 h-4 w-4 text-indigo-600 focus:ring-indigo-500 border-gray-300 rounded",
+                 class: "mt-1 h-4 w-4 text-primary-600 border-gray-300 rounded",
                  "aria-describedby": "disability-certification-description"
                }, "1", "0" %>
            <%= f.label :self_certify_disability,
                "I certify that I have a disability that affects my ability to access telecommunications services",
                class: "ml-2 block text-sm text-gray-700" %>
          </div>
-         <p id="disability-certification-description" class="text-sm text-gray-600">
+         <p id="disability-certification-description" class="form-hint">
            If you have a disability, please self-certify by checking the box above.
          </p>
 
          <fieldset class="space-y-2" data-requires-one-checkbox="true" aria-describedby="portal-edit-disability-type-help">
            <legend class="text-sm text-gray-700 font-medium">Disability type</legend>
-           <p id="portal-edit-disability-type-help" class="text-xs text-gray-700">Select at least one disability that applies to the applicant.</p>
+           <p id="portal-edit-disability-type-help" class="form-hint">Select at least one disability that applies to the applicant.</p>
            
            <div class="grid sm:grid-cols-2 gap-4">
              <% disabilities = [:hearing, :vision, :speech, :mobility, :cognition] %>
@@ -187,7 +187,7 @@
                <div class="flex items-center">
                  <%= f.check_box "#{disability}_disability",
                      checked: disability_checked?("#{disability}_disability", applicant_user),
-                     class: "h-4 w-4 text-indigo-600 focus:ring-indigo-500 border-gray-300 rounded",
+                     class: "h-4 w-4 text-primary-600 border-gray-300 rounded",
                      "aria-describedby": "#{disability}-description" %>
                  <%= f.label "#{disability}_disability", disability.to_s.titleize,
                      class: "ml-2 text-sm text-gray-700" %>
@@ -200,9 +200,8 @@
          </fieldset>
        </section>
 
-       <%# fields_for does not bind a non-association attribute: without an explicit object it
-           builds fields against nil, so these inputs showed no value on the edit page or on
-           any re-render after a refusal. %>
+       <%# fields_for does not bind a non-association attribute. The explicit object is what makes
+           these inputs show their values on the edit page and on a re-render after a refusal. %>
        <%= f.fields_for :medical_provider_attributes, @application.medical_provider_attributes do |mp| %>
          <%= render "medical_provider_form", form: mp %>
        <% end %>
@@ -213,12 +212,12 @@
          
          <div class="space-y-4">
            <div>
-             <%= f.label :alternate_contact_name, "Name", class: "block text-sm font-medium text-gray-700" %>
-             <%= f.text_field :alternate_contact_name, class: "mt-1 block w-full rounded-md border-gray-300 shadow-sm focus:border-indigo-500 focus:ring-indigo-500 sm:text-sm" %>
+             <%= f.label :alternate_contact_name, "Name", class: "form-label" %>
+             <%= f.text_field :alternate_contact_name, class: "form-input mt-1" %>
            </div>
            
            <div>
-             <%= f.label :alternate_contact_relationship_type, "Relationship", class: "block text-sm font-medium text-gray-700" %>
+             <%= f.label :alternate_contact_relationship_type, "Relationship", class: "form-label" %>
              <% relationship_options = [
                [t("applications.alternate_contact_relationship_types.parent"), "parent"],
                [t("applications.alternate_contact_relationship_types.spouse"), "spouse"],
@@ -231,17 +230,17 @@
              <%= f.select :alternate_contact_relationship_type,
                  options_for_select(relationship_options, @application.alternate_contact_relationship_type),
                  { prompt: "Select a relationship" },
-                 class: "mt-1 block w-full rounded-md border-gray-300 shadow-sm focus:border-indigo-500 focus:ring-indigo-500 sm:text-sm" %>
+                 class: "form-input mt-1" %>
            </div>
            
            <div class="grid grid-cols-1 md:grid-cols-2 gap-4">
              <div>
-               <%= f.label :alternate_contact_phone, "Phone", class: "block text-sm font-medium text-gray-700" %>
-               <%= f.telephone_field :alternate_contact_phone, class: "mt-1 block w-full rounded-md border-gray-300 shadow-sm focus:border-indigo-500 focus:ring-indigo-500 sm:text-sm" %>
+               <%= f.label :alternate_contact_phone, "Phone", class: "form-label" %>
+               <%= f.telephone_field :alternate_contact_phone, class: "form-input mt-1" %>
              </div>
              <div>
-               <%= f.label :alternate_contact_email, "Email", class: "block text-sm font-medium text-gray-700" %>
-               <%= f.email_field :alternate_contact_email, class: "mt-1 block w-full rounded-md border-gray-300 shadow-sm focus:border-indigo-500 focus:ring-indigo-500 sm:text-sm" %>
+               <%= f.label :alternate_contact_email, "Email", class: "form-label" %>
+               <%= f.email_field :alternate_contact_email, class: "form-input mt-1" %>
              </div>
            </div>
          </div>
@@ -253,8 +252,8 @@
          <div class="space-y-4">
            <div>
              <%= f.label :residency_proof, "Proof of Residency",
-                 class: "block text-sm font-medium text-gray-700 required-label" %>
-             <p id="residency-hint" class="text-xs text-gray-500 mb-2">
+                 class: "form-label required-label" %>
+             <p id="residency-hint" class="form-hint mb-2">
                Upload one of the following acceptable documents: <strong>driver's license</strong>, <strong>state ID</strong>, 
                <strong>identification card</strong>, <strong>utility bill</strong>, or <strong> photo ID</strong>
              </p>
@@ -265,8 +264,8 @@
            <% if @application.income_collection_enabled? %>
            <div>
              <%= f.label :income_proof, "Income Verification",
-                 class: "block text-sm font-medium text-gray-700 required-label" %>
-             <p id="income-hint" class="text-xs text-gray-500 mb-2">
+                 class: "form-label required-label" %>
+             <p id="income-hint" class="form-hint mb-2">
                Upload SSI/SSDI documentation, recent pay stubs, or tax forms
              </p>
              <%= render 'shared/document_upload', form: f, model: @application, field: :income_proof,
@@ -276,8 +275,8 @@
 
            <div>
              <%= f.label :id_proof, "ID Verification",
-                 class: "block text-sm font-medium text-gray-700 required-label" %>
-             <p id="id-hint" class="text-xs text-gray-500 mb-2">
+                 class: "form-label required-label" %>
+             <p id="id-hint" class="form-hint mb-2">
                Upload a government-issued photo ID such as a driver's license, state ID card, or passport
              </p>
              <%= render 'shared/document_upload', form: f, model: @application, field: :id_proof,
@@ -296,7 +295,7 @@
          <%= f.check_box :terms_accepted,
              id: "terms_accepted",
              required: true,
-             class: "mt-1 h-4 w-4 text-indigo-600 focus:ring-indigo-500 border-gray-300 rounded" %>
+             class: "mt-1 h-4 w-4 text-primary-600 border-gray-300 rounded" %>
          <%= f.label :terms_accepted,
              "I have read and accept the terms and conditions",
              class: "ml-2 block text-sm text-gray-700" %>
@@ -308,7 +307,7 @@
          <%= f.check_box :information_verified,
              id: "information_verified",
              required: true,
-             class: "mt-1 h-4 w-4 text-indigo-600 focus:ring-indigo-500 border-gray-300 rounded" %>
+             class: "mt-1 h-4 w-4 text-primary-600 border-gray-300 rounded" %>
          <%= f.label :information_verified,
              "I verify that all information provided above is accurate and complete",
              class: "ml-2 block text-sm text-gray-700" %>
@@ -318,13 +317,13 @@
     <div class="px-6 py-4 bg-gray-50 flex items-center justify-end space-x-3 rounded-b-lg">
       <%= link_to "Cancel",
           constituent_portal_application_path(@application),
-          class: "px-4 py-2 border border-gray-300 shadow-sm text-sm font-medium rounded-md text-gray-700 bg-white hover:bg-gray-50 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-indigo-500",
+          class: "btn btn-outline",
           role: "button" %>
 
       <%= f.submit "Save Application",
            name: "save_draft",
            formnovalidate: true,
-           class: "px-4 py-2 border border-transparent text-sm font-medium rounded-md shadow-sm text-white bg-indigo-600 hover:bg-indigo-700 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-indigo-500",
+           class: "btn btn-primary",
            "aria-label": "Save application draft" %>
 
        <p id="portal-edit-submit-gate-status" class="sr-only" aria-live="polite" data-final-submit-gate-target="status"></p>
@@ -332,7 +331,7 @@
        <%= f.submit "Submit Application",
            name: "submit_application",
            disabled: true,
-           class: "px-4 py-2 border border-transparent text-sm font-medium rounded-md shadow-sm text-white bg-green-600 hover:bg-green-700 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-green-500 disabled:opacity-50 disabled:cursor-not-allowed",
+           class: "btn btn-success",
            "aria-label": "Submit final application",
            data: { final_submit_gate_target: "submitButton" },
            aria: { describedby: "portal-edit-submit-gate-status" } %>

@@ -4,8 +4,6 @@ class EmailTemplate < ApplicationRecord
   before_validation :set_default_version
   before_validation :set_default_syntax
 
-  # Define enum for format before validations that might use it
-  # html: 0, text: 1
   enum :format, { html: 0, text: 1 }
   enum :syntax, { legacy_percent: 0, liquid: 1 }
 

@@ -15,14 +15,14 @@
   </div>
 
   <div>
-    <%= label_tag :rationale, 'Why these records are different people (required)', class: 'block text-sm font-medium text-gray-700' %>
+    <%= label_tag :rationale, 'Why these records are different people (required)', class: 'form-label' %>
     <%= text_area_tag :rationale,
                       nil,
                       rows: 2,
                       required: true,
-                      class: 'w-full border-gray-300 rounded-md text-sm',
+                      class: 'form-input',
                       placeholder: 'Describe what you verified beyond the matching name and date of birth.' %>
   </div>
 
-  <%= f.submit 'Resolve case', class: 'bg-indigo-600 hover:bg-indigo-700 text-white py-2 px-4 rounded text-sm cursor-pointer' %>
+  <%= f.submit 'Resolve case', class: 'btn btn-primary' %>
 <% end %>

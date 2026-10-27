@@ -1,11 +1,11 @@
 <%# locals: (record:, previous_values:, fields:, impact_token:, title:, confirmation:, body: nil, products: [], purchase_orders: [], vendors: [], new_purchase_order: nil, autofocus: true) -%>
 <%= hidden_field_tag :reviewing, '1' %>
 <%= hidden_field_tag :impact_token, impact_token %>
-<div class="rounded border border-amber-300 bg-amber-50 p-4">
+<div class="rounded border border-warning-300 bg-warning-50 p-4">
   <%= tag.h2(
         title,
         id: 'equipment-correction-impact-heading', tabindex: '-1', autofocus: autofocus,
-        class: 'font-semibold focus:outline-none focus:ring-2 focus:ring-amber-600 focus:ring-offset-2'
+        class: 'font-semibold'
       ) %>
   <% if body %><p><%= body %></p><% end %>
   <dl class="mt-2 space-y-1">

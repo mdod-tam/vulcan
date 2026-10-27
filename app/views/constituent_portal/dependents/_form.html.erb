@@ -22,7 +22,7 @@
   <% end %>
 
   <% if dependent_user.errors.any? %>
-    <div class="bg-red-50 p-4 rounded mb-6 text-red-600" role="alert" aria-atomic="true">
+    <div class="bg-danger-50 p-4 rounded mb-6 text-danger-600" role="alert" aria-atomic="true">
       <h2 class="font-medium">
         <%= pluralize(dependent_user.errors.count, "error") %> prohibited this dependent from being saved:
       </h2>
@@ -34,21 +34,20 @@
     </div>
   <% end %>
 
-  <!-- Dependent Personal Information Section -->
   <section class="space-y-4 p-4 bg-gray-50 rounded">
     <h2 id="personal-information-title" class="text-lg font-medium text-gray-900">Dependent Information</h2>
     <div class="grid grid-cols-1 md:grid-cols-2 gap-4">
       <div>
-        <%= form.label :first_name, "First Name", class: "block text-sm font-medium text-gray-700" %>
+        <%= form.label :first_name, "First Name", class: "form-label" %>
         <%= form.text_field :first_name,
-            class: "mt-1 block w-full py-2 px-3 border border-gray-300 rounded-md shadow-sm focus:outline-none focus:ring-indigo-500 focus:border-indigo-500 sm:text-sm",
+            class: "form-input mt-1",
             required: true %>
       </div>
 
       <div>
-        <%= form.label :last_name, "Last Name", class: "block text-sm font-medium text-gray-700" %>
+        <%= form.label :last_name, "Last Name", class: "form-label" %>
         <%= form.text_field :last_name,
-            class: "mt-1 block w-full py-2 px-3 border border-gray-300 rounded-md shadow-sm focus:outline-none focus:ring-indigo-500 focus:border-indigo-500 sm:text-sm",
+            class: "form-input mt-1",
             required: true %>
       </div>
 
@@ -57,7 +56,7 @@
             <div class="flex items-start">
               <%= check_box_tag :use_guardian_email, "1", use_guardian_email_checked,
                   id: "use_guardian_email_checkbox",
-                  class: "mt-1 h-4 w-4 text-indigo-600 focus:ring-indigo-500 border-gray-300 rounded",
+                  class: "mt-1 h-4 w-4 text-primary-600 border-gray-300 rounded",
                   data: {
                     dependent_fields_target: "sameEmailCheckbox",
                     action: "change->dependent-fields#toggleEmailField"
@@ -75,21 +74,20 @@
                data-dependent-fields-target="emailFieldContainer"
                class="<%= 'hidden' if dependent_user.new_record? && use_guardian_email_checked %>"
                aria-hidden="<%= dependent_user.new_record? && use_guardian_email_checked %>">
-            <%= form.label :email, "Dependent Email", class: "block text-sm font-medium text-gray-700" %>
+            <%= form.label :email, "Dependent Email", class: "form-label" %>
             <%= form.email_field :email,
-                class: "mt-1 block w-full py-2 px-3 border border-gray-300 rounded-md shadow-sm focus:outline-none focus:ring-indigo-500 focus:border-indigo-500 sm:text-sm",
+                class: "form-input mt-1",
                 required: false,
                 autocomplete: "email",
                 data: { dependent_fields_target: "dependentEmail" },
                 "aria-describedby": "dependent_email_help" %>
-            <p id="dependent_email_help" class="mt-1 text-xs text-gray-500">Leave blank to use your email address.</p>
+            <p id="dependent_email_help" class="form-hint">Leave blank to use your email address.</p>
 
-            <%# Newsletter signup - only shown when dependent has their own email %>
             <div class="mt-3">
               <div class="flex items-start">
                 <%= form.check_box :newsletter_signup,
                     id: "dependent_newsletter_signup",
-                    class: "mt-1 h-4 w-4 text-indigo-600 focus:ring-indigo-500 border-gray-300 rounded" %>
+                    class: "mt-1 h-4 w-4 text-primary-600 border-gray-300 rounded" %>
                 <%= form.label :newsletter_signup,
                     "Sign up for our newsletter to receive updates about MAT programs and services",
                     class: "ml-2 block text-sm text-gray-700" %>
@@ -103,7 +101,7 @@
             <div class="flex items-start">
               <%= check_box_tag :use_guardian_phone, "1", use_guardian_phone_checked,
                   id: "use_guardian_phone_checkbox",
-                  class: "mt-1 h-4 w-4 text-indigo-600 focus:ring-indigo-500 border-gray-300 rounded",
+                  class: "mt-1 h-4 w-4 text-primary-600 border-gray-300 rounded",
                   data: {
                     dependent_fields_target: "samePhoneCheckbox",
                     action: "change->dependent-fields#togglePhoneField"
@@ -121,51 +119,50 @@
                data-dependent-fields-target="phoneFieldContainer"
                class="<%= 'hidden' if dependent_user.new_record? && use_guardian_phone_checked %>"
                aria-hidden="<%= dependent_user.new_record? && use_guardian_phone_checked %>">
-            <%= form.label :phone, "Dependent Phone Number", class: "block text-sm font-medium text-gray-700" %>
+            <%= form.label :phone, "Dependent Phone Number", class: "form-label" %>
             <%= form.telephone_field :phone,
-                class: "mt-1 block w-full py-2 px-3 border border-gray-300 rounded-md shadow-sm focus:outline-none focus:ring-indigo-500 focus:border-indigo-500 sm:text-sm",
+                class: "form-input mt-1",
                 placeholder: "555-555-5555",
                 autocomplete: "tel",
                 data: { dependent_fields_target: "dependentPhone" },
                 "aria-describedby": "dependent_phone_help" %>
-            <p id="dependent_phone_help" class="mt-1 text-xs text-gray-500">Leave blank to use your phone number.</p>
+            <p id="dependent_phone_help" class="form-hint">Leave blank to use your phone number.</p>
           </div>
         </div>
 
       <div>
-        <%= form.label :phone_type, "Phone Type", class: "block text-sm font-medium text-gray-700 mb-2" %>
+        <%= form.label :phone_type, "Phone Type", class: "form-label mb-2" %>
         <div role="radiogroup" class="space-y-2">
           <div class="flex items-center">
             <%= form.radio_button :phone_type, "voice", id: "dependent_phone_type_voice",
-                   class: "h-4 w-4 text-indigo-600 focus:ring-indigo-500 border-gray-300" %>
+                   class: "h-4 w-4 text-primary-600 border-gray-300" %>
             <%= form.label :phone_type_voice, "Voice", for: "dependent_phone_type_voice", class: "ml-3 text-sm text-gray-700" %>
           </div>
           <div class="flex items-center">
             <%= form.radio_button :phone_type, "videophone", id: "dependent_phone_type_videophone",
-                   class: "h-4 w-4 text-indigo-600 focus:ring-indigo-500 border-gray-300" %>
+                   class: "h-4 w-4 text-primary-600 border-gray-300" %>
             <%= form.label :phone_type_videophone, "Videophone", for: "dependent_phone_type_videophone", class: "ml-3 text-sm text-gray-700" %>
           </div>
           <div class="flex items-center">
             <%= form.radio_button :phone_type, "text", id: "dependent_phone_type_text",
-                   class: "h-4 w-4 text-indigo-600 focus:ring-indigo-500 border-gray-300" %>
+                   class: "h-4 w-4 text-primary-600 border-gray-300" %>
             <%= form.label :phone_type_text, "Text/SMS", for: "dependent_phone_type_text", class: "ml-3 text-sm text-gray-700" %>
           </div>
         </div>
       </div>
 
       <div>
-        <%= form.label :date_of_birth, t('shared.date_of_birth.label'), class: 'block text-sm font-medium text-gray-700' %>
+        <%= form.label :date_of_birth, t('shared.date_of_birth.label'), class: 'form-label' %>
         <%= date_of_birth_text_field form,
             value: date_of_birth_input_value(dependent_user),
             "aria-describedby": "dependent-date-of-birth-hint",
-            class: "mt-1 block w-full py-2 px-3 border border-gray-300 rounded-md shadow-sm focus:outline-none focus:ring-indigo-500 focus:border-indigo-500 sm:text-sm",
+            class: "form-input mt-1",
             required: true %>
-        <p id="dependent-date-of-birth-hint" class="mt-1 text-xs text-gray-700"><%= t('shared.date_of_birth.hint') %></p>
+        <p id="dependent-date-of-birth-hint" class="form-hint"><%= t('shared.date_of_birth.hint') %></p>
       </div>
     </div>
   </section>
 
-  <!-- Disability Information Section -->
   <section class="space-y-4 p-4 bg-gray-50 rounded">
     <h2 id="disability-section-title" class="text-lg font-medium text-gray-900">Disability Information</h2>
     <fieldset class="space-y-2"
@@ -175,12 +172,12 @@
               aria-invalid="<%= dependent_user.errors[:base].any? { |msg| msg.include?('disability') } %>">
       <legend class="text-sm text-gray-700 font-medium">
         Select at least one disability that applies to your dependent:
-        <span class="text-red-600" aria-hidden="true">*</span>
+        <span class="text-danger-600" aria-hidden="true">*</span>
         <span class="sr-only">(required)</span>
       </legend>
 
       <% if dependent_user.errors[:base].any? { |msg| msg.include?('disability') } %>
-        <div id="disability-error" role="alert" class="mt-2 p-3 bg-red-50 border border-red-400 text-red-700 rounded text-sm">
+        <div id="disability-error" role="alert" class="mt-2 p-3 bg-danger-50 border border-danger-400 text-danger-700 rounded text-sm">
           <%= dependent_user.errors[:base].find { |msg| msg.include?('disability') } %>
         </div>
       <% end %>
@@ -190,7 +187,7 @@
         <% disabilities.each do |disability| %>
           <div class="flex items-center">
             <%= form.check_box "#{disability}_disability",
-                class: "h-4 w-4 text-indigo-600 focus:ring-indigo-500 border-gray-300 rounded",
+                class: "h-4 w-4 text-primary-600 border-gray-300 rounded",
                 "aria-describedby": "#{disability}-description" %>
             <%= form.label "#{disability}_disability", disability.to_s.titleize,
                 class: "ml-2 text-sm text-gray-700" %>
@@ -203,12 +200,11 @@
     </fieldset>
   </section>
 
-  <!-- Relationship Information Section -->
   <%= fields_for :guardian_relationship, guardian_relationship do |gr_form| %>
     <section class="space-y-4 p-4 bg-gray-50 rounded">
       <h2 id="relationship-section-title" class="text-lg font-medium text-gray-900">Relationship Information</h2>
       <div>
-        <%= gr_form.label :relationship_type, "Your Relationship to Dependent", class: "block text-sm font-medium text-gray-700" %>
+        <%= gr_form.label :relationship_type, "Your Relationship to Dependent", class: "form-label" %>
         <%= gr_form.select :relationship_type,
             options_for_select([
               ["Parent", "Parent"],
@@ -220,24 +216,23 @@
               ["Other", "Other"]
             ], guardian_relationship&.relationship_type),
             { include_blank: "Select Relationship Type" },
-            { class: "mt-1 block w-full py-2 px-3 border border-gray-300 rounded-md shadow-sm focus:outline-none focus:ring-indigo-500 focus:border-indigo-500 sm:text-sm",
+            { class: "form-input mt-1",
               required: true } %>
       </div>
     </section>
   <% end %>
 
-  <!-- Form Actions -->
   <div class="px-6 py-4 bg-gray-50 flex items-center justify-end space-x-3 rounded-b-lg">
     <%= link_to "Cancel",
         constituent_portal_dashboard_path,
-        class: "inline-flex items-center px-4 py-2 border border-gray-300 shadow-sm text-sm font-medium rounded-md text-gray-700 bg-white hover:bg-gray-50 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-indigo-500",
+        class: "btn btn-outline",
         role: "button",
         "aria-label": "Cancel and return to dashboard" %>
 
     <%# data-turbo-submits-with is visible feedback only. Turbo already disables the submitter while
         the request is in flight; neither prevents a duplicate, which the server-side key does. %>
     <%= form.submit dependent_user.new_record? ? "Add Dependent" : "Update Dependent",
-        class: "inline-flex items-center px-4 py-2 border border-transparent text-sm font-medium rounded-md shadow-sm text-white bg-indigo-600 hover:bg-indigo-700 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-indigo-500",
+        class: "btn btn-primary",
         data: { turbo_submits_with: dependent_user.new_record? ? t('constituent_portal.dependents.form.adding') : t('constituent_portal.dependents.form.saving') },
         "aria-label": dependent_user.new_record? ? "Add new dependent" : "Update dependent information" %>
   </div>

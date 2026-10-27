@@ -2,7 +2,6 @@
 <div class="space-y-6" data-controller="stream-ready">
 
   <% if @application.income_proof_required? %>
-  <!-- Income Proof Section -->
   <div class="border rounded-lg overflow-hidden bg-white">
     <div class="px-4 py-3 bg-gray-50 border-b flex items-center justify-between">
       <div class="flex items-center space-x-2">
@@ -11,7 +10,7 @@
         </svg>
         <h3 class="text-sm font-medium text-gray-900">Income Proof</h3>
       </div>
-      <span class="px-2 py-1 text-sm font-medium rounded-full <%= badge_class_for(:proof, @application.income_proof_status) %>">
+      <span class="<%= badge_class_for(:proof, @application.income_proof_status) %>">
         <%= @application.income_proof_status.titleize %>
       </span>
     </div>
@@ -46,16 +45,16 @@
           </div>
         <% else %>
            <div class="mb-3">
-            <div class="rounded-md bg-amber-50 p-3 border border-amber-300">
+            <div class="rounded-md bg-warning-50 p-3 border border-warning-300">
               <div class="flex">
                 <div class="flex-shrink-0">
-                  <svg class="h-5 w-5 text-amber-400" viewBox="0 0 20 20" fill="currentColor">
+                  <svg class="h-5 w-5 text-warning-400" viewBox="0 0 20 20" fill="currentColor">
                     <path fill-rule="evenodd" d="M8.485 3.495c.673-1.167 2.357-1.167 3.03 0l6.28 10.875c.673 1.167-.17 2.625-1.516 2.625H3.72c-1.347 0-2.189-1.458-1.515-2.625L8.485 3.495zM10 6a.75.75 0 01.75.75v3.5a.75.75 0 01-1.5 0v-3.5A.75.75 0 0110 6zm0 9a1 1 0 100-2 1 1 0 000 2z" clip-rule="evenodd" />
                   </svg>
                 </div>
                 <div class="ml-3">
-                  <p class="text-sm text-amber-800">
-                    <strong>Data inconsistency detected:</strong> Income proof is marked as <%= @application.income_proof_status.titleize %> but the file is not currently attached.
+                  <p class="text-sm text-warning-800">
+                    <strong>File missing:</strong> Income proof is marked as <%= @application.income_proof_status.titleize %>, but no file is attached.
                   </p>
                 </div>
               </div>
@@ -64,16 +63,16 @@
         <% end %>
       <% elsif @application.income_proof_status == 'approved' %>
          <div class="mb-3">
-            <div class="rounded-md bg-amber-50 p-3 border border-amber-300">
+            <div class="rounded-md bg-warning-50 p-3 border border-warning-300">
               <div class="flex">
                 <div class="flex-shrink-0">
-                  <svg class="h-5 w-5 text-amber-400" viewBox="0 0 20 20" fill="currentColor">
+                  <svg class="h-5 w-5 text-warning-400" viewBox="0 0 20 20" fill="currentColor">
                     <path fill-rule="evenodd" d="M8.485 3.495c.673-1.167 2.357-1.167 3.03 0l6.28 10.875c.673 1.167-.17 2.625-1.516 2.625H3.72c-1.347 0-2.189-1.458-1.515-2.625L8.485 3.495zM10 6a.75.75 0 01.75.75v3.5a.75.75 0 01-1.5 0v-3.5A.75.75 0 0110 6zm0 9a1 1 0 100-2 1 1 0 000 2z" clip-rule="evenodd" />
                   </svg>
                 </div>
                 <div class="ml-3">
-                  <p class="text-sm text-amber-800">
-                    <strong>Data inconsistency detected:</strong> Income proof is marked as <%= @application.income_proof_status.titleize %> but the file is not currently attached.
+                  <p class="text-sm text-warning-800">
+                    <strong>File missing:</strong> Income proof is marked as <%= @application.income_proof_status.titleize %>, but no file is attached.
                   </p>
                 </div>
               </div>
@@ -138,7 +137,7 @@
           <div class="proof-history pl-4 border-l-2 border-gray-200">
             <div class="history-item mb-2">
               <p class="text-sm text-gray-600 mb-1">
-                <span class="text-blue-600">→</span> Submitted on
+                <span class="text-info-600">→</span> Submitted on
                 <%= @application.created_at.strftime("%B %d, %Y at %I:%M %p") %>
                 <span class="text-xs text-gray-500">(via application submission)</span>
               </p>
@@ -151,7 +150,7 @@
           <div class="proof-history pl-4 border-l-2 border-gray-200">
             <div class="history-item mb-2">
               <p class="text-sm text-gray-600 mb-1">
-                <span class="text-yellow-500">Note:</span> No detailed history available.
+                <span class="text-gray-500">Note:</span> No detailed history available.
               </p>
             </div>
           </div>
@@ -170,8 +169,8 @@
           <% if @application.proof_review_state("income") == :approved_current %>
             <%= link_to document_download_path(@application.income_proof, disposition: :inline),
                     target: "_blank",
-                    class: "inline-flex items-center px-4 py-2 border border-transparent rounded-md shadow-sm text-sm font-medium text-white bg-green-600 hover:bg-green-700 focus:outline-none" do %>
-              <svg class="h-5 w-5 mr-2" xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                    class: "btn btn-success" do %>
+              <svg class="h-5 w-5" xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" stroke="currentColor">
                 <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M15 12a3 3 0 11-6 0 3 3 0 016 0z" />
                 <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M2.458 12C3.732 7.943 7.523 5 12 5c4.478 0 8.268 2.943 9.542 7-1.274 4.057-5.064 7-9.542 7-4.477 0-8.268-2.943-9.542-7z" />
               </svg>
@@ -182,7 +181,7 @@
                      data-action="click->modal#open"
                      data-modal-id="incomeProofReviewModal"
                      data-proof-type="income"
-                     class="inline-flex items-center px-4 py-2 border border-transparent rounded-md shadow-sm text-sm font-medium text-white <%= proof_review_button_class(@application, 'income') %> focus:outline-none">
+                     class="btn <%= proof_review_button_class(@application, 'income') %>">
                <%= proof_review_button_text(@application, "income") %>
              </button>
            <% end %>
@@ -205,7 +204,6 @@
   </div>
   <% end %>
 
-  <!-- Residency Proof Section -->
   <div class="border rounded-lg overflow-hidden bg-white">
     <div class="px-4 py-3 bg-gray-50 border-b flex items-center justify-between">
       <div class="flex items-center space-x-2">
@@ -214,7 +212,7 @@
         </svg>
         <h3 class="text-sm font-medium text-gray-900">Residency Proof</h3>
       </div>
-      <span class="px-2 py-1 text-sm font-medium rounded-full <%= badge_class_for(:proof, @application.residency_proof_status) %>">
+      <span class="<%= badge_class_for(:proof, @application.residency_proof_status) %>">
         <%= @application.residency_proof_status.titleize %>
       </span>
     </div>
@@ -249,16 +247,16 @@
           </div>
         <% else %>
            <div class="mb-3">
-            <div class="rounded-md bg-amber-50 p-3 border border-amber-300">
+            <div class="rounded-md bg-warning-50 p-3 border border-warning-300">
               <div class="flex">
                 <div class="flex-shrink-0">
-                  <svg class="h-5 w-5 text-amber-400" viewBox="0 0 20 20" fill="currentColor">
+                  <svg class="h-5 w-5 text-warning-400" viewBox="0 0 20 20" fill="currentColor">
                     <path fill-rule="evenodd" d="M8.485 3.495c.673-1.167 2.357-1.167 3.03 0l6.28 10.875c.673 1.167-.17 2.625-1.516 2.625H3.72c-1.347 0-2.189-1.458-1.515-2.625L8.485 3.495zM10 6a.75.75 0 01.75.75v3.5a.75.75 0 01-1.5 0v-3.5A.75.75 0 0110 6zm0 9a1 1 0 100-2 1 1 0 000 2z" clip-rule="evenodd" />
                   </svg>
                 </div>
                 <div class="ml-3">
-                  <p class="text-sm text-amber-800">
-                    <strong>Data inconsistency detected:</strong> Residency proof is marked as <%= @application.residency_proof_status.titleize %> but the file is not currently attached.
+                  <p class="text-sm text-warning-800">
+                    <strong>File missing:</strong> Residency proof is marked as <%= @application.residency_proof_status.titleize %>, but no file is attached.
                   </p>
                 </div>
               </div>
@@ -267,16 +265,16 @@
         <% end %>
       <% elsif @application.residency_proof_status == 'approved' %>
          <div class="mb-3">
-            <div class="rounded-md bg-amber-50 p-3 border border-amber-300">
+            <div class="rounded-md bg-warning-50 p-3 border border-warning-300">
               <div class="flex">
                 <div class="flex-shrink-0">
-                  <svg class="h-5 w-5 text-amber-400" viewBox="0 0 20 20" fill="currentColor">
+                  <svg class="h-5 w-5 text-warning-400" viewBox="0 0 20 20" fill="currentColor">
                     <path fill-rule="evenodd" d="M8.485 3.495c.673-1.167 2.357-1.167 3.03 0l6.28 10.875c.673 1.167-.17 2.625-1.516 2.625H3.72c-1.347 0-2.189-1.458-1.515-2.625L8.485 3.495zM10 6a.75.75 0 01.75.75v3.5a.75.75 0 01-1.5 0v-3.5A.75.75 0 0110 6zm0 9a1 1 0 100-2 1 1 0 000 2z" clip-rule="evenodd" />
                   </svg>
                 </div>
                 <div class="ml-3">
-                  <p class="text-sm text-amber-800">
-                    <strong>Data inconsistency detected:</strong> Residency proof is marked as <%= @application.residency_proof_status.titleize %> but the file is not currently attached.
+                  <p class="text-sm text-warning-800">
+                    <strong>File missing:</strong> Residency proof is marked as <%= @application.residency_proof_status.titleize %>, but no file is attached.
                   </p>
                 </div>
               </div>
@@ -341,7 +339,7 @@
           <div class="proof-history pl-4 border-l-2 border-gray-200">
             <div class="history-item mb-2">
               <p class="text-sm text-gray-600 mb-1">
-                <span class="text-blue-600">→</span> Submitted on
+                <span class="text-info-600">→</span> Submitted on
                 <%= @application.created_at.strftime("%B %d, %Y at %I:%M %p") %>
                 <span class="text-xs text-gray-500">(via application submission)</span>
               </p>
@@ -354,7 +352,7 @@
           <div class="proof-history pl-4 border-l-2 border-gray-200">
             <div class="history-item mb-2">
               <p class="text-sm text-gray-600 mb-1">
-                <span class="text-yellow-500">Note:</span> No detailed history available.
+                <span class="text-gray-500">Note:</span> No detailed history available.
               </p>
             </div>
           </div>
@@ -372,8 +370,8 @@
           <% if @application.proof_review_state("residency") == :approved_current %>
             <%= link_to document_download_path(@application.residency_proof, disposition: :inline),
                     target: "_blank",
-                    class: "inline-flex items-center px-4 py-2 border border-transparent rounded-md shadow-sm text-sm font-medium text-white bg-green-600 hover:bg-green-700 focus:outline-none" do %>
-              <svg class="h-5 w-5 mr-2" xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                    class: "btn btn-success" do %>
+              <svg class="h-5 w-5" xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" stroke="currentColor">
                 <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M15 12a3 3 0 11-6 0 3 3 0 016 0z" />
                 <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M2.458 12C3.732 7.943 7.523 5 12 5c4.478 0 8.268 2.943 9.542 7-1.274 4.057-5.064 7-9.542 7-4.477 0-8.268-2.943-9.542-7z" />
               </svg>
@@ -384,7 +382,7 @@
                      data-action="click->modal#open"
                      data-modal-id="residencyProofReviewModal"
                      data-proof-type="residency"
-                     class="inline-flex items-center px-4 py-2 border border-transparent rounded-md shadow-sm text-sm font-medium text-white <%= proof_review_button_class(@application, 'residency') %> focus:outline-none">
+                     class="btn <%= proof_review_button_class(@application, 'residency') %>">
                <%= proof_review_button_text(@application, "residency") %>
              </button>
            <% end %>
@@ -406,7 +404,6 @@
     </div>
   </div>
 
-  <!-- ID Proof Section -->
   <div class="border rounded-lg overflow-hidden bg-white">
     <div class="px-4 py-3 bg-gray-50 border-b flex items-center justify-between">
       <div class="flex items-center space-x-2">
@@ -415,7 +412,7 @@
         </svg>
         <h3 class="text-sm font-medium text-gray-900">ID Proof</h3>
       </div>
-      <span class="px-2 py-1 text-sm font-medium rounded-full <%= badge_class_for(:proof, @application.id_proof_status) %>">
+      <span class="<%= badge_class_for(:proof, @application.id_proof_status) %>">
         <%= @application.id_proof_status.titleize %>
       </span>
     </div>
@@ -450,16 +447,16 @@
           </div>
         <% else %>
            <div class="mb-3">
-            <div class="rounded-md bg-amber-50 p-3 border border-amber-300">
+            <div class="rounded-md bg-warning-50 p-3 border border-warning-300">
               <div class="flex">
                 <div class="flex-shrink-0">
-                  <svg class="h-5 w-5 text-amber-400" viewBox="0 0 20 20" fill="currentColor">
+                  <svg class="h-5 w-5 text-warning-400" viewBox="0 0 20 20" fill="currentColor">
                     <path fill-rule="evenodd" d="M8.485 3.495c.673-1.167 2.357-1.167 3.03 0l6.28 10.875c.673 1.167-.17 2.625-1.516 2.625H3.72c-1.347 0-2.189-1.458-1.515-2.625L8.485 3.495zM10 6a.75.75 0 01.75.75v3.5a.75.75 0 01-1.5 0v-3.5A.75.75 0 0110 6zm0 9a1 1 0 100-2 1 1 0 000 2z" clip-rule="evenodd" />
                   </svg>
                 </div>
                 <div class="ml-3">
-                  <p class="text-sm text-amber-800">
-                    <strong>Data inconsistency detected:</strong> ID proof is marked as <%= @application.id_proof_status.titleize %> but the file is not currently attached.
+                  <p class="text-sm text-warning-800">
+                    <strong>File missing:</strong> ID proof is marked as <%= @application.id_proof_status.titleize %>, but no file is attached.
                   </p>
                 </div>
               </div>
@@ -468,16 +465,16 @@
         <% end %>
       <% elsif @application.id_proof_status == 'approved' %>
          <div class="mb-3">
-            <div class="rounded-md bg-amber-50 p-3 border border-amber-300">
+            <div class="rounded-md bg-warning-50 p-3 border border-warning-300">
               <div class="flex">
                 <div class="flex-shrink-0">
-                  <svg class="h-5 w-5 text-amber-400" viewBox="0 0 20 20" fill="currentColor">
+                  <svg class="h-5 w-5 text-warning-400" viewBox="0 0 20 20" fill="currentColor">
                     <path fill-rule="evenodd" d="M8.485 3.495c.673-1.167 2.357-1.167 3.03 0l6.28 10.875c.673 1.167-.17 2.625-1.516 2.625H3.72c-1.347 0-2.189-1.458-1.515-2.625L8.485 3.495zM10 6a.75.75 0 01.75.75v3.5a.75.75 0 01-1.5 0v-3.5A.75.75 0 0110 6zm0 9a1 1 0 100-2 1 1 0 000 2z" clip-rule="evenodd" />
                   </svg>
                 </div>
                 <div class="ml-3">
-                  <p class="text-sm text-amber-800">
-                    <strong>Data inconsistency detected:</strong> ID proof is marked as <%= @application.id_proof_status.titleize %> but the file is not currently attached.
+                  <p class="text-sm text-warning-800">
+                    <strong>File missing:</strong> ID proof is marked as <%= @application.id_proof_status.titleize %>, but no file is attached.
                   </p>
                 </div>
               </div>
@@ -542,7 +539,7 @@
           <div class="proof-history pl-4 border-l-2 border-gray-200">
             <div class="history-item mb-2">
               <p class="text-sm text-gray-600 mb-1">
-                <span class="text-blue-600">→</span> Submitted on
+                <span class="text-info-600">→</span> Submitted on
                 <%= @application.created_at.strftime("%B %d, %Y at %I:%M %p") %>
                 <span class="text-xs text-gray-500">(via application submission)</span>
               </p>
@@ -555,7 +552,7 @@
           <div class="proof-history pl-4 border-l-2 border-gray-200">
             <div class="history-item mb-2">
               <p class="text-sm text-gray-600 mb-1">
-                <span class="text-yellow-500">Note:</span> No detailed history available.
+                <span class="text-gray-500">Note:</span> No detailed history available.
               </p>
             </div>
           </div>
@@ -573,8 +570,8 @@
           <% if @application.proof_review_state("id") == :approved_current %>
             <%= link_to document_download_path(@application.id_proof, disposition: :inline),
                     target: "_blank",
-                    class: "inline-flex items-center px-4 py-2 border border-transparent rounded-md shadow-sm text-sm font-medium text-white bg-green-600 hover:bg-green-700 focus:outline-none" do %>
-              <svg class="h-5 w-5 mr-2" xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                    class: "btn btn-success" do %>
+              <svg class="h-5 w-5" xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" stroke="currentColor">
                 <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M15 12a3 3 0 11-6 0 3 3 0 016 0z" />
                 <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M2.458 12C3.732 7.943 7.523 5 12 5c4.478 0 8.268 2.943 9.542 7-1.274 4.057-5.064 7-9.542 7-4.477 0-8.268-2.943-9.542-7z" />
               </svg>
@@ -585,7 +582,7 @@
                      data-action="click->modal#open"
                      data-modal-id="idProofReviewModal"
                      data-proof-type="id"
-                     class="inline-flex items-center px-4 py-2 border border-transparent rounded-md shadow-sm text-sm font-medium text-white <%= proof_review_button_class(@application, 'id') %> focus:outline-none">
+                     class="btn <%= proof_review_button_class(@application, 'id') %>">
                <%= proof_review_button_text(@application, "id") %>
              </button>
            <% end %>

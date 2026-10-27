@@ -7,10 +7,8 @@ class ProofReviewTest < ActiveSupport::TestCase
 
   def setup
     @admin = create(:admin)
-    # Create a simple application without using problematic traits
     @application = create(:application, :in_progress, skip_proofs: true)
 
-    # Manually attach proofs using direct methods to avoid the factory issues
     @application.income_proof.attach(
       io: StringIO.new('income proof content'),
       filename: 'income.pdf',
@@ -60,7 +58,6 @@ class ProofReviewTest < ActiveSupport::TestCase
   def test_updates_application_status_when_proof_is_approved
     @application.update!(income_proof_status: :not_reviewed)
 
-    # Create the proof review
     build(:proof_review,
           application: @application,
           admin: @admin,
@@ -70,7 +67,6 @@ class ProofReviewTest < ActiveSupport::TestCase
     # Manually update the application status
     @application.update!(income_proof_status: :approved)
 
-    # Verify the application status was updated
     @application.reload
     assert @application.income_proof_status_approved?
   end
@@ -78,7 +74,6 @@ class ProofReviewTest < ActiveSupport::TestCase
   def test_archives_application_after_max_rejections
     @application.update!(total_rejections: 8)
 
-    # Attach proof so it can be reviewed
     @application.income_proof.attach(
       io: StringIO.new('dummy'),
       filename: 'proof.pdf',

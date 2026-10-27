@@ -16,14 +16,14 @@
         <% resources.each do |resource| %>
           <li class="break-words">
             <% if resource.url.present? %>
-              <%= link_to resource.url, target: '_blank', rel: 'noopener noreferrer', class: 'text-indigo-700 underline' do %>
+              <%= link_to resource.url, target: '_blank', rel: 'noopener noreferrer', class: 'text-primary-700 underline' do %>
                 <span lang="<%= locale %>"><%= resource.title %></span><span class="sr-only"><%= t('product_resources.external_context',
                                                                                                    product: product_resource_product_label(product),
                                                                                                    language: product_resource_language(locale)) %></span>
               <% end %>
               <span aria-hidden="true" class="text-sm text-gray-600"><%= t('product_resources.external_link') %></span>
             <% else %>
-              <%= link_to rails_storage_proxy_path(resource.document, disposition: 'attachment'), class: 'text-indigo-700 underline' do %>
+              <%= link_to rails_storage_proxy_path(resource.document, disposition: 'attachment'), class: 'text-primary-700 underline' do %>
                 <span lang="<%= locale %>"><%= resource.title %></span><span class="sr-only"><%= t('product_resources.pdf_context',
                                                                                                    product: product_resource_product_label(product),
                                                                                                    size: number_to_human_size(resource.document.blob.byte_size),

@@ -1,8 +1,8 @@
 <nav aria-label="<%= t('training_history.title') %>" class="mx-auto flex max-w-7xl flex-wrap gap-4 px-4 pt-6">
-  <%= link_to t('training_history.devices'), constituent_portal_products_path, class: 'font-medium text-indigo-700 underline' %>
-  <%= link_to t('training_history.title'), constituent_portal_training_sessions_path, class: 'font-medium text-indigo-700 underline' %>
+  <%= link_to t('training_history.devices'), constituent_portal_products_path, class: 'font-medium text-primary-700 underline' %>
+  <%= link_to t('training_history.title'), constituent_portal_training_sessions_path, class: 'font-medium text-primary-700 underline' %>
 </nav>
-<a href="#main-content" class="sr-only focus:not-sr-only absolute top-0 left-0 bg-white p-2 text-blue-500">
+<a href="#main-content" class="skip-link">
   Skip to main content
 </a>
 
@@ -16,14 +16,14 @@
 
     <main id="main-content">
       <div class="max-w-7xl mx-auto sm:px-6 lg:px-8">
-          <div class="bg-white shadow overflow-hidden sm:rounded-lg p-6 mb-6">
+          <div class="card overflow-hidden rounded-none sm:rounded-lg p-6 mb-6">
             <div class="px-4 py-5 sm:px-6 space-y-6">
               <section aria-labelledby="my-application-status-title">
                 <h3 id="my-application-status-title" class="text-lg leading-6 font-medium text-gray-900">My Application</h3>
 
                 <% if @draft_application %>
                   <div class="mt-4 flex items-center">
-                    <span class="px-2 inline-flex text-xs leading-5 font-semibold rounded-full bg-yellow-100 text-yellow-800">
+                    <span class="badge badge-warning">
                       Draft
                     </span>
                     <span class="ml-4 text-sm text-gray-600">
@@ -31,7 +31,7 @@
                     </span>
                   </div>
                   <%= link_to "Continue Unsubmitted Application", edit_constituent_portal_application_path(@draft_application),
-                      class: "mt-3 inline-flex items-center px-4 py-2 border border-transparent text-sm font-medium rounded-md text-white bg-indigo-600 hover:bg-indigo-700" %>
+                      class: "btn btn-primary mt-3" %>
                 <% elsif @active_application %>
                   <div class="mt-4 flex items-center">
                     <%= application_status_badge(@active_application) %>
@@ -40,11 +40,11 @@
                     </span>
                   </div>
                   <%= link_to "View Application Details", constituent_portal_application_path(@active_application),
-                      class: "mt-3 inline-flex items-center px-4 py-2 border border-transparent text-sm font-medium rounded-md text-indigo-700 bg-indigo-100 hover:bg-indigo-200" %>
+                      class: "btn btn-secondary mt-3" %>
                 <% else %>
                   <p class="mt-2 text-sm text-gray-600">No active application found.</p>
                   <%= link_to "Apply for Myself", new_constituent_portal_application_path(for_self: true),
-                      class: "mt-3 inline-flex items-center px-4 py-2 border border-transparent text-sm font-medium rounded-md text-white bg-indigo-600 hover:bg-indigo-700" %>
+                      class: "btn btn-primary mt-3" %>
                 <% end %>
               </section>
 
@@ -59,41 +59,42 @@
                       <% if dependent_active_app %>
                         <div>
                           <%= link_to "View #{dependent.full_name}'s Application", constituent_portal_application_path(dependent_active_app),
-                              class: "inline-flex items-center px-4 py-2 border border-transparent text-sm font-medium rounded-md text-indigo-700 bg-indigo-100 hover:bg-indigo-200" %>
+                              class: "btn btn-secondary" %>
                         </div>
                       <% elsif dependent_draft_app %>
                         <div>
                           <%= link_to "Continue #{dependent.full_name}'s Draft", edit_constituent_portal_application_path(dependent_draft_app),
-                              class: "inline-flex items-center px-4 py-2 border border-transparent text-sm font-medium rounded-md text-yellow-700 bg-yellow-100 hover:bg-yellow-200" %>
+                              class: "inline-flex items-center px-4 py-2 border border-transparent text-sm font-medium " \
+                                     "rounded-md text-warning-700 bg-warning-100 hover:bg-warning-200" %>
                         </div>
                       <% else %>
                         <div>
                           <%= link_to "Apply for #{dependent.full_name}", new_constituent_portal_application_path(user_id: dependent.id, for_self: false),
-                              class: "inline-flex items-center px-4 py-2 border border-transparent text-sm font-medium rounded-md text-indigo-700 bg-indigo-100 hover:bg-indigo-200" %>
+                              class: "btn btn-secondary" %>
                         </div>
                       <% end %>
                     <% end %>
                   </div>
                   <div class="mt-3">
                     <%= link_to "Add Another Dependent", new_constituent_portal_dependent_path,
-                        class: "inline-flex items-center px-4 py-2 border border-gray-300 text-sm font-medium rounded-md text-gray-700 bg-white hover:bg-gray-50" %>
+                        class: "btn btn-outline" %>
                   </div>
                 <% else %>
                   <h4 class="mt-3 text-sm font-medium text-gray-900">Want to apply for a dependent?</h4>
                   <p class="mt-2 text-sm text-gray-600">You must first add dependents to your account before applying on their behalf.</p>
                   <%= link_to "Add a Dependent", new_constituent_portal_dependent_path,
-                      class: "mt-3 inline-flex items-center px-4 py-2 border border-gray-300 text-sm font-medium rounded-md text-gray-700 bg-white hover:bg-gray-50" %>
+                      class: "btn btn-outline mt-3" %>
                 <% end %>
               </section>
             </div>
           </div>
 
         <div class="grid grid-cols-1 gap-4 sm:grid-cols-2 lg:grid-cols-3">
-          <div class="bg-white overflow-hidden shadow rounded-lg">
+          <div class="card overflow-hidden">
             <div class="p-5">
               <div class="flex items-center">
                 <div class="flex-shrink-0">
-                  <svg aria-hidden="true" class="h-6 w-6 text-gray-400" xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                  <svg aria-hidden="true" class="h-6 w-6 text-gray-500" xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" stroke="currentColor">
                     <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 12h6m-6 4h6m2 5H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z" />
                   </svg>
                 </div>
@@ -116,18 +117,18 @@
             <div class="bg-gray-50 px-5 py-3">
               <% if @active_application %>
                 <%= link_to "View Details", constituent_portal_application_path(@active_application),
-                      class: "text-sm text-indigo-700 hover:text-indigo-900" %>
+                      class: "text-sm text-primary-700 hover:text-primary-900" %>
               <% else %>
                 <span class="text-sm text-gray-500">No active application</span>
               <% end %>
             </div>
           </div>
 
-          <div class="bg-white overflow-hidden shadow rounded-lg">
+          <div class="card overflow-hidden">
             <div class="p-5">
               <div class="flex items-center">
                 <div class="flex-shrink-0">
-                  <svg aria-hidden="true" class="h-6 w-6 text-gray-400" xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                  <svg aria-hidden="true" class="h-6 w-6 text-gray-500" xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" stroke="currentColor">
                     <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M15 5v2m0 4v2m0 4v2M5 5a2 2 0 00-2 2v3a2 2 0 110 4v3a2 2 0 002 2h14a2 2 0 002-2v-3a2 2 0 110-4V7a2 2 0 00-2-2H5z" />
                   </svg>
                 </div>
@@ -165,7 +166,7 @@
         </div>
 
         <% if @recent_purchases.any? %>
-          <section aria-labelledby="dashboard-orders-heading" class="mt-6 bg-white shadow overflow-hidden sm:rounded-lg">
+          <section aria-labelledby="dashboard-orders-heading" class="mt-6 card overflow-hidden rounded-none sm:rounded-lg">
             <div class="px-4 py-5 border-b border-gray-200 sm:px-6">
               <h3 id="dashboard-orders-heading" class="text-lg leading-6 font-medium text-gray-900"><%= t('fulfillment.orders.heading') %></h3>
             </div>
@@ -185,7 +186,7 @@
                     <%= fulfillment_status_badge(purchase) %>
                     <%= link_to t('fulfillment.orders.view_link'),
                                 constituent_portal_application_path(purchase.voucher.application, anchor: 'orders-and-shipping'),
-                                class: 'text-sm text-indigo-700 hover:text-indigo-900',
+                                class: 'text-sm text-primary-700 hover:text-primary-900',
                                 aria: { label: t('fulfillment.orders.view_link_label', vendor: purchase.vendor.business_name,
                                                                                        date: purchase_date(purchase)) } %>
                   </div>
@@ -196,13 +197,13 @@
         <% end %>
 
         <% if current_user&.dependents.any? || @managed_applications&.any? %>
-          <div class="mt-6 bg-white shadow overflow-hidden sm:rounded-lg">
+          <div class="mt-6 card overflow-hidden rounded-none sm:rounded-lg">
             <div class="px-4 py-5 border-b border-gray-200 sm:px-6">
               <h3 class="text-lg leading-6 font-medium text-gray-900">My Dependents</h3>
             </div>
             <div class="px-4 py-5 sm:p-6">
               <% if @managed_applications&.any? %>
-                <h4 class="text-md font-medium text-gray-900 mb-4">Applications I'm Managing</h4>
+                <h4 class="text-base font-medium text-gray-900 mb-4">Applications I'm Managing</h4>
                 <div class="overflow-hidden border-b border-gray-200 sm:rounded-lg mb-6">
                   <table class="min-w-full divide-y divide-gray-200">
                     <thead class="bg-gray-50">
@@ -226,7 +227,7 @@
                             <%= application.application_date&.strftime("%b %d, %Y") || application.created_at.strftime("%b %d, %Y") %>
                           </td>
                           <td class="px-6 py-4 whitespace-nowrap text-right text-sm font-medium">
-                            <%= link_to "View", constituent_portal_application_path(application), class: "text-indigo-600 hover:text-indigo-900" %>
+                            <%= link_to "View", constituent_portal_application_path(application), class: "text-primary-600 hover:text-primary-900" %>
                           </td>
                         </tr>
                       <% end %>
@@ -236,7 +237,7 @@
               <% end %>
 
               <% if current_user.dependents.any? %>
-                <h4 class="text-md font-medium text-gray-900 mb-4">My Dependents</h4>
+                <h4 class="text-base font-medium text-gray-900 mb-4">My Dependents</h4>
                 <ul role="list" class="divide-y divide-gray-200">
                   <% current_user.dependents.each do |dependent| %>
                     <li class="py-4 flex items-center justify-between">
@@ -244,9 +245,9 @@
                         <div class="flex items-center">
                           <p class="text-sm font-medium text-gray-900"><%= dependent.full_name %></p>
                           <%= link_to 'View', constituent_portal_dependent_path(dependent),
-                              class: "ml-2 text-xs text-indigo-600 hover:text-indigo-900" %>
+                              class: "ml-2 text-xs text-primary-600 hover:text-primary-900" %>
                           <%= link_to 'Edit', edit_constituent_portal_dependent_path(dependent),
-                              class: "ml-2 text-xs text-indigo-600 hover:text-indigo-900" %>
+                              class: "ml-2 text-xs text-primary-600 hover:text-primary-900" %>
                         </div>
                         <% guardian_relationship = GuardianRelationship.find_by(guardian_user: current_user, dependent_user: dependent) %>
                         <% if guardian_relationship %>
@@ -258,13 +259,14 @@
                         <% dependent_draft = @managed_drafts.find { |app| app.user_id == dependent.id } %>
                         <% if dependent_active %>
                           <%= link_to "View Application", constituent_portal_application_path(dependent_active),
-                              class: "inline-flex items-center px-3 py-1.5 border border-transparent text-xs font-medium rounded-full shadow-sm text-white bg-indigo-600 hover:bg-indigo-700" %>
+                              class: "btn btn-primary btn-sm rounded-full" %>
                         <% elsif dependent_draft %>
                           <%= link_to "Continue Draft", edit_constituent_portal_application_path(dependent_draft),
-                              class: "inline-flex items-center px-3 py-1.5 border border-transparent text-xs font-medium rounded-full shadow-sm text-white bg-yellow-600 hover:bg-yellow-700" %>
+                              class: "inline-flex items-center px-3 py-1.5 border border-transparent text-xs font-medium " \
+                                     "rounded-full shadow-elevation-1 text-white bg-warning-600 hover:bg-warning-700" %>
                         <% else %>
                           <%= link_to "Start Application", new_constituent_portal_application_path(user_id: dependent.id, for_self: false),
-                              class: "inline-flex items-center px-3 py-1.5 border border-transparent text-xs font-medium rounded-full shadow-sm text-white bg-green-700 hover:bg-green-800" %>
+                              class: "btn btn-success btn-sm rounded-full" %>
                         <% end %>
                       </div>
                     </li>
@@ -275,14 +277,14 @@
               <% end %>
               <div class="mt-4">
                 <%= link_to "Add New Dependent", new_constituent_portal_dependent_path,
-                    class: "inline-flex items-center px-4 py-2 border border-transparent text-sm font-medium rounded-md text-indigo-700 bg-indigo-100 hover:bg-indigo-200" %>
+                    class: "btn btn-secondary" %>
               </div>
             </div>
           </div>
         <% end %>
 
         <% if current_user&.guardians.any? %>
-          <div class="mt-6 bg-white shadow overflow-hidden sm:rounded-lg">
+          <div class="mt-6 card overflow-hidden rounded-none sm:rounded-lg">
             <div class="px-4 py-5 border-b border-gray-200 sm:px-6">
               <h3 class="text-lg leading-6 font-medium text-gray-900">My Guardians</h3>
             </div>
@@ -309,7 +311,7 @@
         <% end %>
 
         <% if @active_application %>
-          <div class="mt-6 bg-white shadow overflow-hidden sm:rounded-lg">
+          <div class="mt-6 card overflow-hidden rounded-none sm:rounded-lg">
             <div class="px-4 py-5 border-b border-gray-200 sm:px-6">
               <h3 class="text-lg leading-6 font-medium text-gray-900">
                 Document Status
@@ -334,16 +336,16 @@
               <div>
                 <div class="flex items-center justify-between">
                   <div>
-                    <h4 class="text-md font-medium text-gray-900">Income Proof</h4>
+                    <h4 class="text-base font-medium text-gray-900">Income Proof</h4>
                     <% if @income_proof_status == "approved" %>
                       <div class="flex items-center mt-2">
-                        <div class="px-2 inline-flex text-xs leading-5 font-semibold rounded-full bg-green-100 text-green-800">
+                        <div class="badge badge-success">
                           Approved
                         </div>
                       </div>
                     <% elsif @income_proof_status == "rejected" %>
                       <div class="flex items-center mt-2">
-                        <div class="px-2 inline-flex text-xs leading-5 font-semibold rounded-full bg-red-100 text-red-800">
+                        <div class="badge badge-danger">
                           Rejected
                         </div>
                         <% if @income_proof_rejection_reason.present? %>
@@ -359,7 +361,7 @@
                       <% end %>
                     <% else %>
                       <div class="flex items-center mt-2">
-                        <div class="px-2 inline-flex text-xs leading-5 font-semibold rounded-full bg-blue-100 text-blue-800">
+                        <div class="badge badge-info">
                           Pending Review
                         </div>
                       </div>
@@ -369,7 +371,7 @@
                   <% if @can_resubmit_income_proof %>
                     <%= link_to "Upload New Income Proof",
                         new_proof_constituent_portal_application_path(@active_application, proof_type: "income"),
-                        class: "inline-flex items-center px-4 py-2 border border-transparent text-sm font-medium rounded-md text-white bg-indigo-600 hover:bg-indigo-700" %>
+                        class: "btn btn-primary" %>
                   <% end %>
                 </div>
               </div>
@@ -378,16 +380,16 @@
               <div>
                 <div class="flex items-center justify-between">
                   <div>
-                    <h4 class="text-md font-medium text-gray-900">Residency Proof</h4>
+                    <h4 class="text-base font-medium text-gray-900">Residency Proof</h4>
                     <% if @residency_proof_status == "approved" %>
                       <div class="flex items-center mt-2">
-                        <div class="px-2 inline-flex text-xs leading-5 font-semibold rounded-full bg-green-100 text-green-800">
+                        <div class="badge badge-success">
                           Approved
                         </div>
                       </div>
                     <% elsif @residency_proof_status == "rejected" %>
                       <div class="flex items-center mt-2">
-                        <div class="px-2 inline-flex text-xs leading-5 font-semibold rounded-full bg-red-100 text-red-800">
+                        <div class="badge badge-danger">
                           Rejected
                         </div>
                         <% if @residency_proof_rejection_reason.present? %>
@@ -403,7 +405,7 @@
                       <% end %>
                     <% else %>
                       <div class="flex items-center mt-2">
-                        <div class="px-2 inline-flex text-xs leading-5 font-semibold rounded-full bg-blue-100 text-blue-800">
+                        <div class="badge badge-info">
                           Pending Review
                         </div>
                       </div>
@@ -413,7 +415,7 @@
                   <% if @can_resubmit_residency_proof %>
                     <%= link_to "Upload New Residency Proof",
                         new_proof_constituent_portal_application_path(@active_application, proof_type: "residency"),
-                        class: "inline-flex items-center px-4 py-2 border border-transparent text-sm font-medium rounded-md text-white bg-indigo-600 hover:bg-indigo-700" %>
+                        class: "btn btn-primary" %>
                   <% end %>
                 </div>
               </div>
@@ -421,16 +423,16 @@
               <div>
                 <div class="flex items-center justify-between">
                   <div>
-                    <h4 class="text-md font-medium text-gray-900">ID Proof</h4>
+                    <h4 class="text-base font-medium text-gray-900">ID Proof</h4>
                     <% if @id_proof_status == "approved" %>
                       <div class="flex items-center mt-2">
-                        <div class="px-2 inline-flex text-xs leading-5 font-semibold rounded-full bg-green-100 text-green-800">
+                        <div class="badge badge-success">
                           Approved
                         </div>
                       </div>
                     <% elsif @id_proof_status == "rejected" %>
                       <div class="flex items-center mt-2">
-                        <div class="px-2 inline-flex text-xs leading-5 font-semibold rounded-full bg-red-100 text-red-800">
+                        <div class="badge badge-danger">
                           Rejected
                         </div>
                         <% if @id_proof_rejection_reason.present? %>
@@ -446,7 +448,7 @@
                       <% end %>
                     <% else %>
                       <div class="flex items-center mt-2">
-                        <div class="px-2 inline-flex text-xs leading-5 font-semibold rounded-full bg-blue-100 text-blue-800">
+                        <div class="badge badge-info">
                           Pending Review
                         </div>
                       </div>
@@ -456,7 +458,7 @@
                   <% if @can_resubmit_id_proof %>
                     <%= link_to "Upload New ID Proof",
                         new_proof_constituent_portal_application_path(@active_application, proof_type: "id"),
-                        class: "inline-flex items-center px-4 py-2 border border-transparent text-sm font-medium rounded-md text-white bg-indigo-600 hover:bg-indigo-700" %>
+                        class: "btn btn-primary" %>
                   <% end %>
                 </div>
               </div>
@@ -466,7 +468,7 @@
 
         <% if @managed_applications&.any? %>
           <% @managed_applications.where.not(status: :draft).each do |managed_app| %>
-            <div class="mt-6 bg-white shadow overflow-hidden sm:rounded-lg">
+            <div class="mt-6 card overflow-hidden rounded-none sm:rounded-lg">
               <div class="px-4 py-5 border-b border-gray-200 sm:px-6">
                 <h3 class="text-lg leading-6 font-medium text-gray-900">
                   Document Status - <%= managed_app.user.full_name %>
@@ -480,16 +482,16 @@
                 <div>
                   <div class="flex items-center justify-between">
                     <div>
-                      <h4 class="text-md font-medium text-gray-900">Income Proof</h4>
+                      <h4 class="text-base font-medium text-gray-900">Income Proof</h4>
                       <% if managed_app.income_proof_status == "approved" %>
                         <div class="flex items-center mt-2">
-                          <div class="px-2 inline-flex text-xs leading-5 font-semibold rounded-full bg-green-100 text-green-800">
+                          <div class="badge badge-success">
                             Approved
                           </div>
                         </div>
                       <% elsif managed_app.income_proof_status == "rejected" %>
                         <div class="flex items-center mt-2">
-                          <div class="px-2 inline-flex text-xs leading-5 font-semibold rounded-full bg-red-100 text-red-800">
+                          <div class="badge badge-danger">
                             Rejected
                           </div>
                           <% income_rejection_reason = get_latest_rejection_reason(managed_app, 'income') %>
@@ -507,7 +509,7 @@
                         <% end %>
                       <% else %>
                         <div class="flex items-center mt-2">
-                          <div class="px-2 inline-flex text-xs leading-5 font-semibold rounded-full bg-blue-100 text-blue-800">
+                          <div class="badge badge-info">
                             Pending Review
                           </div>
                         </div>
@@ -518,7 +520,7 @@
                     <% if can_resubmit_proof?(managed_app, 'income', max_submissions) %>
                       <%= link_to "Upload New Income Proof",
                           new_proof_constituent_portal_application_path(managed_app, proof_type: "income"),
-                          class: "inline-flex items-center px-4 py-2 border border-transparent text-sm font-medium rounded-md text-white bg-indigo-600 hover:bg-indigo-700" %>
+                          class: "btn btn-primary" %>
                     <% end %>
                   </div>
                 </div>
@@ -527,16 +529,16 @@
                 <div>
                   <div class="flex items-center justify-between">
                     <div>
-                      <h4 class="text-md font-medium text-gray-900">Residency Proof</h4>
+                      <h4 class="text-base font-medium text-gray-900">Residency Proof</h4>
                       <% if managed_app.residency_proof_status == "approved" %>
                         <div class="flex items-center mt-2">
-                          <div class="px-2 inline-flex text-xs leading-5 font-semibold rounded-full bg-green-100 text-green-800">
+                          <div class="badge badge-success">
                             Approved
                           </div>
                         </div>
                       <% elsif managed_app.residency_proof_status == "rejected" %>
                         <div class="flex items-center mt-2">
-                          <div class="px-2 inline-flex text-xs leading-5 font-semibold rounded-full bg-red-100 text-red-800">
+                          <div class="badge badge-danger">
                             Rejected
                           </div>
                           <% residency_rejection_reason = get_latest_rejection_reason(managed_app, 'residency') %>
@@ -554,7 +556,7 @@
                         <% end %>
                       <% else %>
                         <div class="flex items-center mt-2">
-                          <div class="px-2 inline-flex text-xs leading-5 font-semibold rounded-full bg-blue-100 text-blue-800">
+                          <div class="badge badge-info">
                             Pending Review
                           </div>
                         </div>
@@ -564,7 +566,7 @@
                     <% if can_resubmit_proof?(managed_app, 'residency', max_submissions) %>
                       <%= link_to "Upload New Residency Proof",
                           new_proof_constituent_portal_application_path(managed_app, proof_type: "residency"),
-                          class: "inline-flex items-center px-4 py-2 border border-transparent text-sm font-medium rounded-md text-white bg-indigo-600 hover:bg-indigo-700" %>
+                          class: "btn btn-primary" %>
                     <% end %>
                   </div>
                 </div>
@@ -572,16 +574,16 @@
                 <div>
                   <div class="flex items-center justify-between">
                     <div>
-                      <h4 class="text-md font-medium text-gray-900">ID Proof</h4>
+                      <h4 class="text-base font-medium text-gray-900">ID Proof</h4>
                       <% if managed_app.id_proof_status == "approved" %>
                         <div class="flex items-center mt-2">
-                          <div class="px-2 inline-flex text-xs leading-5 font-semibold rounded-full bg-green-100 text-green-800">
+                          <div class="badge badge-success">
                             Approved
                           </div>
                         </div>
                       <% elsif managed_app.id_proof_status == "rejected" %>
                         <div class="flex items-center mt-2">
-                          <div class="px-2 inline-flex text-xs leading-5 font-semibold rounded-full bg-red-100 text-red-800">
+                          <div class="badge badge-danger">
                             Rejected
                           </div>
                           <% id_rejection_reason = get_latest_rejection_reason(managed_app, 'id') %>
@@ -599,7 +601,7 @@
                         <% end %>
                       <% else %>
                         <div class="flex items-center mt-2">
-                          <div class="px-2 inline-flex text-xs leading-5 font-semibold rounded-full bg-blue-100 text-blue-800">
+                          <div class="badge badge-info">
                             Pending Review
                           </div>
                         </div>
@@ -609,7 +611,7 @@
                     <% if can_resubmit_proof?(managed_app, 'id', max_submissions) %>
                       <%= link_to "Upload New ID Proof",
                           new_proof_constituent_portal_application_path(managed_app, proof_type: "id"),
-                          class: "inline-flex items-center px-4 py-2 border border-transparent text-sm font-medium rounded-md text-white bg-indigo-600 hover:bg-indigo-700" %>
+                          class: "btn btn-primary" %>
                     <% end %>
                   </div>
                 </div>
@@ -620,14 +622,14 @@
 
         <% if @active_application && @active_application.status_approved? %>
           <div class="mt-6 grid grid-cols-1 gap-4 sm:grid-cols-2">
-            <div class="bg-white shadow overflow-hidden sm:rounded-lg">
+            <div class="card overflow-hidden rounded-none sm:rounded-lg">
               <div class="px-4 py-5 border-b border-gray-200 sm:px-6">
                 <h3 class="text-lg leading-6 font-medium text-gray-900">Waiting Period</h3>
               </div>
               <div class="px-4 py-5 sm:p-6">
                 <% if @waiting_period_months && @waiting_period_months > 0 %>
                   <div class="flex items-center">
-                    <svg aria-hidden="true" class="h-6 w-6 text-yellow-500" xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                    <svg aria-hidden="true" class="h-6 w-6 text-warning-500" xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" stroke="currentColor">
                       <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 8v4l3 3m6-3a9 9 0 11-18 0 9 9 0 0118 0z" />
                     </svg>
                     <p class="ml-3 text-sm text-gray-700">
@@ -636,7 +638,7 @@
                   </div>
                 <% else %>
                   <div class="flex items-center">
-                    <svg aria-hidden="true" class="h-6 w-6 text-green-500" xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                    <svg aria-hidden="true" class="h-6 w-6 text-success-500" xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" stroke="currentColor">
                       <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M5 13l4 4L19 7" />
                     </svg>
                     <p class="ml-3 text-sm text-gray-700">
@@ -647,7 +649,7 @@
               </div>
             </div>
 
-            <div class="bg-white shadow overflow-hidden sm:rounded-lg" data-testid="training-card">
+            <div class="card overflow-hidden rounded-none sm:rounded-lg" data-testid="training-card">
               <div class="px-4 py-5 border-b border-gray-200 sm:px-6">
                 <h3 class="text-lg leading-6 font-medium text-gray-900">Training Sessions</h3>
               </div>
@@ -677,7 +679,7 @@
                             <div class="mt-1 text-gray-700">
                               <p class="text-sm"><%= t('training_history.language', language: localized_contact_label(:languages, session.summary_locale)) %></p>
                               <%= simple_format(session.constituent_summary, { lang: session.summary_locale }, wrapper_tag: 'p') %>
-                              <%= link_to t('training_history.open'), constituent_portal_training_session_path(session), class: 'text-indigo-700 underline' %>
+                              <%= link_to t('training_history.open'), constituent_portal_training_session_path(session), class: 'text-primary-700 underline' %>
                             </div>
                           </div>
                         <% end %>
@@ -701,32 +703,32 @@
                   </p>
 
                   <% if @active_application.training_request_pending? %>
-                    <div class="mb-4 rounded-md bg-blue-50 p-4">
-                      <p class="text-sm text-blue-700">
+                    <div class="mb-4 rounded-md bg-info-50 p-4">
+                      <p class="text-sm text-info-700">
                         <%= t('applications.training_requests.messages.duplicate_pending', locale: current_user.effective_locale) %>
                       </p>
                     </div>
-                    <button type="button" disabled class="inline-flex cursor-not-allowed items-center rounded-md border border-gray-300 bg-gray-100 px-4 py-2 text-sm font-medium text-gray-500 shadow-sm">
+                    <button type="button" disabled class="inline-flex cursor-not-allowed items-center rounded-md border border-gray-300 bg-gray-100 px-4 py-2 text-sm font-medium text-gray-500 shadow-elevation-1">
                       Training Session Requested
                     </button>
                   <% elsif @active_training_session.present? %>
                     <% if @active_training_session.status_requested? %>
-                      <div class="mb-4 rounded-md bg-blue-50 p-4">
-                        <p class="text-sm font-medium text-blue-800 mb-1">
+                      <div class="mb-4 rounded-md bg-info-50 p-4">
+                        <p class="text-sm font-medium text-info-800 mb-1">
                           <%= t('training_history.session', number: @active_training_session.appointment_number) %> &mdash; Awaiting Scheduling
                         </p>
-                        <p class="text-sm text-blue-700">
+                        <p class="text-sm text-info-700">
                           Assigned to
                           <span class="font-medium"><%= @active_training_session.trainer.full_name %></span>.
                           No date has been set yet &mdash; your trainer will contact you to schedule.
                         </p>
                       </div>
                     <% elsif @active_training_session.scheduled_for.present? %>
-                      <div class="mb-4 rounded-md bg-blue-50 p-4">
-                        <p class="text-sm font-medium text-blue-800 mb-1">
+                      <div class="mb-4 rounded-md bg-info-50 p-4">
+                        <p class="text-sm font-medium text-info-800 mb-1">
                           <%= t('training_history.session', number: @active_training_session.appointment_number) %> &mdash; Scheduled
                         </p>
-                        <p class="text-sm text-blue-700">
+                        <p class="text-sm text-info-700">
                           With
                           <span class="font-medium"><%= @active_training_session.trainer.full_name %></span>
                           on
@@ -734,24 +736,24 @@
                         </p>
                       </div>
                     <% else %>
-                      <div class="mb-4 rounded-md bg-blue-50 p-4">
-                        <p class="text-sm font-medium text-blue-800 mb-1">
+                      <div class="mb-4 rounded-md bg-info-50 p-4">
+                        <p class="text-sm font-medium text-info-800 mb-1">
                           <%= t('training_history.session', number: @active_training_session.appointment_number) %> &mdash; In Progress
                         </p>
-                        <p class="text-sm text-blue-700">
+                        <p class="text-sm text-info-700">
                           With
                           <span class="font-medium"><%= @active_training_session.trainer.full_name %></span>.
                         </p>
                       </div>
                     <% end %>
-                    <button type="button" disabled class="inline-flex cursor-not-allowed items-center rounded-md border border-gray-300 bg-gray-100 px-4 py-2 text-sm font-medium text-gray-500 shadow-sm">
+                    <button type="button" disabled class="inline-flex cursor-not-allowed items-center rounded-md border border-gray-300 bg-gray-100 px-4 py-2 text-sm font-medium text-gray-500 shadow-elevation-1">
                       Training Assigned
                     </button>
                   <% elsif @remaining_training_sessions > 0 %>
                     <%= button_to "Request Training",
                         { controller: "constituent_portal/applications", action: "request_training", id: @active_application.id },
                         method: :post,
-                        class: "inline-flex items-center px-4 py-2 border border-transparent text-sm font-medium rounded-md text-white bg-indigo-600 hover:bg-indigo-700" %>
+                        class: "btn btn-primary" %>
                   <% else %>
                     <p class="text-sm text-gray-700">
                       You have used all of your available training sessions.
@@ -774,7 +776,7 @@
           </div>
         <% end %>
 
-        <div class="mt-6 bg-white shadow overflow-hidden sm:rounded-lg">
+        <div class="mt-6 card overflow-hidden rounded-none sm:rounded-lg">
           <div class="px-4 py-5 border-b border-gray-200 sm:px-6">
             <h3 class="text-lg leading-6 font-medium text-gray-900">Recent Activity</h3>
           </div>

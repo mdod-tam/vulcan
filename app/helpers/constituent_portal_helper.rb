@@ -1,10 +1,10 @@
 module ConstituentPortalHelper
   # Per-form key identifying one dependent-creation submission.
   #
-  # Reuses the submitted value when the form is re-rendered after a failure, so a guardian who
-  # corrects a validation error and resubmits is still making the *same* request. Nothing was
-  # persisted by the failed attempt, so the server sees an unspent key and creates normally;
-  # carrying it forward matters only if that attempt turns out to have committed after all.
+  # The submitted value is reused when the form is re-rendered after a failure, so a guardian who
+  # corrects a validation error and resubmits is making the same request. The failed attempt
+  # persisted nothing, so the server sees an unspent key and creates normally. Carrying the key
+  # forward matters only if that attempt did commit.
   def portal_creation_key_for_form
     submitted = params[:portal_creation_key].to_s
     return submitted if submitted.match?(ConstituentPortal::DependentsController::PORTAL_CREATION_KEY_FORMAT)

@@ -1,15 +1,10 @@
-<%# Status box partial for mailers %>
-<%# Usage: %>
-<%# <%= render 'shared/mailers/status_box',  %>
-<%#      status: :success, # or :warning, :error, :info %>
-<%#      title: "Optional Title", %>
-<%#      message: "Your message here" %>
+<%# Status box for mailers. Locals: status (:success, :warning, :error or :info; default :info), title and message.
+    A block or content_for(:status_box_content) adds body content. %>
 
 <% status = local_assigns.fetch(:status, :info).to_sym %>
 <% title = local_assigns.fetch(:title, status.to_s.capitalize) %>
 
-<% 
-  # Define background color based on status
+<%
   bg_color = case status
     when :success then "#ebf8ff"
     when :warning then "#fffaf0"
@@ -18,8 +13,7 @@
   end
 %>
 
-<% 
-  # Define border color based on status
+<%
   border_color = case status
     when :success then "#90cdf4"
     when :warning then "#fbd38d"
@@ -28,8 +22,7 @@
   end
 %>
 
-<% 
-  # Define text color based on status
+<%
   text_color = case status
     when :success then "#2b6cb0"
     when :warning then "#c05621"
@@ -38,8 +31,7 @@
   end
 %>
 
-<% 
-  # Define icon based on status
+<%
   icon = case status
     when :success then "✓"
     when :warning then "⚠"

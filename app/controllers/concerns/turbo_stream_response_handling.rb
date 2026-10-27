@@ -41,7 +41,6 @@ module TurboStreamResponseHandling
     turbo_message ||= html_message
 
     respond_to do |format|
-      # HTML keeps the :notice flash key because existing tests expect it.
       format.html { redirect_to html_redirect_path, notice: html_message }
 
       format.turbo_stream do

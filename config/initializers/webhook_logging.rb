@@ -1,6 +1,5 @@
 # frozen_string_literal: true
 
-# config/initializers/webhook_logging.rb
 ActiveSupport::Notifications.subscribe 'webhook_received' do |*args|
   event = ActiveSupport::Notifications::Event.new(*args)
 

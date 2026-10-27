@@ -13,7 +13,7 @@ class VoucherVerificationServiceTest < ActiveSupport::TestCase
     Policy.stubs(:get).with('voucher_verification_max_attempts').returns(3)
   end
 
-  # Date.parse read 09/10/1980 as October 9 and counted the right answer as a mismatch.
+  # Date.parse would read 09/10/1980 as October 9 and count the right answer as a mismatch.
   test 'a month-first date of birth verifies in every accepted spelling' do
     %w[09/10/1980 9/10/1980 09-10-1980 09101980 1980-09-10].each do |spelling|
       session = {}
@@ -34,7 +34,7 @@ class VoucherVerificationServiceTest < ActiveSupport::TestCase
     assert_equal 1, throttle.failed_attempts
   end
 
-  # This used to call an undefined method and raise NoMethodError.
+  # Guards against a NoMethodError on unreadable input.
   test 'unreadable input is reported without using an attempt' do
     result = verify('9/10/80')
 
@@ -56,7 +56,7 @@ class VoucherVerificationServiceTest < ActiveSupport::TestCase
     end
   end
 
-  # Before this, the lock was never reached, and a correct guess always succeeded.
+  # The lockout is checked before the answer, so a correct guess cannot succeed during it.
   test 'a correct date during the lockout is refused and uses no attempt' do
     3.times { verify(WRONG_DOB) }
 

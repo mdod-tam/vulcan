@@ -30,6 +30,23 @@ class DuplicateReviewCaseTest < ActiveSupport::TestCase
     )
   end
 
+  test 'the enum open scope and predicate separate open cases from resolved ones, and a new case defaults to open' do
+    assert_predicate DuplicateReviewCase.new, :open?
+    assert_includes DuplicateReviewCase.open, @review_case
+    assert_predicate @review_case, :open?
+
+    @review_case.update!(
+      status: :resolved_ignored,
+      resolution_determination: :keep_separate,
+      resolution_rationale: 'confirmed different people',
+      resolved_by: @admin,
+      resolved_at: Time.current
+    )
+
+    assert_not_includes DuplicateReviewCase.open, @review_case
+    assert_not_predicate @review_case, :open?
+  end
+
   test 'for_participant finds both the subject and every candidate without changing for_subject' do
     assert_includes DuplicateReviewCase.for_participant(@subject), @review_case
     assert_includes DuplicateReviewCase.for_participant(@candidate), @review_case
@@ -90,8 +107,8 @@ class DuplicateReviewCaseTest < ActiveSupport::TestCase
     assert_not @review_case.merge_eligible_determination?
   end
 
-  # metadata['reason_codes'] was already held to DuplicateReviewCaseCandidate::MATCH_REASONS;
-  # resolution_metadata validated only its keys, and that is where admin-supplied codes land.
+  # Admin-supplied reason codes land in resolution_metadata, so its codes are validated against the resolution
+  # vocabulary, as metadata['reason_codes'] is against DuplicateReviewCaseCandidate::MATCH_REASONS.
   test 'resolution metadata rejects reason codes outside the resolution vocabulary' do
     @review_case.resolution_metadata = { 'reason_codes' => ['name_dob', 'free text'] }
 

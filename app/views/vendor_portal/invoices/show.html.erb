@@ -4,15 +4,13 @@
       <h1 class="text-3xl font-bold text-gray-900">Invoice <%= @invoice.invoice_number %></h1>
       <div class="mt-4 flex flex-wrap gap-3 md:mt-0">
         <%= link_to 'Back to Invoices', vendor_portal_invoices_path,
-                    class: 'inline-flex items-center px-4 py-2 border border-gray-300 rounded-md shadow-sm text-sm font-medium ' \
-                           'text-gray-700 bg-white hover:bg-gray-50 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-indigo-500' %>
+                    class: 'btn btn-outline' %>
         <%= link_to 'Back to Dashboard', vendor_portal_dashboard_path,
-                    class: 'inline-flex items-center px-4 py-2 border border-gray-300 rounded-md shadow-sm text-sm font-medium ' \
-                           'text-gray-700 bg-white hover:bg-gray-50 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-indigo-500' %>
+                    class: 'btn btn-outline' %>
       </div>
     </div>
 
-    <section aria-labelledby="invoice-details-heading" class="bg-white shadow sm:rounded-lg p-6">
+    <section aria-labelledby="invoice-details-heading" class="bg-white shadow-elevation-2 sm:rounded-lg p-6">
       <h2 id="invoice-details-heading" class="text-lg font-medium text-gray-900 mb-4">Billing and payment</h2>
       <%= render 'invoices/payment_details', invoice: @invoice, audience: :vendor %>
     </section>
@@ -20,11 +18,11 @@
     <section aria-labelledby="invoice-purchases-heading" class="mt-8">
       <h2 id="invoice-purchases-heading" class="text-xl font-semibold text-gray-900 mb-4">Voucher redemptions on this invoice</h2>
       <% if @invoice.voucher_transactions.any? %>
-        <ul role="list" class="bg-white shadow sm:rounded-lg divide-y divide-gray-200">
+        <ul role="list" class="bg-white shadow-elevation-2 sm:rounded-lg divide-y divide-gray-200">
           <% @invoice.voucher_transactions.order(:processed_at).each do |transaction| %>
             <li class="px-4 py-4 sm:px-6 flex flex-wrap justify-between gap-2 text-sm">
               <%= link_to "Voucher redemption #{transaction.reference_number}", vendor_portal_transaction_path(transaction),
-                          class: 'font-medium text-indigo-600 hover:text-indigo-500' %>
+                          class: 'font-medium text-primary-600 hover:text-primary-500' %>
               <span class="text-gray-700"><%= number_to_currency(transaction.amount) %> · <%= l(transaction.processed_at.to_date, format: :long) %></span>
             </li>
           <% end %>

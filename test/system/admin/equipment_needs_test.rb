@@ -175,7 +175,7 @@ module Admin
       system_test_sign_in(admin)
       visit admin_application_path(application, anchor: 'equipment', return_context: context)
       within '#equipment' do
-        assert_selector 'span.bg-amber-100.text-amber-800', text: 'Needs a catalog product'
+        assert_selector 'span.badge.badge-warning', text: 'Needs a catalog product'
         assert_selector '.sr-only', text: 'Fulfillment Status:', visible: :all
         assert_text report.recommendation_notes
         take_screenshot('equipment-needs-outside-catalog-pending', html: true, full: true)
@@ -193,7 +193,7 @@ module Admin
       assert_current_path admin_equipment_index_path(context)
       visit admin_application_path(application, anchor: 'equipment', return_context: context)
       within '#equipment' do
-        assert_selector 'span.bg-gray-100.text-gray-800', text: 'No equipment needed'
+        assert_selector 'span.badge.badge-neutral', text: 'No equipment needed'
         assert_selector '.sr-only', text: 'Fulfillment Status:', visible: :all
         assert_text 'No new devices are currently needed.'
         assert_no_text 'Needs a catalog product'

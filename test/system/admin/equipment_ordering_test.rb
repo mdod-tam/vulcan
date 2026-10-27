@@ -27,7 +27,7 @@ module Admin
       click_button 'Filter'
       assert_current_path admin_equipment_index_path, ignore_query: true
       assert_equal context, Rack::Utils.parse_nested_query(URI.parse(page.current_url).query).slice(*context.keys.map(&:to_s)).symbolize_keys
-      assert_selector 'nav[aria-label="Equipment queues"] a[aria-current=page].bg-indigo-700', text: 'Needs Ordering'
+      assert_selector 'nav[aria-label="Equipment queues"] a[aria-current=page].bg-primary-700', text: 'Needs Ordering'
       assert_text '4 units across 2 applications'
       assert_no_selector 'section[data-equipment-selection-target="group"]', text: excluded.product.name
       group = find('section[data-equipment-selection-target="group"]', text: phone.name)
@@ -149,7 +149,7 @@ module Admin
       take_screenshot('equipment-empty-po-detail', html: true, full: true)
       visit admin_application_path(application, anchor: 'equipment')
       within '#equipment' do
-        assert_selector 'span.bg-amber-100.text-amber-800', text: 'Needs Ordering'
+        assert_selector 'span.badge.badge-warning', text: 'Needs Ordering'
         assert_selector '.sr-only', text: 'Fulfillment Status:', visible: :all
       end
       take_screenshot('equipment-application-needs-ordering-badge', html: true, full: true)
@@ -162,9 +162,9 @@ module Admin
       assert_equal 0, need.reload.remaining_quantity
       page.refresh
       within '#equipment' do
-        assert_selector 'span.rounded-full.bg-blue-100.text-blue-800', text: 'Ordered'
+        assert_selector 'span.badge.badge-info', text: 'Ordered'
         assert_selector '.sr-only', text: 'Fulfillment Status:', visible: :all
-        items.each { |item| assert_selector "#equipment-item-#{item.id} span.bg-blue-100.text-blue-800", text: 'Ordered' }
+        items.each { |item| assert_selector "#equipment-item-#{item.id} span.badge.badge-info", text: 'Ordered' }
       end
       take_screenshot('equipment-application-ordered-badge', html: true, full: true)
       visit admin_equipment_index_path(tab: 'needs_ordering', product_id: product.id)
@@ -185,16 +185,16 @@ module Admin
         assert_selector 'p', text: /Date PO sent:.* · #{status}\z/
         assert_equal index + 1, order.equipment_items.shipped.count
         items.each_with_index do |device, device_index|
-          color, label = device_index <= index ? %w[green Shipped] : %w[blue Ordered]
-          assert_selector "#equipment-item-#{device.id} span.bg-#{color}-100.text-#{color}-800", text: label
+          variant, label = device_index <= index ? %w[success Shipped] : %w[info Ordered]
+          assert_selector "#equipment-item-#{device.id} span.badge-#{variant}", text: label
         end
         take_screenshot("equipment-po-#{index.zero? ? 'partially-shipped' : 'shipped'}", html: true, full: true)
       end
       visit admin_application_path(application, anchor: 'equipment')
       within '#equipment' do
-        assert_selector 'span.rounded-full.bg-green-100.text-green-800', text: 'Shipped'
+        assert_selector 'span.badge.badge-success', text: 'Shipped'
         assert_selector '.sr-only', text: 'Fulfillment Status:', visible: :all
-        items.each { |item| assert_selector "#equipment-item-#{item.id} span.bg-green-100.text-green-800", text: 'Shipped' }
+        items.each { |item| assert_selector "#equipment-item-#{item.id} span.badge.badge-success", text: 'Shipped' }
       end
       take_screenshot('equipment-application-shipped-badge', html: true, full: true)
 
@@ -205,7 +205,7 @@ module Admin
       within find_by_id('recent-completed-heading').find(:xpath, '../..') do
         assert_text application.user.full_name
         assert_link 'View', href: evaluators_evaluation_path(report)
-        assert_selector 'span.rounded-full.bg-green-100.text-green-800', text: 'Shipped'
+        assert_selector 'span.badge.badge-success', text: 'Shipped'
         assert_selector '.sr-only', text: 'Fulfillment Status:', visible: :all
       end
       take_screenshot('equipment-evaluator-shipped-badge', html: true, full: true)

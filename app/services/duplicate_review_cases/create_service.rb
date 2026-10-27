@@ -81,7 +81,7 @@ module DuplicateReviewCases
         ineligibility_error = participant_ineligibility_error
         raise IneligibleParticipantError, ineligibility_error if ineligibility_error
 
-        scope = inline_intake? ? DuplicateReviewCase.all : DuplicateReviewCase.open_cases
+        scope = inline_intake? ? DuplicateReviewCase.all : DuplicateReviewCase.open
         existing = scope.find_by(deduplication_key: deduplication_key)
         if existing
           sync_subject_review_flag!(existing) unless existing.resolved?

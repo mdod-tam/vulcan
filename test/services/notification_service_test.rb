@@ -149,8 +149,7 @@ class NotificationServiceTest < ActiveSupport::TestCase
   end
 
   test 'create_and_deliver! does NOT create an Event record directly' do
-    # AuditEventService.log is now called by the methods that use NotificationService,
-    # not by NotificationService itself. So, this test should assert no direct Event creation.
+    # Audit events come from the callers of NotificationService, not from NotificationService itself.
     assert_no_difference 'Event.count' do
       NotificationService.create_and_deliver!(
         type: :proof_approved,
@@ -210,7 +209,6 @@ class NotificationServiceTest < ActiveSupport::TestCase
   end
 
   test 'resolve_mailer correctly maps actions to mailers' do
-    # Test a few examples
     proof_approved_notif = Notification.new(action: 'proof_approved')
     mailer, method = NotificationService.send(:resolve_mailer, proof_approved_notif)
     assert_nil mailer

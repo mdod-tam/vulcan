@@ -1,5 +1,4 @@
 name: Rails Test
-#simple workflow tests to check if app runs
 on:
   push:
     branches: [ "main" ]
@@ -11,14 +10,14 @@ jobs:
     runs-on: ubuntu-latest
     services:
       postgres:
-        image: postgres:17-alpine
+        image: postgres:18-alpine
         ports:
           - "5432:5432"
         env:
           POSTGRES_DB: rails_test
           POSTGRES_USER: rails
           POSTGRES_PASSWORD: password
-        #waits for postgres to start to avoid any login failures
+        # Jobs start only after Postgres passes this health check.
         options: >-
           --health-cmd pg_isready
           --health-interval 10s
@@ -44,7 +43,7 @@ jobs:
 
       - name: Install JS dependencies
         run: yarn install
-      #app uses solidqueue and on start looks at database.yml, so to get around this overwrite the file to be local and not dedicated
+      # Solid Queue reads the queue database from database.yml, so CI writes a file that points both databases at the Postgres service.
       - name: Overwrite database.yml for CI
         run: |
           cat <<EOF > config/database.yml
@@ -71,9 +70,6 @@ jobs:
       - name: Set up database
         run: bin/rails db:setup
 
-      - name: Seed email templates
-        run: bundle exec rake db:seed_manual_email_templates
-
       - name: Precompile assets
         run: bin/rails assets:precompile
 
@@ -83,6 +79,3 @@ jobs:
       - name: run Brakeman
         run: bundle exec brakeman -q
         
-      #test:system commented out due to errors with test files
-      #- name: Run system test
-      #  run: bin/rails test:system

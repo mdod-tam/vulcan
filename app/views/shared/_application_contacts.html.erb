@@ -13,7 +13,7 @@
   <dt class="text-sm font-medium text-gray-500"><%= t('application_contact.email') %></dt>
   <dd class="mt-1 text-sm text-gray-900 sm:col-span-2 sm:mt-0">
     <% if context.email.present? %>
-      <%= mail_to context.email, class: 'break-words text-indigo-600 underline' %>
+      <%= mail_to context.email, class: 'break-words text-primary-600 underline' %>
       <p class="mt-1 text-gray-600"><%= context.email_owner.full_name %> — <%= localized_contact_label(:languages, context.email_locale) %></p>
     <% else %>
       <%= t('application_contact.not_provided') %>
@@ -24,7 +24,7 @@
   <dt class="text-sm font-medium text-gray-500"><%= t('application_contact.phone') %></dt>
   <dd class="mt-1 text-sm text-gray-900 sm:col-span-2 sm:mt-0">
     <% if context.phone.present? %>
-      <%= link_to context.phone, "tel:#{context.phone}", class: 'text-indigo-600 underline' %>
+      <%= link_to context.phone, "tel:#{context.phone}", class: 'text-primary-600 underline' %>
       <p class="mt-1 text-gray-600"><%= context.phone_owner.full_name %> — <%= localized_contact_label(:phone_methods, context.phone_type) %></p>
       <p class="text-gray-600"><%= t('application_contact.language') %>: <%= localized_contact_label(:languages, context.phone_locale) %></p>
     <% else %>
@@ -75,10 +75,10 @@
         <% end %>
       </p>
       <% if context.alternate_contact_phone.present? %>
-        <p><%= link_to context.alternate_contact_phone, "tel:#{context.alternate_contact_phone}", class: 'text-indigo-600 underline' %></p>
+        <p><%= link_to context.alternate_contact_phone, "tel:#{context.alternate_contact_phone}", class: 'text-primary-600 underline' %></p>
       <% end %>
       <% if context.alternate_contact_email.present? %>
-        <p><%= mail_to context.alternate_contact_email, class: 'break-words text-indigo-600 underline' %></p>
+        <p><%= mail_to context.alternate_contact_email, class: 'break-words text-primary-600 underline' %></p>
       <% end %>
       <p class="mt-2 text-gray-600"><%= t('applications.alternate_contact.admin_authorization_help') %></p>
     <% else %>

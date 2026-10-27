@@ -10,12 +10,10 @@ module Evaluations
     end
 
     def call
-      @evaluation.application.with_lock do
-        @evaluation.with_lock do
-          validate_access!
-          @evaluation.update!(working_notes: @params[:working_notes].presence)
-          record_change! if @evaluation.saved_change_to_working_notes?
-        end
+      @evaluation.with_actor_and_application_lock(@actor) do
+        validate_access!
+        @evaluation.update!(working_notes: @params[:working_notes].presence)
+        record_change! if @evaluation.saved_change_to_working_notes?
       end
 
       success('Working notes saved.', { evaluation: @evaluation })
@@ -26,7 +24,6 @@ module Evaluations
     private
 
     def validate_access!
-      raise ArgumentError, 'Only the assigned evaluator can update this evaluation.' unless @evaluation.evaluator_id == @actor&.id
       raise ArgumentError, 'Working notes are read-only after report submission.' unless @evaluation.working_notes_editable?
     end
 

@@ -1,12 +1,12 @@
 <div class="container mx-auto max-w-4xl px-4 py-8">
   <h1 class="text-2xl font-bold"><%= t('training_history.title') %></h1>
-  <%= link_to t('training_history.back'), constituent_portal_dashboard_path, class: 'mt-3 inline-block text-indigo-700 underline' %>
+  <%= link_to t('training_history.back'), constituent_portal_dashboard_path, class: 'mt-3 inline-block text-primary-700 underline' %>
   <% if @training_sessions.empty? %><p class="mt-6"><%= t('training_history.empty') %></p><% end %>
   <% @training_sessions.each do |session| %>
-    <article class="mt-6 rounded-lg bg-white p-6 shadow">
+    <article class="card mt-6 p-6">
       <h2 class="text-lg font-semibold"><%= session.application.user.full_name %> — <%= t('training_history.session', number: session.appointment_number) %></h2>
       <p><%= l(session.completed_at, format: :long) %></p>
-      <%= link_to t('training_history.open'), constituent_portal_training_session_path(session), class: 'mt-3 inline-block text-indigo-700 underline' %>
+      <%= link_to t('training_history.open'), constituent_portal_training_session_path(session), class: 'mt-3 inline-block text-primary-700 underline' %>
     </article>
   <% end %>
 </div>

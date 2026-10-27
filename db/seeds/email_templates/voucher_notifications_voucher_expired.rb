@@ -1,8 +1,5 @@
 # frozen_string_literal: true
 
-# Seed File for "voucher_notifications_voucher_expired"
-# EmailTemplate.find_by(name: 'voucher_notifications_voucher_expired').deliver(user: user, voucher: voucher)
-# --------------------------------------------------
 EmailTemplate.create_or_find_by!(name: 'voucher_notifications_voucher_expired', format: :text, locale: 'en') do |template|
   template.subject = 'Your Voucher Has Expired'
   template.description = 'Sent to the constituent when their assigned voucher has expired.'

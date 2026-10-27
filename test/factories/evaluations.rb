@@ -1,19 +1,19 @@
 # frozen_string_literal: true
 
-# test/factories/evaluations.rb
 FactoryBot.define do
   factory :evaluation do
-    evaluator
+    # Assignees must be persisted, even when the evaluation itself is only built.
+    evaluator factory: %i[evaluator], strategy: :create
     application factory: %i[application approved with_all_proofs]
     constituent { application.user }
     evaluation_date { 1.day.from_now }
     evaluation_type { :initial }
     status { :requested }
+    assignment_operation_id { SecureRandom.uuid }
     notes { 'Default evaluation notes' }
     location { 'Main Office' }
     needs { 'Additional support for mobility.' }
 
-    # Default attendees
     attendees do
       [
         { 'name' => 'John Doe', 'relationship' => 'Self' },
@@ -21,19 +21,15 @@ FactoryBot.define do
       ]
     end
 
-    # Set up default products
     after(:build) do |evaluation|
-      # Create products directly
       ipad_air = create(:product, name: 'iPad Air')
       ipad_mini = create(:product, name: 'iPad Mini')
 
-      # Set up products tried
       evaluation.products_tried = [
         { 'product_id' => ipad_air.id, 'reaction' => 'Satisfied' },
         { 'product_id' => ipad_mini.id, 'reaction' => 'Neutral' }
       ]
 
-      # Set recommended products
       evaluation.recommended_product_ids = [ipad_air.id, ipad_mini.id]
     end
 

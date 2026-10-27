@@ -94,6 +94,19 @@ class NotificationComposerTest < ActiveSupport::TestCase
     assert_not_includes message, '/admin/applications/'
   end
 
+  test 'a transfer tells the new trainer which training moved and tells the constituent who has it now' do
+    trainer = create(:trainer, first_name: 'Jane', last_name: 'Trainer')
+    session = create(:training_session, application: @application, trainer: trainer)
+
+    to_trainer = NotificationComposer.generate('trainer_reassigned', session, @admin, {}, viewer: trainer)
+    to_constituent = NotificationComposer.generate('training_trainer_changed', session, @admin, { 'trainer_name' => 'Jane Trainer' })
+
+    assert_includes to_trainer, 'training for John Doe'
+    assert_includes to_trainer, "/trainers/training_sessions/#{session.id}"
+    assert_includes to_trainer, 'was transferred to you.'
+    assert_includes to_constituent, 'Your training is now with Jane Trainer.'
+  end
+
   test 'generate message for training_requested' do
     message = NotificationComposer.generate(
       'training_requested',
@@ -302,7 +315,7 @@ class NotificationComposerTest < ActiveSupport::TestCase
     assert result.include?("Application ##{@application.id} (John Doe)")
     assert result.include?('<a')
     assert result.include?("aria-label=\"View Application ##{@application.id} (John Doe)\"")
-    assert result.include?('focus:ring')
+    assert result.include?('text-primary-600')
     assert result.include?('</a>')
   end
 
@@ -310,6 +323,20 @@ class NotificationComposerTest < ActiveSupport::TestCase
     composer = NotificationComposer.new('test', @application, @admin, {}, viewer: @constituent)
 
     assert_includes composer.send(:application_reference), "/constituent_portal/applications/#{@application.id}"
+  end
+
+  test 'application_reference links the current trainer, including an evaluator granted training, to the training session' do
+    granted = create(:evaluator)
+    create(:role_capability, user: granted, capability: 'can_train')
+    @application.update_columns(assigned_trainer_id: granted.id)
+    session = create(:training_session, application: @application, trainer: granted)
+
+    reference = NotificationComposer.new('test', @application, @admin, {}, viewer: granted).send(:application_reference)
+    assert_includes reference, "/trainers/training_sessions/#{session.id}"
+
+    @application.update_columns(assigned_trainer_id: @admin.id)
+    admin_reference = NotificationComposer.new('test', @application, @admin, {}, viewer: @admin).send(:application_reference)
+    assert_includes admin_reference, "/admin/applications/#{@application.id}"
   end
 
   test 'application label uses constituent full name fallback when user is missing' do

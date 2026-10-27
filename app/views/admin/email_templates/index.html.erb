@@ -1,4 +1,4 @@
-<a href="#main-content" class="sr-only focus:not-sr-only focus:absolute focus:top-2 focus:left-2 focus:p-2 focus:bg-indigo-600 focus:text-white focus:z-50 focus:rounded">
+<a href="#main-content" class="skip-link">
   Skip to main content
 </a>
 <main class="container mx-auto px-4 py-8" role="main" id="main-content" tabindex="-1">
@@ -21,7 +21,7 @@
       </div>
     </div>
 
-    <section id="email-delivery" aria-labelledby="email-delivery-heading" class="bg-white rounded-lg shadow mb-8 p-6">
+    <section id="email-delivery" aria-labelledby="email-delivery-heading" class="card mb-8 p-6">
       <h2 id="email-delivery-heading" class="text-xl font-semibold text-gray-900"><%= email_delivery_t('heading') %></h2>
       <p class="mt-1 text-sm text-gray-700 max-w-prose"><%= email_delivery_t('intro') %></p>
       <p class="mt-1 text-sm text-gray-700 max-w-prose"><%= email_delivery_t('test_send.explanation') %></p>
@@ -77,7 +77,7 @@
     </section>
 
     <% @control_panel.pairs_by_category.each do |category, pairs| %>
-      <section aria-labelledby="templates-<%= category %>-heading" class="bg-white rounded-lg shadow mb-6">
+      <section aria-labelledby="templates-<%= category %>-heading" class="card mb-6">
         <h2 id="templates-<%= category %>-heading" class="px-6 pt-5 text-lg font-semibold text-gray-900">
           <%= EmailDelivery::ControlPanel.category_label(category) %>
         </h2>
@@ -98,7 +98,7 @@
                   <%= email_control_state_badge(saved_enabled: pair.saved_enabled, suppressed_by: pair.suppressed_by,
                                                 category: pair.category, mixed: pair.mixed) %>
                   <% if pair.rows.any?(&:locale_needs_sync?) %>
-                    <span class="inline-flex items-center rounded-full bg-amber-100 px-2.5 py-0.5 text-xs font-medium text-amber-800">
+                    <span class="badge badge-warning">
                       Needs Sync
                     </span>
                   <% end %>
@@ -126,7 +126,7 @@
     <% end %>
 
     <% if @control_panel.fragments.any? %>
-      <section aria-labelledby="fragments-heading" class="bg-white rounded-lg shadow mb-6">
+      <section aria-labelledby="fragments-heading" class="card mb-6">
         <h2 id="fragments-heading" class="px-6 pt-5 text-lg font-semibold text-gray-900"><%= email_delivery_t('fragments_heading') %></h2>
         <p class="px-6 text-sm text-gray-700 max-w-prose"><%= email_delivery_t('fragments_help') %></p>
         <ul role="list" class="divide-y divide-gray-200">
@@ -148,7 +148,7 @@
     <% end %>
 
     <% if @control_panel.pairs.empty? && @control_panel.fragments.empty? %>
-      <div class="p-6 text-center bg-white rounded-lg shadow">
+      <div class="card p-6 text-center">
         <p class="text-gray-600">No email templates found in the database.</p>
       </div>
     <% end %>

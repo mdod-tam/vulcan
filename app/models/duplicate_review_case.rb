@@ -82,7 +82,6 @@ class DuplicateReviewCase < ApplicationRecord
   validate :terminal_case_immutable, on: :update
   before_destroy :reject_resolved_case_destroy
 
-  scope :open_cases, -> { where(status: statuses[:open]) }
   scope :resolved_cases, -> { where(status: RESOLVED_STATUSES.map { |s| statuses[s] }) }
   scope :for_subject, ->(user) { where(subject_user: user) }
   scope :for_participant, lambda { |user|
@@ -128,10 +127,6 @@ class DuplicateReviewCase < ApplicationRecord
       self.class.strict_post_import_pairs.where(id: id)
           .pick(:subject_user_id, 'duplicate_review_case_candidates.candidate_user_id')
     end
-  end
-
-  def open?
-    status == 'open'
   end
 
   def resolved?

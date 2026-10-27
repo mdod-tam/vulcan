@@ -157,7 +157,8 @@ module Applications
             voucher_assigned voucher_redeemed voucher_expired voucher_cancelled
             application_created application_post_creation_step_failed
             duplicate_review_case_resolved
-            evaluator_assigned evaluator_reassigned trainer_assigned
+            evaluator_assigned evaluator_reassigned trainer_assigned trainer_unassigned trainer_reassigned
+            trainer_access_removed evaluator_access_removed
             evaluation_working_notes_updated
             medical_certification_requested medical_certification_status_changed
             alternate_contact_updated medical_provider_info_updated proof_secure_submission_refused

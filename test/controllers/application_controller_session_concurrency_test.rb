@@ -2,18 +2,16 @@
 
 require 'test_helper'
 
-# Focused concurrency evidence for the session-creation boundary (plan section 4):
-# ApplicationController#_create_and_set_session_cookie -- the single chokepoint for both
-# password sign-in and 2FA completion -- and the merge service must serialize through
+# Concurrency tests for the session-creation boundary:
+# ApplicationController#_create_and_set_session_cookie, the single chokepoint for both
+# password sign-in and 2FA completion, and the merge service must serialize through
 # User.lock_for_merge_integrity! on the target user.
 #
-# Exercises the real, private controller method directly (via a minimal
-# ActionDispatch::TestRequest/TestResponse pair, not a full HTTP dispatch) rather than
-# through routing, since session creation lives in a controller action rather than a plain
-# service object. This is real production code, not a reimplementation -- see the spike that
-# established the technique works: calling the method directly returns the same Session
-# record (or nil) the real sign-in/2FA flows would get. Both sides of every race are real
-# production code, matching the rest of this concurrency suite.
+# The tests call the real, private controller method directly with a minimal
+# ActionDispatch::TestRequest/TestResponse pair instead of dispatching through routing, because
+# session creation lives in a controller method rather than a service object. The method returns
+# the same Session record (or nil) the sign-in and 2FA flows get. Both sides of every race are
+# production code.
 class ApplicationControllerSessionConcurrencyTest < ActiveSupport::TestCase
   self.use_transactional_tests = false
 
@@ -137,10 +135,10 @@ class ApplicationControllerSessionConcurrencyTest < ActiveSupport::TestCase
 
   def run_create_session(user)
     controller = ApplicationController.new
-    # set_request!/set_response! (not the public request=/response= setters): Metal#response=
-    # deliberately forces performed? to true as a side effect, which is harmless here since
-    # _create_and_set_session_cookie never renders or redirects, but kept consistent with the
-    # other controller-embedded concurrency tests in this suite that do.
+    # set_request!/set_response! rather than the public request=/response= setters, because
+    # Metal#response= forces performed? to true. That would be harmless here, since
+    # _create_and_set_session_cookie never renders or redirects. The other controller concurrency
+    # tests do render or redirect, and this one uses the same setters for consistency.
     controller.set_request!(ActionDispatch::TestRequest.create)
     controller.set_response!(ActionDispatch::TestResponse.new)
     controller.send(:_create_and_set_session_cookie, User.find(user.id))

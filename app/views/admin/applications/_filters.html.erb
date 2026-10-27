@@ -1,13 +1,13 @@
 <div class="flex flex-wrap justify-between mb-4">
   <div class="flex space-x-4 mb-2 md:mb-0">
     <%= link_to admin_applications_path(sort: 'status', direction: params[:direction] == 'asc' ? 'desc' : 'asc'),
-        class: "inline-flex items-center px-4 py-2 border border-gray-300 rounded-md shadow-sm text-sm font-medium text-gray-700 bg-white hover:bg-gray-50 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-indigo-500",
+        class: "btn btn-outline",
         aria: { label: "Sort applications by status" } do %>
       <span>Sort by Status</span>
     <% end %>
 
     <%= link_to admin_applications_path(sort: 'application_date', direction: params[:direction] == 'asc' ? 'desc' : 'asc'),
-        class: "inline-flex items-center px-4 py-2 border border-gray-300 rounded-md shadow-sm text-sm font-medium text-gray-700 bg-white hover:bg-gray-50 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-indigo-500",
+        class: "btn btn-outline",
         aria: { label: "Sort applications by date" } do %>
       <span>Sort by Date</span>
     <% end %>
@@ -16,26 +16,26 @@
   <div class="flex space-x-4 mb-2 md:mb-0">
     <% if params[:filter].present? %>
       <%= link_to admin_applications_path,
-          class: "inline-flex items-center px-4 py-2 border border-gray-300 rounded-md shadow-sm text-sm font-medium text-gray-700 bg-white hover:bg-gray-50 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-indigo-500",
+          class: "btn btn-outline",
           aria: { label: "View all applications" } do %>
         <span>View All Applications</span>
       <% end %>
     <% end %>
 
     <%= link_to admin_applications_path(filter: "proofs_needing_review"),
-        class: "inline-flex items-center px-4 py-2 border border-gray-300 rounded-md shadow-sm text-sm font-medium text-gray-700 bg-white hover:bg-gray-50 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-indigo-500 #{params[:filter] == 'proofs_needing_review' ? 'bg-gray-50' : ''}",
+        class: "btn btn-outline #{params[:filter] == 'proofs_needing_review' ? 'bg-gray-50' : ''}",
         aria: { label: "Show applications needing proof review" } do %>
       <span>Proofs Needing Review</span>
     <% end %>
 
     <%= link_to admin_applications_path(filter: "awaiting_medical_response"),
-        class: "inline-flex items-center px-4 py-2 border border-gray-300 rounded-md shadow-sm text-sm font-medium text-gray-700 bg-white hover:bg-gray-50 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-indigo-500 #{params[:filter] == 'awaiting_medical_response' ? 'bg-gray-50' : ''}",
+        class: "btn btn-outline #{params[:filter] == 'awaiting_medical_response' ? 'bg-gray-50' : ''}",
         aria: { label: "Show applications awaiting medical response" } do %>
       <span>Awaiting Medical Response</span>
     <% end %>
 
     <%= link_to admin_applications_path(filter: "pending_provider_info"),
-        class: "inline-flex items-center px-4 py-2 border border-gray-300 rounded-md shadow-sm text-sm font-medium text-gray-700 bg-white hover:bg-gray-50 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-indigo-500 #{params[:filter] == 'pending_provider_info' ? 'bg-gray-50' : ''}",
+        class: "btn btn-outline #{params[:filter] == 'pending_provider_info' ? 'bg-gray-50' : ''}",
         aria: { label: t('admin.applications.filters.pending_provider_info_aria') } do %>
       <span><%= t('admin.applications.filters.pending_provider_info') %></span>
     <% end %>

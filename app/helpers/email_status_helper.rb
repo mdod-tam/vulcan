@@ -19,7 +19,7 @@ module EmailStatusHelper
 
   def delivery_status_badge(notification)
     presenter = DeliveryStatusPresenter.new(notification, attempt: notification.email_delivery_attempts.max_by(&:id))
-    content_tag(:span, presenter.label, class: "inline-flex rounded px-2 py-1 text-xs #{presenter.badge_class}")
+    badge(presenter.label, presenter.badge_variant)
   end
 
   def delivery_status_text(notification, locale: I18n.locale)

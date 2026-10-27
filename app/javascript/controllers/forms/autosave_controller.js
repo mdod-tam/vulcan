@@ -2,7 +2,7 @@ import { Controller } from "@hotwired/stimulus"
 import { railsRequest } from "../../services/rails_request"
 import { setVisible } from "../../utils/visibility"
 
-const STATUS_COLORS = { saving: "text-indigo-600", saved: "text-green-700", failed: "text-red-600", unsaved: "text-red-600" }
+const STATUS_COLORS = { saving: "text-primary-600", saved: "text-success-700", failed: "text-danger-600", unsaved: "text-danger-600" }
 const CONTROLS = 'input:not([type=hidden]):not([type=submit]):not([type=button]), select, textarea'
 
 // The server orders writes by page and edit revision. Departure requests can overlap ordinary saves.
@@ -221,7 +221,7 @@ export default class extends Controller {
   createFieldError(element) {
     const error = document.createElement("p")
     error.id = fieldErrorId(element)
-    error.className = "field-error-message text-red-600 text-sm mt-1"
+    error.className = "field-error-message text-danger-600 text-sm mt-1"
     element.insertAdjacentElement("afterend", error)
     element.setAttribute("aria-describedby", [element.getAttribute("aria-describedby"), error.id].filter(Boolean).join(" "))
     return error

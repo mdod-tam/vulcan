@@ -87,6 +87,7 @@ en:
         canceled in the print queue.
     reasons:
       trainer_coverage_changed: This message was not sent because the recipient is no longer the assigned trainer.
+      assignment_superseded: This message was not sent because the assignment it announced has since changed.
       all_disabled: All communications are switched off.
       global_disabled: Email is switched off.
       letters_disabled: Letters are switched off.

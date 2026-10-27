@@ -13,7 +13,7 @@ class WelcomeController < ApplicationController
     @has_second_factor = @user.second_factor_enabled?
     @dashboard_path = _dashboard_for(@user)
 
-    # If user already has 2FA set up, redirect to dashboard
+    # A user with a second factor goes to the dashboard unless the page is forced.
     return unless @has_second_factor && params[:force] != 'true'
 
     redirect_to @dashboard_path

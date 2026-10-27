@@ -14,6 +14,7 @@ module Applications
 
     def call
       outcomes = []
+      covered = false
       application.with_lock do
         validate_request!
         application.update!(training_requested_at: Time.current)
@@ -21,14 +22,16 @@ module Applications
           action: 'training_session_requested', actor: current_user, auditable: application,
           metadata: { constituent_id: application.user_id, application_id: application.id }
         )
-        audience = application.assigned_trainer ? 'assigned_trainer' : 'assignment_queue_admin'
-        recipients = application.assigned_trainer ? [application.assigned_trainer] : User.admins.to_a
+        covered = application.assigned_trainer&.assignable_trainer? || false
+        # A covering trainer who lost training access cannot take the request, so the admin queue gets it.
+        audience = covered ? 'assigned_trainer' : 'assignment_queue_admin'
+        recipients = covered ? [application.assigned_trainer] : User.admins.to_a
         ActiveRecord.after_all_transactions_commit do
           recipients.each { |recipient| outcomes << notify(recipient, audience: audience) }
           Application.expire_training_request_metrics_cache!
         end
       end
-      success(message(application.assigned_trainer_id.present? ? :submitted_covered : :submitted), { notification_outcomes: outcomes })
+      success(message(covered ? :submitted_covered : :submitted), { notification_outcomes: outcomes })
     rescue ArgumentError => e
       failure(e.message)
     rescue ActiveRecord::RecordInvalid

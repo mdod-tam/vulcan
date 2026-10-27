@@ -4,22 +4,20 @@ require 'test_helper'
 
 class TwoFactorAuthTest < ActiveSupport::TestCase
   setup do
-    # Replace fixture accessor with FactoryBot, using unique email to avoid uniqueness constraint errors
     @user = create(:user,
                    email: "2fa-test-#{SecureRandom.hex(4)}@example.com",
                    email_verified: true,
                    verified: true)
     @session = {}
 
-    # Set up minimal test credentials
     setup_webauthn_credential
     setup_totp_credential
   end
 
   test 'stores a webauthn challenge' do
-    challenge = SecureRandom.hex(16) # Generate a test challenge
+    challenge = SecureRandom.hex(16)
 
-    stored_challenge = TwoFactorAuth.store_challenge( # Use TwoFactorAuth
+    stored_challenge = TwoFactorAuth.store_challenge(
       @session,
       :webauthn,
       challenge,
@@ -34,16 +32,14 @@ class TwoFactorAuthTest < ActiveSupport::TestCase
   end
 
   test 'stores an sms challenge' do
-    # Create credential for this test with unique phone number to avoid uniqueness constraint errors
     sms_credential = @user.sms_credentials.create!(
       phone_number: "555-#{rand(100..999)}-#{rand(1000..9999)}",
       last_sent_at: Time.current,
       verified_at: Time.current
     )
 
-    # Create a simple string challenge instead of a BCrypt digest
     challenge = 'sms_challenge_digest'
-    stored_challenge = TwoFactorAuth.store_challenge( # Use TwoFactorAuth
+    stored_challenge = TwoFactorAuth.store_challenge(
       @session,
       :sms,
       challenge,
@@ -58,7 +54,7 @@ class TwoFactorAuthTest < ActiveSupport::TestCase
   end
 
   test 'handles TOTP which does not require a stored challenge' do
-    stored_challenge = TwoFactorAuth.store_challenge( # Use TwoFactorAuth
+    stored_challenge = TwoFactorAuth.store_challenge(
       @session,
       :totp,
       nil, # TOTP doesn't need a challenge
@@ -73,17 +69,15 @@ class TwoFactorAuthTest < ActiveSupport::TestCase
   end
 
   test 'retrieves challenge data from session' do
-    # Store a challenge first
     challenge = SecureRandom.hex(16)
-    TwoFactorAuth.store_challenge( # Use TwoFactorAuth
+    TwoFactorAuth.store_challenge(
       @session,
       :webauthn,
       challenge,
       { test_data: 'metadata' }
     )
 
-    # Now retrieve it
-    challenge_data = TwoFactorAuth.retrieve_challenge(@session) # Use TwoFactorAuth
+    challenge_data = TwoFactorAuth.retrieve_challenge(@session)
 
     assert_equal :webauthn, challenge_data[:type]
     assert_equal challenge, challenge_data[:challenge]
@@ -91,26 +85,20 @@ class TwoFactorAuthTest < ActiveSupport::TestCase
   end
 
   test 'verified? returns correct status' do
-    # Initially should not be verified
-    assert_not TwoFactorAuth.verified?(@session) # Use TwoFactorAuth
+    assert_not TwoFactorAuth.verified?(@session)
 
-    # Set verification time
-    TwoFactorAuth.mark_verified(@session) # Use TwoFactorAuth
+    TwoFactorAuth.mark_verified(@session)
 
-    # Now should be verified
-    assert TwoFactorAuth.verified?(@session) # Use TwoFactorAuth
+    assert TwoFactorAuth.verified?(@session)
   end
 
   test 'clears challenge data' do
-    # Set up session with challenge data
     @session[TwoFactorAuth::SESSION_KEYS[:type]] = :webauthn
     @session[TwoFactorAuth::SESSION_KEYS[:challenge]] = 'test_challenge'
     @session[TwoFactorAuth::SESSION_KEYS[:metadata]] = { test: true }
 
-    # Clear the challenge data
-    TwoFactorAuth.clear_challenge(@session) # Use TwoFactorAuth
+    TwoFactorAuth.clear_challenge(@session)
 
-    # Verify data is cleared
     assert_nil @session[TwoFactorAuth::SESSION_KEYS[:type]]
     assert_nil @session[TwoFactorAuth::SESSION_KEYS[:challenge]]
     assert_nil @session[TwoFactorAuth::SESSION_KEYS[:metadata]]
@@ -160,7 +148,6 @@ class TwoFactorAuthTest < ActiveSupport::TestCase
   private
 
   def setup_webauthn_credential
-    # We don't need a real credential for this test, just the model
     @webauthn_credential = @user.webauthn_credentials.create!(
       external_id: SecureRandom.hex(16),
       nickname: 'Test Key',

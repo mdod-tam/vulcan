@@ -21,11 +21,11 @@ A variable has to be both declared and supplied by the sending workflow: editing
 
 | Command | Effect |
 | --- | --- |
-| `bin/rails db:seed_manual_email_templates` | Initializes templates from the [checked-in files](../../lib/tasks/seed_manual_email_templates.rake); deletes existing templates first, including staff edits. |
+| `bin/rails db:seed_manual_email_templates` | Replaces every template with the [checked-in files](../../db/seeds/email_templates) in one transaction, including staff edits; new rows get new ids. |
 | `bin/rails email_templates:audit` | Read-only comparison of expected seed and catalog template keys against the database; does not seed or update templates. |
-| `bin/rails db:seed_policies` | Initializes the application's program policy defaults; see [baseline setup](setup_and_maintenance.md#baseline-seeds). |
+| `bin/rails db:seed_policies` | Resets the application's program policy defaults; see [baseline tasks](setup_and_maintenance.md#baseline-tasks). |
 
-The seeds are initialization tasks. Policy seeding updates differing values if rows already exist; template seeding replaces existing copy. Use the audit on its own to investigate template mismatches. It exits nonzero for missing or unexpected template keys. [Heroku setup](setup_and_maintenance.md#heroku-deployment-and-operations) includes the remote commands.
+The seeds are initialization tasks that overwrite staff changes: policy seeding resets differing values, and template seeding replaces existing copy. Use the audit on its own to investigate template mismatches. It exits nonzero for missing or unexpected template keys. [Heroku setup](setup_and_maintenance.md#heroku-deployment-and-operations) includes the remote commands.
 
 ## Sending and printing
 

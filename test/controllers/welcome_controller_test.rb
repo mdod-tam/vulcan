@@ -22,7 +22,6 @@ class WelcomeControllerTest < ActionDispatch::IntegrationTest
   end
 
   test 'should redirect to dashboard if user already has webauthn credentials' do
-    # Create a webauthn credential for the user
     @user.webauthn_credentials.create!(
       external_id: SecureRandom.uuid,
       nickname: 'Test Key',
@@ -31,11 +30,10 @@ class WelcomeControllerTest < ActionDispatch::IntegrationTest
     )
 
     get welcome_path
-    assert_redirected_to constituent_portal_dashboard_path # Corrected path helper
+    assert_redirected_to constituent_portal_dashboard_path
   end
 
   test 'should allow viewing welcome page with force param even with credentials' do
-    # Create a webauthn credential for the user
     @user.webauthn_credentials.create!(
       external_id: SecureRandom.uuid,
       nickname: 'Test Key',

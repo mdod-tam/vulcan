@@ -61,7 +61,7 @@
                                  required: true,
                                  disabled: !allowed,
                                  class: 'mt-0.5' %>
-            <%= label_tag input_id, class: "text-sm #{allowed ? 'text-gray-700' : 'text-gray-400'}" do %>
+            <%= label_tag input_id, class: "text-sm #{allowed ? 'text-gray-700' : 'text-gray-500'}" do %>
               <span class="block font-medium"><%= duplicate_review_constituent_label(user) %></span>
               <span class="block text-xs text-gray-500 mt-0.5">Login email: <%= stored_email_display(user) %></span>
             <% end %>
@@ -70,10 +70,10 @@
             <% if newer_record || most_recent_login %>
               <div class="mb-1 flex flex-wrap gap-1 text-xs" data-testid="canonical-record-badges">
                 <% if newer_record %>
-                  <span class="rounded-full bg-indigo-50 px-2 py-0.5 text-indigo-700">Newer record</span>
+                  <span class="badge badge-primary">Newer record</span>
                 <% end %>
                 <% if most_recent_login %>
-                  <span class="rounded-full bg-indigo-50 px-2 py-0.5 text-indigo-700">Most recent login</span>
+                  <span class="badge badge-primary">Most recent login</span>
                 <% end %>
               </div>
             <% end %>
@@ -116,7 +116,7 @@
                data-fact="<%= fact.fetch(:key) %>">
             <dt class="text-xs font-medium text-gray-600"><%= fact.fetch(:label) %></dt>
             <dd class="text-sm text-gray-900"><%= fact.fetch(:value) %></dd>
-            <dd class="text-xs font-medium text-emerald-700"><span aria-hidden="true">✓</span> Both records agree</dd>
+            <dd class="text-xs font-medium text-success-700"><span aria-hidden="true">✓</span> Both records agree</dd>
           </div>
         <% end %>
       </dl>
@@ -219,7 +219,7 @@
     <h3 id="<%= dom_id_prefix %>-evidence-heading" class="text-sm font-medium text-gray-700">Match evidence recorded with this case</h3>
     <div class="mt-1 flex flex-wrap gap-1">
       <% reason_codes.each do |code| %>
-        <span class="rounded-full bg-gray-100 px-2 py-0.5 text-xs text-gray-700"><%= duplicate_review_reason_label(code) %></span>
+        <span class="badge badge-neutral"><%= duplicate_review_reason_label(code) %></span>
       <% end %>
     </div>
     <p class="mt-1 text-xs text-gray-500">This explains why the comparison was opened; it does not by itself prove the records are the same person.</p>
@@ -227,13 +227,13 @@
 
   <div>
     <% rationale_id = "#{dom_id_prefix}-rationale" %>
-    <%= label_tag rationale_id, 'Why these records are the same person (required)', class: 'block text-sm font-medium text-gray-700' %>
+    <%= label_tag rationale_id, 'Why these records are the same person (required)', class: 'form-label' %>
     <%= text_area_tag :rationale,
                       nil,
                       id: rationale_id,
                       rows: 2,
                       required: true,
-                      class: 'w-full border-gray-300 rounded-md text-sm',
+                      class: 'form-input',
                       placeholder: 'Describe what you verified beyond the name-and-date-of-birth match.' %>
   </div>
 
@@ -247,7 +247,7 @@
 
   <div>
     <%= f.submit 'Merge records',
-                 class: 'bg-red-600 hover:bg-red-700 disabled:bg-gray-400 disabled:cursor-not-allowed text-white py-2 px-4 rounded text-sm cursor-pointer',
+                 class: 'btn btn-danger',
                  data: {
                    final_submit_gate_target: 'submitButton',
                    turbo_confirm: 'Merge is audited and retires the duplicate record. Continue?'

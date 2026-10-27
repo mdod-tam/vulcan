@@ -9,6 +9,20 @@ module Admin
       "#{practitioner.full_name} (#{identifier})"
     end
 
+    # Wording for the trainer transfer dialog: open appointments move with the coverage, or only the coverage moves.
+    def trainer_transfer_copy(open_sessions)
+      count = open_sessions.size
+      if count.zero?
+        { summary: 'Transfer the coverage to another trainer. Completed sessions stay with their trainers.',
+          confirmation: 'Transfer the coverage to the trainer selected below? Later training requests go to them.' }
+      else
+        { summary: 'Transfer open training to another trainer. Schedules, locations, notes and outcomes are preserved, ' \
+                   'and completed sessions stay with their trainers.',
+          confirmation: "Transfer #{count} open training #{'session'.pluralize(count)} to the trainer selected below? " \
+                        'Appointments are preserved. The new trainer and the constituent are notified.' }
+      end
+    end
+
     MedicalCertificationActionState = Struct.new(
       :latest_certification_request,
       :latest_certification_reject,
@@ -29,36 +43,20 @@ module Admin
 
       url = document_download_path(application.medical_certification, disposition: :inline)
 
-      if style == :button
-        # Use classes similar to other full-height buttons in the form
-        button_classes = [
-          'inline-flex justify-center py-2 px-4 border border-transparent shadow-sm',
-          'text-sm font-medium rounded-md text-white bg-blue-600 hover:bg-blue-700',
-          'focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-blue-500'
-        ].join(' ')
-
-        link_to 'View Medical Certification Document', url,
-                target: '_blank',
-                class: button_classes,
-                rel: 'noopener'
-      else
-        link_to 'View Medical Certification Document', url,
-                target: '_blank',
-                class: 'text-blue-600 hover:text-blue-800 underline',
-                rel: 'noopener'
-      end
+      link_to 'View Medical Certification Document', url,
+              target: '_blank',
+              class: style == :button ? 'btn btn-primary' : 'text-primary-700 hover:text-primary-900 underline',
+              rel: 'noopener'
     end
 
     def medical_certification_submission_method(application)
       return 'unknown' unless application.medical_certification.attached?
 
-      # Try to find submission method from metadata or related records
       if application.respond_to?(:medical_certification_submission_method) &&
          application.medical_certification_submission_method.present?
         return application.medical_certification_submission_method
       end
 
-      # Check for status changes that might have the method
       status_change = ApplicationStatusChange.where(application_id: application.id)
                                              .where("metadata->>'change_type' = ? OR to_status = ?",
                                                     'medical_certification', 'received')
@@ -70,7 +68,6 @@ module Admin
         return status_change.metadata['submission_method']
       end
 
-      # Default fallback
       'portal'
     end
 
@@ -135,16 +132,10 @@ module Admin
     end
 
     def toggle_direction(column)
-      # Check if the current sort column matches the link's column
-      # and if the current direction is ascending.
-      if params[:sort] == column.to_s && params[:direction] == 'asc'
-        'desc' # If so, set the link's direction to descending
-      else
-        'asc'  # Otherwise, set the link's direction to ascending (default)
-      end
+      params[:sort] == column.to_s && params[:direction] == 'asc' ? 'desc' : 'asc'
     end
 
-    # Get proof history in chronological order (oldest first) with deduplication
+    # Proof activity for one proof type, oldest first, with duplicate submissions removed.
     def get_chronological_proof_history(application, proof_type)
       ConstituentPortal::Activity
         .from_events(application)

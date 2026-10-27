@@ -7,8 +7,7 @@ class MedicalCertificationAttachmentServiceTest < ActiveSupport::TestCase
   include ActionDispatch::TestProcess::FixtureFile
 
   setup do
-    clear_active_storage # Clear storage first
-    # Use FactoryBot instead of fixtures
+    clear_active_storage
     @application = create(:application, status: :in_progress)
     @admin = create(:admin)
     @test_file = scanned_upload(fixture_file_upload('medical_certification_valid.pdf', 'application/pdf'),
@@ -83,7 +82,7 @@ class MedicalCertificationAttachmentServiceTest < ActiveSupport::TestCase
 
             assert result[:success], 'A cleared multipart snapshot should succeed'
             assert @application.reload.medical_certification.attached?
-            assert_equal 'approved', @application.medical_certification_status # Corrected assertion
+            assert_equal 'approved', @application.medical_certification_status
           end
         end
       end
@@ -233,16 +232,14 @@ class MedicalCertificationAttachmentServiceTest < ActiveSupport::TestCase
   end
 
   test 'properly handles signed_id strings' do
-    # First create a blob to get its signed_id
     blob = create_dummy_blob
     signed_id = blob.signed_id
 
-    # Then use the signed_id for attachment
     assert_difference 'ActiveStorage::Attachment.count' do
       result = MedicalCertificationAttachmentService.attach_certification(
         application: @application,
         blob_or_file: signed_id,
-        status: :approved, # Corrected status enum value
+        status: :approved,
         admin: @admin,
         submission_method: :admin_upload
       )

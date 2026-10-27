@@ -1,7 +1,5 @@
 # frozen_string_literal: true
 
-# Seed File for "application_notifications_proof_received"
-# --------------------------------------------------
 EmailTemplate.create_or_find_by!(name: 'application_notifications_proof_received', format: :text, locale: 'es') do |template|
   template.subject = 'Documento Recibido'
   template.description = 'Enviado cuando se ha recibido un documento enviado por el solicitante y está esperando revisión.'

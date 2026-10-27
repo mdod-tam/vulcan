@@ -3,22 +3,8 @@
 class NotificationService
   VALID_CHANNELS = %i[email letter sms].freeze
 
-  # Legacy proof-rejection example:
-  #
-  # NotificationService.create_and_deliver!(
-  #   type: 'proof_rejected',
-  #   recipient: user,
-  #   actor: admin,
-  #   notifiable: review,
-  #   metadata: { delivery_path: 'legacy', template_variables: ... },
-  #   channel: :email,
-  #   audit: true,
-  #   deliver: true
-  # )
-  #
   # `channel` records the requested delivery route for metadata and audits.
   # Recipient-facing mailers determine the email or letter route.
-  #
   def self.create_and_deliver!(type:, recipient:, **options)
     opts = normalize_options(options)
     build_notification_builder(type, recipient, opts).create_and_deliver!
@@ -41,12 +27,6 @@ class NotificationService
   end
   private_class_method :build_notification_builder
 
-  # Example:
-  # NotificationService.build
-  #   .type('proof_rejected').recipient(user).actor(admin)
-  #   .notifiable(review).metadata(delivery_path: 'legacy').channel(:email)
-  #   .audit(true).deliver(true)
-  #   .create_and_deliver!
   def self.build
     new.build
   end
@@ -120,7 +100,7 @@ class NotificationService
     NotificationBuilder.new(self)
   end
 
-  # Compatibility views of EmailDelivery::Catalog, which owns delivery classification.
+  # Views of EmailDelivery::Catalog, which owns delivery classification.
   MAILER_MAP = EmailDelivery::Catalog.mailer_map.freeze
 
   # These actions create records for audits and in-app display without email.
@@ -445,6 +425,9 @@ class NotificationService
       mailer_class.public_send(method_name, application, proof_type)
     when :vendor_params
       mailer_class.with(vendor: notification.notifiable).public_send(method_name)
+    when :assignment
+      mailer_class.with(recipient: notification.recipient, assignment: notification.notifiable,
+                        operation_id: notification.metadata&.dig('operation_id')).public_send(method_name)
     when :notifiable
       mailer_class.public_send(method_name, notification.notifiable)
     else
@@ -697,7 +680,7 @@ class NotificationService
 
   def merge_service_metadata(meta, opts)
     meta.merge(
-      # This compatibility key records the requested route, which can differ from the actual route.
+      # The requested route, which can differ from the actual route.
       'channel' => (opts['channel'] || opts[:channel]).to_s
     )
   end
@@ -791,7 +774,7 @@ class NotificationService
   end
   private_class_method :default_actor
 
-  # Existing tests use class-level access to these private instance methods.
+  # Test-only class-level access to these private instance methods.
   if Rails.env.test?
     def self.deliver_notification!(notification, channel:)
       new.send(:deliver_notification!, notification, channel: channel)

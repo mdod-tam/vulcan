@@ -1,7 +1,7 @@
 # frozen_string_literal: true
 
 # Shares lock order and post-merge immutability between same-person merges and online writers.
-# See .cursor/plans/contact_foundation_pr4b_admin_merge.plan.md sections 2 and 4.
+# Users are always locked in ascending id order, and a retired duplicate can be neither edited nor deleted.
 #
 # Callers that lock multiple +User+ rows during a concurrent merge must use +lock_for_merge_integrity!+.
 # Shared order avoids deadlocks from conflicting User lock sequences.

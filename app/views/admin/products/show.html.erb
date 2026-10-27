@@ -3,14 +3,14 @@
   <p class="mt-2"><%= @product.model_number %><%= ' · Archived product' if @product.archived? %></p>
   <h2 class="mt-6 text-2xl font-semibold">Public product resources</h2>
   <p class="mt-2 text-gray-700">Resources are public program guidance. Do not upload personal, application, or session information. Each resource belongs to this exact product and is ordered by title within its language.</p>
-  <%= link_to 'Add resource', new_admin_product_product_resource_path(@product), class: 'mt-4 inline-block rounded bg-indigo-600 px-4 py-2 text-white' %>
+  <%= link_to 'Add resource', new_admin_product_product_resource_path(@product), class: 'btn btn-primary mt-4' %>
   <ul class="mt-5 space-y-4">
     <% @product_resources.each do |resource| %>
       <li class="rounded border border-gray-200 p-4">
         <p class="font-semibold"><%= resource.title %> · <%= product_resource_language(resource.locale) %> · <%= resource.source_type.upcase %></p>
         <div class="mt-2 flex gap-4">
           <%= link_to 'Edit resource', edit_admin_product_product_resource_path(@product, resource),
-                      class: 'text-indigo-700 underline',
+                      class: 'text-primary-700 underline',
                       aria: { label: t('product_resources.admin.edit_name',
                                        title: resource.title, product: product_resource_product_label(@product)) } %>
           <%= button_to 'Delete resource', admin_product_product_resource_path(@product, resource),
@@ -19,11 +19,11 @@
                                                  title: resource.title, product: product_resource_product_label(@product)) },
                         aria: { label: t('product_resources.admin.delete_name',
                                          title: resource.title, product: product_resource_product_label(@product)) },
-                        class: 'text-red-700 underline' %>
+                        class: 'text-danger-700 underline' %>
         </div>
       </li>
     <% end %>
   </ul>
   <%= render 'shared/product_resources', product: @product, region_id: dom_id(@product, :admin_product_resources) %>
-  <%= link_to 'Back to products', admin_products_path, class: 'mt-6 inline-block text-indigo-700 underline' %>
+  <%= link_to 'Back to products', admin_products_path, class: 'mt-6 inline-block text-primary-700 underline' %>
 </div>

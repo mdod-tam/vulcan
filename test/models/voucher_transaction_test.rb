@@ -203,26 +203,24 @@ class VoucherTransactionTest < ActiveSupport::TestCase
   test 'daily_totals calculates daily sums for completed transactions' do
     test_vendor = create(:vendor, email: 'daily_totals_test@example.com')
 
-    # Run this test in complete isolation
+    # daily_totals sums every transaction, so clear them inside a transaction that is rolled back.
     VoucherTransaction.transaction do
       VoucherTransaction.delete_all
 
       freeze_time do
-        # Create a simple transaction with a known amount
         voucher = create(:voucher, :active, initial_value: 1000, remaining_value: 1000)
 
         # Create transaction bypassing factory callbacks that might interfere
         tx = VoucherTransaction.new(
           voucher: voucher,
           vendor: test_vendor,
-          amount: BigDecimal('50.00'), # Use 50 to avoid confusion with setup
+          amount: BigDecimal('50.00'),
           status: :transaction_completed,
           processed_at: Time.current,
           reference_number: 'DAILY-TEST-001'
         )
         tx.save!
 
-        # Verify the amount was stored correctly
         stored_tx = VoucherTransaction.find(tx.id)
         assert_equal 50, stored_tx.amount.to_i, "Transaction should have amount 50, got #{stored_tx.amount}"
 
@@ -230,7 +228,7 @@ class VoucherTransactionTest < ActiveSupport::TestCase
         assert_equal 50, totals[Time.current.to_date], "Daily total should be 50, got #{totals[Time.current.to_date]}"
       end
 
-      raise ActiveRecord::Rollback # Clean up
+      raise ActiveRecord::Rollback
     end
   end
 end

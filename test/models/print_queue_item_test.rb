@@ -3,13 +3,11 @@
 require 'test_helper'
 
 class PrintQueueItemTest < ActiveSupport::TestCase
-  # Set up test helpers
   def setup
     @constituent = create(:constituent)
     @admin = create(:admin)
     @application = create(:application, user: @constituent)
 
-    # Create a new print queue item first
     @pending_letter = PrintQueueItem.new(
       letter_type: :registration_confirmation,
       status: :pending,
@@ -17,24 +15,20 @@ class PrintQueueItemTest < ActiveSupport::TestCase
       application: @application
     )
 
-    # Create a mock attachment instead of using a real file
-    # This prevents ActiveStorage errors in tests
+    # A stubbed attachment avoids a real file and ActiveStorage.
     mock_pdf = mock_attached_file(
       filename: 'test_letter.pdf',
       content_type: 'application/pdf',
       byte_size: 10.kilobytes
     )
 
-    # Stub the attachment methods
     @pending_letter.stubs(:pdf_letter).returns(mock_pdf)
     @pending_letter.stubs(:pdf_letter_attached?).returns(true)
 
-    # Track execution time for performance monitoring
     @start_time = Time.current
   end
 
   teardown do
-    # Log test execution time for performance monitoring
     if defined?(measure_time) && @start_time
       true
     end
@@ -51,7 +45,6 @@ class PrintQueueItemTest < ActiveSupport::TestCase
   end
 
   test 'should require pdf_letter attachment on create' do
-    # Create a new item without mocking the attachment
     letter = PrintQueueItem.new(
       letter_type: :registration_confirmation,
       status: :pending,
@@ -59,7 +52,6 @@ class PrintQueueItemTest < ActiveSupport::TestCase
       application: @application
     )
 
-    # In a real scenario, no attachment would be present
     letter.stubs(:pdf_letter_attached?).returns(false)
 
     assert_not letter.valid?
@@ -78,18 +70,15 @@ class PrintQueueItemTest < ActiveSupport::TestCase
   end
 
   test 'should set default status to pending' do
-    # Create a new letter with mocked attachment
     letter = PrintQueueItem.new(
       letter_type: :registration_confirmation,
       constituent: @constituent
     )
 
-    # Mock the attachment
     mock_pdf = mock_attached_file(filename: 'test_letter.pdf')
     letter.stubs(:pdf_letter).returns(mock_pdf)
     letter.stubs(:pdf_letter_attached?).returns(true)
 
-    # Use safe interaction pattern if available
     result = if respond_to?(:safe_interaction)
                safe_interaction { letter.save }
              else
@@ -114,7 +103,6 @@ class PrintQueueItemTest < ActiveSupport::TestCase
     assert_equal 'registration_confirmation_123.pdf', @pending_letter.pdf_filename
   end
 
-  # Helper method to set up mock attachments for all PrintQueueItems
   def setup_attachment_mocks_for_print_queue
     PrintQueueItem.find_each do |item|
       next if item.pdf_letter_attached? # Skip if already mocked

@@ -12,7 +12,6 @@ module Admin
     end
 
     def show
-      # The policy is already set by the before_action
       @recent_changes = PolicyChange.where(policy: @policy)
                                     .includes(:user)
                                     .order(created_at: :desc)
@@ -47,7 +46,6 @@ module Admin
     end
 
     def update
-      # Single policy update
       @policy.updated_by = current_user
       if @policy.update(value: params[:policy][:value])
         redirect_to admin_policies_path, notice: "Policy '#{@policy.key}' updated successfully."
@@ -62,7 +60,6 @@ module Admin
     end
 
     def bulk_update
-      # Delegate to BulkUpdateService for bulk update logic
       @policies = Policy.all
       result = Policies::BulkUpdateService.new(
         policies_data: policy_params,
@@ -89,10 +86,10 @@ module Admin
 
     def policy_params
       if params[:policies].is_a?(Array)
-        # New array format
+        # The form posts policies[][id] and policies[][value], which Rails parses into an array.
         params.permit(policies: %i[id value])[:policies]
       else
-        # Legacy hash format
+        # A hash keyed by policy id.
         permitted_policies = {}
         params.require(:policies).each do |id, attrs|
           permitted_policies[id] = { id: attrs[:id], value: attrs[:value] }

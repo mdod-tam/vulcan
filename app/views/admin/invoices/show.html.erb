@@ -4,17 +4,17 @@
   </nav>
   <h1 class="text-3xl font-bold text-gray-900 mb-6">Invoice <%= @invoice.invoice_number %></h1>
 
-  <section aria-labelledby="invoice-details-heading" class="bg-white shadow rounded-lg p-6 mb-6">
+  <section aria-labelledby="invoice-details-heading" class="card p-6 mb-6">
     <h2 id="invoice-details-heading" class="text-lg font-medium text-gray-900 mb-4">Billing and payment</h2>
     <%= render 'invoices/payment_details', invoice: @invoice, audience: :admin %>
     <p class="mt-4 text-sm text-gray-600">
       Vendor: <%= link_to @invoice.vendor.business_name.presence || @invoice.vendor.email, admin_vendor_path(@invoice.vendor),
-                          class: 'text-indigo-600 hover:text-indigo-900' %>
+                          class: 'text-primary-600 hover:text-primary-900' %>
     </p>
   </section>
 
   <% if @invoice.status_invoice_pending? %>
-    <section aria-labelledby="approve-heading" class="bg-white shadow rounded-lg p-6 mb-6">
+    <section aria-labelledby="approve-heading" class="card p-6 mb-6">
       <h2 id="approve-heading" class="text-lg font-medium text-gray-900 mb-2">Approve for payment</h2>
       <p class="text-sm text-gray-600 mb-4">Approval fixes the voucher redemptions and total on this invoice.</p>
       <%= button_to 'Approve invoice', approve_admin_invoice_path(@invoice),
@@ -23,7 +23,7 @@
   <% end %>
 
   <% if @invoice.status_invoice_approved? %>
-    <section aria-labelledby="payment-heading" class="bg-white shadow rounded-lg p-6 mb-6">
+    <section aria-labelledby="payment-heading" class="card p-6 mb-6">
       <h2 id="payment-heading" class="text-lg font-medium text-gray-900 mb-2">Record payment</h2>
       <p id="payment-help" class="text-sm text-gray-600 mb-4">Record the one full payment for this invoice. Once recorded, payment details cannot be edited; corrections are added as notes.</p>
       <%= form_with url: record_payment_admin_invoice_path(@invoice), method: :patch, scope: :payment, class: 'space-y-4',
@@ -31,9 +31,9 @@
         <%= hidden_field_tag :expected_status, @invoice.status, id: nil %>
         <% if @payment_errors&.any? %>
           <div id="payment-errors" role="alert" tabindex="-1" data-controller="error-summary"
-               class="rounded-md bg-red-50 p-4 focus:outline-none focus:ring-2 focus:ring-red-500">
-            <h3 class="text-sm font-medium text-red-800">The payment was not recorded:</h3>
-            <ul class="mt-2 list-disc list-inside text-sm text-red-700">
+               class="rounded-md bg-danger-50 p-4">
+            <h3 class="text-sm font-medium text-danger-800">The payment was not recorded:</h3>
+            <ul class="mt-2 list-disc list-inside text-sm text-danger-700">
               <% @payment_errors.full_messages.each do |message| %>
                 <li><%= message %></li>
               <% end %>
@@ -42,31 +42,31 @@
         <% end %>
         <div class="grid grid-cols-1 gap-4 md:grid-cols-2">
           <div>
-            <%= f.label :payment_date, 'Payment date', class: 'block text-sm font-medium text-gray-700' %>
+            <%= f.label :payment_date, 'Payment date', class: 'form-label' %>
             <%= f.text_field :payment_date, typed_date_field_options(value: @payment_input[:payment_date], required: true, class: invoice_form_class(:input),
                                                                      'aria-describedby': 'payment-date-hint') %>
-            <p id="payment-date-hint" class="text-xs text-gray-500 mt-1">The date the payment was made. Enter as MM/DD/YYYY.</p>
+            <p id="payment-date-hint" class="form-hint">The date the payment was made. Enter as MM/DD/YYYY.</p>
           </div>
           <div>
-            <%= f.label :payment_method, 'Payment method', class: 'block text-sm font-medium text-gray-700' %>
+            <%= f.label :payment_method, 'Payment method', class: 'form-label' %>
             <%= f.select :payment_method, invoice_payment_method_options, { include_blank: 'Choose a method', selected: @payment_input[:payment_method] },
                          required: true, class: invoice_form_class(:input) %>
           </div>
           <div>
-            <%= f.label :payment_reference, 'Payment reference (direct deposit or EFT)', class: 'block text-sm font-medium text-gray-700' %>
+            <%= f.label :payment_reference, 'Payment reference (direct deposit or EFT)', class: 'form-label' %>
             <%= f.text_field :payment_reference, value: @payment_input[:payment_reference], class: invoice_form_class(:input) %>
           </div>
           <div>
-            <%= f.label :check_number, 'Check number (checks)', class: 'block text-sm font-medium text-gray-700' %>
+            <%= f.label :check_number, 'Check number (checks)', class: 'form-label' %>
             <%= f.text_field :check_number, value: @payment_input[:check_number], class: invoice_form_class(:input) %>
           </div>
           <div>
-            <%= f.label :gad_invoice_reference, 'GAD invoice reference', class: 'block text-sm font-medium text-gray-700' %>
+            <%= f.label :gad_invoice_reference, 'GAD invoice reference', class: 'form-label' %>
             <%= f.text_field :gad_invoice_reference, value: @payment_input[:gad_invoice_reference], required: true, class: invoice_form_class(:input) %>
           </div>
         </div>
         <div>
-          <%= f.label :payment_notes, 'Internal payment notes (optional, not shown to the vendor)', class: 'block text-sm font-medium text-gray-700' %>
+          <%= f.label :payment_notes, 'Internal payment notes (optional, not shown to the vendor)', class: 'form-label' %>
           <%= f.text_area :payment_notes, value: @payment_input[:payment_notes], rows: 2, class: invoice_form_class(:input) %>
         </div>
         <%= f.submit 'Record payment', class: invoice_form_class(:primary) %>
@@ -75,7 +75,7 @@
   <% end %>
 
   <% if @invoice.status_invoice_pending? || @invoice.status_invoice_approved? %>
-    <section aria-labelledby="withdraw-heading" class="bg-white shadow rounded-lg p-6 mb-6">
+    <section aria-labelledby="withdraw-heading" class="card p-6 mb-6">
       <h2 id="withdraw-heading" class="text-lg font-medium text-gray-900 mb-2">Withdraw invoice</h2>
       <p id="withdraw-help" class="text-sm text-gray-600 mb-4">
         Its voucher redemptions are released and can be added to a later invoice. This invoice and its number are kept and marked Withdrawn.
@@ -86,7 +86,7 @@
                                            'The invoice and its number are kept and marked Withdrawn.' } do |f| %>
         <%= hidden_field_tag :expected_status, @invoice.status, id: nil %>
         <div>
-          <%= label_tag :reason, 'Reason', class: 'block text-sm font-medium text-gray-700' %>
+          <%= label_tag :reason, 'Reason', class: 'form-label' %>
           <%= text_area_tag :reason, nil, rows: 2, required: true, class: invoice_form_class(:input), 'aria-describedby': 'withdraw-help' %>
         </div>
         <%= submit_tag 'Withdraw invoice', class: invoice_form_class(:secondary) %>
@@ -95,7 +95,7 @@
   <% end %>
 
   <% if @invoice.status_invoice_paid? || @invoice.status_invoice_cancelled? %>
-    <section aria-labelledby="correction-heading" class="bg-white shadow rounded-lg p-6 mb-6">
+    <section aria-labelledby="correction-heading" class="card p-6 mb-6">
       <h2 id="correction-heading" class="text-lg font-medium text-gray-900 mb-2">Add a correction note</h2>
       <p id="correction-help" class="text-sm text-gray-600 mb-4">
         Fix the error in accounting first, then record its accounting reference and what was done. The note is kept in this
@@ -104,11 +104,11 @@
       <%= form_with url: correction_note_admin_invoice_path(@invoice), method: :post, class: 'space-y-4' do |f| %>
         <div class="grid grid-cols-1 gap-4 md:grid-cols-3">
           <div>
-            <%= label_tag :reference, 'Accounting reference', class: 'block text-sm font-medium text-gray-700' %>
+            <%= label_tag :reference, 'Accounting reference', class: 'form-label' %>
             <%= text_field_tag :reference, nil, required: true, autocomplete: 'off', class: invoice_form_class(:input) %>
           </div>
           <div class="md:col-span-2">
-            <%= label_tag :note, 'Note', class: 'block text-sm font-medium text-gray-700' %>
+            <%= label_tag :note, 'Note', class: 'form-label' %>
             <%= text_area_tag :note, nil, rows: 2, required: true, class: invoice_form_class(:input), 'aria-describedby': 'correction-help' %>
           </div>
         </div>
@@ -117,7 +117,7 @@
     </section>
   <% end %>
 
-  <section aria-labelledby="redemptions-heading" class="bg-white shadow rounded-lg p-6 mb-6">
+  <section aria-labelledby="redemptions-heading" class="card p-6 mb-6">
     <h2 id="redemptions-heading" class="text-lg font-medium text-gray-900 mb-4">Voucher redemptions (<%= @transactions.size %>)</h2>
     <% if @transactions.any? %>
       <ul role="list" class="divide-y divide-gray-200">
@@ -125,7 +125,7 @@
           <li class="py-3 flex flex-wrap justify-between gap-2 text-sm">
             <span>
               <%= number_to_currency(transaction.amount) %> on voucher
-              <%= link_to transaction.voucher.code, [:admin, transaction.voucher], class: 'font-medium text-indigo-600 hover:text-indigo-900' %>
+              <%= link_to transaction.voucher.code, [:admin, transaction.voucher], class: 'font-medium text-primary-600 hover:text-primary-900' %>
             </span>
             <span class="text-gray-500"><%= l(transaction.processed_at.to_date, format: :long) %> · Ref <%= transaction.reference_number %></span>
           </li>
@@ -136,7 +136,7 @@
     <% end %>
   </section>
 
-  <section aria-labelledby="history-heading" class="bg-white shadow rounded-lg p-6 mb-6">
+  <section aria-labelledby="history-heading" class="card p-6 mb-6">
     <h2 id="history-heading" class="text-lg font-medium text-gray-900 mb-4">History</h2>
     <ul role="list" class="divide-y divide-gray-200">
       <% @audit_events.each do |event| %>
@@ -150,7 +150,7 @@
   </section>
 
   <% if @invoice.email_delivery_attempts.any? %>
-    <section aria-label="<%= t('delivery_visibility.history') %>" class="bg-white shadow rounded-lg p-6">
+    <section aria-label="<%= t('delivery_visibility.history') %>" class="card p-6">
       <h2 class="text-lg font-medium text-gray-900 mb-4"><%= t('delivery_visibility.history') %></h2>
       <%= delivery_visibility(@invoice) %>
     </section>

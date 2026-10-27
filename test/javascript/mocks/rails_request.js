@@ -1,4 +1,4 @@
-// Mock for @rails/request.js
+// Stand-in for @rails/request.js.
 export class FetchRequest {
   constructor(method, url, options = {}) {
     this.method = method
@@ -7,7 +7,7 @@ export class FetchRequest {
   }
 
   async perform() {
-    // This will be mocked in individual tests
+    // Individual tests replace this.
     return { ok: true, status: 200 }
   }
 }
@@ -18,11 +18,8 @@ export class FetchResponse {
   }
 }
 
-export class RequestInterceptor {
-  // Mock implementation
-}
+export class RequestInterceptor {}
 
-// Mock functions
 export const destroy = jest.fn()
 export const get = jest.fn()
 export const patch = jest.fn()

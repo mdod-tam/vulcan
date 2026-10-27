@@ -1,9 +1,7 @@
 import { Controller } from "@hotwired/stimulus"
 
-// Moves keyboard focus into the error summary on render and to the referenced
-// field when a summary link is activated, so screen readers and keyboard users
-// reliably learn that validation failed (WCAG 2.4.3 Focus Order, 3.3.1 Error
-// Identification).
+// Moves keyboard focus into the error summary on render, and to the field a summary link
+// points at when the link is activated.
 export default class extends Controller {
   connect() {
     if (!this.element.hasAttribute("tabindex")) {

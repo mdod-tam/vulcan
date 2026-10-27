@@ -1,6 +1,5 @@
 # frozen_string_literal: true
 
-# Seed File for "application_notifications_medical_certification_not_provided"
 EmailTemplate.create_or_find_by!(name: 'application_notifications_medical_certification_not_provided', format: :text, locale: 'es') do |template|
   template.subject = 'Se Requiere Certificación de Discapacidad Para Su Solicitud'
   template.description = 'Enviado a un constituyente cuando envía una solicitud sin proporcionar certificación de ' \

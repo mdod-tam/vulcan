@@ -2,7 +2,7 @@
 
 require 'test_helper'
 
-# This is a controller test for the Evaluators::EvaluationsController
+# Evaluators::EvaluationsController
 class EvaluationsControllerTest < ActionDispatch::IntegrationTest
   def setup
     @evaluator = create(:evaluator)

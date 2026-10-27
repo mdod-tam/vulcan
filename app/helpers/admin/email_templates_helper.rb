@@ -29,11 +29,7 @@ module Admin
     end
 
     def template_sync_badge_classes(template)
-      if template&.locale_needs_sync?
-        'inline-flex items-center rounded-full bg-amber-100 px-3 py-1 text-xs font-medium text-amber-800'
-      else
-        'inline-flex items-center rounded-full bg-emerald-100 px-3 py-1 text-xs font-medium text-emerald-800'
-      end
+      badge_classes(template&.locale_needs_sync? ? :warning : :success)
     end
 
     def template_syntax_label(template_or_syntax)
@@ -48,11 +44,7 @@ module Admin
     end
 
     def template_syntax_badge_classes(template)
-      if template&.render_syntax == 'liquid'
-        'inline-flex items-center rounded-full bg-cyan-100 px-3 py-1 text-xs font-medium text-cyan-800'
-      else
-        'inline-flex items-center rounded-full bg-gray-100 px-3 py-1 text-xs font-medium text-gray-800'
-      end
+      badge_classes(template&.render_syntax == 'liquid' ? :info : :neutral)
     end
 
     def email_template_syntax_options(template)
@@ -88,7 +80,7 @@ module Admin
     end
 
     def liquid_placeholder_style_help_classes(template)
-      "#{placeholder_style_help_classes(:liquid, template)} border-cyan-200 bg-cyan-50 text-cyan-900"
+      "#{placeholder_style_help_classes(:liquid, template)} border-info-200 bg-info-50 text-info-900"
     end
 
     def display_template_body(template)
@@ -324,7 +316,7 @@ module Admin
         'stale_reviews_text_list' => "- App 1\n- App 2\n- App 3\n- App 4\n- App 5",
         'constituent_disabilities_text_list' => "- Disability 1\n- Disability 2",
         'evaluators_evaluation_url' => 'http://example.com/evaluators/evaluations/1',
-        'verification_url' => 'EMAIL_VERIFICATION_FLOW_NOT_CONFIGURED',
+        'verification_url' => 'http://example.com/verify_email?token=TOKEN',
         'reset_url' => 'http://example.com/password/edit?token=TOKEN',
         'invoice_number' => 'INV-2025-001',
         'total_amount_formatted' => '$1,234.56',

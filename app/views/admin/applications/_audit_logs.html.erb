@@ -1,16 +1,16 @@
 <%# locals: (equipment_records: @equipment_audit_records) -%>
-<section id="audit-logs" class="bg-white rounded-lg shadow p-6 mb-6" aria-labelledby="audit-logs-title">
+<section id="audit-logs" class="card p-6 mb-6" aria-labelledby="audit-logs-title">
     <h2 id="audit-logs-title" class="text-xl font-semibold text-gray-900 mb-4">Activity History</h2>
     <% if @application&.submission_method_paper? %>
-      <div class="mb-4 p-3 bg-blue-50 rounded-md border border-blue-200">
+      <div class="mb-4 p-3 bg-info-50 rounded-md border border-info-200">
         <div class="flex items-start">
           <div class="flex-shrink-0">
-            <svg class="h-5 w-5 text-blue-600" xmlns="http://www.w3.org/2000/svg" viewBox="0 0 20 20" fill="currentColor">
+            <svg class="h-5 w-5 text-info-600" xmlns="http://www.w3.org/2000/svg" viewBox="0 0 20 20" fill="currentColor">
               <path fill-rule="evenodd" d="M18 10a8 8 0 11-16 0 8 8 0 0116 0zm-7-4a1 1 0 11-2 0 1 1 0 012 0zM9 9a1 1 0 000 2v3a1 1 0 001 1h1a1 1 0 100-2v-3a1 1 0 00-1-1H9z" clip-rule="evenodd" />
             </svg>
           </div>
           <div class="ml-3">
-            <p class="text-sm text-blue-800">
+            <p class="text-sm text-info-800">
               <strong>Paper application</strong> - submission details are shown in the Activity History below.
             </p>
           </div>
@@ -132,7 +132,6 @@
                     end
                   when log.is_a?(ApplicationStatusChange)
                     if log.metadata.try(:[], 'change_type') == 'medical_certification'
-                      # Special handling for medical certification status changes
                       method = log.metadata.try(:[], 'submission_method')&.titleize || "Unknown"
                       provider = log.metadata.try(:[], 'provider_name')
                       
@@ -147,11 +146,9 @@
                       when [_, "accepted"]
                         received_at = log.metadata['received_at'].present? ? Time.zone.parse(log.metadata['received_at']).strftime("%m/%d/%Y at %I:%M %p") : nil
                         processed_at = log.metadata['processed_at'].present? ? Time.zone.parse(log.metadata['processed_at']).strftime("%m/%d/%Y at %I:%M %p") : nil
-                        
-                        # If both timestamps exist and are different, show both
+
                         if received_at.present? && processed_at.present? && received_at != processed_at
                           "Disability certification received on #{received_at} and approved on #{processed_at} (via #{method})"
-                        # If only processed_at exists or they're the same, just show one timestamp
                         elsif processed_at.present?
                           "Disability certification approved on #{processed_at} (via #{method})"
                         else
@@ -164,7 +161,6 @@
                       end
                       "#{status_text}#{log.notes.present? ? " - #{log.notes}" : ""}"
                     else
-                      # Regular application status changes
                       status_text = case [log.from_status, log.to_status]
                       when [nil, "draft"]
                         "Application created as draft"
@@ -217,7 +213,7 @@
                     when "duplicate_review_case_resolved"
                       link_to "Identity review: #{log.metadata['resolution_determination'].to_s.humanize}",
                               admin_duplicate_review_path(log.metadata['duplicate_review_case_id']),
-                              class: "text-indigo-700 underline"
+                              class: "text-primary-700 underline"
                     when "application_created"
                       method = log.metadata['submission_method']&.titleize || "Unknown"
                       initial_status = log.metadata['initial_status']&.titleize || "Unknown"
@@ -231,6 +227,8 @@
                       "Evaluator #{log.metadata['evaluator_name']} assigned to application"
                     when "trainer_assigned"
                       "Trainer #{log.metadata['trainer_name']} assigned to application"
+                    when "trainer_unassigned", "trainer_reassigned", "trainer_access_removed", "evaluator_access_removed"
+                      activity_detail(log)
                     when "medical_certification_requested"
                       method = log.metadata['submission_method']&.titleize || 'Unknown'
                       provider = log.metadata['provider_name']

@@ -1,12 +1,12 @@
 <main class="container mx-auto px-4 py-8" role="main">
-  <div class="bg-white rounded-lg shadow">
+  <div class="card">
     <div class="p-6 border-b border-gray-200 flex justify-between items-center">
       <h1 class="text-2xl font-semibold text-gray-900">
         Nonactive Constituents
       </h1>
       <%= form_with url: constituents_admin_users_path, method: :get, local: true, class: "flex space-x-2" do |form| %>
-        <%= form.text_field :q, value: params[:q], placeholder: "Search by full name", class: "block w-full pl-3 pr-10 py-2 border border-gray-300 rounded-md" %>
-        <%= form.submit "Search", class: "px-4 py-2 bg-indigo-600 text-white rounded-md hover:bg-indigo-700" %>
+        <%= form.text_field :q, value: params[:q], placeholder: "Search by full name", class: "form-input" %>
+        <%= form.submit "Search", class: "btn btn-primary" %>
       <% end %>
     </div>
 
@@ -43,7 +43,7 @@
                 <% email_display = display_contact_email(user) %>
                 <div class="text-sm text-gray-500">
                   <% if displayable_contact_email?(user) %>
-                    <%= mail_to email_display, email_display, class: "hover:text-indigo-600" %>
+                    <%= mail_to email_display, email_display, class: "hover:text-primary-600" %>
                   <% else %>
                     <%= email_display %>
                   <% end %>
@@ -67,7 +67,7 @@
               </td>
               <td class="px-6 py-4">
                 <%= link_to history_admin_user_path(user), 
-                    class: "inline-flex items-center text-sm font-medium text-indigo-600 hover:text-indigo-500 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-indigo-500",
+                    class: "inline-flex items-center text-sm font-medium text-primary-600 hover:text-primary-500",
                     aria: { label: "View history for #{user.full_name}" } do %>
                   View History
                   <svg class="ml-2 h-4 w-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">

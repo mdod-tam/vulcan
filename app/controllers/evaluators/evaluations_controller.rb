@@ -84,14 +84,12 @@ module Evaluators
         return
       end
 
-      if @evaluation.update(supplemental_notes_params)
-        redirect_to evaluators_evaluation_path(@evaluation), notice: 'Evaluation updated successfully.'
+      result = ::Evaluations::SupplementalNotesService.new(@evaluation, current_user, supplemental_notes_params).call
+
+      if result.success?
+        redirect_to evaluators_evaluation_path(@evaluation), notice: result.message
       else
-        # Supplemental notes come from the show page. Return validation errors there.
-        @evaluation_form_values = { supplemental_notes: supplemental_notes_params.to_h.with_indifferent_access }
-        @evaluation_form_errors = { supplemental_notes: evaluation_form_errors(@evaluation.errors, :supplemental_notes) }
-        prepare_show_context
-        render :show, status: :unprocessable_content
+        render_lifecycle_failure(:supplemental_notes, supplemental_notes_params, "Failed to update evaluation: #{result.message}")
       end
     end
 
@@ -194,7 +192,7 @@ module Evaluators
       @evaluation = if current_user.admin?
                       Evaluation.find(params[:id])
                     else
-                      current_user.evaluations.find(params[:id])
+                      current_user.assigned_evaluations.find(params[:id])
                     end
     rescue ActiveRecord::RecordNotFound
       redirect_to evaluators_evaluations_path, alert: 'Evaluation not found.'
@@ -226,12 +224,6 @@ module Evaluators
 
     def reschedule_params
       params.expect(evaluation: %i[evaluation_date location reschedule_reason])
-    end
-
-    def require_evaluator!
-      return if current_user&.evaluator? || current_user&.admin?
-
-      redirect_to root_path, alert: 'Not authorized'
     end
 
     def authorize_evaluation_mutation!

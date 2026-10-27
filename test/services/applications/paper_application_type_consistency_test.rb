@@ -15,7 +15,6 @@ module Applications
       # Set Current context to skip proof validations in tests
       Current.paper_context = true
 
-      # Set up FPL policies for testing
       setup_fpl_policies
       @valid_params = {
         constituent: {
@@ -51,14 +50,12 @@ module Applications
 
       assert service.create, "Failed to create paper application: #{service.errors.join(', ')}"
 
-      # Verify the constituent was created with the right type
       constituent = User.find_by(email: @valid_params[:constituent][:email])
       assert_not_nil constituent, 'Constituent was not created'
       assert_equal 'Users::Constituent', constituent.type, 'Constituent has incorrect type'
     end
 
     teardown do
-      # Clean up Current context after the test
       Current.reset
     end
   end

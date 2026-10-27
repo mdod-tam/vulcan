@@ -1,7 +1,5 @@
 # frozen_string_literal: true
 
-# Seed File for "application_notifications_registration_confirmation"
-# --------------------------------------------------
 EmailTemplate.create_or_find_by!(name: 'application_notifications_registration_confirmation', format: :text, locale: 'en') do |template|
   template.subject = 'Welcome to the Maryland Accessible Telecommunications Program'
   template.description = 'Sent to a user immediately after they register an account, outlining program and next steps.'
@@ -31,7 +29,7 @@ EmailTemplate.create_or_find_by!(name: 'application_notifications_registration_c
     * Smartphones (iPhone, iPad, Pixel) with accessibility features and applications to support multiple types of disabilities
     * Amplified phones for individuals with hearing loss
     * Specialized landline phones for individuals with vision loss or hearing loss
-    * Braille and speech products for individuals wih speech differences
+    * Braille and speech products for individuals with speech differences
     * Communication aids for cognitive, memory or speech differences
     * Visual, audible, and tactile alerting systems and accessories
 

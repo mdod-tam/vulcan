@@ -1,7 +1,7 @@
 # frozen_string_literal: true
 
 module VendorPortal
-  # Base controller for all vendor portal controllers
+  # Base for the vendor portal: English locale and vendor-only access.
   class BaseController < ApplicationController
     prepend_around_action :with_vendor_portal_locale
     before_action :authenticate_vendor!
@@ -28,13 +28,10 @@ module VendorPortal
     end
 
     def authenticate_vendor!
-      # First ensure user is authenticated
       authenticate_user!
 
-      # Then verify they are a vendor
       return if current_user&.vendor?
 
-      # Handle format-specific responses for authentication failures
       respond_to do |format|
         format.html do
           flash[:alert] = I18n.t('alerts.must_be_vendor', default: 'You must be a vendor to access this section')

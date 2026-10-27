@@ -3,8 +3,8 @@
 require 'test_helper'
 
 module VendorPortal
-  # Failed date-of-birth checks used to be counted in the session and reset whenever the vendor
-  # reloaded the form, so the limit never applied.
+  # Failed date-of-birth checks are counted in VoucherVerificationThrottle, not in the session, so
+  # reloading the form or signing out does not reset the limit.
   class VoucherVerificationLockoutTest < ActionDispatch::IntegrationTest
     setup do
       @constituent = create(:constituent, date_of_birth: Date.new(1980, 9, 10))

@@ -3,20 +3,7 @@ import { setVisible, hide, show } from "../../utils/visibility"
 
 /**
  * Shows contact and document delivery feedback for the selected preferences.
- * 
- * Usage (include the address targets for delivery feedback):
- *   <div data-controller="contact-feedback">
- *     <input data-contact-feedback-target="phone" ...>
- *     <input data-contact-feedback-target="email" ...>
- *     <input type="radio" name="contact_method" value="voice"
- *            data-action="change->contact-feedback#updateFeedback">
- *     <input data-contact-feedback-target="address1" ...>
- *     <input data-contact-feedback-target="address2" ...>
- *     <input data-contact-feedback-target="city" ...>
- *     <input data-contact-feedback-target="state" ...>
- *     <input data-contact-feedback-target="zipCode" ...>
- *     <div data-contact-feedback-target="feedback"></div>
- *   </div>
+ * Delivery feedback needs the address targets as well as the phone and email targets.
  */
 export default class ContactFeedbackController extends Controller {
   static targets = [
@@ -511,7 +498,7 @@ export default class ContactFeedbackController extends Controller {
     
     const baseClassName = "mt-2 p-3 rounded-md text-sm font-medium flex items-center gap-2"
     const successClassName = `${baseClassName} bg-teal-50 text-teal-800 border border-teal-200`
-    const warningClassName = `${baseClassName} bg-amber-50 text-amber-800 border border-amber-200`
+    const warningClassName = `${baseClassName} bg-warning-50 text-warning-800 border border-warning-200`
     
     const checkIcon = `<svg class="w-5 h-5 flex-shrink-0" fill="currentColor" viewBox="0 0 20 20" aria-hidden="true">
       <path fill-rule="evenodd" d="M10 18a8 8 0 100-16 8 8 0 000 16zm3.707-9.293a1 1 0 00-1.414-1.414L9 10.586 7.707 9.293a1 1 0 00-1.414 1.414l2 2a1 1 0 001.414 0l4-4z" clip-rule="evenodd"/>
@@ -627,8 +614,8 @@ export default class ContactFeedbackController extends Controller {
     const address = this._buildFullAddress()
     
     const baseClassName = "mt-2 p-3 rounded-md text-sm font-medium flex items-start gap-2"
-    const successClassName = `${baseClassName} bg-indigo-50 text-indigo-800 border border-indigo-200`
-    const warningClassName = `${baseClassName} bg-amber-50 text-amber-800 border border-amber-200`
+    const successClassName = `${baseClassName} bg-primary-50 text-primary-800 border border-primary-200`
+    const warningClassName = `${baseClassName} bg-warning-50 text-warning-800 border border-warning-200`
     
     const mailIcon = `<svg class="w-5 h-5 flex-shrink-0 mt-0.5" fill="currentColor" viewBox="0 0 20 20" aria-hidden="true">
       <path d="M2.003 5.884L10 9.882l7.997-3.998A2 2 0 0016 4H4a2 2 0 00-1.997 1.884z"/>

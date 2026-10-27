@@ -16,7 +16,7 @@ module Admin
     before_action :set_application, only: %i[
       show edit update
       review_proof update_proof_status
-      approve reject assign_evaluator reassign_evaluator assign_trainer request_evaluation
+      approve reject assign_evaluator reassign_evaluator assign_trainer reassign_trainer request_evaluation
       update_certification_status resend_medical_certification assign_voucher
       upload_medical_certification send_document_signing_request
       queue_medical_certification_form
@@ -140,7 +140,7 @@ module Admin
       end
     end
 
-    # @return [User] The current user, reloaded for legacy administrator types
+    # @return [User] The current user, reloaded when its type names an administrator class but admin? is false
     def validate_and_prepare_admin_user
       Rails.logger.info "Current user ID: #{current_user.id}; Current user type: #{current_user.type}, admin? method result: #{current_user.admin?}"
 
@@ -230,9 +230,9 @@ module Admin
     end
 
     def assign_evaluator
-      evaluator = Users::Evaluator.available.find_by(id: assignment_selection_id(:evaluator_id))
+      evaluator = User.assignable_for(:can_evaluate).find_by(id: assignment_selection_id(:evaluator_id))
 
-      if @application.assign_evaluator!(evaluator)
+      if @application.assign_evaluator!(evaluator, actor: current_user)
         redirect_to admin_application_path(@application),
                     notice: t('.eval_assign_pass')
       else
@@ -242,7 +242,7 @@ module Admin
     end
 
     def reassign_evaluator
-      evaluator = Users::Evaluator.available.find_by(id: assignment_selection_id(:evaluator_id))
+      evaluator = User.assignable_for(:can_evaluate).find_by(id: assignment_selection_id(:evaluator_id))
 
       if @application.reassign_evaluator!(evaluator, actor: current_user)
         redirect_to admin_application_path(@application), notice: 'Evaluator reassigned. Existing appointment details have been preserved.'
@@ -252,7 +252,7 @@ module Admin
     end
 
     def assign_trainer
-      trainer = Users::Trainer.available.find_by(id: assignment_selection_id(:trainer_id))
+      trainer = User.assignable_for(:can_train).find_by(id: assignment_selection_id(:trainer_id))
 
       if @application.assign_trainer!(trainer, actor: current_user)
         flash[:alert] = 'Saved. A training notice could not be queued. Do not repeat the assignment.' if @application.training_notification_outcomes.any?(&:warning?)
@@ -261,6 +261,18 @@ module Admin
       else
         redirect_to admin_application_path(@application),
                     alert: @application.errors.full_messages.to_sentence.presence || t('.trainer_assign_fail')
+      end
+    end
+
+    def reassign_trainer
+      trainer = User.assignable_for(:can_train).find_by(id: assignment_selection_id(:trainer_id))
+
+      if @application.reassign_trainer!(trainer, actor: current_user, expected_version: params[:expected_version].to_s)
+        flash[:alert] = 'Saved. A training notice could not be queued. Do not repeat the reassignment.' if @application.training_notification_outcomes.any?(&:warning?)
+        redirect_to admin_application_path(@application), notice: t('.trainer_reassign_pass')
+      else
+        redirect_to admin_application_path(@application),
+                    alert: @application.errors.full_messages.to_sentence.presence || t('.trainer_reassign_fail')
       end
     end
 
@@ -661,10 +673,6 @@ module Admin
 
     def require_admin!
       redirect_to root_path, alert: t('shared.unauthorized') unless current_user&.admin?
-    end
-
-    def set_current_attributes
-      Current.set(request, current_user)
     end
 
     def filtered_scope(scope)

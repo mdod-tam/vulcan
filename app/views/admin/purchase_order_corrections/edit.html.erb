@@ -9,8 +9,8 @@
     <% @item_versions.each do |id, version| %><%= hidden_field_tag "item_versions[#{id}]", version %><% end %>
     <%= render 'admin/purchase_orders/fields', form: form, purchase_order: @purchase_order, vendors: @vendors %>
     <div>
-      <%= label_tag :reason, 'Correction reason', class: 'block font-medium' %>
-      <%= text_area_tag :reason, params[:reason], required: true, rows: 2, class: 'mt-1 w-full rounded border-gray-300' %>
+      <%= label_tag :reason, 'Correction reason', class: 'form-label' %>
+      <%= text_area_tag :reason, params[:reason], required: true, rows: 2, class: 'form-input mt-1' %>
     </div>
     <% if @reviewing %>
       <%= render 'admin/equipment/correction_impact', record: @purchase_order, previous_values: @previous_values,
@@ -20,16 +20,16 @@
     <% end %>
     <% if (@items.size > 1 || @items.any?(&:shipped_at?)) && !@reviewing %>
       <%= button_tag 'Review correction', name: :review, value: '1', formnovalidate: true,
-                                          data: { turbo_submits_with: 'Reviewing...' }, class: 'rounded bg-indigo-700 px-4 py-2 text-white' %>
+                                          data: { turbo_submits_with: 'Reviewing...' }, class: 'btn btn-primary' %>
     <% else %>
-      <%= form.submit 'Save purchase order correction', data: { turbo_submits_with: 'Saving...' }, class: 'rounded bg-indigo-700 px-4 py-2 text-white' %>
+      <%= form.submit 'Save purchase order correction', data: { turbo_submits_with: 'Saving...' }, class: 'btn btn-primary' %>
       <% if @reviewing %>
         <%= button_tag 'Review changed values', name: :review, value: '1', formnovalidate: true,
-                                                data: { turbo_submits_with: 'Reviewing...' }, class: 'ml-3 text-indigo-700 underline' %>
+                                                data: { turbo_submits_with: 'Reviewing...' }, class: 'ml-3 text-primary-700 underline' %>
       <% end %>
     <% end %>
   <% end %>
   <p><%= link_to 'Refresh purchase order and discard this draft',
-                 edit_admin_purchase_order_correction_path(@purchase_order, return_context: @return_context), class: 'text-indigo-700 underline' %></p>
-  <%= link_to 'Back to purchase order', admin_purchase_order_path(@purchase_order, return_context: @return_context), class: 'text-indigo-700 underline' %>
+                 edit_admin_purchase_order_correction_path(@purchase_order, return_context: @return_context), class: 'text-primary-700 underline' %></p>
+  <%= link_to 'Back to purchase order', admin_purchase_order_path(@purchase_order, return_context: @return_context), class: 'text-primary-700 underline' %>
 </div>

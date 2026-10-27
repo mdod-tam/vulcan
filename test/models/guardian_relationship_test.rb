@@ -56,14 +56,7 @@ class GuardianRelationshipTest < ActiveSupport::TestCase
       relationship_type: 'Legal Guardian' # Type can be different, pair must be unique
     )
     assert_not(duplicate_relationship.valid?, 'Expected duplicate relationship to be invalid')
-    # Assuming the unique index is on guardian_id and dependent_id in the database,
-    # Rails might report this as an error on :guardian_id or :dependent_id depending on implementation.
-    # A common way is an error on one of the fields, e.g., :dependent_id "has already been taken".
-    # Or a custom validation might add to :base.
-    # For this example, let's assume a general uniqueness error message.
-    # If using a custom validation message:
-    # assert_includes duplicate_relationship.errors[:base], "Guardian and dependent relationship already exists"
-    # If relying on DB index and default Rails message (often on the second field in index):
+    # The uniqueness error may be reported on either id column.
     assert(duplicate_relationship.errors[:dependent_id].any? || duplicate_relationship.errors[:guardian_id].any?,
            'Expected an error on dependent_id or guardian_id for uniqueness')
   end

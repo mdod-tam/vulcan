@@ -1,8 +1,5 @@
 # frozen_string_literal: true
 
-# Seed File for "vendor_notifications_w9_rejected"
-# (Suggest saving as db/seeds/email_templates/vendor_notifications_w9_rejected.rb)
-# --------------------------------------------------
 template = EmailTemplate.find_or_initialize_by(name: 'vendor_notifications_w9_rejected', format: :text, locale: 'es')
 template.subject = 'El Formulario W9 Requiere Corrección'
 template.description = 'Enviado a un proveedor cuando su formulario W9 enviado ha sido rechazado y requiere correcciones.'

@@ -10,7 +10,6 @@ class ProofManageableTest < ActiveSupport::TestCase
     # Set paper application context for tests - but NOT for audit tests
     setup_paper_application_context
 
-    # Replace fixture references with factory calls
     @application = create(:application, :in_progress_with_pending_proofs)
     @user = create(:constituent)
     @admin = create(:admin) # Needed for audit events
@@ -21,7 +20,6 @@ class ProofManageableTest < ActiveSupport::TestCase
   end
 
   teardown do
-    # Clear paper application context after tests
     teardown_paper_application_context
   end
 

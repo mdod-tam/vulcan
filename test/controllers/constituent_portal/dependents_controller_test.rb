@@ -410,7 +410,7 @@ module ConstituentPortal
     end
 
     # Replay and admission both run before model validation. Date.parse read 9/9/26 as 2009-09-26,
-    # so a rejected date used to fingerprint as the real one and report "already added".
+    # so a rejected date would fingerprint as the real one and report "already added".
     test 'an unreadable date of birth is refused before replay with a spent key' do
       key = SecureRandom.hex(16)
       body = dependent_body(date_of_birth: '2009-09-26')
@@ -728,11 +728,11 @@ module ConstituentPortal
       get constituent_portal_dependent_path(@dependent)
       assert_response :success
 
-      assert_select '.bg-white', text: /Recent Changes/i
+      assert_select '.card', text: /Recent Changes/i
       assert_select 'span', text: @guardian.full_name
       assert_select 'span', text: /First name/i
-      assert_select 'span.text-red-600', text: 'O*** N***'
-      assert_select 'span.text-green-600', text: 'N*** N***'
+      assert_select 'span.text-danger-600', text: 'O*** N***'
+      assert_select 'span.text-success-600', text: 'N*** N***'
     end
 
     test 'should show recent changes on dependent edit page' do
@@ -754,10 +754,10 @@ module ConstituentPortal
       get edit_constituent_portal_dependent_path(@dependent)
       assert_response :success
 
-      assert_select '.bg-white', text: /Recent Changes/i
+      assert_select '.card', text: /Recent Changes/i
       assert_select 'span', text: /Phone/i
-      assert_select 'span.text-red-600', text: '***-***-4567'
-      assert_select 'span.text-green-600', text: '***-***-6543'
+      assert_select 'span.text-danger-600', text: '***-***-4567'
+      assert_select 'span.text-success-600', text: '***-***-6543'
     end
 
     test 'should not allow non-guardian to access dependent' do

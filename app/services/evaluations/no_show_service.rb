@@ -10,15 +10,13 @@ module Evaluations
     end
 
     def call
-      @evaluation.application.with_lock do
-        @evaluation.with_lock do
-          validate_transition!
-          @evaluation.update!(
-            status: :no_show,
-            notes: no_show_notes
-          )
-          create_event!
-        end
+      @evaluation.with_actor_and_application_lock(@actor) do
+        validate_transition!
+        @evaluation.update!(
+          status: :no_show,
+          notes: no_show_notes
+        )
+        create_event!
       end
 
       success('Evaluation marked as no-show.', { evaluation: @evaluation })
@@ -33,7 +31,6 @@ module Evaluations
     private
 
     def validate_transition!
-      raise ArgumentError, 'Only the assigned evaluator can update this evaluation.' unless @evaluation.evaluator_id == @actor&.id
       raise ArgumentError, 'Only scheduled or confirmed evaluations can be marked as no-show.' unless @evaluation.status_scheduled? || @evaluation.status_confirmed?
       raise ArgumentError, 'evaluation_date is required before marking an evaluation as no-show' if @evaluation.evaluation_date.blank?
       raise ArgumentError, 'Evaluation can only be marked as no-show after its scheduled time.' if @evaluation.evaluation_date.future?

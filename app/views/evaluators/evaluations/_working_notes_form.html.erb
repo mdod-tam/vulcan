@@ -1,8 +1,8 @@
 <%# locals: (evaluation:, can_edit:) -%>
 <% form_values = @evaluation_form_values.fetch(:save_working_notes, {}) # rubocop:disable Lint/UselessAssignment -- Used by later ERB fragments. %>
-<section class="mt-8 bg-white shadow rounded-lg p-6" aria-labelledby="working-notes-heading">
+<section class="mt-8 card p-6" aria-labelledby="working-notes-heading">
   <h2 id="working-notes-heading" class="text-lg font-semibold text-gray-900"><%= t('evaluators.evaluations.working_notes.title') %></h2>
-  <p id="working-notes-help" class="mt-2 text-sm text-gray-600">
+  <p id="working-notes-help" class="form-hint">
     <strong><%= t('evaluators.evaluations.forms.internal_notes_only') %></strong>
     <%= t('evaluators.evaluations.working_notes.help') %>
   </p>
@@ -16,13 +16,12 @@
             heading: evaluation_action_error_heading(:save_working_notes)
           ) %>
       <div>
-        <%= f.label :working_notes, t('evaluators.evaluations.working_notes.label'), class: 'block text-sm font-medium text-gray-700' %>
+        <%= f.label :working_notes, t('evaluators.evaluations.working_notes.label'), class: 'form-label' %>
         <%= f.text_area(
               :working_notes,
               value: form_values.fetch(:working_notes, evaluation.working_notes),
               rows: 5,
-              class: 'mt-1 block w-full border border-gray-300 rounded-md shadow-sm py-2 px-3 ' \
-                     'focus:outline-none focus:ring-indigo-500 focus:border-indigo-500 sm:text-sm',
+              class: 'form-input mt-1',
               aria: action_form_field_aria(
                 :save_working_notes, :working_notes,
                 describedby: 'working-notes-help', form_errors: @evaluation_form_errors
@@ -32,9 +31,7 @@
       </div>
       <%= f.submit t('evaluators.evaluations.working_notes.save'),
                    data: { turbo_submits_with: 'Saving working notes...' },
-                   class: 'inline-flex justify-center py-2 px-4 border border-transparent shadow-sm text-sm font-medium ' \
-                          'rounded-md text-white bg-indigo-600 hover:bg-indigo-700 focus:outline-none focus:ring-2 ' \
-                          'focus:ring-offset-2 focus:ring-indigo-500' %>
+                   class: 'btn btn-primary' %>
     <% end %>
   <% else %>
     <%= render(

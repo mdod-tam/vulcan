@@ -41,15 +41,12 @@ module Applications
         metadata: {}
       )
 
-      # Stub the audit log builder to return these events
-      # The deduplication is now handled by EventDeduplicationService, so we can test filtering in isolation.
+      # Stub the audit log builder so filtering is tested without deduplication.
       all_events = [cert_notification, cert_status_change, cert_event, non_cert_event]
       @service.instance_variable_get(:@audit_log_builder).stubs(:build_deduplicated_audit_logs).returns(all_events)
 
-      # Execute
       result = @service.certification_events
 
-      # Verify
       assert_includes result, cert_notification
       assert_includes result, cert_status_change
       assert_includes result, cert_event
@@ -77,7 +74,6 @@ module Applications
         created_at: time_base - 1.minute
       )
 
-      # Create ApplicationStatusChange directly
       request_status_change = ApplicationStatusChange.create!(
         application: @application,
         user: @admin,
@@ -90,10 +86,8 @@ module Applications
       all_events = [request_notification, approved_event, request_status_change]
       @service.instance_variable_get(:@audit_log_builder).stubs(:build_deduplicated_audit_logs).returns(all_events)
 
-      # Execute
       result = @service.request_events
 
-      # Verify - should return formatted hash objects for admin views
       assert_equal 2, result.size
       assert(result.all? { |r| r.is_a?(Hash) })
 
@@ -106,7 +100,6 @@ module Applications
         assert_equal @admin.full_name, request_event[:actor_name]
       end
 
-      # Verify they are sorted by timestamp in reverse order (most recent first)
       assert_equal result, result.sort_by { |r| r[:timestamp] }.reverse
     end
   end

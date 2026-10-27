@@ -2,7 +2,7 @@
 
 require 'test_helper'
 
-# Cancellation and outcome boundaries found in pre-PR review, kept as regressions.
+# Cancellation and outcome boundaries of email delivery, kept as regressions.
 class EmailDeliveryBoundaryTest < ActionDispatch::IntegrationTest
   include ActiveJob::TestHelper
 

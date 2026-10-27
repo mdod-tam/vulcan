@@ -2,14 +2,6 @@
 
 module FplPolicyHelpers
   def setup_fpl_policies
-    # Stub the log_change method to avoid validation errors in test
-    Policy.class_eval do
-      def log_change
-        # No-op in test environment to bypass the user requirement
-      end
-    end
-
-    # Use find_or_initialize_by with explicit update to avoid race conditions
     policies = [
       { key: 'fpl_1_person', value: 15_650 },
       { key: 'fpl_2_person', value: 21_150 },

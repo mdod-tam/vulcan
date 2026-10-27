@@ -62,7 +62,7 @@ module DuplicateReconciliation
 
     def another_open_case_for_pair?
       first_id, second_id = @pair_ids
-      DuplicateReviewCase.open_cases
+      DuplicateReviewCase.open
                          .joins(:duplicate_review_case_candidates)
                          .where.not(source: :post_import_reconciliation)
                          .exists?(

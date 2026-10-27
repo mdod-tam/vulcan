@@ -1,6 +1,6 @@
 <div class="min-h-screen flex items-center justify-center bg-gray-100 px-4 py-12">
-  <div class="bg-white p-6 sm:p-8 rounded-lg shadow-md w-full max-w-md text-center">
-    <svg class="mx-auto h-12 w-12 text-green-500" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+  <div class="card p-6 sm:p-8 w-full max-w-md text-center">
+    <svg class="mx-auto h-12 w-12 text-success-500" fill="none" stroke="currentColor" viewBox="0 0 24 24">
       <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M5 13l4 4L19 7"></path>
     </svg>
 
@@ -12,7 +12,7 @@
 
     <div class="mt-6">
       <%= link_to t("portal_self_service.account_recovery.back_to_sign_in"), sign_in_path(locale: public_request_locale_param),
-                 class: "inline-block py-2 px-4 border border-transparent rounded-md shadow-sm text-sm font-medium text-white bg-indigo-600 hover:bg-indigo-700" %>
+                 class: "btn btn-primary" %>
     </div>
   </div>
 </div>

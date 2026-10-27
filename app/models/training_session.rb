@@ -22,6 +22,20 @@ class TrainingSession < ApplicationRecord
 
   # The canonical open-session set includes requested rows. StatusManagement.active excludes them.
   scope :assigned_or_scheduled, -> { where(status: OPEN_STATUSES) }
+
+  # Open assigned work for access changes and recovery queues: everything neither completed nor cancelled, so
+  # requested and legacy rescheduled rows count. A no-show is still owed a follow-up only until a later session
+  # exists for the application.
+  scope :open_assigned, lambda {
+    where.not(status: %i[completed cancelled]).where(<<~SQL.squish, no_show: statuses.fetch('no_show'))
+      training_sessions.status <> :no_show OR NOT EXISTS (
+        SELECT 1 FROM training_sessions later
+        WHERE later.application_id = training_sessions.application_id
+          AND (later.created_at, later.id) > (training_sessions.created_at, training_sessions.id)
+      )
+    SQL
+  }
+
   scope :latest_per_application, lambda {
     select('DISTINCT ON (training_sessions.application_id) training_sessions.*')
       .order('training_sessions.application_id, training_sessions.created_at DESC, training_sessions.id DESC')
@@ -43,7 +57,7 @@ class TrainingSession < ApplicationRecord
 
   validates :scheduled_for, presence: true, if: -> { status_scheduled? || status_confirmed? || will_be_scheduled? }
   validates :reschedule_reason, presence: true, if: :rescheduling?
-  validate :trainer_must_be_trainer_type
+  validate :trainer_must_be_trainer_type, if: -> { new_record? || will_save_change_to_trainer_id? }
   validate :scheduled_time_must_be_future
   validate :recorded_outcome_cannot_change
   validate :training_session_capacity_available, if: :entering_open_status?
@@ -105,19 +119,30 @@ class TrainingSession < ApplicationRecord
                .count
   end
 
+  # Locks the acting user, then the application, then this session, the order access changes use. The locked row
+  # decides whether the actor may still work: a request that loaded the user before a capability change commits
+  # must not act on the stale copy.
   def with_current_trainer_lock(actor)
-    application.with_lock do
-      with_lock do
-        errors.clear
-        raise TrainingSessions::OperationError, I18n.t('training_rules.current_trainer_change') unless application.current_trainer?(actor) && trainer_id == actor&.id
+    transaction do
+      actor = User.lock_for_merge_integrity!(actor).fetch(actor.id) if actor&.persisted?
+      application.with_lock do
+        with_lock do
+          errors.clear
+          raise TrainingSessions::OperationError, I18n.t('training_rules.current_trainer_change') unless assigned_to?(actor)
 
-        yield
+          yield
+        end
       end
     end
   end
 
   def open_status?
     OPEN_STATUSES.include?(status&.to_sym)
+  end
+
+  # True while the person still holds this row, as the application's covering trainer, and may take trainer work.
+  def assigned_to?(user)
+    user.present? && trainer_id == user.id && application.current_trainer?(user) && user.assignable_trainer?
   end
 
   private
@@ -157,12 +182,13 @@ class TrainingSession < ApplicationRecord
     end
   end
 
+  # Checked for a new or changed assignee only, so a former assignee who lost eligibility can still be cancelled or edited.
   def trainer_must_be_trainer_type
     return unless trainer
 
     return if trainer.assignable_trainer?
 
-    errors.add(:trainer, 'must be a trainer')
+    errors.add(:trainer, 'must be an active staff member with training capability')
   end
 
   def scheduled_time_must_be_future

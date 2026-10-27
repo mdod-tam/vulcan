@@ -9,16 +9,9 @@ module Vouchers
       @voucher = voucher
     end
 
-    # Build combined audit logs from multiple sources for a voucher
+    # Events whose metadata names this voucher's id or code, newest first.
     def build_audit_logs
       return [] unless voucher
-
-      # Currently, only events directly related to the voucher are logged in the Event model.
-      # In the future, this could be expanded to include:
-      # - VoucherTransaction events (e.g., redemption, refund)
-      # - Invoice events related to the voucher
-      # - User profile changes related to the voucher's recipient (if applicable)
-      # - Application events related to the voucher's parent application
 
       Event.where('metadata @> ?', { voucher_id: voucher.id }.to_json)
            .or(Event.where('metadata @> ?', { voucher_code: voucher.code }.to_json))
@@ -31,7 +24,7 @@ module Vouchers
       []
     end
 
-    # Build deduplicated audit logs using the EventDeduplicationService
+    # The same events with duplicates merged by Applications::EventDeduplicationService.
     def build_deduplicated_audit_logs
       return [] unless voucher
 

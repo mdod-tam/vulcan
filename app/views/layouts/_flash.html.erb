@@ -1,8 +1,0 @@
-<!-- app/views/layouts/_flash.html.erb -->
-<% flash.each do |key, message| %>
-  <div class="mb-4">
-    <div class="<%= flash_class_for(key) %> px-4 py-3 rounded relative">
-      <span class="block sm:inline"><%= message %></span>
-    </div>
-  </div>
-<% end %>

@@ -7,7 +7,7 @@ module DuplicateReconciliation
     end
 
     def required_for?(user)
-      DuplicateReviewCase.open_cases.for_participant(user).exists? || @population.unresolved_for_user?(user)
+      DuplicateReviewCase.open.for_participant(user).exists? || @population.unresolved_for_user?(user)
     end
   end
 end

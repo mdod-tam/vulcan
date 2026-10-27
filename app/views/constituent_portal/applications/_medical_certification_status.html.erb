@@ -21,7 +21,7 @@
   
   <% if @application.medical_certification_status == "requested" %>
     <p>
-      <span class="certification-status px-2 py-1 text-sm rounded-full <%= badge_class_for(:certification, @application.medical_certification_status) %>">
+      <span class="certification-status <%= badge_class_for(:certification, @application.medical_certification_status) %>">
         Disability Certification Form <%= @application.medical_certification_status&.titleize %>
       </span>
       <% if @application.medical_certification_request_count && @application.medical_certification_request_count > 0 %>
@@ -42,17 +42,17 @@
       </div>
     <% end %>
   <% elsif @application.medical_certification_status == "received" %>
-    <p><span class="certification-status px-2 py-1 text-sm rounded-full <%= badge_class_for(:certification, @application.medical_certification_status) %>">Received</span></p>
+    <p><span class="certification-status <%= badge_class_for(:certification, @application.medical_certification_status) %>">Received</span></p>
     <p class="text-sm text-gray-600 mt-1">
       Certification received on <%= @application.medical_certification_received_at&.strftime("%B %d, %Y at %I:%M %p") %>
     </p>
   <% elsif @application.medical_certification_status == "approved" %>
-    <p><span class="certification-status px-2 py-1 text-sm rounded-full <%= badge_class_for(:certification, @application.medical_certification_status) %>">Approved</span></p>
+    <p><span class="certification-status <%= badge_class_for(:certification, @application.medical_certification_status) %>">Approved</span></p>
     <p class="text-sm text-gray-600 mt-1">
       Certification approved on <%= @application.medical_certification_approved_at&.strftime("%B %d, %Y at %I:%M %p") %>
     </p>
   <% elsif @application.medical_certification_status == "rejected" %>
-    <p><span class="certification-status px-2 py-1 text-sm rounded-full <%= badge_class_for(:certification, @application.medical_certification_status) %>">Rejected</span></p>
+    <p><span class="certification-status <%= badge_class_for(:certification, @application.medical_certification_status) %>">Rejected</span></p>
     <p class="text-sm text-gray-600 mt-1">
       Certification rejected on <%= @application.medical_certification_rejected_at&.strftime("%B %d, %Y at %I:%M %p") %>
     </p>
@@ -60,6 +60,6 @@
       <p class="text-sm mt-2"><strong>Reason:</strong> <%= @application.medical_certification_rejection_reason %></p>
     <% end %>
   <% else %>
-    <p><span class="certification-status px-2 py-1 text-sm rounded-full <%= badge_class_for(:certification, @application.medical_certification_status) %>">Not Requested</span></p>
+    <p><span class="certification-status <%= badge_class_for(:certification, @application.medical_certification_status) %>">Not Requested</span></p>
   <% end %>
 </div>

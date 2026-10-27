@@ -3,20 +3,20 @@
     <h1 class="text-2xl font-bold">Products Management</h1>
     <div class="flex space-x-3">
       <a href="<%= admin_dashboard_path %>"
-         class="inline-flex items-center px-4 py-2 border border-gray-300 rounded-md shadow-sm text-sm font-medium text-gray-700 bg-white hover:bg-gray-50 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-indigo-500"
+         class="btn btn-outline"
          data-turbo-frame="_top"
          aria-label="Return to applications dashboard">
         Back to Dashboard
       </a>
       <%= link_to "Add New Product", 
           new_admin_product_path, 
-          class: "inline-flex items-center px-4 py-2 border border-transparent rounded-md shadow-sm text-sm font-medium text-white bg-indigo-600 hover:bg-indigo-700 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-indigo-500" %>
+          class: "btn btn-primary" %>
     </div>
   </div>
 
   <div class="mb-6">
     <%= form_tag admin_products_path, method: :get, class: "space-y-4", data: { turbo_frame: "products_list" } do %>
-      <div class="bg-white p-4 rounded-lg shadow">
+      <div class="card p-4">
         <h2 class="text-lg font-medium mb-4">Filter by Device Types</h2>
         <div class="grid grid-cols-2 md:grid-cols-3 lg:grid-cols-4 gap-4">
           <% Product::DEVICE_TYPES.sort.each do |device_type| %>
@@ -25,14 +25,14 @@
                   device_type, 
                   params[:device_types]&.include?(device_type),
                   id: "device_type_#{device_type.parameterize}",
-                  class: "h-4 w-4 text-indigo-600 focus:ring-indigo-500 border-gray-300 rounded" %>
+                  class: "h-4 w-4 text-primary-600 border-gray-300 rounded" %>
               <%= label_tag "device_type_#{device_type.parameterize}", 
                   device_type,
                   class: "ml-2 text-sm text-gray-700" %>
             </div>
           <% end %>
         </div>
-        <%= submit_tag "Apply Filters", class: "mt-4 bg-indigo-600 text-white px-4 py-2 rounded-md" %>
+        <%= submit_tag "Apply Filters", class: "btn btn-primary mt-4" %>
       </div>
     <% end %>
   </div>
@@ -41,11 +41,11 @@
     <% Product::DEVICE_TYPES.sort.each do |device_type| %>
       <% if @products_by_type[device_type].present? %>
         <%
-          details_attributes = { class: "mb-6 bg-white rounded-lg shadow" }
+          details_attributes = { class: "card mb-6" }
           details_attributes[:open] = true if params[:device_types]&.include?(device_type)
         %>
         <%= tag.details **details_attributes do %>
-          <summary class="px-6 py-4 cursor-pointer focus:outline-none focus:ring-2 focus:ring-indigo-500">
+          <summary class="px-6 py-4 cursor-pointer">
             <div class="flex items-center justify-between">
               <h2 class="text-lg font-medium"><%= device_type %></h2>
               <span class="text-gray-500">(<%= @products_by_type[device_type].count %> products)</span>
@@ -73,17 +73,17 @@
                       <%= product.vendors.map(&:full_name).join(", ") %>
                     </td>
                     <td class="px-6 py-4 whitespace-nowrap text-right text-sm font-medium">
-                      <%= link_to 'Resources', admin_product_path(product), class: 'text-indigo-600 hover:text-indigo-900 mr-4' %>
+                      <%= link_to 'Resources', admin_product_path(product), class: 'text-primary-600 hover:text-primary-900 mr-4' %>
                       <%= link_to "Edit", edit_admin_product_path(product), 
-                          class: "text-indigo-600 hover:text-indigo-900 mr-4" %>
+                          class: "text-primary-600 hover:text-primary-900 mr-4" %>
                       <% if product.archived? %>
                         <%= button_to "Unarchive", unarchive_admin_product_path(product),
                             method: :post,
-                            class: "text-green-600 hover:text-green-900" %>
+                            class: "text-success-600 hover:text-success-900" %>
                       <% else %>
                         <%= button_to "Archive", archive_admin_product_path(product),
                             method: :post,
-                            class: "text-red-600 hover:text-red-900" %>
+                            class: "text-danger-600 hover:text-danger-900" %>
                       <% end %>
                     </td>
                   </tr>
@@ -91,7 +91,7 @@
               </tbody>
             </table>
           </div>
-        <% end %> <%# End tag.details %>
+        <% end %>
       <% end %>
     <% end %>
   </div>

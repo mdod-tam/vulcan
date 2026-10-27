@@ -37,7 +37,7 @@ module DuplicateReviewCases
         # failure result every other blocker here returns.
         raise IneligibleUserError unless locked_user.public_login_active?
         raise IneligibleActorError unless @actor.admin? && @actor.public_login_active?
-        raise OpenCaseExistsError if DuplicateReviewCase.open_cases.for_participant(locked_user).exists?
+        raise OpenCaseExistsError if DuplicateReviewCase.open.for_participant(locked_user).exists?
         raise UnresolvedPairExistsError if DuplicateReconciliation::Population.new.unresolved_for_user?(locked_user)
 
         locked_user.update!(needs_duplicate_review: false)

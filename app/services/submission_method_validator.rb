@@ -17,7 +17,7 @@ class SubmissionMethodValidator
       :unknown
     end
   rescue StandardError
-    # Handle any errors when trying to convert to symbol
+    # A value that cannot be converted to a symbol is also invalid.
     Rails.logger.warn("Error converting '#{submission_method}' to symbol - defaulting to :unknown")
     :unknown
   end

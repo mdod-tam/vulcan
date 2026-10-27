@@ -1,15 +1,15 @@
 <%= form_with url: bulk_update_admin_policies_path, method: :patch do |form| %>
   <% if flash[:notice] %>
-    <div class="p-4 bg-green-50 border-l-4 border-green-400" role="alert">
-      <p class="text-green-700"><%= flash[:notice] %></p>
+    <div class="p-4 bg-success-50 border-l-4 border-success-400" role="alert">
+      <p class="text-success-700"><%= flash[:notice] %></p>
     </div>
   <% end %>
 
   <div class="p-6">
     <h2 class="text-lg font-medium text-gray-900 mb-4">Federal Poverty Level (FPL) Settings</h2>
     
-    <div class="bg-yellow-50 border-l-4 border-yellow-400 p-4 mb-6">
-      <p class="text-sm text-yellow-700">
+    <div class="bg-warning-50 border-l-4 border-warning-400 p-4 mb-6">
+      <p class="text-sm text-warning-700">
         These values should be updated annually when new Federal Poverty Level guidelines are released, 
         typically in January or February.
       </p>
@@ -21,13 +21,13 @@
       <% if modifier_policy %>
         <div class="flex items-center space-x-4">
           <%= hidden_field_tag "policies[][id]", modifier_policy.id %>
-          <label for="policies_<%= modifier_policy.id %>_value" class="block text-sm font-medium text-gray-700">
+          <label for="policies_<%= modifier_policy.id %>_value" class="form-label">
             FPL Modifier Percentage
           </label>
-          <div class="relative rounded-md shadow-sm w-32">
+          <div class="relative rounded-md shadow-elevation-1 w-32">
             <%= number_field_tag "policies[][value]",
                 modifier_policy.value,
-                class: "block w-full pl-3 pr-8 py-2 rounded-md border-gray-300 focus:ring-indigo-500 focus:border-indigo-500 sm:text-sm",
+                class: "form-input pr-8",
                 required: true,
                 min: 100,
                 step: 100 %>
@@ -67,13 +67,13 @@
                 <%= render "create_missing_policy", policy: policy, key: policy_key, default_value: default_value %>
                 <% if policy %>
                   <%= hidden_field_tag "policies[][id]", policy.id %>
-                  <div class="relative rounded-md shadow-sm w-48">
+                  <div class="relative rounded-md shadow-elevation-1 w-48">
                     <div class="absolute inset-y-0 left-0 pl-3 flex items-center pointer-events-none">
                       <span class="text-gray-500 sm:text-sm">$</span>
                     </div>
                     <%= number_field_tag "policies[][value]",
                         policy.value,
-                        class: "block w-full pl-7 py-2 rounded-md border-gray-300 focus:ring-indigo-500 focus:border-indigo-500 sm:text-sm",
+                        class: "form-input pl-7",
                         required: true,
                         min: 0 %>
                   </div>
@@ -83,7 +83,7 @@
                 <% if policy && modifier_policy %>
                   <%= number_to_currency(policy.value * modifier_policy.value / 100) %>
                 <% else %>
-                  <span class="text-gray-400">Not available</span>
+                  <span class="text-gray-500">Not available</span>
                 <% end %>
               </td>
             </tr>
@@ -96,8 +96,8 @@
   <div class="p-6 border-t border-gray-200">
     <h2 class="text-lg font-medium text-gray-900 mb-4">Proof Submission Rate Limits</h2>
     
-    <div class="bg-blue-50 border-l-4 border-blue-400 p-4 mb-6">
-      <p class="text-sm text-blue-700">
+    <div class="bg-info-50 border-l-4 border-info-400 p-4 mb-6">
+      <p class="text-sm text-info-700">
         Configure how many proof submissions are allowed within a time period.
         Portal and secure-form submissions are rate limited through the web interface.
       </p>
@@ -127,8 +127,8 @@
   <div class="p-6 border-t border-gray-200">
     <h2 class="text-lg font-medium text-gray-900 mb-4">Voucher Policies</h2>
     
-    <div class="bg-blue-50 border-l-4 border-blue-400 p-4 mb-6">
-      <p class="text-sm text-blue-700">
+    <div class="bg-info-50 border-l-4 border-info-400 p-4 mb-6">
+      <p class="text-sm text-info-700">
         Configure the voucher values for each disability type and other voucher-related settings.
       </p>
     </div>
@@ -157,13 +157,13 @@
                 <%= render "create_missing_policy", policy: policy, key: policy_key, default_value: 500 %>
                 <% if policy %>
                   <%= hidden_field_tag "policies[][id]", policy.id %>
-                  <div class="relative rounded-md shadow-sm w-48">
+                  <div class="relative rounded-md shadow-elevation-1 w-48">
                     <div class="absolute inset-y-0 left-0 pl-3 flex items-center pointer-events-none">
                       <span class="text-gray-500 sm:text-sm">$</span>
                     </div>
                     <%= number_field_tag "policies[][value]",
                         policy.value,
-                        class: "block w-full pl-7 py-2 rounded-md border-gray-300 focus:ring-indigo-500 focus:border-indigo-500 sm:text-sm",
+                        class: "form-input pl-7",
                         required: true,
                         min: 0 %>
                   </div>
@@ -176,7 +176,7 @@
     </div>
 
     <div class="mt-6">
-      <h3 class="text-md font-medium text-gray-900 mb-4">Other Voucher Settings</h3>
+      <h3 class="text-base font-medium text-gray-900 mb-4">Other Voucher Settings</h3>
       <div class="overflow-x-auto">
         <table class="min-w-full divide-y divide-gray-200">
           <thead class="bg-gray-50">
@@ -201,10 +201,10 @@
                   <%= render "create_missing_policy", policy: policy, key: key, default_value: default_value %>
                   <% if policy %>
                     <%= hidden_field_tag "policies[][id]", policy.id %>
-                    <div class="relative rounded-md shadow-sm w-48">
+                    <div class="relative rounded-md shadow-elevation-1 w-48">
                       <%= number_field_tag "policies[][value]",
                           policy.value,
-                          class: "block w-full py-2 rounded-md border-gray-300 focus:ring-indigo-500 focus:border-indigo-500 sm:text-sm",
+                          class: "form-input",
                           required: true,
                           min: 0 %>
                     </div>
@@ -247,7 +247,7 @@
                 <%= hidden_field_tag "policies[][id]", policy.id %>
                 <%= number_field_tag "policies[][value]",
                     policy.value,
-                    class: "block w-32 rounded-md border-gray-300 focus:ring-indigo-500 focus:border-indigo-500 sm:text-sm",
+                    class: "form-input w-32",
                     required: true,
                     min: 0 %>
               </td>
@@ -320,7 +320,7 @@
     <div class="mt-4 text-right">
       <%= link_to changes_admin_policies_path,
           data: { turbo_frame: "policies" },
-          class: "text-sm text-indigo-600 hover:text-indigo-500 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-indigo-500" do %>
+          class: "text-sm text-primary-600 hover:text-primary-500" do %>
         View Full Change History
         <span aria-hidden="true"> &rarr;</span>
       <% end %>
@@ -330,9 +330,9 @@
   <div class="px-6 py-4 bg-gray-50 flex justify-end space-x-3">
     <%= link_to "Cancel",
         admin_applications_path,
-        class: "px-4 py-2 border border-gray-300 rounded-md shadow-sm text-sm font-medium text-gray-700 bg-white hover:bg-gray-50 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-indigo-500" %>
+        class: "btn btn-outline" %>
         
     <%= form.submit "Update Policies",
-        class: "px-4 py-2 border border-transparent rounded-md shadow-sm text-sm font-medium text-white bg-indigo-600 hover:bg-indigo-700 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-indigo-500" %>
+        class: "btn btn-primary" %>
   </div>
 <% end %>

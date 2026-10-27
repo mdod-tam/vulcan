@@ -30,7 +30,7 @@
           <div class="ml-4 flex items-center">
             <% if d.eligible_now %>
               <button type="button"
-                      class="inline-flex items-center px-3 py-1.5 border border-transparent rounded-md shadow-sm text-xs font-medium text-white bg-indigo-600 hover:bg-indigo-700"
+                      class="btn btn-primary btn-sm"
                       data-action="click->guardian-picker#selectDependentFromList"
                       data-dependent-id="<%= d.id %>"
                       data-dependent-name="<%= d.name %>">
@@ -44,7 +44,7 @@
                           else
                             'Not eligible'
                           end %>
-              <span class="inline-flex items-center px-2 py-1 border border-gray-300 rounded-md text-xs text-gray-500 bg-gray-50" title="<%= reason %>">
+              <span class="badge badge-neutral" title="<%= reason %>">
                 <%= reason %>
               </span>
             <% end %>

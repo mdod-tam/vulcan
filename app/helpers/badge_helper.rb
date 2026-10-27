@@ -1,80 +1,83 @@
 # frozen_string_literal: true
 
+# Status badges. Each status family maps its states to a badge variant, a color group defined by .badge-*
+# in application.tailwind.css:
+#   neutral  not started, closed, or no information      success    done, approved, available
+#   info     in progress, or an appointment is booked    warning    waiting on someone
+#   attention follows up on something that went wrong    danger     failed, rejected, blocked, cancelled
+#   accent   under review                                primary    brand emphasis
+# Two states of one family share a variant only when they mean the same thing to the reader. Color never
+# carries the state alone: every badge states it in words.
+#
+# Families beyond the application workflow:
+#   invoice              draft and withdrawn are both neutral: neither is waiting on anyone
+#   voucher              redeemed (fully used) is info; expired is danger; cancelled is neutral because it is closed
+#   voucher_transaction  cancelled is neutral, so it differs from pending (warning) and failed (danger)
+#   delivery             in-flight states (queued, accepted, released, submitted, DocuSeal) are info; delayed is
+#                        warning; the three "Not sent" states are attention; bounced, complained, and failed are danger
 module BadgeHelper
-  COLOR_MAPS = {
-    document_scan: {
-      clean: 'bg-green-100 text-green-800',
-      pending: 'bg-yellow-100 text-yellow-800',
-      blocked: 'bg-red-100 text-red-800',
-      failed: 'bg-amber-100 text-amber-800',
-      default: 'bg-gray-100 text-gray-800'
-    },
-    proof: {
-      not_reviewed: 'bg-gray-100 text-gray-800',
-      approved: 'bg-green-100 text-green-800',
-      rejected: 'bg-red-100 text-red-800',
-      default: 'bg-gray-100 text-gray-800'
-    },
-    certification: {
-      not_requested: 'bg-gray-100 text-gray-800',
-      requested: 'bg-yellow-100 text-yellow-800',
-      received: 'bg-blue-100 text-blue-800',
-      approved: 'bg-green-100 text-green-800',
-      rejected: 'bg-red-100 text-red-800',
-      default: 'bg-gray-100 text-gray-800'
-    },
+  VARIANT_MAPS = {
+    document_scan: { clean: :success, pending: :info, blocked: :danger, failed: :attention },
+    proof: { not_reviewed: :neutral, approved: :success, rejected: :danger },
+    certification: { not_requested: :neutral, requested: :warning, received: :info, approved: :success, rejected: :danger },
     application: {
-      draft: 'bg-gray-100 text-gray-800',
-      in_progress: 'bg-purple-100 text-purple-800',
-      approved: 'bg-green-100 text-green-800',
-      rejected: 'bg-red-100 text-red-800',
-      awaiting_proof: 'bg-blue-100 text-blue-800',
-      reminder_sent: 'bg-purple-100 text-purple-800',
-      awaiting_dcf: 'bg-orange-100 text-orange-800',
-      default: 'bg-gray-100 text-gray-800'
+      draft: :neutral, in_progress: :accent, approved: :success, rejected: :danger, awaiting_proof: :info,
+      reminder_sent: :warning, awaiting_dcf: :attention, archived: :neutral
     },
     evaluation: {
-      pending: 'bg-yellow-100 text-yellow-800',
-      requested: 'bg-yellow-100 text-yellow-800',
-      in_progress: 'bg-blue-100 text-blue-800',
-      scheduled: 'bg-blue-100 text-blue-800',
-      confirmed: 'bg-blue-100 text-blue-800',
-      completed: 'bg-green-100 text-green-800',
-      cancelled: 'bg-red-100 text-red-800',
-      no_show: 'bg-red-100 text-red-800',
-      default: 'bg-gray-100 text-gray-800'
+      pending: :warning, requested: :warning, in_progress: :info, scheduled: :info, confirmed: :info,
+      rescheduled: :info, completed: :success, cancelled: :danger, no_show: :attention
     },
     equipment: {
-      needs_catalog_product: 'bg-amber-100 text-amber-800',
-      needs_action: 'bg-amber-100 text-amber-800',
-      needs_ordering: 'bg-amber-100 text-amber-800',
-      po_sent: 'bg-blue-100 text-blue-800',
-      ordered: 'bg-blue-100 text-blue-800',
-      shipped: 'bg-green-100 text-green-800',
-      default: 'bg-gray-100 text-gray-800'
+      needs_catalog_product: :warning, needs_action: :warning, needs_ordering: :warning, po_sent: :info,
+      ordered: :info, shipped: :success
     },
     training_session: {
-      requested: 'bg-yellow-100 text-yellow-800',
-      scheduled: 'bg-blue-100 text-blue-800',
-      confirmed: 'bg-blue-100 text-blue-800',
-      completed: 'bg-green-100 text-green-800',
-      cancelled: 'bg-red-100 text-red-800',
-      default: 'bg-gray-100 text-gray-800'
+      requested: :warning, scheduled: :info, confirmed: :info, rescheduled: :info, completed: :success,
+      cancelled: :danger, no_show: :attention
     },
-    document_signing: {
-      not_sent: 'bg-gray-100 text-gray-800',
-      sent: 'bg-yellow-100 text-yellow-800',
-      opened: 'bg-blue-100 text-blue-800',
-      signed: 'bg-green-100 text-green-800',
-      declined: 'bg-red-100 text-red-800',
-      default: 'bg-gray-100 text-gray-800'
+    document_signing: { not_sent: :neutral, sent: :warning, opened: :info, signed: :success, declined: :danger },
+    invoice: {
+      invoice_draft: :neutral, invoice_pending: :warning, invoice_approved: :info, invoice_paid: :success,
+      invoice_cancelled: :neutral
+    },
+    voucher: { active: :success, redeemed: :info, expired: :danger, cancelled: :neutral },
+    w9: { not_submitted: :neutral, pending_review: :warning, approved: :success, rejected: :danger },
+    voucher_transaction: {
+      transaction_pending: :warning, transaction_completed: :success, transaction_failed: :danger,
+      transaction_cancelled: :neutral
+    },
+    delivery: {
+      delivered: :success, letter_printed: :success,
+      queued: :info, accepted: :info, letter_released: :info, sms_submitted: :info, docuseal: :info,
+      delayed: :warning,
+      suppressed: :attention, letter_blocked: :attention, letter_canceled: :attention,
+      bounced: :danger, complained: :danger, failed: :danger,
+      unknown: :neutral
     }
   }.freeze
 
-  def badge_class_for(type, status)
-    map_for_type = COLOR_MAPS[type.to_sym] || {}
-    css_class = map_for_type[status.to_s.to_sym]
-    css_class || map_for_type[:default] || 'bg-gray-100 text-gray-800'
+  def badge_variant_for(type, status)
+    VARIANT_MAPS.fetch(type.to_sym, {}).fetch(status.to_s.to_sym, :neutral)
+  end
+
+  def badge_class_for(type, status, size: nil)
+    badge_classes(badge_variant_for(type, status), size: size)
+  end
+
+  def badge_classes(variant, size: nil)
+    class_names('badge', "badge-#{variant}", 'badge-lg': size == :lg)
+  end
+
+  # A badge for any text and variant, for values that are not one of the status families above.
+  def badge(text, variant = :neutral, size: nil, **options)
+    extra_class = options.delete(:class)
+    tag.span(text, **options, class: class_names(badge_classes(variant, size: size), extra_class))
+  end
+
+  # The badge for one status of a family. Page-level status badges are large by default.
+  def status_badge(type, status, label: nil, size: :lg)
+    badge(label || badge_label_for(type, status), badge_variant_for(type, status), size: size)
   end
 
   def medical_certification_label(application)
@@ -91,7 +94,7 @@ module BadgeHelper
             else
               'Unknown Certification Status'
             end
-    # Only add the status if it's not already part of the label and not "not_requested"
+    # Append the status unless the label already contains it.
     label += " #{status}" if status != 'not_requested' && label.exclude?(status.titleize)
     label
   end
@@ -101,10 +104,10 @@ module BadgeHelper
       return { 'clean' => 'Passed', 'pending' => 'Pending', 'blocked' => 'Blocked', 'failed' => 'Failed' }.fetch(status.to_s, 'Not scanned')
     end
 
-    # Special case for evaluation "pending" status
+    # An evaluation that is still pending reads as requested.
     return 'Requested' if type.to_sym == :evaluation && status.to_s == 'pending'
 
-    # Handle "confirmed" status as "scheduled"
+    # A confirmed training session reads as scheduled.
     return 'Scheduled' if type.to_sym == :training_session && status.to_s == 'confirmed'
 
     status.to_s.humanize

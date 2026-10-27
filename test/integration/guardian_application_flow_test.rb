@@ -120,8 +120,8 @@ class GuardianApplicationFlowTest < ActionDispatch::IntegrationTest
     assert_select 'td', text: dependent.full_name
   end
 
-  test 'guardian can create new application for dependent even if orphaned application exists (Bug #6)' do
-    # Bug #6: an application without managing_guardian_id must not block a new application by the
+  test 'guardian can create new application for dependent even if orphaned application exists' do
+    # An application without managing_guardian_id must not block a new application by the
     # current guardian.
     unique_phone = "555-#{rand(100..999)}-#{rand(1000..9999)}"
     dependent = create(:constituent, first_name: 'Dependent', last_name: 'Child', phone: unique_phone)

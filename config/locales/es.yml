@@ -344,9 +344,9 @@ es:
       admin_authorization_help: "Los contactos alternativos son solo informativos. No son destinatarios autorizados de la solicitud y no reciben enlaces seguros de flujo de trabajo ni notificaciones de flujo de trabajo."
     dependent_contact:
       strategy_help: "Use la información de contacto del tutor cuando las comunicaciones seguras de flujo de trabajo para esta persona dependiente deban enviarse por defecto al tutor. Proporcione información de contacto separada de la persona dependiente cuando las comunicaciones seguras de flujo de trabajo puedan enviarse a la persona dependiente/solicitante."
-      guardian_email_help: "Las comunicaciones seguras de flujo de trabajo para la persona dependiente se enviarán por defecto a la ruta de correo electrónico del tutor."
+      guardian_email_help: "Las comunicaciones seguras de flujo de trabajo para la persona dependiente se enviarán por defecto al correo electrónico del tutor."
       dependent_email_help: "Este correo electrónico se usará para comunicaciones sobre los beneficios de la persona dependiente. Las comunicaciones seguras de flujo de trabajo pueden enviarse por defecto a la persona dependiente/solicitante cuando este correo electrónico sea distinto del correo electrónico del tutor."
-      guardian_phone_help: "Las llamadas o mensajes de texto para la persona dependiente usarán la ruta telefónica del tutor."
+      guardian_phone_help: "Las llamadas o mensajes de texto para la persona dependiente usarán el teléfono del tutor."
   admin:
     secure_link_row_action: "%{action} enlace de %{recipient}, enviado %{sent_at}"
     applications:
@@ -565,32 +565,32 @@ es:
     complete:
       success: "La sesión de capacitación se marcó como completada correctamente."
       invalid_status: "Solo las sesiones de capacitación programadas o confirmadas se pueden completar."
-      notes_required: "notes es obligatorio"
-      product_required: "product_trained_on_id es obligatorio"
-      duration_hours_required: "duration_hours es obligatorio"
+      notes_required: "Las notas son obligatorias."
+      product_required: "Seleccione el producto que cubrió la capacitación."
+      duration_hours_required: "Ingrese la duración de la capacitación en horas."
     cancel:
       success: "La sesión de capacitación se canceló correctamente."
       invalid_status: "Solo las sesiones solicitadas, programadas o confirmadas se pueden cancelar."
-      reason_required: "cancellation_reason es obligatorio"
+      reason_required: "El motivo de la cancelación es obligatorio."
     reschedule:
       wrong_status: "Solo las sesiones de capacitación programadas o confirmadas se pueden reprogramar."
     schedule_follow_up:
       success: "La sesión de capacitación de seguimiento se programó correctamente."
       invalid_source: "Solo las sesiones de capacitación canceladas o marcadas como no asistidas pueden tener seguimiento."
-      missing_required_fields: "scheduled_for y reschedule_reason son obligatorios"
+      missing_required_fields: "La nueva fecha y hora y el motivo del seguimiento son obligatorios."
       service_window_closed: "La capacitación ya no está disponible para esta solicitud."
       quota_exhausted: "Esta persona ya usó todas las sesiones de capacitación disponibles."
-      invalid_scheduled_for: "scheduled_for debe ser una fecha y hora válidas"
-      scheduled_for_in_future: "scheduled_for debe estar en el futuro"
+      invalid_scheduled_for: "Ingrese una fecha y hora válidas."
+      scheduled_for_in_future: "La fecha y hora deben estar en el futuro."
       unexpected_error: "Ocurrió un error inesperado: %{message}"
     schedule_additional:
       success: "La sesión de capacitación adicional se programó correctamente."
       invalid_source: "Las citas adicionales requieren la última sesión de capacitación completada."
-      missing_scheduled_for: "scheduled_for es obligatorio"
+      missing_scheduled_for: "La fecha y hora son obligatorias."
       service_window_closed: "La capacitación ya no está disponible para esta solicitud."
       quota_exhausted: "Esta persona ya usó todas las sesiones de capacitación disponibles."
-      invalid_scheduled_for: "scheduled_for debe ser una fecha y hora válidas"
-      scheduled_for_in_future: "scheduled_for debe estar en el futuro"
+      invalid_scheduled_for: "Ingrese una fecha y hora válidas."
+      scheduled_for_in_future: "La fecha y hora deben estar en el futuro."
       unexpected_error: "Ocurrió un error inesperado: %{message}"
   application_notifications:
     provider_info_requested:
@@ -827,6 +827,7 @@ es:
       page_number: "Página %{page} de %{total}"
       titles:
         training_session_notifications_training_completed: "Su informe de capacitación está listo"
+        training_session_notifications_trainer_changed: "Su capacitador ha cambiado"
         application_notifications_account_created: "Recibimos su solicitud de Telecomunicaciones Accesibles de Maryland"
         application_notifications_registration_confirmation: "Bienvenido al Programa de Telecomunicaciones Accesibles de Maryland"
         application_notifications_proof_rejected: "Se requiere seguimiento para la verificación de documentos"

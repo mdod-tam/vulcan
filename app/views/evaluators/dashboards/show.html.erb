@@ -4,76 +4,66 @@
   </div>
 
   <div class="grid grid-cols-1 md:grid-cols-4 gap-6 mb-8">
-    <!-- Summary Cards -->
-    <div class="bg-white shadow rounded-lg p-5">
+    <div class="card p-5">
       <h2 class="text-lg font-semibold text-gray-700 mb-3">Requested Evaluations</h2>
       <p class="text-3xl font-bold text-purple-600"><%= @requested_evaluations.count %></p>
       <p class="text-sm text-gray-500 mt-1">New evaluation requests</p>
       <div class="mt-3">
         <%= link_to 'View requested', '#needs-scheduling-heading',
                     data: { turbo: false },
-                    class: 'inline-flex items-center px-4 py-2 bg-blue-600 hover:bg-blue-700 text-white rounded-md font-medium transition-colors duration-200 text-sm' %>
+                    class: 'btn btn-primary' %>
       </div>
     </div>
 
-    <div class="bg-white shadow rounded-lg p-5">
+    <div class="card p-5">
       <h2 class="text-lg font-semibold text-gray-700 mb-3">Scheduled Evaluations</h2>
-      <p class="text-3xl font-bold text-blue-600"><%= @scheduled_evaluations.count %></p>
-      <p class="text-sm text-gray-500 mt-1">
-        <% if current_user.admin? %>
-          Upcoming evaluations
-        <% else %>
-          Upcoming evaluations
-        <% end %>
-      </p>
+      <p class="text-3xl font-bold text-info-600"><%= @scheduled_evaluations.count %></p>
+      <p class="text-sm text-gray-500 mt-1">Upcoming evaluations</p>
       <% if current_user.admin? %>
         <div class="mt-3 flex flex-wrap gap-2">
           <%= link_to 'My scheduled', '#my-upcoming-evaluations-table-heading',
                       data: { turbo: false },
-                      class: 'inline-flex items-center px-4 py-2 border border-blue-300 bg-white hover:bg-blue-50 text-blue-700 ' \
-                             'rounded-md font-medium text-sm focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-blue-500 min-h-[44px]',
+                      class: 'btn btn-secondary min-h-[44px]',
                       aria: { label: 'My scheduled evaluations assigned to me' } %>
           <%= link_to "View scheduled", evaluators_evaluations_path(status: "scheduled"),
-              class: "inline-flex items-center px-4 py-2 bg-blue-600 hover:bg-blue-700 text-white rounded-md font-medium text-sm focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-blue-500 min-h-[44px]",
+              class: 'btn btn-primary min-h-[44px]',
               aria: { label: "View scheduled evaluations for all evaluators" } %>
         </div>
       <% else %>
         <div class="mt-3">
           <%= link_to 'View scheduled', '#upcoming-evaluations-heading',
                       data: { turbo: false },
-                      class: 'inline-flex items-center px-4 py-2 bg-blue-600 hover:bg-blue-700 text-white rounded-md ' \
-                             'font-medium transition-colors duration-200 text-sm' %>
+                      class: 'btn btn-primary' %>
         </div>
       <% end %>
     </div>
 
-    <div class="bg-white shadow rounded-lg p-5">
+    <div class="card p-5">
       <h2 class="text-lg font-semibold text-gray-700 mb-3">Completed Evaluations</h2>
-      <p class="text-3xl font-bold text-green-600"><%= @completed_evaluations.count %></p>
+      <p class="text-3xl font-bold text-success-600"><%= @completed_evaluations.count %></p>
       <p class="text-sm text-gray-500 mt-1">Evaluations completed</p>
       <div class="mt-3">
         <%= link_to 'View completed', '#recent-completed-heading',
                     data: { turbo: false },
-                    class: 'inline-flex items-center px-4 py-2 bg-blue-600 hover:bg-blue-700 text-white rounded-md font-medium transition-colors duration-200 text-sm' %>
+                    class: 'btn btn-primary' %>
       </div>
     </div>
 
-    <div class="bg-white shadow rounded-lg p-5">
+    <div class="card p-5">
       <h2 class="text-lg font-semibold text-gray-700 mb-3">Needs Follow-up</h2>
-      <p class="text-3xl font-bold text-yellow-600"><%= @followup_evaluations.count %></p>
+      <p class="text-3xl font-bold text-warning-600"><%= @followup_evaluations.count %></p>
       <p class="text-sm text-gray-500 mt-1">Cancellations and no-shows</p>
       <div class="mt-3">
         <%= link_to 'View follow up', evaluators_evaluations_path(status: 'needs_followup'),
-                    class: 'inline-flex items-center px-4 py-2 bg-blue-600 hover:bg-blue-700 text-white rounded-md font-medium transition-colors duration-200 text-sm' %>
+                    class: 'btn btn-primary' %>
       </div>
     </div>
   </div>
 
-  <!-- Requested Evaluations (Needs Scheduling) -->
-  <div id="needs-scheduling-section" class="bg-white shadow rounded-lg p-6 mb-8">
+  <div id="needs-scheduling-section" class="card p-6 mb-8">
     <div class="flex justify-between items-center mb-4">
-      <h2 id="needs-scheduling-heading" tabindex="-1" class="text-xl font-semibold focus:outline-none focus:ring-2 focus:ring-indigo-500">Needs Scheduling</h2>
-      <%= link_to "View All", evaluators_evaluations_path(status: "requested"), class: "text-blue-600 hover:text-blue-800" %>
+      <h2 id="needs-scheduling-heading" tabindex="-1" class="text-xl font-semibold">Needs Scheduling</h2>
+      <%= link_to "View All", evaluators_evaluations_path(status: "requested"), class: 'text-primary-600 hover:text-primary-800' %>
     </div>
 
     <% if @requested_evaluations_display.any? %>
@@ -98,12 +88,12 @@
                   <p class="text-sm text-gray-500">Evaluator: <%= evaluation.evaluator&.full_name || 'Unknown' %></p>
                 </td>
                 <td class="px-6 py-4 whitespace-nowrap">
-                  <span class="px-2 inline-flex text-xs leading-5 font-semibold rounded-full <%= badge_class_for(:evaluation, evaluation.status) %>">
+                  <span class="<%= badge_class_for(:evaluation, evaluation.status) %>">
                     Needs Scheduling
                   </span>
                 </td>
                 <td class="px-6 py-4 whitespace-nowrap text-sm font-medium">
-                  <%= link_to "View/Schedule", evaluators_evaluation_path(evaluation), class: "bg-indigo-600 hover:bg-indigo-700 text-white py-1 px-3 rounded-md inline-block transition-colors duration-200" %>
+                  <%= link_to "View/Schedule", evaluators_evaluation_path(evaluation), class: 'btn btn-primary btn-sm' %>
                 </td>
               </tr>
             <% end %>
@@ -116,13 +106,12 @@
   </div>
 
   <% if current_user.admin? %>
-    <!-- Admin's own scheduled evaluations -->
-    <div id="my-upcoming-evaluations-section" class="bg-white shadow rounded-lg p-6 mb-8">
+    <div id="my-upcoming-evaluations-section" class="card p-6 mb-8">
       <div class="flex justify-between items-center mb-4">
         <h2 id="my-upcoming-evaluations-table-heading" tabindex="-1"
-            class="text-xl font-semibold focus:outline-none focus:ring-2 focus:ring-indigo-500">My Upcoming Evaluations</h2>
+            class="text-xl font-semibold">My Upcoming Evaluations</h2>
         <%= link_to 'View My Scheduled', evaluators_evaluations_path(scope: 'mine', status: 'scheduled'),
-                    class: 'text-blue-600 hover:text-blue-800',
+                    class: 'text-primary-600 hover:text-primary-800',
                     aria: { label: 'View My Scheduled evaluations assigned to me' } %>
       </div>
 
@@ -148,13 +137,13 @@
                     <p class="text-sm text-gray-500">Evaluator: <%= evaluation.evaluator&.full_name || 'Unknown' %></p>
                   </td>
                   <td class="px-6 py-4 whitespace-nowrap">
-                    <span class="px-2 inline-flex text-xs leading-5 font-semibold rounded-full <%= badge_class_for(:evaluation, evaluation.status) %>">
+                    <span class="<%= badge_class_for(:evaluation, evaluation.status) %>">
                       <span class="sr-only">Status: </span><%= evaluation.status.titleize %>
                     </span>
                   </td>
                   <td class="px-6 py-4 whitespace-nowrap text-sm font-medium">
                     <%= link_to "View Details", evaluators_evaluation_path(evaluation),
-                        class: "bg-indigo-600 hover:bg-indigo-700 text-white py-1 px-3 rounded-md inline-block transition-colors duration-200",
+                        class: 'btn btn-primary btn-sm',
                         aria: { label: "View details for #{evaluation.constituent.full_name}" } %>
                   </td>
                 </tr>
@@ -168,11 +157,10 @@
     </div>
   <% end %>
 
-  <!-- Upcoming Evaluations -->
-  <div id="upcoming-evaluations-section" class="bg-white shadow rounded-lg p-6 mb-8">
+  <div id="upcoming-evaluations-section" class="card p-6 mb-8">
     <div class="flex justify-between items-center mb-4">
-      <h2 id="upcoming-evaluations-heading" tabindex="-1" class="text-xl font-semibold focus:outline-none focus:ring-2 focus:ring-indigo-500">Upcoming Evaluations</h2>
-      <%= link_to "View All", evaluators_evaluations_path(status: "scheduled"), class: "text-blue-600 hover:text-blue-800" %>
+      <h2 id="upcoming-evaluations-heading" tabindex="-1" class="text-xl font-semibold">Upcoming Evaluations</h2>
+      <%= link_to "View All", evaluators_evaluations_path(status: "scheduled"), class: 'text-primary-600 hover:text-primary-800' %>
     </div>
 
     <% if @upcoming_evaluations.any? %>
@@ -197,12 +185,12 @@
                   <p class="text-sm text-gray-500">Evaluator: <%= evaluation.evaluator&.full_name || 'Unknown' %></p>
                 </td>
                 <td class="px-6 py-4 whitespace-nowrap">
-                  <span class="px-2 inline-flex text-xs leading-5 font-semibold rounded-full <%= badge_class_for(:evaluation, evaluation.status) %>">
+                  <span class="<%= badge_class_for(:evaluation, evaluation.status) %>">
                     <%= evaluation.status.titleize %>
                   </span>
                 </td>
                 <td class="px-6 py-4 whitespace-nowrap text-sm font-medium">
-                  <%= link_to "View Details", evaluators_evaluation_path(evaluation), class: "text-indigo-600 hover:text-indigo-900" %>
+                  <%= link_to "View Details", evaluators_evaluation_path(evaluation), class: 'text-primary-600 hover:text-primary-900' %>
                 </td>
               </tr>
             <% end %>
@@ -214,10 +202,10 @@
     <% end %>
   </div>
 
-  <div id="followup-evaluations-section" class="bg-white shadow rounded-lg p-6 mb-8">
+  <div id="followup-evaluations-section" class="card p-6 mb-8">
       <div class="flex justify-between items-center mb-4">
         <h2 id="followup-evaluations-heading" class="text-xl font-semibold">Needs Follow-up</h2>
-        <%= link_to 'View All', evaluators_evaluations_path(status: 'needs_followup'), class: 'text-blue-600 hover:text-blue-800' %>
+        <%= link_to 'View All', evaluators_evaluations_path(status: 'needs_followup'), class: 'text-primary-600 hover:text-primary-800' %>
       </div>
 
       <% if @followup_evaluations_display.any? %>
@@ -244,13 +232,13 @@
                     <p class="text-sm text-gray-500">Evaluator: <%= evaluation.evaluator&.full_name || 'Unknown' %></p>
                   </td>
                   <td class="px-6 py-4 whitespace-nowrap">
-                    <span class="px-2 inline-flex text-xs leading-5 font-semibold rounded-full <%= badge_class_for(:evaluation, evaluation.status) %>">
+                    <span class="<%= badge_class_for(:evaluation, evaluation.status) %>">
                       <%= evaluation.status.titleize %>
                     </span>
                   </td>
                   <td class="px-6 py-4 whitespace-nowrap text-sm font-medium">
                     <%= link_to 'View/Reschedule', evaluators_evaluation_path(evaluation),
-                                class: 'bg-indigo-600 hover:bg-indigo-700 text-white py-1 px-3 rounded-md inline-block transition-colors duration-200',
+                                class: 'btn btn-primary btn-sm',
                                 aria: { label: "View/Reschedule evaluation for #{evaluation.constituent.full_name}" } %>
                   </td>
                 </tr>
@@ -263,12 +251,11 @@
       <% end %>
   </div>
 
-  <!-- Recent Activity -->
-  <div class="bg-white shadow rounded-lg p-6">
+  <div class="card p-6">
     <div class="flex justify-between items-center mb-4">
       <h2 id="recent-completed-heading" tabindex="-1"
-          class="text-xl font-semibold focus:outline-none focus:ring-2 focus:ring-indigo-500">Recent Completed Evaluations</h2>
-      <%= link_to "View All", evaluators_evaluations_path(status: "completed"), class: "text-blue-600 hover:text-blue-800" %>
+          class="text-xl font-semibold">Recent Completed Evaluations</h2>
+      <%= link_to "View All", evaluators_evaluations_path(status: "completed"), class: 'text-primary-600 hover:text-primary-800' %>
     </div>
 
     <% if @recent_evaluations.any? %>
@@ -285,7 +272,7 @@
                 </p>
                 <%= admin_fulfillment_badge(evaluation.application) %>
               </div>
-              <%= link_to "View", evaluators_evaluation_path(evaluation), class: "text-indigo-600 hover:text-indigo-900" %>
+              <%= link_to "View", evaluators_evaluation_path(evaluation), class: 'text-primary-600 hover:text-primary-900' %>
             </div>
           </div>
         <% end %>

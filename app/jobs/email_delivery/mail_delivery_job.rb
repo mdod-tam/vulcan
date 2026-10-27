@@ -10,6 +10,13 @@ module EmailDelivery
     # Queue only after the caller's transaction commits.
     self.enqueue_after_transaction_commit = true
 
+    # A mailer param deleted after queueing (a removed user, or one whose role changed) cannot be loaded.
+    # The notice is for someone or something that no longer exists, so record it as not sent.
+    discard_on ActiveJob::DeserializationError do |job, _error|
+      EmailDelivery::Outcome.record_not_sent(EmailDelivery::Decision.suppressed(:assignment_superseded),
+                                             context: job.email_delivery_context, mail_action: job.email_delivery_mail_action)
+    end
+
     def email_delivery_mail_action
       mailer, mail_method = arguments
       "#{mailer}##{mail_method}"

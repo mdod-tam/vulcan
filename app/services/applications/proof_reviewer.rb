@@ -135,7 +135,7 @@ module Applications
         assign[:rejection_reason_code] = rejection_reason_code
         assign[:rejection_reason] = rejection_reason_text
       else
-        # Preserve data integrity for non-rejected reviews.
+        # Only a rejected review carries a reason.
         assign[:rejection_reason_code] = nil
         assign[:rejection_reason] = nil
       end
@@ -230,12 +230,8 @@ module Applications
       @application.purge_rejected_proof(@proof_type_key)
     end
 
-    def with_single_proof_review_context
-      previous_value = Current.reviewing_single_proof
-      Current.reviewing_single_proof = true
-      yield
-    ensure
-      Current.reviewing_single_proof = previous_value
+    def with_single_proof_review_context(&)
+      Current.set(reviewing_single_proof: true, &)
     end
   end
 end

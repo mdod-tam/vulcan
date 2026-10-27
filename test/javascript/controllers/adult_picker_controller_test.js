@@ -160,8 +160,7 @@ describe("AdultPickerController", () => {
     expect(setVisible).toHaveBeenCalledWith(controller.medicalCopyButtonTarget, true)
   })
 
-  // Only the click path used to fill this card, from the search result's markup. A restored retry
-  // has no search result, so the pane announced a selected applicant without ever naming them.
+  // A restored retry has no search result to fill the card from, so the context response must name the applicant.
   it("names the selected applicant when the card was not filled by a click", async () => {
     const box = fixture.querySelector(".adult-details-container")
     expect(box.textContent).toBe("")

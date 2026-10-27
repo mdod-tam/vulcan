@@ -1,5 +1,3 @@
-let _legacyWarned = false;
-
 /**
  * Sets visibility and, when requested, the required and aria-hidden attributes.
  * @param {HTMLElement} element - The element to show/hide
@@ -51,27 +49,6 @@ export function setVisible(element, visible, options = {}) {
   }
 
   return element;
-}
-
-/**
- * Adapts the legacy shouldHide argument to setVisible.
- * @deprecated Use setVisible() instead
- * @param {HTMLElement} element - The element to toggle
- * @param {boolean} shouldHide - Whether the element should be hidden
- * @param {Object} options - Additional options
- * @returns {HTMLElement|null} The element, or null if it is absent
- */
-export function legacyToggleHidden(element, shouldHide, options = {}) {
-  if (!_legacyWarned) {
-    const caller = new Error().stack.split("\n")[2] || "";
-    console.warn(
-      "legacyToggleHidden is deprecated. Use setVisible() instead.",
-      caller
-    );
-    _legacyWarned = true;
-  }
-
-  return setVisible(element, !shouldHide, options);
 }
 
 /**
@@ -140,11 +117,4 @@ export function setFieldValue(selector, value) {
   el.dispatchEvent(new Event('input', { bubbles: true }))
   el.dispatchEvent(new Event('change', { bubbles: true }))
   return true
-}
-
-/**
- * @private Only for testing
- */
-export function _resetLegacyWarnings() {
-  _legacyWarned = false;
 }

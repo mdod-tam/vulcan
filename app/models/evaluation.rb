@@ -23,9 +23,13 @@ class Evaluation < ApplicationRecord
 
   scope :by_report_submission, -> { order(Arel.sql('report_submitted_at DESC NULLS LAST'), updated_at: :desc) }
 
+  # Open assigned work for access changes and recovery queues: everything neither completed nor cancelled.
+  # A no-show stays open because assigning again reuses its row.
+  scope :open_assigned, -> { where.not(status: %i[completed cancelled]) }
+
   # Simplified validations
   validates :reschedule_reason, presence: true, if: :rescheduling?
-  validate :evaluator_must_be_assignable
+  validate :evaluator_must_be_assignable, if: -> { new_record? || will_save_change_to_evaluator_id? }
   validate :scheduled_time_must_be_future, on: :create
 
   # Conditional validations for completed status
@@ -45,7 +49,6 @@ class Evaluation < ApplicationRecord
   validates :appointment_completed_at, :report_submitted_at, presence: true, if: :status_changed_to_completed?
   validate :appointment_time_must_not_be_future
 
-  # Callbacks
   before_save :ensure_status_schedule_consistency
   after_save :update_application_record, if: :saved_change_to_status?
 
@@ -104,6 +107,27 @@ class Evaluation < ApplicationRecord
 
       { 'product_id' => id.to_s, 'reaction' => values[:reaction].to_s.strip.presence }
     end
+  end
+
+  # Locks the acting user, then the application, then this evaluation, the order access changes use. Only the
+  # locked row of the actor decides whether they still hold the evaluation: a request that loaded the user before
+  # a capability change commits must not act on the stale copy.
+  def with_actor_and_application_lock(actor)
+    transaction do
+      actor = User.lock_for_merge_integrity!(actor).fetch(actor.id) if actor&.persisted?
+      application.with_lock do
+        with_lock do
+          raise ArgumentError, 'Only the assigned evaluator can update this evaluation.' unless assigned_to?(actor)
+
+          yield
+        end
+      end
+    end
+  end
+
+  # True while the person still holds this evaluation and may take evaluator work.
+  def assigned_to?(user)
+    user.present? && evaluator_id == user.id && user.assignable_evaluator?
   end
 
   def working_notes_editable?
@@ -199,11 +223,12 @@ class Evaluation < ApplicationRecord
     raise ActiveRecord::RecordNotSaved.new('Evaluation review clearance was not recorded.', application)
   end
 
+  # Checked for a new or changed assignee only, so a former assignee who lost eligibility can still be cancelled or edited.
   def evaluator_must_be_assignable
     return if evaluator.nil?
     return if evaluator.assignable_evaluator?
 
-    errors.add(:evaluator, 'must be an Evaluator or an administrator with evaluation capability')
+    errors.add(:evaluator, 'must be an active staff member with evaluation capability')
   end
 
   def scheduled_time_must_be_future

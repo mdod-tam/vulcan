@@ -9,11 +9,11 @@
   </p>
 
   <% if @analysis_results.blank? %>
-    <div class="bg-yellow-100 border border-yellow-400 text-yellow-700 px-4 py-3 rounded relative" role="alert">
+    <div class="bg-warning-100 border border-warning-400 text-warning-700 px-4 py-3 rounded relative" role="alert">
       <strong class="font-bold">No Data:</strong> No draft applications with a recorded last visited step were found.
     </div>
   <% else %>
-    <div class="overflow-x-auto bg-white shadow rounded-lg">
+    <div class="card overflow-x-auto">
       <table class="min-w-full divide-y divide-gray-200">
         <thead class="bg-gray-50">
           <tr>
@@ -42,6 +42,6 @@
   <% end %>
 
   <div class="mt-6">
-    <%= link_to 'Back to Applications', admin_applications_path, class: "text-blue-600 hover:text-blue-800" %>
+    <%= link_to 'Back to Applications', admin_applications_path, class: "text-primary-600 hover:text-primary-800" %>
   </div>
 </div>

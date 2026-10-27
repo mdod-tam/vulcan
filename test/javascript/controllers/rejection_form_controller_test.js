@@ -8,7 +8,6 @@ describe("RejectionFormController", () => {
   let medicalOnlyReasons
 
   beforeEach(() => {
-    // Set up DOM
     document.body.innerHTML = `
       <dialog data-controller="rejection-form">
         <input type="hidden" id="rejection-proof-type" value="" data-rejection-form-target="proofType">
@@ -45,7 +44,6 @@ describe("RejectionFormController", () => {
       </dialog>
     `
 
-    // Set up Stimulus application
     application = Application.start()
     application.register("rejection-form", RejectionFormController)
 
@@ -79,11 +77,11 @@ describe("RejectionFormController", () => {
     const changeProof = proofType => element.dispatchEvent(new CustomEvent("proof-type-changed", { detail: { proofType } }))
     const expectReset = () => {
       expect(element.classList.contains("text-white")).toBe(false)
-      expect(element.classList.contains("bg-indigo-600")).toBe(false)
+      expect(element.classList.contains("bg-primary-600")).toBe(false)
       expect(element.hasAttribute("aria-pressed")).toBe(false)
       controller.reasonButtonTargets.forEach(button => {
         expect(button.getAttribute("aria-pressed")).toBe("false")
-        expect(button.classList.contains("bg-indigo-600")).toBe(false)
+        expect(button.classList.contains("bg-primary-600")).toBe(false)
       })
       expect(controller.reasonFieldTarget.value).toBe("")
       expect(controller.reasonFieldTarget.readOnly).toBe(true)
@@ -137,7 +135,6 @@ describe("RejectionFormController", () => {
 
   test("initializes with reason groups hidden by default", () => {
     const controller = application.getControllerForElementAndIdentifier(element, "rejection-form")
-    // The controller's connect method should handle initial visibility
     expect(generalReasons.classList.contains("hidden")).toBe(true)
     expect(medicalOnlyReasons.classList.contains("hidden")).toBe(true)
   })
@@ -200,7 +197,7 @@ describe("RejectionFormController", () => {
     controller.validateForm(mockEvent)
     
     expect(mockEvent.preventDefault).toHaveBeenCalled()
-    expect(reasonField.classList.contains("border-red-500")).toBe(true)
+    expect(reasonField.classList.contains("border-danger-500")).toBe(true)
     
     mockEvent.preventDefault.mockClear()
     
@@ -209,6 +206,6 @@ describe("RejectionFormController", () => {
     controller.validateForm(mockEvent)
     
     expect(mockEvent.preventDefault).not.toHaveBeenCalled()
-    expect(reasonField.classList.contains("border-red-500")).toBe(false)
+    expect(reasonField.classList.contains("border-danger-500")).toBe(false)
   })
 })

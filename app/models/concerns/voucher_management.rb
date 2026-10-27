@@ -1,7 +1,6 @@
 # frozen_string_literal: true
 
-# Handles all operations related to voucher management
-# This includes voucher assignment, creation, and eligibility checks
+# Voucher assignment and eligibility for an application.
 module VoucherManagement
   extend ActiveSupport::Concern
 
@@ -18,11 +17,10 @@ module VoucherManagement
 
       voucher = vouchers.create!
 
-      # Step 1: Log the auditable business event
       AuditEventService.log(
         action: 'voucher_assigned',
         actor: assigned_by || Current.user,
-        auditable: voucher, # The voucher is the auditable record
+        auditable: voucher,
         metadata: {
           application_id: id,
           voucher_id: voucher.id,
@@ -34,7 +32,6 @@ module VoucherManagement
         }
       )
 
-      # Step 2: Send the user-facing notification directly via mailer
       VoucherNotificationsMailer.with(voucher: voucher).voucher_assigned.deliver_later
 
       voucher
@@ -70,7 +67,6 @@ module VoucherManagement
   private
 
   def create_system_notification!(recipient:, actor:, action:)
-    # Use NotificationService for centralized notification creation
     NotificationService.create_and_deliver!(
       type: action,
       recipient: recipient,

@@ -111,7 +111,7 @@ class DocumentScanningTest < ApplicationSystemTestCase
       scan = DocumentScan.where(user: @admin, purpose: 'product_resource').order(:id).last
       scan.update!(status: verdict, completed_at: Time.current)
       assert_selector "[data-scan-state='#{verdict}']", text: I18n.t("documents.scan.#{verdict}"), wait: 20
-      assert_selector '#product_resource_document[aria-invalid="true"].border-red-500'
+      assert_selector '#product_resource_document[aria-invalid="true"].border-danger-500'
       assert_not page.evaluate_script('document.querySelector("form[action*=product_resources]").checkValidity()')
       assert_no_selector 'input[name="product_resource[document]"][type="hidden"]', visible: :all
       take_screenshot("document-scan-#{verdict}-next-choice", html: true, full: true)
@@ -153,14 +153,14 @@ class DocumentScanningTest < ApplicationSystemTestCase
     assert_selector 'html[lang="es"]'
     attach_file 'file', Rails.root.join('test/fixtures/files/income_proof.pdf')
     assert_selector '[data-scan-state="pending"]', text: I18n.t('documents.upload.scanning', filename: 'income_proof.pdf', locale: :es)
-    assert_selector '#file[class~="focus:ring-2"]'
+    assert_selector '#file.form-input'
     assert_not page.evaluate_script('document.querySelector("form").checkValidity()')
     take_screenshot('document-scan-spanish-secure-pending', html: true, full: true)
 
     scan = DocumentScan.where(secure_form: form).sole
     scan.update!(status: 'blocked', completed_at: Time.current)
     assert_selector '[data-scan-state="blocked"]', text: I18n.t('documents.scan.blocked', locale: :es), wait: 20
-    assert_selector '#file[aria-invalid="true"].border-red-500'
+    assert_selector '#file[aria-invalid="true"].border-danger-500'
     take_screenshot('document-scan-spanish-secure-blocked', html: true, full: true)
     click_button I18n.t('documents.upload.remove', locale: :es)
     attach_file 'file', Rails.root.join('test/fixtures/files/income_proof.pdf')

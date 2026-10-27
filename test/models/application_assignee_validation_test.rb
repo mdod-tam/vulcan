@@ -4,16 +4,19 @@ require 'test_helper'
 
 class ApplicationAssigneeValidationTest < ActiveSupport::TestCase
   setup do
+    @admin = create(:admin)
+    Current.user = @admin
     @application = create(:application, status: :approved, application_date: Date.current)
   end
+
+  teardown { Current.reset }
 
   test 'invalid evaluator objects cannot reset an existing cancelled appointment through the canonical writer' do
     evaluation = create(:evaluation, :cancelled, application: @application, constituent: @application.user)
     before = evaluation.attributes
     products = evaluation.recommended_product_ids
     wrong_role = create(:trainer)
-    create(:role_capability, user: wrong_role, capability: 'can_evaluate')
-    candidates = [nil, build(:evaluator), create(:evaluator, status: :inactive), wrong_role]
+    candidates = [nil, build(:evaluator), create(:evaluator, status: :inactive), wrong_role, create(:constituent)]
 
     candidates.each do |candidate|
       assert_no_difference ['Evaluation.count', 'Notification.count', "Event.where(action: 'evaluator_assigned').count"] do
@@ -25,6 +28,34 @@ class ApplicationAssigneeValidationTest < ActiveSupport::TestCase
       assert_includes @application.errors[:base], 'Select an active evaluator.'
       assert_equal before, evaluation.reload.attributes
       assert_equal products, evaluation.recommended_product_ids
+    end
+  end
+
+  test 'staff granted the other discipline can be assigned through the canonical writers' do
+    admin = create(:admin)
+    Policy.find_or_create_by!(key: 'waiting_period_years').update!(value: 3)
+    Policy.find_or_create_by!(key: 'max_training_sessions').update!(value: 3)
+    granted_trainer = create(:evaluator)
+    create(:role_capability, user: granted_trainer, capability: 'can_train')
+    granted_evaluator = create(:trainer)
+    create(:role_capability, user: granted_evaluator, capability: 'can_evaluate')
+
+    assert @application.assign_trainer!(granted_trainer, actor: admin), @application.errors.full_messages.to_sentence
+    assert @application.assign_evaluator!(granted_evaluator, actor: admin), @application.errors.full_messages.to_sentence
+    assert_equal granted_trainer, @application.reload.assigned_trainer
+    assert_equal granted_evaluator, @application.latest_evaluation.evaluator
+  end
+
+  test 'a non-admin or ineligible acting user cannot assign through the canonical writers' do
+    evaluator = create(:evaluator)
+    trainer = create(:trainer)
+    inactive_admin = create(:admin, status: :inactive)
+
+    [create(:constituent), create(:evaluator), inactive_admin, nil].each do |actor|
+      assert_not @application.assign_evaluator!(evaluator, actor: actor)
+      assert_includes @application.errors[:base], 'Only an administrator can assign an evaluator.'
+      assert_not @application.assign_trainer!(trainer, actor: actor)
+      assert_includes @application.errors[:base], 'Only an administrator can assign a trainer.'
     end
   end
 
@@ -49,8 +80,7 @@ class ApplicationAssigneeValidationTest < ActiveSupport::TestCase
     Policy.find_or_create_by!(key: 'waiting_period_years').update!(value: 3)
     Policy.find_or_create_by!(key: 'max_training_sessions').update!(value: 3)
     wrong_role = create(:evaluator)
-    create(:role_capability, user: wrong_role, capability: 'can_train')
-    candidates = [nil, build(:trainer), create(:trainer, status: :suspended), wrong_role]
+    candidates = [nil, build(:trainer), create(:trainer, status: :suspended), wrong_role, create(:constituent)]
     application_attributes = @application.reload.attributes
 
     candidates.each do |candidate|

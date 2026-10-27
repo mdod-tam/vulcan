@@ -1,16 +1,15 @@
-<%# Skip Link for keyboard navigation %>
-<a href="#main-content" class="sr-only focus:not-sr-only focus:absolute focus:top-2 focus:left-2 focus:p-2 focus:bg-indigo-600 focus:text-white focus:z-50 focus:rounded">
+<a href="#main-content" class="skip-link">
   Skip to main content
 </a>
 
 <div class="container mx-auto px-4 py-8">
   <div id="main-content" tabindex="-1" class="max-w-7xl mx-auto">
     <% if @contact_delivery_attention.present? %>
-      <section class="mb-4 rounded border border-amber-200 bg-amber-50 p-4" aria-label="Delivery needs attention">
+      <section class="mb-4 rounded border border-warning-200 bg-warning-50 p-4" aria-label="Delivery needs attention">
         <h2 class="font-semibold">Delivery to this contact needs attention</h2>
         <% @contact_delivery_attention.each do |attempt| %>
           <%= render 'shared/delivery/status', presenter: DeliveryStatusPresenter.new(attempt, attempt: attempt) %>
-          <% if attempt.application %><%= link_to 'Review application', admin_application_path(attempt.application), class: 'underline text-indigo-700' %><% end %>
+          <% if attempt.application %><%= link_to 'Review application', admin_application_path(attempt.application), class: 'underline text-primary-700' %><% end %>
         <% end %>
       </section>
     <% end %>
@@ -21,15 +20,16 @@
       <div class="flex flex-wrap gap-3">
         <% if @user.needs_duplicate_review %>
           <%= link_to admin_duplicate_review_entry_path(@user),
-              class: "inline-flex items-center px-4 py-2 border border-yellow-300 rounded-md shadow-sm text-sm font-medium text-yellow-800 bg-yellow-50 hover:bg-yellow-100 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-yellow-500",
+              class: "inline-flex items-center px-4 py-2 border border-warning-300 rounded-md shadow-elevation-1 " \
+                     "text-sm font-medium text-warning-800 bg-warning-50 hover:bg-warning-100",
               aria: { label: "Review duplicate flag for #{@user.full_name}" } do %>
             <span>Review Duplicate</span>
           <% end %>
         <% end %>
         <%= link_to edit_admin_user_path(@user),
-            class: "inline-flex items-center px-4 py-2 border border-indigo-300 rounded-md shadow-sm text-sm font-medium text-indigo-700 bg-indigo-50 hover:bg-indigo-100 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-indigo-500",
+            class: "btn btn-secondary",
             aria: { label: "Edit user" } do %>
-          <svg class="h-4 w-4 mr-2" fill="none" stroke="currentColor" viewBox="0 0 24 24" aria-hidden="true">
+          <svg class="h-4 w-4" fill="none" stroke="currentColor" viewBox="0 0 24 24" aria-hidden="true">
             <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M11 5H6a2 2 0 00-2 2v11a2 2 0 002 2h11a2 2 0 002-2v-5m-1.414-9.414a2 2 0 112.828 2.828L11.828 15H9v-2.828l8.586-8.586z"/>
           </svg>
           <span>Edit User</span>
@@ -37,7 +37,7 @@
         <%= button_to mfa_tokens_admin_user_path(@user),
             method: :delete,
             form: { class: "inline-flex", data: { turbo_confirm: "Are you sure?" } },
-            class: "inline-flex items-center px-4 py-2 border border-red-300 rounded-md shadow-sm text-sm font-medium text-red-700 bg-red-50 hover:bg-red-100 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-red-500",
+            class: "btn btn-danger-outline",
             aria: { label: "Delete MFA tokens for #{@user.full_name}" } do %>
           <span>Delete MFA Tokens</span>
         <% end %>
@@ -57,15 +57,15 @@
                   turbo_confirm: delete_user_confirm
                 }
               },
-              class: "inline-flex items-center px-4 py-2 border border-red-600 rounded-md shadow-sm text-sm font-medium text-white bg-red-600 hover:bg-red-700 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-red-500",
+              class: "btn btn-danger",
               aria: { label: "Delete user #{@user.full_name}" } do %>
             <span>Delete User</span>
           <% end %>
         <% end %>
         <%= link_to admin_users_path,
-            class: "inline-flex items-center px-4 py-2 border border-gray-300 rounded-md shadow-sm text-sm font-medium text-gray-700 bg-white hover:bg-gray-50 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-indigo-500",
+            class: "btn btn-outline",
             "aria-label": "Return to users list" do %>
-          <svg class="h-4 w-4 mr-2" fill="none" stroke="currentColor" viewBox="0 0 24 24" aria-hidden="true">
+          <svg class="h-4 w-4" fill="none" stroke="currentColor" viewBox="0 0 24 24" aria-hidden="true">
             <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M10 19l-7-7m0 0l7-7m-7 7h18"/>
           </svg>
           <span>Back to List</span>
@@ -73,7 +73,7 @@
       </div>
     </header>
 
-    <section class="bg-white rounded-lg shadow p-6 mb-6" aria-labelledby="basic-info-title">
+    <section class="card p-6 mb-6" aria-labelledby="basic-info-title">
       <h2 id="basic-info-title" class="text-xl font-semibold text-gray-900 mb-4">Basic Information</h2>
       <dl class="grid grid-cols-1 md:grid-cols-2 gap-6">
         <div>
@@ -85,7 +85,7 @@
           <dd class="mt-1 text-sm text-gray-900">
             <% email_display = display_contact_email(@user) %>
             <% if displayable_contact_email?(@user) %>
-              <%= mail_to email_display, email_display, class: "text-indigo-600 hover:text-indigo-500 focus:outline-none focus:ring-2 focus:ring-indigo-500 rounded" %>
+              <%= mail_to email_display, email_display, class: "text-primary-600 hover:text-primary-500 rounded" %>
             <% else %>
               <span class="text-gray-700"><%= email_display %></span>
             <% end %>
@@ -137,22 +137,51 @@
       </dl>
     </section>
 
-    <section class="bg-white rounded-lg shadow p-6 mb-6" aria-labelledby="guardian-dependent-info-title">
+    <% if @access_events.present? %>
+      <section class="card p-6 mb-6" aria-labelledby="access-history-title">
+        <h2 id="access-history-title" class="text-xl font-semibold text-gray-900 mb-4">Access History</h2>
+        <div class="overflow-x-auto">
+          <table class="min-w-full divide-y divide-gray-200">
+            <caption class="sr-only">Capability changes for <%= @user.full_name %>, newest first</caption>
+            <thead>
+              <tr>
+                <th scope="col" class="px-4 py-2 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">When</th>
+                <th scope="col" class="px-4 py-2 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Change</th>
+                <th scope="col" class="px-4 py-2 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Detail</th>
+                <th scope="col" class="px-4 py-2 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">By</th>
+              </tr>
+            </thead>
+            <tbody class="divide-y divide-gray-200">
+              <% @access_events.each do |event| %>
+                <tr>
+                  <td class="px-4 py-2 text-sm text-gray-700"><%= l(event.created_at, format: :short) %></td>
+                  <td class="px-4 py-2 text-sm font-medium text-gray-900"><%= activity_label(event) %></td>
+                  <td class="px-4 py-2 text-sm text-gray-700"><%= activity_detail(event) %> (<%= event.metadata['reason'].to_s.humanize.downcase %>)</td>
+                  <td class="px-4 py-2 text-sm text-gray-700"><%= activity_actor_name(event) %></td>
+                </tr>
+              <% end %>
+            </tbody>
+          </table>
+        </div>
+      </section>
+    <% end %>
+
+    <section class="card p-6 mb-6" aria-labelledby="guardian-dependent-info-title">
       <h2 id="guardian-dependent-info-title" class="text-xl font-semibold text-gray-900 mb-4">Guardian/Dependent Information</h2>
 
       <% if @user.guardian? %>
         <div class="mb-6">
           <h3 class="text-lg font-medium text-gray-900 mb-3">Dependents Managed by <%= @user.full_name %></h3>
-          <% if @user.dependents.any? %>
+          <% if @user.guardian_relationships_as_guardian.any? %>
             <ul role="list" class="space-y-4" id="dependents_managed_list" aria-label="Dependents managed by <%= @user.full_name %>">
               <% @user.guardian_relationships_as_guardian.each do |gr| %>
                 <% dependent = gr.dependent_user %>
-                <li class="p-4 border border-gray-200 rounded-lg shadow-sm bg-gray-50" id="dependent_<%= dependent.id %>">
+                <li class="p-4 border border-gray-200 rounded-lg shadow-elevation-1 bg-gray-50" id="dependent_<%= dependent.id %>">
                   <div class="flex items-center justify-between">
                     <div class="flex-1">
-                      <p class="text-md font-semibold text-gray-900">
+                      <p class="text-base font-semibold text-gray-900">
                         <%= link_to dependent.full_name, admin_user_path(dependent), 
-                            class: "text-indigo-600 hover:text-indigo-500 focus:outline-none focus:ring-2 focus:ring-indigo-500 rounded",
+                            class: "text-primary-600 hover:text-primary-500 rounded",
                             data: { turbo_frame: "_top" } %>
                       </p>
                       <p class="text-sm text-gray-700">Relationship: <span class="font-medium text-gray-900"><%= gr.relationship_type %></span></p>
@@ -161,7 +190,7 @@
                     <div class="flex flex-col sm:flex-row space-y-2 sm:space-y-0 sm:space-x-2">
                       <% unless dependent.applications.blocking_new_submission.exists? %>
                         <%= link_to new_admin_paper_application_path(guardian_id: @user.id, dependent_id: dependent.id),
-                            class: "inline-flex items-center justify-center px-3 py-1.5 border border-transparent text-xs font-medium rounded-full shadow-sm text-white bg-green-600 hover:bg-green-700 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-green-500",
+                            class: "btn btn-success btn-sm",
                             data: { turbo_frame: "_top" },
                             "aria-label": "Start paper application for #{dependent.full_name} managed by #{@user.full_name}" do %>
                           Start Paper Application
@@ -184,7 +213,7 @@
                         <span class="text-sm text-gray-700"><%= active_app.application_date.strftime('%b %d, %Y') %></span>
                         <button 
                           type="button"
-                          class="inline-flex items-center px-2.5 py-1.5 border border-indigo-200 text-sm font-medium rounded-md text-indigo-700 bg-indigo-50 hover:bg-indigo-100 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-indigo-500"
+                          class="btn btn-secondary btn-sm"
                           data-action="click->application-modal#open"
                           data-modal-id="application-modal"
                           data-application-id="<%= active_app.id %>"
@@ -209,7 +238,7 @@
                         <span class="text-sm text-gray-700"><%= last_app.application_date.strftime('%b %d, %Y') %></span>
                         <button 
                           type="button"
-                          class="inline-flex items-center px-2.5 py-1.5 border border-indigo-200 text-sm font-medium rounded-md text-indigo-700 bg-indigo-50 hover:bg-indigo-100 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-indigo-500"
+                          class="btn btn-secondary btn-sm"
                           data-action="click->application-modal#open"
                           data-modal-id="application-modal"
                           data-application-id="<%= last_app.id %>"
@@ -252,9 +281,9 @@
                         <% end %>
                         <% if eligible_date %>
                           <% if eligible_now %>
-                            <span class="px-2 py-0.5 rounded-full bg-green-100 text-green-800 text-xs font-medium">Eligible now</span>
+                            <span class="badge badge-success">Eligible now</span>
                           <% else %>
-                            <span class="px-2 py-0.5 rounded-full bg-gray-100 text-gray-800 text-xs font-medium">Eligible on <%= eligible_date.strftime('%b %d, %Y') %></span>
+                            <span class="badge badge-neutral">Eligible on <%= eligible_date.strftime('%b %d, %Y') %></span>
                           <% end %>
                         <% end %>
                       <% end %>
@@ -272,15 +301,15 @@
       <% if @user.dependent? %>
         <div class="mb-6">
           <h3 class="text-lg font-medium text-gray-900 mb-3">Guardians for <%= @user.full_name %></h3>
-          <% if @user.guardians.any? %>
+          <% if @user.guardian_relationships_as_dependent.any? %>
             <ul role="list" class="space-y-4" id="guardians_list" aria-label="Guardians for <%= @user.full_name %>">
               <% @user.guardian_relationships_as_dependent.each do |gr| %>
                 <% guardian = gr.guardian_user %>
-                <li class="p-4 border border-gray-200 rounded-lg shadow-sm bg-gray-50" id="guardian_<%= guardian.id %>">
+                <li class="p-4 border border-gray-200 rounded-lg shadow-elevation-1 bg-gray-50" id="guardian_<%= guardian.id %>">
                   <div class="flex-1">
-                    <p class="text-md font-semibold text-gray-900">
+                    <p class="text-base font-semibold text-gray-900">
                       <%= link_to guardian.full_name, admin_user_path(guardian), 
-                          class: "text-indigo-600 hover:text-indigo-500 focus:outline-none focus:ring-2 focus:ring-indigo-500 rounded",
+                          class: "text-primary-600 hover:text-primary-500 rounded",
                           data: { turbo_frame: "_top" } %>
                     </p>
                     <p class="text-sm text-gray-700">Relationship: <span class="font-medium text-gray-900"><%= gr.relationship_type %></span></p>
@@ -292,7 +321,7 @@
                         <% guardian_email_display = display_contact_email(guardian) %>
                         <% if displayable_contact_email?(guardian) %>
                           <%= mail_to guardian_email_display, guardian_email_display,
-                              class: "text-indigo-600 hover:text-indigo-500 focus:outline-none focus:ring-2 focus:ring-indigo-500 rounded" %>
+                              class: "text-primary-600 hover:text-primary-500 rounded" %>
                         <% else %>
                           <span class="text-gray-700"><%= guardian_email_display %></span>
                         <% end %>
@@ -326,20 +355,20 @@
     </section>
 
     <div data-controller="application-modal" data-action="turbo:submit-end->application-modal#handleFormSubmit">
-      <section aria-labelledby="applications-heading" class="bg-white rounded-lg shadow p-6 mb-6">
+      <section aria-labelledby="applications-heading" class="card p-6 mb-6">
         <h2 id="applications-heading" class="text-xl font-semibold text-gray-900 mb-4"><%= @user.first_name %>'s Applications</h2>
         <div class="space-y-4">
           <% if @user.applications.any? %>
             <ul role="list" class="space-y-4">
               <% @user.applications.order(application_date: :desc).each do |application| %>
-                <li class="p-4 border border-gray-200 rounded-lg shadow-sm bg-gray-50">
+                <li class="p-4 border border-gray-200 rounded-lg shadow-elevation-1 bg-gray-50">
                   <div class="flex items-center flex-wrap gap-2">
                     <span class="text-sm font-medium text-gray-700">Application:</span>
                     <%= application_status_badge(application) %>
                     <span class="text-sm text-gray-700"><%= application.application_date.strftime('%b %d, %Y') %></span>
                     <button 
                       type="button"
-                      class="inline-flex items-center px-2.5 py-1.5 border border-indigo-200 text-sm font-medium rounded-md text-indigo-700 bg-indigo-50 hover:bg-indigo-100 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-indigo-500"
+                      class="btn btn-secondary btn-sm"
                       data-action="click->application-modal#open"
                       data-modal-id="application-modal"
                       data-application-id="<%= application.id %>"
@@ -376,9 +405,9 @@
                         </div>
                       <% end %>
                       <% if eligible_now %>
-                        <span class="px-2 py-0.5 rounded-full bg-green-100 text-green-800 text-xs font-medium">Eligible now</span>
+                        <span class="badge badge-success">Eligible now</span>
                       <% else %>
-                        <span class="px-2 py-0.5 rounded-full bg-gray-100 text-gray-800 text-xs font-medium">Eligible on <%= eligible_date.strftime('%b %d, %Y') %></span>
+                        <span class="badge badge-neutral">Eligible on <%= eligible_date.strftime('%b %d, %Y') %></span>
                       <% end %>
                     </div>
                   <% end %>
@@ -393,7 +422,7 @@
 
       <dialog 
         id="application-modal"
-        class="rounded-lg shadow-xl max-w-2xl w-full backdrop:bg-black backdrop:bg-opacity-50"
+        class="rounded-lg shadow-elevation-4 max-w-2xl w-full backdrop:bg-black backdrop:bg-opacity-50"
         aria-labelledby="modal-title">
   
   <div class="bg-white rounded-lg">
@@ -403,7 +432,7 @@
       </h3>
       <button 
         type="button"
-        class="text-gray-400 hover:text-gray-600 focus:outline-none focus:ring-2 focus:ring-indigo-500 rounded"
+        class="text-gray-500 hover:text-gray-700 rounded"
         data-action="click->application-modal#close"
         aria-label="Close modal">
         <svg class="h-6 w-6" fill="none" stroke="currentColor" viewBox="0 0 24 24" aria-hidden="true">
@@ -421,7 +450,7 @@
     <div class="sticky bottom-0 bg-gray-50 border-t border-gray-200 px-6 py-4 flex justify-end gap-3">
       <button 
         type="button"
-        class="px-4 py-2 border border-gray-300 rounded-md shadow-sm text-sm font-medium text-gray-700 bg-white hover:bg-gray-50 focus:outline-none focus:ring-2 focus:ring-indigo-500"
+        class="btn btn-outline"
         data-action="click->application-modal#close"
         aria-label="Close application details modal">
         Close
@@ -429,14 +458,14 @@
       <button 
         type="button"
         id="modal-edit-button"
-        class="px-4 py-2 border border-indigo-300 rounded-md shadow-sm text-sm font-medium text-indigo-700 bg-indigo-50 hover:bg-indigo-100 focus:outline-none focus:ring-2 focus:ring-indigo-500"
+        class="btn btn-secondary"
         data-action="click->application-modal#openApplicationEdit">
         Edit
       </button>
       <a 
         id="modal-view-full-link"
         href="#"
-        class="px-4 py-2 border border-transparent rounded-md shadow-sm text-sm font-medium text-white bg-indigo-600 hover:bg-indigo-700 focus:outline-none focus:ring-2 focus:ring-indigo-500"
+        class="btn btn-primary"
         data-turbo-frame="_top">
         View Full Application
       </a>
@@ -446,7 +475,7 @@
 
       <dialog 
         id="application-edit-modal"
-        class="rounded-lg shadow-xl max-w-2xl w-full backdrop:bg-black backdrop:bg-opacity-50"
+        class="rounded-lg shadow-elevation-4 max-w-2xl w-full backdrop:bg-black backdrop:bg-opacity-50"
         aria-labelledby="application-edit-modal-title">
         
         <div class="bg-white rounded-lg">
@@ -456,7 +485,7 @@
             </h3>
             <button 
               type="button"
-              class="text-gray-400 hover:text-gray-600 focus:outline-none focus:ring-2 focus:ring-indigo-500 rounded"
+              class="text-gray-500 hover:text-gray-700 rounded"
               data-action="click->application-modal#close"
               aria-label="Close modal">
               <svg class="h-6 w-6" fill="none" stroke="currentColor" viewBox="0 0 24 24" aria-hidden="true">
@@ -474,7 +503,7 @@
           <div class="sticky bottom-0 bg-gray-50 border-t border-gray-200 px-6 py-4 flex justify-end gap-3">
             <button 
               type="button"
-              class="px-4 py-2 border border-gray-300 rounded-md shadow-sm text-sm font-medium text-gray-700 bg-white hover:bg-gray-50 focus:outline-none focus:ring-2 focus:ring-indigo-500"
+              class="btn btn-outline"
               data-action="click->application-modal#close"
               aria-label="Cancel editing and close modal">
               Cancel

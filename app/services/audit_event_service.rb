@@ -17,7 +17,7 @@ class AuditEventService < BaseService
   # @param created_at [Time] The optional timestamp for tests.
   # @return [Event, nil] The new event, or nil if deduplication suppresses it.
   def self.log(action:, actor:, auditable: nil, metadata: {}, created_at: nil)
-    # TODO: Add a partial unique index on (action, auditable_type, auditable_id) for recent events.
+    # No unique index covers (action, auditable_type, auditable_id), so two concurrent identical events can both pass the check below.
 
     metadata = AuditMetadataPrivacy.new(auditable: auditable).filter(metadata)
 

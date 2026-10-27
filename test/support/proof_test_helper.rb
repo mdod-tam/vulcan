@@ -10,7 +10,6 @@ module ProofTestHelper
     Current.reviewing_single_proof = nil
   end
 
-  # Set up a clean test environment with proper context clearing
   def setup_clean_test_environment
     clear_current_context
     Event.delete_all if defined?(Event)
@@ -81,7 +80,7 @@ module ProofTestHelper
                  "Found duplicate events: #{duplicate_groups.inspect}"
   end
 
-  # Legacy method for compatibility - prepares application for testing
+  # Sets the application's status and proof statuses; options override the defaults.
   def prepare_application_for_test(app, options = {})
     options = {
       status: 'in_progress',

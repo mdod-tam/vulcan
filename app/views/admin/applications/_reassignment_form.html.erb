@@ -1,0 +1,60 @@
+<%# locals: (type:, reassign_form_path:, assigned_people:, available_assignees:, summary:, confirmation:, expected_version: nil) -%>
+<% dialog_id = "#{type}-reassign-confirm-dialog" %>
+<div class="mt-4 border-t border-gray-200 pt-4">
+  <h4 class="text-sm font-semibold text-gray-900">Reassign <%= type.titleize %></h4>
+  <p class="mt-1 text-sm text-gray-600"><%= summary %></p>
+  <% if available_assignees.any? %>
+    <button type="button"
+            class="btn btn-primary mt-3 min-h-10"
+            data-controller="modal"
+            data-action="click->modal#open"
+            data-modal-id="<%= dialog_id %>"
+            aria-haspopup="dialog"
+            aria-controls="<%= dialog_id %>">
+      Reassign <%= type.titleize %>
+    </button>
+    <noscript>
+      <p class="mt-2 text-sm text-gray-600">Enable JavaScript to confirm <%= type %> reassignment.</p>
+    </noscript>
+
+    <dialog id="<%= dialog_id %>"
+            class="backdrop:bg-gray-500 backdrop:bg-opacity-75 bg-white rounded-lg max-w-md w-full shadow-elevation-4 p-0"
+            data-controller="modal"
+            data-action="click->modal#clickOutside cancel->modal#guardCancel close->modal#onClose"
+            aria-labelledby="<%= type %>-reassign-confirm-heading"
+            aria-describedby="<%= type %>-reassign-confirm-description">
+      <div class="p-6">
+        <h3 id="<%= type %>-reassign-confirm-heading" class="text-lg font-medium text-gray-900">Reassign <%= type.titleize %></h3>
+        <p id="<%= type %>-reassign-confirm-description" class="mt-3 text-sm text-gray-600">
+          <%= confirmation %>
+          <% if assigned_people.any? %>
+            Current <%= type %>: <%= assigned_people.map { |person| practitioner_assignment_option_label(person) }.to_sentence %>.
+          <% end %>
+        </p>
+        <%= form_with url: reassign_form_path, method: :post, class: 'mt-4' do %>
+          <%= hidden_field_tag :expected_version, expected_version if expected_version %>
+          <%= label_tag "reassign_#{type}_id", "New #{type} (required)", class: 'form-label' %>
+          <%= select_tag "#{type}_id",
+                         options_from_collection_for_select(
+                           available_assignees, :id, ->(person) { practitioner_assignment_option_label(person) }
+                         ),
+                         id: "reassign_#{type}_id", include_blank: "Select #{type == 'evaluator' ? 'an' : 'a'} #{type}…", required: true,
+                         class: 'form-input mt-1 h-10 text-sm' %>
+          <div class="mt-6 flex flex-col-reverse gap-3 sm:flex-row sm:justify-end">
+            <button type="button"
+                    class="btn btn-outline min-h-10 w-full text-center sm:w-auto"
+                    data-action="click->modal#close"
+                    autofocus>
+              Cancel
+            </button>
+            <%= submit_tag 'Confirm reassignment',
+                           data: { turbo_submits_with: 'Reassigning...' },
+                           class: 'btn btn-primary min-h-10 w-full sm:w-auto' %>
+          </div>
+        <% end %>
+      </div>
+    </dialog>
+  <% else %>
+    <p class="mt-2 text-sm text-gray-600">No other active <%= type.pluralize %> are available.</p>
+  <% end %>
+</div>

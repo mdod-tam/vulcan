@@ -8,17 +8,13 @@ module Admin
     include AuthenticationTestHelper
 
     setup do
-      # Create admin and user with unique emails
       @admin = FactoryBot.create(:admin, email: "admin-recovery-#{SecureRandom.hex(4)}@example.com")
       @user = FactoryBot.create(:user, email: "user-recovery-#{SecureRandom.hex(4)}@example.com")
 
-      # Ensure user has WebAuthn credentials
       setup_webauthn_credential(@user)
 
-      # Create a recovery request
       @recovery_request = FactoryBot.create(:recovery_request, user: @user)
 
-      # Sign in as admin
       sign_in_for_integration_test(@admin)
     end
 
@@ -41,13 +37,11 @@ module Admin
 
       assert_redirected_to admin_recovery_requests_path
 
-      # Check that request is updated
       @recovery_request.reload
       assert_equal 'approved', @recovery_request.status
       assert_not_nil @recovery_request.resolved_at
       assert_equal @admin.id, @recovery_request.resolved_by_id
 
-      # Check that user's credentials were deleted
       assert_equal 0, @user.reload.webauthn_credentials.count
     end
 
@@ -111,10 +105,8 @@ module Admin
     end
 
     test 'should not allow non-admins to access requests' do
-      # Sign out admin
       delete sign_out_path
 
-      # Sign in as regular user
       @regular_user = FactoryBot.create(:user, email: "regular-#{SecureRandom.hex(4)}@example.com")
       sign_in_for_integration_test(@regular_user)
 
@@ -127,7 +119,6 @@ module Admin
       post approve_admin_recovery_request_path(@recovery_request)
       assert_redirected_to root_path
 
-      # Request should remain unchanged
       @recovery_request.reload
       assert_equal 'pending', @recovery_request.status
     end

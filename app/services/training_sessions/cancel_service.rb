@@ -16,7 +16,8 @@ module TrainingSessions
 
         validate_params!
         initiator = @cancellation_initiator
-        @training_session.update!(status: :cancelled, cancelled_at: Time.current,
+        # A new operation id supersedes any transfer notice still queued for the row.
+        @training_session.update!(status: :cancelled, cancelled_at: Time.current, assignment_operation_id: SecureRandom.uuid,
                                   cancellation_reason: @params[:cancellation_reason], cancellation_initiator: initiator)
         AuditEventService.log(
           actor: @actor, action: 'training_cancelled', auditable: @training_session,

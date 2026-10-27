@@ -1,6 +1,7 @@
 # frozen_string_literal: true
 
-# Preserves the existing notification-ID job contract; never interprets legacy message_id as a provider ID.
+# Refreshes provider status for a notification's pollable delivery attempts. The notification's own message_id is never
+# treated as a provider id.
 class UpdateEmailStatusJob < ApplicationJob
   queue_as :default
 

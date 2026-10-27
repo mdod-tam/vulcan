@@ -29,5 +29,5 @@ if worker_count.positive?
   end
 end
 
-# SOLID_QUEUE_IN_PUMA enables the supervisor inside Puma.
-plugin :solid_queue if ENV['SOLID_QUEUE_IN_PUMA']
+# SOLID_QUEUE_IN_PUMA=true runs the supervisor inside Puma; any other value leaves it to the worker process.
+plugin :solid_queue if ENV['SOLID_QUEUE_IN_PUMA'] == 'true'

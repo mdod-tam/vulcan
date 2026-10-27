@@ -47,15 +47,10 @@ class ProofAttachmentService
       status: params.fetch(:status)
     }
 
-    original_service_context = Current.proof_attachment_service_context
-    Current.proof_attachment_service_context = true
-
-    begin
+    Current.set(proof_attachment_service_context: true) do
       with_service_flow(context) do |result|
         perform_attachment_flow(result, params)
       end
-    ensure
-      Current.proof_attachment_service_context = original_service_context
     end
   end
 
@@ -439,14 +434,12 @@ class ProofAttachmentService
       [context, log_attachment_events(context)]
     end
 
+    # Yields the caller's own paper context so the block can tell whether an outer flow owns reconciliation.
     def with_paper_context(submission_method, _proof_type)
-      original_paper_context = Current.paper_context
-      begin
-        Current.paper_context = true if submission_method.to_sym == :paper
-        yield(original_paper_context)
-      ensure
-        Current.paper_context = original_paper_context
-      end
+      outer_paper_context = Current.paper_context
+      return yield(outer_paper_context) unless submission_method.to_sym == :paper
+
+      Current.set(paper_context: true) { yield(outer_paper_context) }
     end
   end
 end

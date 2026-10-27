@@ -1,8 +1,5 @@
 # frozen_string_literal: true
 
-# Seed File for "vendor_notifications_invoice_generated"
-# (Suggest saving as db/seeds/email_templates/vendor_notifications_invoice_generated.rb)
-# --------------------------------------------------
 EmailTemplate.create_or_find_by!(name: 'vendor_notifications_invoice_generated', format: :text, locale: 'es') do |template|
   template.subject = 'Nueva Factura Generada'
   template.description = 'Enviado a un proveedor cuando se ha generado una nueva factura basada en sus transacciones recientes de vales.'

@@ -21,6 +21,30 @@ module Applications
       assert_not_nil @application.reload.training_requested_at
     end
 
+    test 'a request is routed to the covering trainer while they can take training' do
+      trainer = create(:trainer)
+      @application.update!(assigned_trainer: trainer)
+
+      result = TrainingRequestService.new(application: @application, current_user: @constituent).call
+
+      assert result.success?
+      assert_equal I18n.t('applications.training_requests.messages.submitted_covered'), result.message
+      assert_equal [[trainer.id, 'assigned_trainer']], request_notices
+    end
+
+    test 'a covering trainer who lost access is skipped and the request goes to the administrators' do
+      trainer = create(:trainer)
+      @application.update!(assigned_trainer: trainer)
+      trainer.update_columns(status: User.statuses[:suspended])
+
+      result = TrainingRequestService.new(application: @application, current_user: @constituent).call
+
+      assert result.success?
+      assert_equal I18n.t('applications.training_requests.messages.submitted'), result.message
+      assert_includes request_notices, [@admin.id, 'assignment_queue_admin']
+      assert_not_includes request_notices.map(&:first), trainer.id
+    end
+
     test 'rejects requests outside the service window with a clear message' do
       @application.update!(application_date: 4.years.ago.to_date)
 
@@ -128,6 +152,11 @@ module Applications
     end
 
     private
+
+    def request_notices
+      Notification.where(action: 'training_requested', notifiable: @application)
+                  .map { |notice| [notice.recipient_id, notice.metadata['recipient_audience']] }
+    end
 
     def create_reviewed_application(user:)
       create(:application, :approved, :with_all_proofs, user: user, application_date: 2.years.ago.to_date)

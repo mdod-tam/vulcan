@@ -117,8 +117,8 @@ module Admin
       assert_equal 1, page.evaluate_script('window.equipmentCorrectionEvents.streams')
       assert_equal original_number, item.purchase_order.reload.number
       assert_text '2 equipment items across 1 application, including 1 shipped device'
-      assert_selector '.bg-amber-50 dt', text: 'PO number:', count: 1
-      assert_selector '.bg-amber-50 dt', count: 1
+      assert_selector '.bg-warning-50 dt', text: 'PO number:', count: 1
+      assert_selector '.bg-warning-50 dt', count: 1
       check 'I confirm the impact on all linked equipment and applications.'
       take_screenshot('equipment-shared-po-impact', html: true, full: true)
       assert_difference -> { item.purchase_order.events.count }, 1 do
@@ -143,8 +143,8 @@ module Admin
       assert_selector '#equipment-correction-impact-heading:focus', text: 'Correction impact: 1 device across 1 application'
       assert_equal 1, page.evaluate_script('window.equipmentCorrectionEvents.streams')
       assert_equal 'OriginalPackage', item.reload.tracking_number
-      assert_selector '.bg-amber-50 dt', text: 'Tracking number:', count: 1
-      assert_selector '.bg-amber-50 dt', count: 1
+      assert_selector '.bg-warning-50 dt', text: 'Tracking number:', count: 1
+      assert_selector '.bg-warning-50 dt', count: 1
       reviewed_token = find('input[name=impact_token]', visible: false).value
       fill_in 'Tracking number', with: 'ReviewedAgainPackage'
       check 'I confirm this correction and its impact on shipment history.'
@@ -162,13 +162,13 @@ module Admin
       select 'FedEx', from: 'Carrier'
       fill_in 'IMEI (15 digits)', with: '123456789012345'
       find_button('Review changed values').double_click
-      assert_selector '.bg-amber-50 dd', text: 'USPS → FedEx'
+      assert_selector '.bg-warning-50 dd', text: 'USPS → FedEx'
       assert_correction_submission(2, review: true)
       assert_selector '#equipment-correction-impact-heading:focus'
       assert_equal 2, page.evaluate_script('window.equipmentCorrectionEvents.streams')
       assert_not_equal reviewed_token, find('input[name=impact_token]', visible: false).value
-      assert_selector '.bg-amber-50 dt', text: 'IMEI (15 digits):'
-      assert_selector '.bg-amber-50 dt', count: 4
+      assert_selector '.bg-warning-50 dt', text: 'IMEI (15 digits):'
+      assert_selector '.bg-warning-50 dt', count: 4
       check 'I confirm this correction and its impact on shipment history.'
       take_screenshot('equipment-shipped-correction-review', html: true, full: true)
       find_button('Save equipment correction').double_click
@@ -186,8 +186,8 @@ module Admin
       fill_in 'Date shipped', with: ''
       fill_in 'Correction reason', with: 'Shipment date was entered in error'
       click_button 'Review correction'
-      assert_selector '.bg-amber-50 dt', text: 'Date shipped:'
-      assert_selector '.bg-amber-50 dd', text: "#{Date.current.strftime('%m/%d/%Y')} → Not recorded"
+      assert_selector '.bg-warning-50 dt', text: 'Date shipped:'
+      assert_selector '.bg-warning-50 dd', text: "#{Date.current.strftime('%m/%d/%Y')} → Not recorded"
       check 'I confirm this correction and its impact on shipment history.'
       click_button 'Save equipment correction'
       assert_text 'Equipment item updated.'
@@ -374,7 +374,7 @@ module Admin
       fill_in 'Date PO sent', with: (Date.current - 1.day).strftime('%m/%d/%Y')
       fill_in 'Correction reason', with: 'Replace restored shared vendor and date'
       click_button 'Review changed values'
-      assert_selector '.bg-amber-50 dd', text: final_vendor.business_name
+      assert_selector '.bg-warning-50 dd', text: final_vendor.business_name
       check 'I confirm the impact on all linked equipment and applications.'
       click_button 'Save purchase order correction'
       assert_text 'Purchase order corrected.'

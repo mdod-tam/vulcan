@@ -38,7 +38,6 @@ module Applications
     end
 
     def create
-      Current.paper_context = true
       application_created = run_create_transaction
 
       # Skip record-dependent work when commit verification fails.
@@ -67,20 +66,20 @@ module Applications
       log_error(e, 'Failed to create paper application')
       @errors << e.message
       false
-    ensure
-      Current.paper_context = nil
     end
 
     def update(application)
-      Current.paper_context = true
       update_succeeded = false
 
       ActiveRecord::Base.transaction do
         @application = application
         @constituent = application.user
 
-        rollback_failure('Application update failed') unless update_application_attributes
-        rollback_failure('Proof upload failed') unless process_proof_uploads
+        # Commit callbacks, notices, and reconciliation run outside the paper context.
+        Current.set(paper_context: true) do
+          rollback_failure('Application update failed') unless update_application_attributes
+          rollback_failure('Proof upload failed') unless process_proof_uploads
+        end
 
         update_succeeded = true
       end
@@ -94,8 +93,6 @@ module Applications
       log_error(e, 'Failed to update paper application')
       @errors << e.message
       false
-    ensure
-      Current.paper_context = nil
     end
 
     # Keep reconciliation guidance and other follow-up warnings together so neither is lost.
@@ -125,9 +122,12 @@ module Applications
     # Do not retry a failed callback. Its completed side effects could repeat.
     def run_create_transaction
       ActiveRecord::Base.transaction do
-        rollback_failure_unless_explained('Constituent processing failed') unless process_constituent
-        rollback_failure('Application creation failed') unless create_application
-        rollback_failure_unless_explained('Proof upload failed') unless @skip_proof_processing || process_proof_uploads
+        # Commit callbacks, notices, and reconciliation run outside the paper context.
+        Current.set(paper_context: true) do
+          rollback_failure_unless_explained('Constituent processing failed') unless process_constituent
+          rollback_failure('Application creation failed') unless create_application
+          rollback_failure_unless_explained('Proof upload failed') unless @skip_proof_processing || process_proof_uploads
+        end
         record_identity_decision!
 
         @application.persisted?
@@ -700,8 +700,6 @@ module Applications
     end
 
     def create_application
-      Current.paper_context = true
-
       application_attrs = params[:application]
       return add_error('Application params missing') if application_attrs.blank?
 
@@ -709,8 +707,6 @@ module Applications
 
       @constituent.reload
       build_and_save_application(application_attrs)
-    ensure
-      Current.paper_context = nil
     end
 
     def validate_income_threshold(application_attrs)
@@ -785,8 +781,6 @@ module Applications
     end
 
     def process_proof_uploads
-      Current.paper_context = true
-
       proof_types = %i[income residency id medical_certification]
       proof_types -= %i[income] unless @application.income_proof_required?
 
@@ -795,8 +789,6 @@ module Applications
       end
 
       true
-    ensure
-      Current.paper_context = nil
     end
 
     def process_proof(type)

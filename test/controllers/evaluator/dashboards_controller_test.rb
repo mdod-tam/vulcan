@@ -13,7 +13,6 @@ module Evaluators
       @evaluation = create(:evaluation, evaluator: @evaluator, constituent: @constituent, status: :scheduled)
       @other_evaluation = create(:evaluation, evaluator: @other_evaluator, constituent: @other_constituent, status: :scheduled)
 
-      # Use the correct sign-in helper for integration tests
       sign_in_for_integration_test(@evaluator)
     end
 

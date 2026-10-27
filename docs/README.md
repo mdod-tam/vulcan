@@ -4,7 +4,7 @@ These guides explain the main workflows, the constraints that matter, and where 
 
 For installation and a repository map, start with the [project README](../README.md).
 
-Setup shortcuts: [baseline seeds](infrastructure/setup_and_maintenance.md#baseline-seeds), [initial accounts](infrastructure/setup_and_maintenance.md#initial-accounts), and [Heroku deployment and operations](infrastructure/setup_and_maintenance.md#heroku-deployment-and-operations).
+Setup shortcuts: [bootstrapping an environment](infrastructure/setup_and_maintenance.md#bootstrapping-an-environment), [baseline tasks](infrastructure/setup_and_maintenance.md#baseline-tasks), and [Heroku deployment and operations](infrastructure/setup_and_maintenance.md#heroku-deployment-and-operations).
 
 ## First read
 
@@ -21,7 +21,7 @@ A few terms help when reading the code: a **constituent** receives assistance; a
 | Intake or application status | [Application workflow](features/application_workflow_guide.md), [paper intake](development/paper_application_architecture.md), and [service architecture](development/service_architecture.md). |
 | Account matching, guardians, or recipients | [User management](development/user_management_features.md), [guardian relationships](development/guardian_relationship_system.md), [authentication](security/authentication_system.md), and [notifications](features/notifications.md). |
 | Uploads or provider responses | [Proof review](features/proof_review_process_guide.md), [secure request links](features/secure_request_links.md), and [DocuSeal integration](development/docuseal_integration_guide.md). |
-| Forms or browser behavior | [JavaScript architecture](development/javascript_architecture.md) and [testing/debugging](development/testing_and_debugging_guide.md). |
+| Forms or browser behavior | [JavaScript architecture](development/javascript_architecture.md), [UI styles](development/ui_styles.md), and [testing/debugging](development/testing_and_debugging_guide.md). |
 | Communication controls or delivery history | [All, Email, Printed letters and SMS controls](infrastructure/email_system.md#delivery-controls), [notifications](features/notifications.md), and [audit tracking](features/audit_event_tracking.md). |
 
 Use the source and test links in the workflow guides to trace the current path. The [security baseline](security/baseline_policy.md) distinguishes policy requirements from implemented controls; the [control catalog](security/controls.yaml) maps control IDs to implementation descriptions and source files.

@@ -58,7 +58,6 @@ module StatusManagement
   def rescheduling?
     return false unless persisted?
 
-    # Get the date field name for this model
     date_field = self.class.status_management_date_field
     return false unless date_field
 

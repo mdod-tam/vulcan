@@ -5,10 +5,10 @@
   <% if @product_groups.any? %>
     <%= render 'history', groups: @product_groups %>
   <% else %>
-    <div class="mt-6 rounded-lg bg-white p-6 shadow">
+    <div class="card mt-6 p-6">
       <h2 class="text-xl font-semibold"><%= t('product_resources.devices.empty_heading') %></h2>
       <p class="mt-2 text-gray-600"><%= t('product_resources.devices.empty') %></p>
     </div>
   <% end %>
-  <%= link_to t('product_resources.devices.dashboard'), constituent_portal_dashboard_path, class: 'mt-6 inline-block text-indigo-700 underline' %>
+  <%= link_to t('product_resources.devices.dashboard'), constituent_portal_dashboard_path, class: 'mt-6 inline-block text-primary-700 underline' %>
 </div>

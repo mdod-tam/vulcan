@@ -49,7 +49,7 @@ es:
       wait: "Espere %{seconds} segundos antes de solicitar otro código."
     errors:
       key_unavailable: "No tiene llaves de seguridad registradas. Primero configure una llave de seguridad."
-      totp_unavailable: "No tiene una aplicación de autenticación configurada. Primero configure la autenticación TOTP."
+      totp_unavailable: "No tiene una aplicación de autenticación configurada. Primero configure una aplicación de autenticación."
       invalid_method: "El método de verificación no es válido"
       invalid_type: "El tipo de credencial no es válido"
       no_code: "No se proporcionó un código"

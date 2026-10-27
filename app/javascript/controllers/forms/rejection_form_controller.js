@@ -21,7 +21,7 @@ export default class extends Controller {
 
     if (this.hasReasonFieldTarget) {
       this.reasonFieldTarget.value = ""
-      this.reasonFieldTarget.classList.remove('border-red-500')
+      this.reasonFieldTarget.classList.remove('border-danger-500')
       this._lockReasonField()
     }
     this._hideLanguageNotice()
@@ -122,7 +122,7 @@ export default class extends Controller {
     }
 
     this.reasonFieldTarget.value = reasonText
-    this.reasonFieldTarget.classList.remove('border-red-500')
+    this.reasonFieldTarget.classList.remove('border-danger-500')
     this._lockReasonField()
     this._hideLanguageNotice()
     if (this.hasReasonCodeTarget) {
@@ -170,12 +170,12 @@ export default class extends Controller {
 
     if (!reasonText) {
       event.preventDefault()
-      reasonField.classList.add('border-red-500')
+      reasonField.classList.add('border-danger-500')
       reasonField.focus()
       return
     }
 
-    reasonField.classList.remove('border-red-500')
+    reasonField.classList.remove('border-danger-500')
 
     // Let parent modal controllers react to the submit, e.g. for scroll restoration
     document.dispatchEvent(new CustomEvent('turbo-form-submit', {
@@ -233,7 +233,7 @@ export default class extends Controller {
   }
 
   _applyReasonButtonState(button, selected) {
-    const selectedClasses = ['bg-indigo-600', 'text-white', 'border-indigo-700']
+    const selectedClasses = ['bg-primary-600', 'text-white', 'border-primary-700']
     const unselectedClasses = ['bg-gray-100', 'text-gray-800', 'border-gray-300']
 
     if (selected) {
@@ -259,12 +259,12 @@ export default class extends Controller {
 
     const status = this.codeStatusTarget
     status.textContent = message
-    status.classList.remove('text-gray-500', 'text-emerald-700', 'text-amber-700')
+    status.classList.remove('text-gray-500', 'text-success-700', 'text-warning-700')
 
     if (state === 'linked') {
-      status.classList.add('text-emerald-700')
+      status.classList.add('text-success-700')
     } else if (state === 'unlinked') {
-      status.classList.add('text-amber-700')
+      status.classList.add('text-warning-700')
     } else {
       status.classList.add('text-gray-500')
     }
