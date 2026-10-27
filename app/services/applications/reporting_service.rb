@@ -265,10 +265,10 @@ module Applications
     end
 
     def add_vendor_metrics(data)
-      data[:active_vendors] = Vendor.joins(:voucher_transactions).distinct.count
-      data[:recent_active_vendors] = Vendor.joins(:voucher_transactions)
-                                           .where(voucher_transactions: { created_at: 1.month.ago.. })
-                                           .distinct.count
+      data[:active_vendors] = Users::Vendor.joins(:voucher_transactions).distinct.count
+      data[:recent_active_vendors] = Users::Vendor.joins(:voucher_transactions)
+                                                  .where(voucher_transactions: { created_at: 1.month.ago.. })
+                                                  .distinct.count
     end
 
     def add_mfr_metrics(data)

@@ -21,14 +21,6 @@ class UserCapabilitiesTest < ActiveSupport::TestCase
     assert(UserRolesAndCapabilities::CAPABILITY_MATRIX.values.all? { |policy| policy.frozen? && policy.values.all?(&:frozen?) })
   end
 
-  test 'the legacy STI spelling resolves through the same matrix' do
-    legacy = create(:evaluator)
-    legacy.update_column(:type, 'Evaluator')
-
-    assert_equal %w[can_evaluate], User.find(legacy.id).role_provided_capabilities
-    assert_includes User.assignable_for(:can_evaluate), legacy
-  end
-
   test 'a grant makes the other discipline effective only where the matrix allows it' do
     evaluator = create(:evaluator)
     assert_not evaluator.can_train?

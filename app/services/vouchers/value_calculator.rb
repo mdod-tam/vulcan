@@ -11,7 +11,7 @@ module Vouchers
     def calculate
       total_value = 0
 
-      Constituent::DISABILITY_TYPES.each do |disability_type|
+      Users::Constituent::DISABILITY_TYPES.each do |disability_type|
         next unless constituent.send("#{disability_type}_disability")
 
         value = Policy.voucher_value_for_disability(disability_type)

@@ -182,6 +182,18 @@ module Applications
       end
     end
 
+    test 'counts vendors with recorded voucher transactions' do
+      create(:voucher_transaction, vendor: create(:vendor, :approved))
+      create(:voucher_transaction, vendor: create(:vendor, :approved), created_at: 2.months.ago)
+
+      with_mocked_attachments do
+        data = ReportingService.new.generate_dashboard_data.data
+
+        assert_equal 2, data[:active_vendors]
+        assert_equal 1, data[:recent_active_vendors]
+      end
+    end
+
     test 'includes chart data in dashboard' do
       current_fy_year = Date.current.month >= 7 ? Date.current.year : Date.current.year - 1
       current_fy_start = Date.new(current_fy_year, 7, 1)

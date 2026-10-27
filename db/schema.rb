@@ -1049,8 +1049,8 @@ ActiveRecord::Schema[8.1].define(version: 2026_10_27_210000) do
     t.index ["recipient_id"], name: "index_users_on_recipient_id"
     t.index ["reset_password_token"], name: "index_users_on_reset_password_token", unique: true
     t.index ["type"], name: "index_users_on_type"
-    t.index ["w9_rejections_count"], name: "index_users_on_w9_rejections_count", where: "((type)::text = 'Vendor'::text)"
-    t.index ["w9_status"], name: "index_users_on_w9_status", where: "((type)::text = 'Vendor'::text)"
+    t.index ["w9_rejections_count"], name: "index_users_on_w9_rejections_count", where: "((type)::text = 'Users::Vendor'::text)"
+    t.index ["w9_status"], name: "index_users_on_w9_status", where: "((type)::text = 'Users::Vendor'::text)"
     t.index ["webauthn_id"], name: "index_users_on_webauthn_id", unique: true
   end
 

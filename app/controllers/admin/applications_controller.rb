@@ -146,7 +146,7 @@ module Admin
 
       if current_user.admin?
         current_user
-      elsif ['Administrator', 'Users::Administrator'].include?(current_user.type)
+      elsif current_user.type == 'Users::Administrator'
         User.find(current_user.id)
       else
         Rails.logger.error 'Non-admin user attempting to perform admin action'

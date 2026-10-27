@@ -103,7 +103,7 @@ module Applications
       result = service.create
       assert result, "Service creation failed: #{service.errors.inspect}"
 
-      constituent = Constituent.find_by(email: service_email)
+      constituent = Users::Constituent.find_by(email: service_email)
       assert_not_nil constituent, 'Constituent should be created'
 
       application = constituent.applications.last
@@ -124,7 +124,7 @@ module Applications
       service = PaperApplicationService.new(params: confirmed_paper_params(service_params, admin: @admin), admin: @admin, skip_proof_processing: true)
       assert service.create, "Service creation failed: #{service.errors.inspect}"
 
-      assert_equal Date.new(1980, 1, 15), Constituent.find_by!(email: unique_email).date_of_birth
+      assert_equal Date.new(1980, 1, 15), Users::Constituent.find_by!(email: unique_email).date_of_birth
     end
 
     test 'rejects malformed paper intake date of birth' do
@@ -394,7 +394,7 @@ module Applications
       result = service.create
       assert result, "Failed to create application with rejected proof: #{service.errors.inspect}"
 
-      constituent = Constituent.find_by(email: unique_email)
+      constituent = Users::Constituent.find_by(email: unique_email)
       assert_not_nil constituent, 'Constituent should be created'
 
       application = constituent.applications.last
@@ -429,7 +429,7 @@ module Applications
 
       assert result, "Failed to create paper application that should await certification: #{service.errors.inspect}"
 
-      application = Constituent.find_by!(email: unique_email).applications.order(:created_at).last
+      application = Users::Constituent.find_by!(email: unique_email).applications.order(:created_at).last
       assert_not_nil application, 'Application should be created'
 
       application.reload
@@ -697,7 +697,7 @@ module Applications
       result = service.create
       assert result, "Failed to create application with multiple proof types: #{service.errors.inspect}"
 
-      constituent = Constituent.find_by(email: unique_email)
+      constituent = Users::Constituent.find_by(email: unique_email)
       assert_not_nil constituent, 'Constituent should be created'
 
       application = constituent.applications.last

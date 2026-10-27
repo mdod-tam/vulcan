@@ -4,7 +4,7 @@ module Admin
   class ConstituentsController < Admin::BaseController
     def type_check
       email = params[:email]
-      constituent = Constituent.find_by(email: email)
+      constituent = Users::Constituent.find_by(email: email)
 
       if constituent
         render json: {

@@ -102,7 +102,7 @@
             <div class="mt-1">
               <%= f.select :vendor_id,
                   options_from_collection_for_select(
-                    Vendor.active.order(:business_name),
+                    Users::Vendor.active.order(:business_name),
                     :id,
                     :business_name,
                     params[:vendor_id]

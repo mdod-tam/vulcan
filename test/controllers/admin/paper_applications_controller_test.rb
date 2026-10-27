@@ -987,7 +987,7 @@ module Admin
         ['Income exceeds the maximum threshold for the household size.']
       )
 
-      assert_no_difference(['Application.count', 'Constituent.count']) do
+      assert_no_difference(['Application.count', 'Users::Constituent.count']) do
         post admin_paper_applications_path, headers: default_headers, params: {
           constituent: {
             first_name: 'John',
@@ -1217,7 +1217,7 @@ module Admin
       Applications::PaperApplicationService.any_instance.stubs(:create).returns(false)
       Applications::PaperApplicationService.any_instance.stubs(:errors).returns(['Mocked service error'])
 
-      assert_no_difference(['Application.count', 'Constituent.count']) do
+      assert_no_difference(['Application.count', 'Users::Constituent.count']) do
         post admin_paper_applications_path, headers: default_headers, params: {
           constituent: {
             first_name: 'John',
@@ -1260,7 +1260,7 @@ module Admin
         'ApplicationNotificationsMailer',
         'account_created',
         'deliver_now',
-        args: [Constituent.find_by(id: 999_999)]
+        args: [Users::Constituent.find_by(id: 999_999)]
       )
 
       assert_nothing_raised do
