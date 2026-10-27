@@ -25,7 +25,7 @@ class ApplicationNotificationsMailerPreview < ActionMailer::Preview
   end
 
   def account_created
-    constituent = Constituent.first
+    constituent = Users::Constituent.first
     ApplicationNotificationsMailer.account_created(constituent)
   end
 

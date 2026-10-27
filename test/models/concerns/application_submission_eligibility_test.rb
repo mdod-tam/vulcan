@@ -74,6 +74,17 @@ class ApplicationSubmissionEligibilityTest < ActiveSupport::TestCase
     assert_match(/already have an active application/i, error)
   end
 
+  test 'the error is a message in the requested locale' do
+    target = Application.new(user: @constituent, application_date: Date.current)
+    rejected = create(:application, :rejected, user: @constituent, application_date: 1.year.ago)
+    active = create(:application, :in_progress, user: create(:constituent), application_date: 1.year.ago)
+
+    assert_equal I18n.t('applications.creation.refusals.waiting_period', years: 3, locale: :es),
+                 Application.sibling_application_eligibility_error([rejected], target_application: target, locale: :es)
+    assert_equal I18n.t('applications.creation.refusals.active_application', locale: :es),
+                 Application.sibling_application_eligibility_error([active], target_application: target, locale: :es)
+  end
+
   # `identity_review_pending_for?` is the shared source of truth for both the locked writer and the
   # portal's advisory GET, so its source filter and its open-case filter are pinned directly here
   # rather than only through ApplicationCreator. The source filter in particular is what makes the

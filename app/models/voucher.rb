@@ -151,7 +151,7 @@ class Voucher < ApplicationRecord
   end
 
   def self.calculate_value_for_constituent(constituent)
-    Constituent::DISABILITY_TYPES.sum do |disability_type|
+    Users::Constituent::DISABILITY_TYPES.sum do |disability_type|
       # Compare with true so that only a true flag adds value.
       if constituent.send("#{disability_type}_disability") == true
         Policy.voucher_value_for_disability(disability_type)

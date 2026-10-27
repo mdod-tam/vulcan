@@ -216,8 +216,8 @@ module DashboardMetricsLoading # rubocop:disable Metrics/ModuleLength
   end
 
   def load_vendor_data
-    safe_assign(:active_vendors, Vendor.joins(:voucher_transactions).distinct.count)
-    safe_assign(:recent_active_vendors, Vendor.joins(:voucher_transactions)
+    safe_assign(:active_vendors, Users::Vendor.joins(:voucher_transactions).distinct.count)
+    safe_assign(:recent_active_vendors, Users::Vendor.joins(:voucher_transactions)
                                            .where(voucher_transactions: { created_at: 1.month.ago.. })
                                            .distinct.count)
   end

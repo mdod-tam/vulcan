@@ -14,9 +14,6 @@ module Users
       'trainer' => 'Users::Trainer'
     }.freeze
 
-    # STI `type` may be stored as Users::Constituent or legacy "Constituent"
-    CONSTITUENT_TYPE_VALUES = %w[Users::Constituent Constituent].freeze
-
     SORTABLE_COLUMNS = %w[type last_name first_name email created_at].freeze
 
     def initialize(scope, params = {})
@@ -92,8 +89,6 @@ module Users
       role_key = params[:role].to_s.downcase
       role_type = ROLE_TYPE_MAPPING[role_key]
       return result if role_type.blank?
-
-      return result.where(type: CONSTITUENT_TYPE_VALUES) if role_key == 'constituent'
 
       result.where(type: role_type)
     end

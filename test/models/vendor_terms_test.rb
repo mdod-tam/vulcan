@@ -20,14 +20,12 @@ class VendorTermsTest < ActiveSupport::TestCase
     assert_not VendorTerms.available?
   end
 
-  test 'both vendor classes reject new acceptance while terms are unavailable' do
-    [Users::Vendor, Vendor].each do |vendor_class|
-      vendor = build(:vendor).becomes(vendor_class)
-      vendor.terms_accepted = '1'
+  test 'a vendor rejects new acceptance while terms are unavailable' do
+    vendor = build(:vendor)
+    vendor.terms_accepted = '1'
 
-      assert_not vendor.valid?
-      assert_nil vendor.terms_accepted_at
-      assert_includes vendor.errors[:terms_accepted], I18n.t('vendor_onboarding.terms.unavailable')
-    end
+    assert_not vendor.valid?
+    assert_nil vendor.terms_accepted_at
+    assert_includes vendor.errors[:terms_accepted], I18n.t('vendor_onboarding.terms.unavailable')
   end
 end

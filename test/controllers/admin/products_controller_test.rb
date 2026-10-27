@@ -17,8 +17,12 @@ module Admin
     end
 
     def test_should_get_new
+      vendor = create(:vendor, :approved)
+
       get new_admin_product_path
+
       assert_response :success
+      assert_select "input[type=checkbox][name='product[vendor_ids][]'][value=?]", vendor.id.to_s
     end
 
     def test_should_create_product

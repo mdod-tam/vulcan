@@ -93,6 +93,19 @@ module Admin
       assert_match(/Vouchers issued during FY/, response.body)
     end
 
+    test 'vendor activity counts vendors with recorded transactions' do
+      FeatureFlag.enable!(:vouchers_enabled)
+      create(:voucher_transaction, vendor: create(:vendor, :approved))
+      create(:voucher_transaction, vendor: create(:vendor, :approved), created_at: 2.months.ago)
+
+      get admin_reports_path
+      assert_response :success
+
+      summary = css_select('#vendor-summary-heading').first.ancestors('div').first
+      assert_card_definition_value summary, 'Active Vendors (All Time):', '2'
+      assert_card_definition_value summary, 'Active Vendors (Last 30 Days):', '1'
+    end
+
     test 'referral sources for the current fiscal quarter cover the whole calendar quarter' do
       travel_to Time.zone.local(2026, 6, 15, 12, 0, 0) do
         {

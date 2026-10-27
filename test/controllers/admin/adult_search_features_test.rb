@@ -96,17 +96,6 @@ module Admin
       assert_no_match admin_user.email, response.body
     end
 
-    test 'search includes legacy Constituent STI type rows' do
-      legacy = create(:constituent, email: generate(:email), first_name: 'LegacyStiSearchXyz')
-      legacy.update_column(:type, 'Constituent')
-
-      get search_admin_users_path(q: 'LegacyStiSearchXyz', role: 'constituent', frame_id: 'adult_search_results'),
-          headers: default_headers
-      assert_response :success
-
-      assert_match legacy.full_name, response.body
-    end
-
     test 'search role constituent excludes non-constituent users even with prior applications' do
       evaluator = create(:evaluator, email: generate(:email), first_name: 'PaperCandEvalX', hearing_disability: true)
       create(:application, :archived, user: evaluator)

@@ -2,6 +2,8 @@
 
 Applicants, guardians, and staff all live in the `users` table, separated by STI subclass.
 
+Each subclass lives under `Users::` (`Users::Constituent`, `Users::Vendor`, and so on), and `users.type` always stores that full name. There are no top-level aliases such as `Constituent`, so reference a role by its `Users::` class.
+
 Role decides what someone can do.
 
 Stored contact decides how they can be reached.

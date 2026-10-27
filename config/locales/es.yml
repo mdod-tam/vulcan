@@ -251,6 +251,16 @@ es:
   applications:
     creation:
       failure: "No se pudo guardar su solicitud. Inténtelo de nuevo."
+      refusals:
+        inactive_record: "Este registro ya no es un registro activo elegible."
+        guardian_changed: "La relación con el tutor cambió mientras se guardaba la solicitud."
+        not_draft: "Esta solicitud ya no es un borrador."
+        not_constituent: "Solo los registros de solicitantes pueden usar el portal de solicitudes."
+        wrong_participant: "Esta solicitud ya no pertenece a este participante."
+        guardian_not_managing: "Este tutor ya no administra esta solicitud."
+        guardian_not_authorized: "La relación con este tutor ya no está autorizada."
+        active_application: "Ya tiene una solicitud activa; espere a que se procese antes de iniciar otra."
+        waiting_period: "Debe esperar %{years} años antes de presentar una nueva solicitud."
     # El nombre del botón queda en inglés a propósito: este formulario todavía no está traducido.
     autosave:
       saving: "Guardando borrador…"

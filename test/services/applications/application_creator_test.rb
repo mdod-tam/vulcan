@@ -88,6 +88,32 @@ module Applications
       assert_includes result.error_messages, 'Only constituent records can use the constituent application portal.'
     end
 
+    test 'a refused participant sees the refusal in the form locale' do
+      create_guardian_relationship(@user, @dependent)
+      @dependent.update_column(:type, 'Users::Administrator')
+      form = create_valid_dependent_form(@user, User.find(@dependent.id))
+      form.locale = 'es'
+
+      result = ApplicationCreator.call(form)
+
+      assert result.failure?
+      assert_equal [I18n.t('applications.creation.refusals.not_constituent', locale: :es)], result.error_messages
+      assert_not_equal I18n.t('applications.creation.refusals.not_constituent', locale: :en), result.error_messages.sole
+    end
+
+    test 'a submission blocked by an active application is refused in the form locale' do
+      @user.update!(hearing_disability: true)
+      create(:application, :in_progress, user: @user, application_date: 1.year.ago)
+      form = create_valid_form(@user)
+      form.is_submission = true
+      form.locale = 'es'
+
+      result = ApplicationCreator.call(form)
+
+      assert result.failure?
+      assert_equal [I18n.t('applications.creation.refusals.active_application', locale: :es)], result.error_messages
+    end
+
     test 'submission creates exactly one application_status_changed event' do
       application = create_application_for(@user)
       form = create_form_with_application(@user, application)

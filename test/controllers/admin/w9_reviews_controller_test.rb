@@ -10,7 +10,7 @@ module Admin
     end
 
     test 'should get new with attached w9' do
-      vendor = create(:vendor, type: 'Vendor')
+      vendor = create(:vendor)
 
       attach_w9(vendor)
 
@@ -25,7 +25,7 @@ module Admin
     end
 
     test 'should create approved w9 review' do
-      vendor = create(:vendor, type: 'Vendor')
+      vendor = create(:vendor)
       attach_w9(vendor, filename: 'w9_form.pdf')
       vendor.update!(w9_status: :pending_review)
       assert vendor.w9_form.attached?
@@ -53,7 +53,7 @@ module Admin
     end
 
     test 'should create rejected w9 review' do
-      vendor = create(:vendor, type: 'Vendor')
+      vendor = create(:vendor)
 
       attach_w9(vendor)
 
@@ -90,7 +90,7 @@ module Admin
     end
 
     test 'should not create rejected w9 review without reason' do
-      vendor = create(:vendor, type: 'Vendor')
+      vendor = create(:vendor)
 
       attach_w9(vendor)
 
@@ -140,7 +140,7 @@ module Admin
     end
 
     test 'should show w9 review' do
-      vendor = create(:vendor, type: 'Vendor')
+      vendor = create(:vendor)
 
       # The show action requires an attached W9.
       attach_w9(vendor)
@@ -224,7 +224,7 @@ module Admin
     end
 
     test 'should require admin authentication' do
-      vendor = create(:vendor, type: 'Vendor')
+      vendor = create(:vendor)
 
       attach_w9(vendor)
 
@@ -236,7 +236,7 @@ module Admin
     end
 
     test 'should redirect if w9 form is missing even in test environment' do
-      vendor_without_w9 = create(:vendor, type: 'Vendor')
+      vendor_without_w9 = create(:vendor)
 
       assert_not vendor_without_w9.w9_form.attached?
 
@@ -246,7 +246,7 @@ module Admin
     end
 
     test 'should redirect if review not found with specific message' do
-      vendor = create(:vendor, type: 'Vendor')
+      vendor = create(:vendor)
 
       attach_w9(vendor)
 
@@ -262,11 +262,11 @@ module Admin
     end
 
     test 'should not allow non-admin to review w9' do
-      vendor = create(:vendor, type: 'Vendor')
+      vendor = create(:vendor)
 
       attach_w9(vendor)
 
-      non_admin = create(:vendor, type: 'Vendor')
+      non_admin = create(:vendor)
 
       delete sign_out_path
       sign_in_as(non_admin)

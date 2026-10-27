@@ -102,7 +102,7 @@
             <div class="mt-1">
               <%= f.select :vendor_id,
                   options_from_collection_for_select(
-                    Vendor.active.order(:business_name),
+                    Users::Vendor.active.order(:business_name),
                     :id,
                     :business_name,
                     params[:vendor_id]
@@ -199,8 +199,8 @@
               <td class="px-6 py-4 whitespace-nowrap text-sm text-gray-500">
                 <% if voucher.vendor %>
                   <%= link_to voucher.vendor.business_name,
-                      [:admin, voucher.vendor],
-                      class: "text-primary-600 hover:text-primary-900" %>
+                              admin_vendor_path(voucher.vendor),
+                              class: 'text-primary-600 hover:text-primary-900' %>
                 <% else %>
                   <span class="text-gray-500">Unassigned</span>
                 <% end %>

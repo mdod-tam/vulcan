@@ -99,7 +99,7 @@ module Applications
     def lock_and_requalify_applicant!
       current_user_id = @form.current_user&.id
       applicant_id = initial_applicant_id
-      raise IneligibleApplicantError, 'This record is no longer an eligible active record.' if current_user_id.blank? || applicant_id.blank?
+      raise IneligibleApplicantError, refusal(:inactive_record) if current_user_id.blank? || applicant_id.blank?
 
       guardian_ids = GuardianRelationship.where(dependent_id: applicant_id).pluck(:guardian_id)
       locked_users = User.lock_for_merge_integrity!(
@@ -120,7 +120,7 @@ module Applications
                                        .lock
                                        .to_a
       missing_guardian_ids = @locked_guardian_relationships.map(&:guardian_id).uniq - locked_users.keys
-      raise IneligibleApplicantError, 'This guardian relationship changed while the application was being saved.' if missing_guardian_ids.any?
+      raise IneligibleApplicantError, refusal(:guardian_changed) if missing_guardian_ids.any?
 
       hydrate_guardian_relationships!(locked_users)
 
@@ -128,8 +128,7 @@ module Applications
       replace_with_exact_target!(locked_inventory)
       requalify_application_authority!
 
-      raise IneligibleApplicantError, 'This application is no longer a draft.' unless
-        target_application.new_record? || target_application.status_draft?
+      raise IneligibleApplicantError, refusal(:not_draft) unless target_application.new_record? || target_application.status_draft?
 
       return unless @form.is_submission
 
@@ -137,7 +136,8 @@ module Applications
 
       error = Application.sibling_application_eligibility_error(
         locked_inventory,
-        target_application: target_application
+        target_application: target_application,
+        locale: @form.message_locale
       )
       raise IneligibleApplicantError, error if error
     end
@@ -164,6 +164,11 @@ module Applications
              locale: @form.message_locale)
     end
 
+    # Every refusal reaches the constituent's form, so it resolves in message_locale like the notice above.
+    def refusal(key)
+      I18n.t("applications.creation.refusals.#{key}", locale: @form.message_locale)
+    end
+
     def initial_applicant_id
       if target_application.persisted?
         Application.where(id: target_application.id).pick(:user_id)
@@ -173,11 +178,11 @@ module Applications
     end
 
     def validate_constituent_participant!(user)
-      raise IneligibleApplicantError, 'This record is no longer an eligible active record.' unless user.public_login_active?
+      raise IneligibleApplicantError, refusal(:inactive_record) unless user.public_login_active?
 
       return if user.constituent?
 
-      raise IneligibleApplicantError, 'Only constituent records can use the constituent application portal.'
+      raise IneligibleApplicantError, refusal(:not_constituent)
     end
 
     def hydrate_guardian_relationships!(locked_users)
@@ -193,7 +198,7 @@ module Applications
     def replace_with_exact_target!(locked_inventory)
       if target_application.persisted?
         exact_target = locked_inventory.find { |application| application.id == target_application.id }
-        raise IneligibleApplicantError, 'This application no longer belongs to this participant.' unless exact_target
+        raise IneligibleApplicantError, refusal(:wrong_participant) unless exact_target
 
         @target_application = exact_target
       elsif (resumable_draft = Application.resumable_portal_draft(locked_inventory, actor_id: @current_user.id))
@@ -210,13 +215,13 @@ module Applications
 
       if dependent_application?
         unless @applicant_user.id != @current_user.id && (!target_application.persisted? || manager_id == @current_user.id)
-          raise IneligibleApplicantError, 'This application is no longer managed by this guardian.'
+          raise IneligibleApplicantError, refusal(:guardian_not_managing)
         end
-        raise IneligibleApplicantError, 'This guardian relationship is no longer authorized.' unless locked_guardian_relationship
+        raise IneligibleApplicantError, refusal(:guardian_not_authorized) unless locked_guardian_relationship
 
         target_application.association(:managing_guardian).target = @current_user if target_application.persisted?
       elsif target_application.persisted? && target_application.user_id != @current_user.id
-        raise IneligibleApplicantError, 'This application no longer belongs to this participant.'
+        raise IneligibleApplicantError, refusal(:wrong_participant)
       end
     end
 

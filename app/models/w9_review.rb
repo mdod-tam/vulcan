@@ -36,11 +36,9 @@ class W9Review < ApplicationRecord
   end
 
   def vendor_must_be_vendor_type
-    # Check that vendor exists and is actually a vendor type (either Users::Vendor or Vendor)
     return if vendor.nil? # Let the presence validation handle nil vendors
 
-    # Check for vendor type using the STI type handling methods
-    errors.add(:vendor, 'must be a vendor') unless vendor.vendor? || vendor.is_a?(Users::Vendor) || vendor.is_a?(Vendor)
+    errors.add(:vendor, 'must be a vendor') unless vendor.vendor?
   end
 
   def validate_rejection_fields
