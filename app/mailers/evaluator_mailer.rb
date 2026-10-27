@@ -14,7 +14,7 @@ class EvaluatorMailer < ApplicationMailer
   def new_evaluation_assigned
     evaluation = params[:evaluation]
     evaluator = params[:recipient]
-    superseded = superseded_assignment_delivery(evaluation, operation_id: params[:operation_id], recipient: evaluator)
+    superseded = superseded_assignment_delivery(evaluation, operation_id: params[:operation_id], assignee: evaluator)
     return superseded if superseded
 
     template_name = 'evaluator_mailer_new_evaluation_assigned'

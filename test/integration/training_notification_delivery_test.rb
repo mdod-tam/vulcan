@@ -483,6 +483,26 @@ class TrainingNotificationDeliveryTest < ActiveSupport::TestCase
     assert_empty ActionMailer::Base.deliveries
   end
 
+  %i[email letter].each do |channel|
+    test "the #{channel} notice telling the constituent about a new trainer is not sent after that trainer's access is removed" do
+      load_seeded_email_templates('training_session_notifications_trainer_reassigned', 'training_session_notifications_trainer_changed')
+      @constituent.update!(communication_preference: channel, physical_address_1: 'Constituent Avenue', city: 'Baltimore', state: 'MD', zip_code: '21201')
+      create(:training_session, :scheduled, application: @application, trainer: @trainer)
+      @replacement_trainer = create(:evaluator)
+      create(:role_capability, user: @replacement_trainer, capability: 'can_train')
+      assert reassign_training(@replacement_trainer)
+      constituent_job = mail_jobs.find { |job| job[:args][1] == 'trainer_changed' }
+      remove_training_access(@replacement_trainer)
+
+      assert_no_difference -> { ActionMailer::Base.deliveries.count + PrintQueueItem.where(application: @application).count } do
+        ActiveJob::Base.execute(constituent_job)
+      end
+
+      notice = Notification.find_by!(action: 'training_trainer_changed', recipient: @constituent)
+      assert_equal 'assignment_superseded', notice.metadata.dig('delivery_suppressed', 'reason')
+    end
+  end
+
   test 'a transfer notice whose assignment no longer exists is recorded as not sent, not retried' do
     load_seeded_email_templates('training_session_notifications_trainer_reassigned', 'training_session_notifications_trainer_changed')
     session = create(:training_session, :scheduled, application: @application, trainer: @trainer)
@@ -567,6 +587,14 @@ class TrainingNotificationDeliveryTest < ActiveSupport::TestCase
   def completion_params(actual_time)
     { completed_at: actual_time, constituent_summary: 'We practised using captions.', summary_locale: 'en',
       duration_hours: '1.5', product_trained_on_id: @product.id }
+  end
+
+  def remove_training_access(trainer)
+    intent = Users::CapabilityWriter::Intent.revoke('can_train')
+    operation_id = SecureRandom.uuid
+    token = Users::CapabilityWriter.call(actor: @admin, user: trainer, intent: intent, operation_id: operation_id, confirmation: nil).token
+    result = Users::CapabilityWriter.call(actor: @admin, user: trainer, intent: intent, operation_id: operation_id, confirmation: token)
+    assert result.changed?, result.message
   end
 
   def reassign_training(trainer)

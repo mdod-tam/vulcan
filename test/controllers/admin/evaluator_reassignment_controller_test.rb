@@ -46,6 +46,27 @@ class AdminEvaluatorReassignmentControllerTest < ActionDispatch::IntegrationTest
     assert_select "form[action='#{reassign_evaluator_admin_application_path(@application)}']"
   end
 
+  test 'a cancelled evaluation offers the assignment form that restarts it, not a transfer' do
+    @evaluator.update_columns(type: 'Users::Constituent')
+    @evaluation.update_columns(status: Evaluation.statuses[:cancelled])
+
+    get admin_application_path(@application)
+
+    assert_response :success
+    assert_select '[data-testid="evaluator-assignment-section"]', text: /Cancelled/
+    assert_select "form[action='#{reassign_evaluator_admin_application_path(@application)}']", count: 0
+    assert_select '[data-testid="evaluator-ineligible-notice"]', count: 0
+    assert_select "form[action='#{assign_evaluator_admin_application_path(@application)}'] select[name='evaluator_id']"
+
+    assert_no_difference 'Evaluation.count' do
+      post assign_evaluator_admin_application_path(@application), params: { evaluator_id: @replacement.id }
+    end
+
+    assert_redirected_to admin_application_path(@application)
+    @evaluation.reload
+    assert_equal [@replacement.id, 'requested'], [@evaluation.evaluator_id, @evaluation.status]
+  end
+
   test 'non-admin evaluator cannot transfer an assignment' do
     sign_in_for_controller_test(@evaluator)
     post reassign_evaluator_admin_application_path(@application), params: { evaluator_id: @replacement.id }

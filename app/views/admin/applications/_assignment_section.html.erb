@@ -12,8 +12,10 @@
     - assignment_heading: optional heading for unassigned assignment form
     - assignment_submit_label: optional submit label for unassigned assignment form
     - assignment_select_label: optional accessible label for unassigned assignment select
+    A cancelled entity has no open assignment to transfer, so it offers the assignment form to restart it.
 %>
 
+<% restart = entity.present? && entity.status_cancelled? # rubocop:disable Lint/UselessAssignment -- Used by later ERB fragments. %>
 <div class="rounded-lg border border-gray-200 bg-gray-50 p-4" data-testid="<%= type %>-assignment-section">
   <% if entity.present? %>
     <div class="flex flex-col gap-4 md:flex-row md:items-center md:justify-between">
@@ -27,7 +29,7 @@
           <% end %>
           <%= send(status_badge_method, entity) %>
         </div>
-        <% if assigned_person.present? && !assigned_person.public_send("assignable_#{type}?") %>
+        <% if assigned_person.present? && !restart && !assigned_person.public_send("assignable_#{type}?") %>
           <p class="mt-2 text-sm font-medium text-danger-700" data-testid="<%= type %>-ineligible-notice">
             <%= assigned_person.full_name %> can no longer take <%= type %> assignments. Reassign this work to an eligible <%= type %>.
           </p>
@@ -86,7 +88,7 @@
         </div>
       <% end %>
     </div>
-    <% if local_assigns[:reassign_form_path].present? && !entity.status_completed? %>
+    <% if local_assigns[:reassign_form_path].present? && !entity.status_completed? && !restart %>
       <%= render 'reassignment_form',
                  type: type,
                  reassign_form_path: reassign_form_path,
@@ -97,8 +99,12 @@
                  confirmation: "Transfer this evaluation to the evaluator selected below? The appointment and existing notes will be preserved. " \
                                "This transfers responsibility for scheduling and report submission." %>
     <% end %>
-  <% else %>
-    <h3 class="text-sm font-semibold text-gray-900 mb-3"><%= local_assigns[:assignment_heading].presence || "Assign #{type.titleize}" %></h3>
+  <% end %>
+  <% if entity.blank? || restart %>
+    <h3 class="text-sm font-semibold text-gray-900 mb-3 <%= 'mt-4' if restart %>"><%= local_assigns[:assignment_heading].presence || "Assign #{type.titleize}" %></h3>
+    <% if restart %>
+      <p class="mb-3 text-sm text-gray-600">This evaluation was cancelled. Assign an evaluator to restart it.</p>
+    <% end %>
     <% if available_assignees.blank? %>
       <p class="text-sm text-gray-500">No <%= type.pluralize %> are currently available for assignment.</p>
     <% else %>

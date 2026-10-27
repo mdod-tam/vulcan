@@ -84,14 +84,12 @@ module Evaluators
         return
       end
 
-      if @evaluation.update(supplemental_notes_params)
-        redirect_to evaluators_evaluation_path(@evaluation), notice: 'Evaluation updated successfully.'
+      result = ::Evaluations::SupplementalNotesService.new(@evaluation, current_user, supplemental_notes_params).call
+
+      if result.success?
+        redirect_to evaluators_evaluation_path(@evaluation), notice: result.message
       else
-        # Supplemental notes come from the show page. Return validation errors there.
-        @evaluation_form_values = { supplemental_notes: supplemental_notes_params.to_h.with_indifferent_access }
-        @evaluation_form_errors = { supplemental_notes: evaluation_form_errors(@evaluation.errors, :supplemental_notes) }
-        prepare_show_context
-        render :show, status: :unprocessable_content
+        render_lifecycle_failure(:supplemental_notes, supplemental_notes_params, "Failed to update evaluation: #{result.message}")
       end
     end
 

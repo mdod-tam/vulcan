@@ -27,7 +27,7 @@ class TrainingSessionNotificationsMailer < ApplicationMailer
     training_session = params[:assignment]
     constituent = params[:recipient]
     @application = training_session.application
-    superseded = superseded_assignment_delivery(training_session, operation_id: params[:operation_id])
+    superseded = superseded_assignment_delivery(training_session, operation_id: params[:operation_id], assignee: training_session.trainer)
     return superseded if superseded
 
     locale = resolve_template_locale(recipient: constituent)
@@ -347,7 +347,7 @@ class TrainingSessionNotificationsMailer < ApplicationMailer
     training_session = params[:assignment]
     trainer = params[:recipient]
     @application = training_session.application
-    superseded = superseded_assignment_delivery(training_session, operation_id: params[:operation_id], recipient: trainer)
+    superseded = superseded_assignment_delivery(training_session, operation_id: params[:operation_id], assignee: trainer)
     return superseded if superseded
 
     locale = resolve_template_locale(recipient: trainer)
