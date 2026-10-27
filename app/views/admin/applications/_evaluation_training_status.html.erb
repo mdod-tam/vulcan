@@ -10,7 +10,7 @@
 
   <div class="mb-6 space-y-6">
     <%# The panel follows the evaluation still owed; a newer completed one must not hide it. %>
-    <% current_evaluation = @application.open_evaluation || @application.latest_evaluation %>
+    <% current_evaluation = @application.open_evaluation || @application.latest_evaluation # rubocop:disable Lint/UselessAssignment -- Used below. %>
 
     <% if @application.equipment_fulfillment? %>
       <div>
@@ -114,18 +114,17 @@
                 form: { data: { turbo_confirm: 'Remove trainer coverage and cancel any open appointment? Completed reports remain available.' } }
               ) %>
           <% open_sessions = @application.open_training_assignments.includes(:trainer).to_a %>
-          <% unavailable = @application.covering_trainer_unavailable? %>
-          <% if unavailable %>
+          <% if @application.covering_trainer_unavailable? %>
             <p class="mt-3 text-sm font-medium text-danger-700" data-testid="trainer-ineligible-notice">
               <%= @application.assigned_trainer.full_name %> can no longer take training assignments.
               <%= open_sessions.any? ? 'Reassign the open training to an eligible trainer.' : 'Transfer the coverage to an eligible trainer, or remove it.' %>
             </p>
           <% end %>
-          <% if (open_sessions.any? || unavailable) && !@application.service_window_active? %>
+          <% if (open_sessions.any? || @application.covering_trainer_unavailable?) && !@application.service_window_active? %>
             <p class="mt-3 text-sm text-gray-600" data-testid="training-reassignment-unavailable">
               The service window for this application has ended, so training cannot be transferred.
             </p>
-          <% elsif open_sessions.any? || unavailable %>
+          <% elsif open_sessions.any? || @application.covering_trainer_unavailable? %>
             <% others = User.assignable_for(:can_train) %>
             <% others = others.where.not(id: @application.assigned_trainer_id) if open_sessions.all? { |session| session.trainer_id == @application.assigned_trainer_id } %>
             <%= render 'reassignment_form',

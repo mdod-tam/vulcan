@@ -146,7 +146,9 @@ module Admin
       get admin_applications_path, params: { filter: 'evaluations_needing_reassignment' }
       assert_equal [stranded_evaluation.id], assigns(:applications).map(&:id)
 
-      stranded.open_training_assignments.update_all(trainer_id: create(:trainer).id)
+      replacement = create(:trainer)
+      stranded.update!(assigned_trainer: replacement)
+      stranded.open_training_assignments.update_all(trainer_id: replacement.id)
       get admin_dashboard_path
       assert_equal 0, assigns(:metrics)[:training_needing_reassignment_count]
       assert_select 'a[href=?]', admin_applications_path(filter: 'training_needing_reassignment'), text: /Training Needing Reassignment \(0\)/
