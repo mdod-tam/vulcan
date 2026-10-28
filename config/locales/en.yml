@@ -436,6 +436,10 @@ en:
       scheduled_for_in_future: "The date and time must be in the future."
       unexpected_error: "An unexpected error occurred: %{message}"
   application_notifications:
+    proof_approved:
+      all_proofs_approved: "All required documents for your application have now been approved."
+    registration_confirmation:
+      no_active_vendors: "No authorized vendors found at this time."
     provider_info_requested:
       email_instructions: |-
         Secure provider information link:
@@ -1061,6 +1065,18 @@ en:
   passwords:
     account_access_sms:
       message: "MAT account access link to set your password: %{reset_url} This link expires in 20 minutes."
+    account_access_required: "Use your account access link to reset your password."
+    invalid_reset_link: "Invalid or expired reset link."
+    mismatch: "New password and confirmation do not match."
+    updated: "Password successfully updated."
+    update_failed: "Unable to update password. %{details}."
+    edit:
+      reset: "Reset Password"
+      change: "Change Password"
+      current_password: "Current Password"
+      new_password: "New Password"
+      confirm_password: "Confirm New Password"
+      cancel: "Cancel"
   secure_proof_forms:
     proof_types:
       income: "income proof"

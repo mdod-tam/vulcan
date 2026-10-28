@@ -5,7 +5,7 @@ module Users
   class PasswordUpdateService < BaseService
     # Shared with the reset-link path in PasswordsController, which saves through its own lock.
     def self.failure_message(user)
-      "Unable to update password. #{user.errors.full_messages.to_sentence}."
+      I18n.t('passwords.update_failed', details: user.errors.full_messages.to_sentence)
     end
 
     def initialize(user, password_challenge, new_password, new_password_confirmation)
@@ -50,10 +50,10 @@ module Users
 
       return fail_with_error('Current password is incorrect.') unless @user.authenticate(@password_challenge)
 
-      return fail_with_error('New password and confirmation do not match.') unless @new_password == @new_password_confirmation
+      return fail_with_error(I18n.t('passwords.mismatch')) unless @new_password == @new_password_confirmation
 
       if @user.update(password: @new_password, force_password_change: false)
-        success_result(message: 'Password successfully updated.')
+        success_result(message: I18n.t('passwords.updated'))
       else
         fail_with_error(self.class.failure_message(@user))
       end
@@ -66,7 +66,7 @@ module Users
     end
 
     def success_result(data = {})
-      BaseService::Result.new(success: true, data: data, message: 'Password successfully updated.')
+      BaseService::Result.new(success: true, data: data, message: I18n.t('passwords.updated'))
     end
   end
 end

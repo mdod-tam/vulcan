@@ -1,14 +1,14 @@
 # frozen_string_literal: true
 
 EmailTemplate.create_or_find_by!(name: 'training_session_notifications_training_rescheduled', format: :text, locale: 'es') do |template|
-  template.subject = 'Sesion de capacitacion reprogramada'
-  template.description = 'Se envia a la persona cuando se reprograma su sesion de capacitacion.'
+  template.subject = 'Sesión de capacitación reprogramada'
+  template.description = 'Se envía a la persona cuando se reprograma su sesión de capacitación.'
   template.body = <<~TEXT
     %<header_text>s
 
     Hola %<constituent_full_name>s,
 
-    Su sesion de capacitacion con %<trainer_full_name>s ha sido reprogramada.
+    Su sesión de capacitación con %<trainer_full_name>s ha sido reprogramada.
 
     Hora anterior:
     - Fecha: %<old_scheduled_date_formatted>s
@@ -19,9 +19,9 @@ EmailTemplate.create_or_find_by!(name: 'training_session_notifications_training_
     - Hora: %<scheduled_time_formatted>s
 
 
-    Si tiene preguntas, comuniquese con su capacitador:
-    - Correo electronico: %<trainer_email>s
-    - Telefono: %<trainer_phone_formatted>s
+    Si tiene preguntas, comuníquese con su capacitador:
+    - Correo electrónico: %<trainer_email>s
+    - Teléfono: %<trainer_phone_formatted>s
 
     Lugar o instrucciones para reunirse: %<scheduled_location>s
 

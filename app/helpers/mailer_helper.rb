@@ -103,36 +103,6 @@ module MailerHelper
     address
   end
 
-  # Returns the localized name of a proof type.
-  # @param proof_type [String, Symbol, Integer, ProofReview] The proof type
-  # @return [String] The formatted proof type
-  def format_proof_type(proof_type)
-    return '' if proof_type.nil?
-
-    # A ProofReview supplies the value before its enum type cast.
-    type_value = if proof_type.respond_to?(:proof_type_before_type_cast)
-                   proof_type.proof_type_before_type_cast
-                 else
-                   proof_type
-                 end
-
-    normalized_type = case type_value.to_s
-                      when '0', 'income'
-                        'income'
-                      when '1', 'residency'
-                        'residency'
-                      when '3', 'id'
-                        'id'
-                      else
-                        type_value.to_s
-                      end
-
-    I18n.t(
-      "secure_proof_forms.proof_types.#{normalized_type}",
-      default: normalized_type.humanize.downcase
-    )
-  end
-
   # Returns the scheduled session details, or an instruction to arrange one.
   # @param training_session [TrainingSession] The training session
   # @return [String] The formatted scheduling information text

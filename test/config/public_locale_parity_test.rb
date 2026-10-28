@@ -8,11 +8,12 @@ require 'test_helper'
 class PublicLocaleParityTest < ActiveSupport::TestCase
   SCOPES = %w[
     alerts.sign_in_required alerts.session_expired alerts.session_fail
-    applications.creation controllers errors.messages layouts.secure_public
+    application_notifications.proof_approved application_notifications.registration_confirmation
+    applications.alternate_contact_relationship_types applications.creation controllers errors.messages layouts.secure_public
     passwords password_visibility portal_self_service sessions terms_and_conditions
     secure_certification_form_resends secure_certification_forms secure_proof_form_resends secure_proof_forms
     secure_provider_info_form_resends secure_provider_info_forms secure_w9_form_resends secure_w9_forms
-    security_key_verification shared.date_of_birth shared.header shared.password two_factor_verification
+    security_key_verification shared.date_of_birth shared.header shared.password support.array two_factor_verification
   ].freeze
 
   SCOPES.each do |scope|

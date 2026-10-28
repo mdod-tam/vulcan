@@ -122,7 +122,57 @@ class ApplicationNotificationsMailerTest < ActionMailer::TestCase
     end
   end
 
+  test 'a Spanish approval email renders every generated fragment in Spanish when the ambient locale is English' do
+    use_real_email_templates('application_notifications_proof_approved')
+    recipient = create(:constituent, locale: 'es')
+    application = create(:application, :with_approved_proofs, id_proof_status: :approved, user: recipient)
+    proof_review = create(:proof_review, :with_income_proof, application: application)
+    assert application.all_proofs_approved?
+
+    body = I18n.with_locale(:en) { ApplicationNotificationsMailer.proof_approved(application, proof_review).deliver_now.body.decoded }
+
+    assert_includes body, I18n.t('secure_proof_forms.proof_types.income', locale: :es)
+    assert_includes body, I18n.t('application_notifications.proof_approved.all_proofs_approved', locale: :es)
+    assert_not_includes body, I18n.t('secure_proof_forms.proof_types.income', locale: :en)
+    assert_not_includes body, I18n.t('application_notifications.proof_approved.all_proofs_approved', locale: :en)
+  end
+
+  test 'a Spanish proof-received email names the proof in Spanish when the ambient locale is English' do
+    use_real_email_templates('application_notifications_proof_received')
+    application = create(:application, user: create(:constituent, locale: 'es'))
+
+    body = I18n.with_locale(:en) { ApplicationNotificationsMailer.proof_received(application, :income).deliver_now.body.decoded }
+
+    assert_includes body, I18n.t('secure_proof_forms.proof_types.income', locale: :es)
+    assert_not_includes body, I18n.t('secure_proof_forms.proof_types.income', locale: :en)
+  end
+
+  test 'a Spanish registration email says there are no authorized vendors in Spanish' do
+    use_real_email_templates('application_notifications_registration_confirmation')
+    Users::Vendor.stubs(:active).returns(Users::Vendor.none)
+
+    body = I18n.with_locale(:en) do
+      ApplicationNotificationsMailer.registration_confirmation(create(:constituent, locale: 'es')).deliver_now.body.decoded
+    end
+
+    assert_includes body, I18n.t('application_notifications.registration_confirmation.no_active_vendors', locale: :es)
+    assert_not_includes body, I18n.t('application_notifications.registration_confirmation.no_active_vendors', locale: :en)
+  end
+
   private
+
+  # The default mocks return canned bodies that omit the variables generated fragments fill, so render the seeded
+  # templates themselves.
+  def use_real_email_templates(*names)
+    EmailTemplate.unstub(:find_by!)
+    %i[header_text footer_text].each { |helper| ApplicationNotificationsMailer.any_instance.unstub(helper) }
+    (%w[email_header_text email_footer_text] + names).each do |template_name|
+      EmailTemplate.where(name: template_name, format: :text).destroy_all
+      %w[en es].each do |locale|
+        load Rails.root.join("db/seeds/email_templates/#{template_name}#{'_es' if locale == 'es'}.rb")
+      end
+    end
+  end
 
   def setup_email_template_mocks
     @mock_approved_text = mock_template('Mock Proof Approved: Income',
