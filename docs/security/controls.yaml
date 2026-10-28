@@ -1,175 +1,241 @@
 version: "3.0"
-last_updated: "2026-10-22"
+last_updated: "2026-10-27"
 application: "MAT Vulcan"
 
-# Control identifiers, implementation descriptions, and source files.
+# The security controls: what each one does and which files implement it.
+# The policy they support is in docs/security/baseline_policy.md. When a review
+# produces a report, add an `audit` block to the control (report, coverage,
+# next_review_due); see docs/compliance/required_reports_audits.md.
+
 priority_levels:
-  critical: { label: "Critical", value: 1 }
-  high: { label: "High", value: 2 }
-  medium: { label: "Medium", value: 3 }
-  low: { label: "Low", value: 4 }
+  critical: 1
+  high: 2
+  medium: 3
+  low: 4
 
 controls:
   authentication:
     - id: "AUTH-001"
       name: "User Authentication"
       frameworks: { doit: ["IA-2", "PR.AC-1"], nist_csf: ["PR.AC-1", "PR.AC-7"], nist_800_53: ["IA-5", "AC-7"], rails: ["ActiveModel::SecurePassword"] }
-      priority: { label: "Critical", value: 1 }
+      priority: critical
       owner: "@david"
-      implementation:
-        summary: "Passwords are hashed with BCrypt (has_secure_password), with a default cost of 12 outside tests. Accounts lock after five failed attempts."
-        files: ["app/models/concerns/user_authentication.rb", "app/controllers/sessions_controller.rb"]
-      audit: { report: null, coverage: null, next_review_due: null }
+      summary: >-
+        Passwords are hashed with BCrypt (has_secure_password), with a default
+        cost of 12 outside tests. Accounts lock after five failed attempts.
+      files:
+        - app/models/concerns/user_authentication.rb
+        - app/controllers/sessions_controller.rb
 
     - id: "AUTH-002"
       name: "Multi-Factor Authentication"
       frameworks: { doit: ["IA-2", "G21-1"], nist_csf: ["PR.AC-7"], nist_800_53: ["IA-2"] }
-      priority: { label: "Critical", value: 1 }
+      priority: critical
       owner: "@david"
-      implementation:
-        summary: "WebAuthn (security keys), TOTP (authenticator-app codes), and SMS codes. Required for administrators, evaluators, trainers, and vendors. Optional for constituents."
-        files: ["app/controllers/application_controller.rb", "app/controllers/two_factor_authentications_controller.rb"]
-      audit: { report: null, coverage: null, next_review_due: null }
+      summary: >-
+        WebAuthn security keys, TOTP authenticator codes, and SMS codes.
+        Required for administrators, evaluators, trainers, and vendors, and
+        optional for constituents.
+      files:
+        - app/controllers/application_controller.rb
+        - app/controllers/two_factor_authentications_controller.rb
 
     - id: "AUTH-003"
       name: "Password Policy"
       frameworks: { doit: ["PR.AC-1"] }
-      priority: { label: "High", value: 2 }
+      priority: high
       owner: "@david"
-      implementation:
-        summary: "Minimum password length is 12 characters (UserAuthentication::PASSWORD_MIN_LENGTH). Every new-password field states it."
-        files: ["app/models/concerns/user_authentication.rb"]
+      summary: >-
+        Passwords must be at least 12 characters (UserAuthentication::PASSWORD_MIN_LENGTH),
+        and every new-password field says so.
+      files:
+        - app/models/concerns/user_authentication.rb
 
     - id: "AUTH-004"
       name: "Session Management"
       frameworks: { doit: ["PR.AC-1"], nist_800_53: ["AC-12"] }
-      priority: { label: "High", value: 2 }
+      priority: high
       owner: "@david"
-      implementation:
-        summary: "Signed HttpOnly login cookie, Secure in production and SameSite=Lax. Idle expiry is 30 minutes; absolute expiry remains 24 hours. Activity writes are limited to once per minute. Password changes revoke existing login sessions atomically; authenticated changes issue a fresh session. Shared session creation resets browser state after commit."
-        files: ["app/models/session.rb", "app/models/concerns/user_authentication.rb", "app/controllers/concerns/authentication.rb", "app/controllers/application_controller.rb", "app/controllers/passwords_controller.rb"]
+      summary: >-
+        The login cookie is signed, HttpOnly, SameSite=Lax, and Secure in
+        production. Sessions expire after 30 minutes idle or 24 hours in
+        total, and activity is written at most once a minute. Changing a
+        password revokes the existing login sessions in one step, and a
+        signed-in user who changes theirs gets a fresh session. Shared session
+        creation resets browser state after commit.
+      files:
+        - app/models/session.rb
+        - app/models/concerns/user_authentication.rb
+        - app/controllers/concerns/authentication.rb
+        - app/controllers/application_controller.rb
+        - app/controllers/passwords_controller.rb
 
   data_protection:
     - id: "DATA-001"
       name: "Data Encryption"
       frameworks: { doit: ["SC-13", "PR.DS-2"], nist_csf: ["PR.DS-1", "PR.DS-2"], rails: ["ActiveRecord::Encryption"] }
-      priority: { label: "Critical", value: 1 }
+      priority: critical
       owner: "@david"
-      implementation:
-        summary: "Selected database fields are encrypted. Non-test runtime startup rejects missing or blank encryption credentials. Secretless asset precompile leaves missing keys unset. See pii_encryption.md for fields, audit masking, lookup rules, and key constraints."
-        files: ["app/models/concerns/user_profile.rb", "config/initializers/active_record_encryption.rb"]
-      audit: { report: null, coverage: null, next_review_due: null }
+      summary: >-
+        Selected database fields are encrypted with Active Record Encryption.
+        Outside the test environment the app won't start without the
+        encryption credentials, except while precompiling assets, which
+        doesn't need them. See pii_encryption.md for the fields, audit
+        masking, lookup rules, and key constraints.
+      files:
+        - app/models/concerns/user_profile.rb
+        - config/initializers/active_record_encryption.rb
 
     - id: "DATA-002"
       name: "Input Validation & Filtering"
       frameworks: { doit: ["SC-13", "IA-7"] }
-      priority: { label: "High", value: 2 }
+      priority: high
       owner: "@david"
-      implementation:
-        summary: "Sensitive parameters are filtered out of logs. Controller parameters and model validations enforce workflow-specific rules."
-        files: ["config/initializers/filter_parameter_logging.rb", "app/models/concerns/user_profile.rb"]
+      summary: >-
+        Sensitive parameters are filtered out of logs. Controller parameters
+        and model validations enforce each workflow's rules.
+      files:
+        - config/initializers/filter_parameter_logging.rb
+        - app/models/concerns/user_profile.rb
 
     - id: "DATA-003"
       name: "CSRF Protection"
       frameworks: { doit: ["PR.IP-9"], rails: ["RequestForgeryProtection"] }
-      priority: { label: "High", value: 2 }
+      priority: high
       owner: "@david"
-      implementation:
-        summary: "The base controller has cross-site request forgery (CSRF) protection on. A forged request is rejected with an error (protect_from_forgery with exception handling)."
-        files: ["app/controllers/application_controller.rb"]
+      summary: >-
+        The base controller turns on cross-site request forgery (CSRF)
+        protection (protect_from_forgery with exception handling), so a forged
+        request is rejected with an error.
+      files:
+        - app/controllers/application_controller.rb
 
   access_control:
     - id: "AUTHZ-002"
       name: "Authorization Checks"
       frameworks: { doit: ["PR.AC-4"] }
-      priority: { label: "Critical", value: 1 }
+      priority: critical
       owner: "@david"
-      implementation:
-        summary: "Authentication helpers supply role checks. Portal controllers own record-access scope."
-        files: ["app/controllers/concerns/authentication.rb"]
+      summary: >-
+        Authentication helpers provide the role checks, and each portal
+        controller scopes which records its users can reach.
+      files:
+        - app/controllers/concerns/authentication.rb
 
     - id: "AUTHZ-003"
       name: "API Security"
       frameworks: { doit: ["PR.AC-4"], rails: ["RateLimit", "AuthRateLimit"] }
-      priority: { label: "High", value: 2 }
+      priority: high
       owner: "@david"
-      implementation:
-        summary: "Policy-backed request throttles, held in cache, for proofs and secure forms. Public sign-in, password-reset, and account-recovery limits are keyed by identifier digest."
-        files: ["app/services/rate_limit.rb", "app/services/auth_rate_limit.rb"]
+      summary: >-
+        Request throttles, backed by policy and kept in cache, cover proofs
+        and secure forms. Limits on public sign-in, password reset, and account
+        recovery are keyed by a digest of the identifier.
+      files:
+        - app/services/rate_limit.rb
+        - app/services/auth_rate_limit.rb
 
   http_security:
     - id: "CONFIG-001"
       name: "Application Hardening & Secure Configuration"
       frameworks: { doit: ["SC-13", "IA-7"] }
-      priority: { label: "Critical", value: 1 }
+      priority: critical
       owner: "@david"
-      implementation:
-        summary: "Production forces HTTPS and hides local exception details. Enforced CSP uses request nonces, same-origin upload connections, and a bounded public collector. HTML email previews use an isolated sandboxed document with a separate restrictive policy."
-        files: ["config/environments/production.rb", "config/initializers/content_security_policy.rb", "lib/security/csp_report_filter.rb", "app/controllers/csp_reports_controller.rb", "app/services/csp_violation_report.rb"]
+      summary: >-
+        Production forces HTTPS and hides local exception details. The
+        enforced CSP uses request nonces and same-origin upload connections,
+        and reports go to a bounded public collector. HTML email previews
+        render in an isolated, sandboxed document under their own restrictive
+        policy.
+      files:
+        - config/environments/production.rb
+        - config/initializers/content_security_policy.rb
+        - lib/security/csp_report_filter.rb
+        - app/controllers/csp_reports_controller.rb
+        - app/services/csp_violation_report.rb
 
   audit_and_logging:
     - id: "AUDIT-001"
       name: "Security Logging"
       frameworks: { doit: ["DE.AE-1/2"] }
-      priority: { label: "High", value: 2 }
-      implementation:
-        summary: "Production sends tagged application logs to standard output (stdout)."
-        files: ["config/environments/production.rb"]
+      priority: high
+      summary: Production writes tagged application logs to stdout.
+      files:
+        - config/environments/production.rb
 
     - id: "AUDIT-002"
       name: "Audit Trail"
       frameworks: { doit: ["AU-3"] }
-      priority: { label: "Medium", value: 3 }
-      implementation:
-        summary: "Domain workflows record audit Event rows through AuditEventService, with personal-value masking in nested metadata and staff name snapshots. Exact actor IDs, account associations, and role metadata are preserved. Distinct profile/contact mutations remain visible even when their masks match. HTTP CSV exports record actor, export type, and row count without exported contents."
-        files: ["app/services/audit_event_service.rb", "app/services/audit_metadata_privacy.rb", "app/models/event.rb", "app/services/csv_export.rb"]
+      priority: medium
+      summary: >-
+        Workflows record audit Event rows through AuditEventService. Personal
+        values are masked in nested metadata, and staff names are stored as
+        snapshots. Exact actor IDs, account associations, and role metadata
+        are kept, and separate profile or contact changes stay visible even
+        when their masks match. HTTP CSV exports record the actor, export
+        type, and row count, never the exported contents.
+      files:
+        - app/services/audit_event_service.rb
+        - app/services/audit_metadata_privacy.rb
+        - app/models/event.rb
+        - app/services/csv_export.rb
 
   testing_and_vulnerability_management:
     - id: "TEST-001"
       name: "Security Testing & Assessment"
       frameworks: { doit: ["CA-2.1", "RA-5", "SI-2"] }
-      priority: { label: "Critical", value: 1 }
-      implementation:
-        summary: "The continuous-integration (CI) workflows are configured to run Brakeman, a static security scanner for Rails."
-        files: [".github/workflows/ci.yml", ".github/workflows/main.yml"]
+      priority: critical
+      summary: CI runs Brakeman, a static security scanner for Rails.
+      files:
+        - .github/workflows/ci.yml
+        - .github/workflows/main.yml
 
     - id: "SCA-001"
       name: "Supply-Chain Security (SBOM & SCA)"
       frameworks: { doit: ["SI-2", "RA-5"] }
-      priority: { label: "High", value: 2 }
-      implementation:
-        summary: "Dependabot is configured for daily Bundler and GitHub Actions update checks."
-        files: [".github/dependabot.yml"]
+      priority: high
+      summary: Dependabot checks Bundler and GitHub Actions for updates every day.
+      files:
+        - .github/dependabot.yml
 
     - id: "PATCH-001"
       name: "Patch Management (Ruby/Rails)"
       frameworks: { doit: ["RA-5"] }
-      priority: { label: "High", value: 2 }
-      implementation:
-        summary: "Dependabot provides dependency update proposals."
-        files: [".github/dependabot.yml"]
+      priority: high
+      summary: Dependabot opens pull requests proposing dependency updates.
+      files:
+        - .github/dependabot.yml
 
   error_handling:
     - id: "ERROR-001"
       name: "Error Management & Exception Handling"
       frameworks: { doit: ["PR.DS-6"] }
-      priority: { label: "High", value: 2 }
-      implementation:
-        summary: "Production disables local exception detail pages and provides a public error page."
-        files: ["config/environments/production.rb", "public/500.html"]
+      priority: high
+      summary: Production hides exception detail pages and serves a public error page.
+      files:
+        - config/environments/production.rb
+        - public/500.html
 
   file_security:
     - id: "FILE-SEC-001"
       name: "Active Storage Validation"
       frameworks: { doit: ["SC-13", "IA-7"], rails: ["ActiveStorage::Validations"] }
-      priority: { label: "High", value: 2 }
-      implementation:
-        summary: "Uploaded documents are checked for allowed content types and size and remain unavailable until an antivirus result matches their stored bytes. Application-owned storage routes enforce document audience and private no-store downloads; guidance PDFs have an explicit public audience. First-release checks exercise private storage, browser upload and live scanner behavior."
-        files: ["app/models/document_scan.rb", "app/services/document_scans/stager.rb", "app/jobs/document_scan_job.rb", "app/models/attachment_access.rb", "app/controllers/attachment_downloads_controller.rb", "config/routes/active_storage.rb"]
+      priority: high
+      summary: >-
+        Uploaded documents are checked for allowed content types and size, and
+        they stay unavailable until an antivirus result matches their stored
+        bytes. Application-owned storage routes enforce each document's
+        audience and serve private downloads with no-store caching. Guidance
+        PDFs are explicitly public.
+      files:
+        - app/models/document_scan.rb
+        - app/services/document_scans/stager.rb
+        - app/jobs/document_scan_job.rb
+        - app/models/attachment_access.rb
+        - app/controllers/attachment_downloads_controller.rb
+        - config/routes/active_storage.rb
 
-metadata:
-  review_frequency: "Quarterly"
+review:
+  frequency: quarterly
   responsible_team: "Security Team"
-  last_audit_date: null
-  evidence_note: "Audit fields store report references, measured coverage, and review dates."
-  policy: "docs/security/baseline_policy.md"
+  policy: docs/security/baseline_policy.md

@@ -29,7 +29,7 @@ module Evaluations
       failure('evaluation_date must be a valid date/time')
     rescue StandardError => e
       Rails.logger.error("Unexpected error rescheduling evaluation: #{e.class.name}")
-      failure("An unexpected error occurred: #{e.message}")
+      failure('An unexpected error occurred.')
     end
 
     private

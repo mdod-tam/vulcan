@@ -24,7 +24,7 @@ A few terms help when reading the code: a **constituent** receives assistance; a
 | Forms or browser behavior | [JavaScript architecture](development/javascript_architecture.md), [UI styles](development/ui_styles.md), and [testing/debugging](development/testing_and_debugging_guide.md). |
 | Communication controls or delivery history | [All, Email, Printed letters and SMS controls](infrastructure/email_system.md#delivery-controls), [notifications](features/notifications.md), and [audit tracking](features/audit_event_tracking.md). |
 
-Use the source and test links in the workflow guides to trace the current path. The [security baseline](security/baseline_policy.md) distinguishes policy requirements from implemented controls; the [control catalog](security/controls.yaml) maps control IDs to implementation descriptions and source files.
+Follow the source and test links in the workflow guides to see how something works today. The [security baseline](security/baseline_policy.md) separates what policy requires from what's built, and the [control catalog](security/controls.yaml) describes each control and the files behind it.
 
 ## Development
 
@@ -63,9 +63,9 @@ Use the source and test links in the workflow guides to trace the current path. 
 | [Voucher controls](security/voucher_security_controls.md) | Issuance, vendor verification, redemption, and history. |
 | [Invoice payment corrections](finance/payment_corrections.md) | What staff can change on an invoice at each stage, withdrawal and billing holds, and how to record a correction. |
 | [Security baseline](security/baseline_policy.md) | Policy requirements, implementation boundaries, and approval needs. |
-| [Control catalog](security/controls.yaml) | Control IDs, implementation descriptions, and source pointers. |
+| [Control catalog](security/controls.yaml) | What each security control does and where it lives. |
 | [Reports and audits](compliance/required_reports_audits.md) | Operational review schedules, responsible roles, and evidence. |
 
 ## Planned work
 
-[MAT Vulcan TODOs](future_work/mat_vulcan_todos.md) records proposed work. Use the guides above for current behavior.
+[MAT Vulcan TODOs](future_work/mat_vulcan_todos.md) lists work that's still open. For how things work today, use the guides above.

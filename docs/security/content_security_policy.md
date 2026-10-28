@@ -18,11 +18,11 @@ Saved and test-email GET documents block scripts entirely. An unsaved HTML draft
 
 The reporter runs in the routed draft response. Its `window.location.origin` is the application URL's origin and explicitly targets the parent; the sandbox's `window.origin` and received message origin are `null`. An initial rendering error instead uses an alert-only `about:srcdoc` document, whose URL origin is `null`. That document has no reporter: the parent error is already rendered, and a retry navigates the named iframe to the routed draft response.
 
-Draft preview submits the editor's validated, unsaved values into that iframe. It uses the same template renderer and sample-data owner as saved preview, without changing stored templates or delivered email markup. Text previews remain escaped application content. Preview browser behavior does not establish how a recipient's email client will render the message.
+Draft preview submits the editor's validated, unsaved values into that iframe. It uses the same template renderer and sample-data owner as saved preview, without changing stored templates or delivered email markup. Text previews remain escaped application content. How a preview looks in a browser doesn't tell you how a recipient's email client will render the message.
 
 ## Reports and logging
 
-Browsers POST diagnostics to the public `/csp_reports` collector. It has no application sign-in, MFA, session-refresh, or audit-actor callbacks and is exempt from CSRF checks. A report is untrusted diagnostic input, not evidence of a particular user or a confirmed attack.
+Browsers POST diagnostics to the public `/csp_reports` collector. It has no application sign-in, MFA, session-refresh, or audit-actor callbacks and is exempt from CSRF checks. Treat a report as untrusted diagnostic input. It doesn't point to a particular user or confirm an attack.
 
 [Middleware before the Rails request logger](../../lib/security/csp_report_filter.rb) filters request parameters and validates the body before Rails can log it. It accepts `application/csp-report`, `application/reports+json`, and `application/json`, rejects query strings, bounds the body at **16 KiB**, and limits JSON nesting to 20. Malformed JSON, oversized bodies, and unsupported content types are rejected there, including requests with format suffixes.
 
@@ -32,8 +32,8 @@ Browsers POST diagnostics to the public `/csp_reports` collector. It has no appl
 
 ## Verify in the deployment environment
 
-Before opening access, verify the enforcing response header and exercise sign-in/MFA, Turbo navigation, Stimulus filters, charts, isolated template previews, and document uploads with the target browser and application host. Review real-browser diagnostics and correct the owning resource or source setting when necessary. Tests of policy headers or the collector do not establish deployed browser compatibility.
+Before opening access, verify the enforcing response header and exercise sign-in/MFA, Turbo navigation, Stimulus filters, charts, isolated template previews, and document uploads with the target browser and application host. Review real-browser diagnostics and correct the owning resource or source setting when necessary. Passing header and collector tests doesn't mean the deployed policy works in real browsers.
 
 Keep the collector bounded and redact diagnostics when adjusting policy sources. Deployment TLS, proxy headers, caching, and log retention need their own verification.
 
-[Collector/header tests](../../test/controllers/csp_reports_controller_test.rb) and [projection tests](../../test/services/csp_violation_report_test.rb) describe the automated boundaries. Their presence does not establish that a deployed configuration has been exercised.
+[Collector/header tests](../../test/controllers/csp_reports_controller_test.rb) and [projection tests](../../test/services/csp_violation_report_test.rb) cover the automated side. They don't show that anyone has tried a deployed configuration.

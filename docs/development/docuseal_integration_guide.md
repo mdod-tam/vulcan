@@ -30,7 +30,7 @@ Signing updates arrive at `POST /webhooks/docuseal/disability_certification` ([c
 | `form.completed` | PDF queued for scanning; signing becomes `signed` only after clean-file acceptance under the retention rules below. |
 | `form.declined` | Unsigned requests move to `declined`, reason recorded in the audit event. |
 
-Unknown event types and unmatched submission IDs change nothing, and the receiver still answers 200 — so a successful webhook response is not evidence that a document was attached.
+Unknown event types and unmatched submission IDs change nothing, and the receiver still answers 200 — so a 200 from the webhook doesn't mean a document got attached.
 
 ### Which file wins
 

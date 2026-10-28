@@ -26,7 +26,8 @@ module Admin
         end
         redirect_to admin_feature_flags_path, notice: 'Feature flag updated successfully'
       rescue StandardError => e
-        redirect_to admin_feature_flags_path, alert: "Failed to update feature flag: #{e.message}"
+        Rails.logger.error "Failed to update feature flag: #{e.class.name}"
+        redirect_to admin_feature_flags_path, alert: 'Failed to update feature flag.'
       end
     end
 

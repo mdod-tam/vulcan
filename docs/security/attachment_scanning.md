@@ -2,7 +2,7 @@
 
 Uploaded documents stay private and unavailable until AttachmentScanner returns `ok` for the stored file's SHA-256 and size. A warning, infection, failed scan, missing result, or provider outage does not release the file. A replacement upload gets its own scan.
 
-Files without a scan record are unavailable in every environment. Upload them again; do not mark real uploads clean or backfill clean results. Development seeds and test factories can clear fixed, synthetic repository fixtures through an environment-guarded helper. Those fixtures do not contact the provider or consume upload allocation limits; they are not evidence of a real antivirus scan.
+Files without a scan record are unavailable in every environment. Upload them again; do not mark real uploads clean or backfill clean results. Development seeds and test factories can clear fixed, synthetic repository fixtures through an environment-guarded helper. Those fixtures never contact the provider or use up upload allocation limits, so they say nothing about a real antivirus scan.
 
 Admin document views show **Virus scan** beside a result badge: Passed, Pending, Blocked, Failed, or Not scanned. The result belongs to the displayed file, including the original file in a W-9 review. It is separate from staff approval of the proof, certification, or W-9.
 

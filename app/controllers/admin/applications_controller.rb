@@ -304,8 +304,7 @@ module Admin
                   alert: e.record.errors.full_messages.to_sentence.presence || e.message
     rescue StandardError => e
       Rails.logger.error "Failed to request evaluation for application #{@application.id}: #{e.class.name}"
-      redirect_to admin_application_path(@application),
-                  alert: "Failed to request evaluation: #{e.message}"
+      redirect_to admin_application_path(@application), alert: 'Failed to request evaluation.'
     end
 
     def update_certification_status

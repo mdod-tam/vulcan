@@ -22,7 +22,7 @@ class BaseService
     end
   end
 
-  def initialize(*_args)
+  def initialize
     @errors = []
   end
 

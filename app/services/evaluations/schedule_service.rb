@@ -25,7 +25,7 @@ module Evaluations
       failure(e.message)
     rescue StandardError => e
       Rails.logger.error("Unexpected error scheduling evaluation: #{e.class.name}")
-      failure("An unexpected error occurred: #{e.message}")
+      failure('An unexpected error occurred.')
     end
 
     private
