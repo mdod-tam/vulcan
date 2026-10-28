@@ -4,15 +4,15 @@ require 'test_helper'
 
 module EmailTemplates
   class AuditTest < ActiveSupport::TestCase
-    test 'expected keys include seed and MAILER_MAP aliases' do
+    test 'expected keys include seed and catalog aliases' do
       keys = Audit.new.send(:expected_keys)
 
       assert(keys.any? { |k| k[:name] == 'application_notifications_account_created' && k[:locale] == 'en' })
       assert(keys.any? { |k| k[:name] == 'application_notifications_proof_rejected' && k[:locale] == 'en' })
     end
 
-    test 'every MAILER_MAP action has an audit alias' do
-      missing = NotificationService::MAILER_MAP.keys.reject do |action|
+    test 'every deliverable notification action has an audit alias' do
+      missing = EmailDelivery::Catalog::NOTIFICATION_ACTIONS.values.reject(&:audit_only?).map(&:action).reject do |action|
         Audit::ACTION_TEMPLATE_ALIASES.key?(action)
       end
 

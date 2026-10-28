@@ -38,28 +38,25 @@ class VoucherNotificationsMailerTest < ActionMailer::TestCase
     redeemed_template.stubs(:enabled?).returns(true)
     redeemed_template.stubs(:render).returns(['Voucher redeemed', "Text Redeemed for voucher #{@voucher.code}"])
 
-    # The mailer loads the header and footer templates for every email, so these must be stubbed.
-    header_template = mock('email_header_text')
-    header_template.stubs(:render).returns(['Header Subject', 'Header Content'])
-
-    footer_template = mock('email_footer_text')
-    footer_template.stubs(:render).returns(['Footer Subject', 'Footer Content'])
-
     # Specific .with() calls make each template name resolve to its own mock.
 
-    EmailTemplate.stubs(:find_by!).with(name: 'email_header_text').returns(header_template)
-    EmailTemplate.stubs(:find_by!).with(name: 'email_footer_text').returns(footer_template)
-
-    EmailTemplate.stubs(:find_by!).with(name: 'voucher_notifications_voucher_assigned', format: :text, locale: 'en').returns(assigned_template)
-    EmailTemplate.stubs(:find_by!).with(name: 'voucher_notifications_voucher_expiring_soon', format: :text, locale: 'en').returns(expiring_soon_template)
-    EmailTemplate.stubs(:find_by!).with(name: 'voucher_notifications_voucher_expired', format: :text, locale: 'en').returns(expired_template)
-    EmailTemplate.stubs(:find_by!).with(name: 'voucher_notifications_voucher_redeemed', format: :text, locale: 'en').returns(redeemed_template)
+    VoucherNotificationsMailer.any_instance.stubs(:find_text_template)
+                              .with('voucher_notifications_voucher_assigned', locale: 'en')
+                              .returns(assigned_template)
+    VoucherNotificationsMailer.any_instance.stubs(:find_text_template)
+                              .with('voucher_notifications_voucher_expiring_soon', locale: 'en')
+                              .returns(expiring_soon_template)
+    VoucherNotificationsMailer.any_instance.stubs(:find_text_template)
+                              .with('voucher_notifications_voucher_expired', locale: 'en')
+                              .returns(expired_template)
+    VoucherNotificationsMailer.any_instance.stubs(:find_text_template)
+                              .with('voucher_notifications_voucher_redeemed', locale: 'en')
+                              .returns(redeemed_template)
 
     Policy.stubs(:get).returns(nil)
     Policy.stubs(:get).with('voucher_validity_period_months').returns(12)
     Policy.stubs(:get).with('minimum_voucher_redemption_amount').returns(10)
     Policy.stubs(:get).with('organization_name').returns('My Org')
-    Policy.stubs(:get).with('support_email').returns('mat.program1@maryland.gov')
   end
 
   test 'voucher_assigned' do
@@ -73,9 +70,9 @@ class VoucherNotificationsMailerTest < ActionMailer::TestCase
   end
 
   test 'missing template logs only the exception class and retains delivery failure' do
-    EmailTemplate.stubs(:find_by!)
-                 .with(name: 'voucher_notifications_voucher_assigned', format: :text, locale: 'en')
-                 .raises(ActiveRecord::RecordNotFound, 'private-template-query-value')
+    VoucherNotificationsMailer.any_instance.stubs(:find_text_template)
+                              .with('voucher_notifications_voucher_assigned', locale: 'en')
+                              .raises(ActiveRecord::RecordNotFound, 'private-template-query-value')
     Rails.logger.expects(:error).with('Missing EmailTemplate for voucher_notifications_voucher_assigned: ActiveRecord::RecordNotFound').once
 
     assert_no_emails do
@@ -93,7 +90,9 @@ class VoucherNotificationsMailerTest < ActionMailer::TestCase
       template = EmailTemplate.find_by(name: name, locale: :es) || create(:email_template, :text, name: name, locale: :es)
       template.update!(syntax: :legacy_percent, subject: 'Fechas del vale', body: '%<expiration_date_formatted>s',
                        variables: { required: ['expiration_date_formatted'], optional: [] })
-      EmailTemplate.stubs(:find_by!).with(name: name, format: :text, locale: 'es').returns(template)
+      VoucherNotificationsMailer.any_instance.stubs(:find_text_template)
+                                .with(name, locale: 'es')
+                                .returns(template)
 
       email = VoucherNotificationsMailer.with(voucher: @voucher, transaction: @transaction).public_send(action).deliver_now
 
@@ -114,9 +113,9 @@ class VoucherNotificationsMailerTest < ActionMailer::TestCase
       ['Voucher expiring soon', 'Text Your voucher will expire in 11 days']
     end
 
-    EmailTemplate.stubs(:find_by!)
-                 .with(name: 'voucher_notifications_voucher_expiring_soon', format: :text, locale: 'en')
-                 .returns(specific_template)
+    VoucherNotificationsMailer.any_instance.stubs(:find_text_template)
+                              .with('voucher_notifications_voucher_expiring_soon', locale: 'en')
+                              .returns(specific_template)
 
     email = VoucherNotificationsMailer.with(voucher: @voucher).voucher_expiring_soon.deliver_now
 
@@ -143,9 +142,9 @@ class VoucherNotificationsMailerTest < ActionMailer::TestCase
       ['Importante: Su Vale Expirara Pronto', 'Texto de vencimiento del vale']
     end
 
-    EmailTemplate.stubs(:find_by!)
-                 .with(name: 'voucher_notifications_voucher_expiring_soon', format: :text, locale: 'es')
-                 .returns(specific_template)
+    VoucherNotificationsMailer.any_instance.stubs(:find_text_template)
+                              .with('voucher_notifications_voucher_expiring_soon', locale: 'es')
+                              .returns(specific_template)
 
     email = VoucherNotificationsMailer.with(voucher: @voucher).voucher_expiring_soon.deliver_now
 
@@ -175,10 +174,10 @@ class VoucherNotificationsMailerTest < ActionMailer::TestCase
     specific_redeemed_template.stubs(:enabled?).returns(true)
     specific_redeemed_template.stubs(:render).returns(['Voucher redeemed', redeemed_text])
 
-    # Override only the redeemed template stub. The header and footer stubs from setup stay active.
-    EmailTemplate.stubs(:find_by!)
-                 .with(name: 'voucher_notifications_voucher_redeemed', format: :text, locale: 'en')
-                 .returns(specific_redeemed_template)
+    # Override only the redeemed template stub.
+    VoucherNotificationsMailer.any_instance.stubs(:find_text_template)
+                              .with('voucher_notifications_voucher_redeemed', locale: 'en')
+                              .returns(specific_redeemed_template)
 
     email = VoucherNotificationsMailer.with(transaction: @transaction).voucher_redeemed.deliver_now
 
@@ -231,7 +230,7 @@ class VoucherNotificationsMailerTest < ActionMailer::TestCase
     create(:guardian_relationship, guardian_user: first_guardian, dependent_user: @user)
     create(:guardian_relationship, guardian_user: manager, dependent_user: @user)
     @application.update!(managing_guardian: manager)
-    EmailTemplate.unstub(:find_by!)
+    VoucherNotificationsMailer.any_instance.unstub(:find_text_template)
     { 'en' => 'Redemption confirmation', 'es' => 'Confirmación del canje' }.each do |locale, subject|
       create_real_text_email_template(
         name: 'voucher_notifications_voucher_redeemed', locale: locale, subject: subject,

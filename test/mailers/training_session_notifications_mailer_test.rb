@@ -60,12 +60,12 @@ class TrainingSessionNotificationsMailerTest < ActionMailer::TestCase
       'Mock Body for %<constituent_name>s with %<trainer_name>s on %<scheduled_date>s'
     )
 
-    # Only lookups for text templates match these stubs. An HTML lookup has no matching stub.
-
-    EmailTemplate.stubs(:find_by!).with(name: 'training_session_notifications_trainer_assigned',
-                                        format: :text, locale: 'en').returns(@trainer_assigned_template)
-    EmailTemplate.stubs(:find_by!).with(name: 'training_session_notifications_training_scheduled',
-                                        format: :text, locale: 'en').returns(@training_scheduled_template)
+    TrainingSessionNotificationsMailer.any_instance.stubs(:find_text_template)
+                                      .with('training_session_notifications_trainer_assigned', locale: 'en')
+                                      .returns(@trainer_assigned_template)
+    TrainingSessionNotificationsMailer.any_instance.stubs(:find_text_template)
+                                      .with('training_session_notifications_training_scheduled', locale: 'en')
+                                      .returns(@training_scheduled_template)
   end
 
   test 'trainer_assigned' do
@@ -76,10 +76,10 @@ class TrainingSessionNotificationsMailerTest < ActionMailer::TestCase
     trainer_assigned_template.stubs(:render).returns(['Trainer assigned', expected_text])
     trainer_assigned_template.stubs(:enabled?).returns(true)
 
-    EmailTemplate.unstub(:find_by!)
-    EmailTemplate.stubs(:find_by!)
-                 .with(name: 'training_session_notifications_trainer_assigned', format: :text, locale: 'en')
-                 .returns(trainer_assigned_template)
+    TrainingSessionNotificationsMailer.any_instance.unstub(:find_text_template)
+    TrainingSessionNotificationsMailer.any_instance.stubs(:find_text_template)
+                                      .with('training_session_notifications_trainer_assigned', locale: 'en')
+                                      .returns(trainer_assigned_template)
 
     emails = capture_emails do
       TrainingSessionNotificationsMailer.with(assignment_notice_params(@assigned_session, @trainer)).trainer_assigned.deliver_now
@@ -102,7 +102,7 @@ class TrainingSessionNotificationsMailerTest < ActionMailer::TestCase
     @trainer.update!(locale: 'es')
     @constituent.update!(hearing_disability: true, vision_disability: true, speech_disability: true,
                          mobility_disability: true, cognition_disability: true)
-    EmailTemplate.unstub(:find_by!)
+    TrainingSessionNotificationsMailer.any_instance.unstub(:find_text_template)
     load_seeded_email_templates('training_session_notifications_trainer_assigned')
 
     email = TrainingSessionNotificationsMailer.with(assignment_notice_params(@assigned_session, @trainer)).trainer_assigned.deliver_now
@@ -116,7 +116,7 @@ class TrainingSessionNotificationsMailerTest < ActionMailer::TestCase
   end
 
   test 'the stock trainer assignment uses application manager contacts and preferences rather than the first guardian' do
-    EmailTemplate.unstub(:find_by!)
+    TrainingSessionNotificationsMailer.any_instance.unstub(:find_text_template)
     EmailTemplate.where(name: 'training_session_notifications_trainer_assigned', format: :text, locale: 'en').destroy_all
     load Rails.root.join('db/seeds/email_templates/training_session_notifications_trainer_assigned.rb')
     first_guardian = create(:constituent, locale: 'en', phone_type: 'voice', physical_address_1: 'Other Guardian Lane')
@@ -150,7 +150,7 @@ class TrainingSessionNotificationsMailerTest < ActionMailer::TestCase
   end
 
   test 'the stock trainer assignment supplies missing contact labels for an address-only applicant' do
-    EmailTemplate.unstub(:find_by!)
+    TrainingSessionNotificationsMailer.any_instance.unstub(:find_text_template)
     EmailTemplate.where(name: 'training_session_notifications_trainer_assigned', format: :text, locale: 'en').destroy_all
     load Rails.root.join('db/seeds/email_templates/training_session_notifications_trainer_assigned.rb')
     applicant = Current.instance.set(paper_context: true) do
@@ -169,7 +169,7 @@ class TrainingSessionNotificationsMailerTest < ActionMailer::TestCase
   end
 
   test 'trainer_assigned footer uses program name fallback' do
-    EmailTemplate.unstub(:find_by!)
+    TrainingSessionNotificationsMailer.any_instance.unstub(:find_text_template)
     EmailTemplate.where(name: 'training_session_notifications_trainer_assigned', format: :text, locale: 'en').destroy_all
     EmailTemplate.create!(
       name: 'training_session_notifications_trainer_assigned',
@@ -198,7 +198,6 @@ class TrainingSessionNotificationsMailerTest < ActionMailer::TestCase
     )
     @constituent.update!(locale: 'es', phone_type: 'videophone', preferred_means_of_communication: 'asl')
     Policy.stubs(:get).returns(nil)
-    Policy.stubs(:get).with('support_email').returns('mat.program1@maryland.gov')
     Policy.stubs(:get).with('organization_name').returns(nil)
 
     email = TrainingSessionNotificationsMailer.with(assignment_notice_params(@assigned_session, @trainer)).trainer_assigned.deliver_now
@@ -221,9 +220,9 @@ class TrainingSessionNotificationsMailerTest < ActionMailer::TestCase
     training_scheduled_template.stubs(:render).returns(['Training scheduled', expected_text])
     training_scheduled_template.stubs(:enabled?).returns(true)
 
-    EmailTemplate.stubs(:find_by!)
-                 .with(name: 'training_session_notifications_training_scheduled', format: :text, locale: 'en')
-                 .returns(training_scheduled_template)
+    TrainingSessionNotificationsMailer.any_instance.stubs(:find_text_template)
+                                      .with('training_session_notifications_training_scheduled', locale: 'en')
+                                      .returns(training_scheduled_template)
 
     emails = capture_emails do
       TrainingSessionNotificationsMailer.training_scheduled(@training_session).deliver_now
@@ -243,7 +242,7 @@ class TrainingSessionNotificationsMailerTest < ActionMailer::TestCase
   end
 
   test 'training_scheduled renders a real Liquid text template' do
-    EmailTemplate.unstub(:find_by!)
+    TrainingSessionNotificationsMailer.any_instance.unstub(:find_text_template)
     expected_date = @scheduled_for.strftime('%B %d, %Y')
     create_real_text_email_template(
       name: 'training_session_notifications_training_scheduled',

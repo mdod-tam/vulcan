@@ -9,7 +9,7 @@ Rails flash messages give immediate request feedback.
 ## The normal flow
 
 1. The workflow calls `NotificationService.create_and_deliver!` with an action, recipient, and related record.
-2. The service creates a `Notification`. With `deliver: true`, it attempts the mapped delivery; `deliver: false` creates history only.
+2. The service creates a `Notification`. With `deliver: true`, its private [NotificationDispatch](../../app/services/email_delivery/notification_dispatch.rb) adapts the catalog arguments and attempts delivery; `deliver: false` creates history only. Creation failure returns `nil`.
 3. The mailer builds the message and resolves its destination. Preference-sensitive messages can become letters in the print queue.
 4. Routing metadata records the actual channel and reason. A queued message doesn't mean the recipient got it.
 
@@ -27,7 +27,7 @@ The requested channel is `:email`, `:letter`, or record-only `:sms`, and what ha
 | Security-key recovery approval | Always email, including for users who prefer letters. |
 | Account-access SMS | [PasswordsController](../../app/controllers/passwords_controller.rb) sends through `SmsService` and records the outcome in audit events. |
 
-Proof rejection is fenced off: `NotificationService` refuses ordinary `proof_rejected` delivery unless the caller marks itself a legacy path, because the secure-request flow is what actually gives the constituent a way to replace the document. Provider rejection is fenced the same way by omission — there is no generic `disability_certification_rejected` entry in the mailer map, and certification services own that message.
+Proof rejection belongs exclusively to the secure-request flow, which gives the constituent a way to replace the document. `NotificationService` refuses generic and typed proof-rejection actions before recording them. The catalog has no generic `disability_certification_rejected` notification action; certification services own provider rejection messages.
 
 ### Record-only actions
 
@@ -45,17 +45,19 @@ Automatic proof-rejection delivery does not select SMS. Staff can select it from
 
 ## Message content and delivery tracking
 
-[NotificationComposer](../../app/services/notification_composer.rb) supplies short in-app text. Mailers supply full email and letter bodies using [EmailTemplate](../../app/models/email_template.rb). Each template's `syntax` selects `legacy_percent` placeholders or `liquid` with declared variable paths and restricted syntax. Preserve recipient and locale behavior when changing a template.
+[NotificationComposer](../../app/services/notification_composer.rb) supplies short in-app text. Mailers supply full email and letter bodies using [EmailTemplate](../../app/models/email_template.rb). Mailers, previews, shared fragments, and letters use `EmailTemplate.find_with_locale` to select the requested locale with a default-locale fallback; each caller retains its own missing-template behavior. `ProgramContact` owns support email and phone strings. Each template's `syntax` selects `legacy_percent` placeholders or `liquid` with declared variable paths and restricted syntax. Preserve recipient and locale behavior when changing a template.
+
+Proof-rejection and maximum-rejection notices describe remaining attempts or the current application's closure without generating a reapplication date. Rejection or archival alone starts no waiting period; admission uses the approved-only rule owned by `Applications::AdmissionEligibility`. The maximum-rejection seed templates and preview data have no `reapply_date_formatted` variable.
 
 [UpdateEmailStatusJob](../../app/jobs/update_email_status_job.rb) refreshes pollable `EmailDeliveryAttempt` rows linked to a notification. The authenticated Postmark webhook records delivery, bounce and complaint feedback; open tracking is optional. Legacy message IDs can't identify the provider's message, and a queued, accepted or opened message isn't proof of delivery. See [Postmark delivery visibility](../infrastructure/postmark_delivery_visibility.md) for matching, polling limits and history semantics.
 
 In the notification list, recipients see basic delivery status on their own notifications. Diagnostic details—including suppression reasons, destination ownership, provider feedback and tracking history—and manual notification status refresh are admin-only. Both audiences use the shared delivery presenter so the status has the same meaning.
 
-Shared communication policy refusals use one locked notification writer. All dominates the independent Email, Printed letters and SMS switches; category settings apply across channels. Letter admission and authenticated POST release use the same captured policy. Intentional suppression stores `suppressed`; missing or unreadable settings store `error` with `delivery_error.message`. Both record actual channel `none`. The enqueue adapter preserves that distinction, and routing or audit-error updates merge fresh metadata under a row lock so they cannot erase a worker's refusal. Public account-recovery responses do not expose these internal outcomes.
+Shared communication policy refusals use one locked notification writer. All dominates the independent Email, Printed letters and SMS switches; category settings apply across channels. Letter admission and authenticated POST release use the same captured policy. Intentional suppression stores `suppressed`; missing or unreadable settings store `error` with `delivery_error.message`. Both record actual channel `none`. The enqueue adapter preserves that distinction, and routing or delivery-error updates merge fresh metadata under a row lock so they cannot erase a worker's refusal. Public account-recovery responses do not expose these internal outcomes.
 
 Assignment notices (a trainer or evaluator told they hold work, and the constituent told their trainer changed) are written for one person and one assignment operation. Their mailers take `.with(recipient:, assignment:, operation_id:)`, and each assignment row stores the operation that last gave it to its assignee (`assignment_operation_id`). At delivery the mailer checks that the row still carries that operation and that the assignee still holds it and may still take that kind of work (the recipient of a trainer or evaluator notice, the trainer a constituent notice names); otherwise it records an `assignment_superseded` outcome and sends nothing. So two transfers before delivery send only the later notice, and returning work to an earlier recipient does not revive the earlier notice. A recipient or assignment deleted before delivery is recorded the same way instead of failing the job. [Notifier tests](../../test/integration/training_notification_delivery_test.rb) and [evaluator notice tests](../../test/models/evaluation_assignment_notice_test.rb) cover both disciplines.
 
-Notification auditing is opt-in through `audit: true`. Normally, leave the domain event with its workflow owner so a single action does not generate duplicate audit history.
+Account recovery uses the same operation with `deliver: false` and verifies the returned row before committing its recovery request. `audit: true` sets the notification row's `audited` flag without composing a generic `Event`. Business audit events belong to their workflow owners.
 
 ## Adding to this
 

@@ -18,6 +18,28 @@ module Admin
       assert_equal 'en', @template_text.locale
     end
 
+    test 'locale lookup prefers the requested locale in the requested format' do
+      spanish = create(:email_template, :text, name: @template_text.name, locale: 'es', body: 'Hola %<name>s')
+      create(:email_template, :html, name: @template_text.name, locale: 'es', body: '<p>Hola %<name>s</p>')
+
+      assert_equal spanish, EmailTemplate.find_with_locale(name: @template_text.name, format: :text, locale: :es)
+    end
+
+    test 'locale lookup uses the configured default rather than another format or ambient locale' do
+      create(:email_template, :html, name: @template_text.name, locale: 'es', body: '<p>Hola %<name>s</p>')
+
+      I18n.with_locale(:es) do
+        assert_equal @template_text, EmailTemplate.find_with_locale(name: @template_text.name, format: :text, locale: 'es')
+      end
+    end
+
+    test 'locale lookup returns nil when neither requested nor default template exists' do
+      name = "missing_locale_template_#{SecureRandom.hex(4)}"
+
+      assert_nil EmailTemplate.find_with_locale(name: name, format: :text, locale: 'es')
+      assert_nil EmailTemplate.find_with_locale(name: name, format: :text, locale: I18n.default_locale)
+    end
+
     test 'name + format + locale must be unique together' do
       duplicate = build(
         :email_template, :text,

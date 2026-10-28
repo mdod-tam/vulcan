@@ -50,14 +50,11 @@ module EmailTemplates
 
     def expected_keys
       from_seeds = Catalog.files.map { |path| parse_seed_file(path) }
-      (from_seeds + expected_keys_from_mailer_map).uniq { |key| [key[:name], key[:locale], key[:format]] }
+      (from_seeds + expected_keys_from_notifications).uniq { |key| [key[:name], key[:locale], key[:format]] }
     end
 
-    def expected_keys_from_mailer_map
-      NotificationService::MAILER_MAP.keys.filter_map do |action|
-        template_name = ACTION_TEMPLATE_ALIASES[action]
-        next unless template_name
-
+    def expected_keys_from_notifications
+      ACTION_TEMPLATE_ALIASES.values.uniq.map do |template_name|
         { name: template_name, locale: 'en', format: 'text' }
       end
     end

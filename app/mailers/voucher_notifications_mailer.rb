@@ -27,7 +27,7 @@ class VoucherNotificationsMailer < ApplicationMailer
       subject_variables: { voucher_code: voucher.code, user_first_name: user.first_name },
       fallback: I18n.t('mailers.voucher_notifications.assigned_header', locale: locale)
     )
-    footer_contact_email = Policy.get('support_email') || 'mat.program1@maryland.gov'
+    footer_contact_email = ProgramContact.support_email
     footer_website_url = ProgramContact.website_url
     footer_show_automated_message = true
     organization_name = Policy.get('organization_name') || 'Maryland Accessible Telecommunications Program'
@@ -77,7 +77,7 @@ class VoucherNotificationsMailer < ApplicationMailer
       subject_variables: { voucher_code: voucher.code, user_first_name: user.first_name },
       fallback: I18n.t('mailers.voucher_notifications.expiring_soon.header_fallback', locale: locale)
     )
-    footer_contact_email = Policy.get('support_email') || 'mat.program1@maryland.gov'
+    footer_contact_email = ProgramContact.support_email
     footer_website_url = ProgramContact.website_url
     footer_show_automated_message = true
     organization_name = Policy.get('organization_name') || 'Maryland Accessible Telecommunications Program'
@@ -154,7 +154,7 @@ class VoucherNotificationsMailer < ApplicationMailer
       subject_variables: { voucher_code: voucher.code, user_first_name: user.first_name },
       fallback: I18n.t('mailers.voucher_notifications.expired_header', locale: locale)
     )
-    footer_contact_email = Policy.get('support_email') || 'mat.program1@maryland.gov'
+    footer_contact_email = ProgramContact.support_email
     footer_website_url = ProgramContact.website_url
     footer_show_automated_message = true
     organization_name = Policy.get('organization_name') || 'Maryland Accessible Telecommunications Program'
@@ -218,7 +218,7 @@ class VoucherNotificationsMailer < ApplicationMailer
       fallback: I18n.t('mailers.voucher_notifications.redeemed_header', locale: locale)
     )
     remaining_balance_formatted = number_to_currency(voucher.remaining_value, locale: locale)
-    footer_contact_email = Policy.get('support_email') || 'mat.program1@maryland.gov'
+    footer_contact_email = ProgramContact.support_email
     footer_website_url = ProgramContact.website_url
     footer_show_automated_message = true
     organization_name = Policy.get('organization_name') || 'Maryland Accessible Telecommunications Program'

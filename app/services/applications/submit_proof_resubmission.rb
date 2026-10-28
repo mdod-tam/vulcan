@@ -25,22 +25,11 @@ module Applications
       return inactive_request_failure unless secure_request_form.active_for_public_use?
       return invalid_request_failure unless proof_type
 
-      result = nil
-
-      ApplicationRecord.transaction do
-        # Lock the application before the form, in the same order as issuance.
-        application.lock!
-        secure_request_form.lock!
-        unless secure_request_form.active_for_public_use?
-          result = inactive_request_failure
-          next
-        end
-
+      submit_under_lock(application) do
         # Another path can approve or replace the proof after the link was sent.
         unless application.proof_requestable_via_secure_form?(proof_type)
           log_refused_submission
-          result = failure(message(:no_longer_needed))
-          next
+          next failure(message(:no_longer_needed))
         end
 
         attach_result = attach_proof
@@ -48,18 +37,8 @@ module Applications
 
         raise_attachment_failure(attach_result[:error]) unless attach_result[:success]
 
-        secure_request_form.mark_submitted!
-        log_submission
-        result = success(message(:submitted))
+        complete_submission { log_submission }
       end
-
-      result
-    rescue UploadedDocument::Refused => e
-      refused_upload_failure(e)
-    rescue AttachmentFailure => e
-      failure(e.message)
-    rescue ActiveRecord::RecordInvalid => e
-      failure(e.record.errors.full_messages.to_sentence, { errors: e.record.errors })
     end
 
     private

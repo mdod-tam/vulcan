@@ -309,7 +309,7 @@ class PasswordsController < ApplicationController
   end
 
   def account_access_support_email
-    Policy.get('support_email') || 'mat.program1@maryland.gov'
+    ProgramContact.support_email
   end
 
   def redirect_to_account_access_confirmation

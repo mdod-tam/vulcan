@@ -18,13 +18,13 @@ class EvaluatorMailerTest < ActionMailer::TestCase
       'Recommended products: %<recommended_products_text_list>s. %<footer_text>s'
     )
 
-    EmailTemplate.stubs(:find_by!)
-                 .with(name: 'evaluator_mailer_new_evaluation_assigned', format: :text, locale: 'en')
-                 .returns(new_evaluation_assigned_mock)
+    EvaluatorMailer.any_instance.stubs(:find_text_template)
+                   .with('evaluator_mailer_new_evaluation_assigned', locale: 'en')
+                   .returns(new_evaluation_assigned_mock)
 
-    EmailTemplate.stubs(:find_by!)
-                 .with(name: 'evaluator_mailer_evaluation_submission_confirmation', format: :text, locale: 'en')
-                 .returns(evaluation_submission_mock)
+    EvaluatorMailer.any_instance.stubs(:find_text_template)
+                   .with('evaluator_mailer_evaluation_submission_confirmation', locale: 'en')
+                   .returns(evaluation_submission_mock)
 
     @evaluation = create(:evaluation)
     @evaluator = @evaluation.evaluator
@@ -103,7 +103,7 @@ class EvaluatorMailerTest < ActionMailer::TestCase
 
   test 'a repeated submission confirmation for a letter recipient stays on the letter route' do
     @constituent.update!(communication_preference: 'letter')
-    EmailTemplate.unstub(:find_by!)
+    EvaluatorMailer.any_instance.unstub(:find_text_template)
     EmailTemplate.where(name: 'evaluator_mailer_evaluation_submission_confirmation', format: :text).first_or_create!(
       locale: 'en', subject: 'Evaluation submitted', body: 'Your evaluation is complete.',
       description: 'Evaluation confirmation', variables: { required: [], optional: [] }, version: 1

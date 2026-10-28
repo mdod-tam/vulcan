@@ -31,21 +31,17 @@ module Applications
         attempts << :provider
         true
       end.returns(success: false, outcome: :suppressed, tracking_status: :recorded)
-      paper = PaperApplicationService.new(params: {}, admin: @admin)
-      paper.instance_variable_set(:@application, @application)
+      documents = paper_documents
 
       ActiveRecord::Base.transaction do
-        result = paper.send(:reject_disability_certification,
-                            selected_reason: 'other', custom_reason: 'Missing signature', notes: nil)
-        assert result[:success]
-        assert_equal :deferred, result[:provider_delivery][:outcome]
+        assert documents.call, @paper_errors.inspect
         assert_empty attempts
-        assert_nil paper.warning_message
+        assert_empty @paper_warnings
       end
 
       assert_equal %i[secure_request provider], attempts
       assert @application.reload.disability_certification_status_rejected?
-      assert_includes paper.warning_message, 'Provider email was not sent because delivery is disabled.'
+      assert_includes @paper_warnings.join(' '), 'Provider email was not sent because delivery is disabled.'
       assert_equal 1, ApplicationStatusChange.where(application: @application, to_status: 'rejected').count
     end
 
@@ -57,10 +53,10 @@ module Applications
                        @application.proof_reviews.count,
                        Event.where(auditable: @application).count]
 
+      documents = paper_documents
       ActiveRecord::Base.transaction do
-        result = DisabilityCertificationReviewer.new(@application, @admin).reject(rejection_reason: 'Missing signature')
-        assert result.success?
-        assert_equal :deferred, result.data[:provider_delivery][:outcome]
+        assert documents.call, @paper_errors.inspect
+        assert_empty @paper_warnings
         raise ActiveRecord::Rollback
       end
 
@@ -87,17 +83,12 @@ module Applications
         application: @application, rejection_reason: 'Missing signature', admin: @admin, secure_upload_url: secure_upload_url
       ).returns(stub(certification_rejected: mail))
       EmailDelivery.expects(:deliver_now!).with(mail, context: anything).once.returns(true)
-      paper = PaperApplicationService.new(params: {}, admin: @admin)
-      paper.instance_variable_set(:@application, @application)
-      result = nil
+      documents = paper_documents
 
       assert_no_difference -> { Notification.where(notifiable: @application, action: 'disability_certification_rejected').count } do
         ActiveRecord::Base.transaction do
-          result = paper.send(:reject_disability_certification,
-                              selected_reason: 'other', custom_reason: 'Missing signature', notes: nil)
-          assert result[:success]
-          assert_equal :deferred, result[:provider_delivery][:outcome]
-          assert_nil paper.warning_message
+          assert documents.call, @paper_errors.inspect
+          assert_empty @paper_warnings
         end
       end
 
@@ -106,13 +97,10 @@ module Applications
       assert_equal 1, Event.where(auditable: @application, action: 'disability_certification_status_changed').count
       review = @application.proof_reviews.find_by!(proof_type: :disability_certification, status: :rejected)
       assert_equal 'Missing signature', review.rejection_reason
-      assert result[:provider_delivery][:success]
-      assert_equal :submitted, result[:provider_delivery][:outcome]
-      assert_equal :not_requested, result[:provider_delivery][:tracking_status]
-      assert_includes paper.warning_message, 'Provider email submitted.'
-      assert_includes paper.warning_message, 'Rejection notification tracking is unavailable; verify provider email before retrying.'
-      assert_not_includes paper.warning_message, 'Provider email was not sent.'
-      assert_not_includes paper.warning_message, 'Private notification validation failure'
+      assert_includes @paper_warnings.join(' '), 'Provider email submitted.'
+      assert_includes @paper_warnings.join(' '), 'Rejection notification tracking is unavailable; verify provider email before retrying.'
+      assert_not_includes @paper_warnings.join(' '), 'Provider email was not sent.'
+      assert_not_includes @paper_warnings.join(' '), 'Private notification validation failure'
     end
 
     test 'a database note failure preserves the paper rejection and attempts provider delivery only after a successful commit' do
@@ -133,16 +121,13 @@ module Applications
         attempts << [:provider, @application.reload.disability_certification_status]
         true
       end.returns(success: true, outcome: :submitted, tracking_status: :recorded)
-      paper = PaperApplicationService.new(params: {}, admin: @admin)
-      paper.instance_variable_set(:@application, @application)
+      documents = paper_documents(notes: 'Please add a signature')
 
       assert_difference -> { ApplicationStatusChange.where(application: @application, to_status: 'rejected').count }, 1 do
         assert_difference -> { Event.where(auditable: @application, action: 'disability_certification_status_changed').count }, 1 do
           assert_no_difference -> { ApplicationNote.where(application: @application).count } do
             ActiveRecord::Base.transaction do
-              result = paper.send(:reject_disability_certification,
-                                  selected_reason: 'other', custom_reason: 'Missing signature', notes: 'Please add a signature')
-              assert result[:success]
+              assert documents.call, @paper_errors.inspect
               assert_empty attempts
             end
             assert @application.reload.disability_certification_status_rejected?, "Post-commit attempts: #{attempts.inspect}"
@@ -151,9 +136,23 @@ module Applications
       end
 
       assert_equal [[:secure_request, 'rejected'], [:provider, 'rejected']], attempts
-      assert_includes paper.warning_message, 'The rejection note could not be saved.'
-      assert_includes paper.warning_message, 'Provider email submitted.'
+      assert_includes @paper_warnings.join(' '), 'The rejection note could not be saved.'
+      assert_includes @paper_warnings.join(' '), 'Provider email submitted.'
       assert_equal 1, note_save_attempts
+    end
+
+    private
+
+    def paper_documents(notes: nil)
+      @paper_errors = []
+      @paper_warnings = []
+      params = {
+        disability_certification_action: 'rejected', disability_certification_rejection_reason: 'other',
+        disability_certification_custom_rejection_reason: 'Missing signature',
+        disability_certification_rejection_notes: notes
+      }.with_indifferent_access
+      PaperDocumentDispositions.new(application: @application, admin: @admin, params: params,
+                                    errors: @paper_errors, warnings: @paper_warnings)
     end
   end
 end

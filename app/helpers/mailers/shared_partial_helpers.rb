@@ -53,10 +53,7 @@ module Mailers
 
       key = [:template, template_name, format, resolved_locale, locals.hash]
       fetch_from_cache(key) do
-        template = EmailTemplate.find_by(name: template_name, format: format, locale: resolved_locale)
-        if template.nil? && resolved_locale != I18n.default_locale.to_s
-          template = EmailTemplate.find_by(name: template_name, format: format, locale: I18n.default_locale.to_s)
-        end
+        template = EmailTemplate.find_with_locale(name: template_name, format: format, locale: resolved_locale)
 
         unless template
           total_templates = EmailTemplate.count
@@ -113,7 +110,7 @@ module Mailers
 
     def footer_text(organization_name: nil, contact_email: nil, website_url: nil, locale: nil, **_kwargs)
       org_name  = organization_name || Policy.get('organization_name') || 'MAT Program'
-      email     = contact_email || Policy.get('support_email') || ProgramContact.support_email
+      email     = contact_email || ProgramContact.support_email
       web_url   = website_url || ProgramContact.website_url
 
       render_email_template('email_footer_text', :text, {

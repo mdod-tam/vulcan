@@ -188,7 +188,7 @@
                       <p class="text-sm text-gray-700">Established: <%= gr.created_at.strftime("%B %d, %Y") %></p>
                     </div>
                     <div class="flex flex-col sm:flex-row space-y-2 sm:space-y-0 sm:space-x-2">
-                      <% unless dependent.applications.blocking_new_submission.exists? %>
+                      <% if paper_application_eligibility(dependent).eligible? %>
                         <%= link_to new_admin_paper_application_path(guardian_id: @user.id, dependent_id: dependent.id),
                             class: "btn btn-success btn-sm",
                             data: { turbo_frame: "_top" },
@@ -199,12 +199,9 @@
                     </div>
                   </div>
                   <div class="mt-3 text-sm text-gray-700">
-                    <% last_app = dependent.applications.order(application_date: :desc).first %>
+                    <% last_app = latest_user_application(dependent) %>
                     <% active_app = dependent.applications.active.order(application_date: :desc).first %>
-                    <% waiting_period_years = Policy.get('waiting_period_years') || 3 %>
                     <% approved_app = [active_app, last_app].compact.find { |a| a.status == 'approved' } %>
-                    <% eligible_date = approved_app ? (approved_app.application_date + waiting_period_years.years) : nil %>
-                    <% eligible_now = approved_app.present? && eligible_date && eligible_date <= Time.current %>
 
                     <% if active_app %>
                       <div class="flex items-center flex-wrap gap-2">
@@ -279,14 +276,8 @@
                             Voucher issued on <%= voucher.issued_at.strftime('%b %d, %Y') %>
                           </div>
                         <% end %>
-                        <% if eligible_date %>
-                          <% if eligible_now %>
-                            <span class="badge badge-success">Eligible now</span>
-                          <% else %>
-                            <span class="badge badge-neutral">Eligible on <%= eligible_date.strftime('%b %d, %Y') %></span>
-                          <% end %>
-                        <% end %>
                       <% end %>
+                        <%= paper_application_eligibility_badge(paper_application_eligibility(dependent)) %>
                     </div>
                   </div>
                 </li>
@@ -390,10 +381,7 @@
                     Last updated: <%= application.updated_at.strftime('%b %d, %Y at %l:%M %p') %>
                   </div>
                   <% if application.status == 'approved' %>
-                    <% waiting_period_years = Policy.get('waiting_period_years') || 3 %>
                     <% approved_change = ApplicationStatusChange.where(application_id: application.id, to_status: 'approved').order(changed_at: :desc).first %>
-                    <% eligible_date = application.application_date + waiting_period_years.years %>
-                    <% eligible_now = eligible_date <= Time.current %>
                     <div class="mt-2">
                       <div class="text-xs text-gray-700">
                         Application approved on <%= (approved_change&.changed_at || application.updated_at).strftime('%b %d, %Y') %>
@@ -404,11 +392,7 @@
                           Voucher issued on <%= voucher.issued_at.strftime('%b %d, %Y') %>
                         </div>
                       <% end %>
-                      <% if eligible_now %>
-                        <span class="badge badge-success">Eligible now</span>
-                      <% else %>
-                        <span class="badge badge-neutral">Eligible on <%= eligible_date.strftime('%b %d, %Y') %></span>
-                      <% end %>
+                      <%= paper_application_eligibility_badge(paper_application_eligibility(@user)) %>
                     </div>
                   <% end %>
                 </li>

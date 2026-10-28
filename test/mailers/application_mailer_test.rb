@@ -28,6 +28,27 @@ class ApplicationMailerTest < ActionMailer::TestCase
     assert_equal 'es', resolved
   end
 
+  test 'text template lookup normalizes the recipient locale and falls back to the default template' do
+    name = "mailer_locale_lookup_#{SecureRandom.hex(4)}"
+    english = create(:email_template, :text, name: name, locale: 'en')
+    spanish = create(:email_template, :text, name: name, locale: 'es')
+    mailer = ApplicationMailer.new
+
+    assert_equal spanish, mailer.send(:find_text_template, name, locale: 'es-MX')
+
+    spanish.destroy!
+
+    assert_equal english, mailer.send(:find_text_template, name, locale: 'es-MX')
+  end
+
+  test 'text template lookup raises when the requested and default templates are missing' do
+    mailer = ApplicationMailer.new
+    name = "missing_mailer_template_#{SecureRandom.hex(4)}"
+
+    assert_raises(ActiveRecord::RecordNotFound) { mailer.send(:find_text_template, name, locale: 'es') }
+    assert_raises(ActiveRecord::RecordNotFound) { mailer.send(:find_text_template, name, locale: 'en') }
+  end
+
   test 'resolve_template_locale falls back to recipient locale' do
     recipient = Struct.new(:locale).new('es-MX')
     mailer = ApplicationMailer.new

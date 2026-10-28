@@ -48,10 +48,10 @@ class SecurePublicFormController < ApplicationController
   end
 
   def support_email
-    Policy.get('support_email') || 'mat.program1@maryland.gov'
+    ProgramContact.support_email
   end
 
   def support_phone
-    Policy.get('support_phone') || '410-767-6960'
+    ProgramContact.support_phone
   end
 end

@@ -162,10 +162,10 @@ module Applications
         candidate.respond_to?(:paper_guardian_candidate?) && candidate.paper_guardian_candidate?
       when :dependent
         candidate.respond_to?(:paper_dependent_candidate?) && candidate.paper_dependent_candidate? &&
-          PaperApplicationEligibility.call(candidate).eligible? && guardian_relationship_exists?(candidate)
+          AdmissionEligibility.call(candidate).eligible? && guardian_relationship_exists?(candidate)
       else
         candidate.respond_to?(:paper_applicant_candidate?) && candidate.paper_applicant_candidate? &&
-          PaperApplicationEligibility.call(candidate).eligible?
+          AdmissionEligibility.call(candidate).eligible?
       end
     end
 

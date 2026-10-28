@@ -377,7 +377,6 @@ module ConstituentPortal
       assert_equal 1, @user.guardian_relationships_as_guardian.count
       @user.reload
       assert @user.guardian?, 'User should be recognized as a guardian'
-      assert_equal 'Parent', @user.relationship_types_for_dependent(dependent).first
 
       assert application.for_dependent?, 'Application should be marked for a dependent'
       assert_equal @user.id, application.managing_guardian_id

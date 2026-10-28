@@ -56,5 +56,48 @@ module Admin
       else 'dependent'
       end
     end
+
+    def paper_application_eligibility(user)
+      paper_application_eligibility_results[user.id] ||= Applications::AdmissionEligibility.call(user, waiting_period_years: application_waiting_period_years)
+    end
+
+    def paper_application_eligibility_results
+      @paper_application_eligibility_results ||= {}
+    end
+
+    def application_waiting_period_years
+      @application_waiting_period_years ||= Policy.waiting_period_years
+    end
+
+    def latest_user_application(user)
+      user.applications.max_by { |application| application.application_date || Date.new(1) }
+    end
+
+    def user_search_result_locals(user, role:)
+      is_constituent_search = role == 'constituent'
+      eligibility = paper_application_eligibility(user) if is_constituent_search
+      last_app = latest_user_application(user) if is_constituent_search
+
+      {
+        user: user, role: role, is_constituent_search: is_constituent_search,
+        eligibility: eligibility, last_app: last_app,
+        last_products: last_app&.products&.map(&:name) || [],
+        ineligible_reason: is_constituent_search ? paper_application_ineligibility_reason(eligibility) : nil,
+        ineligible: is_constituent_search && !eligibility.eligible?,
+        email_display: display_contact_email(user), phone_display: display_contact_phone(user)
+      }
+    end
+
+    def paper_application_ineligibility_reason(eligibility)
+      case eligibility.reason
+      when :blocking_application then 'Has active application'
+      when :waiting_period then "Eligible after #{eligibility.eligible_after.to_date.strftime('%b %d, %Y')}"
+      end
+    end
+
+    def paper_application_eligibility_badge(eligibility)
+      label = eligibility.eligible? ? 'Eligible now' : paper_application_ineligibility_reason(eligibility)
+      tag.span(label, class: "badge #{eligibility.eligible? ? 'badge-success' : 'badge-neutral'}")
+    end
   end
 end

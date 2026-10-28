@@ -135,18 +135,11 @@ class AccountRecoveryController < ApplicationController
 
     admins.each do |admin|
       admin_count += 1
-      notification = NotificationService.build
-                                        .type('security_key_recovery_requested')
-                                        .recipient(admin)
-                                        .actor(requester)
-                                        .notifiable(recovery_request)
-                                        .metadata(
-                                          recovery_request_id: recovery_request.id,
-                                          requester_identifier: requester.mfa_account_name
-                                        )
-                                        .channel(:email)
-                                        .deliver(false)
-                                        .create_and_deliver!
+      notification = NotificationService.create_and_deliver!(
+        type: 'security_key_recovery_requested', recipient: admin, actor: requester, notifiable: recovery_request,
+        metadata: { recovery_request_id: recovery_request.id, requester_identifier: requester.mfa_account_name },
+        channel: :email, deliver: false
+      )
 
       raise 'Failed to create admin notification for recovery request' unless notification.respond_to?(:persisted?) && notification.persisted?
 

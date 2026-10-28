@@ -114,7 +114,7 @@ class VendorNotificationsMailer < ApplicationMailer
       'vendor_notifications.w9_upload_requested.body',
       vendor_business_name: vendor.business_name,
       secure_upload_url: secure_upload_url,
-      support_email: support_email,
+      support_email: ProgramContact.support_email,
       organization_name: org_name,
       locale: locale
     )
@@ -220,7 +220,7 @@ class VendorNotificationsMailer < ApplicationMailer
       total_amount_formatted: number_to_currency(invoice.total_amount),
       transactions_html_table: render_transactions_html(transactions),
       transactions_text_list: render_transactions_text(transactions),
-      support_email: support_email
+      support_email: ProgramContact.support_email
     }.compact
   end
 
@@ -231,7 +231,7 @@ class VendorNotificationsMailer < ApplicationMailer
       total_amount_formatted: number_to_currency(invoice.total_amount),
       gad_invoice_reference: invoice.gad_invoice_reference || 'N/A',
       check_number: invoice.check_number,
-      support_email: support_email
+      support_email: ProgramContact.support_email
     }.compact
   end
 
@@ -249,11 +249,11 @@ class VendorNotificationsMailer < ApplicationMailer
       header_title: header_title,
       status_box_attribute => status_box_text(status: status, title: status_box_title, message: status_box_message),
       header_text: header_text(title: header_title, logo_url: logo_url, locale: locale),
-      footer_text: footer_text(organization_name: org_name, contact_email: support_email, website_url: org_url, show_automated_message: true,
+      footer_text: footer_text(organization_name: org_name, contact_email: ProgramContact.support_email, website_url: org_url, show_automated_message: true,
                                locale: locale),
       header_logo_url: logo_url,
       header_subtitle: nil,
-      support_email: support_email
+      support_email: ProgramContact.support_email
     }.compact
   end
   # rubocop:enable Metrics/ParameterLists
@@ -312,10 +312,6 @@ class VendorNotificationsMailer < ApplicationMailer
     nil
   end
 
-  def support_email
-    Policy.get('support_email') || 'mat.program1@maryland.gov'
-  end
-
   def org_name
     Policy.get('organization_name') || 'MAT Program'
   end
@@ -370,7 +366,7 @@ class VendorNotificationsMailer < ApplicationMailer
 
       pdf.move_down 40
       pdf.text 'Please allow up to 30 days for payment processing.', size: 10
-      pdf.text "Contact #{Policy.get('support_email') || 'mat.program1@maryland.gov'} for any questions.", size: 10
+      pdf.text "Contact #{ProgramContact.support_email} for any questions.", size: 10
     end
 
     pdf.render

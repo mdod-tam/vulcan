@@ -235,6 +235,12 @@ en:
         # Support must resolve distinct people who share both values.
         duplicate_identity: "%{name} is already associated with your account with this name and birthdate. If this is a different person, contact the MAT Team at %{support_email} or %{support_phone}."
   applications:
+    admission:
+      title: "Application status"
+      blocking_application: "You already have an active or pending application."
+      remaining_service_months:
+        one: "%{count} month remains in this application's service window."
+        other: "%{count} months remain in this application's service window."
     creation:
       failure: "Your application could not be saved. Please try again."
       # Why a save or submission is refused after the form was loaded.
@@ -470,8 +476,8 @@ en:
         residency: "No proof of Maryland residency was provided with the application."
         income: "No income proof was provided with the application."
       remaining_attempts_message:
-        one: "You have %{count} attempt remaining to submit the required documentation before %{reapply_date}."
-        other: "You have %{count} attempts remaining to submit the required documentation before %{reapply_date}."
+        one: "You have %{count} attempt remaining to submit the required documentation."
+        other: "You have %{count} attempts remaining to submit the required documentation."
       resubmission_options:
         paper: |-
           HOW TO SUBMIT A CORRECTED DOCUMENT:
@@ -485,7 +491,7 @@ en:
           2. If it is easier, you may also mail a copy of your document to our office, and we will scan and upload it for you:
              Maryland Accessible Telecommunications
              %{office_address}
-      archived_message: "Unfortunately, you have reached the maximum number of submission attempts for this application. Your application has been archived. You may apply again after %{reapply_date}."
+      archived_message: "Unfortunately, you have reached the maximum number of submission attempts for this application. Your application has been archived."
   medical_provider_mailer:
     certification_submission_instructions:
       secure: |-
@@ -926,14 +932,9 @@ en:
       set_product:
         product_not_found: "Product not found"
     proof_reviews:
-      show:
-        proof_not_available: "Proof file no longer available"
       create:
-        proof_completed: "Proof review completed successfully"
         resubmission_not_delivered: "Proof review completed, but the secure proof upload request could not be delivered. Review the secure upload link status and try resending."
         resubmission_suppressed: "Proof review completed. No upload request was emailed because that email is turned off in the email settings. Turn it back on and resend the request, or contact the applicant another way."
-      ensure_reviewable_status:
-        app_not_reviewable: "Application is not in a reviewable state"
     recovery_requests:
       approve:
         recovery_approved: "Security key recovery request approved successfully. The user can register a new security key."

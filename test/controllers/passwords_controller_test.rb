@@ -716,7 +716,7 @@ class PasswordsControllerTest < ActionDispatch::IntegrationTest
     I18n.t(
       'portal_self_service.account_access.confirmation',
       locale: locale,
-      support_email: Policy.get('support_email') || 'mat.program1@maryland.gov',
+      support_email: ProgramContact.support_email,
       support_phone: ProgramContact.support_phone_display
     )
   end

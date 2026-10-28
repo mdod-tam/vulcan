@@ -21,6 +21,20 @@ module Mailers
       assert_equal 'Second header Welcome', render_header(EvaluatorMailer.new)
     end
 
+    test 'shared header uses the requested locale and falls back to the default template' do
+      header_template('English header %<title>s')
+      EmailTemplate.where(name: 'email_header_text', format: :text, locale: 'es').destroy_all
+      spanish = create(:email_template, :text, name: 'email_header_text', locale: 'es',
+                                               subject: 'Header', body: 'Cabecera %<title>s',
+                                               variables: { 'required' => ['title'], 'optional' => [] })
+
+      assert_equal 'Cabecera Welcome', EvaluatorMailer.new.send(:header_text, title: 'Welcome', locale: 'es')
+
+      spanish.destroy!
+
+      assert_equal 'English header Welcome', EvaluatorMailer.new.send(:header_text, title: 'Welcome', locale: 'es')
+    end
+
     test 'a failed shared header lookup does not stick to the thread' do
       header_template('Header %<title>s')
       EmailTemplate.stubs(:find_by).raises(ActiveRecord::ConnectionNotEstablished)

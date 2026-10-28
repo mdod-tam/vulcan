@@ -197,8 +197,8 @@ module ConstituentPortal
     def duplicate_identity_message(existing_dependent)
       t('constituent_portal.dependents.create.duplicate_identity',
         name: existing_dependent.full_name,
-        support_email: Policy.get('support_email') || 'mat.program1@maryland.gov',
-        support_phone: Policy.get('support_phone') || '410-767-6960')
+        support_email: ProgramContact.support_email,
+        support_phone: ProgramContact.support_phone)
     end
 
     # A replay redirects without writes. Refusals render after rollback.

@@ -78,7 +78,7 @@ class MedicalProviderMailer < ApplicationMailer
     {
       constituent_full_name: constituent.full_name,
       application_id: application.id,
-      support_email: Policy.get('support_email') || 'mat.program1@maryland.gov'
+      support_email: ProgramContact.support_email
     }.compact
   end
 
@@ -94,7 +94,7 @@ class MedicalProviderMailer < ApplicationMailer
       secure_upload_url: params[:secure_upload_url].to_s,
       download_form_url: build_download_form_url,
       certification_resubmission_instructions: certification_resubmission_instructions(locale),
-      support_email: Policy.get('support_email') || 'mat.program1@maryland.gov'
+      support_email: ProgramContact.support_email
     }.compact
   end
 
@@ -140,7 +140,7 @@ class MedicalProviderMailer < ApplicationMailer
       download_form_url: build_download_form_url,
       secure_upload_url: params[:secure_upload_url].to_s,
       certification_submission_instructions: certification_submission_instructions,
-      support_email: Policy.get('support_email') || 'mat.program1@maryland.gov'
+      support_email: ProgramContact.support_email
     }.compact
   end
 
@@ -166,7 +166,7 @@ class MedicalProviderMailer < ApplicationMailer
       locale: locale,
       download_form_url: build_download_form_url,
       secure_upload_url: params[:secure_upload_url],
-      support_email: support_email
+      support_email: ProgramContact.support_email
     ).strip
   end
 
@@ -209,7 +209,7 @@ class MedicalProviderMailer < ApplicationMailer
   # Provider emails use no_reply and the outbound stream.
   # A disabled template raises DeliverySkipped when the message carries a secure link.
   def provider_mail_options(required_delivery: false)
-    { from: 'no_reply@mdmat.org', reply_to: support_email, message_stream: 'outbound', required_delivery: required_delivery }
+    { from: 'no_reply@mdmat.org', reply_to: ProgramContact.support_email, message_stream: 'outbound', required_delivery: required_delivery }
   end
 
   # A secure request passes the email recorded on its request row.
@@ -227,10 +227,6 @@ class MedicalProviderMailer < ApplicationMailer
 
   def redact_sensitive_mail_value(value, key = nil)
     sanitize_secure_value(value, key)
-  end
-
-  def support_email
-    Policy.get('support_email') || 'mat.program1@maryland.gov'
   end
 
   def log_certification_error(context, application_id, error)

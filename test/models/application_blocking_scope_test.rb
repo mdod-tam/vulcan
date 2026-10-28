@@ -63,7 +63,7 @@ class ApplicationBlockingScopeTest < ActiveSupport::TestCase
                'should not have waiting period error for old rejected app'
   end
 
-  test 'rejected app within waiting period blocks via model validation' do
+  test 'recent rejected app does not start a model waiting period' do
     create(:application, :rejected, user: @constituent, application_date: 1.year.ago)
 
     new_app = Application.new(
@@ -79,8 +79,31 @@ class ApplicationBlockingScopeTest < ActiveSupport::TestCase
       annual_income: 10_000
     )
     new_app.valid?(:create)
-    assert new_app.errors[:base].any? { |e| e.include?('wait') },
-           'should have waiting period error for recent rejected app'
+    assert_not new_app.errors[:base].any? { |e| e.include?('wait') },
+               'a rejected application does not start the waiting period'
+  end
+
+  test 'model waiting validation uses approved dates independently of active admission' do
+    [1.year.ago, Policy.waiting_period_years.years.ago, 8.years.ago].each do |date|
+      user = create(:constituent)
+      create(:application, :approved, user: user, application_date: date)
+      application = build(:application, user: user)
+      application.valid?(:create)
+
+      has_waiting_error = application.errors[:base].any? { |message| message.include?('wait') }
+      assert_equal date > Policy.waiting_period_years.years.ago, has_waiting_error
+    end
+  end
+
+  test 'model waiting validation skips when requested and excludes its current persisted record' do
+    application = create(:application, :approved, user: @constituent)
+    application.valid?(:create)
+    assert_not(application.errors[:base].any? { |message| message.include?('wait') })
+
+    Application.skip_wait_period_validation = true
+    another = build(:application, user: @constituent)
+    another.valid?(:create)
+    assert_not(another.errors[:base].any? { |message| message.include?('wait') })
   end
 
   test 'archived app past waiting period allows new submission' do

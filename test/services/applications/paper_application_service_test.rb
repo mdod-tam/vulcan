@@ -339,34 +339,21 @@ module Applications
       assert_equal original_dependent, dependent.reload.attributes
     end
 
-    test 'existing dependent inside the waiting period is refused before writes' do
+    test 'existing dependent with recent approved history is refused before writes' do
       guardian = create(:constituent)
       dependent = create(:constituent)
-      create(:guardian_relationship, guardian_user: guardian, dependent_user: dependent,
-                                     relationship_type: 'Parent')
-      waiting_period = Policy.get('waiting_period_years') || 3
-      last_application = create(
-        :application,
-        :archived,
-        user: dependent,
-        application_date: waiting_period.years.ago + 1.day
-      )
+      create(:guardian_relationship, guardian_user: guardian, dependent_user: dependent, relationship_type: 'Parent')
+      create(:application, :approved, user: dependent, application_date: 1.day.ago)
       original_dependent = dependent.attributes.deep_dup
       service = PaperApplicationService.new(
-        params: existing_dependent_service_params(guardian, dependent),
-        admin: @admin,
-        skip_proof_processing: true
+        params: existing_dependent_service_params(guardian, dependent), admin: @admin, skip_proof_processing: true
       )
 
       assert_no_difference ['User.count', 'GuardianRelationship.count', 'Application.count',
                             'DuplicateReviewCase.count', 'Event.count', 'Notification.count'] do
         assert_not service.create
       end
-      assert_includes(
-        service.errors,
-        'Not yet eligible for a new application. Eligible after ' \
-        "#{(last_application.application_date + waiting_period.years).to_date.strftime('%B %d, %Y')}."
-      )
+      assert_includes service.errors, 'This dependent already has an active or pending application.'
       assert_equal original_dependent, dependent.reload.attributes
     end
 
@@ -584,47 +571,34 @@ module Applications
       assert_nil service.reconciliation_note
     end
 
-    test 'routes disability certification rejection directly when provider contact information is missing' do
-      custom_reason = "No provider contact details were available. [#{Time.now.to_i}]"
-      application = create(:application, user: create(:constituent, :with_disabilities))
-      application.update_columns(
-        medical_provider_email: nil,
-        medical_provider_fax: nil,
-        updated_at: Time.current
-      )
-
-      service_params = {
+    test 'create rejects certification directly when provider contact information is missing' do
+      custom_reason = 'No provider contact details were available.'
+      service_params = base_paper_params.merge(
+        no_medical_provider_information: true,
+        application: @application_params.except(:medical_provider_name, :medical_provider_email, :medical_provider_phone),
         disability_certification_action: 'rejected',
         disability_certification_rejection_reason: 'other',
         disability_certification_custom_rejection_reason: custom_reason
-      }
-
+      )
       Applications::DisabilityCertificationReviewer.any_instance.expects(:reject).never
-      DisabilityCertificationAttachmentService.expects(:reject_certification).with(
-        has_entries(
-          reason: custom_reason,
-          reason_code: nil,
-          submission_method: :paper
-        )
-      ).returns({ success: true })
-
-      service = PaperApplicationService.new(params: confirmed_paper_params(service_params, admin: @admin), admin: @admin)
-      result = service.update(application)
-      assert result, "Failed to update application with missing provider contact info: #{service.errors.inspect}"
-    end
-
-    test 'application creation fails when attachment validation fails' do
-      service = PaperApplicationService.new(params: {}, admin: @admin)
-
-      def service.create
-        @errors = ['Invalid file type']
-        false
+      service = paper_service_with_proofs(service_params)
+      original_reject = DisabilityCertificationAttachmentService.method(:reject_certification)
+      check_paper_writer = lambda do |**args|
+        assert_equal :paper, args[:submission_method]
+        assert_equal custom_reason, args[:reason]
+        original_reject.call(**args)
       end
 
-      result = service.create
-
-      assert_not result, 'Service should fail for invalid file type'
-      assert service.errors.any?, 'Expected error messages in service.errors'
+      DisabilityCertificationAttachmentService.stub(:reject_certification, check_paper_writer) do
+        assert service.create, service.errors.inspect
+      end
+      assert_predicate service.application.reload, :disability_certification_status_rejected?
+      review = service.application.proof_reviews.rejections.find_by!(proof_type: :disability_certification)
+      assert_equal custom_reason, review.rejection_reason
+      assert_nil review.rejection_reason_code
+      assert_equal 'paper', service.application.submission_method
+      change = service.application.status_changes.where(change_type: 'disability_certification', to_status: 'rejected').sole
+      assert_equal 'paper', change.metadata['submission_method']
     end
 
     test 'application creation fails when income exceeds threshold' do
@@ -640,8 +614,6 @@ module Applications
       }
 
       service = PaperApplicationService.new(params: confirmed_paper_params(service_params, admin: @admin), admin: @admin)
-
-      Applications::PaperApplicationService.any_instance.stubs(:income_within_threshold?).returns(false)
 
       result = service.create
 
@@ -781,38 +753,36 @@ module Applications
       FeatureFlag.disable!(:vouchers_enabled)
     end
 
-    test 'voucher fulfillment does not send account_created notice when vouchers are disabled' do
-      application = build(:application, fulfillment_type: :voucher)
-      service = PaperApplicationService.new(params: {}, admin: @admin)
-      service.instance_variable_set(:@application, application)
-
+    test 'follow-up does not send account-created notice when vouchers are disabled' do
+      user = create(:constituent)
+      follow_up = paper_follow_up(create(:application, user: user), created: [user.id])
       FeatureFlag.disable!(:vouchers_enabled)
+      NotificationService.expects(:create_and_deliver!).with(has_entry(type: 'account_created')).never
 
-      assert_not service.send(:send_account_created_notice?)
+      follow_up.call
     end
 
-    test 'new_user_accounts includes inline-created portal-eligible guardian beyond five minutes' do
-      guardian = create(:constituent, phone: unique_paper_phone, force_password_change: true)
-      guardian.update_column(:created_at, 10.minutes.ago)
+    test 'follow-up sends notice for a recorded created account regardless of account age' do
+      user = create(:constituent, phone: unique_paper_phone, force_password_change: true, created_at: 10.minutes.ago)
+      follow_up = paper_follow_up(create(:application, user: user), created: [user.id])
+      FeatureFlag.enable!(:vouchers_enabled)
+      NotificationService.expects(:create_and_deliver!).with(has_entries(type: 'account_created', recipient: user)).once
 
-      service = PaperApplicationService.new(params: {}, admin: @admin)
-      service.instance_variable_set(:@guardian_user_for_app, guardian)
-      service.send(:track_email_backed_portal_created_user_id, guardian.id)
-
-      assert_includes service.send(:new_user_accounts), guardian
+      follow_up.call
+    ensure
+      FeatureFlag.disable!(:vouchers_enabled)
     end
 
-    test 'new_user_accounts includes quick-created portal marker user' do
-      guardian = create(:constituent, phone: unique_paper_phone, force_password_change: true)
+    test 'follow-up sends notice for a quick-created portal marker' do
+      user = create(:constituent, phone: unique_paper_phone, force_password_change: true)
+      follow_up = paper_follow_up(create(:application, user: user), quick: [user.id])
+      FeatureFlag.enable!(:vouchers_enabled)
+      NotificationService.expects(:create_and_deliver!).with(has_entries(type: 'account_created', recipient: user)).once
 
-      service = PaperApplicationService.new(
-        params: {},
-        admin: @admin,
-        quick_created_portal_user_ids: [guardian.id]
-      )
-      service.instance_variable_set(:@guardian_user_for_app, guardian)
-
-      assert_includes service.send(:new_user_accounts), guardian
+      follow_up.call
+      assert_includes follow_up.reconciliation_note, 'account access link flow'
+    ensure
+      FeatureFlag.disable!(:vouchers_enabled)
     end
 
     test 'paper self hard duplicate contact blocks before persistence without workflow side effects' do
@@ -1179,33 +1149,49 @@ module Applications
       assert_equal on_file, dependent.reload.dependent_email
     end
 
-    test 'new_user_accounts excludes existing user with force_password_change but no submission handoff' do
+    test 'an inferred guardian does not join the explicit intake account-notice inventory' do
+      guardian = create(:constituent, force_password_change: true)
+      applicant = create(:constituent)
+      create(:guardian_relationship, guardian_user: guardian, dependent_user: applicant, relationship_type: 'Parent')
+      params = { existing_constituent_id: applicant.id, contact_info_verified: true,
+                 contact_info_mode: 'on_file', application: @application_params }
+      service = PaperApplicationService.new(params: params, admin: @admin, skip_proof_processing: true,
+                                            quick_created_portal_user_ids: [guardian.id])
+      FeatureFlag.enable!(:vouchers_enabled)
+      NotificationService.expects(:create_and_deliver!).with(has_entry(type: 'account_created')).never
+
+      assert service.create, service.errors.inspect
+      assert_equal guardian, service.application.reload.managing_guardian
+      assert_nil service.guardian_user_for_app
+      assert_equal applicant, service.constituent
+      assert_nil service.warning_message
+    ensure
+      FeatureFlag.disable!(:vouchers_enabled)
+    end
+
+    test 'follow-up excludes an existing account without a submission handoff' do
       existing = create(:constituent, phone: unique_paper_phone, force_password_change: true)
+      follow_up = paper_follow_up(create(:application, user: existing))
+      FeatureFlag.enable!(:vouchers_enabled)
+      NotificationService.expects(:create_and_deliver!).with(has_entry(type: 'account_created')).never
 
-      service = PaperApplicationService.new(params: {}, admin: @admin)
-      service.instance_variable_set(:@constituent, existing)
-
-      assert_not_includes service.send(:new_user_accounts), existing
+      follow_up.call
+    ensure
+      FeatureFlag.disable!(:vouchers_enabled)
     end
 
     test 'send_account_creation_notifications delivers notice and account-access warning for quick-created marker' do
       guardian = create(:constituent, phone: unique_paper_phone, force_password_change: true, communication_preference: :email)
       application = create(:application, user: guardian)
 
-      service = PaperApplicationService.new(
-        params: {},
-        admin: @admin,
-        quick_created_portal_user_ids: [guardian.id]
-      )
-      service.instance_variable_set(:@application, application)
-      service.instance_variable_set(:@guardian_user_for_app, guardian)
+      follow_up = paper_follow_up(application, quick: [guardian.id])
 
       FeatureFlag.enable!(:vouchers_enabled)
       begin
         NotificationService.expects(:create_and_deliver!).with(has_entry(type: 'account_created')).once
-        service.send(:send_account_creation_notifications)
-        assert_includes service.reconciliation_note, 'No temporary portal password is retained'
-        assert_includes service.reconciliation_note, 'account access link flow'
+        follow_up.call
+        assert_includes follow_up.reconciliation_note, 'No temporary portal password is retained'
+        assert_includes follow_up.reconciliation_note, 'account access link flow'
       ensure
         FeatureFlag.disable!(:vouchers_enabled)
       end
@@ -1222,19 +1208,13 @@ module Applications
       )
       application = create(:application, user: guardian)
 
-      service = PaperApplicationService.new(
-        params: {},
-        admin: @admin,
-        quick_created_portal_user_ids: [guardian.id]
-      )
-      service.instance_variable_set(:@application, application)
-      service.instance_variable_set(:@guardian_user_for_app, guardian)
+      follow_up = paper_follow_up(application, quick: [guardian.id])
 
       FeatureFlag.enable!(:vouchers_enabled)
       begin
         NotificationService.expects(:create_and_deliver!).with(has_entry(type: 'account_created')).never
-        service.send(:send_account_creation_notifications)
-        assert_not_includes service.reconciliation_note.to_s, 'account access link flow'
+        follow_up.call
+        assert_not_includes follow_up.reconciliation_note.to_s, 'account access link flow'
       ensure
         FeatureFlag.disable!(:vouchers_enabled)
       end
@@ -1259,14 +1239,12 @@ module Applications
       )
       Current.paper_context = false
 
-      service = PaperApplicationService.new(params: {}, admin: @admin)
-      service.instance_variable_set(:@application, application.reload)
+      follow_up = paper_follow_up(application.reload)
+      follow_up.call
 
-      service.send(:append_proof_resubmission_delivery_warnings)
-
-      assert_includes service.reconciliation_note,
+      assert_includes follow_up.reconciliation_note,
                       'Income proof resubmission form could not be automatically sent'
-      assert_includes service.reconciliation_note, 'You can send it from the application page.'
+      assert_includes follow_up.reconciliation_note, 'You can send it from the application page.'
     end
 
     # Paper identity decisions bind to the submitted identity so an interrupted review cannot approve a different
@@ -1497,35 +1475,24 @@ module Applications
       assert_not_includes service.errors, 'Proof upload failed'
     end
 
-    test 'create applies paper context to the transaction writes only and leaves the caller its own context' do
+    test 'create restores the caller context before identity evidence and follow-up' do
       [nil, false, true].each do |outer|
         Current.paper_context = outer
         params = base_paper_params
         params[:constituent] = params[:constituent].merge(last_name: "Context#{outer.inspect}")
         service = paper_service_with_proofs(params)
-        seen = record_paper_context(service, :process_constituent, :create_application, :process_proof_uploads,
-                                    :send_notifications, :reconcile_after_paper_write)
+        seen = record_paper_context(service, :create_application, :reconcile_after_paper_write)
+        intake = service.instance_variable_get(:@applicant_intake)
+        intake_context = record_paper_context(intake, :call, :record_identity_decision!)
 
-        assert service.create, service.errors.inspect
+        with_constructed_paper_context(PaperDocumentDispositions, seen, :documents) do
+          with_constructed_paper_context(PaperCreationFollowUp, seen, :follow_up) do
+            assert service.create, service.errors.inspect
+          end
+        end
 
-        assert_equal({ process_constituent: true, create_application: true, process_proof_uploads: true,
-                       send_notifications: outer, reconcile_after_paper_write: outer }, seen)
-        assert_equal outer, Current.paper_context
-      end
-    end
-
-    test 'update applies paper context to the transaction writes only and leaves the caller its own context' do
-      application = create(:application, user: create(:constituent))
-
-      [nil, false, true].each do |outer|
-        Current.paper_context = outer
-        service = paper_service_with_proofs({ application: {} })
-        seen = record_paper_context(service, :update_application_attributes, :process_proof_uploads,
-                                    :reconcile_after_paper_write)
-
-        assert service.update(application), service.errors.inspect
-
-        assert_equal({ update_application_attributes: true, process_proof_uploads: true,
+        assert_equal({ call: true, record_identity_decision!: outer }, intake_context)
+        assert_equal({ create_application: true, documents: true, follow_up: outer,
                        reconcile_after_paper_write: outer }, seen)
         assert_equal outer, Current.paper_context
       end
@@ -1554,6 +1521,44 @@ module Applications
     end
 
     # Failed commit verification leaves the outcome unknown. A retry form could duplicate a committed application.
+    test 'a confirmed callback failure remains successful when recipient associations cannot be loaded' do
+      ProofReview.any_instance.stubs(:handle_post_review_actions).raises(StandardError, 'after commit exploded')
+      service = paper_service_with_proofs(base_paper_params.merge(id_proof_action: 'reject', id_proof_rejection_reason: 'none_provided'))
+      original_new = PaperCreationFollowUp.method(:new)
+      refuse_recipient_queries = lambda do |**args|
+        application = args.fetch(:application)
+        application.stubs(:user).raises(ActiveRecord::ConnectionNotEstablished, 'recipient lookup unavailable')
+        application.stubs(:managing_guardian).raises(ActiveRecord::ConnectionNotEstablished, 'recipient lookup unavailable')
+        original_new.call(**args)
+      end
+
+      PaperCreationFollowUp.stub(:new, refuse_recipient_queries) do
+        assert service.create, service.errors.inspect
+      end
+
+      assert service.commit_confirmed?
+      assert Application.exists?(service.application.id)
+      assert Event.exists?(action: 'application_post_creation_step_failed', auditable_id: service.application.id)
+    end
+
+    test 'an unexpected follow-up escape retains guidance accumulated before the escape' do
+      applicant = create(:constituent, force_password_change: true)
+      params = { existing_constituent_id: applicant.id, contact_info_verified: true,
+                 contact_info_mode: 'on_file', application: @application_params }
+      service = PaperApplicationService.new(params: params, admin: @admin, skip_proof_processing: true,
+                                            quick_created_portal_user_ids: [applicant.id])
+      FeatureFlag.enable!(:vouchers_enabled)
+      NotificationService.stubs(:create_and_deliver!).raises(StandardError, 'delivery unavailable')
+      PaperCreationFollowUp.any_instance.stubs(:log_error).raises(StandardError, 'diagnostics unavailable')
+
+      assert service.create, service.errors.inspect
+      assert_includes service.warning_message, 'account access link flow'
+      assert_includes service.warning_message, 'a follow-up step did not finish'
+      assert Application.exists?(service.application.id)
+    ensure
+      FeatureFlag.disable!(:vouchers_enabled)
+    end
+
     test 'an unverifiable commit is not reported as a failure' do
       ProofReview.any_instance.stubs(:handle_post_review_actions).raises(StandardError, 'after commit exploded')
       Application.stubs(:exists?).raises(ActiveRecord::ConnectionNotEstablished, 'database went away')
@@ -1568,14 +1573,14 @@ module Applications
     end
 
     test 'a failure in one post-creation step is named and does not cancel the others' do
-      Applications::PaperApplicationService.any_instance.stubs(:send_notifications)
-                                           .raises(StandardError, 'notification exploded')
+      Applications::PaperCreationFollowUp.any_instance.stubs(:send_notifications)
+                                         .raises(StandardError, 'notification exploded')
 
       service = paper_service(base_paper_params)
 
       # Explicit expectations also detect skipped steps, which an absent warning would miss.
-      Applications::PaperApplicationService.any_instance.expects(:append_proof_resubmission_delivery_warnings).once
-      Applications::PaperApplicationService.any_instance.expects(:request_provider_info_if_missing).once
+      Applications::PaperCreationFollowUp.any_instance.expects(:append_proof_resubmission_delivery_warnings).once
+      Applications::PaperCreationFollowUp.any_instance.expects(:request_provider_info_if_missing).once
 
       assert service.create
       assert_match(/notifications did not finish/i, service.warning_message)
@@ -1592,15 +1597,15 @@ module Applications
     # Isolate the creation audit so its failure cannot skip notifications, proof delivery review, or the provider
     # request.
     test 'a failed creation audit does not cancel the steps after it' do
-      Applications::PaperApplicationService.any_instance.stubs(:log_application_creation)
-                                           .raises(StandardError, 'audit write exploded')
+      Applications::PaperCreationFollowUp.any_instance.stubs(:log_application_creation)
+                                         .raises(StandardError, 'audit write exploded')
 
       service = paper_service(base_paper_params)
 
       # Explicit expectations also detect skipped steps.
-      Applications::PaperApplicationService.any_instance.expects(:send_notifications).once
-      Applications::PaperApplicationService.any_instance.expects(:append_proof_resubmission_delivery_warnings).once
-      Applications::PaperApplicationService.any_instance.expects(:request_provider_info_if_missing).once
+      Applications::PaperCreationFollowUp.any_instance.expects(:send_notifications).once
+      Applications::PaperCreationFollowUp.any_instance.expects(:append_proof_resubmission_delivery_warnings).once
+      Applications::PaperCreationFollowUp.any_instance.expects(:request_provider_info_if_missing).once
 
       assert service.create
       assert_match(/creation audit event did not finish/i, service.warning_message)
@@ -1670,7 +1675,7 @@ module Applications
 
       service = paper_service_with_proofs(params)
 
-      Applications::PaperApplicationService.any_instance.expects(:send_notifications).never
+      Applications::PaperCreationFollowUp.any_instance.expects(:call).never
       Applications::PaperApplicationService.any_instance.expects(:reconcile_after_paper_write).never
 
       assert service.create, 'an unconfirmed commit stays on the success side'
@@ -1679,8 +1684,8 @@ module Applications
 
     # Creation audit precedes notifications so a delivery failure cannot skip it.
     test 'the creation audit event survives a notification failure' do
-      Applications::PaperApplicationService.any_instance.stubs(:send_notifications)
-                                           .raises(StandardError, 'notification exploded')
+      Applications::PaperCreationFollowUp.any_instance.stubs(:send_notifications)
+                                         .raises(StandardError, 'notification exploded')
 
       service = nil
       assert_difference "Event.where(action: 'application_created').count", 1 do
@@ -1694,10 +1699,10 @@ module Applications
 
     # Distinct step names must produce distinct failure events within the deduplication window.
     test 'two different post-creation failures are recorded separately' do
-      Applications::PaperApplicationService.any_instance.stubs(:send_notifications)
-                                           .raises(StandardError, 'notification exploded')
-      Applications::PaperApplicationService.any_instance.stubs(:append_proof_resubmission_delivery_warnings)
-                                           .raises(StandardError, 'delivery check exploded')
+      Applications::PaperCreationFollowUp.any_instance.stubs(:send_notifications)
+                                         .raises(StandardError, 'notification exploded')
+      Applications::PaperCreationFollowUp.any_instance.stubs(:append_proof_resubmission_delivery_warnings)
+                                         .raises(StandardError, 'delivery check exploded')
 
       service = paper_service(base_paper_params)
 
@@ -1813,6 +1818,27 @@ module Applications
         end
       end
       seen
+    end
+
+    def with_constructed_paper_context(klass, seen, key, &)
+      original_new = klass.method(:new)
+      observe = lambda do |**args|
+        object = original_new.call(**args)
+        original_call = object.method(:call)
+        object.define_singleton_method(:call) do
+          seen[key] = Current.paper_context
+          original_call.call
+        end
+        object
+      end
+      klass.stub(:new, observe, &)
+    end
+
+    def paper_follow_up(application, created: [], quick: [])
+      PaperCreationFollowUp.new(application: application, admin: @admin, params: {},
+                                constituent: application.user, guardian_user_for_app: application.managing_guardian,
+                                created_portal_user_ids: created.map(&:to_s),
+                                quick_created_portal_user_ids: quick.map(&:to_s), warnings: [])
     end
 
     def paper_service(params)

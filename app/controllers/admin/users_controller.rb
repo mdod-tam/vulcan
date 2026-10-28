@@ -54,57 +54,11 @@ module Admin
       end
     end
 
-    private
-
-    def load_user_metrics
-      @user_counts_by_role = User.group(:type).count
-      @needs_review_count = User.where(needs_duplicate_review: true).count
-      @guardian_count = GuardianRelationship.select(:guardian_id).distinct.count
-      @dependent_count = GuardianRelationship.select(:dependent_id).distinct.count
-      @total_users_count = User.count
-    end
-
-    def apply_user_filters(scope)
-      result = Users::FilterService.new(scope, params).apply_filters
-      if result.success?
-        result.data
-      else
-        Rails.logger.warn 'User filter error'
-        scope.order(:type, :last_name, :first_name)
-      end
-    end
-
-    def paginate_users(scope)
-      pagy(scope, items: 25)
-    rescue StandardError => e
-      Rails.logger.error "Pagination failed: #{e.class.name}"
-      [Pagy.new(count: scope.count, page: 1, items: 25), scope.limit(25)]
-    end
-
-    def handle_search_frame_request
-      @q = params[:q]
-      @role_filter = params[:role]
-      @frame_id = params[:turbo_frame_id]
-
-      if @q.present?
-        @users = users_for_paper_search(@q, @role_filter, limit: 10)
-        enhance_constituent_eligibility(@users) if @role_filter == 'constituent'
-      else
-        @users = []
-      end
-
-      render partial: 'admin/users/user_search_results_list', locals: { users: @users, role: @role_filter }
-    end
-
-    def turbo_frame_request_for_search_results?
-      turbo_frame_request_id&.end_with?('_search_results') ||
-        params[:turbo_frame_id]&.end_with?('_search_results')
-    end
-
-    public
-
     def show
       @user = User.preload(*USER_PRELOADS).find(params[:id])
+      ActiveRecord::Associations::Preloader.new(
+        records: [@user, *@user.guardian_relationships_as_guardian.map(&:dependent_user)], associations: :applications
+      ).call
       @contact_delivery_attention = EmailDelivery::Visibility.contact_attention(@user)
       @access_events = Event.where(auditable: @user, action: %w[capability_granted capability_removed]).includes(:user)
                             .order(created_at: :desc, id: :desc).limit(25)
@@ -137,17 +91,7 @@ module Admin
     end
 
     def search
-      @q = params[:q]
-      @role_filter = params[:role]
-      @frame_id = params[:frame_id].presence || "#{@role_filter}_search_results"
-
-      @users = if @q.present?
-                 users_for_paper_search(@q, @role_filter, limit: 10)
-               else
-                 []
-               end
-
-      enhance_constituent_eligibility(@users) if @role_filter == 'constituent'
+      prepare_paper_search(frame_id: params[:frame_id].presence || "#{params[:role]}_search_results")
       render 'admin/users/search'
     end
 
@@ -341,8 +285,8 @@ module Admin
     end
 
     def dependents
-      @guardian = User.find(params[:id])
-      waiting_period_years = Policy.get('waiting_period_years') || 3
+      @guardian = User.preload(:guardian_relationships_as_guardian, dependents: :applications).find(params.expect(:id))
+      waiting_period_years = Policy.waiting_period_years
       @dependents = build_dependent_summaries(@guardian, waiting_period_years)
 
       respond_to do |format|
@@ -390,8 +334,8 @@ module Admin
       user = User.find_by(id: params[:id])
       return render json: { success: false, error: 'Not found' }, status: :not_found unless user&.paper_applicant_candidate?
 
-      last_app = user.applications.order(application_date: :desc).first
-      eligibility = adult_eligibility_context(user, last_app)
+      last_app = user.applications.max_by { |application| application.application_date || Date.new(1) }
+      eligibility = adult_eligibility_context(user)
       product_names = last_app&.products&.pluck(:name) || []
 
       render json: {
@@ -411,8 +355,47 @@ module Admin
 
     private
 
+    def load_user_metrics
+      @user_counts_by_role = User.group(:type).count
+      @needs_review_count = User.where(needs_duplicate_review: true).count
+      @guardian_count = GuardianRelationship.select(:guardian_id).distinct.count
+      @dependent_count = GuardianRelationship.select(:dependent_id).distinct.count
+      @total_users_count = User.count
+    end
+
+    def apply_user_filters(scope)
+      result = Users::FilterService.new(scope, params).apply_filters
+      return result.data if result.success?
+
+      Rails.logger.warn 'User filter error'
+      scope.order(:type, :last_name, :first_name)
+    end
+
+    def paginate_users(scope)
+      pagy(scope, items: 25)
+    rescue StandardError => e
+      Rails.logger.error "Pagination failed: #{e.class.name}"
+      [Pagy.new(count: scope.count, page: 1, items: 25), scope.limit(25)]
+    end
+
+    def handle_search_frame_request
+      prepare_paper_search(frame_id: params[:turbo_frame_id])
+      render partial: 'admin/users/user_search_results_list', locals: { users: @users, role: @role_filter }
+    end
+
+    def prepare_paper_search(frame_id:)
+      @q = params[:q]
+      @role_filter = params[:role]
+      @frame_id = frame_id
+      @users = @q.present? ? users_for_paper_search(@q, @role_filter, limit: 10) : []
+    end
+
+    def turbo_frame_request_for_search_results?
+      turbo_frame_request_id&.end_with?('_search_results') || params[:turbo_frame_id]&.end_with?('_search_results')
+    end
+
     def protected_system_user?(user)
-      User.normalize_email(user.email) == 'system@mdmat.org'
+      User.normalize_email(user.email) == PublicAuditActor::SYSTEM_AUDIT_EMAIL
     end
 
     def mfa_credential_counts(user)
@@ -432,22 +415,12 @@ module Admin
       }
     end
 
-    def adult_eligibility_context(user, last_app)
-      waiting_period = Policy.get('waiting_period_years') || 3
-      has_blocking = user.applications.blocking_new_submission.exists?
-      eligible_date = last_app ? (last_app.application_date + waiting_period.years) : nil
-      within_waiting = eligible_date.present? && eligible_date > Time.current
-
-      ineligibility_reason = if has_blocking
-                               'active_application'
-                             elsif within_waiting
-                               'waiting_period'
-                             end
-
+    def adult_eligibility_context(user)
+      result = Applications::AdmissionEligibility.call(user)
       {
-        eligible_now: ineligibility_reason.nil?,
-        ineligibility_reason: ineligibility_reason,
-        eligible_after: ineligibility_reason == 'waiting_period' ? eligible_date&.to_date : nil
+        eligible_now: result.eligible?,
+        ineligibility_reason: result.reason == :blocking_application ? 'active_application' : result.reason&.to_s,
+        eligible_after: result.eligible_after&.to_date
       }
     end
 
@@ -497,18 +470,16 @@ module Admin
 
     def build_dependent_summaries(guardian, waiting_period_years)
       guardian.dependents.map do |dep|
-        last_app = dep.applications.order(application_date: :desc).first
-        has_active_app = dep.applications.blocking_new_submission.exists?
-        eligible_date = last_app ? (last_app.application_date + waiting_period_years.years) : Time.current
-        eligible_now = !has_active_app && eligible_date <= Time.current
-        relationship_types = guardian.relationship_types_for_dependent(dep) rescue [] # rubocop:disable Style/RescueModifier
+        last_app = dep.applications.max_by { |application| application.application_date || Date.new(1) }
+        eligibility = Applications::AdmissionEligibility.call(dep, waiting_period_years: waiting_period_years)
+        relationship_types = guardian.guardian_relationships_as_guardian.select { |relationship| relationship.dependent_id == dep.id }.map(&:relationship_type)
 
         DependentSummary.new(
           id: dep.id, name: dep.full_name, date_of_birth: dep.date_of_birth,
           city: dep.city, state: dep.state, last_app: last_app,
           last_app_status: last_app&.status, last_app_date: last_app&.application_date,
-          has_active_app: has_active_app, eligible_date: eligible_date,
-          eligible_now: eligible_now, relationship_types: relationship_types
+          has_active_app: eligibility.reason == :blocking_application, eligible_date: eligibility.eligible_after,
+          eligible_now: eligibility.eligible?, relationship_types: relationship_types
         )
       end
     end
@@ -522,43 +493,15 @@ module Admin
     end
 
     def users_for_paper_search(query, role_filter, limit: 10)
-      if role_filter == 'constituent'
-        result = Users::FilterService.new(User.preload(*USER_PRELOADS), q: query, role: nil).apply_filters
-        pool = result.success? ? result.data.limit(50).to_a : []
-        return [] if pool.empty?
+      candidate_predicate = { 'constituent' => :paper_applicant_candidate?, 'guardian' => :paper_guardian_candidate? }[role_filter]
+      result = Users::FilterService.new(User.all, q: query, role: candidate_predicate ? nil : role_filter).apply_filters
+      return [] unless result.success?
 
-        pool.select(&:paper_applicant_candidate?).first(limit)
-      elsif role_filter == 'guardian'
-        result = Users::FilterService.new(User.preload(*USER_PRELOADS), q: query, role: nil).apply_filters
-        pool = result.success? ? result.data.limit(50).to_a : []
-        pool.select(&:paper_guardian_candidate?).first(limit)
-      else
-        result = Users::FilterService.new(User.preload(*USER_PRELOADS), q: query, role: role_filter).apply_filters
-        result.success? ? result.data.limit(limit).to_a : []
-      end
-    end
-
-    def enhance_constituent_eligibility(users)
-      waiting_period = Policy.get('waiting_period_years') || 3
-      users.each { |user| decorate_user_eligibility(user, waiting_period) if user.paper_applicant_candidate? }
-    end
-
-    def decorate_user_eligibility(user, waiting_period)
-      has_blocking_app = user.applications.blocking_new_submission.exists?
-      last_app = user.applications.order(application_date: :desc).first
-      eligible_date = last_app ? (last_app.application_date + waiting_period.years) : nil
-      within_waiting = eligible_date.present? && eligible_date > Time.current
-
-      user.define_singleton_method(:eligible_now) { !has_blocking_app && !within_waiting }
-      user.define_singleton_method(:ineligible_reason) do
-        if has_blocking_app
-          'Has active application'
-        elsif within_waiting
-          "Applied #{last_app.application_date.strftime('%b %Y')} — eligible after #{eligible_date.to_date.strftime('%b %d, %Y')}"
-        end
-      end
-      user.define_singleton_method(:last_app_date) { last_app&.application_date }
-      user.define_singleton_method(:last_received_products) { last_app&.products&.pluck(:name).presence || [] }
+      users = result.data.limit(candidate_predicate ? 50 : limit).to_a
+      users = users.select { |user| user.public_send(candidate_predicate) }.first(limit) if candidate_predicate
+      associations = role_filter == 'constituent' ? [*USER_PRELOADS, { applications: :products }] : USER_PRELOADS
+      ActiveRecord::Associations::Preloader.new(records: users, associations: associations).call
+      users
     end
 
     def role_class_for(raw_role)
@@ -641,44 +584,6 @@ module Admin
           :city, :state, :zip_code, :date_of_birth,
           :communication_preference, :locale
         )
-      end
-    end
-
-    # JavaScript expects errors by field, such as { phone: "Phone is invalid" }.
-    def format_validation_errors(errors)
-      error_hash = {}
-
-      Array(errors).each do |error_msg|
-        next if error_msg.blank?
-
-        field_name = extract_field_from_error(error_msg)
-
-        if error_hash[field_name].present?
-          error_hash[field_name] += "; #{error_msg}"
-        else
-          error_hash[field_name] = error_msg
-        end
-      end
-
-      error_hash
-    end
-
-    # Accepts messages such as "Phone is invalid", "Email can't be blank", and "Failed to create user: Phone must be...".
-    def extract_field_from_error(error_msg)
-      clean_msg = error_msg.sub(/^Failed to create (user|guardian|dependent):\s*/i, '')
-
-      case clean_msg
-      when /^Phone/i then 'phone'
-      when /^Email/i then 'email'
-      when /^First name/i then 'first_name'
-      when /^Last name/i then 'last_name'
-      when /^Date of birth/i then 'date_of_birth'
-      when /^Physical address/i then 'physical_address_1'
-      when /^City/i then 'city'
-      when /^State/i then 'state'
-      when /^Zip code/i then 'zip_code'
-      else
-        clean_msg.split.first.downcase.gsub(/[^a-z0-9_]/, '')
       end
     end
   end

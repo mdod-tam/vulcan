@@ -20,39 +20,34 @@ module Applications
     end
 
     def call
-      return failure(message(:provider_email_required)) if provider_email.blank?
-      return failure(message(:unsupported_channel)) unless channel == :email
+      with_issuance_errors(application) do
+        return failure(message(:provider_email_required)) if provider_email.blank?
+        return failure(message(:unsupported_channel)) unless channel == :email
 
-      if @deliver_email
-        denial = authorize_delivery
-        return denial if denial
-      end
-
-      delivery = nil
-
-      ApplicationRecord.transaction do
-        application.with_lock do
-          ensure_cooldown_allows!
-          revoke_open_requests
-          delivery = create_request
-          DisabilityCertificationService.new(application: application, actor: actor)
-                                        .prepare_upload_request!(notification: Notification.find(delivery.notification_id))
+        if @deliver_email
+          denial = authorize_delivery
+          return denial if denial
         end
+
+        delivery = nil
+
+        ApplicationRecord.transaction do
+          application.with_lock do
+            ensure_cooldown_allows!
+            revoke_open_requests
+            delivery = create_request
+            DisabilityCertificationService.new(application: application, actor: actor)
+                                          .prepare_upload_request!(notification: Notification.find(delivery.notification_id))
+          end
+        end
+
+        if @deliver_email
+          result = deliver_requests([delivery])
+          return result if result.failure?
+        end
+
+        success(message(:request_created), result_data(delivery.secure_request_form, delivery.raw_token))
       end
-
-      if @deliver_email
-        result = deliver_requests([delivery])
-        return result if result.failure?
-      end
-
-      success(message(:request_created), result_data(delivery.secure_request_form, delivery.raw_token))
-    rescue ActiveRecord::RecordNotUnique, ActiveRecord::RecordInvalid => e
-      Rails.logger.warn("Certification upload request failed for application #{application.id}: #{e.class.name}")
-      failure(message(:request_conflict))
-    rescue CooldownActive => e
-      return success(message(:resent)) if public_recovery
-
-      failure(e.message)
     rescue StandardError => e
       Rails.logger.warn("Certification upload request failed for application #{application.id}: #{e.class.name}")
       failure(message(:delivery_failed))
@@ -65,13 +60,8 @@ module Applications
                        .open_certification_upload_for_application(application_id: application.id)
                        .order(sent_at: :desc)
                        .first
-      return if latest_request.blank?
-
-      cooldown_until = latest_request.sent_at + SecureFormPolicy.resend_cooldown_hours.hours
-      return if cooldown_until <= Time.current
-
-      minutes = ((cooldown_until - Time.current) / 60.0).ceil
-      raise CooldownActive, message(:cooldown_active, minutes: minutes)
+      minutes = SecureFormPolicy.resend_cooldown_minutes(latest_request)
+      raise Applications::SecureRequestIssuance::CooldownActive, minutes if minutes
     end
 
     def revoke_open_requests
@@ -81,32 +71,19 @@ module Applications
     end
 
     def create_request
-      request_form = nil
-      raw_token = nil
-      attempts = 0
-
-      begin
-        attempts += 1
-        raw_token = MedicalProviderSecureRequestForm.generate_public_token
-        request_form = MedicalProviderSecureRequestForm.create!(request_form_attributes(raw_token))
-      rescue ActiveRecord::RecordNotUnique
-        retry if attempts < 2
-
-        raise
-      end
-
+      issued = MedicalProviderSecureRequestForm.create_with_public_token!(request_form_attributes)
+      request_form = issued.secure_request_form
       notification = create_tracking_notification(request_form) || raise('Could not create certification tracking notification')
-      Delivery.new(secure_request_form: request_form, raw_token: raw_token, context: @email_context, notification_id: notification.id)
+      Delivery.new(secure_request_form: request_form, raw_token: issued.raw_token, context: @email_context, notification_id: notification.id)
     end
 
-    def request_form_attributes(raw_token)
+    def request_form_attributes
       {
         application: application,
         kind: :certification_upload,
         status: :sent,
         provider_email: provider_email,
         provider_name: provider_name,
-        public_token_digest: MedicalProviderSecureRequestForm.digest_public_token(raw_token),
         expires_at: SecureFormPolicy.expires_at,
         sent_at: Time.current,
         request_batch_id: SecureRandom.uuid,
@@ -228,11 +205,5 @@ module Applications
     def provider_name
       application.medical_provider_name
     end
-
-    def message(key, **)
-      I18n.t("#{MESSAGE_SCOPE}.#{key}", **, locale: secure_form_locale_for(actor))
-    end
-
-    class CooldownActive < StandardError; end
   end
 end

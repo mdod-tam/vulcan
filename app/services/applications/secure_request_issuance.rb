@@ -4,7 +4,7 @@ module Applications
   # Shared issuance mechanics for applicant/guardian proof and provider-info links.
   # The caller keeps workflow validation and delivery inside/outside the lock, respectively.
   class SecureRequestIssuance
-    IssuedRequest = Data.define(:secure_request_form, :raw_token)
+    IssuedRequest = Data.define(:secure_request_form, :raw_token, :notification_id)
 
     class Refused < StandardError
       attr_reader :reason
@@ -55,11 +55,27 @@ module Applications
     end
 
     # The caller's issuance transaction also owns replacement revocations and tracking.
-    def replace_request!(candidate:, request_batch_id:)
+    def replace_request!(candidate:, request_batch_id:, notification_type:, tracking_metadata: {})
       requests = open_requests_for(candidate.recipient.id)
-      ensure_cooldown_allows!(requests)
+      minutes = SecureFormPolicy.resend_cooldown_minutes(requests.order(sent_at: :desc).first)
+      raise CooldownActive, minutes if minutes
+
       requests.order(:id).lock.each { |form| form.revoke!(actor: @context.actor, reason: :replacement_request) }
-      create_request!(candidate, request_batch_id)
+      issued = SecureRequestForm.create_with_public_token!(request_attributes(candidate, request_batch_id))
+      form = issued.secure_request_form
+      notification = NotificationService.create_and_deliver!(
+        type: notification_type,
+        recipient: form.recipient,
+        actor: @context.actor,
+        notifiable: @context.application,
+        metadata: tracking_notification_metadata(form).merge(tracking_metadata),
+        channel: form.recipient_channel.to_sym,
+        audit: true,
+        deliver: false
+      )
+      raise Refused, :request_conflict unless notification
+
+      IssuedRequest.new(secure_request_form: form, raw_token: issued.raw_token, notification_id: notification.id)
     end
 
     private
@@ -90,34 +106,22 @@ module Applications
                                     application_id: @context.application.id, recipient_id: recipient_id)
     end
 
-    def ensure_cooldown_allows!(requests)
-      latest_request = requests.order(sent_at: :desc).first
-      return if latest_request.blank?
-
-      cooldown_until = latest_request.sent_at + SecureFormPolicy.resend_cooldown_hours.hours
-      return if cooldown_until <= Time.current
-
-      raise CooldownActive, ((cooldown_until - Time.current) / 60.0).ceil
+    def tracking_notification_metadata(form)
+      {
+        secure_request_form_id: form.id,
+        application_id: form.application_id,
+        recipient_id: form.recipient_id,
+        recipient_role: form.recipient_role,
+        recipient_channel: form.recipient_channel,
+        requested_recipient_channel: form.recipient_channel,
+        delivery_owner_id: form.delivery_owner_id,
+        delivery_source: form.delivery_source,
+        request_batch_id: form.request_batch_id,
+        expires_at: form.expires_at.iso8601
+      }.compact
     end
 
-    def create_request!(candidate, request_batch_id)
-      attempts = 0
-      begin
-        attempts += 1
-        raw_token = SecureRequestForm.generate_public_token
-        # A digest collision must roll back its savepoint before retrying on PostgreSQL.
-        form = ApplicationRecord.transaction(requires_new: true) do
-          SecureRequestForm.create!(request_attributes(candidate, request_batch_id, raw_token))
-        end
-      rescue ActiveRecord::RecordNotUnique
-        retry if attempts < 2
-
-        raise
-      end
-      IssuedRequest.new(secure_request_form: form, raw_token: raw_token)
-    end
-
-    def request_attributes(candidate, request_batch_id, raw_token)
+    def request_attributes(candidate, request_batch_id)
       {
         application: @context.application,
         kind: @kind,
@@ -131,7 +135,6 @@ module Applications
         recipient_relationship_type: candidate.recipient_relationship_type,
         delivery_owner: candidate.delivery_owner,
         delivery_source: candidate.delivery_source&.to_s,
-        public_token_digest: SecureRequestForm.digest_public_token(raw_token),
         expires_at: SecureFormPolicy.expires_at,
         sent_at: Time.current,
         requested_by: @context.actor

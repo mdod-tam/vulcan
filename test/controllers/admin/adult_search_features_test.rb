@@ -62,7 +62,7 @@ module Admin
       end
     end
 
-    test 'adult_application_context sets eligible_after only for waiting period' do
+    test 'adult_application_context allows a recent rejection without a waiting date' do
       original_skip = Application.skip_wait_period_validation
       Application.skip_wait_period_validation = false
 
@@ -74,11 +74,35 @@ module Admin
         assert_response :success
 
         json = response.parsed_body
-        assert_equal false, json['eligible_now']
-        assert_equal 'waiting_period', json['ineligibility_reason']
-        assert json['eligible_after'].present?
+        assert_equal true, json['eligible_now']
+        assert_nil json['ineligibility_reason']
+        assert_nil json['eligible_after']
       ensure
         Application.skip_wait_period_validation = original_skip
+      end
+    end
+
+    test 'both search wrappers use approved-only admission and preserve selection metadata' do
+      rejected = create(:constituent, first_name: 'AdmissionRejected')
+      approved = create(:constituent, first_name: 'AdmissionApproved')
+      last_app = create(:application, :rejected, user: rejected, application_date: 1.day.ago)
+      create(:application, :approved, user: approved, application_date: 5.years.ago)
+      last_app.products << create(:product, name: 'Admission Product')
+
+      [search_admin_users_path(q: 'Admission', role: 'constituent', frame_id: 'adult_search_results'),
+       admin_users_path(q: 'Admission', role: 'constituent', turbo_frame_id: 'adult_search_results')].each do |path|
+        get path, headers: default_headers
+
+        assert_response :success
+        assert_select "li[data-user-id='#{rejected.id}'][data-user-eligible='true'][data-action='click->admin-user-search#selectUser']" do
+          assert_select '[aria-disabled=true]', count: 0
+          assert_select 'span', text: 'Eligible'
+        end
+        assert_select "li[data-user-id='#{rejected.id}'][data-user-last-app-date='#{last_app.application_date}'][data-user-products='Admission Product']"
+        assert_select "li[data-user-id='#{approved.id}'][data-user-eligible='false'][aria-disabled='true']" do
+          assert_select 'span', text: 'Ineligible'
+          assert_select 'div', text: 'Has active application'
+        end
       end
     end
 

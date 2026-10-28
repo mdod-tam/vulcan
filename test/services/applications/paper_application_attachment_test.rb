@@ -21,7 +21,7 @@ module Applications
     test 'can attach proofs using ActiveStorage::Blob signed_id' do
       income_blob, residency_blob = create_blobs
       params = direct_upload_params(income_blob.signed_id, residency_blob.signed_id)
-      mock_policy
+      set_income_policy
 
       assert income_blob.persisted?, 'Income blob not persisted'
       assert residency_blob.persisted?, 'Residency blob not persisted'
@@ -51,7 +51,7 @@ module Applications
     test 'a signed GlobalID is not accepted as an Active Storage upload reference' do
       income_blob, residency_blob = create_blobs
       params = direct_upload_params(income_blob.to_signed_global_id.to_s, residency_blob.to_signed_global_id.to_s)
-      mock_policy
+      set_income_policy
       service = PaperApplicationService.new(params: confirmed_paper_params(params, admin: @admin), admin: @admin)
 
       assert_no_difference ['User.count', 'Application.count', 'Event.count', 'ActiveStorage::Attachment.count'] do
@@ -68,7 +68,7 @@ module Applications
       )
       _income_blob, residency_blob = create_blobs
       params = direct_upload_params(oversized.signed_id, residency_blob.signed_id)
-      mock_policy
+      set_income_policy
       service = PaperApplicationService.new(params: confirmed_paper_params(params, admin: @admin), admin: @admin)
 
       assert_no_difference ['User.count', 'Application.count', 'Event.count', 'ActiveStorage::Attachment.count'] do
@@ -89,7 +89,7 @@ module Applications
         disability_certification: ActionDispatch::Http::UploadedFile.new(tempfile: disguised, filename: 'certification.pdf',
                                                                          type: 'application/pdf')
       )
-      mock_policy
+      set_income_policy
       service = PaperApplicationService.new(params: confirmed_paper_params(params, admin: @admin), admin: @admin)
 
       assert_no_difference ['User.count', 'Application.count', 'Event.count', 'ActiveStorage::Attachment.count'] do
@@ -137,11 +137,12 @@ module Applications
       }
     end
 
-    def mock_policy
-      # Allow both string and symbol variations since the code might use either
-      Policy.stubs(:get).with(any_of(:fpl_1_person, 'fpl_1_person')).returns('20000')
-      Policy.stubs(:get).with(any_of(:fpl_modifier_percentage, 'fpl_modifier_percentage')).returns('200')
-      Policy.stubs(:get).with('support_email').returns('mat.program1@maryland.gov')
+    def set_income_policy
+      { 'fpl_1_person' => 20_000, 'fpl_modifier_percentage' => 200 }.each do |key, value|
+        policy = Policy.find_or_initialize_by(key: key)
+        policy.updated_by = @admin
+        policy.update!(value: value)
+      end
     end
 
     teardown do

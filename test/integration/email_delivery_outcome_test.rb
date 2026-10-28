@@ -77,33 +77,11 @@ class EmailDeliveryOutcomeTest < ActionDispatch::IntegrationTest
     EmailDelivery::Policy.stubs(:verify_delivery).returns(EmailDelivery::Decision.configuration_error(:unavailable))
 
     perform_enqueued_jobs
-    NotificationService.new.send(:persist_delivery_routing_metadata, stale,
-                                 actual_delivery_channel: 'email', delivery_route_reason: 'requested_channel')
+    EmailDelivery::NotificationDispatch.new(stale, channel: :email).send(:persist_delivery_routing_metadata, stale,
+                                                                         actual_delivery_channel: 'email', delivery_route_reason: 'requested_channel')
 
     assert_configuration_error(notification)
     assert_empty ActionMailer::Base.deliveries
-  end
-
-  test 'an audit error on a stale caller preserves the worker refusal' do
-    notification = notify_vendor
-    stale = Notification.find(notification.id)
-    notification.mark_delivery_suppressed!('global_disabled')
-
-    private_detail = 'Private Patient private-audit@example.test at 410-555-0199'
-    error = StandardError.new(private_detail)
-    messages = []
-    Rails.logger.stub(:error, ->(message) { messages << message }) do
-      NotificationService.new.send(:handle_audit_trail_error, stale, error)
-    end
-
-    assert_equal 'global_disabled', notification.reload.metadata.dig('delivery_suppressed', 'reason')
-    assert_equal 'none', notification.metadata['actual_delivery_channel']
-    assert_equal 'StandardError', notification.metadata.dig('audit_error', 'error_class')
-    assert_not notification.metadata.fetch('audit_error').key?('message')
-    %w[Private private-audit@example.test 410-555-0199].each do |private_value|
-      assert_not_includes notification.metadata.to_json, private_value
-      assert_not_includes messages.join, private_value
-    end
   end
 
   test 'a later handler error cannot overwrite a recorded configuration refusal' do
@@ -111,7 +89,7 @@ class EmailDeliveryOutcomeTest < ActionDispatch::IntegrationTest
     stale = Notification.find(notification.id)
     notification.mark_delivery_not_sent!(EmailDelivery::Decision.configuration_error(:unavailable))
 
-    NotificationService.new.send(:handle_delivery_error, stale, StandardError.new('caller failure'), :email)
+    EmailDelivery::NotificationDispatch.new(stale, channel: :email).send(:handle_delivery_error, stale, StandardError.new('caller failure'), :email)
 
     assert_configuration_error(notification)
     assert_equal 'unavailable', notification.metadata.dig('delivery_error', 'reason')

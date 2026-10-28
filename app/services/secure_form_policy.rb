@@ -20,6 +20,13 @@ module SecureFormPolicy
     from + link_expiration_hours.hours
   end
 
+  def resend_cooldown_minutes(latest_request, now: Time.current)
+    return if latest_request.blank?
+
+    remaining = latest_request.sent_at + resend_cooldown_hours.hours - now
+    (remaining / 60.0).ceil if remaining.positive?
+  end
+
   # route_name is a public secure form URL helper, such as :secure_proof_form_url.
   def public_url(route_name, raw_token)
     Rails.application.routes.url_helpers.public_send(route_name, token: raw_token, **CanonicalPublicUrlOptions.call)

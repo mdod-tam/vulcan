@@ -151,6 +151,18 @@ module ConstituentPortal
       assert_select '[data-document-upload-scans-url-value=?]', document_scans_path
     end
 
+    test 'new form admits recent rejected history and continues its target draft' do
+      create(:application, :rejected, user: @user, application_date: 1.day.ago)
+
+      get new_constituent_portal_application_path
+      assert_response :success
+      assert_select 'h1', /New Application for/
+
+      draft = create(:application, :draft, user: @user)
+      get new_constituent_portal_application_path
+      assert_redirected_to edit_constituent_portal_application_path(draft)
+    end
+
     test 'should create application as draft' do
       unique_user = create(:constituent, :with_disabilities,
                            email: "draft_test_#{Time.now.to_i}_#{rand(1000)}@example.com")

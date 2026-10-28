@@ -27,32 +27,12 @@ module Applications
       @system_actor = User.system_user
       return failure(message(:attachment_failed)) unless @system_actor
 
-      result = nil
-
-      ApplicationRecord.transaction do
-        # Lock the application before the form, in the same order as issuance.
-        application.lock!
-        medical_provider_secure_request_form.lock!
-        unless medical_provider_secure_request_form.active_for_public_use?
-          result = inactive_request_failure
-          next
-        end
-
+      submit_under_lock(application) do
         attach_result = accept_certification
         raise_attachment_failure(attach_result[:error]) unless attach_result[:success]
 
-        medical_provider_secure_request_form.mark_submitted!
-        log_submission(attach_result)
-        result = success(message(:submitted))
+        complete_submission { log_submission(attach_result) }
       end
-
-      result
-    rescue UploadedDocument::Refused => e
-      refused_upload_failure(e)
-    rescue AttachmentFailure => e
-      failure(e.message)
-    rescue ActiveRecord::RecordInvalid => e
-      failure(e.record.errors.full_messages.to_sentence, { errors: e.record.errors })
     end
 
     private

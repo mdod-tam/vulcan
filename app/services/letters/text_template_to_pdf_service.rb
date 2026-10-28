@@ -47,7 +47,7 @@ module Letters
       @recipient = recipient
       @variables = variables
       @letter_type_override = letter_type
-      @template = find_template
+      @template = EmailTemplate.find_with_locale(name: template_name, format: format, locale: resolved_locale)
     end
 
     def generate_pdf
@@ -85,15 +85,6 @@ module Letters
     end
 
     private
-
-    def find_template
-      template = EmailTemplate.find_by(name: template_name, format: format, locale: resolved_locale)
-      return template if template.present?
-
-      return template if resolved_locale == I18n.default_locale.to_s
-
-      EmailTemplate.find_by(name: template_name, format: format, locale: I18n.default_locale.to_s)
-    end
 
     def render_template_with_variables
       _rendered_subject, rendered_body = rendered_template
@@ -182,13 +173,12 @@ module Letters
       pdf.font_size 8
       pdf.stroke_horizontal_rule
       pdf.move_down 10
-      support_email = Policy.get('support_email') || 'mat.program1@maryland.gov'
       pdf.text I18n.t('letters.pdf.footer.address',
                       office_address: ProgramContact.office_address,
                       locale: resolved_locale), align: :center
       pdf.text I18n.t('letters.pdf.footer.contact_line',
                       support_phone: ProgramContact.support_phone,
-                      support_email: support_email,
+                      support_email: ProgramContact.support_email,
                       program_website_url: ProgramContact.website_url,
                       locale: resolved_locale), align: :center
     end
@@ -252,8 +242,6 @@ module Letters
     end
 
     def template_requires_shared_partials?
-      template = EmailTemplate.find_by(name: template_name, format: format, locale: resolved_locale) ||
-                 EmailTemplate.find_by(name: template_name, format: format, locale: I18n.default_locale.to_s)
       return false unless template
 
       template.required_variables.include?('header_text') && template.required_variables.include?('footer_text')

@@ -30,6 +30,32 @@ module Vendors
 
       event = Event.find_by!(auditable: @vendor, action: 'w9_submitted_via_secure_form')
       assert_equal @vendor, event.user
+
+      submitted_blob = @vendor.w9_form.blob
+      assert_no_difference [-> { Event.count }, -> { @vendor.w9_archive.count }] do
+        replay = SubmitW9Resubmission.new(vendor: @vendor, vendor_secure_request_form: @secure_request_form, file: nil).call
+        assert_predicate replay, :failure?
+      end
+      assert_equal submitted_blob, @vendor.reload.w9_form.blob
+      assert_predicate @secure_request_form.reload, :submitted?
+    end
+
+    test 'rechecks vendor requestability after locking before writing or consuming the form' do
+      original_blob = @vendor.w9_form.blob
+      @vendor.define_singleton_method(:lock!) do |*args|
+        self.class.where(id: id).update_all(w9_status: self.class.w9_statuses[:approved])
+        super(*args)
+      end
+
+      assert_no_difference [-> { Event.count }, -> { @vendor.w9_archive.count }] do
+        result = SubmitW9Resubmission.new(vendor: @vendor, vendor_secure_request_form: @secure_request_form, file: nil).call
+        assert_predicate result, :failure?
+      end
+
+      assert_predicate @vendor.reload, :w9_status_approved?
+      assert_equal original_blob, @vendor.w9_form.blob
+      assert_predicate @secure_request_form.reload, :active_for_public_use?
+      assert_nil @secure_request_form.submitted_at
     end
 
     test 'audit failure rolls back the document archive status and consumed request together' do

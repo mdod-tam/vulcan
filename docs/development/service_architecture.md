@@ -14,14 +14,14 @@ A typical operation runs in five moves:
 4. The owning service records history and arranges follow-up.
 5. The caller handles success, failure, or a warning about follow-up that did not complete.
 
-[Paper intake](paper_application_architecture.md) is the fullest example — `Admin::PaperApplicationsController` → `PaperApplicationService#create`, with user creation and document handling delegated onward.
+[Paper intake](paper_application_architecture.md) is the fullest example — `Admin::PaperApplicationsController` → `PaperApplicationService#create`, with applicant intake, document dispositions and confirmed-commit follow-up delegated to three paper-specific objects. The service retains transaction classification and the controller-facing boolean, errors and warnings.
 
 ## Who owns what
 
 | Operation | Owner |
 | --- | --- |
 | Portal submission and draft saving | [`ApplicationCreator`](../../app/services/applications/application_creator.rb), [`AutosaveService`](../../app/services/applications/autosave_service.rb) |
-| Paper application creation | [`PaperApplicationService`](../../app/services/applications/paper_application_service.rb), with identity facts in [`PaperIdentityReview`](../../app/services/applications/paper_identity_review.rb) and admission rules in [`PaperApplicationEligibility`](../../app/services/applications/paper_application_eligibility.rb) |
+| Paper application creation | [`PaperApplicationService`](../../app/services/applications/paper_application_service.rb), with identity facts in [`PaperIdentityReview`](../../app/services/applications/paper_identity_review.rb) and admission rules in [`AdmissionEligibility`](../../app/services/applications/admission_eligibility.rb) |
 | Guardian/dependent creation and contact choices | [`GuardianDependentManagementService`](../../app/services/applications/guardian_dependent_management_service.rb), [guardian quick-create](../../app/services/applications/paper_guardian_quick_create_service.rb) |
 | Proof attachment and review | [`ProofAttachmentService`](../../app/services/proof_attachment_service.rb), [`ProofReviewer`](../../app/services/applications/proof_reviewer.rb); submitted files resolve through [`UploadedDocument`](../../app/services/uploaded_document.rb) |
 | Disability certification | [`DisabilityCertificationAttachmentService`](../../app/services/disability_certification_attachment_service.rb), [`DisabilityCertificationService`](../../app/services/applications/disability_certification_service.rb); manual uploads resolve through [`UploadedDocument`](../../app/services/uploaded_document.rb) |
@@ -34,6 +34,10 @@ A typical operation runs in five moves:
 | Public product resources | [`ProductResource`](../../app/models/product_resource.rb), [`ProductResources::Writer`](../../app/services/product_resources/writer.rb), existing [`UploadedDocument`](../../app/services/uploaded_document.rb) intake |
 | Equipment needs, ordering, and corrections | [`EquipmentNeeds::Writer`](../../app/services/equipment_needs/writer.rb), [`Equipment::Ordering`](../../app/services/equipment/ordering.rb), [`Equipment::Correction`](../../app/services/equipment/correction.rb) |
 | Public authentication limits | [`AuthRateLimit`](../../app/services/auth_rate_limit.rb) |
+
+[`AdmissionEligibility`](../../app/services/applications/admission_eligibility.rb) also owns the admission decision used by portal submission/autosave and admin user presentation. Portal writers supply their locked application inventory, exclude the target draft, and ignore unsaved siblings; advisory reads do not replace those locked checks. Active or pending applications take precedence. Only an approved application's date starts the waiting duration, so a recent rejection or archive alone does not postpone admission. Approved applications remain blocking even after that duration elapses.
+
+The Result exposes the approved waiting end separately from its admission reason: the model's create validation checks the waiting duration, while writers and presentation consume the admission decision. `Policy.waiting_period_years` supplies the duration. `Application#service_window_end_date` retains its separate per-application entitlement calculation for training/evaluation, including its missing-date and end-date boundary behavior.
 
 ## Result contracts differ
 
@@ -56,7 +60,7 @@ The service checks durable state when handling transaction errors rather than tr
 
 - Lifecycle changes go through [`Application#transition_status!`](../../app/models/application.rb) and [`#reconcile_workflow_state!`](../../app/models/concerns/application_status_management.rb); a raw status write skips history and follow-up.
 - Proof-rejection audit and resubmission delivery are already coordinated by [`ProofReview`](../../app/models/proof_review.rb) and `RequestProofResubmission` — a second sender duplicates the notice.
-- `NotificationService` has a `deliver: false` mode that records without sending, and some actions are permanently record-only. Its audit events are opt-in ([notifications](../features/notifications.md)).
+- `NotificationService.create_and_deliver!` owns notification creation and the optional `audited` row flag. Its private `EmailDelivery::NotificationDispatch` adapts catalog arguments and records delivery routing/outcomes. The operation returns a notification or `nil`; `deliver: false` records without dispatch, and some actions are permanently record-only. Business audit events remain with their workflow owners ([notifications](../features/notifications.md)).
 - `AuditEventService` writes events; [`EventDeduplicationService`](../../app/services/applications/event_deduplication_service.rb) only chooses what a timeline displays. Display deduplication does not make a write idempotent.
 - Secure requests record their logical recipient, delivery owner, and source at issuance, through the recipient resolver and [issuance integrity service](../../app/services/applications/secure_request_issuance_integrity.rb). Historical forms missing that ownership cannot have it reconstructed from today's contact data.
 
@@ -143,14 +147,14 @@ Deployment requires the additive migration before the new server code. All write
 
 | Attribute | Actual effect |
 | --- | --- |
-| `paper_context` | Paper intake relaxes selected profile and proof validations and changes callback handling. Set and cleared by the owning service or controller. |
+| `paper_context` | Paper intake relaxes selected profile and proof validations and changes callback handling. Set and restored by the owning service or controller. |
 | `skip_proof_validation` | Skips proof presence/consistency checks; used by certification-upload requests and test setup. |
 | `reviewing_single_proof` | Scoped by the proof reviewer while saving one decision, avoiding whole-application proof validation. |
 | `proof_attachment_service_context` | Tells model callbacks that the attachment service owns validation, events, and review timestamps. |
 | `force_notifications` | Declared but unused by production delivery paths. |
 | `test_user_id` | Lets test authentication restore a session, which can bypass the sign-in flow a test means to exercise. |
 
-The readers are in [`ProofManageable`](../../app/models/concerns/proof_manageable.rb), [`ProofConsistencyValidation`](../../app/models/concerns/proof_consistency_validation.rb), and [`Authentication`](../../app/controllers/concerns/authentication.rb). Temporary state is restored in `ensure`; paper context in particular is not a way to suppress validations, audit events, or notifications. Training commands explicitly schedule delivery through `TrainingSessionNotifier` after commit.
+The readers are in [`ProofManageable`](../../app/models/concerns/proof_manageable.rb), [`ProofConsistencyValidation`](../../app/models/concerns/proof_consistency_validation.rb), and [`Authentication`](../../app/controllers/concerns/authentication.rb). Temporary state is restored through block scope or `ensure`; paper context in particular is not a way to suppress validations, audit events, or notifications. Training commands explicitly schedule delivery through `TrainingSessionNotifier` after commit.
 
 ## Tests
 
