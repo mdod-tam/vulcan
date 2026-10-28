@@ -28,11 +28,13 @@ class UserMailerTest < ActionMailer::TestCase
       "Enlace de restablecimiento de contrasena:\nhttp://example.com/password/edit?token=test-password-reset-token"
     )
 
-    EmailTemplate.stubs(:find_by!).with(name: 'user_mailer_password_reset', format: :text, locale: 'en')
-                 .returns(password_reset_template)
+    UserMailer.any_instance.stubs(:find_text_template)
+              .with('user_mailer_password_reset', locale: 'en')
+              .returns(password_reset_template)
 
-    EmailTemplate.stubs(:find_by!).with(name: 'user_mailer_password_reset', format: :text, locale: 'es')
-                 .returns(spanish_password_reset_template)
+    UserMailer.any_instance.stubs(:find_text_template)
+              .with('user_mailer_password_reset', locale: 'es')
+              .returns(spanish_password_reset_template)
 
     UserMailer.any_instance.stubs(:edit_password_url).returns('http://example.com/password/edit?token=test-password-reset-token')
   end
@@ -98,7 +100,7 @@ class UserMailerTest < ActionMailer::TestCase
   end
 
   test 'password_reset renders a real Liquid text template' do
-    EmailTemplate.unstub(:find_by!)
+    UserMailer.any_instance.unstub(:find_text_template)
     user = create(:user)
     user.stubs(:generate_token_for).with(:password_reset).returns('test-password-reset-token')
 

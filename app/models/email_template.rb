@@ -62,6 +62,13 @@ class EmailTemplate < ApplicationRecord
     template.render(**vars)
   end
 
+  def self.find_with_locale(name:, format:, locale:)
+    template = find_by(name: name, format: format, locale: locale)
+    return template if template || locale.to_s == I18n.default_locale.to_s
+
+    find_by(name: name, format: format, locale: I18n.default_locale.to_s)
+  end
+
   def render(**vars)
     EmailTemplates::Renderer.render(template: self, variables: vars)
   end

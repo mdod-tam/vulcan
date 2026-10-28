@@ -29,38 +29,61 @@ module Applications
                    result.refusal_message(subject: :constituent)
     end
 
-    test 'blocks a nonblocking application inside the waiting period' do
-      waiting_period = Policy.get('waiting_period_years') || 3
-      last_application = create(
-        :application,
-        :archived,
-        user: @constituent,
-        application_date: waiting_period.years.ago + 1.day
-      )
+    test 'rejected and archived applications do not start the waiting period' do
+      %i[rejected archived].each do |status|
+        create(:application, user: @constituent, status: status, application_date: 1.day.ago)
+      end
 
       result = PaperApplicationEligibility.call(@constituent)
 
-      assert_not result.eligible?
-      assert_equal :waiting_period, result.reason
-      assert_equal last_application.application_date + waiting_period.years, result.eligible_after
-      assert_equal(
-        "Not yet eligible for a new application. Eligible after #{result.eligible_after.to_date.strftime('%B %d, %Y')}.",
-        result.refusal_message(subject: :dependent)
-      )
+      assert result.eligible?
+      assert_nil result.waiting_period_ends_at
+      assert_nil result.eligible_after
     end
 
-    test 'allows a nonblocking application exactly at the waiting period boundary' do
-      waiting_period = Policy.get('waiting_period_years') || 3
-      create(:application, :rejected, user: @constituent, application_date: waiting_period.years.ago)
+    test 'approved admission blocks before and after the waiting duration elapses' do
+      [1.year.ago, Policy.waiting_period_years.years.ago, 8.years.ago].each do |date|
+        application = create(:application, :approved, user: create(:constituent), application_date: date)
+        result = PaperApplicationEligibility.call(application.user)
 
-      assert PaperApplicationEligibility.call(@constituent).eligible?
+        assert_equal :blocking_application, result.reason
+        assert_nil result.eligible_after
+        assert_equal application.application_date + Policy.waiting_period_years.years, result.waiting_period_ends_at
+        assert_equal date > Policy.waiting_period_years.years.ago, result.waiting_period_active?
+      end
     end
 
-    test 'allows a nonblocking application after the waiting period' do
-      waiting_period = Policy.get('waiting_period_years') || 3
-      create(:application, :archived, user: @constituent, application_date: waiting_period.years.ago - 1.day)
+    test 'uses only persisted supplied inventory and excludes its target draft' do
+      create(:application, :in_progress, user: @constituent)
+      target = create(:application, :draft, user: @constituent)
+      unsaved = build(:application, :approved, user: @constituent)
 
-      assert PaperApplicationEligibility.call(@constituent).eligible?
+      result = PaperApplicationEligibility.call(@constituent, applications: [target, unsaved], excluding: target)
+
+      assert result.eligible?
+      assert_nil result.waiting_period_ends_at
+      assert_equal :blocking_application, PaperApplicationEligibility.call(@constituent).reason
+    end
+
+    test 'a real sibling blocks even when waiting validation is skipped' do
+      target = create(:application, :draft, user: @constituent)
+      sibling = create(:application, :approved, user: @constituent, application_date: 1.day.ago)
+
+      result = PaperApplicationEligibility.call(@constituent, applications: [target, sibling], excluding: target, skip_wait_period: true)
+
+      assert_equal :blocking_application, result.reason
+      assert result.waiting_period_active?
+    end
+
+    test 'an approved record without a date blocks without inventing a waiting date' do
+      approved = create(:application, :approved, user: @constituent)
+      approved.application_date = nil
+
+      result = PaperApplicationEligibility.call(@constituent, applications: [approved])
+
+      assert_equal :blocking_application, result.reason
+      assert_nil result.waiting_period_ends_at
+      assert_not result.waiting_period_active?
     end
   end
 end

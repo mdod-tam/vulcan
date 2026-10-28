@@ -20,50 +20,18 @@ module Applications
     end
 
     def call
-      Letters::Delivery.reconcile_pending!(scope: PrintQueueItem.unreleased.where(application_id: application.id))
-      deliveries, result = prepare_requests
+      with_recipient_issuance_errors do
+        Letters::Delivery.reconcile_pending!(scope: PrintQueueItem.unreleased.where(application_id: application.id))
+        deliveries = prepare_requests
+        delivery_result = deliver_requests(deliveries)
+        return delivery_result if delivery_result.failure?
+        return delivery_denial_result(deliveries) if denied_candidates.any?
 
-      return result if result&.failure?
-
-      delivery_result = deliver_requests(deliveries)
-      return delivery_result if delivery_result.failure?
-
-      return delivery_denial_result(deliveries) if denied_candidates.any?
-
-      result
-    rescue ActiveRecord::RecordNotUnique,
-           ActiveRecord::RecordInvalid,
-           ActiveRecord::RecordNotFound,
-           Applications::SecureRequestIssuanceIntegrity::ParticipantSetUnstable => e
-      Rails.logger.warn("Provider-info request failed for application #{application.id}: #{e.class.name}")
-      failure(message(:request_conflict))
-    rescue SecureRequestIssuance::Refused => e
-      failure(message(e.reason))
-    rescue SecureRequestIssuance::CooldownActive => e
-      return success(message(:resent, user: resend_of&.recipient || actor)) if public_recovery
-
-      failure(message(:cooldown_active, minutes: e.minutes))
+        success(message(:request_created), { secure_request_forms: deliveries.map(&:secure_request_form) })
+      end
     end
 
     private
-
-    def prepare_requests
-      deliveries = nil
-      result = nil
-
-      issuance.with_locked_context do |context|
-        install_locked_context!(context)
-        candidates = issuance.resolve_recipients!(recipient_ids: recipient_ids, channel_overrides: channel_overrides)
-        deliveries = create_requests_for(candidates)
-        result = if deliveries.empty? && denied_candidates.any?
-                   delivery_denial_result(deliveries)
-                 else
-                   success(message(:request_created), { secure_request_forms: deliveries.map(&:secure_request_form) })
-                 end
-      end
-
-      [deliveries, result]
-    end
 
     def issuance
       @issuance ||= SecureRequestIssuance.new(
@@ -75,57 +43,11 @@ module Applications
       )
     end
 
-    def install_locked_context!(context)
-      @application = context.application
-      @actor = context.actor
-      @resend_of = context.resend_of
-    end
-
-    # Refuse each denied channel before token creation; eligible recipients still proceed.
-    def create_requests_for(candidates)
-      request_batch_id = SecureRandom.uuid
-      candidates.filter_map do |candidate|
-        if delivery_denied_for?(candidate)
-          denied_candidates << candidate
-          next
-        end
-
-        create_delivery(candidate, request_batch_id)
-      end
-    end
-
     def create_delivery(candidate, request_batch_id)
-      issued = issuance.replace_request!(candidate: candidate, request_batch_id: request_batch_id)
-      secure_request_form = issued.secure_request_form
-      notification = create_tracking_notification(secure_request_form)
-      raise SecureRequestIssuance::Refused, :request_conflict unless notification
-
-      Delivery.new(secure_request_form: secure_request_form, raw_token: issued.raw_token, candidate: candidate, context: authorization_for(candidate).last,
-                   notification_id: notification.id)
-    end
-
-    def create_tracking_notification(secure_request_form)
-      NotificationService.create_and_deliver!(
-        type: 'provider_info_requested',
-        recipient: secure_request_form.recipient,
-        actor: actor,
-        notifiable: application,
-        metadata: {
-          secure_request_form_id: secure_request_form.id,
-          application_id: application.id,
-          recipient_id: secure_request_form.recipient_id,
-          recipient_role: secure_request_form.recipient_role,
-          recipient_channel: secure_request_form.recipient_channel,
-          requested_recipient_channel: secure_request_form.recipient_channel,
-          delivery_owner_id: secure_request_form.delivery_owner_id,
-          delivery_source: secure_request_form.delivery_source,
-          request_batch_id: secure_request_form.request_batch_id,
-          expires_at: secure_request_form.expires_at.iso8601
-        },
-        channel: notification_channel_for(secure_request_form),
-        audit: true,
-        deliver: false
-      )
+      issued = issuance.replace_request!(candidate: candidate, request_batch_id: request_batch_id,
+                                         notification_type: 'provider_info_requested')
+      Delivery.new(secure_request_form: issued.secure_request_form, raw_token: issued.raw_token,
+                   candidate: candidate, context: authorization_for(candidate).last, notification_id: issued.notification_id)
     end
 
     def deliver_email(delivery)
@@ -137,7 +59,6 @@ module Applications
       )
     end
 
-    def delivery_requested? = true
     def delivery_mail_action = 'ApplicationNotificationsMailer#provider_info_requested'
     def sms_action = 'SmsService#provider_info'
 
@@ -148,22 +69,7 @@ module Applications
       EmailDelivery.deliver_now!(mail, context: delivery_context_for(delivery))
     end
 
-    def deliver_sms(delivery)
-      secure_request_form = delivery.secure_request_form
-      SmsService.send_message(
-        secure_request_form.recipient_phone,
-        sms_message(secure_url_for(delivery.raw_token), secure_request_form),
-        sensitive: true,
-        action: sms_action,
-        delivery_context: delivery_context_for(delivery),
-        context: {
-          secure_request_form_id: secure_request_form.id,
-          application_id: application.id,
-          recipient_id: secure_request_form.recipient_id,
-          recipient_channel: secure_request_form.recipient_channel
-        }
-      )
-    end
+    def public_recovery_message = message(:resent, user: resend_of&.recipient || actor)
 
     def secure_url_for(raw_token)
       SecureFormPolicy.public_url(:secure_provider_info_form_url, raw_token)
@@ -176,10 +82,6 @@ module Applications
         secure_url: secure_url,
         hours: SecureFormPolicy.link_expiration_hours
       )
-    end
-
-    def message(key, user: actor, **)
-      I18n.t("#{MESSAGE_SCOPE}.#{key}", **, locale: secure_form_locale_for(user))
     end
   end
 end

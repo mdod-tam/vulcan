@@ -25,7 +25,7 @@ class RegistrationsMailerTest < ActiveSupport::TestCase
     mock_template.stubs(:render_subject).returns(subject)
     mock_template.stubs(:render).returns([subject, body])
     mock_template.stubs(:enabled?).returns(true)
-    EmailTemplate.stubs(:find_by!).returns(mock_template)
+    ApplicationNotificationsMailer.any_instance.stubs(:find_text_template).returns(mock_template)
 
     ActionMailer::Base.deliveries.clear
 

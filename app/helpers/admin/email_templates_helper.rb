@@ -118,8 +118,7 @@ module Admin
 
     def sample_data_for_template(template_name, locale: 'en', subject: nil, format: :text,
                                  include_optional_variables: nil)
-      template = EmailTemplate.find_by(name: template_name, format: format, locale: locale) ||
-                 EmailTemplate.find_by(name: template_name, format: format, locale: I18n.default_locale.to_s)
+      template = EmailTemplate.find_with_locale(name: template_name, format: format, locale: locale)
       return base_sample_data(locale: locale, subject: subject) unless template
 
       sample_data_for_email_template(template,
@@ -300,7 +299,6 @@ module Admin
         'timestamp_formatted' => Time.current.strftime('%B %d, %Y at %I:%M %p %Z'),
         'submission_date_formatted' => Date.current.strftime('%B %d, %Y'),
         'expiration_date_formatted' => (Date.current + 3.months).strftime('%B %d, %Y'),
-        'reapply_date_formatted' => (Date.current + 6.months).strftime('%B %d, %Y'),
         'transaction_date_formatted' => Date.current.strftime('%B %d, %Y'),
         'period_start_formatted' => (Date.current - 1.month).beginning_of_month.strftime('%B %d, %Y'),
         'period_end_formatted' => (Date.current - 1.month).end_of_month.strftime('%B %d, %Y'),

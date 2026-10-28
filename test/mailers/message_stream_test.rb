@@ -8,7 +8,9 @@ class MessageStreamTest < ActionMailer::TestCase
     @account_created_template.stubs(:subject).returns('Welcome to the System')
     @account_created_template.stubs(:render_subject).returns('Welcome to the System')
     @account_created_template.stubs(:render).returns(['Welcome to the System', 'Account creation email body'])
-    EmailTemplate.stubs(:find_by!).with(name: 'application_notifications_account_created', format: :text, locale: 'en').returns(@account_created_template)
+    ApplicationNotificationsMailer.any_instance.stubs(:find_text_template)
+                                  .with('application_notifications_account_created', locale: 'en')
+                                  .returns(@account_created_template)
     @account_created_template.stubs(:enabled?).returns(true)
 
     @password_reset_template = mock('EmailTemplate')
@@ -16,7 +18,9 @@ class MessageStreamTest < ActionMailer::TestCase
     @password_reset_template.stubs(:subject).returns('Reset Your Password')
     @password_reset_template.stubs(:render_subject).returns('Reset Your Password')
     @password_reset_template.stubs(:render).returns(['Reset Your Password', 'Password reset email body'])
-    EmailTemplate.stubs(:find_by!).with(name: 'user_mailer_password_reset', format: :text, locale: 'en').returns(@password_reset_template)
+    UserMailer.any_instance.stubs(:find_text_template)
+              .with('user_mailer_password_reset', locale: 'en')
+              .returns(@password_reset_template)
   end
 
   test 'notifications mailer uses correct message stream' do

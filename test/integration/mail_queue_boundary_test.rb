@@ -59,6 +59,16 @@ class MailQueueBoundaryTest < ActiveSupport::TestCase
     assert_equal 0, mail_jobs.count
   end
 
+  test 'a rolled-back notification leaves no notification or mail job' do
+    ActiveRecord::Base.transaction do
+      notify_user
+      raise ActiveRecord::Rollback
+    end
+
+    assert_not Notification.exists?(recipient: @user, action: 'account_created')
+    assert_empty mail_jobs
+  end
+
   test 'a committed request queues one job carrying the captured controls' do
     ActiveRecord::Base.transaction { request_reset }
 

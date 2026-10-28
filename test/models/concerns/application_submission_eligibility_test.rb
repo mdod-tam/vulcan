@@ -28,61 +28,40 @@ class ApplicationSubmissionEligibilityTest < ActiveSupport::TestCase
     assert_match(/already have an active application/i, error)
   end
 
-  test 'blocks on the waiting period when only an archived/rejected sibling exists within it' do
+  test 'recent rejected and archived siblings permit admission' do
     target = Application.new(user: @constituent, application_date: Date.current)
-    sibling = create(:application, :rejected, user: @constituent, application_date: 1.year.ago)
+    siblings = %i[rejected archived].map do |status|
+      create(:application, user: @constituent, status: status, application_date: 1.day.ago)
+    end
 
-    error = Application.sibling_application_eligibility_error([sibling], target_application: target)
-
-    assert_match(/wait 3 years/i, error)
+    assert_nil Application.sibling_application_eligibility_error(siblings, target_application: target)
   end
 
-  test 'allows a new application once an archived/rejected sibling is past the waiting period' do
-    target = Application.new(user: @constituent, application_date: Date.current)
-    sibling = create(:application, :archived, user: @constituent, application_date: 4.years.ago)
+  test 'a supplied inventory does not expand to database or unsaved siblings' do
+    target = create(:application, :draft, user: @constituent)
+    create(:application, :in_progress, user: @constituent)
+    unsaved = build(:application, :in_progress, user: @constituent)
 
-    assert_nil Application.sibling_application_eligibility_error([sibling], target_application: target)
+    assert_nil Application.sibling_application_eligibility_error([target, unsaved], target_application: target)
   end
 
-  test 'does not block exactly at the waiting-period boundary' do
+  test 'approved siblings retain active precedence at and beyond the waiting boundary' do
     target = Application.new(user: @constituent, application_date: Date.current)
-    waiting_period = Policy.get('waiting_period_years') || 3
-    sibling = create(:application, :rejected, user: @constituent, application_date: waiting_period.years.ago)
+    [Policy.waiting_period_years.years.ago, 8.years.ago].each do |date|
+      approved = create(:application, :approved, user: create(:constituent), application_date: date)
 
-    assert_nil Application.sibling_application_eligibility_error([sibling], target_application: target)
+      assert_equal I18n.t('applications.creation.refusals.active_application', locale: :es),
+                   Application.sibling_application_eligibility_error([approved], target_application: target, locale: :es)
+    end
   end
 
-  test 'blocks one day inside the waiting-period boundary' do
-    target = Application.new(user: @constituent, application_date: Date.current)
-    waiting_period = Policy.get('waiting_period_years') || 3
-    sibling = create(:application, :rejected, user: @constituent, application_date: waiting_period.years.ago + 1.day)
-
-    error = Application.sibling_application_eligibility_error([sibling], target_application: target)
-
-    assert_match(/wait #{waiting_period} years/i, error)
-  end
-
-  test 'skip_wait_period_validation suppresses the waiting-period check but not the active-sibling check' do
+  test 'skip_wait_period_validation does not suppress the active-sibling check' do
     Application.skip_wait_period_validation = true
     target = Application.new(user: @constituent, application_date: Date.current)
+    sibling = create(:application, :approved, user: @constituent)
 
-    waiting_period_sibling = create(:application, :rejected, user: @constituent, application_date: 1.year.ago)
-    assert_nil Application.sibling_application_eligibility_error([waiting_period_sibling], target_application: target)
-
-    active_sibling = create(:application, :in_progress, user: @constituent, application_date: 1.year.ago)
-    error = Application.sibling_application_eligibility_error([waiting_period_sibling, active_sibling], target_application: target)
-    assert_match(/already have an active application/i, error)
-  end
-
-  test 'the error is a message in the requested locale' do
-    target = Application.new(user: @constituent, application_date: Date.current)
-    rejected = create(:application, :rejected, user: @constituent, application_date: 1.year.ago)
-    active = create(:application, :in_progress, user: create(:constituent), application_date: 1.year.ago)
-
-    assert_equal I18n.t('applications.creation.refusals.waiting_period', years: 3, locale: :es),
-                 Application.sibling_application_eligibility_error([rejected], target_application: target, locale: :es)
     assert_equal I18n.t('applications.creation.refusals.active_application', locale: :es),
-                 Application.sibling_application_eligibility_error([active], target_application: target, locale: :es)
+                 Application.sibling_application_eligibility_error([sibling], target_application: target, locale: :es)
   end
 
   # `identity_review_pending_for?` is the shared source of truth for both the locked writer and the

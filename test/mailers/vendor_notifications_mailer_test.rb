@@ -45,17 +45,17 @@ class VendorNotificationsMailerTest < ActionMailer::TestCase
       'Mock Payment Issued Body %<invoice_number>s'
     )
 
-    EmailTemplate.stubs(:find_by!)
-                 .with(name: 'vendor_notifications_w9_rejected', format: :text, locale: 'en')
-                 .returns(rejected_template)
+    VendorNotificationsMailer.any_instance.stubs(:find_text_template)
+                             .with('vendor_notifications_w9_rejected', locale: 'en')
+                             .returns(rejected_template)
 
-    EmailTemplate.stubs(:find_by!)
-                 .with(name: 'vendor_notifications_w9_approved', format: :text, locale: 'en')
-                 .returns(approved_template)
+    VendorNotificationsMailer.any_instance.stubs(:find_text_template)
+                             .with('vendor_notifications_w9_approved', locale: 'en')
+                             .returns(approved_template)
 
-    EmailTemplate.stubs(:find_by!)
-                 .with(name: 'vendor_notifications_payment_issued', format: :text, locale: 'en')
-                 .returns(payment_template)
+    VendorNotificationsMailer.any_instance.stubs(:find_text_template)
+                             .with('vendor_notifications_payment_issued', locale: 'en')
+                             .returns(payment_template)
   end
 
   test 'payment_issued' do
@@ -66,10 +66,10 @@ class VendorNotificationsMailerTest < ActionMailer::TestCase
     payment_template.stubs(:enabled?).returns(true)
     payment_template.stubs(:render).returns(['Payment issued', expected_text])
 
-    EmailTemplate.unstub(:find_by!)
-    EmailTemplate.stubs(:find_by!)
-                 .with(name: 'vendor_notifications_payment_issued', format: :text, locale: 'en')
-                 .returns(payment_template)
+    VendorNotificationsMailer.any_instance.unstub(:find_text_template)
+    VendorNotificationsMailer.any_instance.stubs(:find_text_template)
+                             .with('vendor_notifications_payment_issued', locale: 'en')
+                             .returns(payment_template)
 
     emails = capture_emails do
       VendorNotificationsMailer.with(invoice: @invoice).payment_issued.deliver_now
@@ -89,7 +89,7 @@ class VendorNotificationsMailerTest < ActionMailer::TestCase
   end
 
   test 'invoice payment and W9 notices use the vendor own email and locale despite guardian relationships' do
-    EmailTemplate.unstub(:find_by!)
+    VendorNotificationsMailer.any_instance.unstub(:find_text_template)
     guardian = create(:constituent, locale: 'es')
     create(:guardian_relationship, guardian_user: guardian, dependent_user: @vendor)
     assert_equal guardian.email, @vendor.effective_email, 'the generic dependent route would select the guardian'
@@ -110,7 +110,7 @@ class VendorNotificationsMailerTest < ActionMailer::TestCase
   end
 
   test 'secure W9 notices preserve the recipient snapshot after the vendor email changes' do
-    EmailTemplate.unstub(:find_by!)
+    VendorNotificationsMailer.any_instance.unstub(:find_text_template)
     snapshot = 'original.vendor@example.test'
 
     email = VendorNotificationsMailer.with(vendor: @vendor, recipient_email: snapshot,
@@ -120,7 +120,7 @@ class VendorNotificationsMailerTest < ActionMailer::TestCase
   end
 
   test 'a Spanish vendor receives Spanish W9 notices at their own email despite the English portal policy' do
-    EmailTemplate.unstub(:find_by!)
+    VendorNotificationsMailer.any_instance.unstub(:find_text_template)
     @vendor.update!(locale: 'es')
     guardian = create(:constituent, locale: 'en')
     create(:guardian_relationship, guardian_user: guardian, dependent_user: @vendor)
@@ -149,7 +149,7 @@ class VendorNotificationsMailerTest < ActionMailer::TestCase
   end
 
   test 'approval seeds preserve existing administrator content and delivery controls in both locales' do
-    EmailTemplate.unstub(:find_by!)
+    VendorNotificationsMailer.any_instance.unstub(:find_text_template)
 
     %w[en es].each do |locale|
       template = create_real_text_email_template(name: 'vendor_notifications_w9_approved', locale: locale,
@@ -168,7 +168,7 @@ class VendorNotificationsMailerTest < ActionMailer::TestCase
 
   test 'new invoice PDFs identify the vendor without their tax ID' do
     @vendor.update!(business_name: 'Private Tax Vendor', business_tax_id: '123456789')
-    EmailTemplate.unstub(:find_by!)
+    VendorNotificationsMailer.any_instance.unstub(:find_text_template)
     create_real_text_email_template(name: 'vendor_notifications_invoice_generated', subject: 'Invoice {{ invoice_number }}',
                                     body: 'Invoice {{ invoice_number }} for {{ vendor_business_name }}',
                                     required: %w[invoice_number vendor_business_name])
@@ -183,7 +183,7 @@ class VendorNotificationsMailerTest < ActionMailer::TestCase
   end
 
   test 'payment_issued renders a real Liquid text template' do
-    EmailTemplate.unstub(:find_by!)
+    VendorNotificationsMailer.any_instance.unstub(:find_text_template)
     create_real_text_email_template(
       name: 'vendor_notifications_payment_issued',
       subject: 'Payment {{ invoice_number }}',
@@ -208,9 +208,9 @@ class VendorNotificationsMailerTest < ActionMailer::TestCase
     approved_template.stubs(:enabled?).returns(true)
     approved_template.stubs(:render).returns(['W9 approved', expected_text])
 
-    EmailTemplate.stubs(:find_by!)
-                 .with(name: 'vendor_notifications_w9_approved', format: :text, locale: 'en')
-                 .returns(approved_template)
+    VendorNotificationsMailer.any_instance.stubs(:find_text_template)
+                             .with('vendor_notifications_w9_approved', locale: 'en')
+                             .returns(approved_template)
 
     emails = capture_emails do
       VendorNotificationsMailer.with(vendor: @vendor).w9_approved.deliver_now
@@ -233,7 +233,7 @@ class VendorNotificationsMailerTest < ActionMailer::TestCase
     @vendor.w9_form.attach(io: file_fixture('sample_w9.pdf').open, filename: 'w9.pdf', content_type: 'application/pdf')
     review = create(:w9_review, :rejected, vendor: @vendor)
     secure_upload_url = 'https://example.test/secure_w9_form?token=abc'
-    EmailTemplate.unstub(:find_by!)
+    VendorNotificationsMailer.any_instance.unstub(:find_text_template)
 
     emails = capture_emails do
       VendorNotificationsMailer.with(
@@ -301,7 +301,7 @@ class VendorNotificationsMailerTest < ActionMailer::TestCase
   end
 
   test 'w9_expiring_soon renders stored template with required variables' do
-    EmailTemplate.unstub(:find_by!)
+    VendorNotificationsMailer.any_instance.unstub(:find_text_template)
     EmailTemplate.where(name: 'vendor_notifications_w9_expiring_soon', format: :text).delete_all
     load Rails.root.join('db/seeds/email_templates/vendor_notifications_w9_expiring_soon.rb')
 
@@ -325,7 +325,7 @@ class VendorNotificationsMailerTest < ActionMailer::TestCase
   end
 
   test 'w9_expired renders stored template with required variables' do
-    EmailTemplate.unstub(:find_by!)
+    VendorNotificationsMailer.any_instance.unstub(:find_text_template)
     EmailTemplate.where(name: 'vendor_notifications_w9_expired', format: :text).delete_all
     load Rails.root.join('db/seeds/email_templates/vendor_notifications_w9_expired.rb')
 

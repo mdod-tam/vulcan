@@ -4,10 +4,9 @@ module EmailDelivery
   # Compares the catalog with the mailers the application defines. The catalog test runs this in CI,
   # so adding a mailer action without classifying it fails the build instead of blocking mail in production.
   module CatalogCoverage
-    # Positional arguments each NotificationService adapter passes.
+    # Positional arguments each NotificationDispatch adapter passes.
     ADAPTER_ARITY = {
       recipient: 1,
-      proof_review: 2,
       proof_attached: 2,
       vendor_params: 0,
       assignment: 0,

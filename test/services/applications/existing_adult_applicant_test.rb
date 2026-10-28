@@ -22,11 +22,11 @@ module Applications
 
     test 'process_existing_self_applicant sets constituent without creating new user' do
       service_params = build_existing_adult_params(@constituent)
-      service = PaperApplicationService.new(params: service_params, admin: @admin)
+      service = applicant_intake(service_params)
 
       assert_no_difference 'User.count' do
-        result = service.send(:process_constituent)
-        assert result, "Expected process_constituent to succeed but got errors: #{service.errors.join(', ')}"
+        result = service.call
+        assert result, "Expected process_constituent to succeed but got errors: #{@intake_errors.join(', ')}"
       end
 
       assert_equal @constituent.id, service.constituent.id
@@ -39,28 +39,27 @@ module Applications
       begin
         create(:application, :in_progress, user: @constituent)
         service_params = build_existing_adult_params(@constituent)
-        service = PaperApplicationService.new(params: service_params, admin: @admin)
+        service = applicant_intake(service_params)
 
-        result = service.send(:process_constituent)
+        result = service.call
         assert_not result
-        assert(service.errors.any? { |e| e.include?('active') || e.include?('pending') })
+        assert(@intake_errors.any? { |e| e.include?('active') || e.include?('pending') })
       ensure
         Application.skip_wait_period_validation = original_skip
       end
     end
 
-    test 'process_existing_self_applicant checks waiting period' do
+    test 'existing adult may apply after rejected history' do
       original_skip = Application.skip_wait_period_validation
       Application.skip_wait_period_validation = false
 
       begin
         create(:application, :rejected, user: @constituent, application_date: 1.year.ago)
         service_params = build_existing_adult_params(@constituent)
-        service = PaperApplicationService.new(params: service_params, admin: @admin)
+        service = applicant_intake(service_params)
 
-        result = service.send(:process_constituent)
-        assert_not result
-        assert(service.errors.any? { |e| e.include?('eligible') || e.include?('Eligible') })
+        assert service.call, @intake_errors.inspect
+        assert_empty @intake_errors
       ensure
         Application.skip_wait_period_validation = original_skip
       end
@@ -69,11 +68,11 @@ module Applications
     test 'process_existing_self_applicant updates contact info with audit trail' do
       new_email = "updated_#{SecureRandom.hex(4)}@example.com"
       service_params = build_existing_adult_params(@constituent, email: new_email)
-      service = PaperApplicationService.new(params: service_params, admin: @admin)
+      service = applicant_intake(service_params)
 
       assert_difference -> { Event.where(action: 'constituent_contact_updated').count }, 1 do
-        result = service.send(:process_constituent)
-        assert result, "Expected success but got errors: #{service.errors.join(', ')}"
+        result = service.call
+        assert result, "Expected success but got errors: #{@intake_errors.join(', ')}"
       end
 
       @constituent.reload
@@ -88,18 +87,18 @@ module Applications
     test 'process_existing_self_applicant rejects non-candidate user id' do
       staff = create(:admin, email: generate(:email))
       params = build_existing_adult_params(@constituent).merge(existing_constituent_id: staff.id)
-      service = PaperApplicationService.new(params: params, admin: @admin)
+      service = applicant_intake(params)
 
-      assert_not service.send(:process_constituent)
-      assert(service.errors.any? { |e| e.include?('not eligible') })
+      assert_not service.call
+      assert(@intake_errors.any? { |e| e.include?('not eligible') })
     end
 
     test 'process_existing_self_applicant requires contact verification when existing id present' do
       params = build_existing_adult_params(@constituent).merge(contact_info_verified: '0')
-      service = PaperApplicationService.new(params: params, admin: @admin)
+      service = applicant_intake(params)
 
-      assert_not service.send(:process_constituent)
-      assert(service.errors.any? { |e| e.include?('Verify contact') })
+      assert_not service.call
+      assert(@intake_errors.any? { |e| e.include?('Verify contact') })
     end
 
     test 'process_existing_self_applicant skips contact updates when contact_info_mode is on_file' do
@@ -108,11 +107,11 @@ module Applications
         contact_info_mode: 'on_file',
         contact_info_verified: '1'
       )
-      service = PaperApplicationService.new(params: service_params, admin: @admin)
+      service = applicant_intake(service_params)
 
       assert_no_difference -> { Event.where(action: 'constituent_contact_updated').count } do
-        result = service.send(:process_constituent)
-        assert result, "Expected success but got errors: #{service.errors.join(', ')}"
+        result = service.call
+        assert result, "Expected success but got errors: #{@intake_errors.join(', ')}"
       end
 
       @constituent.reload
@@ -122,31 +121,29 @@ module Applications
     test 'process_existing_self_applicant skips update when no contact changes' do
       # Submit with same data as on file
       service_params = build_existing_adult_params(@constituent, email: @constituent.email, phone: @constituent.phone)
-      service = PaperApplicationService.new(params: service_params, admin: @admin)
+      service = applicant_intake(service_params)
 
       assert_no_difference -> { Event.where(action: 'constituent_contact_updated').count } do
-        result = service.send(:process_constituent)
+        result = service.call
         assert result
       end
     end
 
-    test 'existing_self_applicant_scenario detects existing_constituent_id' do
-      service = PaperApplicationService.new(
-        params: { existing_constituent_id: @constituent.id, applicant_type: 'self' }.with_indifferent_access,
-        admin: @admin
-      )
-      assert service.send(:existing_self_applicant_scenario?, @constituent.id.to_s)
-    end
+    test 'dependent branch does not reuse an unrelated existing adult selection' do
+      params = build_existing_adult_params(@constituent).merge(applicant_type: 'dependent')
+      service = applicant_intake(params)
 
-    test 'existing_self_applicant_scenario ignores when applicant_type is dependent' do
-      service = PaperApplicationService.new(
-        params: { existing_constituent_id: @constituent.id, applicant_type: 'dependent' }.with_indifferent_access,
-        admin: @admin
-      )
-      assert_not service.send(:existing_self_applicant_scenario?, @constituent.id.to_s)
+      assert_not service.call
+      assert_nil service.constituent
+      assert_includes @intake_errors.join(' '), 'Save or select the guardian'
     end
 
     private
+
+    def applicant_intake(params)
+      @intake_errors = []
+      PaperApplicantIntake.new(params: params, admin: @admin, errors: @intake_errors)
+    end
 
     def build_existing_adult_params(constituent, overrides = {})
       constituent_attrs = {

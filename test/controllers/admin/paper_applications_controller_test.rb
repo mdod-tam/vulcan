@@ -977,7 +977,7 @@ module Admin
 
     test 'should not create paper application when income exceeds threshold' do
       Rails.logger.stubs(:error)
-      Rails.logger.expects(:error).with('[TEST_BUSINESS_LOGIC] Paper application operation failed: Applications::PaperApplicationService').once
+      Rails.logger.expects(:error).with('[ADMIN_OPERATION] Paper application operation failed: Applications::PaperApplicationService').once
 
       unique_email = "income_threshold_#{Time.now.to_i}@example.com"
       unique_phone = "555-#{rand(100..999)}-#{rand(1000..9999)}"
@@ -1021,7 +1021,7 @@ module Admin
 
     test 'should not create paper application for constituent with active application' do
       Rails.logger.stubs(:error)
-      Rails.logger.expects(:error).with('[TEST_BUSINESS_LOGIC] Paper application operation failed: Applications::PaperApplicationService').once
+      Rails.logger.expects(:error).with('[ADMIN_OPERATION] Paper application operation failed: Applications::PaperApplicationService').once
 
       unique_email = "active_app_#{Time.now.to_i}@example.com"
       unique_phone = "555-#{rand(100..999)}-#{rand(1000..9999)}"
@@ -1209,7 +1209,7 @@ module Admin
 
     test 'should not enqueue jobs when transaction fails' do
       Rails.logger.stubs(:error)
-      Rails.logger.expects(:error).with('[TEST_BUSINESS_LOGIC] Paper application operation failed: Applications::PaperApplicationService').once
+      Rails.logger.expects(:error).with('[ADMIN_OPERATION] Paper application operation failed: Applications::PaperApplicationService').once
 
       unique_email = "transaction_fail_#{Time.now.to_i}@example.com"
       unique_phone = "555-#{rand(100..999)}-#{rand(1000..9999)}"
@@ -1252,7 +1252,7 @@ module Admin
 
     test 'should handle missing constituent gracefully in notification job' do
       Rails.logger.stubs(:error)
-      Rails.logger.expects(:error).with(regexp_matches(/\[TEST_EDGE_CASE\] ApplicationNotificationsMailer#account_created called with nil constituent/)).once
+      Rails.logger.expects(:error).with(regexp_matches(/\[DATA_INTEGRITY\] ApplicationNotificationsMailer#account_created called with nil constituent/)).once
 
       # A rollback can leave a notification argument without a constituent record.
 
@@ -1333,7 +1333,7 @@ module Admin
 
     test 'should handle application save failure' do
       Rails.logger.stubs(:error)
-      Rails.logger.expects(:error).with('[TEST_BUSINESS_LOGIC] Paper application operation failed: Applications::PaperApplicationService').once
+      Rails.logger.expects(:error).with('[ADMIN_OPERATION] Paper application operation failed: Applications::PaperApplicationService').once
 
       Application.any_instance.stubs(:save).returns(false)
       Application.any_instance.stubs(:errors).returns(
@@ -1378,7 +1378,7 @@ module Admin
 
     test 'self-application should not use guardian_attributes when constituent data is missing' do
       Rails.logger.stubs(:error)
-      Rails.logger.expects(:error).with('[TEST_BUSINESS_LOGIC] Paper application operation failed: Applications::PaperApplicationService').once
+      Rails.logger.expects(:error).with('[ADMIN_OPERATION] Paper application operation failed: Applications::PaperApplicationService').once
 
       # Applicant disability flags must not turn guardian attributes into a self-applicant record.
 

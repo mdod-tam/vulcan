@@ -114,6 +114,35 @@ module Applications
       assert_equal [I18n.t('applications.creation.refusals.active_application', locale: :es)], result.error_messages
     end
 
+    test 'a recent rejected application permits the locked submission writer' do
+      original_skip = Application.skip_wait_period_validation
+      Application.skip_wait_period_validation = false
+      @user.update!(hearing_disability: true)
+      create(:application, :rejected, user: @user, application_date: 1.day.ago)
+      form = create_valid_form(@user)
+      form.is_submission = true
+
+      assert_difference 'Application.count', 1 do
+        result = ApplicationCreator.call(form)
+        assert result.success?, result.error_messages.inspect
+      end
+    ensure
+      Application.skip_wait_period_validation = original_skip
+    end
+
+    test 'an elapsed approved application still refuses the locked submission writer' do
+      @user.update!(hearing_disability: true)
+      create(:application, :approved, user: @user, application_date: 5.years.ago)
+      form = create_valid_form(@user)
+      form.is_submission = true
+
+      assert_no_difference 'Application.count' do
+        result = ApplicationCreator.call(form)
+        assert result.failure?
+        assert_equal [I18n.t('applications.creation.refusals.active_application')], result.error_messages
+      end
+    end
+
     test 'submission creates exactly one application_status_changed event' do
       application = create_application_for(@user)
       form = create_form_with_application(@user, application)

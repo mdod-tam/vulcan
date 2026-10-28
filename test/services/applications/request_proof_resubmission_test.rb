@@ -298,8 +298,7 @@ module Applications
           application: application,
           actor: @actor,
           proof_type: :income,
-          recipient_ids: [dependent.id, guardian.id],
-          deliver_request: false
+          recipient_ids: [dependent.id, guardian.id]
         ).call
       end
 
@@ -384,20 +383,19 @@ module Applications
       assert_predicate original.reload, :status_sent?
     end
 
-    test 'can create a public recovery link without sending the proof rejection email again' do
-      @mailer_delivery.expects(:deliver_now).never
+    test 'public recovery delivers the replacement without returning a bearer URL' do
+      @mailer_delivery.expects(:deliver_now).once
 
       result = RequestProofResubmission.new(
         application: @application,
         actor: @actor,
         proof_type: :income,
         recipient_ids: [@application.user_id],
-        public_recovery: true,
-        deliver_request: false
+        public_recovery: true
       ).call
 
       assert_predicate result, :success?
-      assert_match %r{\Ahttp://.*secure_proof_form\?token=}, result.data.fetch(:secure_upload_url)
+      assert_not result.data.key?(:secure_upload_url)
       assert_equal 1, result.data.fetch(:secure_request_forms).size
     end
 

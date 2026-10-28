@@ -45,19 +45,16 @@ module ApplicationSubmissionEligibility
     # +applications+ contains the caller's locked Application records for the applicant.
     # +target_application+ is excluded from the sibling check. The error is a message in +locale+.
     def sibling_application_eligibility_error(applications, target_application:, locale: I18n.locale)
-      siblings = Array(applications).select(&:persisted?).reject { |app| app.id == target_application.id }
-      has_blocking_sibling = siblings.any?(&:blocking_new_submission?)
-      return I18n.t('applications.creation.refusals.active_application', locale: locale) if has_blocking_sibling
-
-      return nil if skip_wait_period_validation
-
-      most_recent = siblings.filter_map(&:application_date).max
-      return nil if most_recent.blank?
-
-      waiting_period = Policy.get('waiting_period_years') || 3
-      return nil unless most_recent > waiting_period.years.ago
-
-      I18n.t('applications.creation.refusals.waiting_period', years: waiting_period, locale: locale)
+      waiting_period = Policy.waiting_period_years
+      result = Applications::PaperApplicationEligibility.call(
+        target_application.user,
+        applications: applications, excluding: target_application,
+        skip_wait_period: skip_wait_period_validation, waiting_period_years: waiting_period
+      )
+      case result.reason
+      when :blocking_application then I18n.t('applications.creation.refusals.active_application', locale: locale)
+      when :waiting_period then I18n.t('applications.creation.refusals.waiting_period', years: waiting_period, locale: locale)
+      end
     end
   end
 end

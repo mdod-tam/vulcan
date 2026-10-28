@@ -10,7 +10,7 @@ EmailTemplate.create_or_find_by!(name: 'application_notifications_max_rejections
 
     We regret to inform you that your application (ID: %<application_id>s) has been archived due to reaching the maximum number of document revision attempts.
 
-    Your current application cannot proceed further in the review process. However, you are welcome to submit a new application after %<reapply_date_formatted>s.
+    Your current application cannot proceed further in the review process.
 
     WHY APPLICATIONS ARE ARCHIVED
     Applications may be archived when we are unable to verify eligibility after multiple attempts. This is typically due to:
@@ -18,7 +18,7 @@ EmailTemplate.create_or_find_by!(name: 'application_notifications_max_rejections
     * Inability to verify residency
 
     FUTURE APPLICATIONS
-    When submitting a new application after %<reapply_date_formatted>s, please ensure you have the following ready:
+    If you submit a new application, please have the following ready:
     * Current proof of Maryland residency
     * Any disability documentation required for the program
 
@@ -27,7 +27,7 @@ EmailTemplate.create_or_find_by!(name: 'application_notifications_max_rejections
     %<footer_text>s
   TEXT
   template.variables = {
-    'required' => %w[header_text user_first_name application_id reapply_date_formatted footer_text support_email],
+    'required' => %w[header_text user_first_name application_id footer_text support_email],
     'optional' => []
   }
   template.version = 1

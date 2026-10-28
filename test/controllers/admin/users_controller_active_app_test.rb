@@ -35,6 +35,39 @@ module Admin
                     text: 'Start Paper Application'
     end
 
+    test 'recent rejection is selectable in dependent summaries and admin show' do
+      create(:application, :rejected, user: @dependent, application_date: 1.day.ago)
+
+      get dependents_admin_user_path(@guardian, format: :json)
+      summary = response.parsed_body.fetch('dependents').sole
+      assert_equal true, summary.fetch('eligible_now')
+      assert_equal false, summary.fetch('has_active_app')
+      assert_nil summary['eligible_date']
+
+      get admin_user_path(@guardian)
+      assert_select "#dependent_#{@dependent.id} a", text: 'Start Paper Application'
+      assert_select "#dependent_#{@dependent.id} span", text: 'Eligible now'
+    end
+
+    test 'an elapsed approved application remains blocked on summaries and show' do
+      create(:application, :approved, user: @dependent, application_date: 5.years.ago)
+
+      get dependents_admin_user_path(@guardian, format: :json)
+      summary = response.parsed_body.fetch('dependents').sole
+      assert_equal false, summary.fetch('eligible_now')
+      assert_equal true, summary.fetch('has_active_app')
+      assert_nil summary['eligible_date']
+
+      get admin_user_path(@guardian)
+      assert_select "#dependent_#{@dependent.id} a", text: 'Start Paper Application', count: 0
+      assert_select "#dependent_#{@dependent.id} span", text: 'Has active application'
+      assert_select "#dependent_#{@dependent.id} span", text: 'Eligible now', count: 0
+
+      get admin_user_path(@dependent)
+      assert_select 'span', text: 'Has active application'
+      assert_select 'span', text: 'Eligible now', count: 0
+    end
+
     test 'show page hides start paper application for dependent with blocking application' do
       create(:application, :in_progress, user: @dependent)
 

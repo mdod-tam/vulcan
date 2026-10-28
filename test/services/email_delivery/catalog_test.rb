@@ -34,12 +34,13 @@ module EmailDelivery
       assert_empty used - Catalog::CATEGORIES
     end
 
-    test 'compatibility views derive from the catalog' do
-      assert_equal Catalog.mailer_map, NotificationService::MAILER_MAP
-      assert_includes NotificationService::NOOP_DELIVERY_ACTIONS, 'w9_rejected'
-      assert_equal %w[id_proof_rejected income_proof_rejected proof_rejected residency_proof_rejected],
-                   NotificationService::ORPHAN_PROOF_REJECTION_DELIVERY_ACTIONS.sort
-      assert_equal %w[security_key_recovery_approved trainer_assigned trainer_reassigned], NotificationService::EMAIL_ONLY_ACTIONS.sort
+    test 'notification mapping belongs to the catalog' do
+      assert_predicate Catalog.notification_action('w9_rejected'), :audit_only?
+      assert_equal 'MedicalProviderMailer#requested', Catalog.notification_action('disability_certification_requested').mail_action
+      assert_equal :notifiable_and_notification, Catalog.notification_action('training_requested').adapter
+      assert_nil Catalog.notification_action('proof_rejected')
+      assert_nil Catalog.notification_action('disability_certification_rejected')
+      assert_nil Catalog.notification_action('some_unknown_action')
       assert_equal Catalog.notification_template_aliases, EmailTemplates::Audit::ACTION_TEMPLATE_ALIASES
     end
 

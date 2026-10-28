@@ -179,7 +179,7 @@ class RegistrationsController < ApplicationController
   end
 
   def support_email
-    Policy.get('support_email') || 'mat.program1@maryland.gov'
+    ProgramContact.support_email
   end
 
   def support_phone

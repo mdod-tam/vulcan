@@ -2,7 +2,7 @@
 
 module Applications
   # Secure-request issuers share the same per-recipient delivery contract.
-  # The hosts retain recipient resolution, request creation, token handling and workflow rules.
+  # Hosts retain domain validation, delivery copy, and workflow compensation.
   module SecureRequestDeliveryPolicy
     Delivery = Data.define(:secure_request_form, :raw_token, :context, :notification_id, :candidate, :proof_review) do
       def initialize(candidate: nil, proof_review: nil, **)
@@ -11,6 +11,66 @@ module Applications
     end
 
     private
+
+    def with_issuance_errors(owner)
+      yield
+    rescue ActiveRecord::RecordNotUnique, ActiveRecord::RecordInvalid => e
+      issuance_conflict(owner, e)
+    rescue SecureRequestIssuance::CooldownActive => e
+      public_recovery ? success(public_recovery_message) : failure(message(:cooldown_active, minutes: e.minutes))
+    end
+
+    def with_recipient_issuance_errors(&)
+      with_issuance_errors(application, &)
+    rescue ActiveRecord::RecordNotFound, SecureRequestIssuanceIntegrity::ParticipantSetUnstable => e
+      issuance_conflict(application, e)
+    rescue SecureRequestIssuance::Refused => e
+      failure(message(e.reason))
+    end
+
+    def issuance_conflict(owner, error)
+      Rails.logger.warn("#{self.class.name} request failed for #{owner.model_name.singular} #{owner.id}: #{error.class.name}")
+      failure(message(:request_conflict))
+    end
+
+    def public_recovery_message = message(:resent)
+
+    def message(key, user: actor, **)
+      I18n.t("#{self.class::MESSAGE_SCOPE}.#{key}", **, locale: secure_form_locale_for(user))
+    end
+
+    def prepare_requests
+      issuance.with_locked_context do |context|
+        @application = context.application
+        @actor = context.actor
+        @resend_of = context.resend_of
+        yield if block_given?
+
+        candidates = issuance.resolve_recipients!(recipient_ids: recipient_ids, channel_overrides: channel_overrides)
+        request_batch_id = SecureRandom.uuid
+        candidates.filter_map do |candidate|
+          if delivery_denied_for?(candidate)
+            denied_candidates << candidate
+            next
+          end
+
+          create_delivery(candidate, request_batch_id)
+        end
+      end
+    end
+
+    def deliver_sms(delivery)
+      form = delivery.secure_request_form
+      SmsService.send_message(
+        form.recipient_phone,
+        sms_message(secure_url_for(delivery.raw_token), form),
+        sensitive: true,
+        action: sms_action,
+        delivery_context: delivery_context_for(delivery),
+        context: { secure_request_form_id: form.id, application_id: application.id,
+                   recipient_id: form.recipient_id, recipient_channel: form.recipient_channel }
+      )
+    end
 
     def authorize_delivery
       decision, @email_context = delivery_authorization(:email)
@@ -158,8 +218,6 @@ module Applications
     end
 
     def delivery_denied_for?(candidate)
-      return false unless delivery_requested?
-
       decision, = authorization_for(candidate)
       decision.present?
     end
@@ -199,10 +257,6 @@ module Applications
       delivery.context.merge('request_id' => "secure-request-#{delivery.secure_request_form.model_name.singular}-#{delivery.secure_request_form.id}",
                              'notification_id' => delivery.notification_id,
                              'channel' => delivery_channel(delivery))
-    end
-
-    def notification_channel_for(request_form)
-      request_form.recipient_channel.to_sym
     end
 
     def suppress_delivery(delivery, reason)

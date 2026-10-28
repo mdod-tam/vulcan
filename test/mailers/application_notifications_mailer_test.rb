@@ -15,7 +15,7 @@ class ApplicationNotificationsMailerTest < ActionMailer::TestCase
     stub_url_helpers
     stub_shared_partial_helpers
     set_expected_subjects
-    set_application_and_reapply_dates
+    @application.update_column(:needs_review_since, 4.days.ago)
     clear_emails
   end
 
@@ -27,10 +27,8 @@ class ApplicationNotificationsMailerTest < ActionMailer::TestCase
                                         recipient_email: owner.email, delivery_owner: owner,
                                         delivery_source: 'managing_guardian')
     spanish_template = mock_template('Spanish delivery owner', 'Spanish message for %<user_first_name>s')
-    EmailTemplate.stubs(:find_by!).with(name: 'application_notifications_provider_info_requested',
-                                        format: :text, locale: 'es').returns(spanish_template)
-    EmailTemplate.stubs(:find_by!).with(name: 'application_notifications_provider_info_requested',
-                                        format: :text, locale: 'en').returns(@mock_requested_text)
+    EmailTemplate.stubs(:find_with_locale).with(name: 'application_notifications_provider_info_requested', format: :text, locale: 'es').returns(spanish_template)
+    EmailTemplate.stubs(:find_with_locale).with(name: 'application_notifications_provider_info_requested', format: :text, locale: 'en').returns(@mock_requested_text)
 
     mail = ApplicationNotificationsMailer.provider_info_requested(application, form, secure_url: 'https://example.test/secure').deliver_now
 
@@ -48,8 +46,7 @@ class ApplicationNotificationsMailerTest < ActionMailer::TestCase
                                           recipient_email: owner.email, delivery_source: 'managing_guardian')
       %w[es en].each do |locale|
         template = mock_template("#{locale} delivery", "#{locale} message %<proof_type_formatted>s")
-        EmailTemplate.stubs(:find_by!).with(name: "application_notifications_#{action}",
-                                            format: :text, locale: locale).returns(template)
+        EmailTemplate.stubs(:find_with_locale).with(name: "application_notifications_#{action}", format: :text, locale: locale).returns(template)
       end
       %w[es unsupported].each do |locale|
         owner.update!(locale: locale)
@@ -68,7 +65,7 @@ class ApplicationNotificationsMailerTest < ActionMailer::TestCase
   end
 
   test 'secure request letters render provider and both proof states in the delivery owner language' do
-    EmailTemplate.unstub(:find_by!)
+    EmailTemplate.unstub(:find_with_locale)
     %i[header_text footer_text].each { |helper| ApplicationNotificationsMailer.any_instance.unstub(helper) }
     %w[email_header_text email_footer_text].each do |template_name|
       EmailTemplate.where(name: template_name, format: :text).destroy_all
@@ -116,6 +113,7 @@ class ApplicationNotificationsMailerTest < ActionMailer::TestCase
         unless action == :provider_info_requested
           pdf_text = inflated_pdf_text(item.pdf_letter.download)
           assert_includes pdf_text, I18n.t('secure_proof_forms.proof_types.income', locale: locale)
+          assert_not_includes pdf_text, I18n.l(3.years.from_now.to_date, format: :long, locale: locale) if action == :proof_rejected
         end
         form.revoke!(actor: @admin, reason: :replacement_request)
       end
@@ -159,12 +157,45 @@ class ApplicationNotificationsMailerTest < ActionMailer::TestCase
     assert_not_includes body, I18n.t('application_notifications.registration_confirmation.no_active_vendors', locale: :en)
   end
 
+  %w[en es].each do |locale|
+    test "#{locale} rejection notices retain attempts and closure without a rejection-based waiting date" do
+      use_real_email_templates('application_notifications_proof_rejected', 'application_notifications_max_rejections_reached')
+      @user.update!(locale: locale)
+      reapply_date = 3.years.from_now.to_date
+      future_dates = [I18n.l(reapply_date, format: :long, locale: locale), reapply_date.strftime('%B %d, %Y')].uniq
+
+      [7, 6, 8].each do |rejections|
+        @application.update_column(:total_rejections, rejections)
+        mail = ApplicationNotificationsMailer.proof_rejected(@application, @proof_review).deliver_now
+        body = mail.body.decoded
+        expected = if rejections == 8
+                     I18n.t('application_notifications.proof_rejected.archived_message', locale: locale)
+                   else
+                     I18n.t('application_notifications.proof_rejected.remaining_attempts_message', count: 8 - rejections, locale: locale)
+                   end
+
+        assert_equal [@user.email], mail.to
+        assert_includes body, expected
+        future_dates.each { |date| assert_not_includes body, date }
+        assert_no_match(/%[<{]\w+[>}]s?/, body)
+      end
+
+      body = ApplicationNotificationsMailer.max_rejections_reached(@application).deliver_now.body.decoded
+      closure = locale == 'es' ? 'Su solicitud actual no puede avanzar' : 'Your current application cannot proceed'
+      future_guidance = locale == 'es' ? 'Si presenta una nueva solicitud' : 'If you submit a new application'
+      assert_includes body, closure
+      assert_includes body, future_guidance
+      future_dates.each { |date| assert_not_includes body, date }
+      assert_no_match(/%[<{]\w+[>}]s?/, body)
+    end
+  end
+
   private
 
   # The default mocks return canned bodies that omit the variables generated fragments fill, so render the seeded
   # templates themselves.
   def use_real_email_templates(*names)
-    EmailTemplate.unstub(:find_by!)
+    EmailTemplate.unstub(:find_with_locale)
     %i[header_text footer_text].each { |helper| ApplicationNotificationsMailer.any_instance.unstub(helper) }
     (%w[email_header_text email_footer_text] + names).each do |template_name|
       EmailTemplate.where(name: template_name, format: :text).destroy_all
@@ -187,11 +218,10 @@ class ApplicationNotificationsMailerTest < ActionMailer::TestCase
     @mock_received_text = mock_template('Mock Proof Received: %<proof_type_formatted>s',
                                         'Text Body: Received %<proof_type_formatted>s for %<user_first_name>s.')
     @mock_max_reached = mock_template('Mock Application Archived - ID 7',
-                                      '<p>HTML Body: Application 7 archived for John. ' \
-                                      'Reapply after May 15, 2028.</p>')
+                                      '<p>HTML Body: Application 7 archived for John.</p>')
     @mock_max_reached_text = mock_template('Mock Application Archived - ID 7',
                                            'Text Body: Application %<application_id>s archived for ' \
-                                           '%<user_first_name>s. Reapply after %<reapply_date_formatted>s.')
+                                           '%<user_first_name>s.')
     @mock_reminder = mock_template('Mock Reminder: %<stale_reviews_count>s Apps Need Review',
                                    '<p>HTML Body: Reminder for %<admin_full_name>s. ' \
                                    '%<stale_reviews_count>s apps need review. %<stale_reviews_html_table>s</p>')
@@ -233,18 +263,18 @@ class ApplicationNotificationsMailerTest < ActionMailer::TestCase
   end
 
   def setup_email_template_stubs
-    EmailTemplate.stubs(:find_by!).with(name: 'application_notifications_proof_approved', format: :text, locale: 'en').returns(@mock_approved_text)
-    EmailTemplate.stubs(:find_by!).with(name: 'application_notifications_proof_rejected', format: :text, locale: 'en').returns(@mock_rejected_text)
-    EmailTemplate.stubs(:find_by!).with(name: 'application_notifications_proof_requested', format: :text, locale: 'en').returns(@mock_requested_text)
-    EmailTemplate.stubs(:find_by!).with(name: 'application_notifications_proof_received', format: :text, locale: 'en').returns(@mock_received_text)
-    EmailTemplate.stubs(:find_by!).with(name: 'application_notifications_max_rejections_reached', format: :text, locale: 'en').returns(@mock_max_reached_text)
-    EmailTemplate.stubs(:find_by!).with(name: 'application_notifications_proof_needs_review_reminder', format: :text, locale: 'en').returns(@mock_reminder_text)
-    EmailTemplate.stubs(:find_by!).with(name: 'application_notifications_account_created', format: :text, locale: 'en').returns(@mock_account_created_text)
-    EmailTemplate.stubs(:find_by!).with(name: 'application_notifications_income_threshold_exceeded', format: :text, locale: 'en').returns(@mock_income_exceeded_text)
-    EmailTemplate.stubs(:find_by!).with(name: 'application_notifications_registration_confirmation', format: :text, locale: 'en').returns(@mock_registration_text)
-    EmailTemplate.stubs(:find_by!).with(name: 'application_notifications_training_requested', format: :text, locale: 'en').returns(@mock_training_requested_text)
-    EmailTemplate.stubs(:find_by!).with(name: 'application_notifications_security_key_recovery_approved', format: :text, locale: 'en').returns(@mock_security_key_recovery_text)
-    EmailTemplate.stubs(:find_by!).with(name: 'application_notifications_application_submitted', format: :text, locale: 'en').returns(@mock_application_submitted_text)
+    EmailTemplate.stubs(:find_with_locale).with(name: 'application_notifications_proof_approved', format: :text, locale: 'en').returns(@mock_approved_text)
+    EmailTemplate.stubs(:find_with_locale).with(name: 'application_notifications_proof_rejected', format: :text, locale: 'en').returns(@mock_rejected_text)
+    EmailTemplate.stubs(:find_with_locale).with(name: 'application_notifications_proof_requested', format: :text, locale: 'en').returns(@mock_requested_text)
+    EmailTemplate.stubs(:find_with_locale).with(name: 'application_notifications_proof_received', format: :text, locale: 'en').returns(@mock_received_text)
+    EmailTemplate.stubs(:find_with_locale).with(name: 'application_notifications_max_rejections_reached', format: :text, locale: 'en').returns(@mock_max_reached_text)
+    EmailTemplate.stubs(:find_with_locale).with(name: 'application_notifications_proof_needs_review_reminder', format: :text, locale: 'en').returns(@mock_reminder_text)
+    EmailTemplate.stubs(:find_with_locale).with(name: 'application_notifications_account_created', format: :text, locale: 'en').returns(@mock_account_created_text)
+    EmailTemplate.stubs(:find_with_locale).with(name: 'application_notifications_income_threshold_exceeded', format: :text, locale: 'en').returns(@mock_income_exceeded_text)
+    EmailTemplate.stubs(:find_with_locale).with(name: 'application_notifications_registration_confirmation', format: :text, locale: 'en').returns(@mock_registration_text)
+    EmailTemplate.stubs(:find_with_locale).with(name: 'application_notifications_training_requested', format: :text, locale: 'en').returns(@mock_training_requested_text)
+    EmailTemplate.stubs(:find_with_locale).with(name: 'application_notifications_security_key_recovery_approved', format: :text, locale: 'en').returns(@mock_security_key_recovery_text)
+    EmailTemplate.stubs(:find_with_locale).with(name: 'application_notifications_application_submitted', format: :text, locale: 'en').returns(@mock_application_submitted_text)
   end
 
   def create_test_data
@@ -284,11 +314,6 @@ class ApplicationNotificationsMailerTest < ActionMailer::TestCase
       'income_threshold_exceeded' => 'Mock Income Threshold Exceeded for John',
       'registration_confirmation' => 'Mock Welcome Jane!'
     }
-  end
-
-  def set_application_and_reapply_dates
-    @application.update_column(:needs_review_since, 4.days.ago)
-    @reapply_date = 3.years.from_now.to_date
   end
 
   def clear_emails
@@ -362,7 +387,7 @@ class ApplicationNotificationsMailerTest < ActionMailer::TestCase
   end
 
   test 'application_submitted queues letter from a real Liquid text template' do
-    EmailTemplate.unstub(:find_by!)
+    EmailTemplate.unstub(:find_with_locale)
     @user.update!(communication_preference: 'letter')
     create_real_text_email_template(
       name: 'application_notifications_application_submitted',
@@ -398,11 +423,7 @@ class ApplicationNotificationsMailerTest < ActionMailer::TestCase
 
     spanish_template = mock_template('Asunto de prueba en espanol',
                                      'Texto de prueba para %<user_first_name>s')
-    EmailTemplate.stubs(:find_by!).with(
-      name: 'application_notifications_proof_approved',
-      format: :text,
-      locale: 'es'
-    ).returns(spanish_template)
+    EmailTemplate.stubs(:find_with_locale).with(name: 'application_notifications_proof_approved', format: :text, locale: 'es').returns(spanish_template)
 
     email = ApplicationNotificationsMailer.proof_approved(application, proof_review)
     email.deliver_now
@@ -428,11 +449,7 @@ class ApplicationNotificationsMailerTest < ActionMailer::TestCase
 
     english_template = mock_template('Dependent locale subject',
                                      'Dependent locale body for %<user_first_name>s')
-    EmailTemplate.stubs(:find_by!).with(
-      name: 'application_notifications_proof_approved',
-      format: :text,
-      locale: 'en'
-    ).returns(english_template)
+    EmailTemplate.stubs(:find_with_locale).with(name: 'application_notifications_proof_approved', format: :text, locale: 'en').returns(english_template)
 
     email = ApplicationNotificationsMailer.proof_approved(application, proof_review)
     email.deliver_now
@@ -446,11 +463,7 @@ class ApplicationNotificationsMailerTest < ActionMailer::TestCase
 
     spanish_template = mock_template('Documento Aprobado: Ingreso',
                                      'Texto: Ingreso aprobado para %<user_first_name>s.')
-    EmailTemplate.stubs(:find_by!).with(
-      name: 'application_notifications_proof_approved',
-      format: :text,
-      locale: 'es'
-    ).returns(spanish_template)
+    EmailTemplate.stubs(:find_with_locale).with(name: 'application_notifications_proof_approved', format: :text, locale: 'es').returns(spanish_template)
 
     pdf_service_mock = mock('pdf_service')
     pdf_service_mock.expects(:queue_for_printing).once
@@ -571,11 +584,7 @@ class ApplicationNotificationsMailerTest < ActionMailer::TestCase
                                      'Reason: %<rejection_reason>s ' \
                                      '%<remaining_attempts_message_text>s ' \
                                      '%<default_options_text>s')
-    EmailTemplate.stubs(:find_by!).with(
-      name: 'application_notifications_proof_rejected',
-      format: :text,
-      locale: 'es'
-    ).returns(spanish_template)
+    EmailTemplate.stubs(:find_with_locale).with(name: 'application_notifications_proof_rejected', format: :text, locale: 'es').returns(spanish_template)
 
     email = ApplicationNotificationsMailer.proof_rejected(application, proof_review)
     email.deliver_now
@@ -585,10 +594,9 @@ class ApplicationNotificationsMailerTest < ActionMailer::TestCase
     assert_includes email.body.to_s, I18n.t(
       'application_notifications.proof_rejected.remaining_attempts_message',
       count: 6,
-      locale: 'es',
-      reapply_date: I18n.l(3.years.from_now.to_date, format: :long, locale: 'es')
+      locale: 'es'
     )
-    assert_includes email.body.to_s, I18n.l(3.years.from_now.to_date, format: :long, locale: 'es')
+    assert_not_includes email.body.to_s, I18n.l(3.years.from_now.to_date, format: :long, locale: 'es')
     assert_includes email.body.to_s, 'CÓMO ENVIAR UN DOCUMENTO CORREGIDO'
   end
 
@@ -624,7 +632,7 @@ class ApplicationNotificationsMailerTest < ActionMailer::TestCase
     assert_not email.multipart?
 
     assert_includes email.body.to_s, "archived for #{@user.first_name}"
-    assert_includes email.body.to_s, "Reapply after #{@reapply_date.strftime('%B %d, %Y')}"
+    assert_not_includes email.body.to_s, 'Reapply after'
   end
 
   test 'max_rejections_reached generates letter when preference is letter' do
@@ -754,11 +762,7 @@ class ApplicationNotificationsMailerTest < ActionMailer::TestCase
     spanish_template = mock_template('Recuperacion de llave de seguridad aprobada',
                                      "Recuperacion aprobada para %<user_first_name>s.\n\n" \
                                      "Iniciar sesion:\n%<sign_in_url>s")
-    EmailTemplate.stubs(:find_by!).with(
-      name: 'application_notifications_security_key_recovery_approved',
-      format: :text,
-      locale: 'es'
-    ).returns(spanish_template)
+    EmailTemplate.stubs(:find_with_locale).with(name: 'application_notifications_security_key_recovery_approved', format: :text, locale: 'es').returns(spanish_template)
     user = create(:admin, first_name: 'Staff', locale: 'es')
     recovery_request = create(:recovery_request, user: user, status: 'approved')
     notification = Notification.new(recipient: user, notifiable: recovery_request, action: 'security_key_recovery_approved')
@@ -842,8 +846,7 @@ class ApplicationNotificationsMailerTest < ActionMailer::TestCase
                                               "threshold for household size #{@notification_params[:household_size]}. " \
                                               "#{@notification_params[:additional_notes]}")
 
-    EmailTemplate.stubs(:find_by!).with(name: 'application_notifications_income_threshold_exceeded',
-                                        format: :text, locale: 'en').returns(mock_income_exceeded_text)
+    EmailTemplate.stubs(:find_with_locale).with(name: 'application_notifications_income_threshold_exceeded', format: :text, locale: 'en').returns(mock_income_exceeded_text)
 
     ActionMailer::Base.default from: 'no_reply@mdmat.org'
 
@@ -909,8 +912,7 @@ class ApplicationNotificationsMailerTest < ActionMailer::TestCase
     create(:vendor, :approved, business_name: 'Alpha Mobility')
     create(:vendor, business_name: 'Pending Shop')
     template = mock_template('Welcome', "Authorized vendors:\n%<active_vendors_text_list>s")
-    EmailTemplate.stubs(:find_by!).with(name: 'application_notifications_registration_confirmation',
-                                        format: :text, locale: 'en').returns(template)
+    EmailTemplate.stubs(:find_with_locale).with(name: 'application_notifications_registration_confirmation', format: :text, locale: 'en').returns(template)
 
     email = ApplicationNotificationsMailer.registration_confirmation(user)
     email.deliver_now
@@ -948,52 +950,37 @@ class ApplicationNotificationsMailerTest < ActionMailer::TestCase
     end
   end
 
-  test 'with_mailer_error_handling suppresses re-raise outside test when configured' do
-    mailer = ApplicationNotificationsMailer.new
-    production_env = ActiveSupport::StringInquirer.new('production')
-
-    Rails.stubs(:env).returns(production_env)
-
-    result = mailer.send(:with_mailer_error_handling, 'test-context', raise_in_test_only: true) do
-      raise StandardError, 'simulated failure'
-    end
-
-    assert_nil result
+  test 'max rejection rendering failure is logged safely without sending or raising' do
+    assert_handled_action_failure(:max_rejections_reached, @application)
   end
 
-  test 'with_mailer_error_handling omits exception text from logs' do
-    mailer = ApplicationNotificationsMailer.new
-    production_env = ActiveSupport::StringInquirer.new('production')
-    original_logger = Rails.logger
-    log_output = StringIO.new
-    raw_url = 'https://example.test/secure_provider_info_form?token=secret-token'
-
-    Rails.stubs(:env).returns(production_env)
-    Rails.logger = ActiveSupport::Logger.new(log_output)
-
-    mailer.send(:with_mailer_error_handling, 'provider_info_requested', raise_in_test_only: true) do
-      raise StandardError, "render failed for #{raw_url}"
-    end
-
-    log_message = log_output.string
-    assert_includes log_message, 'StandardError'
-    assert_not_includes log_message, 'render failed for'
-    assert_not_includes log_message, raw_url
-    assert_not_includes log_message, 'secret-token'
-  ensure
-    Rails.logger = original_logger
+  test 'review reminder rendering failure is logged safely without sending or raising' do
+    @application.stubs(:needs_review_since).returns(4.days.ago)
+    assert_handled_action_failure(:proof_needs_review_reminder, @admin, [@application])
   end
 
-  test 'with_mailer_error_handling still re-raises in test when configured' do
-    mailer = ApplicationNotificationsMailer.new
-    test_env = ActiveSupport::StringInquirer.new('test')
+  test 'other public mailer actions still raise rendering failures without logging sensitive text' do
+    error = StandardError.new('private render https://example.test/request?token=secret-token')
+    EmailTemplate.stubs(:find_with_locale).raises(error)
+    messages = []
 
-    Rails.stubs(:env).returns(test_env)
-
-    assert_raises(StandardError) do
-      mailer.send(:with_mailer_error_handling, 'test-context', raise_in_test_only: true) do
-        raise StandardError, 'simulated failure'
+    Rails.logger.stub(:error, ->(message) { messages << message }) do
+      assert_no_emails do
+        assert_raises(StandardError) { ApplicationNotificationsMailer.application_submitted(@application).deliver_now }
       end
+    end
+    assert_includes messages.join, 'StandardError'
+    assert_not_includes messages.join, 'private render'
+    assert_not_includes messages.join, 'secret-token'
+  end
+
+  test 'review reminder sends nothing when no reviews are stale' do
+    @application.stubs(:needs_review_since).returns(1.day.ago)
+    EmailTemplate.expects(:find_with_locale).never
+
+    assert_no_emails do
+      ApplicationNotificationsMailer.proof_needs_review_reminder(@admin, [@application]).deliver_now
+      ApplicationNotificationsMailer.proof_needs_review_reminder(@admin, []).deliver_now
     end
   end
 
@@ -1001,9 +988,7 @@ class ApplicationNotificationsMailerTest < ActionMailer::TestCase
     @user.update!(communication_preference: 'letter')
     owner = create(:constituent, locale: 'es')
     proof_template = mock_template('Solicitud de documento', 'Texto de solicitud')
-    EmailTemplate.expects(:find_by!).with(
-      name: 'application_notifications_proof_requested', format: :text, locale: 'es'
-    ).returns(proof_template)
+    EmailTemplate.expects(:find_with_locale).with(name: 'application_notifications_proof_requested', format: :text, locale: 'es').returns(proof_template)
     snapshot_email = "snapshot.#{SecureRandom.hex(3)}@example.com"
     form = create(:secure_request_form,
                   application: @application,
@@ -1118,9 +1103,7 @@ class ApplicationNotificationsMailerTest < ActionMailer::TestCase
   test 'provider_info_requested letter prints to the resolver-selected address owner' do
     provider_info_template = mock_template('Mock Provider Info Requested',
                                            'Text Body: provider info requested for %<user_first_name>s.')
-    EmailTemplate.stubs(:find_by!).with(
-      name: 'application_notifications_provider_info_requested', format: :text, locale: 'en'
-    ).returns(provider_info_template)
+    EmailTemplate.stubs(:find_with_locale).with(name: 'application_notifications_provider_info_requested', format: :text, locale: 'en').returns(provider_info_template)
     guardian = create(:constituent)
     dependent = create(:constituent, communication_preference: 'email')
     form = create(:secure_request_form,
@@ -1152,9 +1135,7 @@ class ApplicationNotificationsMailerTest < ActionMailer::TestCase
     provider_info_template = mock_template('Mock Provider Info Requested',
                                            'Text Body: provider info requested for %<user_first_name>s.')
     owner = create(:constituent, locale: 'es')
-    EmailTemplate.stubs(:find_by!).with(
-      name: 'application_notifications_provider_info_requested', format: :text, locale: 'es'
-    ).returns(provider_info_template)
+    EmailTemplate.stubs(:find_with_locale).with(name: 'application_notifications_provider_info_requested', format: :text, locale: 'es').returns(provider_info_template)
     snapshot_email = "snapshot.#{SecureRandom.hex(3)}@example.com"
     form = create(:secure_request_form,
                   application: @application,
@@ -1181,9 +1162,7 @@ class ApplicationNotificationsMailerTest < ActionMailer::TestCase
   test 'provider_info_requested letter builds variables in the address owner locale not the recipient locale' do
     provider_info_template = mock_template('Mock Provider Info Requested',
                                            'Text Body: %<provider_info_instructions>s')
-    EmailTemplate.stubs(:find_by!).with(
-      name: 'application_notifications_provider_info_requested', format: :text, locale: 'en'
-    ).returns(provider_info_template)
+    EmailTemplate.stubs(:find_with_locale).with(name: 'application_notifications_provider_info_requested', format: :text, locale: 'en').returns(provider_info_template)
     guardian = create(:constituent, locale: 'en')
     dependent = create(:constituent, locale: 'es', communication_preference: 'letter')
     form = create(:secure_request_form,
@@ -1215,9 +1194,7 @@ class ApplicationNotificationsMailerTest < ActionMailer::TestCase
   test 'provider_info_requested letter uses the spanish address owner locale for a spanish guardian' do
     provider_info_template_es = mock_template('Mock Solicitud de Información',
                                               'Texto: %<provider_info_instructions>s')
-    EmailTemplate.stubs(:find_by!).with(
-      name: 'application_notifications_provider_info_requested', format: :text, locale: 'es'
-    ).returns(provider_info_template_es)
+    EmailTemplate.stubs(:find_with_locale).with(name: 'application_notifications_provider_info_requested', format: :text, locale: 'es').returns(provider_info_template_es)
     guardian = create(:constituent, locale: 'es')
     dependent = create(:constituent, locale: 'en', communication_preference: 'letter')
     form = create(:secure_request_form,
@@ -1279,7 +1256,7 @@ class ApplicationNotificationsMailerTest < ActionMailer::TestCase
 
   test 'provider_info_requested letter PDF output is entirely in the spanish address owner locale' do
     # Template markers and translated instructions independently verify the locale through the real PDF service.
-    EmailTemplate.unstub(:find_by!)
+    EmailTemplate.unstub(:find_with_locale)
     EmailTemplate.where(name: 'application_notifications_provider_info_requested', format: :text).destroy_all
     %w[en es].each do |locale|
       create(:email_template,
@@ -1323,7 +1300,7 @@ class ApplicationNotificationsMailerTest < ActionMailer::TestCase
 
   test 'spanish provider info letter renders a reviewable PDF artifact' do
     # Text assertions cannot verify layout or glyphs. This PDF supports visual review.
-    EmailTemplate.unstub(:find_by!)
+    EmailTemplate.unstub(:find_with_locale)
     EmailTemplate.where(name: 'application_notifications_provider_info_requested', format: :text).destroy_all
     %w[en es].each do |locale|
       create(:email_template,
@@ -1382,5 +1359,18 @@ class ApplicationNotificationsMailerTest < ActionMailer::TestCase
       stream.dup
     end.join
     content.scan(/<([0-9a-fA-F]+)>/).flatten.map { |hex| [hex].pack('H*') }.join.force_encoding('BINARY')
+  end
+
+  def assert_handled_action_failure(action, *)
+    error = StandardError.new('private render https://example.test/request?token=secret-token')
+    EmailTemplate.stubs(:find_with_locale).raises(error)
+    messages = []
+
+    Rails.logger.stub(:error, ->(message) { messages << message }) do
+      assert_no_emails { ApplicationNotificationsMailer.public_send(action, *).deliver_now }
+    end
+    assert_includes messages.join, 'StandardError'
+    assert_not_includes messages.join, 'private render'
+    assert_not_includes messages.join, 'secret-token'
   end
 end

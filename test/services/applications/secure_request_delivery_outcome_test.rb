@@ -90,6 +90,21 @@ class SecureRequestDeliveryOutcomeTest < ActiveSupport::TestCase
       Notification.skip_callback(:create, :before, refuse_tracking) if refuse_tracking
     end
 
+    test "#{service_class} keeps a delivered link active when handoff tracking fails" do
+      application = create(:application, :in_progress)
+      delivery = stub(deliver_now: true)
+      ApplicationNotificationsMailer.stubs(:proof_requested).returns(delivery)
+      ApplicationNotificationsMailer.stubs(:provider_info_requested).returns(delivery)
+      Notification.any_instance.stubs(:record_delivery_handoff!).raises(StandardError, 'tracking unavailable')
+      args = { application: application, actor: @actor }
+      args[:proof_type] = :id if service_class == Applications::RequestProofResubmission
+
+      result = service_class.new(**args).call
+
+      assert_predicate result, :success?
+      assert_predicate result.data.fetch(:secure_request_forms).sole.reload, :active?
+    end
+
     test "#{service_class} revocation survives a subsequent notification write failure" do
       application = create(:application, :in_progress)
       delivery = mock('delivery')
@@ -173,6 +188,56 @@ class SecureRequestDeliveryOutcomeTest < ActiveSupport::TestCase
   end
 
   [Applications::RequestCertificationUpload, Vendors::RequestW9Resubmission].each do |service_class|
+    [1, 2].each do |collisions|
+      test "#{service_class} #{collisions == 1 ? 'retries a digest collision' : 'rolls back exhausted digest retries'}" do
+        service, owner, form_key, = single_request_service(service_class)
+        original = if service_class == Applications::RequestCertificationUpload
+                     create(:medical_provider_secure_request_form, application: owner, requested_by: @actor, sent_at: 2.hours.ago)
+                   else
+                     create(:vendor_secure_request_form, vendor: owner, requested_by: @actor, sent_at: 2.hours.ago)
+                   end
+        form_class = original.class
+        remaining = collisions
+        collide = lambda do |form|
+          if remaining.positive?
+            remaining -= 1
+            form.public_token_digest = original.public_token_digest
+          end
+        end
+        form_class.set_callback(:create, :before, collide)
+
+        if collisions == 1
+          result = assert_difference('Notification.count', 1) do
+            assert_difference(-> { form_class.count }, 1) { service.call }
+          end
+          assert_predicate result, :success?
+          replacement = result.data.fetch(form_key).reload
+          assert_predicate replacement, :active?
+          assert_predicate original.reload, :revoked?
+          assert_not_equal original.public_token_digest, replacement.public_token_digest
+        else
+          result = assert_no_difference [-> { form_class.count }, 'Notification.count', 'Event.count', 'ApplicationStatusChange.count'] do
+            service.call
+          end
+          assert_predicate result, :failure?
+          assert_predicate original.reload, :active?
+          assert_predicate owner.reload, :disability_certification_status_not_requested? if service_class == Applications::RequestCertificationUpload
+        end
+      ensure
+        form_class&.skip_callback(:create, :before, collide) if collide
+      end
+    end
+
+    test "#{service_class} keeps a delivered link active when handoff tracking fails" do
+      service, _owner, form_key, = single_request_service(service_class)
+      Notification.any_instance.stubs(:record_delivery_handoff!).raises(StandardError, 'tracking unavailable')
+
+      result = service.call
+
+      assert_predicate result, :success?
+      assert_predicate result.data.fetch(form_key).reload, :active?
+    end
+
     test "#{service_class} rolls back its request when required tracking cannot be created" do
       service, owner, = single_request_service(service_class)
       NotificationService.stubs(:create_and_deliver!).returns(nil)

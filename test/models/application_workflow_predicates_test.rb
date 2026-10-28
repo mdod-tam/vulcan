@@ -475,6 +475,21 @@ class ApplicationWorkflowPredicatesTest < ActiveSupport::TestCase
     assert_equal Date.new(2026, 1, 1) + waiting.years, app.service_window_end_date
   end
 
+  test 'service windows keep their record date, missing-date behavior and exact active boundary' do
+    travel_to Time.zone.local(2026, 10, 27, 12) do
+      application = build(:application, :approved, application_date: Date.current - Policy.waiting_period_years.years)
+      assert_equal Date.current, application.service_window_end_date
+      assert_not application.service_window_active?
+
+      application.application_date += 1.day
+      assert application.service_window_active?
+
+      application.application_date = nil
+      assert_nil application.service_window_end_date
+      assert_not application.service_window_active?
+    end
+  end
+
   test 'service_window_active? reflects service_window_end_date vs today' do
     app = create(:application, :completed)
     app.update_columns(application_date: 10.years.ago)

@@ -20,7 +20,7 @@ module EmailDelivery
       notification = Notification.new(recipient: dependent, action: 'training_scheduled')
 
       assert ApplicationMailer.new.send(:prefers_letter_delivery?, dependent)
-      assert NotificationService.new.send(:letter_preference_route?, notification)
+      assert NotificationDispatch.new(notification, channel: :email).send(:letter_preference_route?, notification)
     end
   end
 end

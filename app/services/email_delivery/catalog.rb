@@ -101,16 +101,11 @@ module EmailDelivery
       [key, MailAction.new(key: key, category: category.to_s, routing: routing, template: template, owner: owner, essential: ESSENTIAL_ACTIONS[key])]
     end.freeze
 
-    PROOF_REJECTION = ['ApplicationNotificationsMailer#proof_rejected', :proof_review, :preference, PROOF_REVIEW_OWNER].freeze
     PROOF_ATTACHED = ['ApplicationNotificationsMailer#proof_received', :proof_attached, :preference].freeze
     AUDIT_ONLY = [nil, nil, nil].freeze
 
     # [mail_action, adapter, routing, owner]
     NOTIFICATION_ACTIONS = {
-      'proof_rejected' => PROOF_REJECTION,
-      'id_proof_rejected' => PROOF_REJECTION,
-      'income_proof_rejected' => PROOF_REJECTION,
-      'residency_proof_rejected' => PROOF_REJECTION,
       'account_created' => ['ApplicationNotificationsMailer#account_created', :recipient, :preference],
       'id_proof_attached' => PROOF_ATTACHED,
       'income_proof_attached' => PROOF_ATTACHED,
@@ -189,26 +184,6 @@ module EmailDelivery
       MAIL_ACTIONS.values.each_with_object({}) do |entry, categories|
         categories[entry.template] ||= entry.category if entry.template.present?
       end
-    end
-
-    # Views derived from the tables above for NotificationService and the template audit.
-    def mailer_map
-      NOTIFICATION_ACTIONS.values.reject(&:audit_only?).to_h do |entry|
-        mailer, method = entry.mail_action.split('#')
-        [entry.action, [mailer.constantize, method.to_sym]]
-      end
-    end
-
-    def audit_only_actions
-      NOTIFICATION_ACTIONS.values.select(&:audit_only?).map(&:action)
-    end
-
-    def notification_actions_with_routing(routing)
-      NOTIFICATION_ACTIONS.values.select { |entry| entry.routing == routing }.map(&:action)
-    end
-
-    def notification_actions_owned_by(owner)
-      NOTIFICATION_ACTIONS.values.select { |entry| entry.owner == owner }.map(&:action)
     end
 
     def notification_template_aliases

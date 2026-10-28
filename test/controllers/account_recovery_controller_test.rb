@@ -282,10 +282,9 @@ class AccountRecoveryControllerTest < ActionDispatch::IntegrationTest
   end
 
   test 'does not leave pending recovery request when admin notification raises' do
-    NotificationService::NotificationBuilder.any_instance
-                                            .expects(:create_and_deliver!)
-                                            .once
-                                            .raises(StandardError.new('notification failed'))
+    NotificationService.expects(:create_and_deliver!)
+                       .once
+                       .raises(StandardError.new('notification failed'))
 
     assert_no_difference('RecoveryRequest.count') do
       post request_security_key_reset_path, params: {
@@ -299,10 +298,9 @@ class AccountRecoveryControllerTest < ActionDispatch::IntegrationTest
   end
 
   test 'does not leave pending recovery request when admin notification returns nil' do
-    NotificationService::NotificationBuilder.any_instance
-                                            .expects(:create_and_deliver!)
-                                            .once
-                                            .returns(nil)
+    NotificationService.expects(:create_and_deliver!)
+                       .once
+                       .returns(nil)
 
     assert_no_difference('RecoveryRequest.count') do
       post request_security_key_reset_path, params: {

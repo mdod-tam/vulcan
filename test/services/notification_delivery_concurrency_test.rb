@@ -58,8 +58,8 @@ class NotificationDeliveryConcurrencyTest < ActiveSupport::TestCase
   private
 
   def persist_route(notification)
-    NotificationService.new.send(:persist_delivery_routing_metadata, notification,
-                                 actual_delivery_channel: 'email', delivery_route_reason: 'requested_channel')
+    EmailDelivery::NotificationDispatch.new(notification, channel: :email).send(:persist_delivery_routing_metadata, notification,
+                                                                                actual_delivery_channel: 'email', delivery_route_reason: 'requested_channel')
   end
 
   # Pause at the actual metadata read, with or without the implementation's row lock.

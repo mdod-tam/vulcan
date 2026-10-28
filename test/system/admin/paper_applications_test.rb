@@ -1,11 +1,13 @@
 # frozen_string_literal: true
 
 require 'application_system_test_case'
+require Rails.root.join('test/support/system_test_evidence')
 require_relative 'paper_applications_test_helper'
 
 module Admin
   class PaperApplicationsTest < ApplicationSystemTestCase
     include PaperApplicationsTestHelper
+    include SystemTestEvidence
 
     setup do
       @admin = users(:admin_david)
@@ -725,16 +727,9 @@ module Admin
       assert_equal 'approved', application.disability_certification_status.to_s, 'Disability certification should be approved'
     end
 
-    # The search refuses an applicant still inside the waiting period; the server-side rule is covered
-    # by Applications::PaperApplicationEligibilityTest.
-    test 'an applicant inside the waiting period is shown as ineligible and cannot be selected' do
-      original_skip_flag = Application.skip_wait_period_validation
-      Application.skip_wait_period_validation = false
-      Policy.find_or_create_by(key: 'waiting_period_years').update(value: 3)
-      constituent = FactoryBot.create(:constituent, first_name: 'Waiting', last_name: 'Period')
-      # Archived applications do not block another application, but they still count toward the waiting period.
-      archived = FactoryBot.create(:application, user: constituent, status: :archived, application_date: 2.years.ago)
-      applied_on = archived.reload.application_date
+    test 'approved admission remains ineligible in the adult picker after its waiting duration' do
+      constituent = create(:constituent, first_name: 'Approved', last_name: 'Admission')
+      create(:application, :approved, user: constituent, application_date: 5.years.ago)
 
       safe_visit new_admin_paper_application_path
       fill_in 'adult_search_q', with: constituent.full_name
@@ -742,12 +737,28 @@ module Admin
       within '#adult_search_results' do
         result = find('li[aria-disabled="true"]', text: constituent.full_name, wait: 10)
         assert_equal 'Ineligible', result.find('span', text: 'Ineligible').text
-        assert_text "Applied #{applied_on.strftime('%b %Y')} — eligible after #{(applied_on + 3.years).to_date.strftime('%b %d, %Y')}"
+        assert_text 'Has active application'
         result.click
       end
       assert_no_selector '[data-adult-picker-target="selectedPane"]', text: 'Applicant Selected'
-    ensure
-      Application.skip_wait_period_validation = original_skip_flag
+      take_evidence_screenshot('checkpoint2-approved-adult-blocked', full: true, html: true)
+    end
+
+    test 'recent rejection permits adult admission and selecting its ordinary record' do
+      constituent = create(:constituent, first_name: 'Rejected', last_name: 'Admission')
+      create(:application, :rejected, user: constituent, application_date: 1.day.ago)
+
+      safe_visit new_admin_paper_application_path
+      fill_in 'adult_search_q', with: constituent.full_name
+
+      within '#adult_search_results' do
+        result = find('li[data-user-eligible="true"]', text: constituent.full_name, wait: 10)
+        assert_equal 'Eligible', result.find('span', text: 'Eligible').text
+        result.click
+      end
+      assert_selector '[data-adult-picker-target="selectedPane"]', text: constituent.full_name, wait: 10
+      assert_field 'constituent[first_name]', with: constituent.first_name
+      take_evidence_screenshot('checkpoint2-rejected-adult-selected', full: true, html: true)
     end
 
     test 'form validation prevents submission without required proof selections' do

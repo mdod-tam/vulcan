@@ -36,9 +36,7 @@ module Vendors
           end
 
           attach_w9!
-          vendor_secure_request_form.mark_submitted!
-          log_submission
-          result = success(message(:submitted))
+          result = complete_submission { log_submission }
         end
       end
 

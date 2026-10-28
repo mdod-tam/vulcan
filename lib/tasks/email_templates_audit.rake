@@ -1,7 +1,7 @@
 # frozen_string_literal: true
 
 namespace :email_templates do
-  desc 'Read-only audit: seed + MAILER_MAP expected keys vs DB'
+  desc 'Read-only audit: seed + catalog expected keys vs DB'
   task audit: :environment do
     report = EmailTemplates::Audit.run
 

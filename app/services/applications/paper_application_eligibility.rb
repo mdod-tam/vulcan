@@ -1,7 +1,7 @@
 # frozen_string_literal: true
 
 module Applications
-  # One paper-domain answer to whether an existing constituent may receive a new application.
+  # One admission decision for paper intake and portal writers.
   # PaperIdentityReview uses it to decide which dependent matches may be selected; the durable
   # writer asks again after locking and requalifying the selected constituent. The preview is
   # advisory and the writer remains authoritative, but both apply the same blocking-application
@@ -9,9 +9,10 @@ module Applications
   class PaperApplicationEligibility
     SUBJECT_LABELS = { constituent: 'constituent', dependent: 'dependent' }.freeze
 
-    # rubocop:disable Style/RedundantStructKeywordInit -- keyword-only prevents reason/date swaps.
-    Result = Struct.new(:reason, :eligible_after, keyword_init: true) do
+    Result = Struct.new(:reason, :waiting_period_ends_at, keyword_init: true) do
       def eligible? = reason.nil?
+      def eligible_after = (waiting_period_ends_at if reason == :waiting_period)
+      def waiting_period_active? = waiting_period_ends_at.present? && waiting_period_ends_at > Time.current
 
       def refusal_message(subject:)
         label = SUBJECT_LABELS.fetch(subject.to_sym)
@@ -24,27 +25,27 @@ module Applications
         end
       end
     end
-    # rubocop:enable Style/RedundantStructKeywordInit
 
-    def self.call(user)
-      new(user).call
+    def self.call(user, applications: user.applications, excluding: nil, skip_wait_period: false, waiting_period_years: Policy.waiting_period_years)
+      new(applications, excluding: excluding, skip_wait_period: skip_wait_period, waiting_period_years: waiting_period_years).call
     end
 
-    def initialize(user)
-      @user = user
+    # A supplied inventory is authoritative, including when its records are locked by a portal writer.
+    def initialize(applications, excluding:, skip_wait_period:, waiting_period_years:)
+      @applications = Array(applications).select(&:persisted?).reject { |application| excluding && application.id == excluding.id }
+      @skip_wait_period = skip_wait_period
+      @waiting_period_years = waiting_period_years
     end
 
     def call
-      return Result.new(reason: :blocking_application) if @user.applications.blocking_new_submission.exists?
-
-      last_application = @user.applications.order(application_date: :desc).first
-      return Result.new if last_application.blank?
-
-      waiting_period = Policy.get('waiting_period_years') || 3
-      eligible_after = last_application.application_date + waiting_period.years
-      return Result.new if eligible_after <= Time.current
-
-      Result.new(reason: :waiting_period, eligible_after: eligible_after)
+      approved_date = @applications.select(&:status_approved?).filter_map(&:application_date).max
+      result = Result.new(waiting_period_ends_at: approved_date && (approved_date + @waiting_period_years.years))
+      result.reason = if @applications.any?(&:blocking_new_submission?)
+                        :blocking_application
+                      elsif !@skip_wait_period && result.waiting_period_active?
+                        :waiting_period
+                      end
+      result
     end
   end
 end

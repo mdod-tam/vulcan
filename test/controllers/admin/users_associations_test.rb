@@ -80,9 +80,34 @@ module Admin
       create_list(:evaluator, 4, last_name: 'Family')
 
       assert_equal(one_index, query_count { get admin_users_path(q: 'Family') })
-      assert_operator css_select('tbody tr').size, :>=, 20
+      assert_select 'tbody tr', 20
       assert_equal(one_search, query_count { get search_admin_users_path(q: 'Family', role: 'guardian') })
-      assert_operator css_select('li[data-user-id]').size, :>=, 5
+      assert_select 'li[data-user-id]', 10
+    end
+
+    test 'constituent search preloads eligibility, products, contacts and grants at the selected limit' do
+      first = build_search_applicant('BoundedSingle')
+      get search_admin_users_path(q: first.first_name, role: 'constituent')
+      one = query_count { get search_admin_users_path(q: first.first_name, role: 'constituent') }
+      assert_select 'li[data-user-id]', 1
+      9.times { |index| build_search_applicant("Bounded#{index}") }
+
+      full = query_count { get search_admin_users_path(q: 'Bounded', role: 'constituent') }
+
+      assert_select 'li[data-user-id]', 10
+      assert_select 'li[data-user-products="Bounded Product"][data-user-eligible=true]', 10
+      assert_equal one, full, 'query growth must stay bounded across selected applicants'
+    end
+
+    test 'multiple-guardian contact rendering agrees with the canonical unloaded user' do
+      expected_email = User.find(@child.id).effective_email
+      expected_phone = User.find(@child.id).effective_phone
+
+      get search_admin_users_path(q: @child.first_name, role: 'constituent')
+
+      assert_select "li[data-user-id='#{@child.id}'][data-user-email='#{expected_email}'][data-user-phone='#{expected_phone}']"
+      get admin_users_path(q: @child.first_name)
+      assert_select "a[href='mailto:#{expected_email}']", text: expected_email
     end
 
     test 'the search and show pages load the relationships ahead of the rows' do
@@ -110,6 +135,15 @@ module Admin
       @evaluator = create(:evaluator, last_name: 'Family')
       create(:role_capability, user: @evaluator, capability: 'can_train')
       @vendor = create(:vendor, last_name: 'Family')
+    end
+
+    def build_search_applicant(first_name)
+      user = create(:constituent, first_name: first_name)
+      create(:guardian_relationship, guardian_user: user, dependent_user: create(:constituent))
+      create(:guardian_relationship, guardian_user: create(:constituent), dependent_user: user)
+      application = create(:application, :rejected, user: user)
+      application.products << create(:product, name: 'Bounded Product')
+      user
     end
 
     def query_count(&)

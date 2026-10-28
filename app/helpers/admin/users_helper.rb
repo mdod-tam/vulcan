@@ -56,5 +56,33 @@ module Admin
       else 'dependent'
       end
     end
+
+    def paper_application_eligibility(user)
+      paper_application_eligibility_results[user.id] ||= Applications::PaperApplicationEligibility.call(user, waiting_period_years: application_waiting_period_years)
+    end
+
+    def paper_application_eligibility_results
+      @paper_application_eligibility_results ||= {}
+    end
+
+    def application_waiting_period_years
+      @application_waiting_period_years ||= Policy.waiting_period_years
+    end
+
+    def latest_user_application(user)
+      user.applications.max_by { |application| application.application_date || Date.new(1) }
+    end
+
+    def paper_application_ineligibility_reason(eligibility)
+      case eligibility.reason
+      when :blocking_application then 'Has active application'
+      when :waiting_period then "Eligible after #{eligibility.eligible_after.to_date.strftime('%b %d, %Y')}"
+      end
+    end
+
+    def paper_application_eligibility_badge(eligibility)
+      label = eligibility.eligible? ? 'Eligible now' : paper_application_ineligibility_reason(eligibility)
+      tag.span(label, class: "badge #{eligibility.eligible? ? 'badge-success' : 'badge-neutral'}")
+    end
   end
 end

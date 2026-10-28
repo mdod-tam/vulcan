@@ -63,6 +63,24 @@ module Applications
       assert_nil notification.metadata&.dig('delivery_error', 'message')
     end
 
+    test 'best-effort public audit failure preserves a successful proof submission' do
+      original_log = AuditEventService.method(:log)
+      failing_audit = lambda do |**attributes|
+        raise ActiveRecord::RecordInvalid, Event.new if attributes[:action] == 'proof_submitted_via_secure_form'
+
+        original_log.call(**attributes)
+      end
+
+      AuditEventService.stub(:log, failing_audit) do
+        result = SubmitProofResubmission.new(application: @application, secure_request_form: @secure_request_form,
+                                             file: cleared_proof(@file, @secure_request_form)).call
+        assert_predicate result, :success?
+      end
+      assert_predicate @application.reload.income_proof, :attached?
+      assert_predicate @secure_request_form.reload, :submitted?
+      assert_not Event.exists?(auditable: @application, action: 'proof_submitted_via_secure_form')
+    end
+
     test 'rejects unsupported file type without submitting request' do
       file = fixture_file_upload(Rails.root.join('test/fixtures/files/sample.txt'), 'text/plain')
 

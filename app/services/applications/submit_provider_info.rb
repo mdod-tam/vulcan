@@ -33,36 +33,17 @@ module Applications
       return inactive_request_failure unless secure_request_form.active_for_public_use?
       return validation_failure unless provider_params_valid?
 
-      result = nil
-
-      ApplicationRecord.transaction do
-        # Lock the application before the form, in the same order as issuance.
-        application.lock!
-        secure_request_form.lock!
-        unless provider_info_request_form?
-          result = invalid_request_failure
-          next
-        end
-
-        unless secure_request_form.active_for_public_use?
-          result = inactive_request_failure
-          next
-        end
+      submit_under_lock(application) do
+        next invalid_request_failure unless provider_info_request_form?
 
         previous_presence = field_presence(application.attributes.symbolize_keys)
 
-        # The submission is always accepted. The change audit marks it for
-        # review when it replaces a value already on file.
+        # Valid submissions can replace provider details. The change audit marks
+        # replacements of on-file values for review.
         application.medical_provider_change_source = change_source
         application.update!(normalized_provider_params)
-        secure_request_form.mark_submitted!
-        log_submission(previous_presence)
-        result = success(message(:submitted))
+        complete_submission { log_submission(previous_presence) }
       end
-
-      result
-    rescue ActiveRecord::RecordInvalid => e
-      failure(e.record.errors.full_messages.to_sentence, { errors: e.record.errors })
     ensure
       application.medical_provider_change_source = nil
     end

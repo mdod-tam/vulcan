@@ -158,15 +158,21 @@ class SecurePublicFormMatrixTest < ActionDispatch::IntegrationTest
       assert_select 'header p', I18n.t('layouts.secure_public.program_name', locale: :es)
     end
 
-    test "#{name} unavailable page shows the configured support contact" do
-      Policy.stubs(:get).returns(nil)
-      Policy.stubs(:get).with('support_email').returns('help@example.test')
-      Policy.stubs(:get).with('support_phone').returns('410-555-0142')
+    test "#{name} unavailable page uses the canonical program support contact" do
+      ProgramContact.stubs(:support_email).returns('help@example.test')
+      ProgramContact.stubs(:support_phone).returns('410-555-0142')
 
       get public_send(config[:form_path], token: 'not-a-real-token')
 
       assert_includes response.body, 'help@example.test'
       assert_includes response.body, '410-555-0142'
+    end
+
+    test "#{name} unavailable page shows the default program support contact" do
+      get public_send(config[:form_path], token: 'not-a-real-token')
+
+      assert_includes response.body, ProgramContact.support_email
+      assert_includes response.body, ProgramContact.support_phone
     end
 
     test "#{name} success page locale" do

@@ -31,6 +31,30 @@ module SecureFormSubmission
 
   private
 
+  # Match issuance's owner-before-form lock order and recheck after both locks.
+  def submit_under_lock(owner)
+    ApplicationRecord.transaction do
+      owner.lock!
+      request_form.lock!
+      next inactive_request_failure unless request_form.active_for_public_use?
+
+      yield
+    end
+  rescue UploadedDocument::Refused => e
+    refused_upload_failure(e)
+  rescue AttachmentFailure => e
+    failure(e.message)
+  rescue ActiveRecord::RecordInvalid => e
+    failure(e.record.errors.full_messages.to_sentence, { errors: e.record.errors })
+  end
+
+  # The document write, consumption, and audit share the caller's transaction.
+  def complete_submission
+    request_form.mark_submitted!
+    yield
+    success(message(:submitted))
+  end
+
   def invalid_request_failure
     failure(message(:invalid_request))
   end

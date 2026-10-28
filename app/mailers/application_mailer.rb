@@ -202,10 +202,12 @@ class ApplicationMailer < ActionMailer::Base
 
   # Queues a printed letter when the recipient prefers mail. Returns true when the letter route
   # handles the message, so the caller sends no email.
-  def queue_letter_if_preferred(recipient, template_name, variables, locale:, application: nil)
-    return false unless prefers_letter_delivery?(recipient)
+  # rubocop:disable-next Metrics/ParameterLists
+  def queue_letter_if_preferred(recipient, template_name, variables, locale:, application: nil, letter_type: nil, override: nil)
+    return false unless prefers_letter_delivery?(recipient, override: override)
 
-    queue_letter_delivery(recipient: recipient, template_name: template_name, variables: variables, locale: locale, application: application)
+    queue_letter_delivery(recipient: recipient, template_name: template_name, variables: variables, locale: locale,
+                          application: application, letter_type: letter_type)
     true
   end
 
@@ -261,13 +263,8 @@ class ApplicationMailer < ActionMailer::Base
 
   def find_text_template(template_name, locale: nil)
     resolved_locale = normalize_locale(locale) || resolve_template_locale
-    EmailTemplate.find_by!(name: template_name, format: :text, locale: resolved_locale)
-  rescue ActiveRecord::RecordNotFound
-    fallback_locale = I18n.default_locale.to_s
-    raise if resolved_locale == fallback_locale
-
-    Rails.logger.debug { "No #{resolved_locale} template for #{template_name}, falling back to #{fallback_locale}" }
-    EmailTemplate.find_by!(name: template_name, format: :text, locale: fallback_locale)
+    EmailTemplate.find_with_locale(name: template_name, format: :text, locale: resolved_locale) ||
+      raise(ActiveRecord::RecordNotFound, "EmailTemplate not found for #{template_name}")
   end
 
   def set_common_variables

@@ -79,6 +79,26 @@ module Applications
       assert_equal additional_blob.id, event.metadata.fetch('additional_disability_certification_blob_id')
     end
 
+    test 'submission audit failure rolls back certification and leaves the form active' do
+      original_log = AuditEventService.method(:log)
+      failing_audit = lambda do |**attributes|
+        raise ActiveRecord::RecordInvalid, Event.new if attributes[:action] == 'cert_submitted_via_secure_form'
+
+        original_log.call(**attributes)
+      end
+
+      assert_no_difference [-> { Event.count }, -> { @application.status_changes.count }] do
+        AuditEventService.stub(:log, failing_audit) do
+          result = SubmitCertificationUpload.new(application: @application,
+                                                 medical_provider_secure_request_form: @secure_request_form, file: @file).call
+          assert_predicate result, :failure?
+        end
+      end
+      assert_not_predicate @application.reload.disability_certification, :attached?
+      assert_predicate @secure_request_form.reload, :active_for_public_use?
+      assert_nil @secure_request_form.submitted_at
+    end
+
     test 'retains secure upload as additional certification for legacy DocuSeal primary without blob metadata' do
       @application.update!(disability_certification_status: :received)
       @application.disability_certification.attach(

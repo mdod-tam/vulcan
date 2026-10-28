@@ -4,6 +4,7 @@ module SecureTokenizable
   extend ActiveSupport::Concern
 
   TOKEN_BYTES = 24
+  IssuedRequest = Data.define(:secure_request_form, :raw_token)
 
   included do
     before_validation :ensure_request_batch_id, on: :create
@@ -30,6 +31,23 @@ module SecureTokenizable
       # A normal indexed digest lookup is safe for 192-bit random bearer tokens;
       # there is no attacker-exploitable timing signal here requiring constant-time comparison.
       find_by(public_token_digest: digest_public_token(raw_token))
+    end
+
+    def create_with_public_token!(attributes)
+      attempts = 0
+      begin
+        attempts += 1
+        raw_token = generate_public_token
+        # Roll back a digest collision's savepoint before retrying on PostgreSQL.
+        form = transaction(requires_new: true) do
+          create!(attributes.merge(public_token_digest: digest_public_token(raw_token)))
+        end
+      rescue ActiveRecord::RecordNotUnique
+        retry if attempts < 2
+
+        raise
+      end
+      IssuedRequest.new(secure_request_form: form, raw_token: raw_token)
     end
   end
 

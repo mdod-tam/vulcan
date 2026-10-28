@@ -5,7 +5,11 @@
   <ul class="divide-y divide-gray-200 border border-gray-200 rounded-md max-h-60 overflow-y-auto" data-turbo="false">
     <% users.each do |user| %>
       <% is_constituent_search = role == 'constituent' %>
-      <% ineligible = is_constituent_search && user.respond_to?(:eligible_now) && !user.eligible_now %>
+      <% eligibility = paper_application_eligibility(user) if is_constituent_search %>
+      <% last_app = latest_user_application(user) if is_constituent_search %>
+      <% last_products = is_constituent_search ? (last_app&.products&.map(&:name) || []) : [] %>
+      <% ineligible_reason = paper_application_ineligibility_reason(eligibility) if is_constituent_search %>
+      <% ineligible = is_constituent_search && !eligibility.eligible? %>
       <% email_display = display_contact_email(user) %>
       <% phone_display = display_contact_phone(user) %>
       <li class="p-3 <%= ineligible ? 'opacity-50 cursor-not-allowed bg-gray-50' : 'hoverable-user-item' %>"
@@ -26,11 +30,11 @@
           data-user-zip="<%= user.zip_code %>"
           data-user-phone="<%= phone_display == ConstituentCommunicationLabelsHelper::NO_PHONE_ON_FILE ? '' : phone_display %>"
           data-user-dob="<%= user.date_of_birth %>"
-          <% if is_constituent_search && user.respond_to?(:eligible_now) %>
-          data-user-eligible="<%= user.eligible_now %>"
-          data-user-ineligible-reason="<%= user.ineligible_reason %>"
-          data-user-last-app-date="<%= user.last_app_date %>"
-          data-user-products="<%= user.last_received_products.join(', ') %>"
+          <% if is_constituent_search %>
+          data-user-eligible="<%= eligibility.eligible? %>"
+          data-user-ineligible-reason="<%= ineligible_reason %>"
+          data-user-last-app-date="<%= last_app&.application_date %>"
+          data-user-products="<%= last_products.join(', ') %>"
           <% end %>
           data-user-dependents-count="<%= role == 'guardian' ? user.guardian_relationships_as_guardian.size : 0 %>"
           <% if ineligible %>
@@ -40,8 +44,8 @@
           data-turbo="false">
           <div class="flex items-center justify-between">
             <div class="font-medium text-sm text-gray-900"><%= user.full_name %></div>
-            <% if is_constituent_search && user.respond_to?(:eligible_now) %>
-              <% if user.eligible_now %>
+            <% if is_constituent_search %>
+              <% if eligibility.eligible? %>
                 <span class="badge badge-success">Eligible</span>
               <% else %>
                 <span class="badge badge-danger">Ineligible</span>
@@ -68,10 +72,10 @@
             <div class="text-xs text-gray-500">Phone: <%= phone_display %></div>
           <% end %>
 
-          <% if is_constituent_search && user.respond_to?(:ineligible_reason) && user.ineligible_reason.present? %>
-            <div class="text-xs text-danger-600 mt-1"><%= user.ineligible_reason %></div>
-          <% elsif is_constituent_search && user.respond_to?(:last_received_products) && user.last_received_products.any? %>
-            <div class="text-xs text-gray-500 mt-1">Last products: <%= user.last_received_products.join(', ') %></div>
+          <% if ineligible_reason.present? %>
+            <div class="text-xs text-danger-600 mt-1"><%= ineligible_reason %></div>
+          <% elsif last_products.any? %>
+            <div class="text-xs text-gray-500 mt-1">Last products: <%= last_products.join(', ') %></div>
           <% end %>
 
           <% unless is_constituent_search %>

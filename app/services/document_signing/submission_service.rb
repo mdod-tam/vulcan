@@ -119,7 +119,7 @@ module DocumentSigning
         constituent_email: constituent.email.presence || localized_not_provided,
         constituent_address_formatted: constituent_address_formatted,
         application_id: @application.id,
-        support_email: Policy.get('support_email') || 'mat.program1@maryland.gov'
+        support_email: ProgramContact.support_email
       )
     end
 

@@ -80,7 +80,7 @@ class TrainingSessionNotificationsMailer < ApplicationMailer
       subject_variables: { application_id: application.id },
       fallback: "Training Scheduled - Application ##{application.id}"
     )
-    footer_contact_email = Policy.get('support_email') || 'mat.program1@maryland.gov'
+    footer_contact_email = ProgramContact.support_email
     footer_website_url = ProgramContact.website_url
     footer_show_automated_message = true
     organization_name = Policy.get('organization_name') || 'Maryland Accessible Telecommunications Program'
@@ -142,7 +142,7 @@ class TrainingSessionNotificationsMailer < ApplicationMailer
       subject_variables: { application_id: application.id },
       fallback: "Training Rescheduled - Application ##{application.id}"
     )
-    footer_contact_email = Policy.get('support_email') || 'mat.program1@maryland.gov'
+    footer_contact_email = ProgramContact.support_email
     footer_website_url = ProgramContact.website_url
     footer_show_automated_message = true
     organization_name = Policy.get('organization_name') || 'Maryland Accessible Telecommunications Program'
@@ -210,7 +210,7 @@ class TrainingSessionNotificationsMailer < ApplicationMailer
       subject_variables: { application_id: application.id },
       fallback: "Training Cancelled - Application ##{application.id}"
     )
-    footer_contact_email = Policy.get('support_email') || 'mat.program1@maryland.gov'
+    footer_contact_email = ProgramContact.support_email
     footer_website_url = ProgramContact.website_url
     footer_show_automated_message = true
     organization_name = Policy.get('organization_name') || 'Maryland Accessible Telecommunications Program'
@@ -268,7 +268,7 @@ class TrainingSessionNotificationsMailer < ApplicationMailer
       subject_variables: { application_id: application.id },
       fallback: "Training Session Missed - Application ##{application.id}"
     )
-    footer_contact_email = Policy.get('support_email') || 'mat.program1@maryland.gov'
+    footer_contact_email = ProgramContact.support_email
     footer_website_url = ProgramContact.website_url
     footer_show_automated_message = true
     organization_name = Policy.get('organization_name') || 'Maryland Accessible Telecommunications Program'
@@ -362,7 +362,7 @@ class TrainingSessionNotificationsMailer < ApplicationMailer
     rescue StandardError
       nil
     end
-    support_email = Policy.get('support_email') || 'mat.program1@maryland.gov'
+    support_email = ProgramContact.support_email
 
     variables = {
       trainer_full_name: trainer.full_name,

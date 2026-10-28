@@ -78,6 +78,10 @@ class Policy < ApplicationRecord
     get('max_training_sessions') || 3
   end
 
+  def self.waiting_period_years
+    get('waiting_period_years') || 3
+  end
+
   def self.set(key, value)
     policy = find_or_initialize_by(key: key)
     policy.value = value

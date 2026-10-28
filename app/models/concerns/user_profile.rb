@@ -340,7 +340,7 @@ module UserProfile
   end
 
   def portal_registration_support_email
-    Policy.get('support_email') || 'mat.program1@maryland.gov'
+    ProgramContact.support_email
   end
 
   def portal_registration_support_phone

@@ -585,8 +585,7 @@ class Application < ApplicationRecord
   def service_window_end_date
     return nil if application_date.blank?
 
-    waiting_period = Policy.get('waiting_period_years') || 3
-    application_date.to_date + waiting_period.years
+    application_date.to_date + Policy.waiting_period_years.years
   end
 
   def guardian_relationship_type
@@ -642,19 +641,11 @@ class Application < ApplicationRecord
     return if Application.skip_wait_period_validation
     return unless user
 
-    last_app = user_applications_except_current
-    return unless last_app
-
-    waiting_period = Policy.get('waiting_period_years') || 3
-    return unless last_app.application_date > waiting_period.years.ago
+    waiting_period = Policy.waiting_period_years
+    result = Applications::PaperApplicationEligibility.call(user, excluding: self, waiting_period_years: waiting_period)
+    return unless result.waiting_period_active?
 
     errors.add(:base, "You must wait #{waiting_period} years before submitting a new application.")
-  end
-
-  def user_applications_except_current
-    scope = user.applications
-    scope = scope.where.not(id: id) unless new_record?
-    scope.order(application_date: :desc).first
   end
 
   def needs_proof_review?

@@ -249,6 +249,14 @@ es:
         stale_request: "Este formulario estaba desactualizado, por lo que no se cambió nada. Vuelva a cargar la página e inténtelo de nuevo."
         duplicate_identity: "%{name} ya está asociado a su cuenta con este nombre y fecha de nacimiento. Si se trata de otra persona, comuníquese con el equipo de MAT al %{support_email} o %{support_phone}."
   applications:
+    admission:
+      title: "Período de espera"
+      blocking_application: "Ya tiene una solicitud activa o pendiente."
+      waiting_period: "Puede presentar una nueva solicitud después del %{date}."
+      eligible: "Puede presentar una nueva solicitud."
+      remaining_service_months:
+        one: "Queda %{count} mes en el período de servicios de esta solicitud."
+        other: "Quedan %{count} meses en el período de servicios de esta solicitud."
     creation:
       failure: "No se pudo guardar su solicitud. Inténtelo de nuevo."
       refusals:
@@ -649,8 +657,8 @@ es:
         residency: "No se proporcionó ningún comprobante de residencia en Maryland con la solicitud."
         income: "No se proporcionó ningún comprobante de ingresos con la solicitud."
       remaining_attempts_message:
-        one: "Le queda %{count} intento para presentar la documentación requerida antes del %{reapply_date}."
-        other: "Le quedan %{count} intentos para presentar la documentación requerida antes del %{reapply_date}."
+        one: "Le queda %{count} intento para presentar la documentación requerida."
+        other: "Le quedan %{count} intentos para presentar la documentación requerida."
       resubmission_options:
         paper: |-
           CÓMO ENVIAR UN DOCUMENTO CORREGIDO:
@@ -664,7 +672,7 @@ es:
           2. Si le resulta más fácil, también puede enviar una copia de su documento por correo postal a nuestra oficina, y nosotros la escanearemos y la subiremos por usted:
              Telecomunicaciones Accesibles de Maryland
              %{office_address}
-      archived_message: "Lamentablemente, ha alcanzado el número máximo de intentos de envío para esta solicitud. Su solicitud ha sido archivada. Puede volver a solicitar después del %{reapply_date}."
+      archived_message: "Lamentablemente, ha alcanzado el número máximo de intentos de envío para esta solicitud. Su solicitud ha sido archivada."
   medical_provider_mailer:
     certification_submission_instructions:
       secure: |-

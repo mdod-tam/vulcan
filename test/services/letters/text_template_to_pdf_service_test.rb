@@ -168,6 +168,15 @@ module Letters
       assert_not service.send(:template_requires_shared_partials?)
     end
 
+    test 'shared partial handling follows the template loaded for rendering after an admin edit' do
+      service = TextTemplateToPdfService.new(template_name: @template.name, recipient: @user, variables: @variables)
+      @template.update!(body: 'Updated body %<constituent_first_name>s',
+                        variables: { 'required' => ['constituent_first_name'], 'optional' => [] })
+
+      assert_includes service.send(:render_template_with_variables), 'Header text for testing'
+      assert service.send(:template_requires_shared_partials?)
+    end
+
     test 'localizes letter salutation and date label in spanish' do
       @user.update!(first_name: 'Ana', locale: 'es')
 
@@ -176,6 +185,8 @@ module Letters
         recipient: @user,
         variables: @variables
       )
+
+      assert_equal 'en', service.template.locale
 
       salutation_pdf = mock('salutation_pdf')
       salutation_pdf.expects(:text).with('Estimado/a Ana,')

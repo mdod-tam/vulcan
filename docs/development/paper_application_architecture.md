@@ -4,7 +4,7 @@ Staff use paper intake to enter an application, identify its applicant, and atta
 
 The resulting application then follows the shared approval and fulfillment rules.
 
-The multipart form posts directly to [PaperApplicationsController#create](../../app/controllers/admin/paper_applications_controller.rb), which normalizes parameters and restores the form on failure. [PaperApplicationService](../../app/services/applications/paper_application_service.rb) owns applicant selection or creation, identity handling, and the final application write and its outcome.
+The multipart form posts directly to [PaperApplicationsController#create](../../app/controllers/admin/paper_applications_controller.rb), which normalizes parameters and restores the form on failure. [PaperApplicationService](../../app/services/applications/paper_application_service.rb) owns the transaction, application write, durable outcome and follow-up sequence. [PaperApplicantIntake](../../app/services/applications/paper_applicant_intake.rb) handles applicant selection, contact updates and identity decisions; [PaperDocumentDispositions](../../app/services/applications/paper_document_dispositions.rb) applies document choices; [PaperCreationFollowUp](../../app/services/applications/paper_creation_follow_up.rb) runs the independent steps after a confirmed commit. The service supports creation; other admin application edits use their existing controllers and writers.
 
 ## From form to saved application
 
@@ -43,7 +43,7 @@ Uploading or approving requires a document. Rejecting requires a reason, plus cu
 
 The shared upload control stages each file and waits for a clean virus scan before submitting a signed receipt. Paper passes that receipt to its document writer. [`UploadedDocument`](../../app/services/uploaded_document.rb) checks clearance, staff ownership, type and size before any document or workflow changes: 5 MB for proofs and 10 MB for certifications. The paper service reports a writer's refusal against the document it names. Regular proofs use [ProofAttachmentService](../../app/services/proof_attachment_service.rb). Disability certification uses [DisabilityCertificationAttachmentService](../../app/services/disability_certification_attachment_service.rb), which also refuses a staff upload while a certification awaits review or is approved, with provider rejection follow-up routed through the certification reviewer when provider contact is available. See [proof review](../features/proof_review_process_guide.md).
 
-`PaperApplicationService` scopes `Current.paper_context` around its writes and clears it afterward; guardian quick-create sets it in [Admin::UsersController#create](../../app/controllers/admin/users_controller.rb) and resets `Current` in `ensure`. Both are entry points that genuinely own a paper-intake request. Set anywhere else, the flag relaxes profile and proof validation for whatever happens to run next — it is scoped state, not a validation or callback bypass.
+`PaperApplicationService` uses native block-form `Current.set(paper_context: true)` around applicant, application and document writes. It restores the caller's prior value (`nil`, `false` or `true`) before recording identity decisions within the same transaction. Commit callbacks and explicit follow-up run with that restored context. Guardian quick-create also uses block-form context in [Admin::UsersController#create](../../app/controllers/admin/users_controller.rb). The flag relaxes selected profile and proof validations, so the phase that owns those writes must scope it.
 
 ## Save outcomes and retries
 
@@ -94,7 +94,7 @@ Unbalanced markup in one branch of a conditional is worth watching for specifica
 
 ## Follow-up and fulfillment
 
-After a confirmed create, the service separately attempts the creation audit, notifications, proof-delivery checks, and a provider-info request when provider details are missing. A failed step produces a named warning and a best-effort `application_post_creation_step_failed` audit event. Reconciliation failures also surface to staff.
+After a confirmed create, `PaperCreationFollowUp` separately attempts the creation audit, notifications, proof-delivery checks, and a provider-info request when provider details are missing. A failed step produces a named warning and a best-effort `application_post_creation_step_failed` audit event. The transaction owner uses that same recorder for a confirmed callback failure, without retrying the callback. Reconciliation remains at `PaperApplicationService`, and failures also surface to staff.
 
 Account-created notices apply to eligible email-backed users created during intake or marked by a recent quick-create. `send_account_created_notice?` checks the current `vouchers_enabled` flag; it does not check the application's saved fulfillment type. These notices confirm receipt; they contain no temporary password or sign-in link. Account help uses the existing account-access flow.
 

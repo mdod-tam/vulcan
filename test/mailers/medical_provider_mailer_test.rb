@@ -14,13 +14,17 @@ class MedicalProviderMailerTest < ActionMailer::TestCase
     request_cert_template_mock.stubs(:render).returns(["Mock Request Cert Subject for #{@constituent.full_name}",
                                                        "Mock Request Cert Body for #{@constituent.full_name}"])
     request_cert_template_mock.stubs(:enabled?).returns(true)
-    EmailTemplate.stubs(:find_by!).with(name: 'medical_provider_request_certification', format: :text, locale: 'en').returns(request_cert_template_mock)
+    MedicalProviderMailer.any_instance.stubs(:find_text_template)
+                         .with('medical_provider_request_certification', locale: 'en')
+                         .returns(request_cert_template_mock)
 
     rejected_template_mock = mock('rejected_template')
     rejected_template_mock.stubs(:render).returns(["Certification Rejected: #{@constituent.full_name}",
                                                    'Text Rejection Reason: Incomplete documentation, Expired license'])
     rejected_template_mock.stubs(:enabled?).returns(true)
-    EmailTemplate.stubs(:find_by!).with(name: 'medical_provider_certification_rejected', format: :text, locale: 'en').returns(rejected_template_mock)
+    MedicalProviderMailer.any_instance.stubs(:find_text_template)
+                         .with('medical_provider_certification_rejected', locale: 'en')
+                         .returns(rejected_template_mock)
   end
 
   test 'request_certification' do
@@ -33,7 +37,7 @@ class MedicalProviderMailerTest < ActionMailer::TestCase
 
     assert_equal ['no_reply@mdmat.org'], email.from
     assert_equal [@application.medical_provider_email], email.to
-    assert_equal [Policy.get('support_email') || 'mat.program1@maryland.gov'], email.reply_to
+    assert_equal [ProgramContact.support_email], email.reply_to
     expected_subject = "Mock Request Cert Subject for #{@constituent.full_name}"
     assert_equal expected_subject, email.subject
 
@@ -151,11 +155,9 @@ class MedicalProviderMailerTest < ActionMailer::TestCase
     english_template = mock('english_rejected_template')
     english_template.stubs(:render).returns(['Certificacion rechazada', 'Motivo traducido'])
     english_template.stubs(:enabled?).returns(true)
-    EmailTemplate.expects(:find_by!).with(
-      name: 'medical_provider_certification_rejected',
-      format: :text,
-      locale: 'en'
-    ).returns(english_template)
+    MedicalProviderMailer.any_instance.expects(:find_text_template)
+                         .with('medical_provider_certification_rejected', locale: 'en')
+                         .returns(english_template)
 
     email = MedicalProviderMailer.with(
       application: @application,
