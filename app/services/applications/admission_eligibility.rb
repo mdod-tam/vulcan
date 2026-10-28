@@ -1,12 +1,12 @@
 # frozen_string_literal: true
 
 module Applications
-  # One admission decision for paper intake and portal writers.
+  # One admission decision for portal writers, paper intake, and admin views.
   # PaperIdentityReview uses it to decide which dependent matches may be selected; the durable
   # writer asks again after locking and requalifying the selected constituent. The preview is
   # advisory and the writer remains authoritative, but both apply the same blocking-application
   # and waiting-period policy.
-  class PaperApplicationEligibility
+  class AdmissionEligibility
     SUBJECT_LABELS = { constituent: 'constituent', dependent: 'dependent' }.freeze
 
     Result = Struct.new(:reason, :waiting_period_ends_at, keyword_init: true) do

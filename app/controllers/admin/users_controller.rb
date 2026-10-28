@@ -416,7 +416,7 @@ module Admin
     end
 
     def adult_eligibility_context(user)
-      result = Applications::PaperApplicationEligibility.call(user)
+      result = Applications::AdmissionEligibility.call(user)
       {
         eligible_now: result.eligible?,
         ineligibility_reason: result.reason == :blocking_application ? 'active_application' : result.reason&.to_s,
@@ -471,7 +471,7 @@ module Admin
     def build_dependent_summaries(guardian, waiting_period_years)
       guardian.dependents.map do |dep|
         last_app = dep.applications.max_by { |application| application.application_date || Date.new(1) }
-        eligibility = Applications::PaperApplicationEligibility.call(dep, waiting_period_years: waiting_period_years)
+        eligibility = Applications::AdmissionEligibility.call(dep, waiting_period_years: waiting_period_years)
         relationship_types = guardian.guardian_relationships_as_guardian.select { |relationship| relationship.dependent_id == dep.id }.map(&:relationship_type)
 
         DependentSummary.new(

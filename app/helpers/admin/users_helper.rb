@@ -58,7 +58,7 @@ module Admin
     end
 
     def paper_application_eligibility(user)
-      paper_application_eligibility_results[user.id] ||= Applications::PaperApplicationEligibility.call(user, waiting_period_years: application_waiting_period_years)
+      paper_application_eligibility_results[user.id] ||= Applications::AdmissionEligibility.call(user, waiting_period_years: application_waiting_period_years)
     end
 
     def paper_application_eligibility_results

@@ -303,7 +303,7 @@ module Applications
     end
 
     def paper_application_eligible?(user, subject:)
-      result = PaperApplicationEligibility.call(user)
+      result = AdmissionEligibility.call(user)
       return true if result.eligible?
 
       add_error(result.refusal_message(subject: subject))

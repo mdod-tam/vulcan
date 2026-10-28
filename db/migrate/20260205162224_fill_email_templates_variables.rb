@@ -13,7 +13,7 @@ class FillEmailTemplatesVariables < ActiveRecord::Migration[8.0]
       optional: %w[additional_notes]
     },
     'application_notifications_max_rejections_reached' => {
-      required: %w[user_first_name application_id reapply_date_formatted header_text footer_text],
+      required: %w[user_first_name application_id header_text footer_text],
       optional: []
     },
     'application_notifications_proof_approved' => {

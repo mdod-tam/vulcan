@@ -91,7 +91,7 @@ During a duplicate merge, moving a guardian's relationships clears their creatio
 
 [`PaperApplicationService`](../../app/services/applications/paper_application_service.rb) owns the paper application transaction. Staff select a saved guardian; [guardian quick-create](../../app/services/applications/paper_guardian_quick_create_service.rb) creates new guardians before final submission.
 
-For a new dependent, [`GuardianDependentManagementService`](../../app/services/applications/guardian_dependent_management_service.rb) applies contact choices, checks identity, and saves the dependent and relationship within that transaction. For an existing dependent, the writer requires an on-file relationship to the selected guardian and rechecks [paper application eligibility](../../app/services/applications/paper_application_eligibility.rb). A submitted dependent ID alone does not authorize reuse.
+For a new dependent, [`GuardianDependentManagementService`](../../app/services/applications/guardian_dependent_management_service.rb) applies contact choices, checks identity, and saves the dependent and relationship within that transaction. For an existing dependent, the writer requires an on-file relationship to the selected guardian and rechecks [admission eligibility](../../app/services/applications/admission_eligibility.rb). A submitted dependent ID alone does not authorize reuse.
 
 Paper identity decisions use [`PaperIdentityReview`](../../app/services/applications/paper_identity_review.rb) and record applicable keep-separate or existing-person selections in `paper_intake` cases. The new application explicitly identifies its applicant and managing guardian.
 

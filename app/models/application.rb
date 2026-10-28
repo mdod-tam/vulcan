@@ -642,7 +642,7 @@ class Application < ApplicationRecord
     return unless user
 
     waiting_period = Policy.waiting_period_years
-    result = Applications::PaperApplicationEligibility.call(user, excluding: self, waiting_period_years: waiting_period)
+    result = Applications::AdmissionEligibility.call(user, excluding: self, waiting_period_years: waiting_period)
     return unless result.waiting_period_active?
 
     errors.add(:base, "You must wait #{waiting_period} years before submitting a new application.")

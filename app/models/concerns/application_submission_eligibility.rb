@@ -46,7 +46,7 @@ module ApplicationSubmissionEligibility
     # +target_application+ is excluded from the sibling check. The error is a message in +locale+.
     def sibling_application_eligibility_error(applications, target_application:, locale: I18n.locale)
       waiting_period = Policy.waiting_period_years
-      result = Applications::PaperApplicationEligibility.call(
+      result = Applications::AdmissionEligibility.call(
         target_application.user,
         applications: applications, excluding: target_application,
         skip_wait_period: skip_wait_period_validation, waiting_period_years: waiting_period
