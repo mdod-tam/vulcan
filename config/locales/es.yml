@@ -631,6 +631,7 @@ es:
              %{office_address}
     proof_rejected:
       none_provided:
+        disability_certification: "No se proporcionó una certificación de discapacidad con la solicitud."
         default: "No se proporcionó la prueba requerida con la solicitud."
         id: "No se proporcionó ninguna prueba de identidad con la solicitud."
         residency: "No se proporcionó ninguna prueba de residencia en Maryland con la solicitud."

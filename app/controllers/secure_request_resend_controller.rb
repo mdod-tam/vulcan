@@ -62,7 +62,7 @@ class SecureRequestResendController < SecurePublicFormController
     true
   rescue ArgumentError => e
     Rails.logger.warn("#{resend_log_label} resend rate limit unavailable: #{e.class.name}")
-    false
+    true
   end
 
   def request_form_class = raise(NotImplementedError)

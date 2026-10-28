@@ -882,7 +882,8 @@ class ApplicationNotificationsMailer < ApplicationMailer # rubocop:disable Metri
   def build_disability_certification_not_provided_variables(application, template:, locale: nil)
     user = application.user
 
-    rejection_reason_message = application.disability_certification_rejection_reason.presence || ''
+    review = application.latest_disability_certification_rejection_review
+    rejection_reason_message = review ? resolve_rejection_reason(review, locale) : ''
 
     base_variables = build_base_email_variables(
       template: template,

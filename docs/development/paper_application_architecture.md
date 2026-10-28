@@ -39,7 +39,7 @@ Writers recompute under [PaperIdentityCreationLock](../../app/services/applicati
 | Income, residency, ID | `upload_only`, `accept`, or `reject` |
 | Disability certification | `upload_only`, `approved`, or `rejected` |
 
-Uploading or approving requires a document. Rejecting requires a reason, plus custom text for `other`, but no file. **None Provided** means rejection with the `none_provided` reason.
+Uploading or approving requires a document. Rejecting requires a reason, plus custom text for `other`, but no file. **None Provided** means rejection without an uploaded document. For disability certification, the review stores the stable `none_provided` code and triggers the existing missing-certification notice after paper creation; the notice renders friendly rejection text in the delivery recipient's locale.
 
 The shared upload control stages each file and waits for a clean virus scan before submitting a signed receipt. Paper passes that receipt to its document writer. [`UploadedDocument`](../../app/services/uploaded_document.rb) checks clearance, staff ownership, type and size before any document or workflow changes: 5 MB for proofs and 10 MB for certifications. The paper service reports a writer's refusal against the document it names. Regular proofs use [ProofAttachmentService](../../app/services/proof_attachment_service.rb). Disability certification uses [DisabilityCertificationAttachmentService](../../app/services/disability_certification_attachment_service.rb), which also refuses a staff upload while a certification awaits review or is approved, with provider rejection follow-up routed through the certification reviewer when provider contact is available. See [proof review](../features/proof_review_process_guide.md).
 

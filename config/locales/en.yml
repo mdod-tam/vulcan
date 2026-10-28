@@ -460,6 +460,7 @@ en:
              %{office_address}
     proof_rejected:
       none_provided:
+        disability_certification: "No disability certification was provided with the application."
         default: "No required proof was provided with the application."
         id: "No proof of identity was provided with the application."
         residency: "No proof of Maryland residency was provided with the application."

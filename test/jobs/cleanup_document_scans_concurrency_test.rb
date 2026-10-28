@@ -7,7 +7,7 @@ class CleanupDocumentScansConcurrencyTest < ActiveSupport::TestCase
 
   include ConcurrencyTestHelper
 
-  test 'storage failure surfaces after the blob and scan deletion commit' do
+  test 'storage failure retains a durable deletion and the next cleanup removes the bytes' do
     user = create(:constituent)
     blob = ActiveStorage::Blob.create_and_upload!(
       io: StringIO.new(file_fixture('income_proof.pdf').binread), filename: 'income_proof.pdf', content_type: 'application/pdf'
@@ -23,9 +23,67 @@ class CleanupDocumentScansConcurrencyTest < ActiveSupport::TestCase
     assert_not ActiveStorage::Blob.exists?(blob.id)
     assert_not DocumentScan.exists?(scan_id)
     assert blob.service.exist?(blob.key)
+    deletion = DocumentStorageDeletion.find_by!(key: blob.key)
+    assert_equal blob.service_name, deletion.service_name
+
+    CleanupUnattachedUploadsJob.perform_now
+
+    assert_not blob.service.exist?(blob.key)
+    assert_not DocumentStorageDeletion.exists?(deletion.id)
   ensure
     blob&.purge
     cleanup_duplicate_review_test_data!(user) if user
+  end
+
+  test 'blob removal and deletion intent roll back together without touching storage' do
+    user = create(:constituent)
+    blob = ActiveStorage::Blob.create_and_upload!(
+      io: StringIO.new(file_fixture('income_proof.pdf').binread), filename: 'income_proof.pdf', content_type: 'application/pdf'
+    )
+    DocumentScanFixtures.clear!(blob, user: user)
+    scan_id = DocumentScan.find_by!(blob_id: blob.id).id
+    blob.update!(created_at: 8.days.ago)
+    ApplicationRecord.transaction do
+      CleanupUnattachedUploadsJob.perform_now
+      assert_not ActiveStorage::Blob.exists?(blob.id)
+      assert_not DocumentScan.exists?(scan_id)
+      assert DocumentStorageDeletion.exists?(key: blob.key)
+      assert blob.service.exist?(blob.key)
+      raise ActiveRecord::Rollback
+    end
+
+    assert ActiveStorage::Blob.exists?(blob.id)
+    assert DocumentScan.exists?(scan_id)
+    assert_not DocumentStorageDeletion.exists?(key: blob.key)
+    assert blob.service.exist?(blob.key)
+  ensure
+    blob&.purge
+    cleanup_duplicate_review_test_data!(user) if user
+  end
+
+  test 'a variant deletion failure retries after the original file has already been deleted' do
+    blob = ActiveStorage::Blob.create_and_upload!(
+      io: StringIO.new('image'), filename: 'scan.png', content_type: 'image/png', identify: false
+    )
+    variant_key = "variants/#{blob.key}/thumbnail"
+    blob.service.upload(variant_key, StringIO.new('variant'))
+    blob.update!(created_at: 8.days.ago)
+
+    blob.service.stub(:delete_prefixed, ->(_prefix) { raise IOError, 'Storage unavailable' }) do
+      assert_raises(IOError) { CleanupUnattachedUploadsJob.perform_now }
+    end
+
+    assert_not blob.service.exist?(blob.key)
+    assert blob.service.exist?(variant_key)
+    deletion = DocumentStorageDeletion.find_by!(key: blob.key)
+    assert_equal 'image/png', deletion.content_type
+
+    CleanupUnattachedUploadsJob.perform_now
+
+    assert_not blob.service.exist?(variant_key)
+    assert_not DocumentStorageDeletion.exists?(deletion.id)
+  ensure
+    blob&.purge
   end
 
   test 'cleanup cannot leave a late attachment without its scan clearance' do
