@@ -15,6 +15,7 @@ module ConstituentPortal
       visit constituent_portal_dashboard_path
 
       within '[data-testid="application-admission-card"]' do
+        assert_text 'Application status'
         assert_text 'You already have an active or pending application.'
         assert_text "24 months remain in this application's service window."
         assert_no_text 'You are eligible to submit a new application.'

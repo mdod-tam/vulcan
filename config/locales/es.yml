@@ -250,10 +250,8 @@ es:
         duplicate_identity: "%{name} ya está asociado a su cuenta con este nombre y fecha de nacimiento. Si se trata de otra persona, comuníquese con el equipo de MAT al %{support_email} o %{support_phone}."
   applications:
     admission:
-      title: "Período de espera"
+      title: "Estado de la solicitud"
       blocking_application: "Ya tiene una solicitud activa o pendiente."
-      waiting_period: "Puede presentar una nueva solicitud después del %{date}."
-      eligible: "Puede presentar una nueva solicitud."
       remaining_service_months:
         one: "Queda %{count} mes en el período de servicios de esta solicitud."
         other: "Quedan %{count} meses en el período de servicios de esta solicitud."

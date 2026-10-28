@@ -16,13 +16,14 @@ module ConstituentPortal
       assert_response :success
     end
 
-    test 'approved waiting card keeps blocking admission separate from remaining service duration' do
+    test 'approved status card keeps blocking admission separate from remaining service duration' do
       create(:application, :approved, user: @user, application_date: 1.year.ago.to_date)
 
       get constituent_portal_dashboard_path
 
       assert_response :success
       assert_select '[data-testid=application-admission-card]' do
+        assert_select 'h3', text: 'Application status'
         assert_select 'p', text: 'You already have an active or pending application.'
         assert_select 'p', text: "24 months remain in this application's service window."
         assert_select 'p', text: 'You are eligible to submit a new application.', count: 0
@@ -41,7 +42,7 @@ module ConstituentPortal
       end
     end
 
-    test 'non-approved applications do not gain a waiting card' do
+    test 'non-approved applications do not gain an admission card' do
       create(:application, :rejected, user: @user, application_date: 1.day.ago)
 
       get constituent_portal_dashboard_path
@@ -57,6 +58,7 @@ module ConstituentPortal
       get constituent_portal_dashboard_path
 
       assert_select '[data-testid=application-admission-card]' do
+        assert_select 'h3', text: I18n.t('applications.admission.title', locale: :es)
         assert_select 'p', text: I18n.t('applications.admission.blocking_application', locale: :es)
         assert_select 'p', text: I18n.t('applications.admission.remaining_service_months', count: 24, locale: :es)
       end

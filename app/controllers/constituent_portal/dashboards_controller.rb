@@ -91,7 +91,6 @@ module ConstituentPortal
     def load_voucher_information
       @voucher = (@active_application.vouchers.available.first if @active_application)
 
-      @application_admission = Applications::PaperApplicationEligibility.call(current_user)
       @remaining_service_months = calculate_remaining_service_months
     end
 

@@ -188,8 +188,7 @@
                       <p class="text-sm text-gray-700">Established: <%= gr.created_at.strftime("%B %d, %Y") %></p>
                     </div>
                     <div class="flex flex-col sm:flex-row space-y-2 sm:space-y-0 sm:space-x-2">
-                      <% eligibility = paper_application_eligibility(dependent) %>
-                      <% if eligibility.eligible? %>
+                      <% if paper_application_eligibility(dependent).eligible? %>
                         <%= link_to new_admin_paper_application_path(guardian_id: @user.id, dependent_id: dependent.id),
                             class: "btn btn-success btn-sm",
                             data: { turbo_frame: "_top" },
@@ -278,7 +277,7 @@
                           </div>
                         <% end %>
                       <% end %>
-                      <%= paper_application_eligibility_badge(eligibility) %>
+                        <%= paper_application_eligibility_badge(paper_application_eligibility(dependent)) %>
                     </div>
                   </div>
                 </li>

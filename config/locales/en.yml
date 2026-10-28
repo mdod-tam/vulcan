@@ -236,10 +236,8 @@ en:
         duplicate_identity: "%{name} is already associated with your account with this name and birthdate. If this is a different person, contact the MAT Team at %{support_email} or %{support_phone}."
   applications:
     admission:
-      title: "Waiting Period"
+      title: "Application status"
       blocking_application: "You already have an active or pending application."
-      waiting_period: "You may submit a new application after %{date}."
-      eligible: "You are eligible to submit a new application."
       remaining_service_months:
         one: "%{count} month remains in this application's service window."
         other: "%{count} months remain in this application's service window."

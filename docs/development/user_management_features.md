@@ -52,6 +52,8 @@ Deliberate no-contact transitions belong to paper intake, which asks for them ex
 
 Admin user index and search render ordinary User associations. Paper applicant pickers, dependent summaries, and user details consume [`PaperApplicationEligibility`](../../app/services/applications/paper_application_eligibility.rb): active/pending applications block admission; rejected or archived history alone does not start the approved-only waiting duration. Search preloads relationships, grants, and application/product history for its selected results. Eligibility previews remain advisory; paper and portal writers recheck under their existing locks.
 
+Search rows receive explicit presentation locals from `Admin::UsersHelper#user_search_result_locals`, keeping admission and native application/product reads out of ERB preparation fragments. The constituent dashboard's personal application status card appears only for an approved application, showing its blocking-admission message and separate remaining service duration. Rejected or archived applications do not gain that card.
+
 
 **Portal dependent creation.** The [dependent controller](../../app/controllers/constituent_portal/dependents_controller.rb) writes dependent, relationship, and any `portal_dependent` case together; see the [guardian relationship guide](guardian_relationship_system.md).
 

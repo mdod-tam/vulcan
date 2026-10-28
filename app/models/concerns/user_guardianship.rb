@@ -61,12 +61,6 @@ module UserGuardianship
     Application.where(user_id: dependents.pluck(:id))
   end
 
-  def relationship_types_for_dependent(dependent_user)
-    guardian_relationships_as_guardian
-      .where(dependent_id: dependent_user.id)
-      .pluck(:relationship_type)
-  end
-
   # For a dependent, these resolve contact through +guardian_for_contact+.
   def effective_email
     return email unless dependent?
