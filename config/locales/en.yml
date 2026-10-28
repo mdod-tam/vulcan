@@ -932,14 +932,9 @@ en:
       set_product:
         product_not_found: "Product not found"
     proof_reviews:
-      show:
-        proof_not_available: "Proof file no longer available"
       create:
-        proof_completed: "Proof review completed successfully"
         resubmission_not_delivered: "Proof review completed, but the secure proof upload request could not be delivered. Review the secure upload link status and try resending."
         resubmission_suppressed: "Proof review completed. No upload request was emailed because that email is turned off in the email settings. Turn it back on and resend the request, or contact the applicant another way."
-      ensure_reviewable_status:
-        app_not_reviewable: "Application is not in a reviewable state"
     recovery_requests:
       approve:
         recovery_approved: "Security key recovery request approved successfully. The user can register a new security key."

@@ -119,4 +119,73 @@ module Admin
       assert_no_match(/target="attachments-section"/, response.body)
     end
   end
+
+  # Request outcomes must reflect real commits and after-commit callbacks.
+  class ApplicationProofReviewCommitResponsesTest < ActionDispatch::IntegrationTest
+    include AuthenticationTestHelper
+    include ConcurrencyTestHelper
+
+    self.use_transactional_tests = false
+
+    setup do
+      @admin = create(:admin, email: generate(:email))
+      @user = create(:constituent, email: generate(:email))
+      sign_in_for_integration_test(@admin)
+      @application = create(:application, :in_progress, :income_not_required, user: @user)
+      @application.residency_proof.attach(io: file_fixture('residency_proof.pdf').open, filename: 'residency.pdf', content_type: 'application/pdf')
+      @application.id_proof.attach(io: file_fixture('disability_certification_valid.pdf').open, filename: 'id.pdf', content_type: 'application/pdf')
+      %w[residency_proof id_proof].each do |slot|
+        mark_document_clean!(@application.public_send(slot).blob, user: @user, slot: slot)
+      end
+      @application.update!(id_proof_status: :approved, disability_certification_status: :approved)
+      ProofReview.any_instance.stubs(:handle_post_review_actions).raises(StandardError, 'after commit failed')
+    end
+
+    teardown do
+      cleanup_duplicate_review_test_data!(@user, @admin)
+      Current.reset
+    end
+
+    %i[html turbo_stream].each do |format|
+      test "#{format} proof review shows a warning for a saved review whose callback failed" do
+        submit_review(format)
+
+        assert_redirected_to admin_application_path(@application)
+        assert_equal 'Residency proof approved successfully.', flash[:notice]
+        assert_match(/review was saved.*follow-up step/, flash[:alert])
+        assert_saved_review
+        assert @application.events.exists?(action: 'proof_review_follow_up_failed')
+      end
+
+      test "#{format} proof review redirects to the application when saved state cannot be confirmed" do
+        ProofReview.stubs(:find_by).raises(ActiveRecord::ConnectionNotEstablished, 'verification unavailable')
+
+        submit_review(format)
+
+        assert_response :see_other
+        assert_redirected_to admin_application_path(@application)
+        assert_match(/may have been saved.*could not be confirmed/, flash[:alert])
+        assert_match(/before reviewing it again/, flash[:alert])
+        assert_nil flash[:notice]
+        assert_saved_review
+        assert_not @application.events.exists?(action: 'proof_review_follow_up_failed')
+      end
+    end
+
+    private
+
+    def submit_review(format)
+      patch update_proof_status_admin_application_path(@application, format: format),
+            params: { proof_type: 'residency', status: 'approved' }
+    end
+
+    def assert_saved_review
+      review = @application.proof_reviews.where(proof_type: :residency, status: :approved).sole
+      assert_equal @admin, review.admin
+      assert_equal 'approved', @application.reload.residency_proof_status
+      assert_equal 'approved', @application.status
+      assert @application.status_changes.exists?(from_status: 'in_progress', to_status: 'approved', user: @admin)
+      assert @application.events.exists?(action: 'application_status_changed')
+    end
+  end
 end

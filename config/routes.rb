@@ -261,7 +261,6 @@ Rails.application.routes.draw do
 
     resources :constituents_dashboard, only: %i[index show]
 
-    resources :proof_reviews, only: %i[index show new create]
     resources :policies, only: %i[index show edit update create] do
       collection do
         get :changes
