@@ -1,16 +1,18 @@
 <main role="main" class="min-h-screen flex items-center justify-center bg-gray-100">
   <section id="password-form-container" class="card p-8 w-full max-w-md" aria-labelledby="password-form-heading">
     <% token_reset = params[:token].present? %>
-    <h2 id="password-form-heading" class="text-2xl font-semibold mb-6 text-center"><%= token_reset ? "Reset Password" : "Change Password" %></h2>
+    <h2 id="password-form-heading" class="text-2xl font-semibold mb-6 text-center"><%= t(token_reset ? 'passwords.edit.reset' : 'passwords.edit.change') %></h2>
 
     <%= form_with(url: password_path, method: :patch, html: { class: "space-y-6" }) do |form| %>
+      <%# A failed submit re-renders in the language the page was opened in. %>
+      <%= form.hidden_field :locale, value: I18n.locale %>
       <% if token_reset %>
         <%= form.hidden_field :token, value: params[:token] %>
       <% else %>
         <%= render 'shared/password_field',
                    form: form,
                    attribute: :password_challenge,
-                   label: 'Current Password',
+                   label: t('passwords.edit.current_password'),
                    autocomplete: 'current-password',
                    autofocus: true %>
       <% end %>
@@ -18,20 +20,20 @@
       <%= render 'shared/password_field',
                  form: form,
                  attribute: :password,
-                 label: 'New Password',
+                 label: t('passwords.edit.new_password'),
                  autocomplete: 'new-password',
                  new_password: true %>
 
       <%= render 'shared/password_field',
                  form: form,
                  attribute: :password_confirmation,
-                 label: 'Confirm New Password',
+                 label: t('passwords.edit.confirm_password'),
                  autocomplete: 'new-password' %>
 
       <div class="flex justify-end space-x-4">
-        <%= link_to "Cancel", sign_in_path,
+        <%= link_to t('passwords.edit.cancel'), sign_in_path(locale: I18n.locale),
             class: "btn btn-outline btn-sm" %>
-        <%= form.submit token_reset ? "Reset Password" : "Change Password",
+        <%= form.submit t(token_reset ? 'passwords.edit.reset' : 'passwords.edit.change'),
             class: "btn btn-primary btn-sm" %>
       </div>
     <% end %>

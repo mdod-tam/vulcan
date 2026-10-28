@@ -19,7 +19,7 @@ EmailTemplate.create_or_find_by!(name: 'application_notifications_registration_c
     Para solicitar asistencia:
 
     1. Inicie una nueva solicitud.
-    2. Proporcione toda la información requerida, incluyendo prueba de residencia e información de contacto de un profesional que pueda certificar su estado de discapacidad.
+    2. Proporcione toda la información requerida, incluyendo comprobante de residencia e información de contacto de un profesional que pueda certificar su estado de discapacidad.
     3. Envíe su solicitud para su revisión.
 
     Una vez que su solicitud sea aprobada, recibirá un vale con un valor fijo que se puede utilizar para comprar productos elegibles, junto con información sobre qué productos son elegibles y qué proveedores están autorizados para aceptar los vales.

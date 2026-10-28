@@ -310,9 +310,9 @@ class ApplicationNotificationsMailer < ApplicationMailer # rubocop:disable Metri
 
   def registration_confirmation(user)
     with_mailer_error_handling("registration_confirmation user=#{user&.id}") do
-      active_vendors_text_list = build_active_vendors_list
       template_name            = 'application_notifications_registration_confirmation'
       locale                   = resolve_template_locale(recipient: user)
+      active_vendors_text_list = build_active_vendors_list(locale: locale)
       text_template            = find_text_template(template_name, locale: locale)
       variables                = build_registration_variables(user, active_vendors_text_list, template: text_template, locale: locale)
 
@@ -460,9 +460,9 @@ class ApplicationNotificationsMailer < ApplicationMailer # rubocop:disable Metri
   def build_proof_approved_variables(application, proof_review, template:, locale: nil)
     user                      = application.user
     organization_name         = Policy.get('organization_name') || 'MAT Program'
-    proof_type_formatted      = format_proof_type(proof_review.proof_type)
+    proof_type_formatted      = format_proof_type(proof_review.proof_type, locale: locale)
     all_proofs_approved       = application.respond_to?(:all_proofs_approved?) && application.all_proofs_approved?
-    all_proofs_approved_text  = all_proofs_approved ? 'All required documents for your application have now been approved.' : ''
+    all_proofs_approved_text  = all_proofs_approved ? I18n.t('application_notifications.proof_approved.all_proofs_approved', locale: locale) : ''
 
     base_variables = build_base_email_variables(
       template: template,
@@ -783,12 +783,12 @@ class ApplicationNotificationsMailer < ApplicationMailer # rubocop:disable Metri
                          }).compact
   end
 
-  def build_active_vendors_list
+  def build_active_vendors_list(locale: nil)
     active_vendors = Users::Vendor.active.order(:business_name)
     if active_vendors.any?
       active_vendors.map { |v| "- #{v.business_name}" }.join("\n")
     else
-      'No authorized vendors found at this time.'
+      I18n.t('application_notifications.registration_confirmation.no_active_vendors', locale: locale)
     end
   end
 
@@ -864,7 +864,7 @@ class ApplicationNotificationsMailer < ApplicationMailer # rubocop:disable Metri
   def build_proof_received_variables(application, proof_type, template:, locale: nil)
     user                 = application.user
     organization_name    = Policy.get('organization_name') || 'MAT Program'
-    proof_type_formatted = format_proof_type(proof_type)
+    proof_type_formatted = format_proof_type(proof_type, locale: locale)
     base_variables       = build_base_email_variables(
       template: template,
       organization_name: organization_name,

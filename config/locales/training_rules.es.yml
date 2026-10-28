@@ -16,8 +16,8 @@ es:
         no_show_notes: "Motivo de la ausencia"
         reschedule_reason: "Motivo del cambio"
   training_rules:
-    current_trainer_change: "Solo el instructor asignado actualmente puede modificar esta cita."
-    current_trainer_create: "Solo el instructor asignado actualmente puede crear una cita."
+    current_trainer_change: "Solo el capacitador asignado actualmente puede modificar esta cita."
+    current_trainer_create: "Solo el capacitador asignado actualmente puede crear una cita."
     new_work_service_window: "La capacitación solo está disponible para solicitudes aprobadas dentro del período de servicio."
     quota_reached: "Se ha alcanzado el límite de sesiones de capacitación."
     close_open_first: "Registre primero el resultado de la cita pendiente."
