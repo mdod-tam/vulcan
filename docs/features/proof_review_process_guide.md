@@ -72,7 +72,7 @@ Starting points by question: [`ProofAttachmentService`](../../app/services/proof
 
 ## Scheduled jobs, including the broken ones
 
-[`config/recurring.yml`](../../config/recurring.yml) schedules attachment metrics daily and consistency checks weekly in production. A checked-in schedule is not evidence that the queue worker is running.
+[`config/recurring.yml`](../../config/recurring.yml) schedules attachment metrics daily and consistency checks weekly in production. A checked-in schedule doesn't mean the queue worker is running.
 
 | Job | Behavior and limits |
 | --- | --- |

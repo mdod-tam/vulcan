@@ -1,10 +1,8 @@
 # Security Baseline
 
-This policy covers MAT Vulcan's code, infrastructure, environments, and providers that handle agency data.
+This policy covers MAT Vulcan's code, infrastructure, environments, and any provider that handles agency data. It lists the security requirements and the evidence you'd need to show they're met.
 
-It states the security requirements and the evidence needed to assess them.
-
-[controls.yaml](controls.yaml) maps stable control IDs to implementation descriptions and source files. [Security hardening tasks](../future_work/mat_vulcan_todos.md#security-hardening) live in the project TODOs.
+[controls.yaml](controls.yaml) describes each control and the files that implement it. Open hardening work is in the [project TODOs](../future_work/mat_vulcan_todos.md).
 
 ## Policy authority
 

@@ -143,7 +143,7 @@ module DocumentSigning
 
       result = service.call
       assert result.failure?
-      assert_equal 'Failed to create document signing request: API Error', result.message
+      assert_equal 'Failed to create document signing request.', result.message
     end
 
     test 'creates audit event on successful submission' do

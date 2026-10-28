@@ -82,7 +82,7 @@ Issuing a reset link deliberately sits outside the merge lock. A racing contact 
 
 [`AccountRecoveryController`](../../app/controllers/account_recovery_controller.rb) accepts the same eligible identifiers and files a request for staff. A partial unique index — a database rule that blocks duplicates only where a condition holds — allows one pending [`RecoveryRequest`](../../app/models/recovery_request.rb) per user. Repeat submissions return the same public confirmation and reuse the pending request.
 
-[`Admin::RecoveryRequestsController`](../../app/controllers/admin/recovery_requests_controller.rb) approves the request and removes **WebAuthn credentials only**. TOTP and SMS survive. Approval rolls back if the notification record cannot be created or reports an immediate delivery error. A successfully enqueued email still proves nothing about later delivery. The admin **Delete MFA tokens** action is the broader one: it removes all factor types plus sessions ([admin tools](../development/user_management_features.md#admin-tools)).
+[`Admin::RecoveryRequestsController`](../../app/controllers/admin/recovery_requests_controller.rb) approves the request and removes **WebAuthn credentials only**. TOTP and SMS survive. Approval rolls back if the notification record cannot be created or reports an immediate delivery error. Even a successfully enqueued email says nothing about whether it's delivered later. The admin **Delete MFA tokens** action is the broader one: it removes all factor types plus sessions ([admin tools](../development/user_management_features.md#admin-tools)).
 
 ## Public copy constraints
 

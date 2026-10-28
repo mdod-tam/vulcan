@@ -1,9 +1,8 @@
 # frozen_string_literal: true
 
-module DashboardMetricsLoading # rubocop:disable Metrics/ModuleLength
+module DashboardMetricsLoading
   extend ActiveSupport::Concern
 
-  # Returns metrics as a hash. Errors return default metric values.
   def load_dashboard_metrics
     # Cache metrics for five minutes to reduce queries.
     # Keep print_queue_pending_count and the reassignment counts outside the cache so each request reads current counts.
@@ -42,9 +41,6 @@ module DashboardMetricsLoading # rubocop:disable Metrics/ModuleLength
     cached.merge(print_queue_pending_count: PrintQueueItem.unreleased.count,
                  evaluations_needing_reassignment_count: Application.needing_evaluator_reassignment.count,
                  training_needing_reassignment_count: Application.needing_trainer_reassignment.count)
-  rescue StandardError => e
-    Rails.logger.error "Dashboard metric error: #{e.class.name}"
-    default_metric_values_hash
   end
 
   def load_simple_counts
@@ -313,13 +309,6 @@ module DashboardMetricsLoading # rubocop:disable Metrics/ModuleLength
     Date.new(year, 7, 1)
   end
 
-  def safe_assign(var_name, value)
-    instance_variable_set("@#{var_name}", value)
-  rescue StandardError => e
-    Rails.logger.error "Failed to assign @#{var_name}: #{e.class.name}"
-    instance_variable_set("@#{var_name}", 0)
-  end
-
   def cached_count(key, expires_in: 5.minutes, &)
     Rails.cache.fetch("dashboard_metrics_#{key}", expires_in: expires_in, &)
   end
@@ -332,22 +321,6 @@ module DashboardMetricsLoading # rubocop:disable Metrics/ModuleLength
       draft_count submitted_count in_review_count approved_count rejected_count in_progress_count
       draft_and_needs_info_count
     ]
-  end
-
-  def default_metric_values_hash
-    {
-      open_applications_count: 0,
-      pending_services_count: 0,
-      proofs_needing_review_count: 0,
-      disability_certs_to_review_count: 0,
-      digitally_signed_needs_review_count: 0,
-      training_requests_count: 0,
-      evaluation_requests_count: 0,
-      evaluations_needing_reassignment_count: 0,
-      training_needing_reassignment_count: 0,
-      print_queue_pending_count: 0,
-      current_fiscal_year: current_fiscal_year
-    }
   end
 
   # Counts each user once, even if the user has several applications.

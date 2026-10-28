@@ -1,9 +1,7 @@
 # frozen_string_literal: true
 
 module Notifications
-  # Main service for handling income threshold exceeded notifications
-  # Coordinates parameter normalization and threshold calculation
-  # Returns prepared data for the mailer to render
+  # Normalizes the parameters and calculates the threshold for the income-threshold-exceeded mailer.
   class IncomeThresholdService < BaseService
     def self.call(constituent_params, notification_params)
       new(constituent_params, notification_params).call

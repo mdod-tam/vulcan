@@ -2,7 +2,7 @@
 
 A PostgreSQL restore can succeed while Rails cannot decrypt records or retrieve attachments. Recovery requires the database, matching encryption material, uploaded files, and compatible application code/configuration.
 
-This guide describes the recovery procedure; it does not establish that a deployed app has backups configured or that a restore has been tested. Keep secret values, config exports, database dumps, and signed download URLs out of Git and shared logs. Commands below use variable names only.
+This guide walks through the recovery procedure. Keep secret values, config exports, database dumps, and signed download URLs out of Git and shared logs. Commands below use variable names only.
 
 ## Recovery checklist
 
@@ -124,8 +124,8 @@ For an independently stored custom-format dump, use a short-lived signed URL in 
 
 ### Verify before reopening
 
-- [ ] Check migration status against the intended release. Apply only migrations required for that release after the restore; a deploy that ran migrations before restoration does not prove the restored schema is current.
-- [ ] Read pre-backup encrypted records through Rails without printing personal data. Verify designated accounts' contact lookup, password sign-in, MFA, and admin email search. Newly created test records alone cannot prove old data is decryptable.
+- [ ] Check migration status against the intended release. Apply only migrations required for that release after the restore; a deploy that ran migrations before the restore doesn't tell you the restored schema is current.
+- [ ] Read pre-backup encrypted records through Rails without printing personal data. Verify designated accounts' contact lookup, password sign-in, MFA, and admin email search. Newly created test records can't tell you whether old data decrypts.
 - [ ] Download pre-backup attachments and verify a new upload against the restored storage service.
 - [ ] Review pending jobs and external delivery state before restarting workers. An older snapshot can restore jobs whose real-world effects already happened, including email/SMS deliveries.
 - [ ] Keep restored policies, templates, and accounts. **Do not run initialization seeds:** policy seeding overwrites differing values, template seeding replaces edited copy, and demo seeding clears data.

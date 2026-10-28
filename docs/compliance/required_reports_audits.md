@@ -1,14 +1,8 @@
 # Security Reports and Audits
 
-This checklist owns the operational schedule for the [security baseline](../security/baseline_policy.md).
+This is the review schedule for the [security baseline](../security/baseline_policy.md): what to check, how often, who does it, and what evidence to keep for the application, the infrastructure, and our providers.
 
-It covers application, infrastructure, and provider evidence.
-
-A scheduled task is not evidence that a control is implemented or an assessment passed.
-
-The frequencies below retain the project's stated baseline. Confirm applicable agency deadlines, required assessment scope, and named owners with the security owner.
-
-External submission dates and approval requirements need confirmation before use.
+The frequencies below are the project's baseline. Check them with the security owner against the agency's deadlines, the required assessment scope, and the named owners, and confirm any external submission dates and approval requirements before you rely on them.
 
 ## Schedule
 
@@ -25,27 +19,27 @@ External submission dates and approval requirements need confirmation before use
 | Annually | Rotate encryption keys using a tested procedure; review audit-history integrity. | DevOps / Security | Tested key migration/restore, completed rotation record, and sampled history checks. See key handling below. |
 | Annually and when approval scope changes | Refresh the policy assessment and applicable production approval package. | Compliance / Security | Reviewed requirements, assessment artifacts, unresolved conditions, and actual approval. |
 
-These are responsibilities to assign, not evidence that each named role is staffed or each system is deployed. Record actual completion and exceptions rather than carrying an old scheduled date forward as a passed assessment.
+The roles are assignments to make. When a review happens, record what was done and any exceptions, so an old scheduled date never stands in for a completed assessment.
 
 ## Current automation
 
-- [CI](../../.github/workflows/ci.yml) is configured to run Brakeman. Review findings and verify fixes with a fresh scan.
-- [Dependabot](../../.github/dependabot.yml) is configured for daily Bundler and GitHub Actions update checks.
+- [CI](../../.github/workflows/ci.yml) runs Brakeman. Review the findings and rescan to confirm fixes.
+- [Dependabot](../../.github/dependabot.yml) checks Bundler and GitHub Actions for updates every day.
 
-[Security hardening tasks](../future_work/mat_vulcan_todos.md#security-hardening) track implementation work.
+Open hardening work is in the [project TODOs](../future_work/mat_vulcan_todos.md).
 
 ## Record the result
 
 For each review, record its date, environment, scope, responsible person, result, and next due date. Link the report and any remediation work.
 
-Update [controls.yaml](../security/controls.yaml) where the control has `audit.report`, `audit.coverage`, and `audit.next_review_due` fields. Leave unknown results explicit; a source-file pointer or passing CI job does not establish a broader control's coverage.
+When a review produces a report, add its reference, the measured coverage, and the next review date to that control's `audit` block in [controls.yaml](../security/controls.yaml). Don't fill those in from a source-file pointer or a passing CI job. Neither tells you how much of a broader control is covered.
 
-Keep reports and exports in an access-controlled evidence store. The catalog can hold report references without copying personal data, credentials, or sensitive findings into the repository.
+Keep reports and exports in an access-controlled evidence store. The catalog only points to them, so personal data, credentials, and sensitive findings stay out of the repo.
 
 ## Key handling and history
 
-[PII encryption](../security/pii_encryption.md) lists the selected encrypted fields and key constraints. Editing Rails credentials alone is not a rotation procedure: retain the required previous keys, check deterministic lookups and uniqueness, and prove that current data and backups remain readable before retiring old keys.
+[PII encryption](../security/pii_encryption.md) lists the selected encrypted fields and key constraints. Editing Rails credentials isn't a rotation procedure by itself. Keep the previous keys you still need, check deterministic lookups and uniqueness, and show that current data and backups still read correctly before you retire the old keys.
 
 For annual history checks, sample `Event` audit records, `ApplicationStatusChange` transitions, `ProofReview` decisions, and `Notification` communication history. The [audit guide](../features/audit_event_tracking.md) explains their different roles. Confirm coverage and retention for the workflows being assessed rather than assuming every model has the same history.
 
-The [security baseline](../security/baseline_policy.md#before-production-approval) identifies the approval package. Track acceptance and unresolved conditions with the agency; this checklist does not grant approval.
+The [security baseline](../security/baseline_policy.md#before-production-approval) identifies the approval package. Track acceptance and open conditions with the agency. Approval comes from them, not from this checklist.

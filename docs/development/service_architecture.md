@@ -44,7 +44,7 @@ There is no single return convention, and truthiness is not a safe test — a re
 | `BaseService::Result` | `success?` / `failure?`, plus `message` and `data`. |
 | Attachment-service hash | `result[:success]`, with `result[:error]` on failure. |
 | Paper intake boolean | `errors`, `commit_confirmed?`, and `warning_message` — see below. |
-| Audit or notification record | The record, or `nil`. Creating a record proves nothing about external delivery. |
+| Audit or notification record | The record, or `nil`. A created record doesn't mean anything was delivered. |
 
 ### Paper intake can succeed while its follow-up fails
 
@@ -139,7 +139,7 @@ Deployment requires the additive migration before the new server code. All write
 
 ## Temporary request context
 
-[`Current`](../../app/models/current.rb) carries the actor and short-lived workflow state. The flags have different consumers, and a flag's name is not evidence of what it bypasses.
+[`Current`](../../app/models/current.rb) carries the actor and short-lived workflow state. The flags have different consumers, and a flag's name doesn't tell you what it bypasses.
 
 | Attribute | Actual effect |
 | --- | --- |

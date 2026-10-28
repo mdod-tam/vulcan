@@ -45,7 +45,7 @@ The [request helpers](../../test/support/authentication_test_helper.rb) arrange 
 
 [`ApplicationSystemTestCase`](../../test/application_system_test_case.rb) holds driver configuration and cleanup. Locators favor labels, button text, and scoped sections, falling back to a stable ID or `data-testid` where no semantic locator is unambiguous.
 
-The [browser helpers](../../test/support/system_test_helpers.rb) cover the recurring waits — `wait_for_turbo`, `wait_for_stimulus_controller`, modal open and close. A page going idle is not proof the operation succeeded, so the wait goes before the assertion, not instead of it. After a Turbo replacement, an element captured earlier is detached.
+The [browser helpers](../../test/support/system_test_helpers.rb) cover the recurring waits — `wait_for_turbo`, `wait_for_stimulus_controller`, modal open and close. A page going idle doesn't mean the operation worked, so put the wait before the assertion, not in place of it. After a Turbo replacement, an element captured earlier is detached.
 
 `js_errors: true` fails browser tests on uncaught errors and rejected promises; a small hook rethrows Stimulus-reported errors. Runtime errors and missing declared controllers invalidate screenshot sidecars.
 

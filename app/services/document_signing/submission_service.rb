@@ -73,7 +73,7 @@ module DocumentSigning
               { delivery_error: true, configuration_error: true, reason: e.reason })
     rescue StandardError => e
       log_error(e, application_id: @application.id)
-      failure("Failed to create document signing request: #{e.message}")
+      failure('Failed to create document signing request.')
     end
 
     private

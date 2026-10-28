@@ -70,8 +70,8 @@ module ConcurrencyTestHelper
   # The wait ends when pg_blocking_pids identifies blocked_by as the blocker for pid.
   # It raises after timeout seconds. The exact blocker excludes unrelated lock waits.
   #
-  # A prior timing capture showed a three-second lock wait that pg_stat_activity.wait_event_type polling missed.
-  # pg_blocking_pids queries the lock manager instead.
+  # Polling pg_stat_activity.wait_event_type can miss a lock wait, so this asks the lock manager through
+  # pg_blocking_pids instead.
   #
   # A separate observer connection rejects open transactions and uses uncached queries.
   # A cached result would not reflect later changes to the lock graph.

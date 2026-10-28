@@ -11,7 +11,7 @@ Rails flash messages give immediate request feedback.
 1. The workflow calls `NotificationService.create_and_deliver!` with an action, recipient, and related record.
 2. The service creates a `Notification`. With `deliver: true`, it attempts the mapped delivery; `deliver: false` creates history only.
 3. The mailer builds the message and resolves its destination. Preference-sensitive messages can become letters in the print queue.
-4. Routing metadata records the actual channel and reason. A queued message is not proof that the recipient received it.
+4. Routing metadata records the actual channel and reason. A queued message doesn't mean the recipient got it.
 
 The requested channel is `:email`, `:letter`, or record-only `:sms`, and what happened instead is recorded in `actual_delivery_channel` and `delivery_route_reason` — the requested channel alone will not explain a message that became a letter. SMS never comes from here; specific workflows send it through `SmsService`.
 
@@ -47,7 +47,7 @@ Automatic proof-rejection delivery does not select SMS. Staff can select it from
 
 [NotificationComposer](../../app/services/notification_composer.rb) supplies short in-app text. Mailers supply full email and letter bodies using [EmailTemplate](../../app/models/email_template.rb). Each template's `syntax` selects `legacy_percent` placeholders or `liquid` with declared variable paths and restricted syntax. Preserve recipient and locale behavior when changing a template.
 
-[UpdateEmailStatusJob](../../app/jobs/update_email_status_job.rb) refreshes pollable `EmailDeliveryAttempt` rows linked to a notification. The authenticated Postmark webhook records delivery, bounce and complaint feedback; open tracking is optional. Legacy message IDs do not establish provider identity, and queued, accepted or opened messages do not prove delivery. See [Postmark delivery visibility](../infrastructure/postmark_delivery_visibility.md) for matching, polling limits and history semantics.
+[UpdateEmailStatusJob](../../app/jobs/update_email_status_job.rb) refreshes pollable `EmailDeliveryAttempt` rows linked to a notification. The authenticated Postmark webhook records delivery, bounce and complaint feedback; open tracking is optional. Legacy message IDs can't identify the provider's message, and a queued, accepted or opened message isn't proof of delivery. See [Postmark delivery visibility](../infrastructure/postmark_delivery_visibility.md) for matching, polling limits and history semantics.
 
 In the notification list, recipients see basic delivery status on their own notifications. Diagnostic details—including suppression reasons, destination ownership, provider feedback and tracking history—and manual notification status refresh are admin-only. Both audiences use the shared delivery presenter so the status has the same meaning.
 

@@ -8,4 +8,4 @@ This targets the initial exported CSV. Spreadsheet applications can remove escap
 
 Successful HTTP exports create an `export_generated` audit event with the requesting actor, fixed export type and data-row count. The event excludes exported contents, submitted filters and selected record IDs. Each completed generation records its own event, including an empty export. The command-line duplicate report retains its existing read-only behavior and writes through the same serialization policy to the caller's file.
 
-This boundary does not decide which personal fields each role needs. Existing authorization, columns, filters, grouping and pagination remain the export owners' responsibility. The [report privacy review](../future_work/mat_vulcan_todos.md) remains separate work.
+This boundary does not decide which personal fields each role needs. Existing authorization, columns, filters, grouping and pagination remain the export owners' responsibility. The [report privacy review](../future_work/mat_vulcan_todos.md#advanced-reporting) is still open.

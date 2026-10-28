@@ -200,7 +200,7 @@ The hourly job handles at most 100 eligible attempts per run. Each unconfirmed a
 
 Shared EN/ES delivery badges and keyboard-accessible details appear in notification and request histories and the relevant authorized detail screens. Request lifecycle, provider delivery, print handling and DocuSeal remain separate facts. Application/contact attention only includes actionable requests; a bounce at an old address does not label a replacement address bad. Delivered means receiving-server acceptance; an open signal is not proof of human reading.
 
-Notifications with no delivery evidence have no delivery panel. A recorded queue, suppression, error or non-email outcome stays visible; an actual attempt with an uncertain outcome shows **Delivery unknown**. Placeholder or RFC message IDs do not establish a send. `notification_tracking:backfill` and `:analyze` report these records without changing them; `:fix_duplicates` is retired without deleting history. The notification's existing enum remains the owner of local queue, suppression and configuration outcomes. Provider facts never overwrite it.
+Notifications with no delivery evidence have no delivery panel. A recorded queue, suppression, error or non-email outcome stays visible; an actual attempt with an uncertain outcome shows **Delivery unknown**. A placeholder or RFC message ID doesn't mean anything was sent. `notification_tracking:backfill` and `:analyze` report these records without changing them; `:fix_duplicates` is retired without deleting history. The notification's existing enum remains the owner of local queue, suppression and configuration outcomes. Provider facts never overwrite it.
 
 ## Tests
 

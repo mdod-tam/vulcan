@@ -1,12 +1,8 @@
 # Current Application Features
 
-This Ruby on Rails application manages the lifecycle of applications submitted for accessible telecommunications assistance.
+This Rails app manages applications for accessible telecommunications assistance, from intake through document review, disability certification, fulfillment, and any training or evaluation that follows.
 
-That lifecycle runs from intake through document review, disability certification, fulfillment, and any related training or evaluation.
-
-This page is a feature map.
-
-The linked guides explain how each workflow works.
+What follows is a quick tour of what it does. Each section links to the guide that covers the workflow in detail.
 
 ## Applications and identity
 
@@ -29,7 +25,7 @@ The portal displays the restriction, but the writer rechecks under lock. See [us
 | Disability certification | Request provider documentation, collect it through secure upload or DocuSeal, upload scanned documents, review the result, or print a DCF. |
 | Automatic approval | Reconcile the application after document work: approved residency, ID, required income proof, and disability certification can lead to approval. |
 
-Proof review and disability certification are separate workflows. DocuSeal completion means a document was signed, not that staff approved the certification. Incoming fax/postal documents require staff upload; inbound email is not a live collection path.
+Proof review and disability certification are separate workflows. When DocuSeal finishes, the document has been signed, but staff still have to approve the certification. Staff upload documents that arrive by fax or mail, and inbound email isn't a way to collect them.
 
 A saved proof rejection survives a failed resubmission-request delivery, with a warning for staff. See [proof review](features/proof_review_process_guide.md) and [DocuSeal integration](development/docuseal_integration_guide.md).
 

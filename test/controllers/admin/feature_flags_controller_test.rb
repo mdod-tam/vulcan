@@ -108,7 +108,7 @@ module Admin
       @feature_flag.reload
       assert @feature_flag.enabled?, 'Flag should remain unchanged after rollback'
       assert_redirected_to admin_feature_flags_path
-      assert_match 'simulated audit failure', flash[:alert]
+      assert_equal 'Failed to update feature flag.', flash[:alert]
     end
 
     test 'index omits email controls' do
