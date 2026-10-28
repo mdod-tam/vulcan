@@ -10,7 +10,7 @@
 #
 # It's strongly recommended that you check this file into your version control system.
 
-ActiveRecord::Schema[8.1].define(version: 2026_10_27_210000) do
+ActiveRecord::Schema[8.1].define(version: 2026_10_27_220000) do
   # These are extensions that must be enabled in order to support this database
   enable_extension "pg_catalog.plpgsql"
 
@@ -227,6 +227,15 @@ ActiveRecord::Schema[8.1].define(version: 2026_10_27_210000) do
     t.index ["user_id"], name: "index_document_scans_on_user_id"
     t.check_constraint "((user_id IS NOT NULL)::integer + (secure_form_id IS NOT NULL)::integer + COALESCE((continuation::text = 'docuseal'::text)::integer, 0)) <= 1", name: "document_scans_owner"
     t.check_constraint "status::text = ANY (ARRAY['pending'::character varying, 'clean'::character varying, 'blocked'::character varying, 'failed'::character varying]::text[])", name: "document_scans_status"
+  end
+
+  create_table "document_storage_deletions", force: :cascade do |t|
+    t.string "key", null: false
+    t.string "service_name", null: false
+    t.string "content_type"
+    t.datetime "created_at", null: false
+    t.datetime "updated_at", null: false
+    t.index ["key"], name: "index_document_storage_deletions_on_key", unique: true
   end
 
   create_table "duplicate_review_case_candidates", force: :cascade do |t|

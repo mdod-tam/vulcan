@@ -489,31 +489,33 @@ module Applications
       assert result, "Failed to create application with disability certification custom rejection reason: #{service.errors.inspect}"
     end
 
-    test 'routes none provided disability certification rejection directly through attachment service' do
-      test_timestamp = Time.now.to_i
-      unique_email = "test-disability-certification-none-#{test_timestamp}@example.com"
-      unique_phone = "202569#{test_timestamp.to_s[-4..]}"
-
-      service_params = {
-        no_medical_provider_information: true,
-        constituent: @constituent_params.merge(email: unique_email, phone: unique_phone),
-        application: @application_params.except(:medical_provider_name, :medical_provider_phone, :medical_provider_email),
-        disability_certification_action: 'rejected',
-        disability_certification_rejection_reason: 'none_provided'
-      }
-
-      Applications::DisabilityCertificationReviewer.any_instance.expects(:reject).never
-      DisabilityCertificationAttachmentService.expects(:reject_certification).with(
-        has_entries(
-          reason: 'none_provided',
-          reason_code: nil,
-          submission_method: :paper
+    %w[en es].each do |locale|
+      test "paper none provided certification persists its code and sends a localized notice in #{locale}" do
+        service_params = base_paper_params.merge(
+          disability_certification_action: 'rejected', disability_certification_rejection_reason: 'none_provided'
         )
-      ).returns({ success: true })
+        service_params[:constituent][:locale] = locale
+        Applications::DisabilityCertificationReviewer.any_instance.expects(:reject).never
+        service = PaperApplicationService.new(params: confirmed_paper_params(service_params, admin: @admin), admin: @admin)
 
-      service = PaperApplicationService.new(params: confirmed_paper_params(service_params, admin: @admin), admin: @admin)
-      result = service.create
-      assert result, "Failed to create application with disability certification marked none provided: #{service.errors.inspect}"
+        assert service.create, service.errors.inspect
+        application = service.application.reload
+        review = application.proof_reviews.rejections.find_by!(proof_type: :disability_certification)
+        assert_equal 'none_provided', review.rejection_reason_code
+        assert_equal 'none_provided', review.rejection_reason
+        assert_equal @admin, review.admin
+        assert application.disability_certification_status_rejected?
+        notice = Notification.where(notifiable: application, action: 'disability_certification_not_provided').sole
+        assert_equal application.user, notice.recipient
+        assert_equal @admin, notice.actor
+        assert_equal :queued, NotificationService.delivery_outcome(notice)
+
+        email = ApplicationNotificationsMailer.disability_certification_not_provided(application)
+        assert_equal [application.user.email], email.to
+        assert_includes email.body.to_s, I18n.t('application_notifications.proof_rejected.none_provided.disability_certification', locale: locale)
+        assert_not_includes email.body.to_s, 'none_provided'
+        assert_nil service.warning_message
+      end
     end
 
     test 'paper intake without provider info creates application and sends provider info request' do
@@ -1236,34 +1238,6 @@ module Applications
       ensure
         FeatureFlag.disable!(:vouchers_enabled)
       end
-    end
-
-    test 'disability certification not provided notice notifies constituent for none_provided review' do
-      constituent = create(:constituent, communication_preference: :email)
-      application = create(:application, :in_progress, skip_proofs: true, user: constituent)
-      %i[income residency].each do |proof_type|
-        application.public_send("#{proof_type}_proof").attach(
-          io: StringIO.new("#{proof_type} proof"),
-          filename: "#{proof_type}.pdf",
-          content_type: 'application/pdf'
-        )
-      end
-      create(:proof_review,
-             application: application,
-             admin: @admin,
-             proof_type: :disability_certification,
-             status: :rejected,
-             rejection_reason: 'none_provided',
-             rejection_reason_code: 'none_provided',
-             submission_method: :paper)
-
-      service = PaperApplicationService.new(params: {}, admin: @admin)
-      service.instance_variable_set(:@application, application)
-      service.instance_variable_set(:@constituent, constituent)
-
-      NotificationService.expects(:create_and_deliver!).with(has_entry(type: 'disability_certification_not_provided')).once
-
-      service.send(:send_disability_certification_not_provided_notice)
     end
 
     test 'append_proof_resubmission_delivery_warnings surfaces note when resubmission delivery failed' do

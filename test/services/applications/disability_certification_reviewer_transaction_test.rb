@@ -35,7 +35,7 @@ module Applications
       paper.instance_variable_set(:@application, @application)
 
       ActiveRecord::Base.transaction do
-        result = paper.send(:reject_disability_certification_via_reviewer,
+        result = paper.send(:reject_disability_certification,
                             selected_reason: 'other', custom_reason: 'Missing signature', notes: nil)
         assert result[:success]
         assert_equal :deferred, result[:provider_delivery][:outcome]
@@ -93,7 +93,7 @@ module Applications
 
       assert_no_difference -> { Notification.where(notifiable: @application, action: 'disability_certification_rejected').count } do
         ActiveRecord::Base.transaction do
-          result = paper.send(:reject_disability_certification_via_reviewer,
+          result = paper.send(:reject_disability_certification,
                               selected_reason: 'other', custom_reason: 'Missing signature', notes: nil)
           assert result[:success]
           assert_equal :deferred, result[:provider_delivery][:outcome]
@@ -140,7 +140,7 @@ module Applications
         assert_difference -> { Event.where(auditable: @application, action: 'disability_certification_status_changed').count }, 1 do
           assert_no_difference -> { ApplicationNote.where(application: @application).count } do
             ActiveRecord::Base.transaction do
-              result = paper.send(:reject_disability_certification_via_reviewer,
+              result = paper.send(:reject_disability_certification,
                                   selected_reason: 'other', custom_reason: 'Missing signature', notes: 'Please add a signature')
               assert result[:success]
               assert_empty attempts

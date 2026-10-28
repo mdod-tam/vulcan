@@ -912,20 +912,12 @@ module Applications
     end
 
     def resolve_disability_certification_rejection_reason_payload(selected_reason:, custom_reason:)
-      if selected_reason.present? && %w[none_provided other].exclude?(selected_reason)
-        resolved_reason = RejectionReason.resolve_text(
-          code: selected_reason,
-          proof_type: 'disability_certification',
-          fallback: selected_reason
-        )
+      return { reason: custom_reason.presence || 'Other', reason_code: nil } if selected_reason.blank? || selected_reason == 'other'
 
-        return { reason: resolved_reason, reason_code: selected_reason }
-      end
-
-      return { reason: 'none_provided', reason_code: nil } if selected_reason == 'none_provided'
-      return { reason: 'Other', reason_code: nil } if custom_reason.blank?
-
-      { reason: custom_reason, reason_code: nil }
+      reason = RejectionReason.resolve_text(
+        code: selected_reason, proof_type: 'disability_certification', fallback: selected_reason
+      )
+      { reason: reason, reason_code: selected_reason }
     end
 
     def fetch_param(key)
@@ -933,35 +925,15 @@ module Applications
     end
 
     def reject_disability_certification(selected_reason:, custom_reason:, notes:)
-      if disability_certification_reviewer_path?(selected_reason)
-        reject_disability_certification_via_reviewer(
-          selected_reason: selected_reason,
-          custom_reason: custom_reason,
-          notes: notes
-        )
-      else
-        reject_disability_certification_directly(
-          selected_reason: selected_reason,
-          custom_reason: custom_reason,
-          notes: notes
+      reason_payload = resolve_disability_certification_rejection_reason_payload(
+        selected_reason: selected_reason, custom_reason: custom_reason
+      )
+      if selected_reason == 'none_provided' || !medical_provider_notification_available?
+        return DisabilityCertificationAttachmentService.reject_certification(
+          application: @application, admin: @admin, reason: reason_payload[:reason], notes: notes,
+          reason_code: reason_payload[:reason_code], submission_method: :paper, metadata: {}
         )
       end
-    end
-
-    def disability_certification_reviewer_path?(selected_reason)
-      selected_reason != 'none_provided' && medical_provider_notification_available?
-    end
-
-    def medical_provider_notification_available?
-      @application.medical_provider_name.present? &&
-        (@application.medical_provider_email.present? || @application.medical_provider_fax.present?)
-    end
-
-    def reject_disability_certification_via_reviewer(selected_reason:, custom_reason:, notes:)
-      reason_payload = resolve_disability_certification_rejection_reason_payload(
-        selected_reason: selected_reason,
-        custom_reason: custom_reason
-      )
 
       reviewer_result = Applications::DisabilityCertificationReviewer.new(@application, @admin).reject(
         rejection_reason: reason_payload[:reason],
@@ -983,21 +955,9 @@ module Applications
       { success: false, error: StandardError.new(reviewer_result.message) }
     end
 
-    def reject_disability_certification_directly(selected_reason:, custom_reason:, notes:)
-      reason_payload = resolve_disability_certification_rejection_reason_payload(
-        selected_reason: selected_reason,
-        custom_reason: custom_reason
-      )
-
-      DisabilityCertificationAttachmentService.reject_certification(
-        application: @application,
-        admin: @admin,
-        reason: reason_payload[:reason],
-        notes: notes,
-        reason_code: reason_payload[:reason_code],
-        submission_method: :paper,
-        metadata: {}
-      )
+    def medical_provider_notification_available?
+      @application.medical_provider_name.present? &&
+        (@application.medical_provider_email.present? || @application.medical_provider_fax.present?)
     end
 
     def send_notifications

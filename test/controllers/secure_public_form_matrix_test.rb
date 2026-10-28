@@ -53,6 +53,22 @@ class SecurePublicFormMatrixTest < ActionDispatch::IntegrationTest
   end
 
   FORMS.each do |name, config|
+    test "#{name} resend fails closed without rate limit configuration" do
+      token, form = build_state(config, :expired)
+      Policy.where(key: %w[proof_submission_rate_limit_web proof_submission_rate_period]).destroy_all
+      config[:resend_service].any_instance.expects(:call).never
+
+      post public_send(config[:resend_create_path]), params: { token: token }
+
+      assert_secure_headers
+      assert_response :see_other
+      assert_redirected_to public_send(config[:sent_path], locale: 'en')
+      assert_not form.reload.revoked?
+      follow_redirect!
+      assert_response :ok
+      assert_template "#{config[:resend_views]}/create"
+    end
+
     STATES.each do |state|
       next if state == :wrong_kind && config[:wrong_kind].nil?
 
