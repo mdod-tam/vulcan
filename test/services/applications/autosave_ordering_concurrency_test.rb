@@ -132,8 +132,8 @@ module Applications
         params: ActionController::Parameters.new(
           application: {
             annual_income: '50000', household_size: value, vision_disability: true,
-            terms_accepted: true, information_verified: true, medical_release_authorized: true,
-            medical_provider_attributes: { name: 'Test Provider', phone: '2025550123', email: 'provider@example.com' }
+            terms_accepted: true, information_verified: true, disability_information_release_authorized: true,
+            certifying_professional_attributes: { name: 'Test Provider', phone: '2025550123', email: 'provider@example.com' }
           },
           save_draft: 'Save Application', autosave_context: @context, autosave_revision: revision
         )

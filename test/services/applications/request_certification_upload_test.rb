@@ -10,8 +10,8 @@ module Applications
     setup do
       @actor = create(:admin)
       @application = create(:application, :in_progress,
-                            medical_provider_name: 'Dr. Provider',
-                            medical_provider_email: 'provider@example.com')
+                            certifying_professional_name: 'Dr. Provider',
+                            certifying_professional_email: 'provider@example.com')
     end
 
     test 'certification request failure logs omit personal validation details' do
@@ -55,7 +55,7 @@ module Applications
       assert_equal 0, state['issued_count']
       assert_equal @application.disability_certification_requested_at, Time.iso8601(state['issued_at'])
       mail = stub(deliver_now: true)
-      MedicalProviderMailer.stubs(:with).returns(stub(request_certification: mail))
+      CertifyingProfessionalMailer.stubs(:with).returns(stub(request_certification: mail))
 
       travel_to original.sent_at + 2.hours do
         assert_no_difference 'ApplicationStatusChange.count' do
@@ -102,7 +102,7 @@ module Applications
 
         raise ApplicationMailer::DeliverySkipped, 'global_disabled'
       end
-      MedicalProviderMailer.stubs(:with).returns(stub(request_certification: mail))
+      CertifyingProfessionalMailer.stubs(:with).returns(stub(request_certification: mail))
 
       result = assert_no_difference "Event.where(action: 'disability_certification_request_not_sent').count" do
         RequestCertificationUpload.new(application: @application, actor: @actor, deliver_email: true).call
@@ -123,7 +123,7 @@ module Applications
     end
 
     test 'fails explicitly when provider email is missing' do
-      application = create(:application, :draft, medical_provider_email: nil)
+      application = create(:application, :draft, certifying_professional_email: nil)
 
       result = assert_no_difference('SecureRequestForm.certification_upload.count') do
         RequestCertificationUpload.new(application: application, actor: @actor).call
@@ -168,8 +168,8 @@ module Applications
       application = create(:application, :in_progress,
                            user: dependent,
                            managing_guardian: guardian,
-                           medical_provider_name: 'Dr. Provider',
-                           medical_provider_email: 'provider-tracking@example.com')
+                           certifying_professional_name: 'Dr. Provider',
+                           certifying_professional_email: 'provider-tracking@example.com')
 
       result = RequestCertificationUpload.new(application: application, actor: @actor).call
 
@@ -189,8 +189,8 @@ module Applications
       application = create(:application, :in_progress,
                            user: dependent,
                            managing_guardian: guardian,
-                           medical_provider_name: 'Dr. Provider',
-                           medical_provider_email: 'provider-dependent@example.com')
+                           certifying_professional_name: 'Dr. Provider',
+                           certifying_professional_email: 'provider-dependent@example.com')
 
       result = RequestCertificationUpload.new(application: application, actor: @actor).call
 
@@ -235,8 +235,8 @@ module Applications
       ENV['REQUIRE_PROOF_VALIDATIONS'] = 'true'
       Current.skip_proof_validation = nil
       application = create(:application, :in_progress,
-                           medical_provider_name: 'Dr. Provider',
-                           medical_provider_email: 'provider@example.com')
+                           certifying_professional_name: 'Dr. Provider',
+                           certifying_professional_email: 'provider@example.com')
       assert_not application.income_proof.attached?
       assert_not application.residency_proof.attached?
 
@@ -358,7 +358,7 @@ module Applications
     test 'resend targets the provider email on file now, not the expired link snapshot' do
       first_result = RequestCertificationUpload.new(application: @application, actor: @actor).call
       original = first_result.data.fetch(:secure_request_form)
-      @application.update!(medical_provider_email: 'updated-provider@example.com')
+      @application.update!(certifying_professional_email: 'updated-provider@example.com')
 
       travel_to original.sent_at + 2.hours do
         result = RequestCertificationUpload.new(
@@ -389,7 +389,7 @@ module Applications
       mail.expects(:deliver_now).returns(true)
       mailer = mock('request-certification-mailer')
       mailer.expects(:request_certification).returns(mail)
-      MedicalProviderMailer.expects(:with).with do |params|
+      CertifyingProfessionalMailer.expects(:with).with do |params|
         delivered_params = params
         params[:application] == @application &&
           params[:secure_upload_url].match?(/secure_certification_form/) &&
@@ -415,7 +415,7 @@ module Applications
       mail.expects(:deliver_now).returns(true)
       mailer = mock('certification-rejected-mailer')
       mailer.expects(:certification_rejected).returns(mail)
-      MedicalProviderMailer.expects(:with).with do |params|
+      CertifyingProfessionalMailer.expects(:with).with do |params|
         delivered_params = params
         params[:application] == @application &&
           params[:rejection_reason] == 'Missing signature' &&
@@ -438,7 +438,7 @@ module Applications
       mail.expects(:deliver_now).raises(StandardError, 'smtp timeout https://example.test/secure_certification_form?token=secret')
       mailer = mock('failed-request-certification-mailer')
       mailer.expects(:request_certification).returns(mail)
-      MedicalProviderMailer.expects(:with).returns(mailer)
+      CertifyingProfessionalMailer.expects(:with).returns(mailer)
 
       result = assert_difference('SecureRequestForm.certification_upload.count', 1) do
         assert_difference("Notification.where(action: 'cert_upload_requested').count", 1) do

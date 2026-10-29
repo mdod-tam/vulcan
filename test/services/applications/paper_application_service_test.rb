@@ -47,9 +47,9 @@ module Applications
         annual_income: '15000',
         maryland_resident: '1',
         self_certify_disability: '1',
-        medical_provider_name: 'Dr. Smith',
-        medical_provider_phone: '2025559876',
-        medical_provider_email: 'drsmith@example.com'
+        certifying_professional_name: 'Dr. Smith',
+        certifying_professional_phone: '2025559876',
+        certifying_professional_email: 'drsmith@example.com'
       }
 
       @pdf_file = uploaded_pdf
@@ -409,7 +409,7 @@ module Applications
 
       AuditEventService.stubs(:recent_duplicate_exists?).returns(false)
 
-      MedicalProviderMailer.expects(:request_certification).never
+      CertifyingProfessionalMailer.expects(:request_certification).never
 
       service = PaperApplicationService.new(params: confirmed_paper_params(service_params, admin: @admin), admin: @admin)
       result = service.create
@@ -511,9 +511,9 @@ module Applications
       unique_phone = "202570#{test_timestamp.to_s[-4..]}"
 
       service_params = {
-        no_medical_provider_information: true,
+        no_certifying_professional_information: true,
         constituent: @constituent_params.merge(email: unique_email, phone: unique_phone),
-        application: @application_params.except(:medical_provider_name, :medical_provider_phone, :medical_provider_email)
+        application: @application_params.except(:certifying_professional_name, :certifying_professional_phone, :certifying_professional_email)
       }
 
       request_service = mock('request-provider-info-service')
@@ -529,18 +529,18 @@ module Applications
       assert result, "Failed to create paper application without provider info: #{service.errors.inspect}"
       assert_predicate service.application, :persisted?
       assert_equal 'awaiting_proof', service.application.status
-      assert_nil service.application.medical_provider_name
-      assert_nil service.application.medical_provider_phone
-      assert_nil service.application.medical_provider_email
+      assert_nil service.application.certifying_professional_name
+      assert_nil service.application.certifying_professional_phone
+      assert_nil service.application.certifying_professional_email
     end
 
     test 'paper intake without provider info auto-approves when proofs and disability certification are approved' do
       unique_email = generate(:email)
 
       service_params = {
-        no_medical_provider_information: true,
+        no_certifying_professional_information: true,
         constituent: @constituent_params.merge(email: unique_email, phone: unique_paper_phone),
-        application: @application_params.except(:medical_provider_name, :medical_provider_phone, :medical_provider_email),
+        application: @application_params.except(:certifying_professional_name, :certifying_professional_phone, :certifying_professional_email),
         income_proof_action: 'accept',
         income_proof: uploaded_pdf,
         residency_proof_action: 'accept',
@@ -565,17 +565,17 @@ module Applications
       assert_predicate application, :residency_proof_status_approved?
       assert_predicate application, :id_proof_status_approved?
       assert_predicate application, :disability_certification_status_approved?
-      assert_nil application.medical_provider_name
-      assert_nil application.medical_provider_phone
-      assert_nil application.medical_provider_email
+      assert_nil application.certifying_professional_name
+      assert_nil application.certifying_professional_phone
+      assert_nil application.certifying_professional_email
       assert_nil service.reconciliation_note
     end
 
     test 'create rejects certification directly when provider contact information is missing' do
       custom_reason = 'No provider contact details were available.'
       service_params = base_paper_params.merge(
-        no_medical_provider_information: true,
-        application: @application_params.except(:medical_provider_name, :medical_provider_email, :medical_provider_phone),
+        no_certifying_professional_information: true,
+        application: @application_params.except(:certifying_professional_name, :certifying_professional_email, :certifying_professional_phone),
         disability_certification_action: 'rejected',
         disability_certification_rejection_reason: 'other',
         disability_certification_custom_rejection_reason: custom_reason
@@ -1616,7 +1616,7 @@ module Applications
       Applications::RequestProviderInfo.any_instance.stubs(:call).returns(
         BaseService::Result.new(success: false, message: 'the secure form could not be delivered.', data: nil)
       )
-      params = base_paper_params.merge(no_medical_provider_information: '1')
+      params = base_paper_params.merge(no_certifying_professional_information: '1')
 
       service = paper_service(params)
 
@@ -1632,7 +1632,7 @@ module Applications
 
     test 'a raised provider request failure is named and recorded like any other step' do
       Applications::RequestProviderInfo.any_instance.stubs(:call).raises(StandardError, 'delivery exploded')
-      params = base_paper_params.merge(no_medical_provider_information: '1')
+      params = base_paper_params.merge(no_certifying_professional_information: '1')
 
       service = paper_service(params)
 

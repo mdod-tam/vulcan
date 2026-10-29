@@ -34,7 +34,7 @@ describe("GuardianPickerController", () => {
             <div id="lastApplicationSource"></div>
             <div id="lastApplicationDetails"></div>
             <button type="button" id="incomeCopyButton">Income</button>
-            <button type="button" id="medicalCopyButton">Medical</button>
+            <button type="button" id="certifyingProfessionalCopyButton">Use last application certifying professional</button>
           </div>
           <button type="button">Clear Selection</button>
         </div>
@@ -45,10 +45,10 @@ describe("GuardianPickerController", () => {
         <turbo-frame id="dependent_info_form"></turbo-frame>
         <input type="text" name="application[household_size]" value="" />
         <input type="text" name="application[annual_income]" value="" />
-        <input type="text" name="application[medical_provider_name]" value="" />
-        <input type="text" name="application[medical_provider_phone]" value="" />
-        <input type="text" name="application[medical_provider_fax]" value="" />
-        <input type="text" name="application[medical_provider_email]" value="" />
+        <input type="text" name="application[certifying_professional_name]" value="" />
+        <input type="text" name="application[certifying_professional_phone]" value="" />
+        <input type="text" name="application[certifying_professional_fax]" value="" />
+        <input type="text" name="application[certifying_professional_email]" value="" />
       </div>
     `
     
@@ -323,20 +323,20 @@ describe("GuardianPickerController", () => {
       expect(setFieldValue).toHaveBeenCalledWith('input[name="application[annual_income]"]', 18000)
     })
 
-    it("copies last application medical provider fields only when explicitly requested", () => {
+    it("copies last application certifying professional fields only when explicitly requested", () => {
       controller._lastApplicationContext = {
-        medical_provider_name: 'Dr. Test',
-        medical_provider_phone: '555-111-2222',
-        medical_provider_fax: '555-333-4444',
-        medical_provider_email: 'doctor@example.com'
+        certifying_professional_name: 'Dr. Test',
+        certifying_professional_phone: '555-111-2222',
+        certifying_professional_fax: '555-333-4444',
+        certifying_professional_email: 'doctor@example.com'
       }
 
-      controller.useLastApplicationMedicalProvider()
+      controller.useLastApplicationCertifyingProfessional()
 
-      expect(setFieldValue).toHaveBeenCalledWith('input[name="application[medical_provider_name]"]', 'Dr. Test')
-      expect(setFieldValue).toHaveBeenCalledWith('input[name="application[medical_provider_phone]"]', '555-111-2222')
-      expect(setFieldValue).toHaveBeenCalledWith('input[name="application[medical_provider_fax]"]', '555-333-4444')
-      expect(setFieldValue).toHaveBeenCalledWith('input[name="application[medical_provider_email]"]', 'doctor@example.com')
+      expect(setFieldValue).toHaveBeenCalledWith('input[name="application[certifying_professional_name]"]', 'Dr. Test')
+      expect(setFieldValue).toHaveBeenCalledWith('input[name="application[certifying_professional_phone]"]', '555-111-2222')
+      expect(setFieldValue).toHaveBeenCalledWith('input[name="application[certifying_professional_fax]"]', '555-333-4444')
+      expect(setFieldValue).toHaveBeenCalledWith('input[name="application[certifying_professional_email]"]', 'doctor@example.com')
     })
   })
 })

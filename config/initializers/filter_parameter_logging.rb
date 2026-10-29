@@ -45,8 +45,8 @@ Rails.application.config.filter_parameters += [
   # SMS contact
   :phone_number,
 
-  # Medical provider PII fields
-  :medical_provider_name, :medical_provider_phone, :medical_provider_email, :medical_provider_fax,
+  # Certifying professional PII fields
+  :certifying_professional_name, :certifying_professional_phone, :certifying_professional_email, :certifying_professional_fax,
 
   # Encrypted columns and IVs (regex patterns)
   /_encrypted\z/, /_encrypted_iv\z/,

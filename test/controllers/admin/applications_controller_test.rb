@@ -742,7 +742,7 @@ module Admin
     end
 
     test 'should handle document signing request failure' do
-      mock_result = BaseService::Result.new(success: false, message: 'Medical provider email is required')
+      mock_result = BaseService::Result.new(success: false, message: 'Certifying professional email is required')
       mock_service = mock('service')
       mock_service.stubs(:call).returns(mock_result)
       DocumentSigning::SubmissionService.stubs(:new).with(
@@ -756,7 +756,7 @@ module Admin
       assert_redirected_to admin_application_path(@application)
       follow_redirect!(headers: { 'X-Test-User-Id' => @test_user_id.to_s })
       assert_response :success
-      assert_match(/Medical provider email is required/, flash[:alert])
+      assert_match(/Certifying professional email is required/, flash[:alert])
     end
 
     test 'should pass correct parameters to document signing service' do
@@ -898,9 +898,9 @@ module Admin
           income_proof_required: false,
           status: :awaiting_proof,
           disability_certification_status: :requested,
-          medical_provider_name: nil,
-          medical_provider_phone: nil,
-          medical_provider_email: nil
+          certifying_professional_name: nil,
+          certifying_professional_phone: nil,
+          certifying_professional_email: nil
         )
       end
     end

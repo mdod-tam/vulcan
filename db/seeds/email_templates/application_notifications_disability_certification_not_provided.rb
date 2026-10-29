@@ -21,7 +21,7 @@ EmailTemplate.create_or_find_by!(name: 'application_notifications_disability_cer
        - Contact information for a qualifying provider (name, email, phone, fax), OR
        - Upload a completed disability certification form
 
-    3. Our team will then contact your medical provider to request the necessary certification.
+    3. Our team will then contact your certifying professional to request the necessary certification.
 
     WHAT IS NEEDED:
 

@@ -5,7 +5,7 @@ class DisabilityCertificationEmailJob < ApplicationJob
 
   queue_as :default
   self.enqueue_after_transaction_commit = true
-  self.email_delivery_mail_action = 'MedicalProviderMailer#request_certification'
+  self.email_delivery_mail_action = 'CertifyingProfessionalMailer#request_certification'
 
   def email_delivery_params
     arguments.first.to_h.slice(:notification_id, 'notification_id')
@@ -46,7 +46,7 @@ class DisabilityCertificationEmailJob < ApplicationJob
 
   def send_request_email(application, timestamp, notification)
     EmailDelivery.deliver_now!(
-      MedicalProviderMailer.with(
+      CertifyingProfessionalMailer.with(
         application: application,
         timestamp: timestamp,
         notification_id: notification&.id

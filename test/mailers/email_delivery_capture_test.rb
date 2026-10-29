@@ -12,7 +12,7 @@ class EmailDeliveryCaptureTest < ActiveSupport::TestCase
     ENV['POSTMARK_SERVER_ID'] = '23'
     @user = create(:constituent, communication_preference: 'email')
     @admin = create(:admin)
-    load_seeded_email_templates('user_mailer_password_reset', 'application_notifications_provider_info_requested', 'medical_provider_request_certification')
+    load_seeded_email_templates('user_mailer_password_reset', 'application_notifications_provider_info_requested', 'certifying_professional_request_certification')
     @old_method = ApplicationMailer.delivery_method
     ApplicationMailer.delivery_method = :postmark
     @transport = mock('offline Postmark HTTP transport')
@@ -89,7 +89,7 @@ class EmailDeliveryCaptureTest < ActiveSupport::TestCase
   end
 
   test 'certification wrapper job reaches the same acceptance owner' do
-    application = create(:application, :in_progress, medical_provider_email: 'provider@example.test')
+    application = create(:application, :in_progress, certifying_professional_email: 'provider@example.test')
     notification = create(:notification, recipient: @admin, actor: @admin, notifiable: application, action: 'disability_certification_requested')
     @transport.expects(:post).once.returns(@response)
     DisabilityCertificationEmailJob.perform_now(application_id: application.id, timestamp: Time.current.iso8601, notification_id: notification.id)
@@ -140,7 +140,7 @@ class EmailDeliveryCaptureTest < ActiveSupport::TestCase
   end
 
   test 'the certification wrapper retries without a stale local error panel' do
-    application = create(:application, :in_progress, medical_provider_email: 'provider@example.test')
+    application = create(:application, :in_progress, certifying_professional_email: 'provider@example.test')
     notification = create(:notification, recipient: @admin, actor: @admin, notifiable: application, action: 'disability_certification_requested')
     refusal = stub(code: '429', body: { ErrorCode: 0, Message: 'Rate limited' }.to_json)
     @transport.expects(:post).twice.returns(refusal).then.returns(@response)

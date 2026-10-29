@@ -6,13 +6,13 @@ module Applications
 
     MESSAGE_SCOPE = 'applications.provider_info.messages'
     PROVIDER_FIELDS = %i[
-      medical_provider_name
-      medical_provider_email
-      medical_provider_phone
-      medical_provider_fax
+      certifying_professional_name
+      certifying_professional_email
+      certifying_professional_phone
+      certifying_professional_fax
     ].freeze
     PHONE_NUMBER_PATTERN = /\A(?:\d{10}|\d{3}-\d{3}-\d{4})\z/
-    PHONE_NUMBER_FIELDS = %i[medical_provider_phone medical_provider_fax].freeze
+    PHONE_NUMBER_FIELDS = %i[certifying_professional_phone certifying_professional_fax].freeze
 
     attr_reader :application, :secure_request_form, :params
 
@@ -40,12 +40,12 @@ module Applications
 
         # Valid submissions can replace provider details. The change audit marks
         # replacements of on-file values for review.
-        application.medical_provider_change_source = change_source
+        application.certifying_professional_change_source = change_source
         application.update!(normalized_provider_params)
         complete_submission { log_submission(previous_presence) }
       end
     ensure
-      application.medical_provider_change_source = nil
+      application.certifying_professional_change_source = nil
     end
 
     def read_attribute_for_validation(attribute)
@@ -62,12 +62,12 @@ module Applications
 
     def provider_params_valid?
       @form_errors = ActiveModel::Errors.new(self)
-      validate_presence(:medical_provider_name)
-      validate_presence(:medical_provider_phone)
-      validate_presence(:medical_provider_email)
+      validate_presence(:certifying_professional_name)
+      validate_presence(:certifying_professional_phone)
+      validate_presence(:certifying_professional_email)
       validate_email
-      validate_phone_number(:medical_provider_phone)
-      validate_phone_number(:medical_provider_fax)
+      validate_phone_number(:certifying_professional_phone)
+      validate_phone_number(:certifying_professional_fax)
       form_errors.blank?
     end
 
@@ -76,10 +76,10 @@ module Applications
     end
 
     def validate_email
-      return if params[:medical_provider_email].blank?
-      return if params[:medical_provider_email].match?(URI::MailTo::EMAIL_REGEXP)
+      return if params[:certifying_professional_email].blank?
+      return if params[:certifying_professional_email].match?(URI::MailTo::EMAIL_REGEXP)
 
-      form_errors.add(:medical_provider_email, :invalid, message: message(:medical_provider_email_invalid))
+      form_errors.add(:certifying_professional_email, :invalid, message: message(:certifying_professional_email_invalid))
     end
 
     def validate_phone_number(attribute)
@@ -106,7 +106,7 @@ module Applications
 
     def log_submission(previous_presence)
       PublicAuditActor.log_audit(
-        action: 'medical_provider_info_submitted',
+        action: 'certifying_professional_info_submitted',
         auditable: application,
         metadata: {
           submitted_via: 'secure_request_form',

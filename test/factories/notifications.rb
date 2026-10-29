@@ -31,7 +31,7 @@ FactoryBot.define do
       end
 
       trait :bounced_email do
-        action { 'medical_provider_email_bounced' }
+        action { 'certifying_professional_email_bounced' }
         metadata do
           {
             email: 'doctor@example.com',

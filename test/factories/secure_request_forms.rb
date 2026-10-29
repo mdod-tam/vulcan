@@ -54,7 +54,7 @@ FactoryBot.define do
     delivery_source { nil }
     recipient_phone { nil }
     recipient_role { :provider }
-    recipient_email { application.medical_provider_email }
-    recipient_name { application.medical_provider_name }
+    recipient_email { application.certifying_professional_email }
+    recipient_name { application.certifying_professional_name }
   end
 end

@@ -208,9 +208,9 @@ module Applications
     end
 
     def extract_attribute_name
-      if field_name.include?('medical_provider_attributes') &&
-         field_name =~ /medical_provider_attributes\]\[([^\]]+)\]/
-        return "medical_provider_#{::Regexp.last_match(1)}"
+      if field_name.include?('certifying_professional_attributes') &&
+         field_name =~ /certifying_professional_attributes\]\[([^\]]+)\]/
+        return "certifying_professional_#{::Regexp.last_match(1)}"
       end
 
       return field_name[12..-2] if field_name.start_with?('application[') && field_name.end_with?(']')
@@ -223,8 +223,8 @@ module Applications
                        mobility_disability cognition_disability]
       application_fields = %w[annual_income household_size maryland_resident
                               self_certify_disability terms_accepted information_verified
-                              medical_release_authorized medical_provider_name
-                              medical_provider_phone medical_provider_fax medical_provider_email
+                              disability_information_release_authorized certifying_professional_name
+                              certifying_professional_phone certifying_professional_fax certifying_professional_email
                               alternate_contact_name alternate_contact_phone alternate_contact_email
                               alternate_contact_relationship_type]
 

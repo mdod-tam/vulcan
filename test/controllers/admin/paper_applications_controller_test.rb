@@ -56,9 +56,9 @@ module Admin
           annual_income: 10_000,
           maryland_resident: '1',
           self_certify_disability: '1',
-          medical_provider_name: 'Dr. Test',
-          medical_provider_phone: '555-111-2222',
-          medical_provider_email: 'doctor@example.com'
+          certifying_professional_name: 'Dr. Test',
+          certifying_professional_phone: '555-111-2222',
+          certifying_professional_email: 'doctor@example.com'
         }
       }
 
@@ -165,11 +165,11 @@ module Admin
       ProofAttachmentService.stubs(:attach_proof).returns(
         { success: false, error: StandardError.new('Income proof was rejected by storage') }
       )
-      params = rollback_probe_params.merge(no_medical_provider_information: '1', no_income_information: '1')
+      params = rollback_probe_params.merge(no_certifying_professional_information: '1', no_income_information: '1')
 
       post admin_paper_applications_path, headers: default_headers, params: params
 
-      assert_restored "input[name='no_medical_provider_information'][checked]",
+      assert_restored "input[name='no_certifying_professional_information'][checked]",
                       'the no-provider flag was not restored'
       assert_restored "input[name='no_income_information'][checked]",
                       'the no-income flag was not restored'
@@ -179,11 +179,11 @@ module Admin
       ProofAttachmentService.stubs(:attach_proof).returns(
         { success: false, error: StandardError.new('Income proof was rejected by storage') }
       )
-      params = rollback_probe_params.merge(no_medical_provider_information: '0', no_income_information: '0')
+      params = rollback_probe_params.merge(no_certifying_professional_information: '0', no_income_information: '0')
 
       post admin_paper_applications_path, headers: default_headers, params: params
 
-      assert_select "input[name='no_medical_provider_information'][checked]", false,
+      assert_select "input[name='no_certifying_professional_information'][checked]", false,
                     'a submitted "0" must not come back checked'
       assert_select "input[name='no_income_information'][checked]", false,
                     'a submitted "0" must not come back checked'
@@ -373,9 +373,9 @@ module Admin
             annual_income: 10_000,
             maryland_resident: '1',
             self_certify_disability: '1',
-            medical_provider_name: 'Dr. Self Cert',
-            medical_provider_phone: '555-111-2222',
-            medical_provider_email: 'dr.self@example.com'
+            certifying_professional_name: 'Dr. Self Cert',
+            certifying_professional_phone: '555-111-2222',
+            certifying_professional_email: 'dr.self@example.com'
           },
           income_proof: income_proof_file,
           residency_proof: residency_proof_file,
@@ -403,7 +403,7 @@ module Admin
 
       begin
         post admin_paper_applications_path, headers: default_headers, params: {
-          no_medical_provider_information: true,
+          no_certifying_professional_information: true,
           constituent: {
             first_name: 'Workflow',
             last_name: 'Warning', date_of_birth: '01/15/1980',
@@ -460,9 +460,9 @@ module Admin
             annual_income: 12_000,
             maryland_resident: '1',
             self_certify_disability: '1',
-            medical_provider_name: 'Dr. Locale',
-            medical_provider_phone: '555-111-0091',
-            medical_provider_email: 'dr.locale.self@example.com'
+            certifying_professional_name: 'Dr. Locale',
+            certifying_professional_phone: '555-111-0091',
+            certifying_professional_email: 'dr.locale.self@example.com'
           }
         }
       end
@@ -508,9 +508,9 @@ module Admin
             annual_income: 15_000,
             maryland_resident: '1',
             self_certify_disability: '1',
-            medical_provider_name: 'Dr. ChildWell',
-            medical_provider_phone: '555-333-4444',
-            medical_provider_email: 'dr.childwell@example.com'
+            certifying_professional_name: 'Dr. ChildWell',
+            certifying_professional_phone: '555-333-4444',
+            certifying_professional_email: 'dr.childwell@example.com'
           },
           income_proof: income_proof_file,
           residency_proof: residency_proof_file,
@@ -572,9 +572,9 @@ module Admin
                 annual_income: 19_000,
                 maryland_resident: '1',
                 self_certify_disability: '1',
-                medical_provider_name: 'Dr. Locale Family',
-                medical_provider_phone: '555-333-0092',
-                medical_provider_email: 'dr.locale.family@example.com'
+                certifying_professional_name: 'Dr. Locale Family',
+                certifying_professional_phone: '555-333-0092',
+                certifying_professional_email: 'dr.locale.family@example.com'
               }
             }
           end
@@ -619,9 +619,9 @@ module Admin
                 annual_income: 18_000,
                 maryland_resident: '1',
                 self_certify_disability: '1',
-                medical_provider_name: 'Dr. Shared',
-                medical_provider_phone: '555-444-5555',
-                medical_provider_email: 'dr.shared@example.com'
+                certifying_professional_name: 'Dr. Shared',
+                certifying_professional_phone: '555-444-5555',
+                certifying_professional_email: 'dr.shared@example.com'
               },
               income_proof: income_proof_file,
               residency_proof: residency_proof_file,
@@ -683,9 +683,9 @@ module Admin
                 annual_income: 18_000,
                 maryland_resident: '1',
                 self_certify_disability: '1',
-                medical_provider_name: 'Dr. FamCare',
-                medical_provider_phone: '555-555-6666',
-                medical_provider_email: 'dr.famcare@example.com'
+                certifying_professional_name: 'Dr. FamCare',
+                certifying_professional_phone: '555-555-6666',
+                certifying_professional_email: 'dr.famcare@example.com'
               },
               income_proof: income_proof_file,
               residency_proof: residency_proof_file,
@@ -742,9 +742,9 @@ module Admin
             annual_income: 14_000,
             maryland_resident: '1',
             self_certify_disability: '1',
-            medical_provider_name: 'Dr. Existing Dependent',
-            medical_provider_phone: '555-444-0093',
-            medical_provider_email: 'dr.existing.dependent@example.com'
+            certifying_professional_name: 'Dr. Existing Dependent',
+            certifying_professional_phone: '555-444-0093',
+            certifying_professional_email: 'dr.existing.dependent@example.com'
           }
         }
       end
@@ -790,9 +790,9 @@ module Admin
             annual_income: 14_000,
             maryland_resident: '1',
             self_certify_disability: '1',
-            medical_provider_name: 'Dr. Blank Locale',
-            medical_provider_phone: '555-444-0094',
-            medical_provider_email: 'dr.blank.locale@example.com'
+            certifying_professional_name: 'Dr. Blank Locale',
+            certifying_professional_phone: '555-444-0094',
+            certifying_professional_email: 'dr.blank.locale@example.com'
           }
         }
       end
@@ -896,9 +896,9 @@ module Admin
         annual_income: 12_000,
         maryland_resident: '1',
         self_certify_disability: '1',
-        medical_provider_name: 'Dr. No Proof',
-        medical_provider_phone: '555-888-9999',
-        medical_provider_email: 'dr.noproof@mdmat.org'
+        certifying_professional_name: 'Dr. No Proof',
+        certifying_professional_phone: '555-888-9999',
+        certifying_professional_email: 'dr.noproof@mdmat.org'
       }
     end
 
@@ -956,10 +956,10 @@ module Admin
           self_certify_disability: '1',
           terms_accepted: '1',
           information_verified: '1',
-          medical_release_authorized: '1',
-          medical_provider_name: 'Dr. John Doe',
-          medical_provider_phone: '555-123-4567',
-          medical_provider_email: 'dr.doe@example.com',
+          disability_information_release_authorized: '1',
+          certifying_professional_name: 'Dr. John Doe',
+          certifying_professional_phone: '555-123-4567',
+          certifying_professional_email: 'dr.doe@example.com',
           submission_method: 'paper'
         },
         income_proof_action: 'accept',
@@ -1007,10 +1007,10 @@ module Admin
             self_certify_disability: '1',
             terms_accepted: '1',
             information_verified: '1',
-            medical_release_authorized: '1',
-            medical_provider_name: 'Dr. Jane Smith',
-            medical_provider_phone: '555-987-6543',
-            medical_provider_email: 'dr.smith@example.com'
+            disability_information_release_authorized: '1',
+            certifying_professional_name: 'Dr. Jane Smith',
+            certifying_professional_phone: '555-987-6543',
+            certifying_professional_email: 'dr.smith@example.com'
           }
         }
       end
@@ -1057,10 +1057,10 @@ module Admin
           self_certify_disability: '1',
           terms_accepted: '1',
           information_verified: '1',
-          medical_release_authorized: '1',
-          medical_provider_name: 'Dr. Jane Smith',
-          medical_provider_phone: '555-987-6543',
-          medical_provider_email: 'dr.smith@example.com'
+          disability_information_release_authorized: '1',
+          certifying_professional_name: 'Dr. Jane Smith',
+          certifying_professional_phone: '555-987-6543',
+          certifying_professional_email: 'dr.smith@example.com'
         }
       }
 
@@ -1249,10 +1249,10 @@ module Admin
             self_certify_disability: '1',
             terms_accepted: '1',
             information_verified: '1',
-            medical_release_authorized: '1',
-            medical_provider_name: 'Dr. Jane Smith',
-            medical_provider_phone: '555-987-6543',
-            medical_provider_email: 'dr.smith@example.com'
+            disability_information_release_authorized: '1',
+            certifying_professional_name: 'Dr. Jane Smith',
+            certifying_professional_phone: '555-987-6543',
+            certifying_professional_email: 'dr.smith@example.com'
           },
           income_proof_action: 'reject',
           income_proof_rejection_reason: 'incomplete_documentation'
@@ -1329,10 +1329,10 @@ module Admin
           self_certify_disability: '1',
           terms_accepted: '1',
           information_verified: '1',
-          medical_release_authorized: '1',
-          medical_provider_name: 'Dr. Test',
-          medical_provider_phone: '555-987-6543',
-          medical_provider_email: 'dr.test@example.com'
+          disability_information_release_authorized: '1',
+          certifying_professional_name: 'Dr. Test',
+          certifying_professional_phone: '555-987-6543',
+          certifying_professional_email: 'dr.test@example.com'
         },
         income_proof_action: 'reject',
         income_proof_rejection_reason: 'incomplete_documentation'
@@ -1377,10 +1377,10 @@ module Admin
             self_certify_disability: '1',
             terms_accepted: '1',
             information_verified: '1',
-            medical_release_authorized: '1',
-            medical_provider_name: 'Dr. Test',
-            medical_provider_phone: '555-987-6543',
-            medical_provider_email: 'dr.test@example.com'
+            disability_information_release_authorized: '1',
+            certifying_professional_name: 'Dr. Test',
+            certifying_professional_phone: '555-987-6543',
+            certifying_professional_email: 'dr.test@example.com'
           }
         }
       end
@@ -1426,9 +1426,9 @@ module Admin
             household_size: 1,
             annual_income: 10_000,
             maryland_resident: '1',
-            medical_provider_name: 'Dr. Test',
-            medical_provider_phone: '555-333-4444',
-            medical_provider_email: 'dr.test@example.com'
+            certifying_professional_name: 'Dr. Test',
+            certifying_professional_phone: '555-333-4444',
+            certifying_professional_email: 'dr.test@example.com'
           }
         }
       end
@@ -1473,9 +1473,9 @@ module Admin
             annual_income: 10_000,
             maryland_resident: '1',
             self_certify_disability: '1',
-            medical_provider_name: 'Dr. Self',
-            medical_provider_phone: '555-444-5555',
-            medical_provider_email: 'dr.self@example.com'
+            certifying_professional_name: 'Dr. Self',
+            certifying_professional_phone: '555-444-5555',
+            certifying_professional_email: 'dr.self@example.com'
           },
           income_proof: income_proof_file,
           residency_proof: residency_proof_file,
@@ -1518,9 +1518,9 @@ module Admin
             annual_income: 10_000,
             maryland_resident: '1',
             self_certify_disability: '1',
-            medical_provider_name: 'Dr. Letter',
-            medical_provider_phone: '555-111-2222',
-            medical_provider_email: 'letter@example.com'
+            certifying_professional_name: 'Dr. Letter',
+            certifying_professional_phone: '555-111-2222',
+            certifying_professional_email: 'letter@example.com'
           },
           income_proof_action: 'not_provided',
           residency_proof_action: 'not_provided'
@@ -1563,9 +1563,9 @@ module Admin
             annual_income: 10_000,
             maryland_resident: '1',
             self_certify_disability: '1',
-            medical_provider_name: 'Dr. Phone',
-            medical_provider_phone: '555-111-3333',
-            medical_provider_email: 'phone@example.com'
+            certifying_professional_name: 'Dr. Phone',
+            certifying_professional_phone: '555-111-3333',
+            certifying_professional_email: 'phone@example.com'
           },
           income_proof_action: 'not_provided',
           residency_proof_action: 'not_provided'
@@ -1606,9 +1606,9 @@ module Admin
             annual_income: 10_000,
             maryland_resident: '1',
             self_certify_disability: '1',
-            medical_provider_name: 'Dr. Email',
-            medical_provider_phone: '555-111-4444',
-            medical_provider_email: 'email@example.com'
+            certifying_professional_name: 'Dr. Email',
+            certifying_professional_phone: '555-111-4444',
+            certifying_professional_email: 'email@example.com'
           },
           income_proof_action: 'not_provided',
           residency_proof_action: 'not_provided'
@@ -1647,9 +1647,9 @@ module Admin
             annual_income: 10_000,
             maryland_resident: '1',
             self_certify_disability: '1',
-            medical_provider_name: 'Dr. Phone',
-            medical_provider_phone: '555-111-3333',
-            medical_provider_email: 'phone@example.com'
+            certifying_professional_name: 'Dr. Phone',
+            certifying_professional_phone: '555-111-3333',
+            certifying_professional_email: 'phone@example.com'
           },
           income_proof_action: 'not_provided',
           residency_proof_action: 'not_provided'
@@ -1681,9 +1681,9 @@ module Admin
           annual_income: 10_000,
           maryland_resident: '1',
           self_certify_disability: '1',
-          medical_provider_name: 'Dr. Letter',
-          medical_provider_phone: '555-111-2222',
-          medical_provider_email: 'letter@example.com'
+          certifying_professional_name: 'Dr. Letter',
+          certifying_professional_phone: '555-111-2222',
+          certifying_professional_email: 'letter@example.com'
         },
         income_proof_action: 'not_provided',
         residency_proof_action: 'not_provided'
@@ -1708,9 +1708,9 @@ module Admin
           hearing_disability: '1'
         },
         application: { household_size: '2', annual_income: '15000', maryland_resident: '1',
-                       self_certify_disability: '1', medical_provider_name: 'Dr. Probe',
-                       medical_provider_phone: '2025559876',
-                       medical_provider_email: 'probe@example.com' }
+                       self_certify_disability: '1', certifying_professional_name: 'Dr. Probe',
+                       certifying_professional_phone: '2025559876',
+                       certifying_professional_email: 'probe@example.com' }
       }
 
       assert_no_difference 'User.count' do
@@ -1744,9 +1744,9 @@ module Admin
         application: {
           household_size: 1, annual_income: 10_000,
           maryland_resident: '1',
-          medical_provider_name: 'Dr. Rollback',
-          medical_provider_phone: '2025559876',
-          medical_provider_email: 'dr.rollback@example.com'
+          certifying_professional_name: 'Dr. Rollback',
+          certifying_professional_phone: '2025559876',
+          certifying_professional_email: 'dr.rollback@example.com'
         },
         income_proof_action: 'upload_only',
         income_proof: paper_pdf_receipt('income_proof.pdf')

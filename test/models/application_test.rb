@@ -28,21 +28,21 @@ class ApplicationTest < ActiveSupport::TestCase
 
   test 'submitted application requires provider info before DCF routing or approval' do
     application = build(:application, :in_progress,
-                        medical_provider_name: nil,
-                        medical_provider_phone: nil,
-                        medical_provider_email: nil)
+                        certifying_professional_name: nil,
+                        certifying_professional_phone: nil,
+                        certifying_professional_email: nil)
 
     assert_not application.valid?
-    assert_includes application.errors.attribute_names, :medical_provider_name
-    assert_includes application.errors.attribute_names, :medical_provider_phone
-    assert_includes application.errors.attribute_names, :medical_provider_email
+    assert_includes application.errors.attribute_names, :certifying_professional_name
+    assert_includes application.errors.attribute_names, :certifying_professional_phone
+    assert_includes application.errors.attribute_names, :certifying_professional_email
   end
 
   test 'missing provider info is allowed while awaiting DCF or after DCF approval' do
     application = build(:application, :in_progress,
-                        medical_provider_name: nil,
-                        medical_provider_phone: nil,
-                        medical_provider_email: nil)
+                        certifying_professional_name: nil,
+                        certifying_professional_phone: nil,
+                        certifying_professional_email: nil)
 
     application.status = :awaiting_dcf
     assert application.valid?
@@ -718,7 +718,7 @@ class ApplicationTest < ActiveSupport::TestCase
     )
     application.reload
 
-    MedicalProviderMailer.expects(:request_certification).never
+    CertifyingProfessionalMailer.expects(:request_certification).never
 
     assert_difference -> { ApplicationStatusChange.where(application: application, to_status: 'awaiting_dcf').count }, 1 do
       assert_difference -> { Event.where(auditable: application, action: 'application_status_changed').count }, 1 do
@@ -742,7 +742,7 @@ class ApplicationTest < ActiveSupport::TestCase
     )
     application.reload
 
-    MedicalProviderMailer.expects(:request_certification).never
+    CertifyingProfessionalMailer.expects(:request_certification).never
 
     application.escalate_to_dcf!(actor: @admin, trigger: :document_request)
 
@@ -763,7 +763,7 @@ class ApplicationTest < ActiveSupport::TestCase
     )
     application.reload
 
-    MedicalProviderMailer.expects(:request_certification).never
+    CertifyingProfessionalMailer.expects(:request_certification).never
 
     assert_no_difference -> { ApplicationStatusChange.where(application: application).count } do
       application.escalate_to_dcf!(actor: @admin, trigger: :proof_review_approved)
@@ -785,7 +785,7 @@ class ApplicationTest < ActiveSupport::TestCase
       )
       application.reload
 
-      MedicalProviderMailer.expects(:request_certification).never
+      CertifyingProfessionalMailer.expects(:request_certification).never
 
       assert_no_difference -> { ApplicationStatusChange.where(application: application).count } do
         application.escalate_to_dcf!(actor: @admin, trigger: :proof_review_approved)
@@ -810,7 +810,7 @@ class ApplicationTest < ActiveSupport::TestCase
     )
     application.reload
 
-    MedicalProviderMailer.expects(:request_certification).never
+    CertifyingProfessionalMailer.expects(:request_certification).never
 
     assert_no_difference -> { ApplicationStatusChange.where(application: application).count } do
       assert_no_difference -> { Event.where(auditable: application, action: 'application_status_changed').count } do
@@ -835,7 +835,7 @@ class ApplicationTest < ActiveSupport::TestCase
     )
     application.reload
 
-    MedicalProviderMailer.expects(:request_certification).never
+    CertifyingProfessionalMailer.expects(:request_certification).never
 
     assert_difference -> { ApplicationStatusChange.where(application: application, to_status: 'awaiting_dcf').count }, 1 do
       assert_difference -> { Event.where(auditable: application, action: 'application_status_changed').count }, 1 do

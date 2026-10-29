@@ -302,7 +302,7 @@ class SecureRequestFormTest < ActiveSupport::TestCase
   # Certification upload links go to the application's certifying provider, who is not a user.
 
   test 'a certification link is addressed to the provider and snapshots the provider on file' do
-    application = create(:application, medical_provider_name: 'Dr. Provider', medical_provider_email: 'provider@example.test')
+    application = create(:application, certifying_professional_name: 'Dr. Provider', certifying_professional_email: 'provider@example.test')
     form = create(:certification_upload_form, application: application)
 
     assert_nil form.recipient
@@ -360,7 +360,7 @@ class SecureRequestFormTest < ActiveSupport::TestCase
   end
 
   test 'the database allows one active certification link per application' do
-    application = create(:application, medical_provider_email: 'provider@example.test')
+    application = create(:application, certifying_professional_email: 'provider@example.test')
     create(:certification_upload_form, application: application)
 
     assert_raises(ActiveRecord::RecordNotUnique) do
@@ -368,7 +368,7 @@ class SecureRequestFormTest < ActiveSupport::TestCase
     end
     assert_nothing_raised do
       create(:certification_upload_form, :revoked, application: application)
-      create(:certification_upload_form, :submitted, application: create(:application, medical_provider_email: 'provider@example.test'))
+      create(:certification_upload_form, :submitted, application: create(:application, certifying_professional_email: 'provider@example.test'))
     end
   end
 

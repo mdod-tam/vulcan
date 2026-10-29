@@ -92,17 +92,17 @@
       <%# Bound to the submitted value, falling back to the stored one, so a re-render (validation
           failure, pending review, any refusal) keeps the authorization. The box is required, so
           losing it would leave final_submit_gate holding "Submit Application" disabled. %>
-      <%= check_box_tag "application[medical_release_authorized]", "1",
-          medical_release_authorized_checked?(@application),
+      <%= check_box_tag "application[disability_information_release_authorized]", "1",
+          disability_information_release_authorized_checked?(@application),
           class: "mt-1 h-4 w-4 text-primary-600 border-gray-300 rounded",
           required: true,
           "aria-required": "true",
           "aria-describedby": "disability-release-description",
-          id: "application_medical_release_authorized" %>
-      <%= label_tag "application[medical_release_authorized]",
+          id: "application_disability_information_release_authorized" %>
+      <%= label_tag "application[disability_information_release_authorized]",
           "I authorize the release and sharing of my disability-related information as described above",
           class: "ml-2 block text-sm font-medium text-info-800 required-label",
-          for: "application_medical_release_authorized" %>
+          for: "application_disability_information_release_authorized" %>
     </div>
     <p id="disability-release-description" class="text-xs text-info-600 ml-6 mt-1">
       This authorization is required to process your MAT application and verify your eligibility.

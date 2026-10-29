@@ -7,7 +7,7 @@ module Webhooks
     skip_before_action :verify_authenticity_token
     before_action :verify_twilio_signature, only: [:fax_status]
 
-    # POST fax delivery status for a fax sent to a medical provider.
+    # POST fax delivery status for a fax sent to a certifying professional.
     def fax_status
       fax_sid = params[:FaxSid]
       status = params[:Status]
@@ -18,7 +18,7 @@ module Webhooks
       notification = Notification.find_by("metadata->>'fax_sid' = ?", fax_sid)
 
       if notification.present?
-        MedicalProviderNotifier.new(notification.notifiable).receive_fax_status(notification, fax_sid: fax_sid, status: status)
+        CertifyingProfessionalNotifier.new(notification.notifiable).receive_fax_status(notification, fax_sid: fax_sid, status: status)
         render json: { success: true, status: status }, status: :ok
       else
         # An unknown SID is logged and still answered with 200.

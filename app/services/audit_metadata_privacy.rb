@@ -5,7 +5,7 @@ class AuditMetadataPrivacy
   WITHHELD = '[withheld]'
   PRESERVED_VALUES = [nil, true, false, '', WITHHELD].freeze
   NAME_FIELDS = %w[first_name last_name middle_initial full_name name admin_name guardian_name actor_name user_name target_user_name
-                   applicant_name trainer_name evaluator_name constituent_name provider provider_name medical_provider_name
+                   applicant_name trainer_name evaluator_name constituent_name provider provider_name certifying_professional_name
                    alternate_contact_name recipient_name assigned_to_name completed_by_name].freeze
   WITHHELD_FIELDS = %w[date_of_birth physical_address_1 physical_address_2 address_line1 address_line2
                        address city zip_code postal_code notes payment_notes identity_rationale rationale

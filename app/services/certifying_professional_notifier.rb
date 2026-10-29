@@ -1,12 +1,12 @@
 # frozen_string_literal: true
 
-class MedicalProviderNotifier
+class CertifyingProfessionalNotifier
   include SecureErrorSanitizer
 
   REJECTION_ACTION = 'disability_certification_rejected'
   FAX_METHOD = 'fax'
   EMAIL_METHOD = 'email'
-  EMAIL_ACTION = 'MedicalProviderMailer#certification_rejected'
+  EMAIL_ACTION = 'CertifyingProfessionalMailer#certification_rejected'
   FAX_ACTION = 'FaxService#certification_rejected'
   FAX_FAILURES = %w[failed no-answer busy canceled].freeze
   FAX_TERMINAL = (FAX_FAILURES + %w[delivered]).freeze
@@ -25,7 +25,7 @@ class MedicalProviderNotifier
   # @param secure_upload_url [String, nil] Tokenized upload URL for email delivery only
   # @return [Hash] Transport outcome and independent notification tracking status
   def send_certification_rejection_notice(rejection_reason:, admin:, notification_id: nil, secure_upload_url: nil)
-    Rails.logger.info "Notifying medical provider about certification rejection for Application ID: #{application.id}"
+    Rails.logger.info "Notifying certifying professional about certification rejection for Application ID: #{application.id}"
 
     @delivery_contexts = { 'email' => EmailDelivery::Policy.capture(mail_action: EMAIL_ACTION, params: { notification_id: notification_id }) }
     delivery_result = if email_available?
@@ -102,7 +102,7 @@ class MedicalProviderNotifier
 
   def queue_callback_fallback(notification, context)
     reason = notification.metadata['rejection_reason'] || application.disability_certification_rejection_reason
-    mail = MedicalProviderMailer.with(application: application, admin: notification.actor, rejection_reason: reason).certification_rejected
+    mail = CertifyingProfessionalMailer.with(application: application, admin: notification.actor, rejection_reason: reason).certification_rejected
     outcome = EmailDelivery.deliver_later(mail, context: context)
     self.class.record_fallback_outcome(context, status: outcome)
   rescue StandardError => e
@@ -113,7 +113,7 @@ class MedicalProviderNotifier
   private
 
   def email_available?
-    application.medical_provider_email.present?
+    application.certifying_professional_email.present?
   end
 
   def handle_delivery_result(delivery_result, notification_id: nil)
@@ -182,7 +182,7 @@ class MedicalProviderNotifier
   # @return [Hash] Delivery result hash
   def notify_by_email(rejection_reason, admin, secure_upload_url: nil)
     EmailDelivery.verify!(EMAIL_ACTION, context: @delivery_contexts.fetch('email'), channel: :email)
-    mail = MedicalProviderMailer.with(
+    mail = CertifyingProfessionalMailer.with(
       application: application,
       rejection_reason: rejection_reason,
       admin: admin,

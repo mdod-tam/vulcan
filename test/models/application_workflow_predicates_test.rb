@@ -31,9 +31,9 @@ class ApplicationWorkflowPredicatesTest < ActiveSupport::TestCase
       application_date: 4.years.ago,
       maryland_resident: true,
       self_certify_disability: true,
-      medical_provider_name: 'Dr. Test',
-      medical_provider_phone: '555-1234',
-      medical_provider_email: 'dr@test.com'
+      certifying_professional_name: 'Dr. Test',
+      certifying_professional_phone: '555-1234',
+      certifying_professional_email: 'dr@test.com'
     )
     app.save!
     assert app.fulfillment_type_voucher?, "Expected voucher, got #{app.fulfillment_type}"

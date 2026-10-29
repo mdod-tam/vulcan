@@ -177,7 +177,7 @@ es:
         application_form:
           attributes:
             base:
-              medical_provider_required: "Se requiere información del profesional certificador para enviar la solicitud."
+              certifying_professional_required: "Se requiere información del profesional certificador para enviar la solicitud."
               pending_identity_review: "Esta solicitud aún no se puede enviar porque necesitamos revisar parte de la información asociada con esta solicitud. Mientras tanto, puede seguir editando y guardando el borrador. Comuníquese con el equipo de MAT si tiene preguntas."
   activity_history:
     labels:
@@ -309,12 +309,12 @@ es:
         expired: "Este enlace seguro ha vencido."
         resent: "Si esta solicitud se puede reenviar, se enviará un nuevo enlace seguro usando la información de contacto elegible que esté registrada en ese momento."
         invalid_request: "Este enlace seguro ya no está disponible."
-        medical_provider_name_blank: "Ingrese el nombre del profesional certificador."
-        medical_provider_phone_blank: "Ingrese el número de teléfono del profesional certificador."
-        medical_provider_email_blank: "Ingrese el correo electrónico del profesional certificador."
-        medical_provider_phone_invalid: "Ingrese un número de teléfono de 10 dígitos, usando 4105550100 o 410-555-0100."
-        medical_provider_fax_invalid: "Ingrese un número de fax de 10 dígitos, usando 4105550100 o 410-555-0100."
-        medical_provider_email_invalid: "Ingrese un correo electrónico válido."
+        certifying_professional_name_blank: "Ingrese el nombre del profesional certificador."
+        certifying_professional_phone_blank: "Ingrese el número de teléfono del profesional certificador."
+        certifying_professional_email_blank: "Ingrese el correo electrónico del profesional certificador."
+        certifying_professional_phone_invalid: "Ingrese un número de teléfono de 10 dígitos, usando 4105550100 o 410-555-0100."
+        certifying_professional_fax_invalid: "Ingrese un número de fax de 10 dígitos, usando 4105550100 o 410-555-0100."
+        certifying_professional_email_invalid: "Ingrese un correo electrónico válido."
         request_after_submission_failed: "No pudimos enviar automáticamente el formulario de información del proveedor. El personal del programa dará seguimiento."
     proof_resubmission:
       messages:
@@ -459,7 +459,7 @@ es:
           revoke: "Revocar"
           revoke_confirm: "¿Revocar este enlace seguro para subir %{proof_type}? El destinatario ya no podrá usarlo."
           no_actions: "Sin acciones"
-      medical_provider_secure_request_forms:
+      certifying_professional_secure_request_forms:
         panel:
           title: "Enlaces seguros para subir la certificación"
         table:
@@ -476,7 +476,7 @@ es:
           expired: "Vencido"
           revoked: "Revocado"
           submitted: "Enviado"
-      medical_provider_secure_request_form_revocations:
+      certifying_professional_secure_request_form_revocations:
         create:
           success: "Enlace seguro para subir la certificación revocado."
           failure: "No se pudo revocar el enlace seguro para subir la certificación."
@@ -671,7 +671,7 @@ es:
              Telecomunicaciones Accesibles de Maryland
              %{office_address}
       archived_message: "Lamentablemente, ha alcanzado el número máximo de intentos de envío para esta solicitud. Su solicitud ha sido archivada."
-  medical_provider_mailer:
+  certifying_professional_mailer:
     certification_submission_instructions:
       secure: |-
         1. Formulario de certificación de discapacidad en blanco:
@@ -870,7 +870,7 @@ es:
         application_notifications_proof_received: "Verificación de documentos recibida"
         application_notifications_max_rejections_reached: "Actualización importante del estado de la solicitud"
         application_notifications_provider_info_requested: "Solicitud de información del profesional certificador"
-        medical_provider_request_certification: "Solicitud de certificación de discapacidad"
+        certifying_professional_request_certification: "Solicitud de certificación de discapacidad"
         voucher_notifications_voucher_assigned: "Su vale para equipo de accesibilidad"
         voucher_notifications_voucher_redeemed: "Confirmación de canje del vale"
         evaluator_mailer_evaluation_submission_confirmation: "Confirmación de envío de evaluación"

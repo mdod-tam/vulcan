@@ -31,7 +31,7 @@ The seeds are initialization tasks that overwrite staff changes: policy seeding 
 
 [`ApplicationMailer`](../../app/mailers/application_mailer.rb) provides shared rendering and delivery; workflow mailers choose recipients, variables, and whether postal preference applies.
 
-Provider certification requests are queued by [`DisabilityCertificationService`](../../app/services/applications/disability_certification_service.rb) as [`DisabilityCertificationEmailJob`](../../app/jobs/disability_certification_email_job.rb), which sends via `MedicalProviderMailer` and records delivery errors on the notification when there is one ([job tests](../../test/jobs/disability_certification_email_job_test.rb)).
+Provider certification requests are queued by [`DisabilityCertificationService`](../../app/services/applications/disability_certification_service.rb) as [`DisabilityCertificationEmailJob`](../../app/jobs/disability_certification_email_job.rb), which sends via `CertifyingProfessionalMailer` and records delivery errors on the notification when there is one ([job tests](../../test/jobs/disability_certification_email_job_test.rb)).
 
 The job configures three total attempts with Rails polynomial backoff. It defers enqueue until commit and binds the exact notification. Early policy refusal creates no delivery-owned request state; late refusal or enqueue failure restores only that attempt’s unchanged state. A newer request, including a DocuSeal request in the same second, takes precedence.
 

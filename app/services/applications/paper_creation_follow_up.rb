@@ -77,7 +77,7 @@ module Applications
     end
 
     def request_provider_info_if_missing
-      return unless params[:no_medical_provider_information]
+      return unless params[:no_certifying_professional_information]
       return if @application.disability_certification_status_approved?
 
       result = Applications::RequestProviderInfo.new(

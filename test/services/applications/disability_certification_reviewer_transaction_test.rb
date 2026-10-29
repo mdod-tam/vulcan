@@ -11,7 +11,7 @@ module Applications
       @admin = create(:admin)
       @constituent = create(:constituent)
       @application = create(:application, user: @constituent, disability_certification_status: :requested,
-                                          medical_provider_name: 'Dr. Provider', medical_provider_email: 'provider@example.test')
+                                          certifying_professional_name: 'Dr. Provider', certifying_professional_email: 'provider@example.test')
     end
 
     teardown do
@@ -25,7 +25,7 @@ module Applications
         attempts << :secure_request
         true
       end.returns(BaseService::Result.new(success: true, data: { secure_upload_url: 'https://example.test/secure_certification_form?token=test' }))
-      MedicalProviderNotifier.any_instance.stubs(:send_certification_rejection_notice).with do |**_arguments|
+      CertifyingProfessionalNotifier.any_instance.stubs(:send_certification_rejection_notice).with do |**_arguments|
         assert_not ActiveRecord::Base.current_transaction.open?
         assert @application.reload.disability_certification_status_rejected?
         attempts << :provider
@@ -47,7 +47,7 @@ module Applications
 
     test 'outer rollback restores rejection writes and performs no provider or secure-link operation' do
       RequestCertificationUpload.any_instance.expects(:call).never
-      MedicalProviderNotifier.any_instance.expects(:send_certification_rejection_notice).never
+      CertifyingProfessionalNotifier.any_instance.expects(:send_certification_rejection_notice).never
       before_counts = [ApplicationStatusChange.where(application: @application).count,
                        Notification.where(notifiable: @application).count,
                        @application.proof_reviews.count,
@@ -79,7 +79,7 @@ module Applications
       )
       mail = stub('certification_rejection_mail')
       mail.stubs(:[]).with('X-PM-Message-Id').returns(stub(value: 'MSG-TRACKING'))
-      MedicalProviderMailer.expects(:with).with(
+      CertifyingProfessionalMailer.expects(:with).with(
         application: @application, rejection_reason: 'Missing signature', admin: @admin, secure_upload_url: secure_upload_url
       ).returns(stub(certification_rejected: mail))
       EmailDelivery.expects(:deliver_now!).with(mail, context: anything).once.returns(true)
@@ -116,7 +116,7 @@ module Applications
         attempts << [:secure_request, @application.reload.disability_certification_status]
         true
       end.returns(BaseService::Result.new(success: true, data: {}))
-      MedicalProviderNotifier.any_instance.stubs(:send_certification_rejection_notice).with do |**_arguments|
+      CertifyingProfessionalNotifier.any_instance.stubs(:send_certification_rejection_notice).with do |**_arguments|
         assert_not ActiveRecord::Base.current_transaction.open?
         attempts << [:provider, @application.reload.disability_certification_status]
         true
@@ -144,7 +144,7 @@ module Applications
     test 'a committed rejection whose follow-up step fails is reported as saved, without contacting the provider' do
       ProofReview.any_instance.stubs(:handle_post_review_actions).raises(StandardError, 'private callback failure')
       RequestCertificationUpload.any_instance.expects(:call).never
-      MedicalProviderNotifier.any_instance.expects(:send_certification_rejection_notice).never
+      CertifyingProfessionalNotifier.any_instance.expects(:send_certification_rejection_notice).never
 
       result = DisabilityCertificationReviewer.new(@application, @admin).reject(rejection_reason: 'Missing signature', notes: 'Check the date')
 
@@ -170,7 +170,7 @@ module Applications
         true
       end.raises(StandardError, 'private callback failure')
       RequestCertificationUpload.any_instance.expects(:call).never
-      MedicalProviderNotifier.any_instance.expects(:send_certification_rejection_notice).never
+      CertifyingProfessionalNotifier.any_instance.expects(:send_certification_rejection_notice).never
 
       result = DisabilityCertificationReviewer.new(@application, @admin).reject(rejection_reason: 'Missing signature')
 

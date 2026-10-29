@@ -51,7 +51,7 @@ module ConstituentPortal
           application: {
             user_id: dependent.id, household_size: '3', annual_income: '50000', hearing_disability: '1',
             physical_address_1: '123 Retry Street', city: 'Baltimore', state: 'MD', zip_code: '21201',
-            medical_provider_attributes: { name: 'Dr. Retry', phone: '2025551234', email: 'retry@example.com' }
+            certifying_professional_attributes: { name: 'Dr. Retry', phone: '2025551234', email: 'retry@example.com' }
           }
         }
 
@@ -70,13 +70,13 @@ module ConstituentPortal
         assert_includes log.string, 'Error creating application: StandardError'
         assert_select 'input[name="application[user_id]"][value=?]', dependent.id.to_s
         assert_select 'input[name="application[physical_address_1]"][value=?]', '123 Retry Street'
-        assert_select 'input[name="application[medical_provider_attributes][name]"][value=?]', 'Dr. Retry'
+        assert_select 'input[name="application[certifying_professional_attributes][name]"][value=?]', 'Dr. Retry'
 
         post constituent_portal_applications_path, params: submitted, headers: { 'Accept' => accept }
         assert_response :redirect
         draft = dependent.applications.draft.sole
         assert_equal guardian.id, draft.managing_guardian_id
-        assert_equal 'Dr. Retry', draft.medical_provider_name
+        assert_equal 'Dr. Retry', draft.certifying_professional_name
       end
     end
 
@@ -125,7 +125,7 @@ module ConstituentPortal
           self_certify_disability: checkbox_params(true),
           hearing_disability: true
         },
-        medical_provider: {
+        certifying_professional: {
           name: 'Dr. Smith',
           phone: '2025551234',
           email: 'drsmith@example.com'
@@ -177,7 +177,7 @@ module ConstituentPortal
             self_certify_disability: checkbox_params(true),
             hearing_disability: true
           },
-          medical_provider: {
+          certifying_professional: {
             name: 'Dr. Smith',
             phone: '2025551234',
             email: 'drsmith@example.com'
@@ -190,9 +190,9 @@ module ConstituentPortal
 
       assert_redirected_to constituent_portal_application_path(application)
       assert_equal 'draft', application.status
-      assert_equal 'Dr. Smith', application.medical_provider_name
-      assert_equal '2025551234', application.medical_provider_phone
-      assert_equal 'drsmith@example.com', application.medical_provider_email
+      assert_equal 'Dr. Smith', application.certifying_professional_name
+      assert_equal '2025551234', application.certifying_professional_phone
+      assert_equal 'drsmith@example.com', application.certifying_professional_email
     end
 
     test 'should persist selected locale from new application form' do
@@ -210,7 +210,7 @@ module ConstituentPortal
             self_certify_disability: checkbox_params(true),
             hearing_disability: checkbox_params(true)
           },
-          medical_provider: {
+          certifying_professional: {
             name: 'Dr. Locale',
             phone: '2025556789',
             email: 'dr.locale@example.com'
@@ -241,7 +241,7 @@ module ConstituentPortal
             self_certify_disability: checkbox_params(true),
             hearing_disability: checkbox_params(true)
           },
-          medical_provider: {
+          certifying_professional: {
             name: 'Dr. Preserve Locale',
             phone: '2025556790',
             email: 'dr.preserve.locale@example.com'
@@ -275,8 +275,8 @@ module ConstituentPortal
             income_proof: cleared_proof(@valid_pdf, :income_proof).signed_id,
             terms_accepted: checkbox_params(true),
             information_verified: checkbox_params(true),
-            medical_release_authorized: checkbox_params(true),
-            medical_provider_attributes: {
+            disability_information_release_authorized: checkbox_params(true),
+            certifying_professional_attributes: {
               name: 'Dr. Smith',
               phone: '2025551234',
               email: 'drsmith@example.com'
@@ -313,8 +313,8 @@ module ConstituentPortal
             self_certify_disability: checkbox_params(true), hearing_disability: checkbox_params(true),
             residency_proof: cleared_proof(@valid_image, :residency_proof).signed_id, income_proof: fixture_file_upload(disguised.path, 'application/pdf'),
             terms_accepted: checkbox_params(true), information_verified: checkbox_params(true),
-            medical_release_authorized: checkbox_params(true),
-            medical_provider_attributes: { name: 'Dr. Smith', phone: '2025551234', email: 'drsmith@example.com' }
+            disability_information_release_authorized: checkbox_params(true),
+            certifying_professional_attributes: { name: 'Dr. Smith', phone: '2025551234', email: 'drsmith@example.com' }
           },
           submit_application: 'Submit Application'
         }
@@ -720,7 +720,7 @@ module ConstituentPortal
             residency_proof: cleared_proof(@valid_image, :residency_proof).signed_id,
             income_proof: cleared_proof(@valid_pdf, :income_proof).signed_id,
             no_provider_info_provided: '1',
-            medical_provider_attributes: {
+            certifying_professional_attributes: {
               name: '',
               phone: '',
               email: ''
@@ -732,7 +732,7 @@ module ConstituentPortal
 
       assert_response :unprocessable_content
       expected = I18n.t(
-        'activemodel.errors.models.application_form.attributes.base.medical_provider_required',
+        'activemodel.errors.models.application_form.attributes.base.certifying_professional_required',
         locale: 'en'
       )
       assert_equal expected, flash[:alert]
@@ -760,7 +760,7 @@ module ConstituentPortal
             residency_proof: cleared_proof(@valid_image, :residency_proof).signed_id,
             income_proof: cleared_proof(@valid_pdf, :income_proof).signed_id,
             no_provider_info_provided: '1',
-            medical_provider_attributes: {
+            certifying_professional_attributes: {
               name: '',
               phone: '',
               email: ''
@@ -772,7 +772,7 @@ module ConstituentPortal
 
       assert_response :unprocessable_content
       expected = I18n.t(
-        'activemodel.errors.models.application_form.attributes.base.medical_provider_required',
+        'activemodel.errors.models.application_form.attributes.base.certifying_professional_required',
         locale: 'es'
       )
       assert_equal expected, flash[:alert]
@@ -808,7 +808,7 @@ module ConstituentPortal
       %w[en es].each do |locale|
         params = pending_review_submission_params.merge(constituent: { locale: locale })
         params[:application] = params[:application].merge(
-          household_size: '', medical_provider_attributes: { name: '', phone: '', email: '' }
+          household_size: '', certifying_professional_attributes: { name: '', phone: '', email: '' }
         )
 
         assert_no_difference('Application.count') { post constituent_portal_applications_path, params: params }
@@ -842,8 +842,8 @@ module ConstituentPortal
             income_proof: cleared_proof(@valid_pdf, :income_proof).signed_id,
             terms_accepted: checkbox_params(true),
             information_verified: checkbox_params(true),
-            medical_release_authorized: checkbox_params(true),
-            medical_provider_attributes: {
+            disability_information_release_authorized: checkbox_params(true),
+            certifying_professional_attributes: {
               name: 'Dr. Child',
               phone: '2025551212',
               email: 'drchild@example.com'
@@ -892,9 +892,9 @@ module ConstituentPortal
             cognition_disability: checkbox_params(false),
             terms_accepted: checkbox_params(true),
             information_verified: checkbox_params(true),
-            medical_release_authorized: checkbox_params(true)
+            disability_information_release_authorized: checkbox_params(true)
           },
-          medical_provider: {
+          certifying_professional: {
             name: 'Dr. Portal Locale',
             phone: '2025553050',
             email: 'dr.portal.locale@example.com'
@@ -975,9 +975,9 @@ module ConstituentPortal
         status: :draft,
         household_size: 3,
         annual_income: 50_000,
-        medical_provider_name: 'Dr. Smith',
-        medical_provider_phone: '2025551234',
-        medical_provider_email: 'drsmith@example.com'
+        certifying_professional_name: 'Dr. Smith',
+        certifying_professional_phone: '2025551234',
+        certifying_professional_email: 'drsmith@example.com'
       )
 
       patch constituent_portal_application_path(@application), params: {
@@ -988,7 +988,7 @@ module ConstituentPortal
           self_certify_disability: true,
           terms_accepted: true,
           information_verified: true,
-          medical_release_authorized: true,
+          disability_information_release_authorized: true,
           hearing_disability: checkbox_params(true), # Submission requires at least one disability.
           vision_disability: checkbox_params(false),
           speech_disability: checkbox_params(false),
@@ -996,7 +996,7 @@ module ConstituentPortal
           cognition_disability: checkbox_params(false),
           residency_proof: cleared_proof(@valid_image, :residency_proof).signed_id,
           income_proof: cleared_proof(@valid_pdf, :income_proof).signed_id,
-          medical_provider_attributes: {
+          certifying_professional_attributes: {
             name: 'Dr. Smith',
             phone: '2025551234',
             email: 'drsmith@example.com'
@@ -1101,7 +1101,7 @@ module ConstituentPortal
       @application.update!(status: :draft,
                            household_size: 3,
                            annual_income: 50_000,
-                           medical_provider_name: 'Good Health Clinic')
+                           certifying_professional_name: 'Good Health Clinic')
 
       patch constituent_portal_application_path(@application), params: {
         application: {
@@ -1112,7 +1112,7 @@ module ConstituentPortal
           speech_disability: checkbox_params(false),
           mobility_disability: checkbox_params(false),
           cognition_disability: checkbox_params(false),
-          medical_provider_attributes: {
+          certifying_professional_attributes: {
             name: 'Dr. Jane Smith',
             phone: '2025559876',
             email: 'drjane@example.com'
@@ -1128,9 +1128,9 @@ module ConstituentPortal
       assert_equal 5, @application.household_size
       assert_equal 75_000, @application.annual_income
 
-      assert_equal 'Dr. Jane Smith', @application.medical_provider_name
-      assert_equal '2025559876', @application.medical_provider_phone
-      assert_equal 'drjane@example.com', @application.medical_provider_email
+      assert_equal 'Dr. Jane Smith', @application.certifying_professional_name
+      assert_equal '2025559876', @application.certifying_professional_phone
+      assert_equal 'drjane@example.com', @application.certifying_professional_email
 
       assert_not_nil @application.user_id
       assert_equal @user.id, @application.user_id
@@ -1218,9 +1218,9 @@ module ConstituentPortal
             zip_code: '21201',
             terms_accepted: checkbox_params(true),
             information_verified: checkbox_params(true),
-            medical_release_authorized: checkbox_params(true)
+            disability_information_release_authorized: checkbox_params(true)
           },
-          medical_provider_attributes: {
+          certifying_professional_attributes: {
             name: 'Dr. Smith',
             phone: '2025551234',
             email: 'drsmith@example.com'
@@ -1276,8 +1276,8 @@ module ConstituentPortal
             income_proof: cleared_proof(@valid_pdf, :income_proof).signed_id,
             terms_accepted: checkbox_params(true),
             information_verified: checkbox_params(true),
-            medical_release_authorized: checkbox_params(true),
-            medical_provider_attributes: {
+            disability_information_release_authorized: checkbox_params(true),
+            certifying_professional_attributes: {
               name: 'Dr. Johnson',
               phone: '3015551234',
               email: 'drjohnson@example.com'
@@ -1342,8 +1342,8 @@ module ConstituentPortal
             income_proof: cleared_proof(@valid_pdf, :income_proof).signed_id,
             terms_accepted: checkbox_params(true),
             information_verified: checkbox_params(true),
-            medical_release_authorized: checkbox_params(true),
-            medical_provider_attributes: {
+            disability_information_release_authorized: checkbox_params(true),
+            certifying_professional_attributes: {
               name: 'Dr. Child',
               phone: '2025551212',
               email: 'drchild@example.com'
@@ -1445,8 +1445,8 @@ module ConstituentPortal
           income_proof: cleared_proof(@valid_pdf, :income_proof).signed_id,
           terms_accepted: checkbox_params(true),
           information_verified: checkbox_params(true),
-          medical_release_authorized: checkbox_params(true),
-          medical_provider_attributes: {
+          disability_information_release_authorized: checkbox_params(true),
+          certifying_professional_attributes: {
             name: 'Dr. Smith', phone: '2025551234', email: 'drsmith@example.com'
           }
         },

@@ -9,8 +9,8 @@ module Admin
       @application = create(:application,
                             status: 'in_progress',
                             disability_certification_status: 'not_requested',
-                            medical_provider_name: 'Dr. Test Provider',
-                            medical_provider_email: 'provider@example.com')
+                            certifying_professional_name: 'Dr. Test Provider',
+                            certifying_professional_email: 'provider@example.com')
 
       system_test_sign_in(@admin)
     end
@@ -74,8 +74,8 @@ module Admin
     end
 
     test 'admin can reject a disability certification without uploading' do
-      MedicalProviderNotifier.any_instance.expects(:send_certification_rejection_notice)
-                             .returns(success: true, outcome: :submitted, tracking_status: :recorded)
+      CertifyingProfessionalNotifier.any_instance.expects(:send_certification_rejection_notice)
+                                    .returns(success: true, outcome: :submitted, tracking_status: :recorded)
 
       RejectionReason.find_or_create_by!(
         code: 'missing_signature',

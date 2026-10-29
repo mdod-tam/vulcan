@@ -2,15 +2,15 @@
 
 require 'test_helper'
 
-class MedicalProviderNotifierTest < ActiveSupport::TestCase
+class CertifyingProfessionalNotifierTest < ActiveSupport::TestCase
   setup do
     @admin = create(:admin)
     @constituent = create(:constituent)
     @application = create(:application,
                           user: @constituent,
-                          medical_provider_name: 'Dr. Provider',
-                          medical_provider_email: 'provider@example.com',
-                          medical_provider_fax: '+14105551212')
+                          certifying_professional_name: 'Dr. Provider',
+                          certifying_professional_email: 'provider@example.com',
+                          certifying_professional_fax: '+14105551212')
 
     AuditEventService.stubs(:log)
   end
@@ -25,7 +25,7 @@ class MedicalProviderNotifierTest < ActiveSupport::TestCase
                           action: 'disability_certification_rejected',
                           metadata: { 'rejection_reason' => 'Missing signature' })
 
-    notifier = MedicalProviderNotifier.new(@application)
+    notifier = CertifyingProfessionalNotifier.new(@application)
     notifier.stubs(:notify_by_email).returns(
       { success: true, method: 'email', outcome: :submitted, message_id: 'MSG-123' }
     )
@@ -62,7 +62,7 @@ class MedicalProviderNotifierTest < ActiveSupport::TestCase
                           action: 'disability_certification_rejected',
                           metadata: { 'rejection_reason' => 'Missing signature' })
 
-    notifier = MedicalProviderNotifier.new(@application)
+    notifier = CertifyingProfessionalNotifier.new(@application)
     DocumentSigning::SubmissionService.expects(:new).never
     notifier.stubs(:notify_by_email).returns(
       { success: true, method: 'email', outcome: :submitted, message_id: 'MSG-456' }
@@ -82,15 +82,15 @@ class MedicalProviderNotifierTest < ActiveSupport::TestCase
   end
 
   test 'passes secure upload url to rejection email and delivers synchronously' do
-    notifier = MedicalProviderNotifier.new(@application)
+    notifier = CertifyingProfessionalNotifier.new(@application)
     mail = mock('certification_rejected_mail')
     mail.expects(:deliver_now).returns(true)
     mail.expects(:[]).with('X-PM-Message-Id').returns(stub(value: 'MSG-SECURE'))
     mail.expects(:deliver_later).never
-    mailer_proxy = mock('medical_provider_mailer_proxy')
+    mailer_proxy = mock('certifying_professional_mailer_proxy')
     mailer_proxy.expects(:certification_rejected).returns(mail)
 
-    MedicalProviderMailer.expects(:with).with(
+    CertifyingProfessionalMailer.expects(:with).with(
       application: @application,
       rejection_reason: 'Missing signature',
       admin: @admin,
@@ -104,7 +104,7 @@ class MedicalProviderNotifierTest < ActiveSupport::TestCase
   end
 
   test 'redacts secure upload urls from email errors and notification metadata' do
-    @application.update!(medical_provider_fax: nil)
+    @application.update!(certifying_professional_fax: nil)
     notification = create(:notification,
                           recipient: @application.user,
                           actor: @admin,
@@ -115,9 +115,9 @@ class MedicalProviderNotifierTest < ActiveSupport::TestCase
     raw_error = "SMTP rejected message containing #{secure_upload_url}"
     mail = mock('certification_rejected_mail')
     mail.expects(:deliver_now).raises(StandardError, raw_error)
-    mailer_proxy = mock('medical_provider_mailer_proxy')
+    mailer_proxy = mock('certifying_professional_mailer_proxy')
     mailer_proxy.expects(:certification_rejected).returns(mail)
-    MedicalProviderMailer.expects(:with).with(
+    CertifyingProfessionalMailer.expects(:with).with(
       application: @application,
       rejection_reason: 'Missing signature',
       admin: @admin,
@@ -129,7 +129,7 @@ class MedicalProviderNotifierTest < ActiveSupport::TestCase
 
     begin
       Rails.logger = ActiveSupport::Logger.new(log_output)
-      result = MedicalProviderNotifier.new(@application).send_certification_rejection_notice(
+      result = CertifyingProfessionalNotifier.new(@application).send_certification_rejection_notice(
         rejection_reason: 'Missing signature',
         admin: @admin,
         notification_id: notification.id,
@@ -153,7 +153,7 @@ class MedicalProviderNotifierTest < ActiveSupport::TestCase
   test 'email failure is not silently routed to the unavailable fax provider' do
     notification = create(:notification, recipient: @application.user, actor: @admin, notifiable: @application,
                                          action: 'disability_certification_rejected')
-    notifier = MedicalProviderNotifier.new(@application)
+    notifier = CertifyingProfessionalNotifier.new(@application)
     notifier.stubs(:notify_by_email).returns(success: false, method: 'email', outcome: :failed, error: 'smtp timeout')
     FaxService.any_instance.expects(:send_fax).never
 
@@ -166,10 +166,10 @@ class MedicalProviderNotifierTest < ActiveSupport::TestCase
   end
 
   test 'fax-only provider gets an explicit unavailable result' do
-    @application.update_column(:medical_provider_email, nil)
+    @application.update_column(:certifying_professional_email, nil)
     notification = create(:notification, recipient: @application.user, actor: @admin, notifiable: @application,
                                          action: 'disability_certification_rejected')
-    result = MedicalProviderNotifier.new(@application).send_certification_rejection_notice(
+    result = CertifyingProfessionalNotifier.new(@application).send_certification_rejection_notice(
       rejection_reason: 'Missing signature', admin: @admin, notification_id: notification.id
     )
     assert_not result[:success]
@@ -183,10 +183,10 @@ class MedicalProviderNotifierTest < ActiveSupport::TestCase
       notification = create(:notification, recipient: @application.user, actor: @admin, notifiable: @application,
                                            action: 'disability_certification_rejected')
       EmailDelivery.stubs(:verify!)
-      MedicalProviderMailer.stubs(:with).returns(stub(certification_rejected: mock('mail')))
+      CertifyingProfessionalMailer.stubs(:with).returns(stub(certification_rejected: mock('mail')))
       EmailDelivery.expects(:deliver_later).returns(outcome)
 
-      result = MedicalProviderNotifier.new(@application).send_certification_rejection_notice(
+      result = CertifyingProfessionalNotifier.new(@application).send_certification_rejection_notice(
         rejection_reason: 'Missing signature', admin: @admin, notification_id: notification.id
       )
 
@@ -200,7 +200,7 @@ class MedicalProviderNotifierTest < ActiveSupport::TestCase
   test 'tracking failure preserves accepted email submission without suggesting another send' do
     notification = create(:notification, recipient: @application.user, actor: @admin, notifiable: @application,
                                          action: 'disability_certification_rejected')
-    notifier = MedicalProviderNotifier.new(@application)
+    notifier = CertifyingProfessionalNotifier.new(@application)
     notifier.stubs(:notify_by_email).returns(success: true, method: 'email', outcome: :submitted, message_id: 'MSG-ACCEPTED')
     Notification.any_instance.expects(:update!).raises(ActiveRecord::RecordInvalid.new(notification))
 

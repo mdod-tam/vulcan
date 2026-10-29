@@ -32,9 +32,9 @@ class SecureFormTerminalStateTest < ApplicationSystemTestCase
     assert_selector 'h1', text: I18n.t('secure_provider_info_forms.show.heading')
     form.mark_submitted!
 
-    fill_in 'medical_provider_name', with: 'Dr. Second Tab'
-    fill_in 'medical_provider_phone', with: '410-555-0100'
-    fill_in 'medical_provider_email', with: 'second-tab@example.test'
+    fill_in 'certifying_professional_name', with: 'Dr. Second Tab'
+    fill_in 'certifying_professional_phone', with: '410-555-0100'
+    fill_in 'certifying_professional_email', with: 'second-tab@example.test'
     click_button I18n.t('secure_provider_info_forms.show.submit')
 
     assert_selector 'h1', text: I18n.t('secure_provider_info_forms.submitted.heading')

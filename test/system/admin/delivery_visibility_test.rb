@@ -12,7 +12,7 @@ module Admin
       @attempt = EmailDeliveryAttempt.create!(notification: @notification, origin: @application, application: @application,
                                               correlation_id: SecureRandom.uuid, destination: 'provider-with-long-name@example.test',
                                               recipient_key: EmailDeliveryAttempt.recipient_key('provider-with-long-name@example.test'),
-                                              server_id: 'default', mail_action: 'MedicalProviderMailer#request_certification',
+                                              server_id: 'default', mail_action: 'CertifyingProfessionalMailer#request_certification',
                                               attempted_at: 1.hour.ago, accepted_at: 1.hour.ago, delivered_at: 50.minutes.ago,
                                               bounced_at: 40.minutes.ago, bounce_category: 'HardBounce', feedback_at: 40.minutes.ago)
     end
@@ -47,7 +47,7 @@ module Admin
     end
 
     test 'application attention links to independent request lifecycle and delivery history' do
-      @application.update_columns(medical_provider_name: nil, medical_provider_email: nil)
+      @application.update_columns(certifying_professional_name: nil, certifying_professional_email: nil)
       form = create(:secure_request_form, application: @application, recipient: @application.user, sent_at: 70.minutes.ago)
       @attempt.update!(origin: form, delivery_owner: form.delivery_owner, recipient: form.recipient)
       sign_in(@admin)
@@ -78,7 +78,7 @@ module Admin
       attempt = EmailDeliveryAttempt.create!(notification: notification, origin: @application, application: @application,
                                              correlation_id: SecureRandom.uuid, destination: 'provider@example.test',
                                              recipient_key: EmailDeliveryAttempt.recipient_key('provider@example.test'),
-                                             server_id: '23', mail_action: 'MedicalProviderMailer#certification_rejected',
+                                             server_id: '23', mail_action: 'CertifyingProfessionalMailer#certification_rejected',
                                              attempted_at: 5.minutes.ago, bounced_at: 4.minutes.ago, bounce_category: 'HardBounce')
       create(:notification, notifiable: @application, action: 'disability_certification_requested', delivery_status: :queued)
 

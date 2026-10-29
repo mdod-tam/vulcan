@@ -9,7 +9,7 @@ module ConstituentPortal
     include ApplicationFormHandling
     include ApplicationDataStructures
     include AddressHelper
-    include MedicalProviderHelper
+    include CertifyingProfessionalHelper
 
     class UserAttributeUpdateError < StandardError; end
     class ApplicationCreationError < StandardError; end
@@ -55,12 +55,12 @@ module ConstituentPortal
 
     def edit
       # A Struct gives fields_for named provider attributes.
-      medical_provider_struct = Struct.new(:name, :phone, :fax, :email)
-      @application.medical_provider_attributes = medical_provider_struct.new(
-        @application.medical_provider_name,
-        @application.medical_provider_phone,
-        @application.medical_provider_fax,
-        @application.medical_provider_email
+      certifying_professional_struct = Struct.new(:name, :phone, :fax, :email)
+      @application.certifying_professional_attributes = certifying_professional_struct.new(
+        @application.certifying_professional_name,
+        @application.certifying_professional_phone,
+        @application.certifying_professional_fax,
+        @application.certifying_professional_email
       )
       @applicant_user = @application.for_dependent? ? @application.user : current_user
     end
@@ -194,7 +194,7 @@ module ConstituentPortal
 
     def initialize_new_application
       @application = current_user.applications.new
-      @application.medical_provider_attributes ||= {}
+      @application.certifying_professional_attributes ||= {}
       @applicant_user = current_user
     end
 
@@ -348,7 +348,7 @@ module ConstituentPortal
       @application.assign_attributes(filtered_application_params)
       restore_applicant_context_from_params
       setup_address_for_form
-      restore_medical_provider_from_params
+      restore_certifying_professional_from_params
       apply_failure_messages(result)
 
       render_form_errors(nil, @application)
@@ -362,8 +362,8 @@ module ConstituentPortal
 
       # The address before_action runs on GET only. Rebuild the form dependencies before the update refusal renders.
       setup_address_for_form
-      restore_medical_provider_from_params
-      prepare_medical_provider_for_edit
+      restore_certifying_professional_from_params
+      prepare_certifying_professional_for_edit
       render :edit, formats: [:html], status: :unprocessable_content
     end
 
@@ -398,14 +398,14 @@ module ConstituentPortal
       @application.managing_guardian_id = current_user.id
     end
 
-    # fields_for binds to medical_provider_attributes. find_param_value does not read this nested parameter shape.
+    # fields_for binds to certifying_professional_attributes. find_param_value does not read this nested parameter shape.
     # Restore the submitted provider values, including blanks, for a retry.
-    def restore_medical_provider_from_params
-      submitted = params.dig(:application, :medical_provider_attributes)
+    def restore_certifying_professional_from_params
+      submitted = params.dig(:application, :certifying_professional_attributes)
       return if submitted.blank?
 
       provider_struct = Struct.new(:name, :phone, :fax, :email)
-      @application.medical_provider_attributes = provider_struct.new(
+      @application.certifying_professional_attributes = provider_struct.new(
         submitted[:name], submitted[:phone], submitted[:fax], submitted[:email]
       )
     end
@@ -462,10 +462,10 @@ module ConstituentPortal
     end
 
     def show_missing_provider_info_flash(form)
-      return unless form.errors.added?(:base, :medical_provider_required)
+      return unless form.errors.added?(:base, :certifying_professional_required)
 
       flash.now[:alert] = I18n.t(
-        'activemodel.errors.models.application_form.attributes.base.medical_provider_required',
+        'activemodel.errors.models.application_form.attributes.base.certifying_professional_required',
         locale: form.message_locale
       )
     end
@@ -474,8 +474,8 @@ module ConstituentPortal
       determine_success_message(application, is_submission: application.status != original_status && application.status_in_progress?)
     end
 
-    def prepare_medical_provider_for_edit
-      @medical_provider = medical_provider_from_application(@application)
+    def prepare_certifying_professional_for_edit
+      @certifying_professional = certifying_professional_from_application(@application)
     end
 
     def render_autosave_response(result)
@@ -502,15 +502,15 @@ module ConstituentPortal
       redirect_to constituent_portal_application_path(app), notice: notice
     end
 
-    def build_medical_provider_for_form
-      @application.medical_provider_attributes ||= {} if @application
+    def build_certifying_professional_for_form
+      @application.certifying_professional_attributes ||= {} if @application
       provider_params = {
-        medical_provider_name: find_param_value(:name, :medical_provider),
-        medical_provider_phone: find_param_value(:phone, :medical_provider),
-        medical_provider_fax: find_param_value(:fax, :medical_provider),
-        medical_provider_email: find_param_value(:email, :medical_provider)
+        certifying_professional_name: find_param_value(:name, :certifying_professional),
+        certifying_professional_phone: find_param_value(:phone, :certifying_professional),
+        certifying_professional_fax: find_param_value(:fax, :certifying_professional),
+        certifying_professional_email: find_param_value(:email, :certifying_professional)
       }
-      @medical_provider = medical_provider_from_params(provider_params)
+      @certifying_professional = certifying_professional_from_params(provider_params)
     end
 
     def find_param_value(field, param_type)
@@ -522,7 +522,7 @@ module ConstituentPortal
 
     def filtered_application_params
       application_params.except(
-        :medical_provider_attributes,
+        :certifying_professional_attributes,
         # This checkbox controls form state. Application has no use_guardian_address attribute.
         :use_guardian_address,
         :hearing_disability,
@@ -579,13 +579,13 @@ module ConstituentPortal
     def application_params
       params.expect(
         application: %i[
-          annual_income household_size maryland_resident self_certify_disability terms_accepted information_verified medical_release_authorized
-          medical_provider_name medical_provider_phone medical_provider_fax medical_provider_email
+          annual_income household_size maryland_resident self_certify_disability terms_accepted information_verified disability_information_release_authorized
+          certifying_professional_name certifying_professional_phone certifying_professional_fax certifying_professional_email
           physical_address_1 physical_address_2 city state zip_code
           use_guardian_address
           hearing_disability vision_disability speech_disability mobility_disability cognition_disability
           alternate_contact_name alternate_contact_phone alternate_contact_email alternate_contact_relationship_type
-          medical_provider_attributes
+          certifying_professional_attributes
         ]
       )
     end

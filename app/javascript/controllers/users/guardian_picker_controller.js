@@ -15,7 +15,7 @@ export default class extends Controller {
     "lastApplicationSource",
     "lastApplicationDetails",
     "incomeCopyButton",
-    "medicalCopyButton"
+    "certifyingProfessionalCopyButton"
   ];
 
   connect() {
@@ -93,7 +93,7 @@ export default class extends Controller {
     const parts = [];
     if (data.household_size) parts.push(`Household size: ${data.household_size}`);
     if (data.annual_income) parts.push(`Annual income: $${Number(data.annual_income).toLocaleString()}`);
-    if (data.medical_provider_name) parts.push(`Medical provider: ${data.medical_provider_name}`);
+    if (data.certifying_professional_name) parts.push(`Certifying professional: ${data.certifying_professional_name}`);
 
     let dateStr = '';
     if (data.application_date) {
@@ -109,12 +109,12 @@ export default class extends Controller {
     if (this.hasIncomeCopyButtonTarget) {
       setVisible(this.incomeCopyButtonTarget, !!(data.household_size || data.annual_income));
     }
-    if (this.hasMedicalCopyButtonTarget) {
-      setVisible(this.medicalCopyButtonTarget, !!(
-        data.medical_provider_name ||
-        data.medical_provider_phone ||
-        data.medical_provider_fax ||
-        data.medical_provider_email
+    if (this.hasCertifyingProfessionalCopyButtonTarget) {
+      setVisible(this.certifyingProfessionalCopyButtonTarget, !!(
+        data.certifying_professional_name ||
+        data.certifying_professional_phone ||
+        data.certifying_professional_fax ||
+        data.certifying_professional_email
       ));
     }
 
@@ -134,14 +134,14 @@ export default class extends Controller {
     setFieldValue('input[name="application[annual_income]"]', data.annual_income);
   }
 
-  useLastApplicationMedicalProvider() {
+  useLastApplicationCertifyingProfessional() {
     const data = this._lastApplicationContext;
     if (!data) return;
 
-    setFieldValue('input[name="application[medical_provider_name]"]', data.medical_provider_name);
-    setFieldValue('input[name="application[medical_provider_phone]"]', data.medical_provider_phone);
-    setFieldValue('input[name="application[medical_provider_fax]"]', data.medical_provider_fax);
-    setFieldValue('input[name="application[medical_provider_email]"]', data.medical_provider_email);
+    setFieldValue('input[name="application[certifying_professional_name]"]', data.certifying_professional_name);
+    setFieldValue('input[name="application[certifying_professional_phone]"]', data.certifying_professional_phone);
+    setFieldValue('input[name="application[certifying_professional_fax]"]', data.certifying_professional_fax);
+    setFieldValue('input[name="application[certifying_professional_email]"]', data.certifying_professional_email);
   }
 
   // Called from dependents list partial buttons

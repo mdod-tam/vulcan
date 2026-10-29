@@ -180,7 +180,7 @@ module Applications
     end
 
     def determine_initial_status
-      return :awaiting_proof if params[:no_medical_provider_information]
+      return :awaiting_proof if params[:no_certifying_professional_information]
 
       income_action = params[:income_proof_action]
       residency_action = params[:residency_proof_action]

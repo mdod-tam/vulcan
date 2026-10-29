@@ -156,7 +156,7 @@ def create_users_with_factories
   users_map['unconfirmed_user'] = create_user_with_factory(:constituent, email: 'unconfirmed@example.com', first_name: 'New', last_name: 'User', email_verified: false)
   users_map['trainer'] = create_user_with_factory(:trainer, email: 'trainer@example.com', first_name: 'Trainer', last_name: 'Person')
   users_map['evaluator'] = create_user_with_factory(:evaluator, email: 'evaluator@example.com', first_name: 'Evaluator', last_name: 'Person')
-  users_map['medical_provider'] = create_user_with_factory(:user, :medical_provider, email: 'medical@example.com', first_name: 'Doctor', last_name: 'Smith')
+  users_map['certifying_professional'] = create_user_with_factory(:user, :certifying_professional, email: 'medical@example.com', first_name: 'Doctor', last_name: 'Smith')
 
   users_map['constituent_john'] = create_user_with_factory(:constituent, email: 'john.doe@example.com', first_name: 'John', last_name: 'Doe')
   users_map['constituent_jane'] = create_user_with_factory(:constituent, email: 'jane.doe@example.com', first_name: 'Jane', last_name: 'Doe')

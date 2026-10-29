@@ -319,10 +319,10 @@ module Admin
           household_size: last_app.household_size,
           annual_income: last_app.annual_income,
           maryland_resident: last_app.maryland_resident,
-          medical_provider_name: last_app.medical_provider_name,
-          medical_provider_phone: last_app.medical_provider_phone,
-          medical_provider_fax: last_app.medical_provider_fax,
-          medical_provider_email: last_app.medical_provider_email
+          certifying_professional_name: last_app.certifying_professional_name,
+          certifying_professional_phone: last_app.certifying_professional_phone,
+          certifying_professional_fax: last_app.certifying_professional_fax,
+          certifying_professional_email: last_app.certifying_professional_email
         }
       else
         render json: { success: true, application_id: nil }
@@ -346,10 +346,10 @@ module Admin
         **eligibility,
         household_size: last_app&.household_size,
         annual_income: last_app&.annual_income,
-        medical_provider_name: last_app&.medical_provider_name,
-        medical_provider_phone: last_app&.medical_provider_phone,
-        medical_provider_fax: last_app&.medical_provider_fax,
-        medical_provider_email: last_app&.medical_provider_email
+        certifying_professional_name: last_app&.certifying_professional_name,
+        certifying_professional_phone: last_app&.certifying_professional_phone,
+        certifying_professional_fax: last_app&.certifying_professional_fax,
+        certifying_professional_email: last_app&.certifying_professional_email
       }
     end
 

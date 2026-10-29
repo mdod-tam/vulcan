@@ -51,8 +51,8 @@ module Admin
     end
 
     test 'provider channel options describe their own destination and stable owner identity' do
-      application = create(:application, status: :awaiting_proof, medical_provider_name: nil, medical_provider_phone: nil,
-                                         medical_provider_email: nil)
+      application = create(:application, status: :awaiting_proof, certifying_professional_name: nil, certifying_professional_phone: nil,
+                                         certifying_professional_email: nil)
       recipient = application.user
       recipient.update!(phone_type: 'text')
 
@@ -155,8 +155,8 @@ module Admin
 
     test 'show page renders localized secure link channel and status labels' do
       application = create(:application, status: :awaiting_proof,
-                                         medical_provider_name: nil, medical_provider_phone: nil,
-                                         medical_provider_email: nil)
+                                         certifying_professional_name: nil, certifying_professional_phone: nil,
+                                         certifying_professional_email: nil)
       create(:secure_request_form, application: application, recipient: application.user, recipient_channel: :sms)
 
       get admin_application_path(application)
@@ -192,7 +192,7 @@ module Admin
 
     test 'show page activity history shows masked replaced provider values for review' do
       old_email = 'original@example.test'
-      application = create(:application, status: :awaiting_proof, medical_provider_email: old_email)
+      application = create(:application, status: :awaiting_proof, certifying_professional_email: old_email)
       form = create(:secure_request_form, application: application, recipient: application.user)
       create(:admin, email: PublicAuditActor::SYSTEM_AUDIT_EMAIL)
 
@@ -200,29 +200,29 @@ module Admin
         application: application,
         secure_request_form: form,
         params: {
-          medical_provider_name: application.medical_provider_name,
-          medical_provider_phone: application.medical_provider_phone,
-          medical_provider_email: 'replacement@example.test'
+          certifying_professional_name: application.certifying_professional_name,
+          certifying_professional_phone: application.certifying_professional_phone,
+          certifying_professional_email: 'replacement@example.test'
         }
       ).call
 
-      assert_equal 'replacement@example.test', application.reload.medical_provider_email
+      assert_equal 'replacement@example.test', application.reload.certifying_professional_email
 
       get admin_application_path(application)
 
       assert_response :success
       history = css_select('#audit-logs').first.text
       assert_includes history, 'Provider Info Replaced - Review'
-      assert_includes history, 'Medical provider email: o***@e***.test -> r***@e***.test'
+      assert_includes history, 'Certifying professional email: o***@e***.test -> r***@e***.test'
       assert_not_includes history, old_email
       assert_not_includes history, 'replacement@example.test'
     end
 
     test 'show page shows secure provider information requests when any required provider field is missing' do
       application = create(:application, status: :awaiting_proof,
-                                         medical_provider_name: 'Dr. Secure',
-                                         medical_provider_phone: nil,
-                                         medical_provider_email: 'secure@example.test')
+                                         certifying_professional_name: 'Dr. Secure',
+                                         certifying_professional_phone: nil,
+                                         certifying_professional_email: 'secure@example.test')
 
       get admin_application_path(application)
 
@@ -234,9 +234,9 @@ module Admin
     test 'show page blocks secure provider information request form when managing guardian is ambiguous' do
       dependent = create(:constituent)
       application = create(:application, user: dependent, status: :awaiting_proof,
-                                         medical_provider_name: nil,
-                                         medical_provider_phone: nil,
-                                         medical_provider_email: nil)
+                                         certifying_professional_name: nil,
+                                         certifying_professional_phone: nil,
+                                         certifying_professional_email: nil)
       create(:guardian_relationship, dependent_user: dependent, guardian_user: create(:constituent))
       create(:guardian_relationship, dependent_user: dependent, guardian_user: create(:constituent))
 
@@ -254,8 +254,8 @@ module Admin
       dependent = create(:constituent, email: dependent_email, dependent_email: dependent_email)
       create(:guardian_relationship, guardian_user: guardian, dependent_user: dependent, relationship_type: 'Parent')
       application = create(:application, user: dependent, managing_guardian: guardian, status: :awaiting_proof,
-                                         medical_provider_name: nil, medical_provider_phone: nil,
-                                         medical_provider_email: nil)
+                                         certifying_professional_name: nil, certifying_professional_phone: nil,
+                                         certifying_professional_email: nil)
 
       get admin_application_path(application)
 
@@ -273,8 +273,8 @@ module Admin
       )
       create(:guardian_relationship, guardian_user: guardian, dependent_user: dependent, relationship_type: 'Parent')
       application = create(:application, user: dependent, managing_guardian: guardian, status: :awaiting_proof,
-                                         medical_provider_name: nil, medical_provider_phone: nil,
-                                         medical_provider_email: nil)
+                                         certifying_professional_name: nil, certifying_professional_phone: nil,
+                                         certifying_professional_email: nil)
 
       get admin_application_path(application)
 
@@ -285,8 +285,8 @@ module Admin
 
     test 'show page activity history includes secure certification upload requests' do
       application = create(:application,
-                           medical_provider_name: 'Dr. Secure',
-                           medical_provider_email: 'secure@example.test')
+                           certifying_professional_name: 'Dr. Secure',
+                           certifying_professional_email: 'secure@example.test')
       create(
         :notification,
         recipient: application.user,
@@ -312,8 +312,8 @@ module Admin
 
     test 'show page activity history includes revoked secure certification upload requests' do
       application = create(:application,
-                           medical_provider_name: 'Awaiting Provider',
-                           medical_provider_email: 'awaiting.provider@example.com')
+                           certifying_professional_name: 'Awaiting Provider',
+                           certifying_professional_email: 'awaiting.provider@example.com')
       Event.create!(
         user: @admin,
         auditable: application,
@@ -336,8 +336,8 @@ module Admin
 
     test 'show page offers secure certification upload link when provider email is present' do
       application = create(:application,
-                           medical_provider_name: 'Dr. Secure',
-                           medical_provider_email: 'secure@example.test',
+                           certifying_professional_name: 'Dr. Secure',
+                           certifying_professional_email: 'secure@example.test',
                            disability_certification_status: :requested)
 
       get admin_application_path(application)
@@ -353,8 +353,8 @@ module Admin
     test 'show page hides secure certification upload link when certification is pending review' do
       application = create(:application,
                            :with_disability_certification,
-                           medical_provider_name: 'Dr. Secure',
-                           medical_provider_email: 'secure@example.test',
+                           certifying_professional_name: 'Dr. Secure',
+                           certifying_professional_email: 'secure@example.test',
                            disability_certification_status: :received)
 
       get admin_application_path(application)
@@ -367,8 +367,8 @@ module Admin
     test 'show page hides secure certification upload link when certification is attached before request' do
       application = create(:application,
                            :with_disability_certification,
-                           medical_provider_name: 'Dr. Secure',
-                           medical_provider_email: 'secure@example.test',
+                           certifying_professional_name: 'Dr. Secure',
+                           certifying_professional_email: 'secure@example.test',
                            disability_certification_status: :not_requested)
 
       get admin_application_path(application)
@@ -381,8 +381,8 @@ module Admin
     test 'show page offers secure certification upload link after attached certification is rejected' do
       application = create(:application,
                            :with_disability_certification,
-                           medical_provider_name: 'Dr. Secure',
-                           medical_provider_email: 'secure@example.test',
+                           certifying_professional_name: 'Dr. Secure',
+                           certifying_professional_email: 'secure@example.test',
                            disability_certification_status: :rejected)
 
       get admin_application_path(application)
@@ -394,8 +394,8 @@ module Admin
 
     test 'show page warns before secure certification upload when DocuSeal is active' do
       application = create(:application,
-                           medical_provider_name: 'Dr. Secure',
-                           medical_provider_email: 'secure@example.test',
+                           certifying_professional_name: 'Dr. Secure',
+                           certifying_professional_email: 'secure@example.test',
                            disability_certification_status: :requested,
                            document_signing_status: :opened)
 
@@ -408,8 +408,8 @@ module Admin
 
     test 'show page confirms DocuSeal as an additional option when secure certification links are active' do
       application = create(:application,
-                           medical_provider_name: 'Dr. Secure',
-                           medical_provider_email: 'secure@example.test',
+                           certifying_professional_name: 'Dr. Secure',
+                           certifying_professional_email: 'secure@example.test',
                            disability_certification_status: :requested)
       create(:certification_upload_form, application: application)
 
@@ -421,8 +421,8 @@ module Admin
     end
 
     test 'show page surfaces provider email remediation for secure certification upload' do
-      application = create(:application, medical_provider_name: 'Dr. Missing')
-      application.update_columns(medical_provider_email: nil, disability_certification_status: :requested)
+      application = create(:application, certifying_professional_name: 'Dr. Missing')
+      application.update_columns(certifying_professional_email: nil, disability_certification_status: :requested)
 
       get admin_application_path(application)
 
@@ -435,7 +435,7 @@ module Admin
 
     test 'provider information row actions name their link and resend asks for confirmation' do
       application = create(:application, status: :awaiting_proof)
-      application.update_columns(medical_provider_email: nil)
+      application.update_columns(certifying_professional_email: nil)
       guardian = create(:constituent)
       first = create(:secure_request_form, application: application, recipient: application.user)
       second = create(:secure_request_form, application: application, recipient: guardian, delivery_owner: guardian)
@@ -640,8 +640,8 @@ module Admin
 
     test 'secure certification upload request sends mail and redirects with notice' do
       application = create(:application,
-                           medical_provider_name: 'Dr. Secure',
-                           medical_provider_email: 'secure@example.test',
+                           certifying_professional_name: 'Dr. Secure',
+                           certifying_professional_email: 'secure@example.test',
                            disability_certification_status: :requested)
       result = BaseService::Result.new(success: true, message: 'created', data: {})
       Applications::RequestCertificationUpload.any_instance.expects(:call).returns(result)
@@ -654,8 +654,8 @@ module Admin
     end
 
     test 'secure certification upload request redirects with service failure message' do
-      application = create(:application, medical_provider_name: 'Dr. Missing')
-      application.update_columns(medical_provider_email: nil, disability_certification_status: :requested)
+      application = create(:application, certifying_professional_name: 'Dr. Missing')
+      application.update_columns(certifying_professional_email: nil, disability_certification_status: :requested)
 
       post admin_application_certification_upload_request_path(application)
 
@@ -761,8 +761,8 @@ module Admin
 
     test 'manual certification upload revoke records an audit event' do
       application = create(:application,
-                           medical_provider_name: 'Dr. Secure',
-                           medical_provider_email: 'secure@example.test')
+                           certifying_professional_name: 'Dr. Secure',
+                           certifying_professional_email: 'secure@example.test')
       secure_request_form = create(:certification_upload_form,
                                    application: application,
                                    recipient_name: 'Dr. Secure',
@@ -771,11 +771,11 @@ module Admin
       get admin_application_path(application)
 
       assert_response :success
-      assert_select "form[action='#{admin_application_medical_provider_secure_request_form_revocation_path(application, secure_request_form)}'][method='post'][data-turbo-frame='_top'][data-turbo-confirm=?]:not([data-turbo='false']):not([onsubmit])",
-                    I18n.t('admin.applications.medical_provider_secure_request_forms.table.revoke_confirm')
+      assert_select "form[action='#{admin_application_certifying_professional_secure_request_form_revocation_path(application, secure_request_form)}'][method='post'][data-turbo-frame='_top'][data-turbo-confirm=?]:not([data-turbo='false']):not([onsubmit])",
+                    I18n.t('admin.applications.certifying_professional_secure_request_forms.table.revoke_confirm')
 
       assert_difference("Event.where(auditable: application, action: 'cert_upload_request_revoked').count", 1) do
-        post admin_application_medical_provider_secure_request_form_revocation_path(application, secure_request_form)
+        post admin_application_certifying_professional_secure_request_form_revocation_path(application, secure_request_form)
       end
 
       assert_redirected_to admin_application_path(application)
@@ -795,13 +795,13 @@ module Admin
 
       Rails.logger.stub(:error, ->(message) { messages << message }) do
         assert_no_difference 'Event.count' do
-          post admin_application_medical_provider_secure_request_form_revocation_path(application, form)
+          post admin_application_certifying_professional_secure_request_form_revocation_path(application, form)
         end
       end
 
       assert_redirected_to admin_application_path(application)
       assert_response :see_other
-      assert_equal I18n.t('admin.applications.medical_provider_secure_request_form_revocations.create.failure'), flash[:alert]
+      assert_equal I18n.t('admin.applications.certifying_professional_secure_request_form_revocations.create.failure'), flash[:alert]
       assert_predicate form.reload, :active?
       assert_not_includes messages.join, 'private-certification@example.test'
       assert_not_includes messages.join, '410-555-0199'
@@ -811,8 +811,8 @@ module Admin
 
     test 'show page offers batch revoke when active sibling links share a request batch' do
       application = create(:application, status: :awaiting_proof,
-                                         medical_provider_name: nil, medical_provider_phone: nil,
-                                         medical_provider_email: nil)
+                                         certifying_professional_name: nil, certifying_professional_phone: nil,
+                                         certifying_professional_email: nil)
       guardian = create(:constituent)
       batch_id = SecureRandom.uuid
       create(:secure_request_form, application: application, recipient: application.user, request_batch_id: batch_id)
@@ -943,8 +943,8 @@ module Admin
 
     test 'show page channel select lists only currently available channels and defaults to the resolved channel' do
       application = create(:application, status: :awaiting_proof,
-                                         medical_provider_name: nil, medical_provider_phone: nil,
-                                         medical_provider_email: nil)
+                                         certifying_professional_name: nil, certifying_professional_phone: nil,
+                                         certifying_professional_email: nil)
       application.user.update!(phone_type: 'text')
 
       get admin_application_path(application)
@@ -960,8 +960,8 @@ module Admin
 
     test 'show page channel select omits sms for a voice phone recipient' do
       application = create(:application, status: :awaiting_proof,
-                                         medical_provider_name: nil, medical_provider_phone: nil,
-                                         medical_provider_email: nil)
+                                         certifying_professional_name: nil, certifying_professional_phone: nil,
+                                         certifying_professional_email: nil)
       application.user.update!(phone_type: 'voice')
 
       get admin_application_path(application)
@@ -980,8 +980,8 @@ module Admin
       Current.paper_context = false
       user.update_columns(physical_address_1: nil, city: nil, state: nil, zip_code: nil)
       application = create(:application, user: user, status: :awaiting_proof,
-                                         medical_provider_name: nil, medical_provider_phone: nil,
-                                         medical_provider_email: nil)
+                                         certifying_professional_name: nil, certifying_professional_phone: nil,
+                                         certifying_professional_email: nil)
 
       get admin_application_path(application)
 
@@ -993,8 +993,8 @@ module Admin
 
     test 'forged sms channel override is rejected without creating a secure request form' do
       application = create(:application, status: :awaiting_proof,
-                                         medical_provider_name: nil, medical_provider_phone: nil,
-                                         medical_provider_email: nil)
+                                         certifying_professional_name: nil, certifying_professional_phone: nil,
+                                         certifying_professional_email: nil)
       application.user.update!(phone_type: 'voice')
 
       assert_no_difference('SecureRequestForm.count') do
@@ -1014,8 +1014,8 @@ module Admin
 
     test 'unknown forged channel value is rejected without creating a secure request form' do
       application = create(:application, status: :awaiting_proof,
-                                         medical_provider_name: nil, medical_provider_phone: nil,
-                                         medical_provider_email: nil)
+                                         certifying_professional_name: nil, certifying_professional_phone: nil,
+                                         certifying_professional_email: nil)
 
       assert_no_difference('SecureRequestForm.count') do
         post admin_application_secure_request_forms_path(application),
@@ -1034,8 +1034,8 @@ module Admin
 
     test 'resend forms carry no stale hidden channel override fields' do
       application = create(:application, status: :awaiting_proof,
-                                         medical_provider_name: nil, medical_provider_phone: nil,
-                                         medical_provider_email: nil)
+                                         certifying_professional_name: nil, certifying_professional_phone: nil,
+                                         certifying_professional_email: nil)
       create(:secure_request_form, application: application, recipient: application.user)
 
       get admin_application_path(application)
@@ -1047,8 +1047,8 @@ module Admin
     test 'show page enables an sms-only recipient behind an explicit channel prompt' do
       user = build_sms_only_constituent
       application = create(:application, user: user, status: :awaiting_proof,
-                                         medical_provider_name: nil, medical_provider_phone: nil,
-                                         medical_provider_email: nil)
+                                         certifying_professional_name: nil, certifying_professional_phone: nil,
+                                         certifying_professional_email: nil)
 
       get admin_application_path(application)
 
@@ -1076,8 +1076,8 @@ module Admin
     test 'channel select labels name their recipient for assistive technology' do
       user = build_sms_only_constituent
       application = create(:application, user: user, status: :awaiting_proof,
-                                         medical_provider_name: nil, medical_provider_phone: nil,
-                                         medical_provider_email: nil)
+                                         certifying_professional_name: nil, certifying_professional_phone: nil,
+                                         certifying_professional_email: nil)
 
       get admin_application_path(application)
 
@@ -1094,8 +1094,8 @@ module Admin
       create(:guardian_relationship, guardian_user: guardian, dependent_user: dependent,
                                      relationship_type: 'Parent')
       application = create(:application, user: dependent, status: :awaiting_proof,
-                                         medical_provider_name: nil, medical_provider_phone: nil,
-                                         medical_provider_email: nil)
+                                         certifying_professional_name: nil, certifying_professional_phone: nil,
+                                         certifying_professional_email: nil)
       create(:secure_request_form, application: application, recipient: guardian,
                                    recipient_role: :guardian, recipient_relationship_type: 'Parent')
 
@@ -1120,8 +1120,8 @@ module Admin
       # The later relationship avoids automatic guardian selection and its email route.
       guardian.update_columns(physical_address_1: nil, city: nil, state: nil, zip_code: nil)
       application = create(:application, user: sms_only, status: :awaiting_proof,
-                                         medical_provider_name: nil, medical_provider_phone: nil,
-                                         medical_provider_email: nil)
+                                         certifying_professional_name: nil, certifying_professional_phone: nil,
+                                         certifying_professional_email: nil)
       create(:guardian_relationship, guardian_user: guardian, dependent_user: sms_only,
                                      relationship_type: 'Parent')
 
@@ -1146,8 +1146,8 @@ module Admin
       create(:guardian_relationship, guardian_user: guardian, dependent_user: dependent,
                                      relationship_type: 'Parent')
       application = create(:application, user: dependent, status: :awaiting_proof,
-                                         medical_provider_name: nil, medical_provider_phone: nil,
-                                         medical_provider_email: nil)
+                                         certifying_professional_name: nil, certifying_professional_phone: nil,
+                                         certifying_professional_email: nil)
       guardian.update!(status: :suspended)
 
       get admin_application_path(application)
@@ -1169,8 +1169,8 @@ module Admin
       Current.paper_context = false
       user.update_columns(physical_address_1: nil, city: nil, state: nil, zip_code: nil)
       application = create(:application, user: user, status: :awaiting_proof,
-                                         medical_provider_name: nil, medical_provider_phone: nil,
-                                         medical_provider_email: nil)
+                                         certifying_professional_name: nil, certifying_professional_phone: nil,
+                                         certifying_professional_email: nil)
 
       get admin_application_path(application)
 
@@ -1217,8 +1217,8 @@ module Admin
     test 'explicitly selecting sms for an sms-only recipient issues the secure request' do
       user = build_sms_only_constituent
       application = create(:application, user: user, status: :awaiting_proof,
-                                         medical_provider_name: nil, medical_provider_phone: nil,
-                                         medical_provider_email: nil)
+                                         certifying_professional_name: nil, certifying_professional_phone: nil,
+                                         certifying_professional_email: nil)
       SmsService.stubs(:send_message).returns(true)
 
       assert_difference('SecureRequestForm.count', 1) do
@@ -1239,8 +1239,8 @@ module Admin
     test 'sms-only recipient left on the channel prompt fails closed without creating a form' do
       user = build_sms_only_constituent
       application = create(:application, user: user, status: :awaiting_proof,
-                                         medical_provider_name: nil, medical_provider_phone: nil,
-                                         medical_provider_email: nil)
+                                         certifying_professional_name: nil, certifying_professional_phone: nil,
+                                         certifying_professional_email: nil)
       SmsService.expects(:send_message).never
 
       # A blank override permits defaults, but SMS is never a default.
@@ -1269,8 +1269,8 @@ module Admin
       create(:guardian_relationship, guardian_user: guardian, dependent_user: dependent,
                                      relationship_type: 'Parent')
       application = create(:application, user: dependent, status: :awaiting_proof,
-                                         medical_provider_name: nil, medical_provider_phone: nil,
-                                         medical_provider_email: nil,
+                                         certifying_professional_name: nil, certifying_professional_phone: nil,
+                                         certifying_professional_email: nil,
                                          managing_guardian: guardian)
       guardian.update!(status: :suspended)
 
@@ -1292,8 +1292,8 @@ module Admin
       create(:guardian_relationship, guardian_user: guardian, dependent_user: dependent,
                                      relationship_type: 'Parent')
       application = create(:application, user: dependent, status: :awaiting_proof,
-                                         medical_provider_name: nil, medical_provider_phone: nil,
-                                         medical_provider_email: nil,
+                                         certifying_professional_name: nil, certifying_professional_phone: nil,
+                                         certifying_professional_email: nil,
                                          managing_guardian: guardian)
       guardian.update!(status: :suspended)
 
@@ -1311,8 +1311,8 @@ module Admin
       Current.paper_context = false
       user.update_columns(physical_address_1: nil, city: nil, state: nil, zip_code: nil)
       application = create(:application, user: user, status: :awaiting_proof,
-                                         medical_provider_name: nil, medical_provider_phone: nil,
-                                         medical_provider_email: nil)
+                                         certifying_professional_name: nil, certifying_professional_phone: nil,
+                                         certifying_professional_email: nil)
 
       get admin_application_path(application)
 
@@ -1336,8 +1336,8 @@ module Admin
       create(:guardian_relationship, guardian_user: guardian, dependent_user: dependent,
                                      relationship_type: 'Parent')
       application = create(:application, user: dependent, status: :awaiting_proof,
-                                         medical_provider_name: nil, medical_provider_phone: nil,
-                                         medical_provider_email: nil,
+                                         certifying_professional_name: nil, certifying_professional_phone: nil,
+                                         certifying_professional_email: nil,
                                          managing_guardian: guardian)
 
       post admin_application_secure_request_forms_path(application),
@@ -1360,8 +1360,8 @@ module Admin
       create(:guardian_relationship, guardian_user: guardian, dependent_user: dependent,
                                      relationship_type: 'Parent')
       application = create(:application, user: dependent, status: :awaiting_proof,
-                                         medical_provider_name: nil, medical_provider_phone: nil,
-                                         medical_provider_email: nil,
+                                         certifying_professional_name: nil, certifying_professional_phone: nil,
+                                         certifying_professional_email: nil,
                                          managing_guardian: guardian)
 
       post admin_application_secure_request_forms_path(application),
@@ -1386,8 +1386,8 @@ module Admin
       create(:guardian_relationship, guardian_user: guardian, dependent_user: dependent,
                                      relationship_type: 'Parent')
       application = create(:application, user: dependent, status: :awaiting_proof,
-                                         medical_provider_name: nil, medical_provider_phone: nil,
-                                         medical_provider_email: nil,
+                                         certifying_professional_name: nil, certifying_professional_phone: nil,
+                                         certifying_professional_email: nil,
                                          managing_guardian: guardian)
       create(:secure_request_form, application: application, recipient: dependent,
                                    recipient_channel: :letter, recipient_role: :constituent,
@@ -1413,8 +1413,8 @@ module Admin
       create(:guardian_relationship, guardian_user: guardian, dependent_user: dependent,
                                      relationship_type: 'Parent')
       application = create(:application, user: dependent, status: :awaiting_proof,
-                                         medical_provider_name: nil, medical_provider_phone: nil,
-                                         medical_provider_email: nil,
+                                         certifying_professional_name: nil, certifying_professional_phone: nil,
+                                         certifying_professional_email: nil,
                                          managing_guardian: guardian)
 
       get admin_application_path(application)

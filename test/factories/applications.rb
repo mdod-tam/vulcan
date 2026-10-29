@@ -16,10 +16,10 @@ FactoryBot.define do
     application_date { 4.years.ago }
     maryland_resident { true }
     self_certify_disability { true }
-    medical_provider_name { generate(:medical_provider_name) }
-    medical_provider_phone { generate(:medical_provider_phone) }
-    medical_provider_fax { generate(:medical_provider_fax) }
-    medical_provider_email { generate(:medical_provider_email) }
+    certifying_professional_name { generate(:certifying_professional_name) }
+    certifying_professional_phone { generate(:certifying_professional_phone) }
+    certifying_professional_fax { generate(:certifying_professional_fax) }
+    certifying_professional_email { generate(:certifying_professional_email) }
     household_size { 4 }
     annual_income  { 50_000 }
 
@@ -52,7 +52,7 @@ FactoryBot.define do
       disability_certification_status { :approved }
       terms_accepted { true }
       information_verified { true }
-      medical_release_authorized { true }
+      disability_information_release_authorized { true }
       income_verified_at { Time.current }
       last_activity_at { Time.current }
       income_verified_by factory: %i[admin]
@@ -64,7 +64,7 @@ FactoryBot.define do
       residency_proof_status { :rejected }
       terms_accepted { true }
       information_verified { true }
-      medical_release_authorized { true }
+      disability_information_release_authorized { true }
       total_rejections { 1 }
       needs_review_since { Time.current }
       last_activity_at { Time.current }
@@ -77,7 +77,7 @@ FactoryBot.define do
       id_proof_status { :approved }
       terms_accepted { true }
       information_verified { true }
-      medical_release_authorized { true }
+      disability_information_release_authorized { true }
       application_date { 8.years.ago }
       last_activity_at { 8.years.ago }
     end

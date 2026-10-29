@@ -31,8 +31,8 @@ class TextEmailLinkAccessibilityTest < ActiveSupport::TestCase
     application_notifications_training_requested
     email_footer_text
     evaluator_mailer_new_evaluation_assigned
-    medical_provider_certification_rejected
-    medical_provider_request_certification
+    certifying_professional_certification_rejected
+    certifying_professional_request_certification
     user_mailer_email_verification
     user_mailer_password_reset
     vendor_notifications_w9_rejected
@@ -76,9 +76,9 @@ class TextEmailLinkAccessibilityTest < ActiveSupport::TestCase
   # When adding new recipient-localized templates, register the name here and keep _es seeds.
   RECIPIENT_LOCALIZED_EMAIL_TEMPLATE_NAMES = %w[
     application_notifications_training_requested
-    medical_provider_certification_approved
-    medical_provider_certification_rejected
-    medical_provider_request_certification
+    certifying_professional_certification_approved
+    certifying_professional_certification_rejected
+    certifying_professional_request_certification
     training_session_notifications_trainer_assigned
     vendor_notifications_w9_approved
     vendor_notifications_w9_expired
@@ -99,10 +99,10 @@ class TextEmailLinkAccessibilityTest < ActiveSupport::TestCase
     %w[secure_proof_forms sms message],
     %w[passwords account_access_sms message],
     %w[document_signing disability_certification_request body],
-    %w[medical_provider_mailer certification_submission_instructions secure],
-    %w[medical_provider_mailer certification_submission_instructions fax],
-    %w[medical_provider_mailer certification_resubmission_instructions secure],
-    %w[medical_provider_mailer certification_resubmission_instructions fax]
+    %w[certifying_professional_mailer certification_submission_instructions secure],
+    %w[certifying_professional_mailer certification_submission_instructions fax],
+    %w[certifying_professional_mailer certification_resubmission_instructions secure],
+    %w[certifying_professional_mailer certification_resubmission_instructions fax]
   ].freeze
 
   test 'stored text email template sources label URL-like lines with nearby purpose text' do

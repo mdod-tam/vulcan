@@ -10,7 +10,7 @@ class SecureProviderInfoFormsController < SecureRequestFormController
     Applications::SubmitProviderInfo.new(
       application: @secure_request_form.application,
       secure_request_form: @secure_request_form,
-      params: params.permit(:medical_provider_name, :medical_provider_email, :medical_provider_phone, :medical_provider_fax)
+      params: params.permit(:certifying_professional_name, :certifying_professional_email, :certifying_professional_phone, :certifying_professional_fax)
     ).call
   end
 

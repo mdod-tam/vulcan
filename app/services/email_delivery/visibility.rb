@@ -54,7 +54,7 @@ module EmailDelivery
 
     def self.latest_attempts(attempts)
       attempts.group_by do |attempt|
-        recipient = attempt.mail_action.start_with?('MedicalProviderMailer#') ? 'medical_provider' : attempt.recipient_id || attempt.recipient_key
+        recipient = attempt.mail_action.start_with?('CertifyingProfessionalMailer#') ? 'certifying_professional' : attempt.recipient_id || attempt.recipient_key
         [attempt.origin_type, attempt.origin_id, attempt.mail_action, recipient]
       end.values.map(&:last)
     end

@@ -16,8 +16,8 @@ module AdminTests
 
     test 'secure provider info panel shows resolver channel select with only available channels' do
       application = create(:application, status: :awaiting_proof,
-                                         medical_provider_name: nil, medical_provider_phone: nil,
-                                         medical_provider_email: nil)
+                                         certifying_professional_name: nil, certifying_professional_phone: nil,
+                                         certifying_professional_email: nil)
       application.user.update!(phone_type: 'text')
 
       system_test_sign_in(@admin)
@@ -41,8 +41,8 @@ module AdminTests
       Current.paper_context = false
       user.update_columns(physical_address_1: nil, city: nil, state: nil, zip_code: nil)
       application = create(:application, user: user, status: :awaiting_proof,
-                                         medical_provider_name: nil, medical_provider_phone: nil,
-                                         medical_provider_email: nil)
+                                         certifying_professional_name: nil, certifying_professional_phone: nil,
+                                         certifying_professional_email: nil)
 
       system_test_sign_in(@admin)
       visit_admin_application_with_retry(application, user: @admin)
@@ -60,8 +60,8 @@ module AdminTests
     test 'sms-only recipient is selectable behind an explicit channel prompt and issues via sms' do
       user = build_sms_only_constituent
       application = create(:application, user: user, status: :awaiting_proof,
-                                         medical_provider_name: nil, medical_provider_phone: nil,
-                                         medical_provider_email: nil)
+                                         certifying_professional_name: nil, certifying_professional_phone: nil,
+                                         certifying_professional_email: nil)
 
       system_test_sign_in(@admin)
       visit_admin_application_with_retry(application, user: @admin)
@@ -105,8 +105,8 @@ module AdminTests
       guardian.update_columns(physical_address_1: nil, city: nil, state: nil, zip_code: nil)
       # The later relationship avoids automatic guardian selection and its email route.
       application = create(:application, user: sms_only, status: :awaiting_proof,
-                                         medical_provider_name: nil, medical_provider_phone: nil,
-                                         medical_provider_email: nil)
+                                         certifying_professional_name: nil, certifying_professional_phone: nil,
+                                         certifying_professional_email: nil)
       create(:guardian_relationship, guardian_user: guardian, dependent_user: sms_only,
                                      relationship_type: 'Parent')
 
@@ -151,8 +151,8 @@ module AdminTests
         create(:guardian_relationship, guardian_user: guardian, dependent_user: applicant)
       end
       application = create(:application, user: applicant, status: :awaiting_proof,
-                                         medical_provider_name: nil, medical_provider_phone: nil,
-                                         medical_provider_email: nil,
+                                         certifying_professional_name: nil, certifying_professional_phone: nil,
+                                         certifying_professional_email: nil,
                                          managing_guardian: default_guardian)
 
       system_test_sign_in(@admin)
@@ -194,8 +194,8 @@ module AdminTests
       user = create(:constituent, email: nil, phone: nil, communication_preference: 'letter')
       Current.paper_context = false
       application = create(:application, user: user, status: :awaiting_proof,
-                                         medical_provider_name: nil, medical_provider_phone: nil,
-                                         medical_provider_email: nil)
+                                         certifying_professional_name: nil, certifying_professional_phone: nil,
+                                         certifying_professional_email: nil)
 
       system_test_sign_in(@admin)
       visit_admin_application_with_retry(application, user: @admin)
@@ -221,8 +221,8 @@ module AdminTests
       create(:guardian_relationship, guardian_user: guardian, dependent_user: dependent,
                                      relationship_type: 'Parent')
       application = create(:application, user: dependent, status: :awaiting_proof,
-                                         medical_provider_name: nil, medical_provider_phone: nil,
-                                         medical_provider_email: nil,
+                                         certifying_professional_name: nil, certifying_professional_phone: nil,
+                                         certifying_professional_email: nil,
                                          managing_guardian: guardian)
       guardian.update!(status: :suspended)
 
@@ -255,8 +255,8 @@ module AdminTests
       create(:guardian_relationship, guardian_user: guardian, dependent_user: dependent,
                                      relationship_type: 'Parent')
       application = create(:application, user: dependent, status: :awaiting_proof,
-                                         medical_provider_name: nil, medical_provider_phone: nil,
-                                         medical_provider_email: nil,
+                                         certifying_professional_name: nil, certifying_professional_phone: nil,
+                                         certifying_professional_email: nil,
                                          managing_guardian: guardian)
 
       system_test_sign_in(@admin)
@@ -349,8 +349,8 @@ module AdminTests
     test 'secure request recipient workflow final evidence' do
       SmsService.stubs(:send_message).returns(true)
       application = create(:application, status: :awaiting_proof,
-                                         medical_provider_name: nil, medical_provider_phone: nil,
-                                         medical_provider_email: nil)
+                                         certifying_professional_name: nil, certifying_professional_phone: nil,
+                                         certifying_professional_email: nil)
       application.user.update!(phone_type: 'text')
       system_test_sign_in(@admin)
       visit_admin_application_with_retry(application, user: @admin)
@@ -401,7 +401,7 @@ module AdminTests
       twin = create(:constituent, first_name: 'Casey', last_name: 'Example')
       create(:guardian_relationship, guardian_user: twin, dependent_user: dependent, relationship_type: 'Parent')
       household = create(:application, user: dependent, managing_guardian: guardian, status: :awaiting_proof,
-                                       medical_provider_name: nil, medical_provider_phone: nil, medical_provider_email: nil)
+                                       certifying_professional_name: nil, certifying_professional_phone: nil, certifying_professional_email: nil)
       %i[provider_info_request id_proof_resubmission].each do |kind|
         create(:secure_request_form, application: household, recipient: dependent, kind: kind,
                                      recipient_channel: :letter, delivery_owner: guardian,
@@ -453,8 +453,8 @@ module AdminTests
       address_only = create(:constituent, email: nil, phone: nil, communication_preference: 'letter')
       Current.reset
       postal_application = create(:application, user: address_only, status: :awaiting_proof,
-                                                medical_provider_name: nil, medical_provider_phone: nil,
-                                                medical_provider_email: nil)
+                                                certifying_professional_name: nil, certifying_professional_phone: nil,
+                                                certifying_professional_email: nil)
       visit_admin_application_with_retry(postal_application, user: @admin)
       assert_equal 'letter', find("#provider_info_channel_#{address_only.id}").value
       take_screenshot('secure-request-final-address-only', html: true)

@@ -36,7 +36,7 @@ module EmailDelivery
 
     test 'notification mapping belongs to the catalog' do
       assert_predicate Catalog.notification_action('w9_rejected'), :audit_only?
-      assert_equal 'MedicalProviderMailer#requested', Catalog.notification_action('disability_certification_requested').mail_action
+      assert_equal 'CertifyingProfessionalMailer#requested', Catalog.notification_action('disability_certification_requested').mail_action
       assert_equal :notifiable_and_notification, Catalog.notification_action('training_requested').adapter
       assert_nil Catalog.notification_action('proof_rejected')
       assert_nil Catalog.notification_action('disability_certification_rejected')

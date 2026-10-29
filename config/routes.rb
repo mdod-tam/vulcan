@@ -218,12 +218,12 @@ Rails.application.routes.draw do
       resource :certification_upload_request,
                only: [:create],
                controller: 'application_certification_upload_requests'
-      resources :medical_provider_secure_request_forms,
+      resources :certifying_professional_secure_request_forms,
                 only: [],
-                controller: 'application_medical_provider_secure_request_forms' do
+                controller: 'application_certifying_professional_secure_request_forms' do
         resource :revocation,
                  only: [:create],
-                 controller: 'application_medical_provider_secure_request_form_revocations'
+                 controller: 'application_certifying_professional_secure_request_form_revocations'
       end
     end
 

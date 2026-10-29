@@ -5,7 +5,7 @@ class AuditEventService < BaseService
   DEDUP_WINDOW = 5.seconds
   SENSITIVE_CHANGE_FIELDS = %w[serial_duplicate_reason].freeze
   MUTATION_ACTIONS = %w[profile_updated profile_updated_by_guardian profile_updated_by_admin
-                        profile_created_by_admin_via_paper alternate_contact_updated medical_provider_info_updated
+                        profile_created_by_admin_via_paper alternate_contact_updated certifying_professional_info_updated
                         constituent_contact_updated vendor_updated voucher_updated].freeze
 
   # Logs an event, or returns nil when deduplication suppresses a matching event within DEDUP_WINDOW.

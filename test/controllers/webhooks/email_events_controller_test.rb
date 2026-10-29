@@ -11,7 +11,7 @@ module Webhooks
       ENV['POSTMARK_WEBHOOK_PASSWORD'] = 'offline-secret'
       @headers = { 'Authorization' => ActionController::HttpAuthentication::Basic.encode_credentials('offline-webhook', 'offline-secret') }
       @attempt = EmailDeliveryAttempt.create!(correlation_id: SecureRandom.uuid, recipient_key: EmailDeliveryAttempt.recipient_key('provider@example.test'),
-                                              destination: 'provider@example.test', server_id: '23', mail_action: 'MedicalProviderMailer#request_certification',
+                                              destination: 'provider@example.test', server_id: '23', mail_action: 'CertifyingProfessionalMailer#request_certification',
                                               attempted_at: Time.current)
       @payload = { RecordType: 'Delivery', MessageID: 'provider-123', ServerID: 23, Recipient: @attempt.destination,
                    DeliveredAt: Time.current.iso8601, Metadata: { delivery_attempt: @attempt.correlation_id } }

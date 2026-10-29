@@ -14,9 +14,9 @@ class AdminGuardianManagementTest < ApplicationSystemTestCase
                                         status: 'in_progress',
                                         application_date: Date.current,
                                         maryland_resident: true,
-                                        medical_provider_name: 'Test Provider',
-                                        medical_provider_phone: '555-123-4567',
-                                        medical_provider_email: 'provider@example.com',
+                                        certifying_professional_name: 'Test Provider',
+                                        certifying_professional_phone: '555-123-4567',
+                                        certifying_professional_email: 'provider@example.com',
                                         household_size: 2,
                                         annual_income: 30_000,
                                         self_certify_disability: true)

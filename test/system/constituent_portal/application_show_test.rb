@@ -30,7 +30,7 @@ module ConstituentPortal
       check 'Hearing'
       check 'Vision'
 
-      # Medical provider information.
+      # Certifying professional information.
       within '#certifying-professional-fields' do
         fill_in 'Name', with: 'Benjamin Rush'
         fill_in 'Phone', with: '2022222323'
@@ -76,7 +76,7 @@ module ConstituentPortal
       assert_text 'Disability Types', wait: 5
       assert_text 'Hearing, Vision', wait: 5
 
-      # Medical provider information.
+      # Certifying professional information.
       assert_text 'Name', wait: 5
       assert_text 'Benjamin Rush', wait: 5
       assert_text 'Phone', wait: 5
@@ -194,7 +194,7 @@ module ConstituentPortal
       check 'Cognition'
 
       within '#certifying-professional-fields' do
-        fill_in 'Name', with: 'Dr. Medical Provider'
+        fill_in 'Name', with: 'Dr. Certifying Professional'
         fill_in 'Phone', with: '2025551234'
         fill_in 'Email', with: 'doctor@example.com'
         check 'I authorize the release and sharing of my disability-related information as described above'

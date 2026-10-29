@@ -4,26 +4,26 @@
 <% if @certification_upload_forms.present? %>
   <div class="mt-6" data-testid="cert-upload-forms-panel">
     <h3 class="text-sm font-medium text-gray-700 mb-2">
-      <%= t('admin.applications.medical_provider_secure_request_forms.panel.title') %>
+      <%= t('admin.applications.certifying_professional_secure_request_forms.panel.title') %>
     </h3>
     <div class="overflow-x-auto">
       <table class="min-w-full divide-y divide-gray-200 text-sm">
         <thead>
           <tr>
             <th scope="col" class="px-3 py-2 text-left font-semibold text-gray-900">
-              <%= t('admin.applications.medical_provider_secure_request_forms.table.provider') %>
+              <%= t('admin.applications.certifying_professional_secure_request_forms.table.provider') %>
             </th>
             <th scope="col" class="px-3 py-2 text-left font-semibold text-gray-900">
-              <%= t('admin.applications.medical_provider_secure_request_forms.table.status') %>
+              <%= t('admin.applications.certifying_professional_secure_request_forms.table.status') %>
             </th>
             <th scope="col" class="px-3 py-2 text-left font-semibold text-gray-900">
               <%= t('delivery_visibility.requested_on', time: '').strip %>
             </th>
             <th scope="col" class="px-3 py-2 text-left font-semibold text-gray-900">
-              <%= t('admin.applications.medical_provider_secure_request_forms.table.expires') %>
+              <%= t('admin.applications.certifying_professional_secure_request_forms.table.expires') %>
             </th>
             <th scope="col" class="px-3 py-2 text-right font-semibold text-gray-900">
-              <%= t('admin.applications.medical_provider_secure_request_forms.table.actions') %>
+              <%= t('admin.applications.certifying_professional_secure_request_forms.table.actions') %>
             </th>
           </tr>
         </thead>
@@ -34,7 +34,7 @@
                 <%= secure_request_masked_email(form.recipient_email) %>
               </td>
               <td class="px-3 py-3 text-gray-700">
-                <%= t("admin.applications.medical_provider_secure_request_forms.statuses.#{form.display_status}") %>
+                <%= t("admin.applications.certifying_professional_secure_request_forms.statuses.#{form.display_status}") %>
                 <%= delivery_visibility(form) %>
               </td>
               <td class="px-3 py-3 text-gray-700"><%= l(form.sent_at, format: :short) %></td>
@@ -42,23 +42,23 @@
               <td class="px-3 py-3 text-right">
                 <% if form.active? %>
                   <%= button_to(
-                        t('admin.applications.medical_provider_secure_request_forms.table.revoke'),
-                        admin_application_medical_provider_secure_request_form_revocation_path(@application, form),
+                        t('admin.applications.certifying_professional_secure_request_forms.table.revoke'),
+                        admin_application_certifying_professional_secure_request_form_revocation_path(@application, form),
                         method: :post,
                         form: {
                           class: 'inline',
                           data: {
-                            turbo_confirm: t('admin.applications.medical_provider_secure_request_forms.table.revoke_confirm'),
+                            turbo_confirm: t('admin.applications.certifying_professional_secure_request_forms.table.revoke_confirm'),
                             turbo_frame: '_top'
                           }
                         },
-                        'aria-label': secure_link_row_action_label(t('admin.applications.medical_provider_secure_request_forms.table.revoke'), form,
+                        'aria-label': secure_link_row_action_label(t('admin.applications.certifying_professional_secure_request_forms.table.revoke'), form,
                                                                    recipient: secure_request_masked_email(form.recipient_email)),
                         class: 'btn btn-danger-outline btn-sm'
                       ) %>
                 <% else %>
                   <span class="text-gray-500">
-                    <%= t('admin.applications.medical_provider_secure_request_forms.table.no_actions') %>
+                    <%= t('admin.applications.certifying_professional_secure_request_forms.table.no_actions') %>
                   </span>
                 <% end %>
               </td>

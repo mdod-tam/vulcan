@@ -67,7 +67,7 @@ module Admin
 
       fill_in_application_details(household_size: 2, annual_income: 14_000)
       fill_in_disability_information
-      fill_in_medical_provider_information(
+      fill_in_certifying_professional_information(
         name: 'Dr. Existing Dependent',
         phone: '555-444-0093',
         email: 'dr.existing.dependent@example.com'

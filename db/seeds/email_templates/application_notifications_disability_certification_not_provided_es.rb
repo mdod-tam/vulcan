@@ -21,7 +21,7 @@ EmailTemplate.create_or_find_by!(name: 'application_notifications_disability_cer
        - Información de contacto de un proveedor calificado (nombre, correo electrónico, teléfono, fax), O
        - Suba un formulario de certificación de discapacidad completado
 
-    3. Nuestro equipo se comunicará entonces con su proveedor médico para solicitar la certificación necesaria.
+    3. Nuestro equipo se comunicará entonces con su profesional certificador para solicitar la certificación necesaria.
 
     QUÉ SE NECESITA:
 

@@ -7,7 +7,7 @@ module ParamCasting
     maryland_resident
     terms_accepted
     information_verified
-    medical_release_authorized
+    disability_information_release_authorized
     self_certify_disability
     hearing_disability
     vision_disability
@@ -23,7 +23,7 @@ module ParamCasting
     maryland_resident
     terms_accepted
     information_verified
-    medical_release_authorized
+    disability_information_release_authorized
     self_certify_disability
   ].freeze
 

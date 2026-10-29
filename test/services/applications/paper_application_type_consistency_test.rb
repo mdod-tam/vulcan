@@ -33,9 +33,9 @@ module Applications
           annual_income: '29999',
           maryland_resident: '1',
           self_certify_disability: '1',
-          medical_provider_name: 'doctor',
-          medical_provider_phone: '2028321821',
-          medical_provider_email: 'doctor@example.com'
+          certifying_professional_name: 'doctor',
+          certifying_professional_phone: '2028321821',
+          certifying_professional_email: 'doctor@example.com'
         }
       }
     end

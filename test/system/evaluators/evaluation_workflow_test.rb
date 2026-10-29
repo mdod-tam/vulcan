@@ -339,7 +339,7 @@ module Evaluators
       assert_no_text '@system.matvulcan.local'
       assert_no_text '000-123-4567'
       assert_no_text 'Annual Income'
-      assert_no_text 'Medical Provider'
+      assert_no_text 'Certifying Professional'
       assert_no_selector "a[href='#{admin_application_path(application)}']"
       take_screenshot('evaluator-assessment-desktop', html: true, full: true)
 

@@ -3,7 +3,7 @@
 # Owns application lifecycle rules for proofs, certification, training, evaluations, and fulfillment.
 class Application < ApplicationRecord
   has_many :email_delivery_attempts, dependent: :nullify
-  MedicalProviderInfo = Struct.new(:name, :phone, :fax, :email, keyword_init: true) do # rubocop:disable Style/RedundantStructKeywordInit
+  CertifyingProfessionalInfo = Struct.new(:name, :phone, :fax, :email, keyword_init: true) do # rubocop:disable Style/RedundantStructKeywordInit
     def present?
       name.present? || phone.present? || fax.present? || email.present?
     end
@@ -35,7 +35,7 @@ class Application < ApplicationRecord
   include ContactChangeAudit
 
   # The nested provider form uses this virtual attribute.
-  attr_accessor :medical_provider_attributes
+  attr_accessor :certifying_professional_attributes
 
   enum :status, {
     draft: 0,               # Incomplete application
@@ -127,10 +127,10 @@ class Application < ApplicationRecord
   validates :maryland_resident, inclusion: { in: [true], message: 'You must be a Maryland resident to apply' }, unless: :status_draft?
   validates :terms_accepted, acceptance: { accept: true }, if: :submitted?
   validates :information_verified, acceptance: { accept: true }, if: :submitted?
-  validates :medical_release_authorized, acceptance: { accept: true }, if: -> { submitted? && !skip_medical_provider_validation? }
-  validates :medical_provider_name, presence: true, unless: :skip_medical_provider_validation?
-  validates :medical_provider_phone, presence: true, unless: :skip_medical_provider_validation?
-  validates :medical_provider_email, presence: true, unless: :skip_medical_provider_validation?
+  validates :disability_information_release_authorized, acceptance: { accept: true }, if: -> { submitted? && !skip_certifying_professional_validation? }
+  validates :certifying_professional_name, presence: true, unless: :skip_certifying_professional_validation?
+  validates :certifying_professional_phone, presence: true, unless: :skip_certifying_professional_validation?
+  validates :certifying_professional_email, presence: true, unless: :skip_certifying_professional_validation?
   validates :self_certify_disability, inclusion: { in: [true, false] }, unless: :status_draft?
   validates :alternate_contact_phone,
             format: { with: /\A\+?[\d\-()\s]+\z/, allow_blank: true }
@@ -344,26 +344,26 @@ class Application < ApplicationRecord
     end
   end
 
-  def skip_medical_provider_validation?
+  def skip_certifying_professional_validation?
     status_draft? ||
       status_awaiting_proof? ||
       ((status_awaiting_dcf? || disability_certification_status_approved?) && missing_required_provider_info?)
   end
 
   def missing_required_provider_info?
-    %i[medical_provider_name medical_provider_phone medical_provider_email].any? do |attribute|
+    %i[certifying_professional_name certifying_professional_phone certifying_professional_email].any? do |attribute|
       public_send(attribute).blank?
     end
   end
 
-  def medical_provider_info_present?
-    %i[medical_provider_name medical_provider_phone medical_provider_fax medical_provider_email].any? do |attribute|
+  def certifying_professional_info_present?
+    %i[certifying_professional_name certifying_professional_phone certifying_professional_fax certifying_professional_email].any? do |attribute|
       public_send(attribute).present?
     end
   end
 
   def ready_for_docuseal?
-    medical_provider_name.present? && medical_provider_email.present?
+    certifying_professional_name.present? && certifying_professional_email.present?
   end
 
   def approve!(user:)
@@ -509,8 +509,8 @@ class Application < ApplicationRecord
       .first
   end
 
-  def medical_provider_name
-    self[:medical_provider_name]
+  def certifying_professional_name
+    self[:certifying_professional_name]
   end
 
   def for_dependent?

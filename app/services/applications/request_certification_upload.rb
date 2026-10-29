@@ -106,7 +106,7 @@ module Applications
     end
 
     def delivery_mail_action
-      rejection_delivery? ? 'MedicalProviderMailer#certification_rejected' : 'MedicalProviderMailer#request_certification'
+      rejection_delivery? ? 'CertifyingProfessionalMailer#certification_rejected' : 'CertifyingProfessionalMailer#request_certification'
     end
 
     def delivery_channel(_delivery) = :email
@@ -123,7 +123,7 @@ module Applications
       request_form = forms.first
       { application_id: application.id, secure_request_form_id: request_form.id,
         request_batch_id: request_form.request_batch_id, recipient_ids: [],
-        template_name: rejection_delivery? ? 'medical_provider_certification_rejected' : 'medical_provider_request_certification' }
+        template_name: rejection_delivery? ? 'certifying_professional_certification_rejected' : 'certifying_professional_request_certification' }
     end
 
     def deliver_email(delivery)
@@ -148,7 +148,7 @@ module Applications
 
       mail =
         if rejection_delivery?
-          MedicalProviderMailer.with(
+          CertifyingProfessionalMailer.with(
             application: application,
             recipient_email: request_form.recipient_email,
             rejection_reason: rejection_reason_for_delivery,
@@ -156,7 +156,7 @@ module Applications
             secure_upload_url: secure_upload_url
           ).certification_rejected
         else
-          MedicalProviderMailer.with(
+          CertifyingProfessionalMailer.with(
             application: application,
             recipient_email: request_form.recipient_email,
             timestamp: Time.current.iso8601,
@@ -185,11 +185,11 @@ module Applications
 
     # A resend uses the provider on file now, not the one on the expired link.
     def provider_email
-      application.medical_provider_email
+      application.certifying_professional_email
     end
 
     def provider_name
-      application.medical_provider_name
+      application.certifying_professional_name
     end
   end
 end

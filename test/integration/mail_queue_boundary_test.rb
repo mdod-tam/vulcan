@@ -195,7 +195,7 @@ class MailQueueBoundaryTest < ActiveSupport::TestCase
   end
 
   test 'certification wrapper rollback leaves no request state or queue job' do
-    @application = create(:application, user: @user, medical_provider_email: 'provider@example.com')
+    @application = create(:application, user: @user, certifying_professional_email: 'provider@example.com')
     original_count = @application.disability_certification_request_count
     ActiveRecord::Base.transaction do
       result = Applications::DisabilityCertificationService.new(application: @application, actor: @admin).request_certification
@@ -208,7 +208,7 @@ class MailQueueBoundaryTest < ActiveSupport::TestCase
   end
 
   test 'deferred certification queue failure compensates only the committed delivery request' do
-    @application = create(:application, user: @user, medical_provider_email: 'provider@example.com', disability_certification_status: :not_requested)
+    @application = create(:application, user: @user, certifying_professional_email: 'provider@example.com', disability_certification_status: :not_requested)
     before_state = @application.attributes.slice(*Applications::DisabilityCertificationService::STATE_FIELDS)
     SolidQueue::Record.connection.add_check_constraint(:solid_queue_jobs, "class_name <> 'DisabilityCertificationEmailJob'", name: 'reject_certification_for_test')
     ActiveRecord::Base.transaction do

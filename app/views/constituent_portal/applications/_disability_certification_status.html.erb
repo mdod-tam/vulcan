@@ -1,19 +1,23 @@
 <div class="mb-4 certification-status-section">
   <h2 class="text-xl font-semibold mb-2">Disability Certification Status</h2>
   
-  <% if @application.medical_provider_name.present? %>
+  <% if @application.certifying_professional_name.present? %>
     <div class="mb-2">
-      <p><strong><%= @application.medical_provider_name %></strong></p>
-      <p><%= @application.medical_provider_address_1 if @application.respond_to?(:medical_provider_address_1) && @application.medical_provider_address_1.present? %></p>
+      <p><strong><%= @application.certifying_professional_name %></strong></p>
       <p>
-        <% if @application.medical_provider_phone.present? %>
-          Phone: <%= @application.medical_provider_phone %>
+        <% if @application.respond_to?(:certifying_professional_address_1) && @application.certifying_professional_address_1.present? %>
+          <%= @application.certifying_professional_address_1 %>
         <% end %>
-        <% if @application.medical_provider_fax.present? %>
-          <% if @application.medical_provider_phone.present? %>
+      </p>
+      <p>
+        <% if @application.certifying_professional_phone.present? %>
+          Phone: <%= @application.certifying_professional_phone %>
+        <% end %>
+        <% if @application.certifying_professional_fax.present? %>
+          <% if @application.certifying_professional_phone.present? %>
              / 
           <% end %>
-          Fax: <%= @application.medical_provider_fax %>
+          Fax: <%= @application.certifying_professional_fax %>
         <% end %>
       </p>
     </div>

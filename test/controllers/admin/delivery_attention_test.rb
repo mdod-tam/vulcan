@@ -12,7 +12,7 @@ module Admin
     end
 
     test 'provider-info attention links to the affected request row' do
-      @application = create(:application, status: :awaiting_proof, medical_provider_name: nil, medical_provider_email: nil)
+      @application = create(:application, status: :awaiting_proof, certifying_professional_name: nil, certifying_professional_email: nil)
       form = create(:secure_request_form, application: @application)
       assert_attention_target(form, 'ApplicationNotificationsMailer#provider_info_requested', "secure_request_form_#{form.id}")
     end
@@ -42,19 +42,19 @@ module Admin
 
     test 'certification upload attention links to the affected request row' do
       form = create(:certification_upload_form, application: @application)
-      assert_attention_target(form, 'MedicalProviderMailer#request_certification', "secure_request_form_#{form.id}")
+      assert_attention_target(form, 'CertifyingProfessionalMailer#request_certification', "secure_request_form_#{form.id}")
     end
 
     test 'certification email attention links to the displayed certification delivery' do
       notification = create(:notification, notifiable: @application, action: 'disability_certification_requested')
-      assert_attention_target(@application, 'MedicalProviderMailer#request_certification', notification: notification)
+      assert_attention_target(@application, 'CertifyingProfessionalMailer#request_certification', notification: notification)
     end
 
     test 'rejection attention links to the exact bounced attempt despite a newer request notification' do
       rejection = create(:notification, notifiable: @application, action: 'disability_certification_rejected', created_at: 1.hour.ago)
       newer_request = create(:notification, notifiable: @application, action: 'disability_certification_requested', delivery_status: :queued)
 
-      attempt = assert_attention_target(@application, 'MedicalProviderMailer#certification_rejected', notification: rejection)
+      attempt = assert_attention_target(@application, 'CertifyingProfessionalMailer#certification_rejected', notification: rejection)
 
       assert_select "#latest-certification-delivery #email_delivery_attempt_#{attempt.id} [data-delivery-status='bounced']", count: 1
       assert_select "#certification_delivery_notification_#{newer_request.id} [data-delivery-status='queued']", count: 1
@@ -63,7 +63,7 @@ module Admin
 
     test 'certification attempt still has an attention destination after its notification is deleted' do
       notification = create(:notification, notifiable: @application, action: 'disability_certification_requested')
-      attempt = assert_attention_target(@application, 'MedicalProviderMailer#request_certification', notification: notification)
+      attempt = assert_attention_target(@application, 'CertifyingProfessionalMailer#request_certification', notification: notification)
       notification.destroy!
       assert_nil attempt.reload.notification_id
 

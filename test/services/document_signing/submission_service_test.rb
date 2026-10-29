@@ -10,8 +10,8 @@ module DocumentSigning
       @constituent = create(:constituent, :with_address_and_phone)
       @application = create(:application, :in_progress,
                             user: @constituent,
-                            medical_provider_email: 'doctor@example.com',
-                            medical_provider_name: 'Dr. Jane Smith')
+                            certifying_professional_email: 'doctor@example.com',
+                            certifying_professional_name: 'Dr. Jane Smith')
 
       # Mock DocuSeal API response
       @mock_submission = {
@@ -91,8 +91,8 @@ module DocumentSigning
       end
     end
 
-    test 'fails without medical provider email' do
-      @application.update_columns(medical_provider_email: nil)
+    test 'fails without certifying professional email' do
+      @application.update_columns(certifying_professional_email: nil)
 
       service = DocumentSigning::SubmissionService.new(
         application: @application,
@@ -101,11 +101,11 @@ module DocumentSigning
 
       result = service.call
       assert result.failure?
-      assert_equal 'Medical provider email is required', result.message
+      assert_equal 'Certifying professional email is required', result.message
     end
 
-    test 'fails without medical provider name' do
-      @application.update_columns(medical_provider_name: nil)
+    test 'fails without certifying professional name' do
+      @application.update_columns(certifying_professional_name: nil)
 
       service = DocumentSigning::SubmissionService.new(
         application: @application,
@@ -114,7 +114,7 @@ module DocumentSigning
 
       result = service.call
       assert result.failure?
-      assert_equal 'Medical provider name is required', result.message
+      assert_equal 'Certifying professional name is required', result.message
     end
 
     test 'fails without actor' do

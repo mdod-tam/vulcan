@@ -153,22 +153,22 @@
 
     <section aria-labelledby="disability-certification-heading" class="mb-6 p-4 bg-gray-50 rounded">
       <h2 id="disability-certification-heading" class="text-xl font-semibold mb-4 text-gray-900">Disability Certification</h2>
-      <% if @application.medical_provider_name.present? %>
+      <% if @application.certifying_professional_name.present? %>
         <div class="mb-4">
           <h3 class="text-lg font-medium text-gray-900 mb-3">Certifying Professional Information</h3>
           <dl class="space-y-3">
             <div>
               <dt class="text-sm font-medium text-gray-700">Name</dt>
-              <dd class="mt-1 text-sm text-gray-900"><%= @application.medical_provider_name %></dd>
+              <dd class="mt-1 text-sm text-gray-900"><%= @application.certifying_professional_name %></dd>
             </div>
             <div>
               <dt class="text-sm font-medium text-gray-700">Phone</dt>
-              <dd class="mt-1 text-sm text-gray-900"><%= @application.medical_provider_phone %></dd>
+              <dd class="mt-1 text-sm text-gray-900"><%= @application.certifying_professional_phone %></dd>
             </div>
             <div>
               <dt class="text-sm font-medium text-gray-700">Email</dt>
               <dd class="mt-1 text-sm text-gray-900">
-                <%= mail_to @application.medical_provider_email, @application.medical_provider_email,
+                <%= mail_to @application.certifying_professional_email, @application.certifying_professional_email,
                     class: "text-primary-600 hover:text-primary-500 rounded" %>
               </dd>
             </div>

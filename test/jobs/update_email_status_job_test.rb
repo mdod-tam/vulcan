@@ -11,7 +11,7 @@ class UpdateEmailStatusJobTest < ActiveJob::TestCase
     @notification = Notification.create!(recipient: create(:constituent), notifiable: create(:application), action: 'disability_certification_requested', message_id: 'legacy-rfc-id')
     @attempt = EmailDeliveryAttempt.create!(notification: @notification, correlation_id: SecureRandom.uuid,
                                             recipient_key: EmailDeliveryAttempt.recipient_key('provider@example.test'), destination: 'provider@example.test',
-                                            server_id: '23', mail_action: 'MedicalProviderMailer#request_certification',
+                                            server_id: '23', mail_action: 'CertifyingProfessionalMailer#request_certification',
                                             attempted_at: Time.current, provider_message_id: 'provider-id', state: 'accepted')
     @client = mock
     Postmark::ApiClient.stubs(:new).returns(@client)

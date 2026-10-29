@@ -136,9 +136,9 @@ module Applications
           annual_income: '15000',
           maryland_resident: '1',
           self_certify_disability: '1',
-          medical_provider_name: 'Dr. Smith',
-          medical_provider_phone: '2025559876',
-          medical_provider_email: 'drsmith@example.com'
+          certifying_professional_name: 'Dr. Smith',
+          certifying_professional_phone: '2025559876',
+          certifying_professional_email: 'drsmith@example.com'
         }
       }
     end
@@ -166,9 +166,9 @@ module Applications
           annual_income: '15000',
           maryland_resident: '1',
           self_certify_disability: '1',
-          medical_provider_name: 'Dr. Smith',
-          medical_provider_phone: '2025559876',
-          medical_provider_email: 'drsmith@example.com'
+          certifying_professional_name: 'Dr. Smith',
+          certifying_professional_phone: '2025559876',
+          certifying_professional_email: 'drsmith@example.com'
         }
       }
     end

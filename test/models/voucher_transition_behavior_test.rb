@@ -96,9 +96,9 @@ class VoucherTransitionBehaviorTest < ActiveSupport::TestCase
       current_user: user,
       is_submission: true,
       annual_income: nil,
-      medical_provider_name: 'Dr. Test',
-      medical_provider_phone: '555-1234',
-      medical_provider_email: 'dr@test.com',
+      certifying_professional_name: 'Dr. Test',
+      certifying_professional_phone: '555-1234',
+      certifying_professional_email: 'dr@test.com',
       hearing_disability: true
     )
 
@@ -114,9 +114,9 @@ class VoucherTransitionBehaviorTest < ActiveSupport::TestCase
       current_user: user,
       is_submission: true,
       annual_income: nil,
-      medical_provider_name: 'Dr. Test',
-      medical_provider_phone: '555-1234',
-      medical_provider_email: 'dr@test.com',
+      certifying_professional_name: 'Dr. Test',
+      certifying_professional_phone: '555-1234',
+      certifying_professional_email: 'dr@test.com',
       hearing_disability: true
     )
 
@@ -137,9 +137,9 @@ class VoucherTransitionBehaviorTest < ActiveSupport::TestCase
       application: app,
       is_submission: true,
       annual_income: nil,
-      medical_provider_name: 'Dr. Test',
-      medical_provider_phone: '555-1234',
-      medical_provider_email: 'dr@test.com',
+      certifying_professional_name: 'Dr. Test',
+      certifying_professional_phone: '555-1234',
+      certifying_professional_email: 'dr@test.com',
       hearing_disability: true
     )
 
@@ -165,9 +165,9 @@ class VoucherTransitionBehaviorTest < ActiveSupport::TestCase
         annual_income: '999999',
         maryland_resident: '1',
         self_certify_disability: '1',
-        medical_provider_name: 'Dr. Smith',
-        medical_provider_phone: '2025559876',
-        medical_provider_email: 'dr@test.com'
+        certifying_professional_name: 'Dr. Smith',
+        certifying_professional_phone: '2025559876',
+        certifying_professional_email: 'dr@test.com'
       },
       income_proof_action: 'none',
       residency_proof_action: 'none'
@@ -198,9 +198,9 @@ class VoucherTransitionBehaviorTest < ActiveSupport::TestCase
         annual_income: '15000',
         maryland_resident: '1',
         self_certify_disability: '1',
-        medical_provider_name: 'Dr. Smith',
-        medical_provider_phone: '2025559876',
-        medical_provider_email: 'dr@test.com'
+        certifying_professional_name: 'Dr. Smith',
+        certifying_professional_phone: '2025559876',
+        certifying_professional_email: 'dr@test.com'
       },
       income_proof_action: 'none',
       residency_proof_action: 'accept',
@@ -243,9 +243,9 @@ class VoucherTransitionBehaviorTest < ActiveSupport::TestCase
         annual_income: '30000',
         maryland_resident: '1',
         self_certify_disability: '1',
-        medical_provider_name: 'Dr. Smith',
-        medical_provider_phone: '2025559876',
-        medical_provider_email: 'dr@test.com'
+        certifying_professional_name: 'Dr. Smith',
+        certifying_professional_phone: '2025559876',
+        certifying_professional_email: 'dr@test.com'
       },
       income_proof_action: 'accept',
       income_proof: fixture_file_upload(

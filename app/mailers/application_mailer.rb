@@ -127,7 +127,7 @@ class ApplicationMailer < ActionMailer::Base
   def record_provider_fallback_submission
     return unless @delivery_context&.dig('provider_notification_id')
 
-    MedicalProviderNotifier.record_fallback_outcome(@delivery_context, status: :submitted)
+    CertifyingProfessionalNotifier.record_fallback_outcome(@delivery_context, status: :submitted)
   end
 
   def mail_with_text_body(mail_options, text_body)

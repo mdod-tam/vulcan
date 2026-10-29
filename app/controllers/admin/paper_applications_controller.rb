@@ -49,9 +49,9 @@ module Admin
 
     APPLICATION_FIELDS = %i[
       household_size annual_income maryland_resident self_certify_disability
-      medical_provider_name medical_provider_phone medical_provider_fax
-      medical_provider_email terms_accepted information_verified
-      medical_release_authorized
+      certifying_professional_name certifying_professional_phone certifying_professional_fax
+      certifying_professional_email terms_accepted information_verified
+      disability_information_release_authorized
       alternate_contact_name alternate_contact_phone alternate_contact_email alternate_contact_relationship_type
     ].freeze
 
@@ -454,7 +454,7 @@ module Admin
         # custom text.
         *PROOF_WORKFLOW_FIELDS,
         # Restore these flags to keep provider and income requirements suppressed on retry.
-        :no_medical_provider_information, :no_income_information, :show_create_guardian_form,
+        :no_certifying_professional_information, :no_income_information, :show_create_guardian_form,
         application: APPLICATION_FIELDS,
         applicant_attributes: USER_DISABILITY_FIELDS,
         constituent: (USER_BASE_FIELDS + DEPENDENT_BASE_FIELDS + USER_DISABILITY_FIELDS),
@@ -527,7 +527,7 @@ module Admin
         :id_proof_rejection_reason, :id_proof_custom_rejection_reason,
         :disability_certification_action, :disability_certification, :disability_certification_signed_id,
         :disability_certification_rejection_reason, :disability_certification_custom_rejection_reason,
-        :no_medical_provider_information,
+        :no_certifying_professional_information,
         application: APPLICATION_FIELDS,
         applicant_attributes: USER_DISABILITY_FIELDS,
         constituent: (USER_BASE_FIELDS + DEPENDENT_BASE_FIELDS + USER_DISABILITY_FIELDS),
@@ -537,7 +537,7 @@ module Admin
 
     def base_params_from(permitted)
       base = permitted.slice(
-        :relationship_type, :guardian_id, :dependent_id, :no_medical_provider_information,
+        :relationship_type, :guardian_id, :dependent_id, :no_certifying_professional_information,
         :existing_constituent_id, :identity_review_receipt, :identity_candidate_id, :identity_determination,
         :identity_rationale, :contact_info_mode, :contact_info_verified,
         :no_email_address, :no_phone_number,

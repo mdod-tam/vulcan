@@ -40,7 +40,7 @@ module SeedLookupHelpers
     unconfirmed_user: 'unconfirmed@example.com',
     trainer: 'trainer@example.com',
     evaluator: 'evaluator@example.com',
-    medical_provider: 'medical@example.com',
+    certifying_professional: 'medical@example.com',
     constituent_john: 'john.doe@example.com',
     constituent_jane: 'jane.doe@example.com',
     constituent_alex: 'alex.smith@example.com',
@@ -77,8 +77,8 @@ module SeedLookupHelpers
                                  last_name: 'User',
                                  status: :active
                                }]
-                             when :medical_provider
-                               [Users::MedicalProvider, {
+                             when :certifying_professional
+                               [Users::CertifyingProfessional, {
                                  password: 'password1234',
                                  first_name: sym.to_s.titleize.split('_').first,
                                  last_name: 'User',

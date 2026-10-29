@@ -16,7 +16,7 @@ module Admin
     def load_certification_delivery_data
       @certification_upload_forms = EmailDelivery::Visibility.preload(@application.certification_upload_forms.order(created_at: :desc))
       @certification_delivery_attempts = @application.email_delivery_attempts.where(origin: @application)
-                                                     .where('mail_action LIKE ?', 'MedicalProviderMailer#%')
+                                                     .where('mail_action LIKE ?', 'CertifyingProfessionalMailer#%')
                                                      .includes(:delivery_owner).order(attempted_at: :desc, id: :desc).to_a
       notifications = EmailDelivery::Visibility.preload(
         Notification.where(notifiable: @application,

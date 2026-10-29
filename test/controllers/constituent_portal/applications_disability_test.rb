@@ -19,7 +19,7 @@ module ConstituentPortal
           annual_income: '18000', # below the eligibility ceiling for a household of 2 (federal poverty level times the policy modifier)
           maryland_resident: '1',
           self_certify_disability: '1',
-          medical_provider_attributes: {
+          certifying_professional_attributes: {
             name: 'Dr. Smith',
             phone: '555-123-4567',
             email: 'dr.smith@example.com'
@@ -27,7 +27,7 @@ module ConstituentPortal
           **proof_receipts,
           terms_accepted: '1',
           information_verified: '1',
-          medical_release_authorized: '1',
+          disability_information_release_authorized: '1',
           # no disabilities selected by default
           hearing_disability: '0',
           vision_disability: '0',
@@ -104,7 +104,7 @@ module ConstituentPortal
           household_size: 2,
           annual_income: '50000',
           self_certify_disability: '1',
-          medical_provider_attributes: {
+          certifying_professional_attributes: {
             name: 'Dr. Smith',
             phone: '555-123-4567',
             email: 'dr.smith@example.com'
@@ -112,7 +112,7 @@ module ConstituentPortal
           **proof_receipts,
           terms_accepted: '1',
           information_verified: '1',
-          medical_release_authorized: '1'
+          disability_information_release_authorized: '1'
         },
         submit_application: true
       }
@@ -166,14 +166,14 @@ module ConstituentPortal
           maryland_resident: '1',
           annual_income: '50000',
           self_certify_disability: '1',
-          medical_provider_attributes: {
+          certifying_professional_attributes: {
             name: 'Dr. Smith',
             phone: '555-123-4567',
             email: 'dr.smith@example.com'
           },
           terms_accepted: '1',
           information_verified: '1',
-          medical_release_authorized: '1'
+          disability_information_release_authorized: '1'
         },
         submit_application: true
       }
@@ -188,7 +188,7 @@ module ConstituentPortal
           annual_income: '50000',
           self_certify_disability: '1',
           cognition_disability: '1',
-          medical_provider_attributes: {
+          certifying_professional_attributes: {
             name: 'Dr. Smith',
             phone: '555-123-4567',
             email: 'dr.smith@example.com'
@@ -196,7 +196,7 @@ module ConstituentPortal
           **proof_receipts,
           terms_accepted: '1',
           information_verified: '1',
-          medical_release_authorized: '1'
+          disability_information_release_authorized: '1'
         },
         submit_application: true
       }

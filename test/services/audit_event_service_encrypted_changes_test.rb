@@ -55,7 +55,7 @@ class AuditEventServiceEncryptedChangesTest < ActiveSupport::TestCase
   end
 
   test 'contact extras and top-level provider destinations use the same policy' do
-    event = AuditEventService.log(action: 'medical_provider_info_updated', actor: @actor, auditable: create(:application),
+    event = AuditEventService.log(action: 'certifying_professional_info_updated', actor: @actor, auditable: create(:application),
                                   metadata: { provider_email: 'doctor@example.test',
                                               changes: { alternate_contact_name: { old: 'Alice Smith', new: 'Bob Jones' } } })
     assert_equal 'd***@e***.test', event.metadata['provider_email']

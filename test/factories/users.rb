@@ -39,8 +39,8 @@ FactoryBot.define do
       confirmed_at { Time.current }
     end
 
-    trait :medical_provider do
-      type { 'Users::MedicalProvider' }
+    trait :certifying_professional do
+      type { 'Users::CertifyingProfessional' }
       sequence(:email) { |n| "medical#{n}@example.com" }
       first_name { 'Dr.' }
       last_name { 'Provider' }

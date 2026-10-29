@@ -159,7 +159,7 @@ module Webhooks
           'submission_id' => app.document_signing_submission_id,
           'submitter_id' => app.document_signing_submitter_id,
           'requested_at' => app.document_signing_requested_at&.utc&.iso8601(6),
-          'provider_email' => app.medical_provider_email,
+          'provider_email' => app.certifying_professional_email,
           'actor_id' => @system_actor.id,
           'completed_at' => Time.current.iso8601(6),
           'document_url' => url,
@@ -233,7 +233,7 @@ module Webhooks
         next unless app.document_signing_submission_id == context['submission_id'] &&
                     app.document_signing_submitter_id == context['submitter_id'] &&
                     app.document_signing_requested_at&.utc&.iso8601(6) == context['requested_at'] &&
-                    app.medical_provider_email == context['provider_email']
+                    app.certifying_professional_email == context['provider_email']
         next if Event.where(auditable: app, action: 'document_signing_attachment_failed')
                      .with_metadata('operation_id', operation_id).with_metadata('failure_reason', reason).exists?
 

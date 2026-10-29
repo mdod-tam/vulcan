@@ -187,15 +187,15 @@ module Applications
       assert_equal 'es', @user.locale
     end
 
-    test 'sets medical provider details' do
+    test 'sets certifying professional details' do
       form = create_valid_form(@user)
-      form.medical_provider_name = 'Dr. Test'
-      form.medical_provider_phone = '555-1234'
+      form.certifying_professional_name = 'Dr. Test'
+      form.certifying_professional_phone = '555-1234'
 
       result = ApplicationCreator.call(form)
 
-      assert_equal 'Dr. Test', result.application.medical_provider_name
-      assert_equal '555-1234', result.application.medical_provider_phone
+      assert_equal 'Dr. Test', result.application.certifying_professional_name
+      assert_equal '555-1234', result.application.certifying_professional_phone
     end
 
     test 'logs audit event for creation' do
@@ -232,7 +232,7 @@ module Applications
         submission_method: 'online',
         terms_accepted: true,
         information_verified: true,
-        medical_release_authorized: true
+        disability_information_release_authorized: true
       )
       form = ApplicationForm.new(
         current_user: @user,
@@ -245,12 +245,12 @@ module Applications
         speech_disability: @user.speech_disability,
         mobility_disability: @user.mobility_disability,
         cognition_disability: @user.cognition_disability,
-        medical_provider_name: application.medical_provider_name,
-        medical_provider_phone: application.medical_provider_phone,
-        medical_provider_email: application.medical_provider_email,
+        certifying_professional_name: application.certifying_professional_name,
+        certifying_professional_phone: application.certifying_professional_phone,
+        certifying_professional_email: application.certifying_professional_email,
         terms_accepted: true,
         information_verified: true,
-        medical_release_authorized: true,
+        disability_information_release_authorized: true,
         is_submission: true
       )
 
@@ -298,9 +298,9 @@ module Applications
     test 'submitted online application requires provider info' do
       form = create_valid_form(@user)
       form.is_submission = true
-      form.medical_provider_name = nil
-      form.medical_provider_phone = nil
-      form.medical_provider_email = nil
+      form.certifying_professional_name = nil
+      form.certifying_professional_phone = nil
+      form.certifying_professional_email = nil
 
       Applications::RequestProviderInfo.expects(:new).never
 
@@ -308,7 +308,7 @@ module Applications
 
       assert result.failure?
       assert_includes result.error_messages, 'Form is invalid'
-      assert_includes form.errors[:base], 'Medical provider information is required for submission.'
+      assert_includes form.errors[:base], 'Certifying professional information is required for submission.'
     end
 
     test 'sets draft status for non-submissions' do
@@ -835,12 +835,12 @@ module Applications
         speech_disability: false,
         mobility_disability: false,
         cognition_disability: false,
-        medical_provider_name: 'Test Provider',
-        medical_provider_phone: '555-1234',
-        medical_provider_email: 'provider@test.com',
+        certifying_professional_name: 'Test Provider',
+        certifying_professional_phone: '555-1234',
+        certifying_professional_email: 'provider@test.com',
         terms_accepted: true,
         information_verified: true,
-        medical_release_authorized: true
+        disability_information_release_authorized: true
       )
     end
 
@@ -864,12 +864,12 @@ module Applications
         speech_disability: false,
         mobility_disability: false,
         cognition_disability: false,
-        medical_provider_name: 'Test Provider',
-        medical_provider_phone: '555-1234',
-        medical_provider_email: 'provider@test.com',
+        certifying_professional_name: 'Test Provider',
+        certifying_professional_phone: '555-1234',
+        certifying_professional_email: 'provider@test.com',
         terms_accepted: true,
         information_verified: true,
-        medical_release_authorized: true
+        disability_information_release_authorized: true
       )
     end
 
@@ -885,12 +885,12 @@ module Applications
         speech_disability: false,
         mobility_disability: false,
         cognition_disability: false,
-        medical_provider_name: 'Updated Provider',
-        medical_provider_phone: '555-5678',
-        medical_provider_email: 'updated@test.com',
+        certifying_professional_name: 'Updated Provider',
+        certifying_professional_phone: '555-5678',
+        certifying_professional_email: 'updated@test.com',
         terms_accepted: true,
         information_verified: true,
-        medical_release_authorized: true
+        disability_information_release_authorized: true
       )
     end
   end

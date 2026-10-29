@@ -30,9 +30,9 @@ module ConstituentPortal
       check 'Hearing'
 
       within '#certifying-professional-fields' do
-        find('input[name="application[medical_provider_attributes][name]"]').set('').set('Dr. Test Provider')
-        find('input[name="application[medical_provider_attributes][phone]"]').set('').set('2025551234')
-        find('input[name="application[medical_provider_attributes][email]"]').set('').set('test@example.com')
+        find('input[name="application[certifying_professional_attributes][name]"]').set('').set('Dr. Test Provider')
+        find('input[name="application[certifying_professional_attributes][phone]"]').set('').set('2025551234')
+        find('input[name="application[certifying_professional_attributes][email]"]').set('').set('test@example.com')
       end
 
       check 'I authorize the release and sharing of my disability-related information as described above'
@@ -84,9 +84,9 @@ module ConstituentPortal
       end
 
       within '#certifying-professional-fields' do
-        find('input[name="application[medical_provider_attributes][name]"]').set('').set('Dr. Test Provider')
-        find('input[name="application[medical_provider_attributes][phone]"]').set('').set('2025551234')
-        find('input[name="application[medical_provider_attributes][email]"]').set('').set('test@example.com')
+        find('input[name="application[certifying_professional_attributes][name]"]').set('').set('Dr. Test Provider')
+        find('input[name="application[certifying_professional_attributes][phone]"]').set('').set('2025551234')
+        find('input[name="application[certifying_professional_attributes][email]"]').set('').set('test@example.com')
       end
 
       check 'I authorize the release and sharing of my disability-related information as described above'

@@ -286,16 +286,16 @@ module ConstituentPortal
       assert_equal true, @draft_application.self_certify_disability
     end
 
-    test 'should autosave medical provider fields' do
+    test 'should autosave certifying professional fields' do
       patch autosave_field_constituent_portal_application_path(@draft_application),
-            params: { **autosave_metadata(actor: @user), field_name: 'application[medical_provider_attributes][name]', field_value: 'Dr. Jane Smith' },
+            params: { **autosave_metadata(actor: @user), field_name: 'application[certifying_professional_attributes][name]', field_value: 'Dr. Jane Smith' },
             as: :json
 
       assert_response :success
       assert_json_response(success: true)
 
       @draft_application.reload
-      assert_equal 'Dr. Jane Smith', @draft_application.medical_provider_name
+      assert_equal 'Dr. Jane Smith', @draft_application.certifying_professional_name
     end
 
     test 'should update last_visited_step when autosaving Application field' do

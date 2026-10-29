@@ -2,7 +2,7 @@
 
 module Applications
   class DisabilityCertificationService < BaseService
-    ACTION = 'MedicalProviderMailer#request_certification'
+    ACTION = 'CertifyingProfessionalMailer#request_certification'
     STATE_FIELDS = %w[disability_certification_status disability_certification_requested_at disability_certification_request_count].freeze
 
     attr_reader :application, :actor
@@ -27,7 +27,7 @@ module Applications
     end
 
     def request_certification(automatic: false)
-      return failure('Medical provider email is required') if application.medical_provider_email.blank?
+      return failure('Certifying professional email is required') if application.certifying_professional_email.blank?
 
       decision, context = EmailDelivery.issuance(ACTION)
       return refusal(decision) if decision
@@ -145,7 +145,7 @@ module Applications
       recipient = resolver.known_recipients.find { |user| user.id == resolver.default_recipient_ids.first } || application.user
       NotificationService.create_and_deliver!(
         type: 'disability_certification_requested', recipient: recipient, actor: actor, notifiable: application,
-        metadata: { provider: application.medical_provider_name, provider_email: application.medical_provider_email },
+        metadata: { provider: application.certifying_professional_name, provider_email: application.certifying_professional_email },
         channel: :email, deliver: false
       ) || raise('Could not create certification tracking notification')
     end

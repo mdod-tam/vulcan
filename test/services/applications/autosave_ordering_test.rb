@@ -56,7 +56,7 @@ module Applications
       assert save_field('household_size', '8', 1)[:success]
       submitted = form(household_size: 7, autosave_revision: 2)
       submitted.is_submission = true
-      submitted.medical_provider_email = 'provider@example.org'
+      submitted.certifying_professional_email = 'provider@example.org'
       assert submitted.valid?, submitted.errors.full_messages.inspect
       result = ApplicationCreator.call(submitted)
       assert result.success?, result.error_messages.inspect
@@ -72,7 +72,7 @@ module Applications
       before = @draft.reload.attributes
       submitted = form(household_size: 7, autosave_revision: 6)
       submitted.is_submission = true
-      submitted.medical_provider_email = 'provider@example.org'
+      submitted.certifying_professional_email = 'provider@example.org'
       assert submitted.valid?, submitted.errors.full_messages.inspect
       AuditEventService.stubs(:log).returns(true)
       AuditEventService.stubs(:log).with { |**args| args[:action] == 'application_status_changed' }
@@ -87,7 +87,7 @@ module Applications
     test 'a refused full form save does not suppress pending autosaves' do
       invalid = form(household_size: 7, autosave_revision: 2)
       invalid.is_submission = true
-      invalid.medical_provider_name = nil
+      invalid.certifying_professional_name = nil
       result = ApplicationCreator.call(invalid)
       assert result.failure?
       assert save_field('household_size', '4', 1)[:success]
@@ -116,8 +116,8 @@ module Applications
     end
 
     test 'a full form clear remains blank when its earlier autosave arrives later' do
-      previous = { medical_provider_name: 'Previous Provider', medical_provider_phone: '2025550123',
-                   medical_provider_fax: '2025550124', medical_provider_email: 'provider@example.org' }
+      previous = { certifying_professional_name: 'Previous Provider', certifying_professional_phone: '2025550123',
+                   certifying_professional_fax: '2025550124', certifying_professional_email: 'provider@example.org' }
       @draft.update!(previous)
       submitted = form(household_size: 7, autosave_revision: 2)
       previous.each_key { |field| submitted.public_send("#{field}=", '') }
@@ -131,11 +131,11 @@ module Applications
     end
 
     test 'omitted provider fields remain unchanged on a full save' do
-      @draft.update!(medical_provider_fax: '2025550124', medical_provider_email: 'provider@example.org')
+      @draft.update!(certifying_professional_fax: '2025550124', certifying_professional_email: 'provider@example.org')
       result = ApplicationCreator.call(form(household_size: 7, autosave_revision: 2))
       assert result.success?, result.error_messages.inspect
-      assert_equal '2025550124', @draft.reload.medical_provider_fax
-      assert_equal 'provider@example.org', @draft.medical_provider_email
+      assert_equal '2025550124', @draft.reload.certifying_professional_fax
+      assert_equal 'provider@example.org', @draft.certifying_professional_email
     end
 
     test 'a rolled back full form write does not consume the submission floor' do
@@ -161,8 +161,8 @@ module Applications
       ApplicationForm.new(current_user: @user, application: @draft, params: ActionController::Parameters.new(
         application: { annual_income: '50000', household_size: attributes[:household_size],
                        vision_disability: true, terms_accepted: true, information_verified: true,
-                       medical_release_authorized: true,
-                       medical_provider_attributes: { name: 'Test Provider', phone: '2025550123' } },
+                       disability_information_release_authorized: true,
+                       certifying_professional_attributes: { name: 'Test Provider', phone: '2025550123' } },
         autosave_context: @context, autosave_revision: attributes[:autosave_revision]
       ))
     end

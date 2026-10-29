@@ -1,11 +1,11 @@
 # frozen_string_literal: true
 
-scope = { name: 'medical_provider_certification_rejected', format: :text }
+scope = { name: 'certifying_professional_certification_rejected', format: :text }
 scope[:locale] = 'es' if EmailTemplate.column_names.include?('locale')
 
 template = EmailTemplate.find_or_initialize_by(scope)
 template.subject = 'Certificación de Discapacidad Rechazada'
-template.description = 'Enviado a un proveedor médico cuando se rechaza el formulario de certificación de discapacidad enviado.'
+template.description = 'Enviado a un profesional certificador cuando se rechaza el formulario de certificación de discapacidad enviado.'
 template.body = <<~TEXT
   TELECOMUNICACIONES ACCESIBLES DE MARYLAND
 
@@ -44,4 +44,4 @@ template.variables = {
 }
 template.version = 2
 template.save! if template.new_record? || template.changed?
-Rails.logger.debug 'Seeded medical_provider_certification_rejected_es (text)' if ENV['VERBOSE_TESTS'] || Rails.env.development?
+Rails.logger.debug 'Seeded certifying_professional_certification_rejected_es (text)' if ENV['VERBOSE_TESTS'] || Rails.env.development?

@@ -34,9 +34,9 @@ class VoucherRedemptionIntegrationTest < ActionDispatch::IntegrationTest
                           status: 'draft',
                           household_size: 2,
                           annual_income: 35_000,
-                          medical_provider_name: 'Dr. Integration Test',
-                          medical_provider_email: "doctor.integration.#{SecureRandom.hex(4)}@example.com",
-                          medical_provider_phone: "555-#{rand(100..999)}-#{rand(1000..9999)}")
+                          certifying_professional_name: 'Dr. Integration Test',
+                          certifying_professional_email: "doctor.integration.#{SecureRandom.hex(4)}@example.com",
+                          certifying_professional_phone: "555-#{rand(100..999)}-#{rand(1000..9999)}")
 
     @voucher = Voucher.create!(
       application: @application,

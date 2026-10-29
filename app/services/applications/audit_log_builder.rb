@@ -161,7 +161,7 @@ module Applications
             trainer_access_removed evaluator_access_removed
             evaluation_working_notes_updated
             disability_certification_requested disability_certification_status_changed
-            alternate_contact_updated medical_provider_info_updated proof_secure_submission_refused
+            alternate_contact_updated certifying_professional_info_updated proof_secure_submission_refused
             proof_resubmission_request_failed
             provider_info_request_revoked proof_resubmission_request_revoked
             proof_resubmission_request_expired

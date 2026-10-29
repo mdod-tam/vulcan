@@ -71,7 +71,7 @@ class EmailDeliveryAttempt < ApplicationRecord
     when VendorSecureRequestForm
       origin.active?
     when Application
-      mail_action.start_with?('MedicalProviderMailer#') && application&.disability_certification_status.in?(%w[requested rejected])
+      mail_action.start_with?('CertifyingProfessionalMailer#') && application&.disability_certification_status.in?(%w[requested rejected])
     else
       false
     end

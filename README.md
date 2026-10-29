@@ -47,7 +47,7 @@ The workflow guides link to focused tests and explain the boundaries shared by p
 
 ### Domain rules worth knowing
 
-- **A user and an application are different records.** A user is a person/account; an application is one request for assistance. Roles share the `users` table through STI: `Users::Constituent`, `Users::Administrator`, `Users::Vendor`, `Users::Evaluator`, `Users::Trainer`, and `Users::MedicalProvider`.
+- **A user and an application are different records.** A user is a person/account; an application is one request for assistance. Roles share the `users` table through STI: `Users::Constituent`, `Users::Administrator`, `Users::Vendor`, `Users::Evaluator`, `Users::Trainer`, and `Users::CertifyingProfessional`.
 - **Applicant, guardian, and message recipient can differ.** A guardian relationship is distinct from an application's managing guardian. Contact ownership and public-login eligibility have separate rules; see [guardian relationships](docs/development/guardian_relationship_system.md) and [authentication](docs/security/authentication_system.md).
 - **Lifecycle changes have side effects.** Use `Application#transition_status!` and `Application#reconcile_workflow_state!` to preserve status history and associated work. Application status, individual proof decisions, and disability certification are separate states; `Application#transition_disability_certification_status!` is the one writer of the certification status.
 - **Fulfillment is saved on each application.** At creation, `vouchers_enabled` determines voucher versus equipment fulfillment and whether income proof is required. Changing the flag does not rewrite existing applications; see [fulfillment settings](docs/features/application_workflow_guide.md#fulfillment-settings).
@@ -165,7 +165,7 @@ After the demo seed, these accounts use `password1234`:
 | Trainer | `trainer@example.com` |
 | Evaluator | `evaluator@example.com` |
 | Vendors | `ray@testemail.com`, `teltex@testemail.com` |
-| Legacy medical-provider seed | `medical@example.com` |
+| Legacy certifying-professional seed | `medical@example.com` |
 
 Providers use secure certification links in the current workflow; they do not need a portal account.
 

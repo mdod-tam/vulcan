@@ -238,8 +238,8 @@ module Admin
         'A secure upload link is already active. Send DocuSeal as an additional option?'
       else
         [
-          "Send digital signing request to #{application.medical_provider_name}",
-          "(#{application.medical_provider_email}) for #{application.constituent_full_name}'s disability certification?"
+          "Send digital signing request to #{application.certifying_professional_name}",
+          "(#{application.certifying_professional_email}) for #{application.constituent_full_name}'s disability certification?"
         ].join(' ')
       end
     end
@@ -248,7 +248,7 @@ module Admin
       if application.document_signing_status_sent? || application.document_signing_status_opened?
         "A DocuSeal request is already #{application.document_signing_status}. Send a secure upload link as an additional option?"
       else
-        "Send secure certification upload link to #{application.medical_provider_email}?"
+        "Send secure certification upload link to #{application.certifying_professional_email}?"
       end
     end
   end

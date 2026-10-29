@@ -6,7 +6,7 @@ class DisabilityCertificationFlowTest < ActionDispatch::IntegrationTest
   include ActiveJob::TestHelper
 
   def setup
-    create_medical_provider_email_templates
+    create_certifying_professional_email_templates
 
     # Timestamped emails prevent uniqueness errors.
     timestamp = Time.current.to_i
@@ -14,9 +14,9 @@ class DisabilityCertificationFlowTest < ActionDispatch::IntegrationTest
     @constituent = create(:constituent, email: "mcf_constituent_#{timestamp}@example.com")
     @application = create(:application,
                           user: @constituent,
-                          medical_provider_name: 'Dr. Smith',
-                          medical_provider_email: "drsmith_#{timestamp}@example.com",
-                          medical_provider_phone: '555-555-5555')
+                          certifying_professional_name: 'Dr. Smith',
+                          certifying_professional_email: "drsmith_#{timestamp}@example.com",
+                          certifying_professional_phone: '555-555-5555')
 
     sign_in_for_integration_test(@admin)
   end
@@ -89,7 +89,7 @@ class DisabilityCertificationFlowTest < ActionDispatch::IntegrationTest
     application_without_email = @application
 
     # update_columns skips validations, so the provider email can be nil.
-    application_without_email.update_columns(medical_provider_email: nil)
+    application_without_email.update_columns(certifying_professional_email: nil)
 
     post resend_disability_certification_admin_application_path(application_without_email)
     assert_redirected_to admin_application_path(application_without_email)
@@ -110,15 +110,15 @@ class DisabilityCertificationFlowTest < ActionDispatch::IntegrationTest
 
   private
 
-  def create_medical_provider_email_templates
-    return if EmailTemplate.exists?(name: 'medical_provider_request_certification', format: :text, locale: 'en')
+  def create_certifying_professional_email_templates
+    return if EmailTemplate.exists?(name: 'certifying_professional_request_certification', format: :text, locale: 'en')
 
     EmailTemplate.create!(
-      name: 'medical_provider_request_certification',
+      name: 'certifying_professional_request_certification',
       format: :text,
       locale: 'en',
       subject: 'Disability Certification Request',
-      body: "Dear Medical Provider,\n\n" \
+      body: "Dear Certifying Professional,\n\n" \
             "We need disability certification for %<constituent_full_name>s.\n\n" \
             "Application ID: %<application_id>s\n" \
             "Date: %<timestamp_formatted>s\n" \
@@ -130,7 +130,7 @@ class DisabilityCertificationFlowTest < ActionDispatch::IntegrationTest
             "Download form: %<download_form_url>s\n\n" \
             "Please provide the required certification.\n\n" \
             'Thank you.',
-      description: 'Sent to medical providers requesting certification.'
+      description: 'Sent to certifying professionals requesting certification.'
     )
   end
 end

@@ -73,9 +73,9 @@ module Seeds
                           application_date: profile[:stage] == :archived ? 4.years.ago.to_date : (index + 1).days.ago.to_date,
                           submission_method: profile.fetch(:submission_method, :online),
                           maryland_resident: true, self_certify_disability: true,
-                          terms_accepted: true, information_verified: true, medical_release_authorized: true,
-                          medical_provider_name: 'Dr. Morgan Lee', medical_provider_email: 'provider@example.com',
-                          medical_provider_phone: '202-555-0199', household_size: (index % 5) + 1,
+                          terms_accepted: true, information_verified: true, disability_information_release_authorized: true,
+                          certifying_professional_name: 'Dr. Morgan Lee', certifying_professional_email: 'provider@example.com',
+                          certifying_professional_phone: '202-555-0199', household_size: (index % 5) + 1,
                           annual_income: 12_000 + (index * 1_500))
     end
 

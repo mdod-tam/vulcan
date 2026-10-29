@@ -50,10 +50,10 @@ class ApplicationFormTest < ActiveSupport::TestCase
 
   test 'nested provider fields and the submitted locale are extracted' do
     form = form_for(constituent: { locale: 'es' },
-                    application: { medical_provider_attributes: { name: 'Dr. A', phone: '2025550123', email: 'a@example.com' } })
+                    application: { certifying_professional_attributes: { name: 'Dr. A', phone: '2025550123', email: 'a@example.com' } })
 
     assert_equal ['Dr. A', '2025550123', 'a@example.com'],
-                 [form.medical_provider_name, form.medical_provider_phone, form.medical_provider_email]
+                 [form.certifying_professional_name, form.certifying_professional_phone, form.certifying_professional_email]
     assert_equal 'es', form.locale
   end
 
@@ -77,11 +77,11 @@ class ApplicationFormTest < ActiveSupport::TestCase
     application.errors.merge!(form.errors)
 
     assert_includes application.errors.full_messages, 'Existing problem'
-    assert application.errors.added?(:base, :medical_provider_required)
+    assert application.errors.added?(:base, :certifying_professional_required)
     assert application.errors.added?(:annual_income, :blank)
     assert_includes application.errors.full_messages, "Annual income can't be blank"
     %i[en es].each do |locale|
-      expected = I18n.t('activemodel.errors.models.application_form.attributes.base.medical_provider_required', locale: locale)
+      expected = I18n.t('activemodel.errors.models.application_form.attributes.base.certifying_professional_required', locale: locale)
       assert_includes I18n.with_locale(locale) { application.errors.full_messages }, expected
     end
   end
