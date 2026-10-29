@@ -11,7 +11,7 @@ class SecurePublicFormMatrixTest < ActionDispatch::IntegrationTest
 
   FORMS = {
     proof: {
-      factory: :secure_request_form, kind: :income_proof_resubmission, wrong_kind: :provider_info_request,
+      factory: :secure_request_form, kind: :income_proof_resubmission, wrong_kind: :provider_info_request, model: SecureRequestForm,
       views: 'secure_proof_forms', resend_views: 'secure_proof_form_resends',
       form_path: :secure_proof_form_path, resend_path: :new_secure_proof_form_resend_path,
       resend_create_path: :secure_proof_form_resend_path, success_path: :secure_proof_form_success_path,
@@ -20,7 +20,8 @@ class SecurePublicFormMatrixTest < ActionDispatch::IntegrationTest
       sent_path: :secure_proof_form_resend_sent_path
     },
     certification: {
-      factory: :medical_provider_secure_request_form, kind: :certification_upload, wrong_kind: nil,
+      factory: :certification_upload_form, kind: :certification_upload, wrong_kind: :income_proof_resubmission, model: SecureRequestForm,
+      wrong_kind_factory: :secure_request_form,
       views: 'secure_certification_forms', resend_views: 'secure_certification_form_resends',
       form_path: :secure_certification_form_path, resend_path: :new_secure_certification_form_resend_path,
       resend_create_path: :secure_certification_form_resend_path, success_path: :secure_certification_form_success_path,
@@ -29,7 +30,7 @@ class SecurePublicFormMatrixTest < ActionDispatch::IntegrationTest
       sent_path: :secure_certification_form_resend_sent_path
     },
     provider_info: {
-      factory: :secure_request_form, kind: :provider_info_request, wrong_kind: :income_proof_resubmission,
+      factory: :secure_request_form, kind: :provider_info_request, wrong_kind: :income_proof_resubmission, model: SecureRequestForm,
       views: 'secure_provider_info_forms', resend_views: 'secure_provider_info_form_resends',
       form_path: :secure_provider_info_form_path, resend_path: :new_secure_provider_info_form_resend_path,
       resend_create_path: :secure_provider_info_form_resend_path, success_path: :secure_provider_info_form_success_path,
@@ -38,7 +39,7 @@ class SecurePublicFormMatrixTest < ActionDispatch::IntegrationTest
       sent_path: :secure_provider_info_form_resend_sent_path
     },
     w9: {
-      factory: :vendor_secure_request_form, kind: :w9_upload, wrong_kind: nil,
+      factory: :vendor_secure_request_form, kind: :w9_upload, wrong_kind: nil, model: VendorSecureRequestForm,
       views: 'secure_w9_forms', resend_views: 'secure_w9_form_resends',
       form_path: :secure_w9_form_path, resend_path: :new_secure_w9_form_resend_path,
       resend_create_path: :secure_w9_form_resend_path, success_path: :secure_w9_form_success_path,
@@ -198,18 +199,43 @@ class SecurePublicFormMatrixTest < ActionDispatch::IntegrationTest
     end
   end
 
+  # A certification link shares a table with proof and provider-info links, so each of their pages must refuse it.
+  %i[proof provider_info].each do |name|
+    config = FORMS.fetch(name)
+
+    test "#{name} pages refuse a certification token on every route" do
+      token = SecureRequestForm.generate_public_token
+      create(:certification_upload_form, raw_token: token)
+      config[:submit_service].any_instance.expects(:call).never
+      config[:resend_service].any_instance.expects(:call).never
+
+      get public_send(config[:form_path], token: token)
+      assert_template "#{config[:views]}/unavailable"
+
+      patch public_send(config[:form_path]), params: update_params(name, token)
+      assert_redirected_to public_send(config[:form_path], token: token)
+
+      get public_send(config[:resend_path], token: token)
+      assert_template "#{config[:resend_views]}/unavailable"
+
+      post public_send(config[:resend_create_path]), params: { token: token }
+      assert_redirected_to public_send(config[:sent_path], locale: 'en')
+    end
+  end
+
   private
 
   def build_state(config, state)
     return ['not-a-real-token', nil] if state == :missing
 
-    token = config[:factory].to_s.classify.constantize.generate_public_token
+    token = config[:model].generate_public_token
     kind = state == :wrong_kind ? config[:wrong_kind] : config[:kind]
+    factory = state == :wrong_kind ? config.fetch(:wrong_kind_factory, config[:factory]) : config[:factory]
     traits = { expired: [:expired], revoked: [:revoked], submitted: [:submitted] }.fetch(state, [])
     attributes = { kind: kind, raw_token: token }
     attributes[:submitted_at] = Time.current if state == :revoked_submitted
     traits = [:revoked] if state == :revoked_submitted
-    [token, create(config[:factory], *traits, **attributes)]
+    [token, create(factory, *traits, **attributes)]
   end
 
   def expected_show(state)

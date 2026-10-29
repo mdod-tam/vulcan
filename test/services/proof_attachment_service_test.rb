@@ -197,22 +197,66 @@ class ProofAttachmentServiceTest < ActiveSupport::TestCase
     assert_equal 'paper', event.metadata['submission_method']
   end
 
-  test 'metrics recording handles exceptions gracefully' do
-    # Exception handling remains outside this test because the metrics stub cannot raise.
-    ProofAttachmentService.stub :record_metrics, ->(*args) {} do
-      result = ProofAttachmentService.attach_proof({
-                                                     application: @application,
-                                                     proof_type: 'income',
-                                                     blob_or_file: @test_file_upload,
-                                                     status: :approved,
-                                                     admin: @admin,
-                                                     submission_method: :paper,
-                                                     metadata: { ip_address: '127.0.0.1' }
-                                                   })
+  test 'a paper rejection states the applicant address the way every other rejection does' do
+    @constituent.update!(physical_address_1: '123 Main St', physical_address_2: 'Apt 4', city: 'Baltimore', state: 'MD', zip_code: '21201')
 
-      assert result[:success], 'Operation should succeed even with metrics mocked'
-      assert @application.income_proof.attached?, 'Proof should be attached'
-    end
+    reject_on_paper('residency', reason: 'address_mismatch')
+
+    review = @application.proof_reviews.find_by!(proof_type: 'residency', status: 'rejected')
+    assert_equal 'address_mismatch', review.rejection_reason_code
+    assert_includes review.rejection_reason, '123 Main St Apt 4 Baltimore, MD 21201'
+  end
+
+  test 'a repeat paper rejection of the same proof updates its review and still counts as a rejection' do
+    reject_on_paper('income', reason: 'First reason')
+    first_review = @application.proof_reviews.find_by!(proof_type: 'income', status: 'rejected')
+
+    reject_on_paper('income', reason: 'Second reason')
+
+    reviews = @application.proof_reviews.where(proof_type: 'income', status: 'rejected')
+    assert_equal [first_review.id], reviews.ids, 'a repeat decision keeps one row'
+    assert_equal 'Second reason', first_review.reload.rejection_reason
+    assert_equal 2, @application.reload.total_rejections, 'each rejection counts, first or repeat'
+    assert_equal 2, Event.where(action: 'proof_rejected', auditable: @application).count, 'each rejection is audited'
+  end
+
+  test 'rejecting two different proofs in one intake records an audit event for each' do
+    reject_on_paper('income', reason: 'Unreadable')
+    reject_on_paper('residency', reason: 'Unreadable')
+
+    events = Event.where(action: 'proof_rejected', auditable: @application).order(:id)
+    proof_types = events.map { |event| event.metadata['proof_type'] }
+    assert_equal %w[income residency], proof_types
+  end
+
+  test 'an attachment logs one outcome line naming the proof and its status' do
+    log = StringIO.new
+    blob = stored_pdf_blob(3.kilobytes)
+    result = Rails.stub(:logger, ActiveSupport::Logger.new(log)) { attach_income(blob.signed_id) }
+
+    assert result[:success], result[:error]&.message
+    assert_equal 1, log.string.scan(/Proof income not_reviewed completed in \d+ms/).size
+  end
+
+  test 'a refused attachment returns its error and logs it in the outcome line' do
+    log = StringIO.new
+    refused = fixture_file_upload('invalid.exe', 'application/octet-stream')
+    result = Rails.stub(:logger, ActiveSupport::Logger.new(log)) { attach_income(refused) }
+
+    assert_not result[:success]
+    assert_kind_of UploadedDocument::Refused, result[:error]
+    assert_equal %i[duration_ms error success], result.keys.sort
+    assert_equal 1, log.string.scan(/Proof income not_reviewed failed in \d+ms: UploadedDocument::Refused/).size
+  end
+
+  test 'a failure after the attachment succeeded reports the operation as failed' do
+    NotificationService.stubs(:create_and_deliver!).raises(RuntimeError, 'notification write failed')
+
+    result = attach_income(stored_pdf_blob(3.kilobytes).signed_id)
+
+    assert_not result[:success], 'a step after the attachment failed, so the operation did not succeed'
+    assert_equal 'notification write failed', result[:error].message
+    assert_not @application.reload.income_proof.attached?, 'the transaction rolled the attachment back'
   end
 
   test 'a signed ID submission reports the stored blob size, not the token length' do
@@ -257,6 +301,14 @@ class ProofAttachmentServiceTest < ActiveSupport::TestCase
   end
 
   private
+
+  def reject_on_paper(proof_type, reason:)
+    without_auto_resubmission do
+      ProofAttachmentService.reject_proof_without_attachment(
+        application: @application, proof_type: proof_type, admin: @admin, submission_method: :paper, reason: reason
+      )
+    end
+  end
 
   def attach_income(blob_or_file, **)
     ProofAttachmentService.attach_proof(

@@ -65,7 +65,7 @@ module Applications
                                    Notification.where(notifiable: @application).count,
                                    @application.proof_reviews.count,
                                    Event.where(auditable: @application).count]
-      assert_empty @application.medical_provider_secure_request_forms
+      assert_empty @application.certification_upload_forms
     end
 
     test 'missing rejection notification preserves committed rejection and warns without repeating provider delivery' do
@@ -139,6 +139,80 @@ module Applications
       assert_includes @paper_warnings.join(' '), 'The rejection note could not be saved.'
       assert_includes @paper_warnings.join(' '), 'Provider email submitted.'
       assert_equal 1, note_save_attempts
+    end
+
+    test 'a committed rejection whose follow-up step fails is reported as saved, without contacting the provider' do
+      ProofReview.any_instance.stubs(:handle_post_review_actions).raises(StandardError, 'private callback failure')
+      RequestCertificationUpload.any_instance.expects(:call).never
+      MedicalProviderNotifier.any_instance.expects(:send_certification_rejection_notice).never
+
+      result = DisabilityCertificationReviewer.new(@application, @admin).reject(rejection_reason: 'Missing signature', notes: 'Check the date')
+
+      assert result.success?, result.message
+      assert_includes result.message, 'The certification rejection was saved, but a follow-up step did not finish. ' \
+                                      'Check this application before rejecting it again.'
+      assert_includes result.message, 'Provider email was not sent.'
+      assert_not_includes result.message, 'private callback failure'
+      assert @application.reload.disability_certification_status_rejected?
+      assert_equal 1, ApplicationStatusChange.where(application: @application, to_status: 'rejected').count
+      review = @application.proof_reviews.find_by!(proof_type: :disability_certification, status: :rejected)
+      assert_equal 'Missing signature', review.rejection_reason
+      failure = Event.where(auditable: @application, action: 'proof_review_follow_up_failed').sole
+      assert_equal review.id, failure.metadata['proof_review_id']
+      assert_equal 'disability_certification', failure.metadata['proof_type']
+      assert_equal 'Disability certification rejected: Check the date', @application.application_notes.sole.content
+    end
+
+    test 'a rejection whose commit cannot be confirmed fails without suggesting it was lost' do
+      # The connection is lost as the callback fails, so the reads that follow cannot confirm the commit.
+      ProofReview.any_instance.stubs(:handle_post_review_actions).with do
+        ApplicationStatusChange.stubs(:where).raises(ActiveRecord::ConnectionNotEstablished, 'verification unavailable')
+        true
+      end.raises(StandardError, 'private callback failure')
+      RequestCertificationUpload.any_instance.expects(:call).never
+      MedicalProviderNotifier.any_instance.expects(:send_certification_rejection_notice).never
+
+      result = DisabilityCertificationReviewer.new(@application, @admin).reject(rejection_reason: 'Missing signature')
+
+      assert result.failure?
+      assert_equal :unknown, result.data[:commit_state]
+      assert_equal 'The certification rejection may have been saved, but that could not be confirmed. ' \
+                   'Check this application before rejecting it again.', result.message
+      assert_not_includes result.message, 'private callback failure'
+      ApplicationStatusChange.unstub(:where)
+      assert @application.reload.disability_certification_status_rejected?
+      assert_equal 1, ApplicationStatusChange.where(application: @application, to_status: 'rejected').count
+      assert_not Event.exists?(auditable: @application, action: 'proof_review_follow_up_failed')
+    end
+
+    test 'a failure before the first rejection write raises its original error and leaves nothing behind' do
+      RejectionReason.stubs(:resolve_text).raises(RuntimeError, 'reason lookup failed')
+      RequestCertificationUpload.any_instance.expects(:call).never
+
+      error = assert_raises(RuntimeError) do
+        DisabilityCertificationReviewer.new(@application, @admin).reject(rejection_reason: 'Missing signature')
+      end
+
+      assert_equal 'reason lookup failed', error.message
+      assert @application.reload.disability_certification_status_requested?
+      assert_empty @application.proof_reviews
+      assert_equal 0, ApplicationStatusChange.where(application: @application, change_type: 'disability_certification').count
+      assert_empty Notification.where(notifiable: @application)
+      assert_not Event.exists?(auditable: @application, action: 'proof_review_follow_up_failed')
+    end
+
+    test 'a rejection that rolled back raises its original error and leaves nothing behind' do
+      NotificationService.stubs(:create_and_deliver!).raises(RuntimeError, 'notification write failed')
+      RequestCertificationUpload.any_instance.expects(:call).never
+
+      error = assert_raises(RuntimeError) do
+        DisabilityCertificationReviewer.new(@application, @admin).reject(rejection_reason: 'Missing signature')
+      end
+
+      assert_equal 'notification write failed', error.message
+      assert @application.reload.disability_certification_status_requested?
+      assert_empty @application.proof_reviews
+      assert_equal 0, ApplicationStatusChange.where(application: @application, to_status: 'rejected').count
     end
 
     private

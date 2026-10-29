@@ -3,13 +3,14 @@
 class SecureCertificationFormsController < SecureRequestFormController
   private
 
-  def request_form_class = MedicalProviderSecureRequestForm
+  # Resolved through the certification scope, so a token for any other kind finds nothing.
+  def request_form_class = SecureRequestForm.certification_upload
   def request_form_kind_matches? = @secure_request_form.kind_certification_upload?
 
   def submit_request_form
     Applications::SubmitCertificationUpload.new(
       application: @secure_request_form.application,
-      medical_provider_secure_request_form: @secure_request_form,
+      secure_request_form: @secure_request_form,
       file: params[:file]
     ).call
   end

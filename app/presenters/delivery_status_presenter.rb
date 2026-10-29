@@ -18,7 +18,7 @@ class DeliveryStatusPresenter
   def text(key, **) = I18n.t("delivery_visibility.#{key}", locale: locale, **)
 
   def details_label
-    reference = text("records.#{record.model_name.i18n_key}", id: record.id)
+    reference = text("records.#{record_key}", id: record.id)
     reference = text('attempt_for', id: attempt.id, record: reference) if attempt && record != attempt
     text('details_for', record: reference, channel: text("channels.#{channel}", default: channel), status: label)
   end
@@ -62,13 +62,17 @@ class DeliveryStatusPresenter
   def masked_destination
     address = attempt&.destination
     address ||= record.recipient_email if record.respond_to?(:recipient_email)
-    address ||= record.provider_email if record.respond_to?(:provider_email)
     return nil if address.blank?
 
     local, domain = address.split('@', 2)
     return nil if local.blank? || domain.blank?
 
     "#{local.first}***@#{domain}"
+  end
+
+  # A certification link is a SecureRequestForm that reads as its own kind of request.
+  def record_key
+    record.try(:kind_certification_upload?) ? 'certification_upload_request' : record.model_name.i18n_key
   end
 
   def owner_label

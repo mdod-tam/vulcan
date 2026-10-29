@@ -47,7 +47,7 @@ class ProofReviewService < BaseService
       perform_review
       log_review_success
       success(success_message, review_result_data)
-    rescue Applications::ProofReviewer::CommitUnconfirmed => e
+    rescue Applications::ReviewCommit::Unconfirmed => e
       log_review_error(e)
       failure(e.message, { commit_state: :unknown })
     rescue StandardError => e

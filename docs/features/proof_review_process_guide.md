@@ -14,10 +14,12 @@ Four things are easy to conflate:
 
 - The **attachment** (`application.residency_proof`) is the file.
 - The **status** (`residency_proof_status`) is `not_reviewed`, `approved`, or `rejected`.
-- The **[`ProofReview`](../../app/models/proof_review.rb)** is the decision: reviewer, time, and rejection reason. A re-review updates the existing record.
+- The **[`ProofReview`](../../app/models/proof_review.rb)** is the decision: reviewer, time, and rejection reason. A proof type and status keep one record (`ProofReview.for_decision` and `record!`), so a re-review from the review modal, paper intake, or a certification rejection updates it. A repeat rejection still counts toward the limit and is audited.
 - The **application status** is the whole application's position in its lifecycle. Rejecting one proof is not rejecting the application.
 
 Disability certification is a separate requirement, and receiving or signing that document is not the same as approving it.
+
+Rejection reasons live in [`RejectionReason`](../../app/models/rejection_reason.rb), edited by admins. Every rejection form offers `RejectionReason.options_for`, which gives one reason per code in the locale the form passes, or English where that locale has none. The application review modal passes the applicant's language; the paper intake form passes the admin's own locale. Certification reasons are always English, because the provider receives them. A reason that states the applicant's address uses `%<address>s`, filled with `User#mailing_address_line` (for example `123 Main St Apt 4 Baltimore, MD 21201`) in the stored text, the previews, and the emails alike. Emails look the code up again at send time, in the recipient's locale.
 
 Status alone does not tell you whether there is a file: [`Application#proof_review_state`](../../app/models/application.rb) combines requirement, attachment, status, and submission history, and the admin flow uses `proof_type_reviewable?` to decide whether a proof can be acted on at all.
 

@@ -6,8 +6,12 @@ A secure request link lets someone complete one document task without a portal a
 | --- | --- | --- | --- |
 | Proof resubmission | [`SecureRequestForm`](../../app/models/secure_request_form.rb) | Applicant or guardian | [`SubmitProofResubmission`](../../app/services/applications/submit_proof_resubmission.rb) |
 | Provider information | `SecureRequestForm` | Applicant or guardian | [`SubmitProviderInfo`](../../app/services/applications/submit_provider_info.rb) |
-| Certification upload | [`MedicalProviderSecureRequestForm`](../../app/models/medical_provider_secure_request_form.rb) | Certifying provider | [`SubmitCertificationUpload`](../../app/services/applications/submit_certification_upload.rb) |
+| Certification upload | `SecureRequestForm` (`certification_upload` kind) | Certifying provider | [`SubmitCertificationUpload`](../../app/services/applications/submit_certification_upload.rb) |
 | W9 upload | [`VendorSecureRequestForm`](../../app/models/vendor_secure_request_form.rb) | Vendor | [`SubmitW9Resubmission`](../../app/services/vendors/submit_w9_resubmission.rb) |
+
+A certification link goes to the application's certifying provider, who is not a user. It has no user recipient and no delivery owner: the provider's email is in `recipient_email`, the name in `recipient_name`, and `recipient_role` is `provider`. Check constraints keep that true in both directions, and a unique index allows one active certification link per application, matching the issuer's replace-every-open-link rule. Certification pages resolve tokens through `SecureRequestForm.certification_upload`, so a proof or provider-information token never opens one, and the proof and provider-information pages refuse a certification token by kind. An application's `secure_request_forms` are the user-recipient links; its `certification_upload_forms` are the provider links.
+
+Audit events and delivery tracking name a link with `secure_request_form_id` for every kind except W9, which uses `vendor_secure_request_form_id`.
 
 ## Timing
 
@@ -16,7 +20,7 @@ A secure request link lets someone complete one document task without a portal a
 | Policy key | Default | Effect |
 | --- | --- | --- |
 | `secure_form_link_expiration_hours` | 48 | How long a new link stays usable. The provider information email and the proof and provider information text messages state this value; proof, certification, and W9 emails do not. |
-| `secure_form_resend_cooldown_hours` | 1 | How soon another link can be issued: per recipient for proof and provider information, per application for certification, and per vendor for W9. |
+| `secure_form_resend_cooldown_hours` | 1 | How soon another link can be issued after the latest open one: per recipient for proof and provider information, per application for certification, and per vendor for W9. A submitted or revoked link starts no cooldown. |
 
 `RecordSecureFormExpirationsJob` runs hourly in production ([schedule](../../config/recurring.yml)). It records one expiration event for each expired proof, certification, or W9 link that is still open, then sets `expiration_recorded_at` so later runs skip that form. Provider information links do not record an expiration event.
 
@@ -24,7 +28,7 @@ A secure request link lets someone complete one document task without a portal a
 
 Issuance records the recipient and delivery details on the form row, and delivery sends to that recorded contact. A resend records the contact on file at that time, not the contact on the expired link, and revokes the open links it replaces.
 
-Proof and provider-information commands use [`Applications::SecureRequestIssuance`](../../app/services/applications/secure_request_issuance.rb) for locked recipient resolution, replacement, and mandatory tracking. A failed tracking write rolls back the whole recipient batch, including replacement revocations. [`SecureTokenizable`](../../app/models/concerns/secure_tokenizable.rb) creates tokens for all four link types and retries one digest collision inside a savepoint. `SecureFormPolicy` computes the cooldown duration; each issuing command retains its own query scope. W9 cooldown includes submitted links, while the other commands check open links.
+Proof and provider-information commands use [`Applications::SecureRequestIssuance`](../../app/services/applications/secure_request_issuance.rb) for locked recipient resolution, replacement, and mandatory tracking. A failed tracking write rolls back the whole recipient batch, including replacement revocations. All four issuers replace links through [`SecureFormReplacement`](../../app/services/secure_form_replacement.rb). It applies the cooldown, revokes the open links as `replacement_request`, and creates the new link. [`SecureTokenizable`](../../app/models/concerns/secure_tokenizable.rb) creates tokens for all four link types and retries one digest collision inside a savepoint, and `SecureFormPolicy` computes the cooldown duration. The issuer owns the application or vendor lock, recipient rules, and which links count as open; every command checks only open links for its cooldown.
 
 [`SecureRequestDeliveryPolicy`](../../app/services/applications/secure_request_delivery_policy.rb) shares transport and outcome handling. Transport failure revokes the failed link and allows other recipients to proceed. Failure to record a handoff after successful transport leaves the delivered link usable. The proof command attempts delivery after issuance; certification preparation still returns a URL to the separate provider-notice flow.
 
@@ -36,7 +40,7 @@ Constituent links use the recipient's delivery locale for email, SMS, and pages.
 
 ### Certification request state and counts
 
-[`DisabilityCertificationService`](../../app/services/applications/disability_certification_service.rb) records certification request state, status history, and audit for both queued provider requests and secure upload preparation. Each state write attaches the previous status, timestamp, and count to its tracking notification so a delivery refusal can restore that request without replacing newer state.
+[`DisabilityCertificationService`](../../app/services/applications/disability_certification_service.rb) records certification request state for both queued provider requests and secure upload preparation, through `Application#transition_disability_certification_status!`, which writes the status, history, and audit together. Each state write attaches the previous status, timestamp, and count to its tracking notification so a delivery refusal can restore that request without replacing newer state.
 
 `disability_certification_request_count` counts the ordinary provider requests queued by `DisabilityCertificationService` (including resends) and the separate DocuSeal signing requests. It is recorded at issuance, before confirmed delivery; an intentional or configuration refusal restores the unchanged queued request's previous count. Transport failures retain the request for failure tracking. Issuing or resending a secure upload link leaves this count unchanged, including when the secure issuer delivers the link directly. Rejection review also prepares a link for a separate provider notifier. Preparation changes `not_requested` to `requested` once; later links retain certification status, timestamp, and count, including `rejected`.
 

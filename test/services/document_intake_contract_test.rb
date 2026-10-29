@@ -96,10 +96,10 @@ class DocumentIntakeContractTest < ActiveSupport::TestCase
   def prepare_secure_certification_form
     application = create(:application, :in_progress, medical_provider_name: 'Dr. Provider',
                                                      medical_provider_email: 'provider@example.com')
-    form = create(:medical_provider_secure_request_form, application: application)
+    form = create(:certification_upload_form, application: application)
     scanning_submitter(secure_form: form, purpose: :certification, slot: 'disability_certification') do |file|
       secure_outcome(Applications::SubmitCertificationUpload.new(application: application,
-                                                                 medical_provider_secure_request_form: form,
+                                                                 secure_request_form: form,
                                                                  file: file).call)
     end
   end

@@ -1093,6 +1093,18 @@ module Admin
       assert_equal (1..8).map(&:to_s), JSON.parse(attribute).keys.sort
     end
 
+    test 'the paper form offers the stored reasons for each proof, including ones an admin added' do
+      create(:rejection_reason, code: 'zz_paper_income', proof_type: 'income', body: 'Added income reason')
+      create(:rejection_reason, code: 'zz_paper_cert', proof_type: 'disability_certification', body: 'Added certification reason')
+
+      get new_admin_paper_application_path, headers: default_headers
+
+      assert_select "select#income_proof_rejection_reason option[value='zz_paper_income'][data-reason-text='Added income reason']"
+      assert_select "select#disability_certification_rejection_reason option[value='zz_paper_cert'][data-reason-text='Added certification reason']"
+      assert_select "select#income_proof_rejection_reason option[value='zz_paper_cert']", count: 0
+      assert_select "select#income_proof_rejection_reason option[value='none_provided']", count: 1
+    end
+
     test 'should send rejection notification' do
       def @controller.redirect_to(*args)
         flash[:notice] = 'Rejection notification has been sent'

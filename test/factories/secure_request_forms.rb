@@ -45,4 +45,16 @@ FactoryBot.define do
       recipient_channel { :sms }
     end
   end
+
+  # A request to the application's certifying provider, who is not a user.
+  factory :certification_upload_form, parent: :secure_request_form do
+    kind { :certification_upload }
+    recipient { nil }
+    delivery_owner { nil }
+    delivery_source { nil }
+    recipient_phone { nil }
+    recipient_role { :provider }
+    recipient_email { application.medical_provider_email }
+    recipient_name { application.medical_provider_name }
+  end
 end

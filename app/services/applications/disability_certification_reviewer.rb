@@ -11,7 +11,10 @@ module Applications
       @admin = admin
     end
 
-    # Records the rejection and attempts provider notification.
+    # Records the rejection and attempts provider notification. When the rejection commits but a later step
+    # fails, the result succeeds with a warning and the provider is not contacted. When the database cannot
+    # confirm the commit, the result fails with data[:commit_state] set to :unknown. Under a caller's open
+    # transaction (paper intake) the caller owns the commit, and an error propagates.
     # @param rejection_reason [String] The reason for rejection
     # @param notes [String, nil] Optional additional notes for internal use
     # @param rejection_reason_code [String, nil] Stable code for locale-aware resolution (e.g. missing_signature)
@@ -22,11 +25,17 @@ module Applications
       validation_result = validate_rejection_inputs(rejection_reason)
       return validation_result if validation_result.failure?
 
-      service_result = reject_certification(rejection_reason, notes, rejection_reason_code)
-      return failure(service_result[:error]&.message || 'Disability certification service failed') unless service_result[:success]
+      commit = review_commit
+      service_result = commit.run(on_committed: ->(error) { rejection_review&.log_follow_up_failure(error) }) do
+        commit.transaction { reject_certification(rejection_reason, notes, rejection_reason_code) }
+      end
+      # A nil result means the rejection committed and a later step failed.
+      return failure(service_result[:error]&.message || 'Disability certification service failed') if service_result && !service_result[:success]
 
       note_result = create_rejection_note(notes)
       warnings = note_result.failure? ? [note_result.message] : []
+      return rejection_saved_with_warning(commit.warning, warnings) if service_result.nil?
+
       warnings << 'Rejection notification tracking is unavailable; verify provider email before retrying.' if service_result[:notification_id].nil?
       result = success(nil, { notification_id: service_result[:notification_id],
                               provider_delivery: { success: false, outcome: :deferred }, warnings: warnings })
@@ -45,9 +54,39 @@ module Applications
         result.message = rejection_message(result.data)
       end
       result
+    rescue ReviewCommit::Unconfirmed => e
+      failure(e.message, { commit_state: :unknown })
     end
 
     private
+
+    def review_commit
+      ReviewCommit.new(application: application, subject: 'certification rejection', again: 'rejecting it again') { durable_state }
+    end
+
+    # The facts a certification rejection writes. ReviewCommit compares them before the writes, after them, and
+    # after an error.
+    def durable_state
+      {
+        certification: Application.where(id: application.id).pick(
+          :disability_certification_status, :disability_certification_verified_at, :disability_certification_verified_by_id
+        ),
+        review: rejection_review&.attributes_for_database,
+        history: ApplicationStatusChange.where(application_id: application.id, change_type: 'disability_certification').count
+      }
+    end
+
+    def rejection_review
+      application.proof_reviews.find_by(proof_type: :disability_certification, status: :rejected)
+    end
+
+    # The provider is not contacted, because the saved state is not fully known.
+    def rejection_saved_with_warning(warning, warnings)
+      data = { notification_id: nil, provider_delivery: { success: false, outcome: :failed }, warnings: [*warnings, warning] }
+      result = success(nil, data)
+      result.message = rejection_message(data)
+      result
+    end
 
     def validate_rejection_inputs(rejection_reason)
       return failure('Rejection reason is required') if rejection_reason.blank?

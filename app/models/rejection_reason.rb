@@ -60,12 +60,31 @@ class RejectionReason < ApplicationRecord
       find_by(code: code, proof_type: proof_type, locale: 'en')
   end
 
-  # Returns { text:, code: } for persisting to ProofReview
-  def self.resolve_for_persistence(code:, proof_type:, fallback:, locale: 'en', interpolations: {})
+  # The codes the rejection forms offer themselves, apart from the reasons stored here.
+  FORM_OWN_CODES = %w[none_provided other].freeze
+
+  # The reasons a rejection form offers: one per proof type and code, in the locale where it has one and
+  # in English otherwise. proof_type: nil offers every proof type.
+  def self.options_for(locale: 'en', proof_type: nil)
+    scope = where(locale: [locale.to_s, 'en']).where.not(code: FORM_OWN_CODES)
+    scope = scope.where(proof_type: proof_type) if proof_type
+    scope.order(:proof_type, :code).group_by { |reason| [reason.proof_type, reason.code] }.values.map do |variants|
+      variants.find { |reason| reason.locale == locale.to_s } || variants.first
+    end
+  end
+
+  # What a reason body may state about the application. Every place that fills a body uses this.
+  def self.interpolations_for(application)
+    { address: application&.user&.mailing_address_line.to_s }
+  end
+
+  # Returns { text:, code: } for persisting to ProofReview. The application supplies the address that
+  # reasons such as address_mismatch state.
+  def self.resolve_for_persistence(code:, proof_type:, fallback:, application: nil, locale: 'en')
     return { text: fallback.to_s.presence, code: nil } if code.blank?
 
     rr = resolve(code: code, proof_type: proof_type, locale: locale)
-    resolved_text = interpolate_body(rr&.body || fallback, interpolations)
+    resolved_text = interpolate_body(rr&.body || fallback, application ? interpolations_for(application) : {})
     {
       text: resolved_text,
       code: rr ? code : nil
@@ -74,9 +93,9 @@ class RejectionReason < ApplicationRecord
 
   # Returns the human-readable body for the given code and proof type,
   # or the fallback when code is blank or no record exists.
-  def self.resolve_text(code:, proof_type:, fallback:, locale: 'en', interpolations: {})
+  def self.resolve_text(code:, proof_type:, fallback:, application: nil, locale: 'en')
     resolve_for_persistence(
-      code: code, proof_type: proof_type, fallback: fallback, locale: locale, interpolations: interpolations
+      code: code, proof_type: proof_type, fallback: fallback, application: application, locale: locale
     )[:text]
   end
 
@@ -87,6 +106,11 @@ class RejectionReason < ApplicationRecord
     body % interpolations.transform_keys(&:to_sym)
   rescue KeyError, ArgumentError
     body
+  end
+
+  # This reason's body with the application's details filled in.
+  def body_for(application)
+    self.class.interpolate_body(body, self.class.interpolations_for(application))
   end
 
   private

@@ -7,7 +7,7 @@ es:
     records:
       notification: 'notificación n.º %{id}'
       secure_request_form: 'solicitud segura n.º %{id}'
-      medical_provider_secure_request_form: 'solicitud de carga de certificación n.º %{id}'
+      certification_upload_request: 'solicitud de carga de certificación n.º %{id}'
       vendor_secure_request_form: 'solicitud W9 n.º %{id}'
       email_delivery_attempt: 'intento de entrega n.º %{id}'
       invoice: 'factura n.º %{id}'

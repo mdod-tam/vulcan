@@ -136,7 +136,7 @@ class DisabilityCertificationAttachmentServiceTest < ActiveSupport::TestCase
     assert_not event.metadata.key?('error_message')
     assert_not event.metadata.key?('error_backtrace')
     assert_includes messages.join, 'ActiveRecord::RecordInvalid'
-    assert_includes messages.join, '"success":false'
+    assert_match(/Disability certification approved failed in \d+ms: ActiveRecord::RecordInvalid/, messages.join)
   end
 
   test 'certification failure reporting preserves the original error without logging audit failure details' do
@@ -339,6 +339,106 @@ class DisabilityCertificationAttachmentServiceTest < ActiveSupport::TestCase
     assert_nil @application.disability_certification_rejection_reason_code
     assert_equal 'Custom follow-up rejection text', second_review.rejection_reason
     assert_nil second_review.rejection_reason_code
+  end
+
+  test 'a review outcome records the previous status in its history row and audit event' do
+    @application.disability_certification.attach(@test_file)
+    @application.update_columns(disability_certification_status: Application.disability_certification_statuses[:requested])
+
+    result = DisabilityCertificationAttachmentService.update_certification_status(
+      application: @application, status: :approved, admin: @admin, submission_method: :admin_review
+    )
+
+    assert result[:success], result[:error]&.message
+    change = @application.status_changes.disability_certification.sole
+    assert_equal %w[requested approved], [change.from_status, change.to_status]
+    event = Event.find_by!(action: 'disability_certification_status_changed', auditable: @application)
+    assert_equal %w[requested approved], event.metadata.values_at('old_status', 'new_status')
+  end
+
+  test 'a rejection records the previous status in its history row and audit event' do
+    @application.update_columns(disability_certification_status: Application.disability_certification_statuses[:received])
+
+    DisabilityCertificationAttachmentService.reject_certification(
+      application: @application, admin: @admin, reason: 'Unreadable', submission_method: :admin_review
+    )
+
+    change = @application.status_changes.disability_certification.sole
+    assert_equal %w[received rejected], [change.from_status, change.to_status]
+    event = Event.find_by!(action: 'disability_certification_status_changed', auditable: @application)
+    assert_equal %w[received rejected], event.metadata.values_at('old_status', 'new_status')
+  end
+
+  test 'each status change keeps its own audit event when changes follow within the dedup window' do
+    @application.disability_certification.attach(@test_file)
+
+    %i[received approved].each do |status|
+      result = DisabilityCertificationAttachmentService.update_certification_status(
+        application: @application, status: status, admin: @admin, submission_method: :admin_review
+      )
+      assert result[:success], result[:error]&.message
+    end
+
+    events = Event.where(action: 'disability_certification_status_changed', auditable: @application).order(:id)
+    recorded_statuses = events.map { |event| event.metadata['new_status'] }
+    assert_equal %w[received approved], recorded_statuses
+    assert_equal 2, @application.status_changes.disability_certification.count
+  end
+
+  test 'a certification rejection states the applicant address like every other proof rejection' do
+    @application.user.update!(physical_address_1: '9 Oak Rd', city: 'Towson', state: 'MD', zip_code: '21204')
+    create(:rejection_reason, code: 'zz_cert_address', proof_type: 'disability_certification',
+                              body: 'The provider address must match %<address>s.')
+
+    DisabilityCertificationAttachmentService.reject_certification(
+      application: @application, admin: @admin, reason: 'Replaced by the stored reason', reason_code: 'zz_cert_address',
+      submission_method: :admin_review
+    )
+
+    review = @application.proof_reviews.find_by!(proof_type: :disability_certification, status: :rejected)
+    assert_equal 'The provider address must match 9 Oak Rd Towson, MD 21204.', review.rejection_reason
+  end
+
+  test 'a rejection logs one outcome line and returns its result keys' do
+    log = StringIO.new
+    result = Rails.stub(:logger, ActiveSupport::Logger.new(log)) do
+      DisabilityCertificationAttachmentService.reject_certification(
+        application: @application, admin: @admin, reason: 'missing_signature', submission_method: :admin_review
+      )
+    end
+
+    assert result[:success]
+    assert_equal %i[duration_ms error notification_id success], result.keys.sort
+    assert_equal 1, log.string.scan(/Disability certification rejected completed in \d+ms/).size
+    assert_not_includes log.string, 'METRICS:'
+  end
+
+  test 'a rejection that fails logs its error class and raises the error to its caller' do
+    NotificationService.stubs(:create_and_deliver!).raises(RuntimeError, 'notification write failed')
+    log = StringIO.new
+
+    error = Rails.stub(:logger, ActiveSupport::Logger.new(log)) do
+      assert_raises(RuntimeError) do
+        DisabilityCertificationAttachmentService.reject_certification(
+          application: @application, admin: @admin, reason: 'missing_signature', submission_method: :admin_review
+        )
+      end
+    end
+
+    assert_equal 'notification write failed', error.message
+    assert_equal 1, log.string.scan(/Disability certification rejected failed in \d+ms: RuntimeError/).size
+  end
+
+  test 'a status update that fails returns its error without raising and logs the outcome line' do
+    log = StringIO.new
+    result = Rails.stub(:logger, ActiveSupport::Logger.new(log)) do
+      DisabilityCertificationAttachmentService.update_certification_status(application: @application, status: :approved, admin: @admin)
+    end
+
+    assert_not result[:success]
+    assert_match(/No certification is attached/, result[:error].message)
+    assert_equal %i[duration_ms error success], result.keys.sort
+    assert_equal 1, log.string.scan(/Disability certification approved failed in \d+ms: RuntimeError/).size
   end
 
   private

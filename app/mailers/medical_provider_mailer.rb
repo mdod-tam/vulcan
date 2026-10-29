@@ -115,7 +115,7 @@ class MedicalProviderMailer < ApplicationMailer
       proof_type: 'disability_certification',
       locale: locale
     )
-    reason&.body.presence || fallback_reason
+    reason&.body_for(application).presence || fallback_reason
   end
 
   # Providers get the default locale, the same as their secure form pages.

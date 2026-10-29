@@ -147,10 +147,7 @@ module Admin
     end
 
     def format_proof_history_detail(detail, application)
-      text = RejectionReason.interpolate_body(
-        detail.to_s,
-        address: application_proof_history_address(application)
-      ).to_s.strip
+      text = RejectionReason.interpolate_body(detail.to_s, RejectionReason.interpolations_for(application)).to_s.strip
 
       text.gsub(/\A"(.*)"\z/m, '\1')
     end
@@ -204,7 +201,7 @@ module Admin
     def disability_certification_action_state(application, secure_request_forms: nil)
       latest_request = latest_disability_certification_notification(application, 'disability_certification_requested')
       latest_reject = latest_disability_certification_notification(application, 'disability_certification_rejected')
-      active_secure_forms = Array(secure_request_forms || application.medical_provider_secure_request_forms).count(&:active?)
+      active_secure_forms = Array(secure_request_forms || application.certification_upload_forms).count(&:active?)
 
       DisabilityCertificationActionState.new(
         latest_certification_request: latest_request,
@@ -236,12 +233,9 @@ module Admin
     end
 
     def docuseal_confirmation(application, active_secure_cert_upload_forms)
+      # The database allows one active certification link per application.
       if active_secure_cert_upload_forms.positive?
-        if active_secure_cert_upload_forms == 1
-          'A secure upload link is already active. Send DocuSeal as an additional option?'
-        else
-          "#{active_secure_cert_upload_forms} secure upload links are already active. Send DocuSeal as an additional option?"
-        end
+        'A secure upload link is already active. Send DocuSeal as an additional option?'
       else
         [
           "Send digital signing request to #{application.medical_provider_name}",
@@ -256,14 +250,6 @@ module Admin
       else
         "Send secure certification upload link to #{application.medical_provider_email}?"
       end
-    end
-
-    def application_proof_history_address(application)
-      [
-        application.user&.physical_address_1,
-        application.user&.physical_address_2,
-        [application.user&.city, application.user&.state, application.user&.zip_code].compact.join(' ')
-      ].compact_blank.join(' ').squish
     end
   end
 end

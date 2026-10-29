@@ -6,22 +6,22 @@ module Applications
 
     MESSAGE_SCOPE = 'applications.certification_upload.messages'
 
-    attr_reader :application, :medical_provider_secure_request_form, :file
+    attr_reader :application, :secure_request_form, :file
 
     def self.model_name
       ActiveModel::Name.new(self, nil, 'CertificationUpload')
     end
 
-    def initialize(application:, medical_provider_secure_request_form:, file:)
+    def initialize(application:, secure_request_form:, file:)
       super()
       @application = application
-      @medical_provider_secure_request_form = medical_provider_secure_request_form
+      @secure_request_form = secure_request_form
       @file = file
     end
 
     def call
       return invalid_request_failure unless form_belongs_to_application?
-      return inactive_request_failure unless medical_provider_secure_request_form.active_for_public_use?
+      return inactive_request_failure unless secure_request_form.active_for_public_use?
       return invalid_request_failure unless certification_kind?
 
       @system_actor = User.system_user
@@ -38,25 +38,25 @@ module Applications
     private
 
     def form_belongs_to_application?
-      medical_provider_secure_request_form.application_id == application.id
+      secure_request_form.application_id == application.id
     end
 
     def certification_kind?
-      medical_provider_secure_request_form.kind_certification_upload?
+      secure_request_form.kind_certification_upload?
     end
 
-    def request_form = medical_provider_secure_request_form
+    def request_form = secure_request_form
 
     def accept_certification
       DisabilityCertificationAttachmentService.accept_submission(
         application: application,
         blob: secure_upload_blob,
         submission_method: :secure_form,
-        requested_at: medical_provider_secure_request_form.sent_at,
+        requested_at: secure_request_form.sent_at,
         admin: @system_actor,
         metadata: {
-          medical_provider_secure_request_form_id: medical_provider_secure_request_form.id,
-          request_batch_id: medical_provider_secure_request_form.request_batch_id
+          secure_request_form_id: secure_request_form.id,
+          request_batch_id: secure_request_form.request_batch_id
         }
       )
     end
@@ -64,7 +64,7 @@ module Applications
     def secure_upload_blob
       blob = UploadedDocument.resolve!(file, record: application, name: 'disability_certification',
                                              min_bytes: ProofUploadFormats::SECURE_FORM_MIN_BYTES,
-                                             scan_owner: medical_provider_secure_request_form)
+                                             scan_owner: secure_request_form)
       blob.update!(metadata: blob.metadata.merge(secure_upload_metadata))
       blob
     end
@@ -72,9 +72,9 @@ module Applications
     def secure_upload_metadata
       {
         source: 'secure_form',
-        medical_provider_secure_request_form_id: medical_provider_secure_request_form.id,
-        request_batch_id: medical_provider_secure_request_form.request_batch_id,
-        provider_email: medical_provider_secure_request_form.provider_email
+        secure_request_form_id: secure_request_form.id,
+        request_batch_id: secure_request_form.request_batch_id,
+        provider_email: secure_request_form.recipient_email
       }
     end
 

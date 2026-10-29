@@ -65,10 +65,9 @@ class EmailDeliveryAttempt < ApplicationRecord
     when SecureRequestForm
       return false unless origin.active?
       return application&.missing_required_provider_info? if origin.kind_provider_info_request?
+      return application&.disability_certification_status != 'approved' if origin.kind_certification_upload?
 
       application&.proof_requestable_via_secure_form?(origin.kind.delete_suffix('_proof_resubmission'))
-    when MedicalProviderSecureRequestForm
-      origin.active? && application&.disability_certification_status != 'approved'
     when VendorSecureRequestForm
       origin.active?
     when Application

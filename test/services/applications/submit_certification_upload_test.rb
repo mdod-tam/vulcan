@@ -11,7 +11,7 @@ module Applications
       @application = create(:application, :in_progress,
                             medical_provider_name: 'Dr. Provider',
                             medical_provider_email: 'provider@example.com')
-      @secure_request_form = create(:medical_provider_secure_request_form, application: @application)
+      @secure_request_form = create(:certification_upload_form, application: @application)
       upload = fixture_file_upload(Rails.root.join('test/fixtures/files/disability_certification_valid.pdf'), 'application/pdf')
       @file = scanned_upload(upload, secure_form: @secure_request_form, purpose: :certification,
                                      slot: 'disability_certification').signed_id
@@ -20,7 +20,7 @@ module Applications
     test 'attaches certification through attachment service and marks request submitted' do
       result = SubmitCertificationUpload.new(
         application: @application,
-        medical_provider_secure_request_form: @secure_request_form,
+        secure_request_form: @secure_request_form,
         file: @file
       ).call
 
@@ -30,7 +30,7 @@ module Applications
       assert_predicate @application, :disability_certification_status_received?
 
       event = Event.find_by!(auditable: @application, action: 'cert_submitted_via_secure_form')
-      assert_equal @secure_request_form.id, event.metadata.fetch('medical_provider_secure_request_form_id')
+      assert_equal @secure_request_form.id, event.metadata.fetch('secure_request_form_id')
       assert_equal User.system_user, event.user
 
       status_change = ApplicationStatusChange.where(application: @application, change_type: :disability_certification).last
@@ -51,7 +51,7 @@ module Applications
       assert_no_difference -> { ApplicationStatusChange.where(application: @application).count } do
         result = SubmitCertificationUpload.new(
           application: @application,
-          medical_provider_secure_request_form: @secure_request_form,
+          secure_request_form: @secure_request_form,
           file: @file
         ).call
 
@@ -67,12 +67,12 @@ module Applications
       additional_blob = @application.additional_disability_certifications.first.blob
       assert_equal 'disability_certification_valid.pdf', additional_blob.filename.to_s
       assert_equal 'secure_form', additional_blob.metadata.fetch('source')
-      assert_equal @secure_request_form.id, additional_blob.metadata.fetch('medical_provider_secure_request_form_id')
+      assert_equal @secure_request_form.id, additional_blob.metadata.fetch('secure_request_form_id')
       assert_equal @secure_request_form.request_batch_id, additional_blob.metadata.fetch('request_batch_id')
-      assert_equal @secure_request_form.provider_email, additional_blob.metadata.fetch('provider_email')
+      assert_equal @secure_request_form.recipient_email, additional_blob.metadata.fetch('provider_email')
 
       event = Event.find_by!(auditable: @application, action: 'cert_submitted_via_secure_form')
-      assert_equal @secure_request_form.id, event.metadata.fetch('medical_provider_secure_request_form_id')
+      assert_equal @secure_request_form.id, event.metadata.fetch('secure_request_form_id')
       assert_equal 'p***@e***.com', event.metadata.fetch('provider_email')
       assert_equal @secure_request_form.request_batch_id, event.metadata.fetch('request_batch_id')
       assert_equal 'additional_disability_certification', event.metadata.fetch('retained_as')
@@ -90,7 +90,7 @@ module Applications
       assert_no_difference [-> { Event.count }, -> { @application.status_changes.count }] do
         AuditEventService.stub(:log, failing_audit) do
           result = SubmitCertificationUpload.new(application: @application,
-                                                 medical_provider_secure_request_form: @secure_request_form, file: @file).call
+                                                 secure_request_form: @secure_request_form, file: @file).call
           assert_predicate result, :failure?
         end
       end
@@ -121,7 +121,7 @@ module Applications
       assert_no_difference -> { ApplicationStatusChange.where(application: @application).count } do
         result = SubmitCertificationUpload.new(
           application: @application,
-          medical_provider_secure_request_form: @secure_request_form,
+          secure_request_form: @secure_request_form,
           file: @file
         ).call
 
@@ -144,7 +144,7 @@ module Applications
 
       result = SubmitCertificationUpload.new(
         application: @application,
-        medical_provider_secure_request_form: @secure_request_form,
+        secure_request_form: @secure_request_form,
         file: @file
       ).call
 
@@ -166,7 +166,7 @@ module Applications
 
       result = SubmitCertificationUpload.new(
         application: @application,
-        medical_provider_secure_request_form: @secure_request_form,
+        secure_request_form: @secure_request_form,
         file: file
       ).call
 
@@ -181,7 +181,7 @@ module Applications
 
       result = SubmitCertificationUpload.new(
         application: other_application,
-        medical_provider_secure_request_form: @secure_request_form,
+        secure_request_form: @secure_request_form,
         file: @file
       ).call
 
@@ -196,7 +196,7 @@ module Applications
 
       result = SubmitCertificationUpload.new(
         application: @application,
-        medical_provider_secure_request_form: @secure_request_form,
+        secure_request_form: @secure_request_form,
         file: @file
       ).call
 
@@ -211,7 +211,7 @@ module Applications
 
       result = SubmitCertificationUpload.new(
         application: @application,
-        medical_provider_secure_request_form: @secure_request_form,
+        secure_request_form: @secure_request_form,
         file: @file
       ).call
 
@@ -226,7 +226,7 @@ module Applications
 
       result = SubmitCertificationUpload.new(
         application: @application,
-        medical_provider_secure_request_form: @secure_request_form,
+        secure_request_form: @secure_request_form,
         file: @file
       ).call
 
@@ -286,7 +286,7 @@ module Applications
     def submit_upload
       SubmitCertificationUpload.new(
         application: @application,
-        medical_provider_secure_request_form: @secure_request_form,
+        secure_request_form: @secure_request_form,
         file: @file
       ).call
     end

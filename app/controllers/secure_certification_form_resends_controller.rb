@@ -3,7 +3,7 @@
 class SecureCertificationFormResendsController < SecureRequestResendController
   private
 
-  def request_form_class = MedicalProviderSecureRequestForm
+  def request_form_class = SecureRequestForm.certification_upload
   def request_form_kind_matches? = @secure_request_form.kind_certification_upload?
 
   def request_replacement_link
@@ -22,6 +22,6 @@ class SecureCertificationFormResendsController < SecureRequestResendController
   def resend_log_label = 'Certification upload'
 
   def resend_log_context
-    { application_id: @secure_request_form.application_id, medical_provider_secure_request_form_id: @secure_request_form.id }
+    { application_id: @secure_request_form.application_id, secure_request_form_id: @secure_request_form.id }
   end
 end

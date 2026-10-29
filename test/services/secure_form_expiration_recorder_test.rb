@@ -16,7 +16,7 @@ class SecureFormExpirationRecorderTest < ActiveSupport::TestCase
                         requested_by: @admin,
                         kind: :income_proof_resubmission,
                         expires_at: 1.hour.ago)
-    certification_form = create(:medical_provider_secure_request_form,
+    certification_form = create(:certification_upload_form,
                                 application: application,
                                 requested_by: @admin,
                                 expires_at: 1.hour.ago)
@@ -37,7 +37,7 @@ class SecureFormExpirationRecorderTest < ActiveSupport::TestCase
 
     assert_equal proof_form.id, proof_event.metadata.fetch('secure_request_form_id')
     assert_equal 'income', proof_event.metadata.fetch('proof_type')
-    assert_equal certification_form.id, cert_event.metadata.fetch('medical_provider_secure_request_form_id')
+    assert_equal certification_form.id, cert_event.metadata.fetch('secure_request_form_id')
     assert_equal w9_form.id, w9_event.metadata.fetch('vendor_secure_request_form_id')
   end
 
@@ -155,14 +155,14 @@ class SecureFormExpirationRecorderTest < ActiveSupport::TestCase
   end
 
   test 'expiration events keep the metadata each form type recorded before' do
-    form = create(:medical_provider_secure_request_form, requested_by: @admin, expires_at: 1.hour.ago)
+    form = create(:certification_upload_form, requested_by: @admin, expires_at: 1.hour.ago)
 
     SecureFormExpirationRecorder.new.call
 
     event = Event.find_by!(action: 'cert_upload_request_expired')
-    assert_equal %w[application_id expires_at medical_provider_secure_request_form_id provider_email provider_name
-                    request_batch_id requested_channel],
+    assert_equal %w[application_id expires_at provider_email provider_name request_batch_id
+                    requested_channel secure_request_form_id],
                  (event.metadata.keys - ['__service_generated']).sort
-    assert_equal form.id, event.metadata['medical_provider_secure_request_form_id']
+    assert_equal form.id, event.metadata['secure_request_form_id']
   end
 end

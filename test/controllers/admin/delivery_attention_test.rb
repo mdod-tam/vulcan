@@ -41,8 +41,8 @@ module Admin
     end
 
     test 'certification upload attention links to the affected request row' do
-      form = create(:medical_provider_secure_request_form, application: @application)
-      assert_attention_target(form, 'MedicalProviderMailer#request_certification', "medical_provider_secure_request_form_#{form.id}")
+      form = create(:certification_upload_form, application: @application)
+      assert_attention_target(form, 'MedicalProviderMailer#request_certification', "secure_request_form_#{form.id}")
     end
 
     test 'certification email attention links to the displayed certification delivery' do

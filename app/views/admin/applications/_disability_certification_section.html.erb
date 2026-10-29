@@ -101,7 +101,7 @@
 
   <div class="mt-6">
     <%# RuboCop checks each ERB fragment separately; the local is read below. %>
-    <% certification_action_state = disability_certification_action_state(@application, secure_request_forms: @medical_provider_secure_request_forms) %> <%# erb_lint:disable Rubocop %>
+    <% certification_action_state = disability_certification_action_state(@application, secure_request_forms: @certification_upload_forms) %> <%# erb_lint:disable Rubocop %>
 
     <% if show_disability_certification_request_buttons?(@application) && !@application.document_signing_status_signed? %>
       <div class="flex flex-wrap gap-2">

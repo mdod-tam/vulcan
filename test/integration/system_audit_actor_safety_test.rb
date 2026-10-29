@@ -45,15 +45,14 @@ class SystemAuditActorSafetyTest < ActionDispatch::IntegrationTest
       cases = [
         [:secure_request_form, { application: application, kind: :provider_info_request }, secure_provider_info_form_resend_path],
         [:secure_request_form, { application: application, kind: :income_proof_resubmission }, secure_proof_form_resend_path],
-        [:medical_provider_secure_request_form, { application: application }, secure_certification_form_resend_path],
+        [:certification_upload_form, { application: application }, secure_certification_form_resend_path],
         [:vendor_secure_request_form, { vendor: vendor }, secure_w9_form_resend_path]
       ]
 
       cases.each do |factory, attributes, path|
         token = SecureRandom.urlsafe_base64(32)
         form = create(factory, :expired, **attributes, requested_by: nil, raw_token: token)
-        counts = ['User.count', 'Event.count', 'Notification.count', 'SecureRequestForm.count',
-                  'MedicalProviderSecureRequestForm.count', 'VendorSecureRequestForm.count']
+        counts = ['User.count', 'Event.count', 'Notification.count', 'SecureRequestForm.count', 'VendorSecureRequestForm.count']
         assert_no_difference counts do
           post path, params: { token: token }
         end
@@ -70,8 +69,8 @@ class SystemAuditActorSafetyTest < ActionDispatch::IntegrationTest
     test "certification upload with #{actor_state} actor fails before storing or submitting" do
       register_conflicting_constituent if actor_state == :constituent
       application = create(:application, :in_progress, medical_provider_email: 'provider@example.test')
-      token = MedicalProviderSecureRequestForm.generate_public_token
-      form = create(:medical_provider_secure_request_form, application: application, raw_token: token)
+      token = SecureRequestForm.generate_public_token
+      form = create(:certification_upload_form, application: application, raw_token: token)
       file = fixture_file_upload('disability_certification_valid.pdf', 'application/pdf')
       counts = ['User.count', 'Event.count', 'ActiveStorage::Blob.count', 'ActiveStorage::Attachment.count', 'ApplicationStatusChange.count']
 

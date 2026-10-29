@@ -479,7 +479,7 @@ class ApplicationNotificationsMailer < ApplicationMailer # rubocop:disable Metri
       proof_type: proof_review.proof_type,
       locale: locale
     )
-    return interpolate_address_placeholder(reason.body, proof_review.application) if reason&.body
+    return reason.body_for(proof_review.application) if reason&.body
     return none_provided_rejection_reason(proof_review.proof_type, locale) if reason_code == 'none_provided'
 
     proof_review.rejection_reason
@@ -497,26 +497,6 @@ class ApplicationNotificationsMailer < ApplicationMailer # rubocop:disable Metri
       locale: locale,
       default: I18n.t('application_notifications.proof_rejected.none_provided.default', locale: locale)
     )
-  end
-
-  def interpolate_address_placeholder(body, application)
-    return body unless body.include?('%<address>s') || body.include?('%<address>')
-
-    format(body, address: build_application_address(application))
-  rescue KeyError, ArgumentError
-    body
-  end
-
-  def build_application_address(application)
-    user = application.user
-    return '' unless user
-
-    addr1 = user.physical_address_1.to_s
-    addr2 = user.physical_address_2.presence || ''
-    city = user.city.to_s
-    state = user.state.to_s
-    zip = user.zip_code.to_s
-    "#{addr1} #{addr2} #{city}, #{state} #{zip}".squish
   end
 
   def build_remaining_attempts_message(remaining_attempts, locale: nil)

@@ -32,7 +32,7 @@ module Applications
       application = create(:application, :in_progress, medical_provider_name: 'Dr. Original',
                                                        medical_provider_email: 'original-provider@example.test')
       first = RequestCertificationUpload.new(application: application, actor: @admin).call
-                                        .data.fetch(:medical_provider_secure_request_form)
+                                        .data.fetch(:secure_request_form)
       application.update!(medical_provider_email: 'current-provider@example.test')
 
       travel_to first.sent_at + 2.hours do
@@ -42,8 +42,8 @@ module Applications
       end
 
       assert_equal ['current-provider@example.test'], ActionMailer::Base.deliveries.last.to
-      replacement = application.medical_provider_secure_request_forms.order(:sent_at).last
-      assert_equal 'current-provider@example.test', replacement.provider_email
+      replacement = application.certification_upload_forms.order(:sent_at).last
+      assert_equal 'current-provider@example.test', replacement.recipient_email
     end
 
     test 'a W9 resend goes to the vendor email on file now' do

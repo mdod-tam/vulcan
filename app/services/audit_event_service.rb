@@ -154,7 +154,6 @@ class AuditEventService < BaseService
       w9_upload_request_expired
     ].include?(action.to_s)
       form_id = metadata['secure_request_form_id'] || metadata[:secure_request_form_id] ||
-                metadata['medical_provider_secure_request_form_id'] || metadata[:medical_provider_secure_request_form_id] ||
                 metadata['vendor_secure_request_form_id'] || metadata[:vendor_secure_request_form_id]
       request_batch_id = metadata['request_batch_id'] || metadata[:request_batch_id]
       return "#{base}_#{form_id || request_batch_id}" if form_id.present? || request_batch_id.present?

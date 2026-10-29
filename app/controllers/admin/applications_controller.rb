@@ -328,7 +328,8 @@ module Admin
         rejection_reason = RejectionReason.resolve_text(
           code: rejection_reason_code,
           proof_type: 'disability_certification',
-          fallback: nil
+          fallback: nil,
+          application: @application
         )
       end
 
@@ -340,6 +341,8 @@ module Admin
 
       if result.success?
         handle_successful_certification_update(result.message)
+      elsif result.data&.dig(:commit_state) == :unknown
+        redirect_to admin_application_path(@application), alert: result.message, status: :see_other
       else
         handle_error_response(
           error_message: "Failed to reject certification: #{result.message}",

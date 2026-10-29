@@ -21,10 +21,9 @@ class DisabilityCertificationAttachmentService
   # @param metadata [Hash] additional operation metadata
   # @return [Hash] :success, :error, :duration_ms, and :status on success
   def self.update_certification_status(application:, status:, admin:, submission_method: :admin_review, metadata: {})
-    start_time = Time.current
-    result = { success: false, error: nil, duration_ms: 0 }
+    on_error = ->(error) { record_failure(application, error, admin, submission_method, metadata) }
 
-    begin
+    AttachmentOperation.measure("Disability certification #{status}", on_error: on_error) do |result|
       raise 'Cannot update certification status: No certification is attached' unless application.disability_certification.attached?
 
       DocumentScan.require_clean!(application.disability_certification.blob) if status.to_s == 'approved'
@@ -35,15 +34,7 @@ class DisabilityCertificationAttachmentService
 
       result[:success] = true
       result[:status] = status.to_s
-    rescue StandardError => e
-      record_failure(application, e, admin, submission_method, metadata)
-      result[:error] = e
-    ensure
-      result[:duration_ms] = ((Time.current - start_time) * 1000).round
-      record_metrics(result, status)
     end
-
-    result
   end
 
   # Staff and provider submissions take the same application lock.
@@ -154,50 +145,9 @@ class DisabilityCertificationAttachmentService
   # Writes the status, status history, audit event, and notification. The attachment does not change.
   def self.update_certification_status_only(application, status, admin, submission_method, metadata)
     ActiveRecord::Base.transaction do
-      old_status = application.disability_certification_status || 'requested'
+      Rails.logger.info "Updating disability certification status to #{status} for application #{application.id}"
 
-      Rails.logger.info "[DisabilityCertService] Updating status from #{old_status} to #{status} for app #{application.id}"
-
-      # update_columns bypasses Application validations and callbacks.
-      # This service owns status history, audit, notifications, and approved-workflow reconciliation.
-      # Before you add callback-dependent behavior, remove this bypass or extend the manual bookkeeping.
-      update_result = application.update_columns( # rubocop:disable Rails/SkipsModelValidations
-        disability_certification_status: status.to_s,
-        disability_certification_verified_at: Time.current,
-        disability_certification_verified_by_id: admin&.id,
-        updated_at: Time.current
-      )
-
-      Rails.logger.info "[DisabilityCertService] update_columns returned: #{update_result}"
-
-      application.reload
-
-      Rails.logger.info "Updated disability certification status to #{status} for application #{application.id}"
-
-      ApplicationStatusChange.create!(
-        application: application,
-        user: admin,
-        from_status: old_status,
-        to_status: status.to_s,
-        change_type: 'disability_certification',
-        metadata: {
-          change_type: 'disability_certification',
-          submission_method: submission_method.to_s,
-          verified_at: Time.current.iso8601,
-          verified_by_id: admin&.id
-        }
-      )
-
-      AuditEventService.log(
-        action: 'disability_certification_status_changed',
-        actor: admin,
-        auditable: application,
-        metadata: {
-          old_status: application.disability_certification_status_was || 'requested',
-          new_status: status.to_s,
-          change_type: 'disability_certification'
-        }
-      )
+      record_verified_status!(application, status, admin, submission_method: submission_method.to_s)
 
       action_mapping = {
         approved: 'disability_certification_approved',
@@ -229,6 +179,18 @@ class DisabilityCertificationAttachmentService
     end
   end
 
+  # A review outcome records who verified the certification and when, whatever the outcome.
+  def self.record_verified_status!(application, status, admin, submission_method:, metadata: {}, notes: nil)
+    verified_at = Time.current
+    application.transition_disability_certification_status!(
+      status,
+      actor: admin,
+      notes: notes,
+      attributes: { disability_certification_verified_at: verified_at, disability_certification_verified_by_id: admin&.id },
+      metadata: { submission_method: submission_method, verified_at: verified_at.iso8601, verified_by_id: admin&.id }.merge(metadata)
+    )
+  end
+
   def self.record_failure(application, error, admin, submission_method, _metadata)
     Rails.logger.error "Disability certification attachment error for application #{application.id}: #{error.class.name}"
 
@@ -250,31 +212,13 @@ class DisabilityCertificationAttachmentService
     Rails.logger.error "Failed to record disability certification failure: #{e.class.name}"
   end
 
-  def self.record_metrics(result, status)
-    log_operation_result(result, status)
-    context = build_metrics_context(result, status)
-    log_metrics(context)
-  rescue StandardError => e
-    Rails.logger.error "Failed to record disability certification metrics: #{e.class.name}"
-  end
-
+  # Returns the result with the block's payload merged in. A failure is raised, not returned.
   def self.execute_with_timing(status)
-    start_time = Time.current
-    result = { success: false, error: nil, duration_ms: 0 }
-
-    begin
+    AttachmentOperation.measure("Disability certification #{status}", reraise: true) do |result|
       payload = yield
       result.merge!(payload) if payload.is_a?(Hash)
       result[:success] = true
-    rescue StandardError => e
-      result[:error] = e
-      raise
-    ensure
-      result[:duration_ms] = ((Time.current - start_time) * 1000).round
-      record_metrics(result, status)
     end
-
-    result
   end
 
   def self.process_attachment(params)
@@ -291,81 +235,24 @@ class DisabilityCertificationAttachmentService
   def self.process_rejection(params)
     ActiveRecord::Base.transaction do
       params[:resolved_reason] = resolve_rejection_reason_text(params)
-      update_rejection_status(params)
+      record_verified_status!(
+        params[:application], :rejected, params[:admin],
+        submission_method: params[:submission_method],
+        metadata: { rejection_reason: params[:resolved_reason] },
+        notes: params[:notes]
+      )
       upsert_disability_certification_rejection_review(params)
-      create_rejection_audit_trail(params)
       notification = send_rejection_notification(params)
       { notification_id: notification&.id }
     end
   end
 
-  def self.update_rejection_status(params)
-    old_status = params[:application].disability_certification_status || 'requested'
-    params[:old_status] = old_status
-
-    # This branch shares the callback bypass in update_certification_status_only
-    # and must maintain its own audit trail.
-    update_attrs = {
-      disability_certification_status: 'rejected',
-      disability_certification_verified_at: Time.current,
-      disability_certification_verified_by_id: params[:admin].id,
-      updated_at: Time.current
-    }
-
-    params[:application].update_columns(**update_attrs) # rubocop:disable Rails/SkipsModelValidations
-    params[:application].reload
-  end
-
   def self.upsert_disability_certification_rejection_review(params)
-    app = params[:application]
-    review = app.proof_reviews.find_or_initialize_by(
-      proof_type: :disability_certification,
-      status: :rejected
-    )
-
-    review.assign_attributes(
+    ProofReview.for_decision(params[:application], proof_type: :disability_certification, status: :rejected).record!(
       admin: params[:admin],
       rejection_reason: params[:resolved_reason],
       rejection_reason_code: params[:reason_code].presence,
       notes: params[:notes]
-    )
-    review.reviewed_at = Time.current unless review.new_record?
-    review.save!
-  end
-
-  def self.create_rejection_audit_trail(params)
-    app = params[:application]
-    admin = params[:admin]
-
-    ApplicationStatusChange.create!(
-      application: app,
-      user: admin,
-      from_status: params[:old_status] || 'requested',
-      to_status: 'rejected',
-      change_type: 'disability_certification',
-      metadata: {
-        change_type: 'disability_certification',
-        submission_method: params[:submission_method],
-        verified_at: Time.current.iso8601,
-        verified_by_id: admin.id,
-        rejection_reason: params[:resolved_reason],
-        notes: params[:notes]
-      },
-      notes: params[:notes]
-    )
-
-    AuditEventService.log(
-      actor: admin,
-      action: 'disability_certification_status_changed',
-      auditable: app,
-      metadata: {
-        application_id: app.id,
-        old_status: app.disability_certification_status_was || 'requested',
-        new_status: 'rejected',
-        timestamp: Time.current.iso8601,
-        change_type: 'disability_certification',
-        reason: params[:resolved_reason]
-      }
     )
   end
 
@@ -388,33 +275,9 @@ class DisabilityCertificationAttachmentService
     RejectionReason.resolve_text(
       code: params[:reason_code].presence,
       proof_type: 'disability_certification',
-      fallback: params[:reason]
+      fallback: params[:reason],
+      application: params[:application]
     )
-  end
-
-  def self.log_operation_result(result, status)
-    if result[:success]
-      Rails.logger.info "Disability certification #{status} completed in #{result[:duration_ms]}ms"
-    else
-      Rails.logger.error "Disability certification #{status} failed in #{result[:duration_ms]}ms: #{result[:error]&.class&.name}"
-    end
-  end
-
-  def self.build_metrics_context(result, status)
-    context = {
-      status: status,
-      success: result[:success],
-      duration_ms: result[:duration_ms],
-      environment: Rails.env,
-      transaction_id: SecureRandom.uuid
-    }
-
-    add_error_context(context, result[:error]) if result[:error]
-    context
-  end
-
-  def self.add_error_context(context, error)
-    context[:error_class] = error.class.name
   end
 
   def self.perform_attachment(application, attachment_param)
@@ -436,9 +299,5 @@ class DisabilityCertificationAttachmentService
   def self.verify_final_attachment(application)
     application.reload
     raise 'Critical error: Attachment disappeared after status update' unless application.disability_certification.attached?
-  end
-
-  def self.log_metrics(context)
-    Rails.logger.info("METRICS: disability_certification #{context.to_json}")
   end
 end

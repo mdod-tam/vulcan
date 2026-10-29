@@ -7,7 +7,7 @@ en:
     records:
       notification: 'notification #%{id}'
       secure_request_form: 'secure request #%{id}'
-      medical_provider_secure_request_form: 'certification upload request #%{id}'
+      certification_upload_request: 'certification upload request #%{id}'
       vendor_secure_request_form: 'W9 request #%{id}'
       email_delivery_attempt: 'delivery attempt #%{id}'
       invoice: 'invoice #%{id}'

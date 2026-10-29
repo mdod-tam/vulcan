@@ -117,4 +117,26 @@ class DocumentScansControllerTest < ActionDispatch::IntegrationTest
       assert_not application.reload.income_proof.attached?
     end
   end
+
+  test 'a secure scan stages only for the form type that names its kind' do
+    proof_token = SecureRequestForm.generate_public_token
+    create(:secure_request_form, application: create(:application, income_proof_required: true), kind: :income_proof_resubmission,
+                                 raw_token: proof_token)
+    certification_token = SecureRequestForm.generate_public_token
+    certification_form = create(:certification_upload_form, raw_token: certification_token)
+
+    [['proof', certification_token, 'income_proof', 'proof'], ['certification', proof_token, 'disability_certification', 'certification']].each do |type, token, slot, purpose|
+      assert_no_difference 'DocumentScan.count' do
+        post document_scans_path, params: { file: fixture_file_upload('income_proof.pdf', 'application/pdf'), purpose: purpose,
+                                            slot: slot, secure_form_type: type, token: token }
+      end
+      assert_response :not_found, "#{type} scans must refuse another kind's token"
+    end
+
+    post document_scans_path, params: { file: fixture_file_upload('disability_certification_valid.pdf', 'application/pdf'),
+                                        purpose: 'certification', slot: 'disability_certification',
+                                        secure_form_type: 'certification', token: certification_token }
+    assert_response :accepted
+    assert_equal certification_form, DocumentScan.find(response.parsed_body.fetch('id')).secure_form
+  end
 end

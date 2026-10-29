@@ -326,7 +326,7 @@ module Applications
         action: 'cert_upload_requested',
         metadata: {
           'application_id' => @application.id,
-          'medical_provider_secure_request_form_id' => 103,
+          'secure_request_form_id' => 103,
           'provider_name' => 'Dr. Provider',
           'provider_email' => 'provider@example.test',
           'requested_channel' => 'email',
@@ -387,7 +387,7 @@ module Applications
         action: 'cert_upload_request_revoked',
         metadata: {
           'application_id' => @application.id,
-          'medical_provider_secure_request_form_id' => 203,
+          'secure_request_form_id' => 203,
           'provider_name' => 'Dr. Provider',
           'provider_email' => 'provider@example.test'
         }
@@ -423,7 +423,7 @@ module Applications
         action: 'cert_upload_request_expired',
         metadata: {
           'application_id' => @application.id,
-          'medical_provider_secure_request_form_id' => 303,
+          'secure_request_form_id' => 303,
           'provider_name' => 'Dr. Provider',
           'provider_email' => 'provider@example.test'
         }
@@ -456,7 +456,7 @@ module Applications
         action: 'cert_submitted_via_secure_form',
         metadata: {
           'application_id' => @application.id,
-          'medical_provider_secure_request_form_id' => 403,
+          'secure_request_form_id' => 403,
           'provider_name' => 'Dr. Provider',
           'provider_email' => 'provider@example.test'
         }

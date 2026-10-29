@@ -118,7 +118,7 @@ class EmailDeliveryBoundaryTest < ActionDispatch::IntegrationTest
 
     assert_empty ActionMailer::Base.deliveries
     assert result.data[:delivery_suppressed]
-    assert result.data.fetch(:medical_provider_secure_request_form).reload.revoked?
+    assert result.data.fetch(:secure_request_form).reload.revoked?
   end
 
   test 'a certification email stopped after its request was prepared moves certification back from requested' do

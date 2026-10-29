@@ -4,7 +4,8 @@ module ApplicationProviderInfoRequests
   extend ActiveSupport::Concern
 
   included do
-    has_many :secure_request_forms, dependent: :destroy
+    # Certification links go to the provider, not a user, and are in certification_upload_forms.
+    has_many :secure_request_forms, -> { for_user_recipients }, inverse_of: :application, dependent: :destroy
 
     scope :with_provider_info_prerequisites_met, lambda {
       where(residency_proof_status: residency_proof_statuses[:approved],

@@ -143,19 +143,18 @@ module Vendors
       assert_equal 1, VendorSecureRequestForm.open_w9_upload_for_vendor(vendor_id: @vendor.id).count
     end
 
-    test 'submitted secure link blocks a new secure W9 request during cooldown' do
+    test 'submitted secure link does not start a cooldown for a new secure W9 request' do
       first_result = RequestW9Resubmission.new(vendor: @vendor, actor: @actor).call
       original = first_result.data.fetch(:vendor_secure_request_form)
       original.mark_submitted!
 
-      result = assert_no_difference('VendorSecureRequestForm.count') do
+      result = assert_difference('VendorSecureRequestForm.count', 1) do
         RequestW9Resubmission.new(vendor: @vendor, actor: @actor).call
       end
 
-      assert_not result.success?
-      assert_match(/minute/, result.message)
+      assert_predicate result, :success?
       assert_predicate original.reload, :submitted?
-      assert_equal 0, VendorSecureRequestForm.open_w9_upload_for_vendor(vendor_id: @vendor.id).count
+      assert_equal 1, VendorSecureRequestForm.open_w9_upload_for_vendor(vendor_id: @vendor.id).count
     end
 
     test 'revoked secure link does not block a new secure W9 request during cooldown' do
@@ -170,20 +169,6 @@ module Vendors
       assert_predicate result, :success?
       assert_predicate original.reload, :revoked?
       assert_equal 1, VendorSecureRequestForm.open_w9_upload_for_vendor(vendor_id: @vendor.id).count
-    end
-
-    test 'submitted secure link outside cooldown allows a new secure W9 request' do
-      first_result = RequestW9Resubmission.new(vendor: @vendor, actor: @actor).call
-      original = first_result.data.fetch(:vendor_secure_request_form)
-      original.mark_submitted!
-
-      travel_to original.sent_at + 2.hours do
-        result = assert_difference('VendorSecureRequestForm.count', 1) do
-          RequestW9Resubmission.new(vendor: @vendor, actor: @actor).call
-        end
-
-        assert_predicate result, :success?
-      end
     end
 
     test 'delivery failure revokes new secure request and records non-secret failure metadata' do

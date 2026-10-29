@@ -76,6 +76,13 @@ module UserProfile
     [first_name, last_name].compact.join(' ')
   end
 
+  # The mailing address on one line, as rejection reasons state it: "123 Main St Apt 4 Baltimore, MD 21201".
+  # Missing parts are left out without leaving stray punctuation.
+  def mailing_address_line
+    locality = [city.presence, [state, zip_code].compact_blank.join(' ').presence].compact.join(', ')
+    [physical_address_1, physical_address_2, locality].compact_blank.join(' ')
+  end
+
   # The column is encrypted text holding ISO dates, so reading goes through the same parser as
   # writing. Date.parse would read a stray value day-first and answer with a different date.
   def date_of_birth

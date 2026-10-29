@@ -33,8 +33,6 @@ module Applications
 
         ApplicationRecord.transaction do
           application.with_lock do
-            ensure_cooldown_allows!
-            revoke_open_requests
             delivery = create_request
             DisabilityCertificationService.new(application: application, actor: actor)
                                           .prepare_upload_request!(notification: Notification.find(delivery.notification_id))
@@ -55,24 +53,15 @@ module Applications
 
     private
 
-    def ensure_cooldown_allows!
-      latest_request = MedicalProviderSecureRequestForm
-                       .open_certification_upload_for_application(application_id: application.id)
-                       .order(sent_at: :desc)
-                       .first
-      minutes = SecureFormPolicy.resend_cooldown_minutes(latest_request)
-      raise Applications::SecureRequestIssuance::CooldownActive, minutes if minutes
-    end
-
-    def revoke_open_requests
-      MedicalProviderSecureRequestForm
-        .open_certification_upload_for_application(application_id: application.id)
-        .find_each { |request_form| request_form.revoke!(actor: actor, reason: :replacement_request) }
-    end
-
+    # An application has one certifying provider, so a new request replaces every open one.
     def create_request
-      issued = MedicalProviderSecureRequestForm.create_with_public_token!(request_form_attributes)
+      issued = SecureFormReplacement.replace!(
+        open: SecureRequestForm.open_certification_upload_for_application(application_id: application.id),
+        actor: actor,
+        attributes: request_form_attributes
+      )
       request_form = issued.secure_request_form
+
       notification = create_tracking_notification(request_form) || raise('Could not create certification tracking notification')
       Delivery.new(secure_request_form: request_form, raw_token: issued.raw_token, context: @email_context, notification_id: notification.id)
     end
@@ -81,13 +70,10 @@ module Applications
       {
         application: application,
         kind: :certification_upload,
-        status: :sent,
-        provider_email: provider_email,
-        provider_name: provider_name,
-        expires_at: SecureFormPolicy.expires_at,
-        sent_at: Time.current,
-        request_batch_id: SecureRandom.uuid,
-        requested_by: actor
+        recipient_role: :provider,
+        recipient_channel: :email,
+        recipient_email: provider_email,
+        recipient_name: provider_name
       }
     end
 
@@ -98,11 +84,11 @@ module Applications
         actor: actor,
         notifiable: application,
         metadata: {
-          medical_provider_secure_request_form_id: request_form.id,
+          secure_request_form_id: request_form.id,
           application_id: application.id,
           request_batch_id: request_form.request_batch_id,
-          provider_name: request_form.provider_name,
-          provider_email: request_form.provider_email,
+          provider_name: request_form.recipient_name,
+          provider_email: request_form.recipient_email,
           requested_channel: channel.to_s,
           expires_at: request_form.expires_at.iso8601
         },
@@ -126,7 +112,7 @@ module Applications
     def delivery_channel(_delivery) = :email
 
     def suppressed_delivery_data(deliveries)
-      { medical_provider_secure_request_form: Array(deliveries).first&.secure_request_form }.compact
+      { secure_request_form: Array(deliveries).first&.secure_request_form }.compact
     end
 
     def delivery_failure_data(delivery_failures, deliveries)
@@ -135,7 +121,7 @@ module Applications
 
     def delivery_failure_details(forms)
       request_form = forms.first
-      { application_id: application.id, medical_provider_secure_request_form_id: request_form.id,
+      { application_id: application.id, secure_request_form_id: request_form.id,
         request_batch_id: request_form.request_batch_id, recipient_ids: [],
         template_name: rejection_delivery? ? 'medical_provider_certification_rejected' : 'medical_provider_request_certification' }
     end
@@ -151,7 +137,7 @@ module Applications
 
     def result_data(request_form, raw_token)
       {
-        medical_provider_secure_request_form: request_form,
+        secure_request_form: request_form,
         secure_upload_url: secure_upload_url_for(raw_token)
       }
     end
@@ -164,7 +150,7 @@ module Applications
         if rejection_delivery?
           MedicalProviderMailer.with(
             application: application,
-            recipient_email: request_form.provider_email,
+            recipient_email: request_form.recipient_email,
             rejection_reason: rejection_reason_for_delivery,
             admin: actor,
             secure_upload_url: secure_upload_url
@@ -172,7 +158,7 @@ module Applications
         else
           MedicalProviderMailer.with(
             application: application,
-            recipient_email: request_form.provider_email,
+            recipient_email: request_form.recipient_email,
             timestamp: Time.current.iso8601,
             secure_upload_url: secure_upload_url
           ).request_certification

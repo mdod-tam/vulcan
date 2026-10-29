@@ -91,7 +91,7 @@ module Applications
       )
 
       review = @application.proof_reviews.find_by!(proof_type: :income, status: :rejected)
-      assert_equal 'The address must match 123 Main St Apt 4B Baltimore MD 21201.', review.rejection_reason
+      assert_equal 'The address must match 123 Main St Apt 4B Baltimore, MD 21201.', review.rejection_reason
     end
 
     test 'approved review triggers reconciler auto-approval audit' do

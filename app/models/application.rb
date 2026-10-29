@@ -111,7 +111,7 @@ class Application < ApplicationRecord
   has_many :equipment_needs, dependent: :restrict_with_error
   has_many :equipment_items, dependent: :restrict_with_error
   has_many :application_notes, dependent: :destroy
-  has_many :medical_provider_secure_request_forms, dependent: :destroy
+  has_many :certification_upload_forms, -> { certification_upload }, class_name: 'SecureRequestForm', inverse_of: :application, dependent: :destroy
   has_and_belongs_to_many :products
   has_one_attached :income_proof
   has_one_attached :residency_proof

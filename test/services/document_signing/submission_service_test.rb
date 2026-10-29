@@ -154,21 +154,35 @@ module DocumentSigning
         actor: @admin
       )
 
-      assert_difference 'Event.count', 1 do
+      assert_difference -> { Event.where(action: 'document_signing_request_sent').count }, 1 do
         result = service.call
         assert result.success?
       end
 
-      event = Event.last
-      assert_equal 'document_signing_request_sent', event.action
+      event = Event.find_by!(action: 'document_signing_request_sent')
       assert_equal @admin, event.user
       assert_equal @application, event.auditable
       assert_equal 'docuseal', event.metadata['document_signing_service']
       assert_equal 'sub_123456', event.metadata['document_signing_submission_id']
     end
 
+    test 'records the requested certification status in the status history and audit log' do
+      DocumentSigning::SubmissionService.any_instance.stubs(:create_submission!).returns(@mock_submission)
+
+      result = DocumentSigning::SubmissionService.new(application: @application, actor: @admin).call
+
+      assert result.success?
+      change = @application.status_changes.disability_certification.sole
+      assert_equal %w[not_requested requested], [change.from_status, change.to_status]
+      assert_equal @admin, change.user
+      assert_equal ['document_signing', 'Dr. Jane Smith'], change.metadata.values_at('submission_method', 'provider_name')
+      event = Event.find_by!(action: 'disability_certification_requested', auditable: @application)
+      assert_equal %w[not_requested requested document_signing],
+                   event.metadata.values_at('old_status', 'new_status', 'submission_method')
+    end
+
     test 'preserves open secure certification upload forms when sending DocuSeal request' do
-      secure_request_form = create(:medical_provider_secure_request_form, application: @application)
+      secure_request_form = create(:certification_upload_form, application: @application)
       DocumentSigning::SubmissionService.any_instance.stubs(:create_submission!).returns(@mock_submission)
 
       result = DocumentSigning::SubmissionService.new(

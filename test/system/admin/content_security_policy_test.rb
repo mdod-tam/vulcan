@@ -155,7 +155,7 @@ module Admin
       request_form = "form[action='#{request_path}']"
       confirmation = 'Send secure certification upload link to provider@example.test?'
 
-      assert_no_difference [-> { application.medical_provider_secure_request_forms.count },
+      assert_no_difference [-> { application.certification_upload_forms.count },
                             -> { Event.where(auditable: application, action: 'disability_certification_requested').count }] do
         within(request_form) do
           dismiss_confirm(confirmation) { click_button 'Send secure certification upload link to Dr. CSP' }
@@ -174,8 +174,8 @@ module Admin
       assert_current_path admin_application_path(application)
       assert_selector 'h1#application-title', text: "Application ##{application.id}"
       assert_equal 'requested', application.reload.disability_certification_status
-      request = application.medical_provider_secure_request_forms.sole
-      assert_equal 'provider@example.test', request.provider_email
+      request = application.certification_upload_forms.sole
+      assert_equal 'provider@example.test', request.recipient_email
       assert_equal @admin.id, request.requested_by_id
       assert_equal @admin.id, Event.where(auditable: application, action: 'disability_certification_requested').sole.user_id
       assert_not application.disability_certification.attached?

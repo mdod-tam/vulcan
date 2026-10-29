@@ -97,19 +97,19 @@ module Applications
         next unless application.disability_certification_requested_at == issued_at
         next unless application.disability_certification_request_count == state['issued_count']
         next if application.document_signing_requested_at && application.document_signing_requested_at >= issued_at
-        next if MedicalProviderSecureRequestForm.open_certification_upload_for_application(application_id: application.id).exists?
+        next if SecureRequestForm.open_certification_upload_for_application(application_id: application.id).exists?
 
-        Current.instance.set(skip_proof_validation: true) { application.update!(state.fetch('previous')) }
-        metadata = { change_type: 'disability_certification', reason: 'delivery_not_sent', notification_id: notification.id }
-        request_form_id = notification.metadata['medical_provider_secure_request_form_id']
-        metadata[:medical_provider_secure_request_form_id] = request_form_id if request_form_id
-        ApplicationStatusChange.create!(application: application, user: notification.actor,
-                                        from_status: 'requested', to_status: application.disability_certification_status,
-                                        change_type: 'disability_certification',
-                                        metadata: metadata)
-        AuditEventService.log(action: 'disability_certification_request_not_sent', actor: notification.actor, auditable: application,
-                              metadata: metadata.merge(old_status: 'requested', new_status: application.disability_certification_status,
-                                                       operation_id: "disability-certification-not-sent-#{notification.id}"))
+        previous = state.fetch('previous')
+        metadata = { reason: 'delivery_not_sent', notification_id: notification.id }
+        request_form_id = notification.metadata['secure_request_form_id']
+        metadata[:secure_request_form_id] = request_form_id if request_form_id
+        application.transition_disability_certification_status!(
+          previous.fetch('disability_certification_status'),
+          actor: notification.actor,
+          action: 'disability_certification_request_not_sent',
+          attributes: previous.except('disability_certification_status'),
+          metadata: metadata
+        )
       end
     end
 
@@ -127,21 +127,17 @@ module Applications
     # Caller holds the application lock; state, tracking, history and audit commit together.
     def record_request!(notification:, submission_method:, request_count:, delivery_outcome: nil)
       previous = application.attributes.slice(*STATE_FIELDS)
-      Current.instance.set(skip_proof_validation: true) do
-        application.update!(disability_certification_status: :requested, disability_certification_requested_at: Time.current,
-                            disability_certification_request_count: request_count)
-      end
+      application.transition_disability_certification_status!(
+        :requested,
+        actor: actor,
+        action: 'disability_certification_requested',
+        attributes: { disability_certification_requested_at: Time.current, disability_certification_request_count: request_count },
+        metadata: { notification_id: notification.id, requested_by_id: actor&.id, submission_method: submission_method,
+                    delivery_outcome: delivery_outcome }.compact
+      )
       application.reload
       notification.update_metadata!('certification_request_state', self.class.request_state(application, previous: previous))
       notification.update_metadata!('request_count', request_count)
-      metadata = { notification_id: notification.id, change_type: 'disability_certification',
-                   requested_by_id: actor&.id, submission_method: submission_method }
-      ApplicationStatusChange.create!(application: application, user: actor,
-                                      from_status: previous['disability_certification_status'], to_status: 'requested',
-                                      change_type: 'disability_certification', metadata: metadata)
-      AuditEventService.log(action: 'disability_certification_requested', actor: actor, auditable: application,
-                            metadata: metadata.merge(old_status: previous['disability_certification_status'], new_status: 'requested',
-                                                     delivery_outcome: delivery_outcome).compact)
     end
 
     def create_notification

@@ -36,8 +36,6 @@ module Vendors
             denial = request_state_denial
             raise ActiveRecord::Rollback if denial
 
-            ensure_cooldown_allows!
-            revoke_open_requests
             delivery = create_request
           end
         end
@@ -64,41 +62,19 @@ module Vendors
       failure(message(:request_not_needed))
     end
 
-    def ensure_cooldown_allows!
-      latest_request = VendorSecureRequestForm
-                       .w9_upload
-                       .where(vendor: vendor)
-                       .where.not(status: :revoked)
-                       .order(sent_at: :desc)
-                       .first
-      minutes = SecureFormPolicy.resend_cooldown_minutes(latest_request)
-      raise Applications::SecureRequestIssuance::CooldownActive, minutes if minutes
-    end
-
-    def revoke_open_requests
-      VendorSecureRequestForm
-        .open_w9_upload_for_vendor(vendor_id: vendor.id)
-        .order(:id).each { |request_form| request_form.with_lock { request_form.revoke!(actor: actor, reason: :replacement_request) } }
-    end
-
     def create_request
-      issued = VendorSecureRequestForm.create_with_public_token!(request_form_attributes)
+      issued = SecureFormReplacement.replace!(
+        open: VendorSecureRequestForm.open_w9_upload_for_vendor(vendor_id: vendor.id),
+        actor: actor,
+        attributes: request_form_attributes
+      )
       request_form = issued.secure_request_form
       notification = create_tracking_notification(request_form) || raise('Could not create W9 tracking notification')
       Delivery.new(secure_request_form: request_form, raw_token: issued.raw_token, context: @email_context, notification_id: notification.id)
     end
 
     def request_form_attributes
-      {
-        vendor: vendor,
-        kind: :w9_upload,
-        status: :sent,
-        recipient_email: recipient_email,
-        expires_at: SecureFormPolicy.expires_at,
-        sent_at: Time.current,
-        request_batch_id: SecureRandom.uuid,
-        requested_by: actor
-      }
+      { vendor: vendor, kind: :w9_upload, recipient_email: recipient_email }
     end
 
     def create_tracking_notification(request_form)
