@@ -88,7 +88,7 @@ module Admin
         fill_in 'guardian_attributes[first_name]', with: ''
         fill_in 'guardian_attributes[email]', with: 'invalid-email'
         click_button 'Save Guardian'
-        assert_selector '.border-red-500', count: 2, wait: 3
+        assert_selector '.border-danger-500', count: 2, wait: 3
 
         fill_in 'guardian_attributes[first_name]', with: 'Guardian'
         fill_in 'guardian_attributes[last_name]', with: 'TestParent'

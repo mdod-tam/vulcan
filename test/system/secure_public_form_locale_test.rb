@@ -8,6 +8,10 @@ class SecurePublicFormLocaleTest < ApplicationSystemTestCase
 
   test 'vendor W9 form renders show and validation errors in the vendor locale' do
     vendor = create(:vendor, :with_w9, locale: 'es')
+    # A W9 link only accepts a resubmission while the vendor's W9 is not
+    # submitted; :with_w9 alone leaves it in_progress, which fails the
+    # request as inactive instead of reporting the missing file.
+    vendor.update!(w9_status: :rejected)
     raw_token = VendorSecureRequestForm.generate_public_token
     create(:vendor_secure_request_form, vendor: vendor, raw_token: raw_token)
 

@@ -56,7 +56,9 @@ module Admin
 
       within '[data-testid="disability-certification-upload-form"]' do
         choose 'Approve Certification and Upload'
-        attach_file 'disability_certification', Rails.root.join('test/fixtures/files/disability_certification_valid.pdf')
+        # The upload widget blocks submission while its virus scan is pending;
+        # attach_cleared_document completes the scan like every other upload test.
+        attach_cleared_document 'disability_certification', Rails.root.join('test/fixtures/files/disability_certification_valid.pdf')
         click_button 'Process Certification'
       end
 
