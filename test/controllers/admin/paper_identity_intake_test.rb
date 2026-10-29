@@ -18,9 +18,9 @@ module Admin
         },
         application: {
           household_size: 2, annual_income: 20_000, maryland_resident: true, self_certify_disability: true,
-          medical_provider_name: 'Doctor Example', medical_provider_phone: '555-123-4567',
-          medical_provider_email: 'doctor@example.org', terms_accepted: true,
-          information_verified: true, medical_release_authorized: true
+          certifying_professional_name: 'Doctor Example', certifying_professional_phone: '555-123-4567',
+          certifying_professional_email: 'doctor@example.org', terms_accepted: true,
+          information_verified: true, disability_information_release_authorized: true
         }
       }
       @blobs = %w[income_proof residency_proof id_proof disability_certification].to_h do |key|

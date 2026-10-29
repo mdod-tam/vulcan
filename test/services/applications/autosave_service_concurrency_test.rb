@@ -397,12 +397,12 @@ module Applications
         speech_disability: false,
         mobility_disability: false,
         cognition_disability: false,
-        medical_provider_name: 'Test Provider',
-        medical_provider_phone: '555-1234',
-        medical_provider_email: 'provider@test.com',
+        certifying_professional_name: 'Test Provider',
+        certifying_professional_phone: '555-1234',
+        certifying_professional_email: 'provider@test.com',
         terms_accepted: true,
         information_verified: true,
-        medical_release_authorized: true,
+        disability_information_release_authorized: true,
         is_submission: true
       )
       ApplicationCreator.call(form)

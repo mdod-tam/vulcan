@@ -19,7 +19,7 @@ function buildForm() {
       </fieldset>
       <fieldset>
         <legend>Certifying Professional Information</legend>
-        <input type="checkbox" id="release" name="application[medical_release_authorized]" required aria-describedby="disability_release_hint">
+        <input type="checkbox" id="release" name="application[disability_information_release_authorized]" required aria-describedby="disability_release_hint">
         <label for="release"><span>I authorize the release and sharing of my disability-related information.</span></label>
         <p id="disability_release_hint">The program may contact this provider to verify my disability certification.</p>
       </fieldset>
@@ -28,7 +28,7 @@ function buildForm() {
         <label>Accept <input type="radio" name="income_proof_action" value="accept" required></label>
         <label>Reject <input type="radio" name="income_proof_action" value="reject" required></label>
       </fieldset>
-      <label>Provider Name <input type="text" name="application[medical_provider_name]" required></label>
+      <label>Provider Name <input type="text" name="application[certifying_professional_name]" required></label>
     </form>
   `
   return document.querySelector("form")
@@ -51,7 +51,7 @@ describe("submit_gate_state", () => {
     const form = buildForm()
 
     expect(blockingRequiredControls(form, alwaysVisible).map((field) => field.name))
-      .toEqual(["application[medical_release_authorized]", "application[medical_provider_name]"])
+      .toEqual(["application[disability_information_release_authorized]", "application[certifying_professional_name]"])
     expect(blockingRadioGroups(form, alwaysVisible)).toHaveLength(1)
     expect(blockingCheckboxGroups(form, alwaysVisible)).toHaveLength(1)
 
@@ -63,7 +63,7 @@ describe("submit_gate_state", () => {
   })
 
   test("a standalone requirement is named by its own label, not its enclosing fieldset legend", () => {
-    const release = buildForm().querySelector('input[name="application[medical_release_authorized]"]')
+    const release = buildForm().querySelector('input[name="application[disability_information_release_authorized]"]')
 
     // Helper text linked through aria-describedby stays out of the accessible name, so the
     // status line carries the exact outstanding item without the explanation sentence.

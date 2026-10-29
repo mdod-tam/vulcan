@@ -27,9 +27,9 @@ module VendorPortal
                             status: 'in_progress',
                             household_size: 1,
                             annual_income: 25_000,
-                            medical_provider_name: 'Dr. Test Provider',
-                            medical_provider_email: 'doctor@example.com',
-                            medical_provider_phone: '555-123-4567')
+                            certifying_professional_name: 'Dr. Test Provider',
+                            certifying_professional_email: 'doctor@example.com',
+                            certifying_professional_phone: '555-123-4567')
 
       @voucher = create(:voucher,
                         application: @application,

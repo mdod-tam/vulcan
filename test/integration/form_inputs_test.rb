@@ -43,7 +43,7 @@ class FormInputsTest < ActionDispatch::IntegrationTest
         vision_disability: checkbox_params(false),
         speech_disability: checkbox_params(true)
       },
-      medical_provider: {
+      certifying_professional: {
         name: 'Dr. Smith',
         phone: '2025551234',
         email: 'drsmith@example.com'
@@ -74,7 +74,7 @@ class FormInputsTest < ActionDispatch::IntegrationTest
         vision_disability: '0',
         speech_disability: %w[0 1]
       },
-      medical_provider: {
+      certifying_professional: {
         name: 'Dr. Smith',
         phone: '2025551234',
         email: 'drsmith@example.com'
@@ -102,7 +102,7 @@ class FormInputsTest < ActionDispatch::IntegrationTest
         vision_disability: false,
         speech_disability: true
       },
-      medical_provider: {
+      certifying_professional: {
         name: 'Dr. Smith',
         phone: '2025551234',
         email: 'drsmith@example.com'
@@ -132,7 +132,7 @@ class FormInputsTest < ActionDispatch::IntegrationTest
         vision_disability: '0',
         speech_disability: '1'
       },
-      medical_provider: {
+      certifying_professional: {
         name: 'Dr. Smith',
         phone: '2025551234',
         email: 'drsmith@example.com'
@@ -192,7 +192,7 @@ class FormInputsTest < ActionDispatch::IntegrationTest
         vision_disability: checkbox_params(false),
         speech_disability: checkbox_params(true)
       },
-      medical_provider: {
+      certifying_professional: {
         name: 'Dr. Smith',
         phone: '2025551234',
         email: 'drsmith@example.com'
@@ -223,7 +223,7 @@ class FormInputsTest < ActionDispatch::IntegrationTest
         speech_disability: checkbox_params(true),
         vision_disability: checkbox_params(false)
       },
-      medical_provider: {
+      certifying_professional: {
         name: 'Dr. Smith',
         phone: '2025551234',
         email: 'drsmith@example.com'

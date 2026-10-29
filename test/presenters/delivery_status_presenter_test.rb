@@ -119,12 +119,12 @@ class DeliveryStatusPresenterTest < ActiveSupport::TestCase
     application = create(:application, disability_certification_status: :requested)
     old_attempt = EmailDeliveryAttempt.create!(origin: application, application: application, correlation_id: SecureRandom.uuid,
                                                destination: 'old@example.test', recipient_key: EmailDeliveryAttempt.recipient_key('old@example.test'),
-                                               server_id: 'default', mail_action: 'MedicalProviderMailer#request_certification',
+                                               server_id: 'default', mail_action: 'CertifyingProfessionalMailer#request_certification',
                                                attempted_at: 2.days.ago, bounced_at: 1.day.ago)
     assert EmailDelivery::Visibility.application_attention([application]).key?(application.id)
     EmailDeliveryAttempt.create!(origin: application, application: application, correlation_id: SecureRandom.uuid,
                                  destination: 'new@example.test', recipient_key: EmailDeliveryAttempt.recipient_key('new@example.test'),
-                                 server_id: 'default', mail_action: 'MedicalProviderMailer#request_certification',
+                                 server_id: 'default', mail_action: 'CertifyingProfessionalMailer#request_certification',
                                  attempted_at: Time.current, accepted_at: Time.current)
     assert_empty EmailDelivery::Visibility.application_attention([application])
     assert old_attempt.reload.bounced_at
@@ -133,7 +133,7 @@ class DeliveryStatusPresenterTest < ActiveSupport::TestCase
   test 'guardian attention follows destination at send and actionable request' do
     guardian = create(:constituent)
     form = create(:secure_request_form, delivery_owner: guardian, recipient_email: guardian.email)
-    form.application.update_columns(medical_provider_name: nil, medical_provider_email: nil)
+    form.application.update_columns(certifying_professional_name: nil, certifying_professional_email: nil)
     attempt = EmailDeliveryAttempt.create!(origin: form, application: form.application, recipient: form.recipient, delivery_owner: guardian,
                                            correlation_id: SecureRandom.uuid, destination: guardian.email,
                                            recipient_key: EmailDeliveryAttempt.recipient_key(guardian.email), server_id: 'default',

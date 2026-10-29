@@ -79,9 +79,9 @@ class GuardianApplicationFlowTest < ActionDispatch::IntegrationTest
           annual_income: 50_000,
           self_certify_disability: true,
           vision_disability: true,
-          medical_provider_name: 'Dr. Test',
-          medical_provider_phone: '123-456-7890',
-          medical_provider_email: 'doctor@example.com',
+          certifying_professional_name: 'Dr. Test',
+          certifying_professional_phone: '123-456-7890',
+          certifying_professional_email: 'doctor@example.com',
           submit_application: true # Simulate clicking the Submit Application button
         }
       }
@@ -151,9 +151,9 @@ class GuardianApplicationFlowTest < ActionDispatch::IntegrationTest
           annual_income: 40_000,
           self_certify_disability: true,
           vision_disability: true,
-          medical_provider_name: 'Dr. Smith',
-          medical_provider_phone: '555-1234',
-          medical_provider_email: 'smith@example.com'
+          certifying_professional_name: 'Dr. Smith',
+          certifying_professional_phone: '555-1234',
+          certifying_professional_email: 'smith@example.com'
         },
         save_draft: true
       }

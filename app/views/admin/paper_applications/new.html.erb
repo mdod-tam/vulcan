@@ -233,9 +233,9 @@
                 </button>
                 <button type="button"
                         class="hidden inline-flex items-center px-3 py-1.5 text-xs font-medium text-info-700 bg-white border border-info-200 rounded-md hover:bg-info-100"
-                        data-adult-picker-target="medicalCopyButton"
-                        data-action="adult-picker#useLastApplicationMedicalProvider">
-                  Use last application medical provider
+                        data-adult-picker-target="certifyingProfessionalCopyButton"
+                        data-action="adult-picker#useLastApplicationCertifyingProfessional">
+                  Use last application certifying professional
                 </button>
               </div>
             </div>
@@ -397,9 +397,9 @@
                       </button>
                       <button type="button"
                               class="hidden inline-flex items-center px-3 py-1.5 text-xs font-medium text-info-700 bg-white border border-info-200 rounded-md hover:bg-info-100"
-                              data-guardian-picker-target="medicalCopyButton"
-                              data-action="guardian-picker#useLastApplicationMedicalProvider">
-                        Use last application medical provider
+                              data-guardian-picker-target="certifyingProfessionalCopyButton"
+                              data-action="guardian-picker#useLastApplicationCertifyingProfessional">
+                        Use last application certifying professional
                       </button>
                     </div>
                   </div>
@@ -501,53 +501,54 @@
               <p class="text-sm text-gray-600 mb-4">We'll contact this provider to verify the disability certification</p>
 
               <div class="flex items-center gap-3 mb-6 pb-4">
-                <%= check_box_tag :no_medical_provider_information,
+                <%= check_box_tag :no_certifying_professional_information,
                         nil,
-                        ActiveModel::Type::Boolean.new.cast(submitted_params[:no_medical_provider_information]),
-                        id: "no_medical_provider_information",
+                        ActiveModel::Type::Boolean.new.cast(submitted_params[:no_certifying_professional_information]),
+                        id: "no_certifying_professional_information",
                         class: "h-4 w-4 rounded border-gray-300 text-primary-600 shadow-elevation-1 cursor-pointer",
                         data: {
-                          "action": "change->paper-application#toggleMedicalProvider"
+                          "action": "change->paper-application#toggleCertifyingProfessional"
                         } %>
-                <%= label_tag :no_medical_provider_information, "No certifying professional information provided", class: "text-sm font-medium text-gray-700 cursor-pointer" %>
+                <%= label_tag :no_certifying_professional_information, "No certifying professional information provided",
+                              class: "text-sm font-medium text-gray-700 cursor-pointer" %>
             </div>
 
               <%= fields_for :application, @paper_application[:application] do |a| %>
                 <div class="grid grid-cols-1 md:grid-cols-2 gap-4">
                   <div class="md:col-span-2">
-                    <%= a.label :medical_provider_name, "Provider Name", class: "form-label required-label" %>
-                    <%= a.text_field :medical_provider_name,
+                    <%= a.label :certifying_professional_name, "Provider Name", class: "form-label required-label" %>
+                    <%= a.text_field :certifying_professional_name,
                         required: true,
                         class: "form-input mt-1",
                         "aria-required": "true" %>
                   </div>
                   <div>
-                    <%= a.label :medical_provider_phone, "Provider Phone", class: "form-label required-label" %>
-                    <%= a.telephone_field :medical_provider_phone,
+                    <%= a.label :certifying_professional_phone, "Provider Phone", class: "form-label required-label" %>
+                    <%= a.telephone_field :certifying_professional_phone,
                         required: true,
                         placeholder: "XXX-XXX-XXXX",
                         class: "form-input mt-1",
                         "aria-required": "true" %>
                   </div>
                   <div>
-                    <%= a.label :medical_provider_email, "Provider Email", class: "form-label required-label" %>
-                    <%= a.email_field :medical_provider_email,
+                    <%= a.label :certifying_professional_email, "Provider Email", class: "form-label required-label" %>
+                    <%= a.email_field :certifying_professional_email,
                         required: true,
                         class: "form-input mt-1",
                         "aria-required": "true" %>
                   </div>
                   <div class="md:col-span-2">
-                    <%= a.label :medical_provider_fax, "Fax (Optional)", class: "form-label" %>
-                    <%= a.text_field :medical_provider_fax,
+                    <%= a.label :certifying_professional_fax, "Fax (Optional)", class: "form-label" %>
+                    <%= a.text_field :certifying_professional_fax,
                         class: "form-input mt-1" %>
                   </div>
                 </div>
 
                 <div class="mt-6 flex items-start">
-                  <%= a.check_box :medical_release_authorized,
+                  <%= a.check_box :disability_information_release_authorized,
                       { required: true, class: "mt-1 h-4 w-4 text-primary-600 border-gray-300 rounded", 'aria-describedby': 'disability_release_hint' } %>
                   <div class="ml-3">
-                    <label for="application_medical_release_authorized">
+                    <label for="application_disability_information_release_authorized">
                       <span class="form-label required-label">I authorize the release and sharing of my disability-related information.</span>
                     </label>
                     <p id="disability_release_hint" class="text-xs text-gray-500 mt-1">The program may contact this provider to verify my disability certification.</p>

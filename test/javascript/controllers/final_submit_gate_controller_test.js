@@ -44,9 +44,9 @@ describe("FinalSubmitGateController", () => {
       <form>
         <input type="checkbox" name="application[self_certify_disability]" required>
         <input type="checkbox" name="application[terms_accepted]" required>
-        <input type="text" name="application[medical_provider_attributes][name]" required>
-        <input type="tel" name="application[medical_provider_attributes][phone]" required>
-        <input type="email" name="application[medical_provider_attributes][email]" required>
+        <input type="text" name="application[certifying_professional_attributes][name]" required>
+        <input type="tel" name="application[certifying_professional_attributes][phone]" required>
+        <input type="email" name="application[certifying_professional_attributes][email]" required>
         <input type="file" name="application[income_proof]" required>
         <input type="radio"
                name="contact[phone_user_id]"
@@ -104,9 +104,9 @@ describe("FinalSubmitGateController", () => {
 
     document.querySelector('input[name="application[terms_accepted]"]').checked = true
     document.querySelector('input[name="application[hearing_disability]"]').checked = true
-    document.querySelector('input[name="application[medical_provider_attributes][name]"]').value = "Dr. Test"
-    document.querySelector('input[name="application[medical_provider_attributes][phone]"]').value = "2025551234"
-    document.querySelector('input[name="application[medical_provider_attributes][email]"]').value = "doctor@example.com"
+    document.querySelector('input[name="application[certifying_professional_attributes][name]"]').value = "Dr. Test"
+    document.querySelector('input[name="application[certifying_professional_attributes][phone]"]').value = "2025551234"
+    document.querySelector('input[name="application[certifying_professional_attributes][email]"]').value = "doctor@example.com"
     attachRequiredFile()
     controller.update()
 
@@ -146,9 +146,9 @@ describe("FinalSubmitGateController", () => {
     document.querySelector('input[name="application[self_certify_disability]"]').checked = true
     document.querySelector('input[name="application[terms_accepted]"]').checked = true
     document.querySelector('input[name="application[hearing_disability]"]').checked = true
-    document.querySelector('input[name="application[medical_provider_attributes][name]"]').value = "Dr. Test"
-    document.querySelector('input[name="application[medical_provider_attributes][phone]"]').value = "2025551234"
-    document.querySelector('input[name="application[medical_provider_attributes][email]"]').value = "doctor@example.com"
+    document.querySelector('input[name="application[certifying_professional_attributes][name]"]').value = "Dr. Test"
+    document.querySelector('input[name="application[certifying_professional_attributes][phone]"]').value = "2025551234"
+    document.querySelector('input[name="application[certifying_professional_attributes][email]"]').value = "doctor@example.com"
     attachRequiredFile()
   }
 
@@ -215,9 +215,9 @@ describe("FinalSubmitGateController", () => {
 
     expect(submitButton.disabled).toBe(true)
 
-    document.querySelector('input[name="application[medical_provider_attributes][name]"]').value = "Dr. Test"
-    document.querySelector('input[name="application[medical_provider_attributes][phone]"]').value = "2025551234"
-    document.querySelector('input[name="application[medical_provider_attributes][email]"]').value = "doctor@example.com"
+    document.querySelector('input[name="application[certifying_professional_attributes][name]"]').value = "Dr. Test"
+    document.querySelector('input[name="application[certifying_professional_attributes][phone]"]').value = "2025551234"
+    document.querySelector('input[name="application[certifying_professional_attributes][email]"]').value = "doctor@example.com"
     attachRequiredFile()
     controller.update()
 
@@ -228,9 +228,9 @@ describe("FinalSubmitGateController", () => {
     document.querySelector('input[name="application[self_certify_disability]"]').checked = true
     document.querySelector('input[name="application[terms_accepted]"]').checked = true
     document.querySelector('input[name="application[hearing_disability]"]').checked = true
-    document.querySelector('input[name="application[medical_provider_attributes][name]"]').value = "Dr. Test"
-    document.querySelector('input[name="application[medical_provider_attributes][phone]"]').value = "2025551234"
-    document.querySelector('input[name="application[medical_provider_attributes][email]"]').value = "doctor@example.com"
+    document.querySelector('input[name="application[certifying_professional_attributes][name]"]').value = "Dr. Test"
+    document.querySelector('input[name="application[certifying_professional_attributes][phone]"]').value = "2025551234"
+    document.querySelector('input[name="application[certifying_professional_attributes][email]"]').value = "doctor@example.com"
 
     controller.update()
 
@@ -246,9 +246,9 @@ describe("FinalSubmitGateController", () => {
     document.querySelector('input[name="application[self_certify_disability]"]').checked = true
     document.querySelector('input[name="application[terms_accepted]"]').checked = true
     document.querySelector('input[name="application[hearing_disability]"]').checked = true
-    document.querySelector('input[name="application[medical_provider_attributes][name]"]').value = "Dr. Test"
-    document.querySelector('input[name="application[medical_provider_attributes][phone]"]').value = "2025551234"
-    document.querySelector('input[name="application[medical_provider_attributes][email]"]').value = "doctor@example.com"
+    document.querySelector('input[name="application[certifying_professional_attributes][name]"]').value = "Dr. Test"
+    document.querySelector('input[name="application[certifying_professional_attributes][phone]"]').value = "2025551234"
+    document.querySelector('input[name="application[certifying_professional_attributes][email]"]').value = "doctor@example.com"
     attachRequiredFile()
 
     controller.handleIncomeValidation({ detail: { exceedsThreshold: true } })

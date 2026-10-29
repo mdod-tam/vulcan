@@ -74,7 +74,7 @@ module Admin
       attach_and_accept_proofs
       fill_in_application_details(household_size: 3, annual_income: 45_000)
       fill_in_disability_information
-      fill_in_medical_provider_information(name: 'Dr. Jones', email: 'jones@example.com')
+      fill_in_certifying_professional_information(name: 'Dr. Jones', email: 'jones@example.com')
       complete_paper_application_attestations
 
       click_button 'Submit Paper Application'

@@ -10,7 +10,7 @@
 #
 # It's strongly recommended that you check this file into your version control system.
 
-ActiveRecord::Schema[8.1].define(version: 2026_10_28_180100) do
+ActiveRecord::Schema[8.1].define(version: 2026_10_29_111500) do
   # These are extensions that must be enabled in order to support this database
   enable_extension "pg_catalog.plpgsql"
 
@@ -127,11 +127,11 @@ ActiveRecord::Schema[8.1].define(version: 2026_10_28_180100) do
     t.integer "disability_certification_status", default: 0, null: false
     t.datetime "disability_certification_verified_at"
     t.bigint "disability_certification_verified_by_id"
-    t.string "medical_provider_email"
-    t.string "medical_provider_fax"
-    t.string "medical_provider_name"
-    t.string "medical_provider_phone"
-    t.boolean "medical_release_authorized"
+    t.string "certifying_professional_email"
+    t.string "certifying_professional_fax"
+    t.string "certifying_professional_name"
+    t.string "certifying_professional_phone"
+    t.boolean "disability_information_release_authorized"
     t.datetime "needs_review_since"
     t.datetime "received_at"
     t.text "residency_details"
@@ -149,6 +149,7 @@ ActiveRecord::Schema[8.1].define(version: 2026_10_28_180100) do
     t.datetime "equipment_needs_initialized_at"
     t.bigint "assigned_trainer_id"
     t.index ["assigned_trainer_id"], name: "index_applications_on_assigned_trainer_id"
+    t.index ["certifying_professional_email", "status"], name: "index_applications_on_certifying_professional_email_and_status"
     t.index ["disability_certification_status"], name: "index_applications_on_disability_certification_status"
     t.index ["disability_certification_verified_by_id"], name: "index_applications_on_disability_certification_verified_by_id"
     t.index ["document_signing_service"], name: "index_applications_on_document_signing_service"
@@ -161,7 +162,6 @@ ActiveRecord::Schema[8.1].define(version: 2026_10_28_180100) do
     t.index ["income_verified_by_id"], name: "index_applications_on_income_verified_by_id"
     t.index ["last_proof_submitted_at"], name: "index_applications_on_last_proof_submitted_at"
     t.index ["managing_guardian_id"], name: "index_applications_on_managing_guardian_id"
-    t.index ["medical_provider_email", "status"], name: "index_applications_on_medical_provider_email_and_status"
     t.index ["needs_review_since"], name: "index_applications_on_needs_review_since"
     t.index ["residency_proof_status"], name: "idx_applications_on_residency_proof_status"
     t.index ["status", "needs_review_since"], name: "index_applications_on_status_and_needs_review_since"
@@ -984,7 +984,7 @@ ActiveRecord::Schema[8.1].define(version: 2026_10_28_180100) do
     t.datetime "last_w9_reminder_sent_at"
     t.string "locale"
     t.datetime "locked_at"
-    t.bigint "medical_provider_id"
+    t.bigint "certifying_professional_id"
     t.datetime "merged_at"
     t.bigint "merged_by_id"
     t.bigint "merged_into_user_id"
@@ -1021,13 +1021,13 @@ ActiveRecord::Schema[8.1].define(version: 2026_10_28_180100) do
     t.string "website_url"
     t.string "zip_code", limit: 300
     t.index ["business_name"], name: "index_users_on_business_name"
+    t.index ["certifying_professional_id"], name: "index_users_on_certifying_professional_id"
     t.index ["dependent_email"], name: "index_users_on_dependent_email"
     t.index ["dependent_phone"], name: "index_users_on_dependent_phone"
     t.index ["email"], name: "index_users_on_email"
     t.index ["email"], name: "index_users_on_email_unique", unique: true
     t.index ["evaluator_id"], name: "index_users_on_evaluator_id"
     t.index ["income_verified_by_id"], name: "index_users_on_income_verified_by_id"
-    t.index ["medical_provider_id"], name: "index_users_on_medical_provider_id"
     t.index ["merged_by_id"], name: "index_users_on_merged_by_id"
     t.index ["merged_into_user_id"], name: "index_users_on_merged_into_user_id"
     t.index ["phone"], name: "index_users_on_phone", where: "(phone IS NOT NULL)"
@@ -1259,9 +1259,9 @@ ActiveRecord::Schema[8.1].define(version: 2026_10_28_180100) do
   add_foreign_key "training_sessions", "products", column: "product_trained_on_id"
   add_foreign_key "training_sessions", "users", column: "trainer_id"
   add_foreign_key "user_email_search_tokens", "users", on_delete: :cascade
+  add_foreign_key "users", "users", column: "certifying_professional_id"
   add_foreign_key "users", "users", column: "evaluator_id"
   add_foreign_key "users", "users", column: "income_verified_by_id"
-  add_foreign_key "users", "users", column: "medical_provider_id"
   add_foreign_key "users", "users", column: "merged_by_id"
   add_foreign_key "users", "users", column: "merged_into_user_id"
   add_foreign_key "users", "users", column: "recipient_id"

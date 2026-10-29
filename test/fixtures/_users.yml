@@ -91,8 +91,8 @@ evaluator:
   state: MD
   zip_code: 20706
 
-medical_provider:
-  type: Users::MedicalProvider
+certifying_professional:
+  type: Users::CertifyingProfessional
   email: medical@example.com
   first_name: Doctor
   last_name: Smith

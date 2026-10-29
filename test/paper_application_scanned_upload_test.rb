@@ -40,12 +40,12 @@ class PaperApplicationScannedUploadTest < ActionDispatch::IntegrationTest
           annual_income: 20_000,
           maryland_resident: true,
           self_certify_disability: true,
-          medical_provider_name: 'Dr. Smith',
-          medical_provider_phone: '555-123-4567',
-          medical_provider_email: 'smith@example.com',
+          certifying_professional_name: 'Dr. Smith',
+          certifying_professional_phone: '555-123-4567',
+          certifying_professional_email: 'smith@example.com',
           terms_accepted: true,
           information_verified: true,
-          medical_release_authorized: true
+          disability_information_release_authorized: true
         },
         income_proof_action: 'accept',
         income_proof_signed_id: income_blob.signed_id,

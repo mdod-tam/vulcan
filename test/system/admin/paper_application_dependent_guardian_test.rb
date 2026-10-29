@@ -168,7 +168,7 @@ module Admin
       fill_in_disability_information
       attach_and_accept_proofs
       fill_in_application_details(household_size: 3, annual_income: 25_000)
-      fill_in_medical_provider_information(name: 'Dr. Pediatric', phone: '555-555-1234', email: 'drpediatric@example.com')
+      fill_in_certifying_professional_information(name: 'Dr. Pediatric', phone: '555-555-1234', email: 'drpediatric@example.com')
       complete_paper_application_attestations
     end
 

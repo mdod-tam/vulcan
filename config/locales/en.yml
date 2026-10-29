@@ -156,7 +156,7 @@ en:
         application_form:
           attributes:
             base:
-              medical_provider_required: "Medical provider information is required for submission."
+              certifying_professional_required: "Certifying professional information is required for submission."
               pending_identity_review: "This application cannot be submitted yet because we need to review some of the information associated with this application. You can keep editing and saving the draft in the meantime. Please contact the MAT Team if you have questions."
   activity_history:
     labels:
@@ -298,12 +298,12 @@ en:
         expired: "This secure link has expired."
         resent: "If this request can be resent, a new secure link will be sent using the current eligible contact information on file."
         invalid_request: "This secure link is no longer available."
-        medical_provider_name_blank: "Enter the certifying professional's name."
-        medical_provider_phone_blank: "Enter the certifying professional's phone number."
-        medical_provider_email_blank: "Enter the certifying professional's email address."
-        medical_provider_phone_invalid: "Enter a 10-digit phone number, using 4105550100 or 410-555-0100."
-        medical_provider_fax_invalid: "Enter a 10-digit fax number, using 4105550100 or 410-555-0100."
-        medical_provider_email_invalid: "Enter a valid email address."
+        certifying_professional_name_blank: "Enter the certifying professional's name."
+        certifying_professional_phone_blank: "Enter the certifying professional's phone number."
+        certifying_professional_email_blank: "Enter the certifying professional's email address."
+        certifying_professional_phone_invalid: "Enter a 10-digit phone number, using 4105550100 or 410-555-0100."
+        certifying_professional_fax_invalid: "Enter a 10-digit fax number, using 4105550100 or 410-555-0100."
+        certifying_professional_email_invalid: "Enter a valid email address."
         request_after_submission_failed: "We could not send the provider information form automatically. Program staff will follow up."
     proof_resubmission:
       messages:
@@ -492,7 +492,7 @@ en:
              Maryland Accessible Telecommunications
              %{office_address}
       archived_message: "Unfortunately, you have reached the maximum number of submission attempts for this application. Your application has been archived."
-  medical_provider_mailer:
+  certifying_professional_mailer:
     certification_submission_instructions:
       secure: |-
         1. Blank disability certification form:
@@ -731,7 +731,7 @@ en:
           revoke: "Revoke"
           revoke_confirm: "Revoke this secure %{proof_type} upload link? The recipient will no longer be able to use it."
           no_actions: "No actions"
-      medical_provider_secure_request_forms:
+      certifying_professional_secure_request_forms:
         panel:
           title: "Secure Certification Upload Links"
         table:
@@ -748,7 +748,7 @@ en:
           expired: "Expired"
           revoked: "Revoked"
           submitted: "Submitted"
-      medical_provider_secure_request_form_revocations:
+      certifying_professional_secure_request_form_revocations:
         create:
           success: "Secure certification upload link revoked."
           failure: "Unable to revoke secure certification upload link."
@@ -1014,7 +1014,7 @@ en:
         application_notifications_proof_received: "Document Verification Received"
         application_notifications_max_rejections_reached: "Important Application Status Update"
         application_notifications_provider_info_requested: "Certifying Professional Information Requested"
-        medical_provider_request_certification: "Request for Disability Certification"
+        certifying_professional_request_certification: "Request for Disability Certification"
         voucher_notifications_voucher_assigned: "Your Accessibility Equipment Voucher"
         voucher_notifications_voucher_redeemed: "Voucher Redemption Confirmation"
         evaluator_mailer_evaluation_submission_confirmation: "Evaluation Submission Confirmation"

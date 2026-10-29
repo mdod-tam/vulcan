@@ -11,17 +11,17 @@ module Applications
         status: :awaiting_proof
       )
       @application.update!(
-        medical_provider_name: nil,
-        medical_provider_phone: nil,
-        medical_provider_email: nil,
-        medical_provider_fax: nil
+        certifying_professional_name: nil,
+        certifying_professional_phone: nil,
+        certifying_professional_email: nil,
+        certifying_professional_fax: nil
       )
       @secure_request_form = create(:secure_request_form, application: @application, recipient: @application.user)
       @params = {
-        medical_provider_name: 'Dr. Secure',
-        medical_provider_email: 'provider@example.test',
-        medical_provider_phone: '410-555-0100',
-        medical_provider_fax: '410-555-0101'
+        certifying_professional_name: 'Dr. Secure',
+        certifying_professional_email: 'provider@example.test',
+        certifying_professional_phone: '410-555-0100',
+        certifying_professional_fax: '410-555-0101'
       }
     end
 
@@ -33,7 +33,7 @@ module Applications
       ).call
 
       assert_predicate result, :success?
-      assert_equal 'Dr. Secure', @application.reload.medical_provider_name
+      assert_equal 'Dr. Secure', @application.reload.certifying_professional_name
       assert_predicate @secure_request_form.reload, :submitted?
     end
 
@@ -42,15 +42,15 @@ module Applications
         application: @application,
         secure_request_form: @secure_request_form,
         params: @params.merge(
-          medical_provider_phone: '4105550100',
-          medical_provider_fax: '4105550101'
+          certifying_professional_phone: '4105550100',
+          certifying_professional_fax: '4105550101'
         )
       ).call
 
       assert_predicate result, :success?
       @application.reload
-      assert_equal '410-555-0100', @application.medical_provider_phone
-      assert_equal '410-555-0101', @application.medical_provider_fax
+      assert_equal '410-555-0100', @application.certifying_professional_phone
+      assert_equal '410-555-0101', @application.certifying_professional_fax
     end
 
     test 'revoked submitted and expired requests cannot submit' do
@@ -75,7 +75,7 @@ module Applications
         super(*args)
       end
 
-      assert_no_difference -> { Event.where(action: 'medical_provider_info_submitted').count } do
+      assert_no_difference -> { Event.where(action: 'certifying_professional_info_submitted').count } do
         result = SubmitProviderInfo.new(
           application: @application,
           secure_request_form: @secure_request_form,
@@ -88,16 +88,16 @@ module Applications
                      result.message
       end
 
-      assert_nil @application.reload.medical_provider_name
+      assert_nil @application.reload.certifying_professional_name
     end
 
     test 'rejects a secure request form for a different application' do
       other_application = create(:application, status: :awaiting_proof)
       other_application.update!(
-        medical_provider_name: nil,
-        medical_provider_phone: nil,
-        medical_provider_email: nil,
-        medical_provider_fax: nil
+        certifying_professional_name: nil,
+        certifying_professional_phone: nil,
+        certifying_professional_email: nil,
+        certifying_professional_fax: nil
       )
 
       result = SubmitProviderInfo.new(
@@ -110,7 +110,7 @@ module Applications
       assert_equal I18n.t('applications.provider_info.messages.invalid_request',
                           locale: @secure_request_form.recipient.effective_locale),
                    result.message
-      assert_nil other_application.reload.medical_provider_name
+      assert_nil other_application.reload.certifying_professional_name
       assert_predicate @secure_request_form.reload, :status_sent?
     end
 
@@ -118,7 +118,7 @@ module Applications
       %i[id_proof_resubmission residency_proof_resubmission income_proof_resubmission].each do |proof_kind|
         request = create(:secure_request_form, application: @application, recipient: @application.user, kind: proof_kind)
 
-        assert_no_difference -> { Event.where(action: 'medical_provider_info_submitted').count } do
+        assert_no_difference -> { Event.where(action: 'certifying_professional_info_submitted').count } do
           result = SubmitProviderInfo.new(
             application: @application,
             secure_request_form: request,
@@ -131,7 +131,7 @@ module Applications
                        result.message
         end
 
-        assert_nil @application.reload.medical_provider_name
+        assert_nil @application.reload.certifying_professional_name
         assert_predicate request.reload, :status_sent?
       end
     end
@@ -141,32 +141,32 @@ module Applications
         application: @application,
         secure_request_form: @secure_request_form,
         params: {
-          medical_provider_name: '',
-          medical_provider_phone: '',
-          medical_provider_email: 'not-an-email'
+          certifying_professional_name: '',
+          certifying_professional_phone: '',
+          certifying_professional_email: 'not-an-email'
         }
       )
       result = service.call
 
       assert_not result.success?
       assert_equal result.data.fetch(:errors), service.form_errors
-      assert_includes result.data.fetch(:errors).attribute_names, :medical_provider_name
-      assert_includes result.data.fetch(:errors).attribute_names, :medical_provider_phone
-      assert_includes result.data.fetch(:errors).attribute_names, :medical_provider_email
+      assert_includes result.data.fetch(:errors).attribute_names, :certifying_professional_name
+      assert_includes result.data.fetch(:errors).attribute_names, :certifying_professional_phone
+      assert_includes result.data.fetch(:errors).attribute_names, :certifying_professional_email
     end
 
     test 'blank provider phone only adds the required-field error' do
       service = SubmitProviderInfo.new(
         application: @application,
         secure_request_form: @secure_request_form,
-        params: @params.merge(medical_provider_phone: '')
+        params: @params.merge(certifying_professional_phone: '')
       )
       result = service.call
 
       assert_not result.success?
-      phone_errors = result.data.fetch(:errors).where(:medical_provider_phone)
+      phone_errors = result.data.fetch(:errors).where(:certifying_professional_phone)
       assert_equal 1, phone_errors.size
-      assert_equal I18n.t('applications.provider_info.messages.medical_provider_phone_blank',
+      assert_equal I18n.t('applications.provider_info.messages.certifying_professional_phone_blank',
                           locale: @secure_request_form.recipient.effective_locale),
                    phone_errors.first.message
     end
@@ -176,32 +176,32 @@ module Applications
         application: @application,
         secure_request_form: @secure_request_form,
         params: @params.merge(
-          medical_provider_phone: 'office phone ext 12',
-          medical_provider_fax: '(410) 555-0101'
+          certifying_professional_phone: 'office phone ext 12',
+          certifying_professional_fax: '(410) 555-0101'
         )
       )
       result = service.call
 
       assert_not result.success?
-      assert_includes result.data.fetch(:errors).attribute_names, :medical_provider_phone
-      assert_includes result.data.fetch(:errors).attribute_names, :medical_provider_fax
+      assert_includes result.data.fetch(:errors).attribute_names, :certifying_professional_phone
+      assert_includes result.data.fetch(:errors).attribute_names, :certifying_professional_fax
     end
 
     test 'allows blank provider fax' do
       result = SubmitProviderInfo.new(
         application: @application,
         secure_request_form: @secure_request_form,
-        params: @params.merge(medical_provider_fax: '')
+        params: @params.merge(certifying_professional_fax: '')
       ).call
 
       assert_predicate result, :success?
-      assert_equal '', @application.reload.medical_provider_fax
+      assert_equal '', @application.reload.certifying_professional_fax
     end
 
     test 'does not mark secure request submitted or create audit event when application update rolls back' do
       @application.stubs(:update!).raises(ActiveRecord::RecordInvalid.new(@application))
 
-      assert_no_difference -> { Event.where(action: 'medical_provider_info_submitted').count } do
+      assert_no_difference -> { Event.where(action: 'certifying_professional_info_submitted').count } do
         SubmitProviderInfo.new(
           application: @application,
           secure_request_form: @secure_request_form,
@@ -214,8 +214,8 @@ module Applications
       assert_predicate @secure_request_form, :status_sent?
     end
 
-    test 'successful submission creates exactly one medical_provider_info_submitted event' do
-      assert_difference -> { Event.where(action: 'medical_provider_info_submitted').count }, 1 do
+    test 'successful submission creates exactly one certifying_professional_info_submitted event' do
+      assert_difference -> { Event.where(action: 'certifying_professional_info_submitted').count }, 1 do
         SubmitProviderInfo.new(
           application: @application,
           secure_request_form: @secure_request_form,
@@ -231,7 +231,7 @@ module Applications
         params: @params
       ).call
 
-      event = Event.find_by!(action: 'medical_provider_info_submitted', auditable: @application)
+      event = Event.find_by!(action: 'certifying_professional_info_submitted', auditable: @application)
       metadata = event.metadata.deep_stringify_keys
 
       assert_equal @secure_request_form.id.to_s, metadata['secure_request_form_id'].to_s
@@ -254,7 +254,7 @@ module Applications
         params: @params
       ).call
 
-      event = Event.find_by!(action: 'medical_provider_info_submitted', auditable: @application)
+      event = Event.find_by!(action: 'certifying_professional_info_submitted', auditable: @application)
 
       assert_equal 'secure_request_form', event.metadata.deep_stringify_keys['submitted_via']
     end
@@ -269,14 +269,14 @@ module Applications
         application: @application,
         secure_request_form: @secure_request_form,
         params: {
-          medical_provider_name: raw_provider_name,
-          medical_provider_email: raw_provider_email,
-          medical_provider_phone: raw_provider_phone,
-          medical_provider_fax: raw_provider_fax
+          certifying_professional_name: raw_provider_name,
+          certifying_professional_email: raw_provider_email,
+          certifying_professional_phone: raw_provider_phone,
+          certifying_professional_fax: raw_provider_fax
         }
       ).call
 
-      event = Event.find_by!(action: 'medical_provider_info_submitted', auditable: @application)
+      event = Event.find_by!(action: 'certifying_professional_info_submitted', auditable: @application)
       metadata_json = event.metadata.to_json
 
       assert_not_includes metadata_json, raw_provider_name
@@ -292,7 +292,7 @@ module Applications
         params: @params
       ).call
 
-      event = Event.find_by!(action: 'medical_provider_info_submitted', auditable: @application)
+      event = Event.find_by!(action: 'certifying_professional_info_submitted', auditable: @application)
       submitted_presence = event.metadata.deep_stringify_keys['submitted_presence']
 
       assert_kind_of Hash, submitted_presence
@@ -302,7 +302,7 @@ module Applications
     end
 
     test 'accepts a submission that replaces values on file and marks it for review' do
-      @application.update_columns(medical_provider_name: 'Dr. Admin Entered', medical_provider_email: 'admin-entered@example.test')
+      @application.update_columns(certifying_professional_name: 'Dr. Admin Entered', certifying_professional_email: 'admin-entered@example.test')
 
       result = SubmitProviderInfo.new(
         application: @application,
@@ -311,16 +311,16 @@ module Applications
       ).call
 
       assert_predicate result, :success?
-      assert_equal 'Dr. Secure', @application.reload.medical_provider_name
+      assert_equal 'Dr. Secure', @application.reload.certifying_professional_name
 
       event = secure_form_change_event
       assert_equal @system_audit_actor.id, event.user_id
       assert event.metadata['review_required']
-      assert_equal %w[medical_provider_email medical_provider_name], event.metadata['overwritten_fields'].sort
+      assert_equal %w[certifying_professional_email certifying_professional_name], event.metadata['overwritten_fields'].sort
       assert_equal 'secure_request_form', event.metadata['submitted_via']
       assert_equal @secure_request_form.id, event.metadata['secure_request_form_id']
-      assert_equal({ 'old' => 'D*** A*** E***', 'new' => 'D*** S***' }, event.metadata['changes']['medical_provider_name'])
-      assert_nil @application.medical_provider_change_source
+      assert_equal({ 'old' => 'D*** A*** E***', 'new' => 'D*** S***' }, event.metadata['changes']['certifying_professional_name'])
+      assert_nil @application.certifying_professional_change_source
     end
 
     test 'filling blank provider values is recorded without a review flag' do
@@ -333,13 +333,13 @@ module Applications
       event = secure_form_change_event
       assert_not event.metadata['review_required']
       assert_empty event.metadata['overwritten_fields']
-      assert_equal({ 'old' => nil, 'new' => 'p***@e***.test' }, event.metadata['changes']['medical_provider_email'])
+      assert_equal({ 'old' => nil, 'new' => 'p***@e***.test' }, event.metadata['changes']['certifying_professional_email'])
     end
 
     private
 
     def secure_form_change_event
-      Event.where(action: 'medical_provider_info_updated', auditable: @application)
+      Event.where(action: 'certifying_professional_info_updated', auditable: @application)
            .find { |event| event.metadata['submitted_via'] == 'secure_request_form' }
     end
   end

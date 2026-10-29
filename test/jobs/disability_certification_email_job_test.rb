@@ -10,8 +10,8 @@ class DisabilityCertificationEmailJobTest < ActiveJob::TestCase
     @constituent = create(:constituent, :with_address_and_phone)
     @application = create(:application,
                           user: @constituent,
-                          medical_provider_name: 'Dr. Ada Lovelace',
-                          medical_provider_email: 'provider@example.com')
+                          certifying_professional_name: 'Dr. Ada Lovelace',
+                          certifying_professional_email: 'provider@example.com')
   end
 
   test 'sends request certification email when notification id is provided' do
@@ -76,7 +76,7 @@ class DisabilityCertificationEmailJobTest < ActiveJob::TestCase
   private
 
   def ensure_request_certification_template!
-    EmailTemplate.find_or_create_by!(name: 'medical_provider_request_certification', format: :text, locale: 'en') do |template|
+    EmailTemplate.find_or_create_by!(name: 'certifying_professional_request_certification', format: :text, locale: 'en') do |template|
       template.subject = 'Disability Certification Request for %<constituent_full_name>s'
       template.body = <<~TEXT
         Please complete the requested certification for %<constituent_full_name>s.
@@ -89,7 +89,7 @@ class DisabilityCertificationEmailJobTest < ActiveJob::TestCase
         Application ID: %<application_id>s
         Form URL: %<download_form_url>s
       TEXT
-      template.description = 'Test template for medical provider request certification emails.'
+      template.description = 'Test template for certifying professional request certification emails.'
       template.variables = {
         'required' => %w[
           constituent_full_name

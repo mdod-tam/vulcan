@@ -39,10 +39,10 @@ class HomeControllerTest < ActionDispatch::IntegrationTest
     vendor: :vendor_portal_dashboard_path,
     evaluator: :evaluators_dashboard_path,
     trainer: :trainers_dashboard_path,
-    medical_provider: :edit_profile_path
+    certifying_professional: :edit_profile_path
   }.each do |role, destination|
     test "signed-in #{role} reaches the existing role destination" do
-      user = role == :medical_provider ? create(:user, :medical_provider) : create(role)
+      user = role == :certifying_professional ? create(:user, :certifying_professional) : create(role)
       secret = ROTP::Base32.random_base32
       user.totp_credentials.create!(secret: secret, nickname: 'Authenticator')
 

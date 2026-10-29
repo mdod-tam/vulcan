@@ -15,8 +15,8 @@ module DocumentSigning
     end
 
     def call
-      return failure('Medical provider email is required') if @application.medical_provider_email.blank?
-      return failure('Medical provider name is required')  if @application.medical_provider_name.blank?
+      return failure('Certifying professional email is required') if @application.certifying_professional_email.blank?
+      return failure('Certifying professional name is required')  if @application.certifying_professional_name.blank?
       return failure('Actor is required') if @actor.blank?
 
       # A second request within 30 seconds is refused as a duplicate.
@@ -50,7 +50,7 @@ module DocumentSigning
             document_signing_requested_at: requested_at,
             disability_certification_requested_at: requested_at
           },
-          metadata: { submission_method: 'document_signing', provider_name: @application.medical_provider_name,
+          metadata: { submission_method: 'document_signing', provider_name: @application.certifying_professional_name,
                       requested_by_id: @actor.id }
         )
 
@@ -68,8 +68,8 @@ module DocumentSigning
         metadata: {
           document_signing_service: @service_type,
           document_signing_submission_id: submission['id'],
-          provider_name: @application.medical_provider_name,
-          provider_email: @application.medical_provider_email,
+          provider_name: @application.certifying_professional_name,
+          provider_email: @application.certifying_professional_email,
           submission_method: 'document_signing'
         }
       )
@@ -89,9 +89,9 @@ module DocumentSigning
       data = {
         name: submission_name,
         submitters: [{
-          role: 'Medical Provider',
-          email: @application.medical_provider_email,
-          name: @application.medical_provider_name
+          role: 'Certifying Professional',
+          email: @application.certifying_professional_email,
+          name: @application.certifying_professional_name
         }],
         send_email: true,
         message: {

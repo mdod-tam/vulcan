@@ -120,7 +120,7 @@ module DocumentSigning
         application.document_signing_submission_id == @context.fetch('submission_id') &&
         application.document_signing_submitter_id == @context.fetch('submitter_id') &&
         application.document_signing_requested_at == parsed_time('requested_at') &&
-        application.medical_provider_email == @context['provider_email']
+        application.certifying_professional_email == @context['provider_email']
     end
 
     def attached?(application)

@@ -11,7 +11,7 @@ class ApplicationForm
   SCALAR_APPLICATION_PARAMS = %i[
     annual_income household_size maryland_resident self_certify_disability
     hearing_disability vision_disability speech_disability mobility_disability cognition_disability
-    terms_accepted information_verified medical_release_authorized use_guardian_address
+    terms_accepted information_verified disability_information_release_authorized use_guardian_address
     user_id managing_guardian_id residency_proof income_proof id_proof
     physical_address_1 physical_address_2 city state zip_code
     alternate_contact_name alternate_contact_phone alternate_contact_email alternate_contact_relationship_type
@@ -45,12 +45,12 @@ class ApplicationForm
 
   attribute :terms_accepted, :boolean, default: false
   attribute :information_verified, :boolean, default: false
-  attribute :medical_release_authorized, :boolean, default: false
+  attribute :disability_information_release_authorized, :boolean, default: false
 
-  attribute :medical_provider_name, :string
-  attribute :medical_provider_phone, :string
-  attribute :medical_provider_fax, :string
-  attribute :medical_provider_email, :string
+  attribute :certifying_professional_name, :string
+  attribute :certifying_professional_phone, :string
+  attribute :certifying_professional_fax, :string
+  attribute :certifying_professional_email, :string
 
   attribute :user_id, :integer # Dependent applicant for a new application
   attribute :managing_guardian_id, :integer
@@ -70,7 +70,7 @@ class ApplicationForm
   validates :annual_income, presence: true, if: -> { is_submission && income_collection_required? }
   validate :validate_disability_selection, if: :is_submission
   validate :validate_guardian_relationship, if: :for_dependent?
-  validate :validate_medical_provider, if: :is_submission
+  validate :validate_certifying_professional, if: :is_submission
 
   def initialize(attributes = {})
     @current_user = attributes.delete(:current_user)
@@ -137,7 +137,7 @@ class ApplicationForm
     # A top-level checkbox takes precedence over the nested one.
     assign_attributes(scalar_params(params, :use_guardian_address))
     extract_locale_attribute(params, app_params)
-    extract_medical_provider_attributes(params)
+    extract_certifying_professional_attributes(params)
 
     self.is_submission = params[:submit_application].present?
   end
@@ -151,21 +151,21 @@ class ApplicationForm
     self.locale = selected_locale if selected_locale.present?
   end
 
-  def extract_medical_provider_attributes(params)
-    if params.dig(:application, :medical_provider_attributes).present?
-      mp_attrs = params[:application][:medical_provider_attributes]
-      assign_medical_provider_attributes(mp_attrs)
-    # Only tests post top-level medical_provider params.
-    elsif params[:medical_provider].present?
-      assign_medical_provider_attributes(params[:medical_provider])
+  def extract_certifying_professional_attributes(params)
+    if params.dig(:application, :certifying_professional_attributes).present?
+      mp_attrs = params[:application][:certifying_professional_attributes]
+      assign_certifying_professional_attributes(mp_attrs)
+    # Only tests post top-level certifying_professional params.
+    elsif params[:certifying_professional].present?
+      assign_certifying_professional_attributes(params[:certifying_professional])
     end
   end
 
-  def assign_medical_provider_attributes(mp_attrs)
-    self.medical_provider_name = mp_attrs[:name] if mp_attrs[:name]
-    self.medical_provider_phone = mp_attrs[:phone] if mp_attrs[:phone]
-    self.medical_provider_fax = mp_attrs[:fax] if mp_attrs[:fax]
-    self.medical_provider_email = mp_attrs[:email] if mp_attrs[:email]
+  def assign_certifying_professional_attributes(mp_attrs)
+    self.certifying_professional_name = mp_attrs[:name] if mp_attrs[:name]
+    self.certifying_professional_phone = mp_attrs[:phone] if mp_attrs[:phone]
+    self.certifying_professional_fax = mp_attrs[:fax] if mp_attrs[:fax]
+    self.certifying_professional_email = mp_attrs[:email] if mp_attrs[:email]
   end
 
   def determine_applicant_user
@@ -208,13 +208,13 @@ class ApplicationForm
     errors.add(:user_id, 'No valid guardian relationship found.')
   end
 
-  def validate_medical_provider
+  def validate_certifying_professional
     return unless is_submission
 
-    return unless medical_provider_name.blank? || medical_provider_phone.blank? || medical_provider_email.blank?
+    return unless certifying_professional_name.blank? || certifying_professional_phone.blank? || certifying_professional_email.blank?
 
     I18n.with_locale(message_locale) do
-      errors.add(:base, :medical_provider_required)
+      errors.add(:base, :certifying_professional_required)
     end
   end
 

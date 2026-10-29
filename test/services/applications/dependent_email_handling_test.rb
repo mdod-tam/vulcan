@@ -32,9 +32,9 @@ module Applications
             household_size: 2,
             annual_income: 18_000, # Safely under the threshold
             maryland_resident: true,
-            medical_provider_name: 'Dr. Test',
-            medical_provider_phone: '555-123-4567',
-            medical_provider_email: 'doctor@example.com',
+            certifying_professional_name: 'Dr. Test',
+            certifying_professional_phone: '555-123-4567',
+            certifying_professional_email: 'doctor@example.com',
             self_certify_disability: true
           },
           income_proof_action: 'accept',
@@ -97,9 +97,9 @@ module Applications
             household_size: 2,
             annual_income: 18_000, # Safely under the threshold
             maryland_resident: true,
-            medical_provider_name: 'Dr. Test',
-            medical_provider_phone: '555-123-4567',
-            medical_provider_email: 'doctor@example.com',
+            certifying_professional_name: 'Dr. Test',
+            certifying_professional_phone: '555-123-4567',
+            certifying_professional_email: 'doctor@example.com',
             self_certify_disability: true
           },
           income_proof_action: 'accept',
@@ -151,9 +151,9 @@ module Applications
             household_size: 2,
             annual_income: 18_000,
             maryland_resident: true,
-            medical_provider_name: 'Dr. Test',
-            medical_provider_phone: '555-123-4567',
-            medical_provider_email: 'doctor@example.com',
+            certifying_professional_name: 'Dr. Test',
+            certifying_professional_phone: '555-123-4567',
+            certifying_professional_email: 'doctor@example.com',
             self_certify_disability: true
           },
           income_proof_action: 'accept',

@@ -1,6 +1,6 @@
 # frozen_string_literal: true
 
-template = EmailTemplate.find_or_initialize_by(name: 'medical_provider_request_certification', format: :text, locale: 'en')
+template = EmailTemplate.find_or_initialize_by(name: 'certifying_professional_request_certification', format: :text, locale: 'en')
 template.subject = 'DISABILITY CERTIFICATION FORM REQUEST'
 template.description = 'Sent to a certifying professional requesting they complete and submit a disability certification form for an applicant.'
 template.body = <<~TEXT
@@ -43,4 +43,4 @@ template.variables = {
 }
 template.version ||= 1
 template.save!
-Rails.logger.debug 'Seeded medical_provider_request_certification (text)' if ENV['VERBOSE_TESTS'] || Rails.env.development?
+Rails.logger.debug 'Seeded certifying_professional_request_certification (text)' if ENV['VERBOSE_TESTS'] || Rails.env.development?

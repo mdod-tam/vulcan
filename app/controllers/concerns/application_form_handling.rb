@@ -26,7 +26,7 @@ module ApplicationFormHandling
 
   def initialize_address_and_provider_for_form
     initialize_address if respond_to?(:initialize_address, true)
-    build_medical_provider_for_form if respond_to?(:build_medical_provider_for_form, true)
+    build_certifying_professional_for_form if respond_to?(:build_certifying_professional_for_form, true)
   end
 
   def determine_success_message(application, is_submission: false)

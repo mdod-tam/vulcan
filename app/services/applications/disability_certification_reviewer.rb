@@ -46,7 +46,7 @@ module Applications
         request_result = request_secure_certification_upload
         result.data[:secure_upload_request] = { success: request_result.success?, message: request_result.message }
         result.data[:provider_delivery].replace(
-          notify_medical_provider(
+          notify_certifying_professional(
             rejection_reason, service_result[:notification_id],
             secure_upload_url: request_result.data&.dig(:secure_upload_url)
           )
@@ -125,8 +125,8 @@ module Applications
       failure('Secure upload link could not be created')
     end
 
-    def notify_medical_provider(rejection_reason, notification_id, secure_upload_url: nil)
-      MedicalProviderNotifier.new(application).send_certification_rejection_notice(
+    def notify_certifying_professional(rejection_reason, notification_id, secure_upload_url: nil)
+      CertifyingProfessionalNotifier.new(application).send_certification_rejection_notice(
         rejection_reason: rejection_reason,
         admin: admin,
         notification_id: notification_id,

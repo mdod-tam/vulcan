@@ -460,12 +460,12 @@ module Applications
         speech_disability: false,
         mobility_disability: false,
         cognition_disability: false,
-        medical_provider_name: 'Test Provider',
-        medical_provider_phone: '555-1234',
-        medical_provider_email: 'provider@test.com',
+        certifying_professional_name: 'Test Provider',
+        certifying_professional_phone: '555-1234',
+        certifying_professional_email: 'provider@test.com',
         terms_accepted: true,
         information_verified: true,
-        medical_release_authorized: true,
+        disability_information_release_authorized: true,
         income_proof: submission_income_proof(attach_income_proof, user: user),
         is_submission: true
       )
@@ -484,12 +484,12 @@ module Applications
         speech_disability: false,
         mobility_disability: false,
         cognition_disability: false,
-        medical_provider_name: 'Draft Provider',
-        medical_provider_phone: '555-4321',
-        medical_provider_email: 'draft-provider@test.com',
+        certifying_professional_name: 'Draft Provider',
+        certifying_professional_phone: '555-4321',
+        certifying_professional_email: 'draft-provider@test.com',
         terms_accepted: true,
         information_verified: true,
-        medical_release_authorized: true,
+        disability_information_release_authorized: true,
         is_submission: false
       )
       ApplicationCreator.call(form)

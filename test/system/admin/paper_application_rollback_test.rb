@@ -154,7 +154,7 @@ module Admin
       verify_existing_adult_contact
       fill_in_application_details(household_size: 2, annual_income: 20_000)
       fill_in_disability_information
-      fill_in_medical_provider_information
+      fill_in_certifying_professional_information
       attach_and_accept_proofs
       complete_paper_application_attestations
 
@@ -209,7 +209,7 @@ module Admin
       verify_existing_adult_contact
       fill_in_application_details(household_size: 2, annual_income: 20_000)
       fill_in_disability_information
-      fill_in_medical_provider_information
+      fill_in_certifying_professional_information
       attach_and_accept_proofs
       complete_paper_application_attestations
 
@@ -355,7 +355,7 @@ module Admin
       select_existing_dependent_through_the_ui(dependent)
       fill_in_application_details(household_size: 2, annual_income: 20_000)
       fill_in_disability_information
-      fill_in_medical_provider_information
+      fill_in_certifying_professional_information
       attach_and_accept_proofs
       complete_paper_application_attestations
 
@@ -483,7 +483,7 @@ module Admin
 
     # Separate dynamic controllers own these flags.
     def choose_no_information_flags
-      check 'no_medical_provider_information', allow_label_click: true
+      check 'no_certifying_professional_information', allow_label_click: true
       check 'no_income_information', allow_label_click: true
     end
 
@@ -513,7 +513,7 @@ module Admin
       assert_not first("input[type='checkbox'][name='use_guardian_address']", visible: :all).checked?,
                  'an unchecked guardian-address choice must stay unchecked'
 
-      assert enabled_checkbox('no_medical_provider_information').checked?,
+      assert enabled_checkbox('no_certifying_professional_information').checked?,
              'the no-provider flag was not restored'
       assert enabled_checkbox('no_income_information').checked?,
              'the no-income flag was not restored'
@@ -525,7 +525,7 @@ module Admin
       fill_in_applicant_information(first_name: 'Rollback', last_name: 'Retry')
       fill_in_application_details(household_size: 2, annual_income: 20_000)
       fill_in_disability_information
-      fill_in_medical_provider_information
+      fill_in_certifying_professional_information
       attach_and_accept_proofs
       choose_non_default_proof_dispositions
       complete_paper_application_attestations
@@ -545,7 +545,7 @@ module Admin
         'constituent[first_name]' => 'Rollback',
         'constituent[last_name]' => 'Retry',
         'application[household_size]' => '2',
-        'application[medical_provider_name]' => 'Dr. Smith'
+        'application[certifying_professional_name]' => 'Dr. Smith'
       }.each do |name, expected|
         assert_equal expected, enabled_field(name).value, "#{name} was not restored"
       end
@@ -556,7 +556,7 @@ module Admin
                    'annual income was not restored'
 
       %w[application[maryland_resident] applicant_attributes[self_certify_disability]
-         application[medical_release_authorized] application[terms_accepted]
+         application[disability_information_release_authorized] application[terms_accepted]
          applicant_attributes[hearing_disability]].each do |name|
         assert enabled_checkbox(name).checked?, "#{name} was not restored"
       end

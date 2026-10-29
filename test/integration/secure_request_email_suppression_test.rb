@@ -200,7 +200,7 @@ class SecureRequestEmailSuppressionTest < ActiveSupport::TestCase
   %i[w9 certification].each do |kind|
     test "#{kind} late configuration refusal revokes the link and starts no cooldown" do
       service = configuration_test_service(kind)
-      load_seeded_email_templates('vendor_notifications_w9_rejected', 'medical_provider_request_certification')
+      load_seeded_email_templates('vendor_notifications_w9_rejected', 'certifying_professional_request_certification')
       EmailDelivery::Policy.stubs(:verify_delivery).returns(EmailDelivery::Decision.allowed)
                            .then.returns(EmailDelivery::Decision.configuration_error(:unavailable))
 
@@ -274,7 +274,7 @@ class SecureRequestEmailSuppressionTest < ActiveSupport::TestCase
   end
 
   def provider_application
-    create(:application, :in_progress, medical_provider_name: 'Dr. Provider', medical_provider_email: 'provider@example.com')
+    create(:application, :in_progress, certifying_professional_name: 'Dr. Provider', certifying_professional_email: 'provider@example.com')
   end
 
   def rejected_income_application

@@ -14,9 +14,9 @@ module Applications
       # A plain update would fail silently and leave these values unsaved on @application.
       Current.set(skip_proof_validation: true) do
         @application.update!(
-          medical_provider_name: 'Dr. Test Provider',
-          medical_provider_email: 'provider@example.com',
-          medical_provider_fax: '555-123-4567'
+          certifying_professional_name: 'Dr. Test Provider',
+          certifying_professional_email: 'provider@example.com',
+          certifying_professional_fax: '555-123-4567'
         )
       end
     end
@@ -30,9 +30,9 @@ module Applications
       # The attachment stub leaves certification status unchanged. This test covers the reviewer result.
     end
 
-    test 'passes rejection notification id to medical provider notifier' do
-      mock_notifier = mock('medical_provider_notifier')
-      MedicalProviderNotifier.expects(:new).with(@application).returns(mock_notifier)
+    test 'passes rejection notification id to certifying professional notifier' do
+      mock_notifier = mock('certifying_professional_notifier')
+      CertifyingProfessionalNotifier.expects(:new).with(@application).returns(mock_notifier)
       mock_notifier.expects(:send_certification_rejection_notice).with(
         rejection_reason: 'Invalid documentation',
         admin: @admin,
@@ -56,8 +56,8 @@ module Applications
     end
 
     test 'continues rejection notification when secure cert upload request fails for a non-remediation reason' do
-      mock_notifier = mock('medical_provider_notifier')
-      MedicalProviderNotifier.expects(:new).with(@application).returns(mock_notifier)
+      mock_notifier = mock('certifying_professional_notifier')
+      CertifyingProfessionalNotifier.expects(:new).with(@application).returns(mock_notifier)
       mock_notifier.expects(:send_certification_rejection_notice).with(
         rejection_reason: 'Invalid documentation',
         admin: @admin,
@@ -80,9 +80,9 @@ module Applications
     end
 
     test 'retains rejection while reporting unavailable delivery when provider email is missing' do
-      @application.update(medical_provider_email: nil, medical_provider_fax: '555-123-4567')
-      mock_notifier = mock('medical_provider_notifier')
-      MedicalProviderNotifier.expects(:new).with(@application).returns(mock_notifier)
+      @application.update(certifying_professional_email: nil, certifying_professional_fax: '555-123-4567')
+      mock_notifier = mock('certifying_professional_notifier')
+      CertifyingProfessionalNotifier.expects(:new).with(@application).returns(mock_notifier)
       mock_notifier.expects(:send_certification_rejection_notice).with(
         rejection_reason: 'Invalid documentation',
         admin: @admin,
@@ -125,7 +125,7 @@ module Applications
 
     test 'retains durable rejection and reports actual provider failure' do
       notifier = stub(send_certification_rejection_notice: { success: false, outcome: :failed, tracking_status: :recorded })
-      MedicalProviderNotifier.expects(:new).with(@application).returns(notifier)
+      CertifyingProfessionalNotifier.expects(:new).with(@application).returns(notifier)
       RequestCertificationUpload.any_instance.stubs(:call).returns(
         BaseService::Result.new(success: true, data: { secure_upload_url: nil })
       )
@@ -141,7 +141,7 @@ module Applications
     test 'does not misreport accepted provider email when tracking fails' do
       DisabilityCertificationAttachmentService.stubs(:reject_certification).returns(success: true, notification_id: 1234)
       RequestCertificationUpload.any_instance.stubs(:call).returns(BaseService::Result.new(success: true, data: {}))
-      MedicalProviderNotifier.any_instance.stubs(:send_certification_rejection_notice).returns(
+      CertifyingProfessionalNotifier.any_instance.stubs(:send_certification_rejection_notice).returns(
         success: true, outcome: :submitted, tracking_status: :failed, tracking_error: 'ActiveRecord::RecordInvalid'
       )
 
@@ -156,7 +156,7 @@ module Applications
 
     test 'note failure does not turn a saved rejection into a retryable failure or expose exception text' do
       RequestCertificationUpload.any_instance.stubs(:call).returns(BaseService::Result.new(success: true, data: {}))
-      MedicalProviderNotifier.any_instance.stubs(:send_certification_rejection_notice).returns(success: true, outcome: :queued)
+      CertifyingProfessionalNotifier.any_instance.stubs(:send_certification_rejection_notice).returns(success: true, outcome: :queued)
       ApplicationNote.any_instance.expects(:save!).raises(StandardError, 'private note failure')
 
       result = @service.reject(rejection_reason: 'Missing signature', notes: 'Review the signature')

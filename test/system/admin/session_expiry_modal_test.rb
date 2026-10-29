@@ -65,18 +65,18 @@ module Admin
       within('#application-modal') { click_button 'Edit', exact: true }
       frame_form = '#application-edit-modal-content form'
       assert_selector "#{frame_form}[data-turbo-frame='application-edit-modal-content']"
-      within('#application-edit-modal') { fill_in 'application_medical_provider_name', with: 'Unsaved provider correction' }
+      within('#application-edit-modal') { fill_in 'application_certifying_professional_name', with: 'Unsaved provider correction' }
       expire_and_count_submissions(admin, frame_form)
 
       within('#application-edit-modal') do
         click_button 'Update Application'
         assert_selector '[data-session-activity-expired-notice]', text: I18n.t('sessions.activity.messages.expired')
-        assert_field 'application_medical_provider_name', with: 'Unsaved provider correction'
+        assert_field 'application_certifying_professional_name', with: 'Unsaved provider correction'
       end
       assert_current_path admin_user_path(application.user)
       assert_equal 0, page.evaluate_script('window.expiredFormSubmissions')
       assert page.evaluate_script('document.activeElement.matches("#application-edit-modal [data-session-activity-expired-notice]")')
-      assert_not_equal 'Unsaved provider correction', application.reload.medical_provider_name
+      assert_not_equal 'Unsaved provider correction', application.reload.certifying_professional_name
       take_screenshot('admin-frame-edit-session-expired', html: true, full: true)
     ensure
       page.execute_script('if (window.originalSessionClock) Date.now = window.originalSessionClock') if page.has_selector?('body', wait: 0)

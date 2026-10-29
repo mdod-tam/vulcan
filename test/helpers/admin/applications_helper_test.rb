@@ -10,8 +10,8 @@ module Admin
       @application = create(
         :application,
         :in_progress,
-        medical_provider_name: 'Dr. Provider',
-        medical_provider_email: 'provider@example.test'
+        certifying_professional_name: 'Dr. Provider',
+        certifying_professional_email: 'provider@example.test'
       )
     end
 

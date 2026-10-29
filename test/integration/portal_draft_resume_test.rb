@@ -82,7 +82,7 @@ class PortalDraftResumeTest < ActionDispatch::IntegrationTest
   def form_params(applicant)
     { application: { user_id: applicant.id, annual_income: '50000', household_size: 7,
                      vision_disability: true, terms_accepted: true, information_verified: true,
-                     medical_release_authorized: true,
-                     medical_provider_attributes: { name: 'Test Provider', phone: '2025550123', email: 'provider@example.org' } } }
+                     disability_information_release_authorized: true,
+                     certifying_professional_attributes: { name: 'Test Provider', phone: '2025550123', email: 'provider@example.org' } } }
   end
 end

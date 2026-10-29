@@ -5,14 +5,14 @@ require 'test_helper'
 module Webhooks
   class TwilioControllerTest < ActionDispatch::IntegrationTest
     setup do
-      @application = create(:application, medical_provider_email: 'doctor@example.com')
+      @application = create(:application, certifying_professional_email: 'doctor@example.com')
       @admin = create(:admin)
       ensure_system_audit_actor!
       @notification = create(:notification, recipient: @application.user, actor: @admin, notifiable: @application,
                                             action: 'disability_certification_rejected',
                                             metadata: { 'fax_sid' => 'FX_TEST_123', 'rejection_reason' => 'Missing signature',
                                                         'provider_delivery_contexts' => {
-                                                          'email' => EmailDelivery::Policy.capture(mail_action: MedicalProviderNotifier::EMAIL_ACTION)
+                                                          'email' => EmailDelivery::Policy.capture(mail_action: CertifyingProfessionalNotifier::EMAIL_ACTION)
                                                         } })
     end
 
@@ -35,12 +35,12 @@ module Webhooks
     test 'callback exceptions keep private provider details out of logs and JSON and allow retry' do
       sentinel = 'private-fax-sentinel doctor@example.test token=secret-provider-token'
       log = StringIO.new
-      notifier = MedicalProviderNotifier.new(@application)
+      notifier = CertifyingProfessionalNotifier.new(@application)
       original_metadata = @notification.metadata.deep_dup
 
       assert_no_difference ['Event.count', 'Notification.count'] do
         Rails.stub(:logger, ActiveSupport::Logger.new(log)) do
-          MedicalProviderNotifier.stub(:new, notifier) do
+          CertifyingProfessionalNotifier.stub(:new, notifier) do
             notifier.stub(:receive_fax_status, ->(*) { raise StandardError, sentinel }) do
               post webhooks_twilio_fax_status_path, params: { FaxSid: 'FX_TEST_123', Status: 'delivered' }
             end
@@ -64,7 +64,7 @@ module Webhooks
       log = StringIO.new
       validator = mock('signature validator')
       validator.expects(:validate).returns(false)
-      MedicalProviderNotifier.expects(:new).never
+      CertifyingProfessionalNotifier.expects(:new).never
 
       assert_no_difference ['Event.count', 'Notification.count'] do
         Rails.stub(:logger, ActiveSupport::Logger.new(log)) do

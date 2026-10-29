@@ -13,7 +13,7 @@ export default class extends Controller {
     "onFileSummary",
     "onFileSummaryContent",
     "incomeCopyButton",
-    "medicalCopyButton",
+    "certifyingProfessionalCopyButton",
     "contactModeRadio",
     "verificationCheckbox",
     "verificationSection",
@@ -163,14 +163,14 @@ export default class extends Controller {
     setFieldValue('input[name="application[annual_income]"]', data.annual_income)
   }
 
-  useLastApplicationMedicalProvider() {
+  useLastApplicationCertifyingProfessional() {
     const data = this._adultApplicationContext
     if (!data) return
 
-    setFieldValue('input[name="application[medical_provider_name]"]', data.medical_provider_name)
-    setFieldValue('input[name="application[medical_provider_phone]"]', data.medical_provider_phone)
-    setFieldValue('input[name="application[medical_provider_fax]"]', data.medical_provider_fax)
-    setFieldValue('input[name="application[medical_provider_email]"]', data.medical_provider_email)
+    setFieldValue('input[name="application[certifying_professional_name]"]', data.certifying_professional_name)
+    setFieldValue('input[name="application[certifying_professional_phone]"]', data.certifying_professional_phone)
+    setFieldValue('input[name="application[certifying_professional_fax]"]', data.certifying_professional_fax)
+    setFieldValue('input[name="application[certifying_professional_email]"]', data.certifying_professional_email)
   }
 
   highlightChanges() {
@@ -357,15 +357,15 @@ export default class extends Controller {
   _toggleCopyButtons(data = null) {
     const context = data || this._adultApplicationContext
     const hasIncomeData = !!(context && (context.household_size || context.annual_income))
-    const hasMedicalProviderData = !!(context && (
-      context.medical_provider_name ||
-      context.medical_provider_phone ||
-      context.medical_provider_fax ||
-      context.medical_provider_email
+    const hasCertifyingProfessionalData = !!(context && (
+      context.certifying_professional_name ||
+      context.certifying_professional_phone ||
+      context.certifying_professional_fax ||
+      context.certifying_professional_email
     ))
 
     if (this.hasIncomeCopyButtonTarget) setVisible(this.incomeCopyButtonTarget, hasIncomeData)
-    if (this.hasMedicalCopyButtonTarget) setVisible(this.medicalCopyButtonTarget, hasMedicalProviderData)
+    if (this.hasCertifyingProfessionalCopyButtonTarget) setVisible(this.certifyingProfessionalCopyButtonTarget, hasCertifyingProfessionalData)
   }
 
   _toggleSectionFieldsDisabled(section, disabled) {

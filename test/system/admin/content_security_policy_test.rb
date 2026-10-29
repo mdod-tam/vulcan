@@ -126,7 +126,7 @@ module Admin
       take_screenshot('default-csp-vendor-link-revoked', full: true, html: true)
 
       application = create(:application, status: :awaiting_proof,
-                                         medical_provider_name: nil, medical_provider_phone: nil, medical_provider_email: nil)
+                                         certifying_professional_name: nil, certifying_professional_phone: nil, certifying_professional_email: nil)
       provider_form = create(:secure_request_form, application: application, recipient: application.user,
                                                    sent_at: (SecureFormPolicy.resend_cooldown_hours + 1).hours.ago)
       visit admin_application_path(application)
@@ -147,9 +147,9 @@ module Admin
     end
 
     test 'certification upload link asks before sending and creates one request after confirmation' do
-      load_seeded_email_templates('medical_provider_request_certification')
+      load_seeded_email_templates('certifying_professional_request_certification')
       application = create(:application, disability_certification_status: :not_requested,
-                                         medical_provider_name: 'Dr. CSP', medical_provider_email: 'provider@example.test')
+                                         certifying_professional_name: 'Dr. CSP', certifying_professional_email: 'provider@example.test')
       visit admin_application_path(application)
       request_path = admin_application_certification_upload_request_path(application)
       request_form = "form[action='#{request_path}']"

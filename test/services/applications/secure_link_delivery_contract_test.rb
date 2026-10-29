@@ -29,11 +29,11 @@ module Applications
     end
 
     test 'a certification resend goes to the provider email on file now' do
-      application = create(:application, :in_progress, medical_provider_name: 'Dr. Original',
-                                                       medical_provider_email: 'original-provider@example.test')
+      application = create(:application, :in_progress, certifying_professional_name: 'Dr. Original',
+                                                       certifying_professional_email: 'original-provider@example.test')
       first = RequestCertificationUpload.new(application: application, actor: @admin).call
                                         .data.fetch(:secure_request_form)
-      application.update!(medical_provider_email: 'current-provider@example.test')
+      application.update!(certifying_professional_email: 'current-provider@example.test')
 
       travel_to first.sent_at + 2.hours do
         result = RequestCertificationUpload.new(application: application, actor: @admin, resend_of: first,

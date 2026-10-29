@@ -87,10 +87,12 @@ module Applications
       pdf.text "DOB: #{dob}"
       pdf.move_down 10
       pdf.text 'Provider Information', style: :bold
-      pdf.text "Name: #{application.medical_provider_name || 'N/A'}"
-      pdf.text "Email: #{application.medical_provider_email || 'N/A'}"
-      pdf.text "Phone: #{application.medical_provider_phone || 'N/A'}"
-      pdf.text "Fax: #{application.medical_provider_fax}" if application.respond_to?(:medical_provider_fax) && application.medical_provider_fax.present?
+      pdf.text "Name: #{application.certifying_professional_name || 'N/A'}"
+      pdf.text "Email: #{application.certifying_professional_email || 'N/A'}"
+      pdf.text "Phone: #{application.certifying_professional_phone || 'N/A'}"
+      if application.respond_to?(:certifying_professional_fax) && application.certifying_professional_fax.present?
+        pdf.text "Fax: #{application.certifying_professional_fax}"
+      end
       pdf.move_down 20
       pdf.text 'Please complete and return the attached certification.'
 

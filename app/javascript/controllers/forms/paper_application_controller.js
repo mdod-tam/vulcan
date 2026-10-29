@@ -116,41 +116,41 @@ export default class extends Controller {
   /**
    * Hides provider fields and removes their required state when the no-provider option is selected.
    */
-  toggleMedicalProvider(event) {
+  toggleCertifyingProfessional(event) {
     this.syncFormState(event);
   }
 
   syncFormState(event = null) {
-    this.syncMedicalProviderRequirement(event);
+    this.syncCertifyingProfessionalRequirement(event);
     this._applySubmitGating();
   }
 
-  syncMedicalProviderRequirement(event = null) {
-    if (event?.target && !this._isMedicalProviderControl(event.target)) return;
+  syncCertifyingProfessionalRequirement(event = null) {
+    if (event?.target && !this._isCertifyingProfessionalControl(event.target)) return;
 
-    const checkbox = this.element.querySelector('input[name="no_medical_provider_information"]');
+    const checkbox = this.element.querySelector('input[name="no_certifying_professional_information"]');
     if (!checkbox) return;
 
     const fieldset = checkbox.closest('fieldset');
     if (!fieldset) return;
 
     const isChecked = checkbox.checked;
-    const medicalProviderFields = Array.from(fieldset.querySelectorAll('input, select, textarea'))
-      .filter((field) => field.name?.startsWith("application[medical_provider_"));
-    const requiredProviderFields = Array.from(medicalProviderFields)
-      .filter((field) => this._isApplicationMedicalProviderField(field));
-    const hasProviderInfo = medicalProviderFields
+    const certifyingProfessionalFields = Array.from(fieldset.querySelectorAll('input, select, textarea'))
+      .filter((field) => field.name?.startsWith("application[certifying_professional_"));
+    const requiredProviderFields = Array.from(certifyingProfessionalFields)
+      .filter((field) => this._isApplicationCertifyingProfessionalField(field));
+    const hasProviderInfo = certifyingProfessionalFields
       .some((field) => String(field.value || "").trim() !== "");
     const description = fieldset.querySelector('p.text-sm');
     const fieldsContainer = fieldset.querySelector('.grid');
-    const medicalRelease = fieldset.querySelector('input[type="checkbox"][name="application[medical_release_authorized]"]');
+    const disabilityInformationRelease = fieldset.querySelector('input[type="checkbox"][name="application[disability_information_release_authorized]"]');
 
     if (isChecked) {
       if (description) description.classList.add('hidden');
       if (fieldsContainer) fieldsContainer.classList.add('hidden');
 
       this._setRequired(requiredProviderFields, false);
-      this._setRequired([medicalRelease], false);
+      this._setRequired([disabilityInformationRelease], false);
       checkbox.required = false;
       checkbox.setCustomValidity("");
       return;
@@ -160,18 +160,18 @@ export default class extends Controller {
     if (fieldsContainer) fieldsContainer.classList.remove('hidden');
 
     this._setRequired(requiredProviderFields, hasProviderInfo);
-    this._setRequired([medicalRelease], hasProviderInfo);
+    this._setRequired([disabilityInformationRelease], hasProviderInfo);
     checkbox.required = !hasProviderInfo;
     checkbox.setCustomValidity(hasProviderInfo ? "" : "Check this box if no certifying professional information was provided.");
   }
 
-  _isApplicationMedicalProviderField(field) {
-    return field.name.startsWith("application[medical_provider_") && !field.name.includes("fax");
+  _isApplicationCertifyingProfessionalField(field) {
+    return field.name.startsWith("application[certifying_professional_") && !field.name.includes("fax");
   }
 
-  _isMedicalProviderControl(field) {
-    return field.name === "no_medical_provider_information" ||
-      field.name?.startsWith("application[medical_provider_");
+  _isCertifyingProfessionalControl(field) {
+    return field.name === "no_certifying_professional_information" ||
+      field.name?.startsWith("application[certifying_professional_");
   }
 
   _setRequired(fields, required) {

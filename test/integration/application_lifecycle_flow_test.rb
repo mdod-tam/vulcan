@@ -81,7 +81,7 @@ class ApplicationLifecycleFlowTest < ActiveSupport::TestCase
         disability_certification_status: :not_requested
       )
 
-      MedicalProviderMailer.expects(:request_certification).never
+      CertifyingProfessionalMailer.expects(:request_certification).never
 
       reviewer = Applications::ProofReviewer.new(application, admin)
 

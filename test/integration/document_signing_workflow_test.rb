@@ -15,8 +15,8 @@ class DocumentSigningWorkflowTest < ActionDispatch::IntegrationTest
 
     @application = create(:application, :in_progress,
                           application_date: Date.current,
-                          medical_provider_email: 'doctor@example.com',
-                          medical_provider_name: 'Dr. Jane Smith')
+                          certifying_professional_email: 'doctor@example.com',
+                          certifying_professional_name: 'Dr. Jane Smith')
 
     @mock_submission = {
       'id' => 'sub_123456',

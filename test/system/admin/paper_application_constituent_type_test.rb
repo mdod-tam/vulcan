@@ -37,9 +37,9 @@ module Admin
       check 'application_maryland_resident'
       check 'applicant_attributes_self_certify_disability'
 
-      fill_in 'application_medical_provider_name', with: 'Dr. Smith'
-      fill_in 'application_medical_provider_phone', with: '2025551212'
-      fill_in 'application_medical_provider_email', with: 'drsmith@example.com'
+      fill_in 'application_certifying_professional_name', with: 'Dr. Smith'
+      fill_in 'application_certifying_professional_phone', with: '2025551212'
+      fill_in 'application_certifying_professional_email', with: 'drsmith@example.com'
 
       attach_pdf_proof('income')
       choose 'accept_income_proof'

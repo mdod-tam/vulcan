@@ -1,6 +1,6 @@
 # frozen_string_literal: true
 
-EmailTemplate.create_or_find_by!(name: 'medical_provider_certification_approved', format: :text, locale: 'en') do |template|
+EmailTemplate.create_or_find_by!(name: 'certifying_professional_certification_approved', format: :text, locale: 'en') do |template|
   template.subject = 'Signed Disability Certification Received and Approved'
   template.description = 'Sent to the signer when their signed disability certification copy is received and approved.'
   template.body = <<~TEXT
@@ -32,4 +32,4 @@ EmailTemplate.create_or_find_by!(name: 'medical_provider_certification_approved'
   }
   template.version = 1
 end
-Rails.logger.debug 'Seeded medical_provider_certification_approved (text)' if ENV['VERBOSE_TESTS'] || Rails.env.development?
+Rails.logger.debug 'Seeded certifying_professional_certification_approved (text)' if ENV['VERBOSE_TESTS'] || Rails.env.development?

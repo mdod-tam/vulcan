@@ -289,7 +289,7 @@ class SecureRequestDeliveryOutcomeTest < ActiveSupport::TestCase
       mail.stubs(:deliver_now).raises(StandardError, 'transport failed')
       mailer = mock('secure request mailer')
       if service_class == Applications::RequestCertificationUpload
-        MedicalProviderMailer.stubs(:with).returns(mailer)
+        CertifyingProfessionalMailer.stubs(:with).returns(mailer)
         mailer.stubs(:request_certification).returns(mail)
       else
         VendorNotificationsMailer.stubs(:with).returns(mailer)
@@ -309,7 +309,7 @@ class SecureRequestDeliveryOutcomeTest < ActiveSupport::TestCase
 
   def single_request_service(service_class)
     if service_class == Applications::RequestCertificationUpload
-      application = create(:application, :in_progress, medical_provider_name: 'Dr. Provider', medical_provider_email: 'provider@example.test')
+      application = create(:application, :in_progress, certifying_professional_name: 'Dr. Provider', certifying_professional_email: 'provider@example.test')
       [service_class.new(application: application, actor: @actor, deliver_email: true), application,
        :secure_request_form, 'cert_upload_requested']
     else

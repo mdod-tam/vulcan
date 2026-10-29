@@ -9,8 +9,8 @@ module Applications
     setup do
       ensure_system_audit_actor!
       @application = create(:application, :in_progress,
-                            medical_provider_name: 'Dr. Provider',
-                            medical_provider_email: 'provider@example.com')
+                            certifying_professional_name: 'Dr. Provider',
+                            certifying_professional_email: 'provider@example.com')
       @secure_request_form = create(:certification_upload_form, application: @application)
       upload = fixture_file_upload(Rails.root.join('test/fixtures/files/disability_certification_valid.pdf'), 'application/pdf')
       @file = scanned_upload(upload, secure_form: @secure_request_form, purpose: :certification,

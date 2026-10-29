@@ -5,24 +5,24 @@ require 'test_helper'
 class SecureProviderInfoFormsControllerTest < ActionDispatch::IntegrationTest
   test 'a real secure submission keeps review evidence with masked provider history' do
     actor = create(:admin, email: PublicAuditActor::SYSTEM_AUDIT_EMAIL)
-    application = create(:application, status: :awaiting_proof, medical_provider_name: 'Existing Doctor',
-                                       medical_provider_email: 'existing@example.test', medical_provider_phone: '410-555-1234')
+    application = create(:application, status: :awaiting_proof, certifying_professional_name: 'Existing Doctor',
+                                       certifying_professional_email: 'existing@example.test', certifying_professional_phone: '410-555-1234')
     token = SecureRequestForm.generate_public_token
     form = create(:secure_request_form, application: application, recipient: application.user, raw_token: token)
 
     patch secure_provider_info_form_path(token: token), params: {
-      medical_provider_name: 'Incoming Doctor', medical_provider_email: 'incoming@example.test', medical_provider_phone: '202-555-5678'
+      certifying_professional_name: 'Incoming Doctor', certifying_professional_email: 'incoming@example.test', certifying_professional_phone: '202-555-5678'
     }
 
     assert_response :redirect
     assert form.reload.submitted?
-    assert_equal 'incoming@example.test', application.reload.medical_provider_email
-    event = Event.where(action: 'medical_provider_info_updated', auditable: application).order(:id).last
+    assert_equal 'incoming@example.test', application.reload.certifying_professional_email
+    event = Event.where(action: 'certifying_professional_info_updated', auditable: application).order(:id).last
     assert_equal actor.id, event.user_id
     assert event.metadata['review_required']
     assert_equal form.id, event.metadata['secure_request_form_id']
-    assert_equal({ 'old' => 'e***@e***.test', 'new' => 'i***@e***.test' }, event.field_changes['medical_provider_email'])
-    assert_equal({ 'old' => '***-***-1234', 'new' => '***-***-5678' }, event.field_changes['medical_provider_phone'])
+    assert_equal({ 'old' => 'e***@e***.test', 'new' => 'i***@e***.test' }, event.field_changes['certifying_professional_email'])
+    assert_equal({ 'old' => '***-***-1234', 'new' => '***-***-5678' }, event.field_changes['certifying_professional_phone'])
     %w[existing@example.test incoming@example.test 410-555-1234 202-555-5678].each do |value|
       assert_not_includes event.metadata.to_json, value
     end
@@ -49,9 +49,9 @@ class SecureProviderInfoFormsControllerTest < ActionDispatch::IntegrationTest
   test 'public form does not expose existing provider information' do
     application = create(
       :application,
-      medical_provider_name: 'Existing Doctor',
-      medical_provider_email: 'existing-doctor@example.test',
-      medical_provider_phone: '410-555-0199'
+      certifying_professional_name: 'Existing Doctor',
+      certifying_professional_email: 'existing-doctor@example.test',
+      certifying_professional_phone: '410-555-0199'
     )
     token = SecureRequestForm.generate_public_token
     create(:secure_request_form, application: application, recipient: application.user, raw_token: token)
@@ -84,7 +84,7 @@ class SecureProviderInfoFormsControllerTest < ActionDispatch::IntegrationTest
     get secure_provider_info_form_path(token: token)
 
     assert_response :success
-    assert_select 'input[name=medical_provider_name][autocomplete=off]'
+    assert_select 'input[name=certifying_professional_name][autocomplete=off]'
   end
 
   test 'success page uses the distinct heading copy' do
@@ -114,9 +114,9 @@ class SecureProviderInfoFormsControllerTest < ActionDispatch::IntegrationTest
 
     patch secure_provider_info_form_path(token: token), params: {
       token: token,
-      medical_provider_name: 'Dr. Taylor',
-      medical_provider_phone: '410-555-0199',
-      medical_provider_email: 'doctor@example.test'
+      certifying_professional_name: 'Dr. Taylor',
+      certifying_professional_phone: '410-555-0199',
+      certifying_professional_email: 'doctor@example.test'
     }
 
     assert_redirected_to secure_provider_info_form_success_path(locale: :es)
@@ -151,19 +151,19 @@ class SecureProviderInfoFormsControllerTest < ActionDispatch::IntegrationTest
   test 'validation failure preserves token in form action and hidden field' do
     application = create(:application, status: :awaiting_proof)
     application.update!(
-      medical_provider_name: nil,
-      medical_provider_phone: nil,
-      medical_provider_email: nil,
-      medical_provider_fax: nil
+      certifying_professional_name: nil,
+      certifying_professional_phone: nil,
+      certifying_professional_email: nil,
+      certifying_professional_fax: nil
     )
     token = SecureRequestForm.generate_public_token
     create(:secure_request_form, application: application, recipient: application.user, raw_token: token)
 
     patch secure_provider_info_form_path(token: token), params: {
       token: token,
-      medical_provider_name: '',
-      medical_provider_phone: '',
-      medical_provider_email: 'not-an-email'
+      certifying_professional_name: '',
+      certifying_professional_phone: '',
+      certifying_professional_email: 'not-an-email'
     }
 
     assert_response :unprocessable_content
@@ -176,10 +176,10 @@ class SecureProviderInfoFormsControllerTest < ActionDispatch::IntegrationTest
     delivery_owner = create(:constituent, locale: 'es')
     application = create(:application, status: :awaiting_proof, user: constituent)
     application.update!(
-      medical_provider_name: nil,
-      medical_provider_phone: nil,
-      medical_provider_email: nil,
-      medical_provider_fax: nil
+      certifying_professional_name: nil,
+      certifying_professional_phone: nil,
+      certifying_professional_email: nil,
+      certifying_professional_fax: nil
     )
     token = SecureRequestForm.generate_public_token
     create(:secure_request_form, application: application, recipient: constituent, raw_token: token,
@@ -187,59 +187,59 @@ class SecureProviderInfoFormsControllerTest < ActionDispatch::IntegrationTest
 
     patch secure_provider_info_form_path(token: token), params: {
       token: token,
-      medical_provider_name: '',
-      medical_provider_phone: '',
-      medical_provider_email: 'not-an-email'
+      certifying_professional_name: '',
+      certifying_professional_phone: '',
+      certifying_professional_email: 'not-an-email'
     }
 
     assert_response :unprocessable_content
-    assert_select '#medical_provider_name_error',
-                  I18n.t('applications.provider_info.messages.medical_provider_name_blank', locale: :es)
-    assert_select '#medical_provider_email_error',
-                  I18n.t('applications.provider_info.messages.medical_provider_email_invalid', locale: :es)
+    assert_select '#certifying_professional_name_error',
+                  I18n.t('applications.provider_info.messages.certifying_professional_name_blank', locale: :es)
+    assert_select '#certifying_professional_email_error',
+                  I18n.t('applications.provider_info.messages.certifying_professional_email_invalid', locale: :es)
   end
 
   test 'validation failure marks errored fields as aria-invalid' do
     application = create(:application, status: :awaiting_proof)
     application.update!(
-      medical_provider_name: nil,
-      medical_provider_phone: nil,
-      medical_provider_email: nil,
-      medical_provider_fax: nil
+      certifying_professional_name: nil,
+      certifying_professional_phone: nil,
+      certifying_professional_email: nil,
+      certifying_professional_fax: nil
     )
     token = SecureRequestForm.generate_public_token
     create(:secure_request_form, application: application, recipient: application.user, raw_token: token)
 
     patch secure_provider_info_form_path(token: token), params: {
       token: token,
-      medical_provider_name: '',
-      medical_provider_phone: '',
-      medical_provider_email: 'not-an-email'
+      certifying_professional_name: '',
+      certifying_professional_phone: '',
+      certifying_professional_email: 'not-an-email'
     }
 
     assert_response :unprocessable_content
-    assert_select 'input#medical_provider_name[aria-invalid=true][aria-describedby=medical_provider_name_error]'
-    assert_select 'input#medical_provider_phone[aria-invalid=true][aria-describedby=medical_provider_phone_error]'
-    assert_select 'input#medical_provider_email[aria-invalid=true][aria-describedby=medical_provider_email_error]'
-    assert_select 'input#medical_provider_fax[aria-invalid=true]', count: 0
+    assert_select 'input#certifying_professional_name[aria-invalid=true][aria-describedby=certifying_professional_name_error]'
+    assert_select 'input#certifying_professional_phone[aria-invalid=true][aria-describedby=certifying_professional_phone_error]'
+    assert_select 'input#certifying_professional_email[aria-invalid=true][aria-describedby=certifying_professional_email_error]'
+    assert_select 'input#certifying_professional_fax[aria-invalid=true]', count: 0
   end
 
   test 'validation failure error summary is focusable and wired to stimulus controller' do
     application = create(:application, status: :awaiting_proof)
     application.update!(
-      medical_provider_name: nil,
-      medical_provider_phone: nil,
-      medical_provider_email: nil,
-      medical_provider_fax: nil
+      certifying_professional_name: nil,
+      certifying_professional_phone: nil,
+      certifying_professional_email: nil,
+      certifying_professional_fax: nil
     )
     token = SecureRequestForm.generate_public_token
     create(:secure_request_form, application: application, recipient: application.user, raw_token: token)
 
     patch secure_provider_info_form_path(token: token), params: {
       token: token,
-      medical_provider_name: '',
-      medical_provider_phone: '',
-      medical_provider_email: 'not-an-email'
+      certifying_professional_name: '',
+      certifying_professional_phone: '',
+      certifying_professional_email: 'not-an-email'
     }
 
     assert_response :unprocessable_content
@@ -250,26 +250,26 @@ class SecureProviderInfoFormsControllerTest < ActionDispatch::IntegrationTest
   test 'error summary links are prefixed with the field label' do
     application = create(:application, status: :awaiting_proof)
     application.update!(
-      medical_provider_name: nil,
-      medical_provider_phone: nil,
-      medical_provider_email: nil,
-      medical_provider_fax: nil
+      certifying_professional_name: nil,
+      certifying_professional_phone: nil,
+      certifying_professional_email: nil,
+      certifying_professional_fax: nil
     )
     token = SecureRequestForm.generate_public_token
     create(:secure_request_form, application: application, recipient: application.user, raw_token: token)
 
     patch secure_provider_info_form_path(token: token), params: {
       token: token,
-      medical_provider_name: '',
-      medical_provider_phone: '',
-      medical_provider_email: 'not-an-email'
+      certifying_professional_name: '',
+      certifying_professional_phone: '',
+      certifying_professional_email: 'not-an-email'
     }
 
     assert_response :unprocessable_content
     name_label = I18n.t('secure_provider_info_forms.show.provider_name')
     email_label = I18n.t('secure_provider_info_forms.show.provider_email')
-    assert_select 'a[href="#medical_provider_name"] strong', text: "#{name_label}:"
-    assert_select 'a[href="#medical_provider_email"] strong', text: "#{email_label}:"
+    assert_select 'a[href="#certifying_professional_name"] strong', text: "#{name_label}:"
+    assert_select 'a[href="#certifying_professional_email"] strong', text: "#{email_label}:"
   end
 
   test 'generic submit failure renders the service message' do
@@ -282,9 +282,9 @@ class SecureProviderInfoFormsControllerTest < ActionDispatch::IntegrationTest
 
     patch secure_provider_info_form_path(token: token), params: {
       token: token,
-      medical_provider_name: 'Dr. Taylor',
-      medical_provider_phone: '410-555-0199',
-      medical_provider_email: 'doctor@example.test'
+      certifying_professional_name: 'Dr. Taylor',
+      certifying_professional_phone: '410-555-0199',
+      certifying_professional_email: 'doctor@example.test'
     }
 
     assert_response :unprocessable_content
@@ -508,9 +508,9 @@ class SecureProviderInfoFormsControllerTest < ActionDispatch::IntegrationTest
 
     patch secure_provider_info_form_path(token: token), params: {
       token: token,
-      medical_provider_name: 'Dr. Revoked Attempt',
-      medical_provider_phone: '410-555-0100',
-      medical_provider_email: 'revoked@example.test'
+      certifying_professional_name: 'Dr. Revoked Attempt',
+      certifying_professional_phone: '410-555-0100',
+      certifying_professional_email: 'revoked@example.test'
     }
 
     assert_response :see_other
@@ -523,21 +523,21 @@ class SecureProviderInfoFormsControllerTest < ActionDispatch::IntegrationTest
     proof_request_kinds.each do |proof_kind|
       application = create(:application, status: :awaiting_proof)
       application.update!(
-        medical_provider_name: nil,
-        medical_provider_phone: nil,
-        medical_provider_email: nil,
-        medical_provider_fax: nil
+        certifying_professional_name: nil,
+        certifying_professional_phone: nil,
+        certifying_professional_email: nil,
+        certifying_professional_fax: nil
       )
       token = SecureRequestForm.generate_public_token
       secure_request_form = create(:secure_request_form, application: application, recipient: application.user,
                                                          kind: proof_kind, raw_token: token)
 
-      assert_no_difference -> { Event.where(action: 'medical_provider_info_submitted').count } do
+      assert_no_difference -> { Event.where(action: 'certifying_professional_info_submitted').count } do
         patch secure_provider_info_form_path(token: token), params: {
           token: token,
-          medical_provider_name: 'Dr. Proof Token',
-          medical_provider_phone: '410-555-0100',
-          medical_provider_email: 'proof-token@example.test'
+          certifying_professional_name: 'Dr. Proof Token',
+          certifying_professional_phone: '410-555-0100',
+          certifying_professional_email: 'proof-token@example.test'
         }
       end
 
@@ -545,7 +545,7 @@ class SecureProviderInfoFormsControllerTest < ActionDispatch::IntegrationTest
       follow_redirect!
       assert_response :ok
       assert_select 'h1', I18n.t!('secure_provider_info_forms.unavailable.heading')
-      assert_nil application.reload.medical_provider_name
+      assert_nil application.reload.certifying_professional_name
       assert_predicate secure_request_form.reload, :status_sent?
     end
   end
@@ -557,9 +557,9 @@ class SecureProviderInfoFormsControllerTest < ActionDispatch::IntegrationTest
 
     patch secure_provider_info_form_path(token: token), params: {
       token: token,
-      medical_provider_name: 'Dr. Expired Attempt',
-      medical_provider_phone: '410-555-0100',
-      medical_provider_email: 'expired@example.test'
+      certifying_professional_name: 'Dr. Expired Attempt',
+      certifying_professional_phone: '410-555-0100',
+      certifying_professional_email: 'expired@example.test'
     }
 
     assert_redirected_to new_secure_provider_info_form_resend_path(token: token)
@@ -567,18 +567,18 @@ class SecureProviderInfoFormsControllerTest < ActionDispatch::IntegrationTest
 
   test 'PATCH with a submitted token renders submitted state without resubmitting' do
     application = create(:application)
-    application.update!(medical_provider_name: 'Dr. Already Submitted',
-                        medical_provider_phone: '410-555-0100',
-                        medical_provider_email: 'submitted@example.test')
+    application.update!(certifying_professional_name: 'Dr. Already Submitted',
+                        certifying_professional_phone: '410-555-0100',
+                        certifying_professional_email: 'submitted@example.test')
     token = SecureRequestForm.generate_public_token
     create(:secure_request_form, :submitted, application: application, recipient: application.user, raw_token: token)
 
-    assert_no_difference -> { Event.where(action: 'medical_provider_info_submitted').count } do
+    assert_no_difference -> { Event.where(action: 'certifying_professional_info_submitted').count } do
       patch secure_provider_info_form_path(token: token), params: {
         token: token,
-        medical_provider_name: 'Dr. Second Submit Attempt',
-        medical_provider_phone: '410-555-0100',
-        medical_provider_email: 'second@example.test'
+        certifying_professional_name: 'Dr. Second Submit Attempt',
+        certifying_professional_phone: '410-555-0100',
+        certifying_professional_email: 'second@example.test'
       }
     end
 
@@ -586,7 +586,7 @@ class SecureProviderInfoFormsControllerTest < ActionDispatch::IntegrationTest
     follow_redirect!
     assert_response :ok
     assert_select 'h1', I18n.t!('secure_provider_info_forms.submitted.heading')
-    assert_equal 'Dr. Already Submitted', application.reload.medical_provider_name
+    assert_equal 'Dr. Already Submitted', application.reload.certifying_professional_name
   end
   test 'resend new renders unavailable for a revoked token' do
     application = create(:application)

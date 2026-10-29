@@ -70,7 +70,7 @@ class AuthenticationVerificationTest < ActionDispatch::IntegrationTest
         self_certify_disability: %w[0 1],
         hearing_disability: true
       },
-      medical_provider: {
+      certifying_professional: {
         name: 'Dr. Smith',
         phone: '2025551234',
         email: 'drsmith@example.com'

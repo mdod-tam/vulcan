@@ -26,7 +26,7 @@ class SecurePublicFormLocaleTest < ApplicationSystemTestCase
     take_evidence_screenshot('secure-w9-vendor-spanish-validation', full: true, html: true)
   end
 
-  # The certification form is completed by the medical provider, not the applicant, so it uses the
+  # The certification form is completed by the certifying professional, not the applicant, so it uses the
   # default locale whatever the applicant's language (SecureRequestForm#delivery_locale).
   test 'certification form renders show and validation errors in the default locale for a Spanish-speaking applicant' do
     ensure_system_audit_actor! # certification submissions are recorded by the system actor
@@ -35,8 +35,8 @@ class SecurePublicFormLocaleTest < ApplicationSystemTestCase
       :application,
       :in_progress,
       user: constituent,
-      medical_provider_name: 'Dra. Proveedora',
-      medical_provider_email: 'provider-locale@example.com'
+      certifying_professional_name: 'Dra. Proveedora',
+      certifying_professional_email: 'provider-locale@example.com'
     )
     raw_token = SecureRequestForm.generate_public_token
     create(:certification_upload_form, application: application, raw_token: raw_token)

@@ -52,9 +52,9 @@ class ApplicationBlockingScopeTest < ActiveSupport::TestCase
       application_date: Date.current,
       maryland_resident: true,
       self_certify_disability: true,
-      medical_provider_name: 'Dr. Test',
-      medical_provider_phone: '555-111-2222',
-      medical_provider_email: 'test@test.com',
+      certifying_professional_name: 'Dr. Test',
+      certifying_professional_phone: '555-111-2222',
+      certifying_professional_email: 'test@test.com',
       household_size: 1,
       annual_income: 10_000
     )
@@ -72,9 +72,9 @@ class ApplicationBlockingScopeTest < ActiveSupport::TestCase
       application_date: Date.current,
       maryland_resident: true,
       self_certify_disability: true,
-      medical_provider_name: 'Dr. Test',
-      medical_provider_phone: '555-111-2222',
-      medical_provider_email: 'test@test.com',
+      certifying_professional_name: 'Dr. Test',
+      certifying_professional_phone: '555-111-2222',
+      certifying_professional_email: 'test@test.com',
       household_size: 1,
       annual_income: 10_000
     )

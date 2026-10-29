@@ -130,8 +130,8 @@ module Admin
     end
 
     test 'a DocuSeal request while email is off explains on the page why nothing was sent' do
-      application = create(:application, :in_progress, medical_provider_name: 'Dr. Provider',
-                                                       medical_provider_email: 'provider@example.test')
+      application = create(:application, :in_progress, certifying_professional_name: 'Dr. Provider',
+                                                       certifying_professional_email: 'provider@example.test')
       application.update_columns(disability_certification_status: Application.disability_certification_statuses[:not_requested])
       EmailDelivery::ControlWriter.set(name: EmailDelivery::GLOBAL_CONTROL, enabled: false, actor: @admin, operation_id: 'op-1')
       ::Docuseal.expects(:create_submission).never

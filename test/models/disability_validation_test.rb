@@ -19,9 +19,9 @@ class DisabilityValidationTest < ActiveSupport::TestCase
       annual_income: 30_000,
       maryland_resident: true,
       self_certify_disability: true,
-      medical_provider_name: 'Dr. Test',
-      medical_provider_phone: '1234567890',
-      medical_provider_email: 'test@example.com'
+      certifying_professional_name: 'Dr. Test',
+      certifying_professional_phone: '1234567890',
+      certifying_professional_email: 'test@example.com'
     }
   end
 

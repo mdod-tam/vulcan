@@ -117,37 +117,37 @@ describe("PaperApplicationController", () => {
     expect(submitButton.disabled).toBe(false)
   })
 
-  test("medical provider toggle manages provider and release requirements", () => {
+  test("certifying professional toggle manages provider and release requirements", () => {
     document.body.innerHTML = `
       <form data-controller="paper-application">
         <fieldset>
           <input
             type="checkbox"
-            name="no_medical_provider_information"
-            data-action="change->paper-application#toggleMedicalProvider"
+            name="no_certifying_professional_information"
+            data-action="change->paper-application#toggleCertifyingProfessional"
           >
           <p class="text-sm">Provider description</p>
           <div class="grid">
-            <input type="text" name="application[medical_provider_name]" required>
-            <input type="tel" name="application[medical_provider_phone]" required>
-            <input type="email" name="application[medical_provider_email]" required>
-            <input type="text" name="application[medical_provider_fax]">
+            <input type="text" name="application[certifying_professional_name]" required>
+            <input type="tel" name="application[certifying_professional_phone]" required>
+            <input type="email" name="application[certifying_professional_email]" required>
+            <input type="text" name="application[certifying_professional_fax]">
           </div>
-          <input type="hidden" name="application[medical_release_authorized]" value="0">
-          <input type="checkbox" name="application[medical_release_authorized]" value="1" required>
+          <input type="hidden" name="application[disability_information_release_authorized]" value="0">
+          <input type="checkbox" name="application[disability_information_release_authorized]" value="1" required>
         </fieldset>
       </form>
     `
 
     const form = document.querySelector("[data-controller='paper-application']")
     const directController = new PaperApplicationController()
-    const checkbox = document.querySelector("input[name='no_medical_provider_information']")
-    const providerName = document.querySelector("input[name='application[medical_provider_name]']")
-    const providerPhone = document.querySelector("input[name='application[medical_provider_phone]']")
-    const providerEmail = document.querySelector("input[name='application[medical_provider_email]']")
-    const providerFax = document.querySelector("input[name='application[medical_provider_fax]']")
-    const hiddenMedicalRelease = document.querySelector("input[type='hidden'][name='application[medical_release_authorized]']")
-    const medicalRelease = document.querySelector("input[type='checkbox'][name='application[medical_release_authorized]']")
+    const checkbox = document.querySelector("input[name='no_certifying_professional_information']")
+    const providerName = document.querySelector("input[name='application[certifying_professional_name]']")
+    const providerPhone = document.querySelector("input[name='application[certifying_professional_phone]']")
+    const providerEmail = document.querySelector("input[name='application[certifying_professional_email]']")
+    const providerFax = document.querySelector("input[name='application[certifying_professional_fax]']")
+    const hiddenDisabilityInformationRelease = document.querySelector("input[type='hidden'][name='application[disability_information_release_authorized]']")
+    const disabilityInformationRelease = document.querySelector("input[type='checkbox'][name='application[disability_information_release_authorized]']")
 
     Object.defineProperty(directController, "element", {
       value: form,
@@ -156,26 +156,26 @@ describe("PaperApplicationController", () => {
     })
 
     checkbox.checked = true
-    directController.toggleMedicalProvider({ target: checkbox })
+    directController.toggleCertifyingProfessional({ target: checkbox })
 
     expect(providerName.hasAttribute("required")).toBe(false)
     expect(providerPhone.hasAttribute("required")).toBe(false)
     expect(providerEmail.hasAttribute("required")).toBe(false)
     expect(providerFax.hasAttribute("required")).toBe(false)
-    expect(hiddenMedicalRelease.hasAttribute("required")).toBe(false)
-    expect(medicalRelease.hasAttribute("required")).toBe(false)
+    expect(hiddenDisabilityInformationRelease.hasAttribute("required")).toBe(false)
+    expect(disabilityInformationRelease.hasAttribute("required")).toBe(false)
     expect(checkbox.hasAttribute("required")).toBe(false)
 
     checkbox.checked = false
     providerName.value = "Dr. Test"
-    directController.syncMedicalProviderRequirement({ target: providerName })
+    directController.syncCertifyingProfessionalRequirement({ target: providerName })
 
     expect(providerName.hasAttribute("required")).toBe(true)
     expect(providerPhone.hasAttribute("required")).toBe(true)
     expect(providerEmail.hasAttribute("required")).toBe(true)
     expect(providerFax.hasAttribute("required")).toBe(false)
-    expect(hiddenMedicalRelease.hasAttribute("required")).toBe(false)
-    expect(medicalRelease.hasAttribute("required")).toBe(true)
+    expect(hiddenDisabilityInformationRelease.hasAttribute("required")).toBe(false)
+    expect(disabilityInformationRelease.hasAttribute("required")).toBe(true)
     expect(checkbox.hasAttribute("required")).toBe(false)
   })
 
@@ -183,28 +183,28 @@ describe("PaperApplicationController", () => {
     document.body.innerHTML = `
       <form data-controller="paper-application">
         <fieldset>
-          <input type="checkbox" name="no_medical_provider_information">
+          <input type="checkbox" name="no_certifying_professional_information">
           <p class="text-sm">Provider description</p>
           <div class="grid">
-            <input type="text" name="application[medical_provider_name]" required>
-            <input type="tel" name="application[medical_provider_phone]" required>
-            <input type="email" name="application[medical_provider_email]" required>
-            <input type="text" name="application[medical_provider_fax]">
+            <input type="text" name="application[certifying_professional_name]" required>
+            <input type="tel" name="application[certifying_professional_phone]" required>
+            <input type="email" name="application[certifying_professional_email]" required>
+            <input type="text" name="application[certifying_professional_fax]">
           </div>
-          <input type="hidden" name="application[medical_release_authorized]" value="0">
-          <input type="checkbox" name="application[medical_release_authorized]" value="1" required>
+          <input type="hidden" name="application[disability_information_release_authorized]" value="0">
+          <input type="checkbox" name="application[disability_information_release_authorized]" value="1" required>
         </fieldset>
       </form>
     `
 
     const form = document.querySelector("[data-controller='paper-application']")
     const directController = new PaperApplicationController()
-    const checkbox = document.querySelector("input[name='no_medical_provider_information']")
-    const providerName = document.querySelector("input[name='application[medical_provider_name]']")
-    const providerPhone = document.querySelector("input[name='application[medical_provider_phone]']")
-    const providerEmail = document.querySelector("input[name='application[medical_provider_email]']")
-    const hiddenMedicalRelease = document.querySelector("input[type='hidden'][name='application[medical_release_authorized]']")
-    const medicalRelease = document.querySelector("input[type='checkbox'][name='application[medical_release_authorized]']")
+    const checkbox = document.querySelector("input[name='no_certifying_professional_information']")
+    const providerName = document.querySelector("input[name='application[certifying_professional_name]']")
+    const providerPhone = document.querySelector("input[name='application[certifying_professional_phone]']")
+    const providerEmail = document.querySelector("input[name='application[certifying_professional_email]']")
+    const hiddenDisabilityInformationRelease = document.querySelector("input[type='hidden'][name='application[disability_information_release_authorized]']")
+    const disabilityInformationRelease = document.querySelector("input[type='checkbox'][name='application[disability_information_release_authorized]']")
 
     Object.defineProperty(directController, "element", {
       value: form,
@@ -212,26 +212,26 @@ describe("PaperApplicationController", () => {
       configurable: true
     })
 
-    directController.syncMedicalProviderRequirement()
+    directController.syncCertifyingProfessionalRequirement()
 
     expect(providerName.hasAttribute("required")).toBe(false)
     expect(providerPhone.hasAttribute("required")).toBe(false)
     expect(providerEmail.hasAttribute("required")).toBe(false)
-    expect(hiddenMedicalRelease.hasAttribute("required")).toBe(false)
-    expect(medicalRelease.hasAttribute("required")).toBe(false)
+    expect(hiddenDisabilityInformationRelease.hasAttribute("required")).toBe(false)
+    expect(disabilityInformationRelease.hasAttribute("required")).toBe(false)
     expect(checkbox.hasAttribute("required")).toBe(true)
     expect(checkbox.validationMessage).toBe("Check this box if no certifying professional information was provided.")
 
     providerName.value = "Dr. Test"
     providerPhone.value = "555-111-2222"
     providerEmail.value = "dr.test@example.com"
-    directController.syncMedicalProviderRequirement({ target: providerEmail })
+    directController.syncCertifyingProfessionalRequirement({ target: providerEmail })
 
     expect(providerName.hasAttribute("required")).toBe(true)
     expect(providerPhone.hasAttribute("required")).toBe(true)
     expect(providerEmail.hasAttribute("required")).toBe(true)
-    expect(hiddenMedicalRelease.hasAttribute("required")).toBe(false)
-    expect(medicalRelease.hasAttribute("required")).toBe(true)
+    expect(hiddenDisabilityInformationRelease.hasAttribute("required")).toBe(false)
+    expect(disabilityInformationRelease.hasAttribute("required")).toBe(true)
     expect(checkbox.hasAttribute("required")).toBe(false)
     expect(checkbox.validationMessage).toBe("")
   })
@@ -260,17 +260,17 @@ describe("PaperApplicationController", () => {
         <label>Income proof file <input type="file" name="income_proof" required></label>
         <fieldset>
           <legend>Certifying Professional Information</legend>
-          <label><input type="checkbox" name="no_medical_provider_information"> No certifying professional information provided</label>
+          <label><input type="checkbox" name="no_certifying_professional_information"> No certifying professional information provided</label>
           <p class="text-sm">Provider description</p>
           <div class="grid">
-            <label>Provider Name <input type="text" name="application[medical_provider_name]"></label>
-            <label>Provider Phone <input type="tel" name="application[medical_provider_phone]"></label>
-            <label>Provider Email <input type="email" name="application[medical_provider_email]"></label>
+            <label>Provider Name <input type="text" name="application[certifying_professional_name]"></label>
+            <label>Provider Phone <input type="tel" name="application[certifying_professional_phone]"></label>
+            <label>Provider Email <input type="email" name="application[certifying_professional_email]"></label>
           </div>
-          <input type="hidden" name="application[medical_release_authorized]" value="0">
+          <input type="hidden" name="application[disability_information_release_authorized]" value="0">
           <div>
-            <input type="checkbox" id="application_medical_release_authorized" name="application[medical_release_authorized]" value="1" aria-describedby="disability_release_hint">
-            <label for="application_medical_release_authorized">I authorize the release and sharing of my disability-related information.</label>
+            <input type="checkbox" id="application_disability_information_release_authorized" name="application[disability_information_release_authorized]" value="1" aria-describedby="disability_release_hint">
+            <label for="application_disability_information_release_authorized">I authorize the release and sharing of my disability-related information.</label>
             <p id="disability_release_hint">The program may contact this provider to verify my disability certification.</p>
           </div>
         </fieldset>
@@ -329,7 +329,7 @@ describe("PaperApplicationController", () => {
     document.querySelector('input[name="application[maryland_resident]"]').checked = true
     document.querySelector('input[name="application[information_verified]"]').checked = true
     document.querySelector('input[name="income_proof_action"][value="upload_only"]').checked = true
-    document.querySelector('input[name="no_medical_provider_information"]').checked = true
+    document.querySelector('input[name="no_certifying_professional_information"]').checked = true
 
     directController.syncFormState()
     expect(submitButton.disabled).toBe(true)
@@ -353,8 +353,8 @@ describe("PaperApplicationController", () => {
     expect(submitButton.disabled).toBe(false)
     expect(status.textContent).toBe("Paper application is ready to submit.")
 
-    document.querySelector('input[name="no_medical_provider_information"]').checked = false
-    document.querySelector('input[name="application[medical_provider_name]"]').value = "Dr. Test"
+    document.querySelector('input[name="no_certifying_professional_information"]').checked = false
+    document.querySelector('input[name="application[certifying_professional_name]"]').value = "Dr. Test"
     directController.syncFormState()
 
     expect(submitButton.disabled).toBe(true)
@@ -363,8 +363,8 @@ describe("PaperApplicationController", () => {
       "Still needed: Provider Phone, Provider Email, I authorize the release and sharing of my disability-related information."
     )
 
-    document.querySelector('input[name="application[medical_provider_phone]"]').value = "555-111-2222"
-    document.querySelector('input[name="application[medical_provider_email]"]').value = "dr.test@example.com"
+    document.querySelector('input[name="application[certifying_professional_phone]"]').value = "555-111-2222"
+    document.querySelector('input[name="application[certifying_professional_email]"]').value = "dr.test@example.com"
     directController.syncFormState()
 
     expect(submitButton.disabled).toBe(true)
@@ -373,7 +373,7 @@ describe("PaperApplicationController", () => {
     )
 
     // The form renders a hidden "0" companion before the checkbox, so scope by type like the real markup.
-    document.querySelector('input[type="checkbox"][name="application[medical_release_authorized]"]').checked = true
+    document.querySelector('input[type="checkbox"][name="application[disability_information_release_authorized]"]').checked = true
     directController.syncFormState()
 
     expect(submitButton.disabled).toBe(false)

@@ -218,9 +218,9 @@ module Applications
                                   date_of_birth: '04/02/1990', hearing_disability: '1',
                                   email: "parity-#{SecureRandom.hex(4)}@example.com"),
         application: { household_size: '2', annual_income: '15000', maryland_resident: '1',
-                       self_certify_disability: '1', medical_provider_name: 'Dr. Parity',
-                       medical_provider_phone: '2025559876',
-                       medical_provider_email: 'parity@example.com' }
+                       self_certify_disability: '1', certifying_professional_name: 'Dr. Parity',
+                       certifying_professional_phone: '2025559876',
+                       certifying_professional_email: 'parity@example.com' }
       }.merge(extra)
     end
 

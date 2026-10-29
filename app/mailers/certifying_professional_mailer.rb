@@ -1,6 +1,6 @@
 # frozen_string_literal: true
 
-class MedicalProviderMailer < ApplicationMailer
+class CertifyingProfessionalMailer < ApplicationMailer
   include Rails.application.routes.url_helpers
 
   def self.default_url_options
@@ -26,11 +26,11 @@ class MedicalProviderMailer < ApplicationMailer
 
   def certification_approved
     locale = provider_email_locale
-    template = find_text_template('medical_provider_certification_approved', locale: locale)
+    template = find_text_template('certifying_professional_certification_approved', locale: locale)
     variables = build_approval_variables
     log_debug_variables('certification_approved', variables)
 
-    send_email(params[:application].medical_provider_email, template, variables, provider_mail_options)
+    send_email(params[:application].certifying_professional_email, template, variables, provider_mail_options)
   rescue StandardError => e
     log_certification_error('certification_approved', params[:application]&.id, e)
     raise e
@@ -42,7 +42,7 @@ class MedicalProviderMailer < ApplicationMailer
   # @param admin [User] The admin who rejected the certification
   def certification_rejected
     locale = provider_email_locale
-    template = find_text_template('medical_provider_certification_rejected', locale: locale)
+    template = find_text_template('certifying_professional_certification_rejected', locale: locale)
     variables = build_rejection_variables(locale)
     log_debug_variables('certification_rejected', variables)
 
@@ -58,7 +58,7 @@ class MedicalProviderMailer < ApplicationMailer
   # @param notification_id [Integer] ID of the notification record for tracking
   def request_certification
     locale = provider_email_locale
-    template = find_text_template('medical_provider_request_certification', locale: locale)
+    template = find_text_template('certifying_professional_request_certification', locale: locale)
     variables = build_request_certification_variables
     log_debug_variables('request_certification', variables)
 
@@ -146,14 +146,14 @@ class MedicalProviderMailer < ApplicationMailer
 
   def certification_submission_instructions
     certification_instructions(
-      'medical_provider_mailer.certification_submission_instructions',
+      'certifying_professional_mailer.certification_submission_instructions',
       locale: provider_email_locale
     )
   end
 
   def certification_resubmission_instructions(locale)
     certification_instructions(
-      'medical_provider_mailer.certification_resubmission_instructions',
+      'certifying_professional_mailer.certification_resubmission_instructions',
       locale: locale
     )
   end
@@ -214,7 +214,7 @@ class MedicalProviderMailer < ApplicationMailer
 
   # A secure request passes the email recorded on its request row.
   def provider_recipient_email(application)
-    params[:recipient_email].presence || application.medical_provider_email
+    params[:recipient_email].presence || application.certifying_professional_email
   end
 
   def log_debug_variables(context, variables)

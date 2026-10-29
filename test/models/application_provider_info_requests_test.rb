@@ -15,9 +15,9 @@ class ApplicationProviderInfoRequestsTest < ActiveSupport::TestCase
     # review, audit, and timestamp side effects, none of which are under test here.
     matching_application.update_columns(
       income_proof_required: false,
-      medical_provider_name: '',
-      medical_provider_phone: '',
-      medical_provider_email: ''
+      certifying_professional_name: '',
+      certifying_professional_phone: '',
+      certifying_professional_email: ''
     )
     create(
       :application,
@@ -41,7 +41,7 @@ class ApplicationProviderInfoRequestsTest < ActiveSupport::TestCase
     app = create(:application, residency_proof_status: :approved, id_proof_status: :approved)
     app.update_columns(
       income_proof_required: false,
-      medical_provider_name: '', medical_provider_phone: '', medical_provider_email: ''
+      certifying_professional_name: '', certifying_professional_phone: '', certifying_professional_email: ''
     )
 
     assert_includes Application.pending_provider_info, app
@@ -52,7 +52,7 @@ class ApplicationProviderInfoRequestsTest < ActiveSupport::TestCase
     app.update_columns(
       income_proof_required: true,
       income_proof_status: Application.income_proof_statuses[:not_reviewed],
-      medical_provider_name: '', medical_provider_phone: '', medical_provider_email: ''
+      certifying_professional_name: '', certifying_professional_phone: '', certifying_professional_email: ''
     )
 
     refute_includes Application.pending_provider_info, app
@@ -63,7 +63,7 @@ class ApplicationProviderInfoRequestsTest < ActiveSupport::TestCase
     app.update_columns(
       income_proof_required: true,
       income_proof_status: Application.income_proof_statuses[:approved],
-      medical_provider_name: '', medical_provider_phone: '', medical_provider_email: ''
+      certifying_professional_name: '', certifying_professional_phone: '', certifying_professional_email: ''
     )
 
     assert_includes Application.pending_provider_info, app
@@ -76,7 +76,7 @@ class ApplicationProviderInfoRequestsTest < ActiveSupport::TestCase
     app.update_columns(
       id_proof_status: Application.id_proof_statuses[:not_reviewed],
       income_proof_required: false,
-      medical_provider_name: '', medical_provider_phone: '', medical_provider_email: ''
+      certifying_professional_name: '', certifying_professional_phone: '', certifying_professional_email: ''
     )
 
     refute_includes Application.pending_provider_info, app
@@ -94,7 +94,7 @@ class ApplicationProviderInfoRequestsTest < ActiveSupport::TestCase
     app.update_columns(
       id_proof_status: Application.id_proof_statuses[:rejected],
       income_proof_required: false,
-      medical_provider_name: '', medical_provider_phone: '', medical_provider_email: ''
+      certifying_professional_name: '', certifying_professional_phone: '', certifying_professional_email: ''
     )
 
     refute_includes Application.pending_provider_info, app

@@ -257,8 +257,8 @@ class SecurePublicFormMatrixTest < ActionDispatch::IntegrationTest
 
   def update_params(name, token)
     if name == :provider_info
-      return { token: token, medical_provider_name: 'Dr. Matrix', medical_provider_phone: '410-555-0100',
-               medical_provider_email: 'matrix@example.test' }
+      return { token: token, certifying_professional_name: 'Dr. Matrix', certifying_professional_phone: '410-555-0100',
+               certifying_professional_email: 'matrix@example.test' }
     end
 
     { token: token, file: fixture_file_upload(Rails.root.join('test/fixtures/files/disability_certification_valid.pdf'), 'application/pdf') }

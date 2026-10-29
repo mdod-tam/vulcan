@@ -43,82 +43,82 @@
     <%= hidden_field_tag :token, @token %>
     <p class="text-sm text-gray-600"><%= t('.required_legend') %></p>
 
-    <%# Explicit id: values match the error summary anchor hrefs (#medical_provider_name, etc.).
+    <%# Explicit id: values match the error summary anchor hrefs (#certifying_professional_name, etc.).
         Without the override, form_with would prefix them with the model name. %>
-    <% name_errors = Array(errors&.[](:medical_provider_name)) %>
+    <% name_errors = Array(errors&.[](:certifying_professional_name)) %>
     <div>
-      <%= form.label :medical_provider_name, class: "form-label" do %>
+      <%= form.label :certifying_professional_name, class: "form-label" do %>
         <%= t('.provider_name') %> <abbr title="<%= t('.required') %>" class="text-danger-700 no-underline" aria-hidden="true">*</abbr>
       <% end %>
-      <%= form.text_field :medical_provider_name,
-                          id: "medical_provider_name",
+      <%= form.text_field :certifying_professional_name,
+                          id: "certifying_professional_name",
                           required: true,
-                          value: params[:medical_provider_name],
+                          value: params[:certifying_professional_name],
                           autocomplete: "off",
                           aria: {
-                            describedby: name_errors.any? ? "medical_provider_name_error" : nil,
+                            describedby: name_errors.any? ? "certifying_professional_name_error" : nil,
                             invalid: name_errors.any? ? "true" : nil
                           },
                           class: "form-input mt-2 #{'border-danger-500' if name_errors.any?}" %>
       <% if name_errors.any? %>
-        <p id="medical_provider_name_error" class="mt-2 text-sm text-danger-700"><%= name_errors.to_sentence %></p>
+        <p id="certifying_professional_name_error" class="mt-2 text-sm text-danger-700"><%= name_errors.to_sentence %></p>
       <% end %>
     </div>
 
-    <% email_errors = Array(errors&.[](:medical_provider_email)) %>
+    <% email_errors = Array(errors&.[](:certifying_professional_email)) %>
     <div>
-      <%= form.label :medical_provider_email, class: "form-label" do %>
+      <%= form.label :certifying_professional_email, class: "form-label" do %>
         <%= t('.provider_email') %> <abbr title="<%= t('.required') %>" class="text-danger-700 no-underline" aria-hidden="true">*</abbr>
       <% end %>
-      <%= form.email_field :medical_provider_email,
-                           id: "medical_provider_email",
+      <%= form.email_field :certifying_professional_email,
+                           id: "certifying_professional_email",
                            required: true,
-                           value: params[:medical_provider_email],
+                           value: params[:certifying_professional_email],
                            autocomplete: "email",
                            aria: {
-                             describedby: email_errors.any? ? "medical_provider_email_error" : nil,
+                             describedby: email_errors.any? ? "certifying_professional_email_error" : nil,
                              invalid: email_errors.any? ? "true" : nil
                            },
                            class: "form-input mt-2 #{'border-danger-500' if email_errors.any?}" %>
       <% if email_errors.any? %>
-        <p id="medical_provider_email_error" class="mt-2 text-sm text-danger-700"><%= email_errors.to_sentence %></p>
+        <p id="certifying_professional_email_error" class="mt-2 text-sm text-danger-700"><%= email_errors.to_sentence %></p>
       <% end %>
     </div>
 
-    <% phone_errors = Array(errors&.[](:medical_provider_phone)) %>
+    <% phone_errors = Array(errors&.[](:certifying_professional_phone)) %>
     <div>
-      <%= form.label :medical_provider_phone, class: "form-label" do %>
+      <%= form.label :certifying_professional_phone, class: "form-label" do %>
         <%= t('.provider_phone') %> <abbr title="<%= t('.required') %>" class="text-danger-700 no-underline" aria-hidden="true">*</abbr>
       <% end %>
-      <%= form.telephone_field :medical_provider_phone,
-                               id: "medical_provider_phone",
+      <%= form.telephone_field :certifying_professional_phone,
+                               id: "certifying_professional_phone",
                                required: true,
-                               value: params[:medical_provider_phone],
+                               value: params[:certifying_professional_phone],
                                autocomplete: "tel",
                                aria: {
-                                 describedby: phone_errors.any? ? "medical_provider_phone_error" : nil,
+                                 describedby: phone_errors.any? ? "certifying_professional_phone_error" : nil,
                                  invalid: phone_errors.any? ? "true" : nil
                                },
                                class: "form-input mt-2 #{'border-danger-500' if phone_errors.any?}" %>
       <% if phone_errors.any? %>
-        <p id="medical_provider_phone_error" class="mt-2 text-sm text-danger-700"><%= phone_errors.to_sentence %></p>
+        <p id="certifying_professional_phone_error" class="mt-2 text-sm text-danger-700"><%= phone_errors.to_sentence %></p>
       <% end %>
     </div>
 
-    <% fax_errors = Array(errors&.[](:medical_provider_fax)) %>
+    <% fax_errors = Array(errors&.[](:certifying_professional_fax)) %>
     <div>
-      <%= form.label :medical_provider_fax, t('.provider_fax'), class: "form-label" %>
-      <%= form.telephone_field :medical_provider_fax,
-                               id: "medical_provider_fax",
-                               value: params[:medical_provider_fax],
+      <%= form.label :certifying_professional_fax, t('.provider_fax'), class: "form-label" %>
+      <%= form.telephone_field :certifying_professional_fax,
+                               id: "certifying_professional_fax",
+                               value: params[:certifying_professional_fax],
                                autocomplete: "tel",
                                aria: {
-                                 describedby: fax_errors.any? ? "medical_provider_fax_error" : nil,
+                                 describedby: fax_errors.any? ? "certifying_professional_fax_error" : nil,
                                  invalid: fax_errors.any? ? "true" : nil
                                },
                                class: "form-input mt-2 #{'border-danger-500' if fax_errors.any?}" %>
       <% if fax_errors.any? %>
-        <p id="medical_provider_fax_error" class="mt-2 text-sm text-danger-700"><%= fax_errors.to_sentence %></p>
+        <p id="certifying_professional_fax_error" class="mt-2 text-sm text-danger-700"><%= fax_errors.to_sentence %></p>
       <% end %>
     </div>
 

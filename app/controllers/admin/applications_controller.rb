@@ -659,10 +659,10 @@ module Admin
     def application_params
       permitted = %i[application_type
                      submission_method
-                     medical_provider_name
-                     medical_provider_phone
-                     medical_provider_fax
-                     medical_provider_email
+                     certifying_professional_name
+                     certifying_professional_phone
+                     certifying_professional_fax
+                     certifying_professional_email
                      alternate_contact_name
                      alternate_contact_phone
                      alternate_contact_email

@@ -202,7 +202,7 @@
 
        <%# fields_for does not bind a non-association attribute. The explicit object is what makes
            these inputs show their values on the edit page and on a re-render after a refusal. %>
-       <%= f.fields_for :medical_provider_attributes, @application.medical_provider_attributes do |mp| %>
+       <%= f.fields_for :certifying_professional_attributes, @application.certifying_professional_attributes do |mp| %>
          <%= render "certifying_professional_form", form: mp %>
        <% end %>
 

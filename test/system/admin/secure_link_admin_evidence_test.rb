@@ -21,9 +21,9 @@ module Admin
         application: application,
         secure_request_form: form,
         params: {
-          medical_provider_name: application.medical_provider_name,
-          medical_provider_phone: application.medical_provider_phone,
-          medical_provider_email: 'replacement-provider@example.test'
+          certifying_professional_name: application.certifying_professional_name,
+          certifying_professional_phone: application.certifying_professional_phone,
+          certifying_professional_email: 'replacement-provider@example.test'
         }
       ).call
       open_link = create(:secure_request_form, application: application, recipient: application.user)
@@ -41,8 +41,8 @@ module Admin
     end
 
     test 'certification section flags a kept-aside document and explains a disabled action' do
-      application = create(:application, disability_certification_status: :approved, medical_provider_name: 'Dr. Evidence')
-      application.update_columns(medical_provider_email: nil)
+      application = create(:application, disability_certification_status: :approved, certifying_professional_name: 'Dr. Evidence')
+      application.update_columns(certifying_professional_email: nil)
       application.additional_disability_certifications.attach(
         io: StringIO.new('late docuseal'),
         filename: 'late_docuseal.pdf',
@@ -58,8 +58,8 @@ module Admin
     end
 
     test 'disabled secure certification action shows its reason' do
-      application = create(:application, medical_provider_name: 'Dr. Missing')
-      application.update_columns(medical_provider_email: nil, disability_certification_status: Application.disability_certification_statuses[:requested])
+      application = create(:application, certifying_professional_name: 'Dr. Missing')
+      application.update_columns(certifying_professional_email: nil, disability_certification_status: Application.disability_certification_statuses[:requested])
 
       visit admin_application_path(application)
 

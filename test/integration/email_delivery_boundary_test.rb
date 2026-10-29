@@ -13,7 +13,7 @@ class EmailDeliveryBoundaryTest < ActionDispatch::IntegrationTest
                     create(:admin, email: PublicAuditActor::SYSTEM_AUDIT_EMAIL)
     @user = create(:constituent, communication_preference: 'email')
     load_seeded_email_templates('user_mailer_password_reset', 'evaluator_mailer_evaluation_submission_confirmation',
-                                'vendor_notifications_w9_approved', 'medical_provider_request_certification')
+                                'vendor_notifications_w9_approved', 'certifying_professional_request_certification')
     ActionMailer::Base.deliveries.clear
     clear_enqueued_jobs
   end
@@ -101,8 +101,8 @@ class EmailDeliveryBoundaryTest < ActionDispatch::IntegrationTest
   end
 
   test 'a certification request prepared before an off and on interval keeps its original authorization' do
-    application = create(:application, :in_progress, medical_provider_name: 'Dr. Provider',
-                                                     medical_provider_email: 'provider@example.test')
+    application = create(:application, :in_progress, certifying_professional_name: 'Dr. Provider',
+                                                     certifying_professional_email: 'provider@example.test')
     service_class = Class.new(Applications::RequestCertificationUpload) do
       private
 
@@ -122,8 +122,8 @@ class EmailDeliveryBoundaryTest < ActionDispatch::IntegrationTest
   end
 
   test 'a certification email stopped after its request was prepared moves certification back from requested' do
-    application = create(:application, :in_progress, medical_provider_name: 'Dr. Provider',
-                                                     medical_provider_email: 'provider@example.test')
+    application = create(:application, :in_progress, certifying_professional_name: 'Dr. Provider',
+                                                     certifying_professional_email: 'provider@example.test')
     EmailDelivery::Policy.stubs(:verify_delivery).returns(EmailDelivery::Decision.allowed)
                          .then.returns(EmailDelivery::Decision.suppressed(:global_disabled))
 
@@ -137,8 +137,8 @@ class EmailDeliveryBoundaryTest < ActionDispatch::IntegrationTest
   end
 
   test 'a late certification stop does not undo a status this request did not set' do
-    application = create(:application, :in_progress, medical_provider_name: 'Dr. Provider',
-                                                     medical_provider_email: 'provider@example.test')
+    application = create(:application, :in_progress, certifying_professional_name: 'Dr. Provider',
+                                                     certifying_professional_email: 'provider@example.test')
     application.update_columns(disability_certification_status: Application.disability_certification_statuses[:requested],
                                disability_certification_requested_at: 2.days.ago)
     EmailDelivery::Policy.stubs(:verify_delivery).returns(EmailDelivery::Decision.allowed)
@@ -150,8 +150,8 @@ class EmailDeliveryBoundaryTest < ActionDispatch::IntegrationTest
   end
 
   test 'a late certification stop keeps a DocuSeal request accepted in the same second' do
-    application = create(:application, :in_progress, medical_provider_name: 'Dr. Provider',
-                                                     medical_provider_email: 'provider@example.test')
+    application = create(:application, :in_progress, certifying_professional_name: 'Dr. Provider',
+                                                     certifying_professional_email: 'provider@example.test')
     ::Docuseal.stubs(:create_submission).returns({ 'id' => 'sub-1', 'submitters' => [{ 'id' => 'subm-1' }] })
     EmailDelivery::Policy.stubs(:verify_delivery).returns(EmailDelivery::Decision.allowed)
                          .then.returns(EmailDelivery::Decision.allowed)
@@ -216,7 +216,7 @@ class EmailDeliveryBoundaryTest < ActionDispatch::IntegrationTest
                                         notifiable: create(:application), metadata: {})
     attempt = EmailDeliveryAttempt.create!(notification: notification, correlation_id: SecureRandom.uuid,
                                            recipient_key: EmailDeliveryAttempt.recipient_key('original@example.test'), destination: 'original@example.test',
-                                           server_id: 'default', mail_action: 'MedicalProviderMailer#request_certification', attempted_at: Time.current,
+                                           server_id: 'default', mail_action: 'CertifyingProfessionalMailer#request_certification', attempted_at: Time.current,
                                            provider_message_id: 'pm-1', opened_at: 1.hour.ago)
     notification.mark_delivery_suppressed!('global_disabled')
     fact = EmailDelivery::Feedback.webhook('RecordType' => 'Delivery', 'MessageID' => 'pm-1',

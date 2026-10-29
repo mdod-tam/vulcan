@@ -39,11 +39,11 @@ module PaperApplicationsTestHelper
     end
   end
 
-  def fill_in_medical_provider_information(name: 'Dr. Smith', phone: '555-987-6543', email: 'dr.smith@example.com')
-    within_medical_provider_fieldset do
-      find('input[name="application[medical_provider_name]"]').set('').set(name)
-      find('input[name="application[medical_provider_phone]"]').set('').set(phone)
-      find('input[name="application[medical_provider_email]"]').set('').set(email)
+  def fill_in_certifying_professional_information(name: 'Dr. Smith', phone: '555-987-6543', email: 'dr.smith@example.com')
+    within_certifying_professional_fieldset do
+      find('input[name="application[certifying_professional_name]"]').set('').set(name)
+      find('input[name="application[certifying_professional_phone]"]').set('').set(phone)
+      find('input[name="application[certifying_professional_email]"]').set('').set(email)
     end
   end
 
@@ -64,7 +64,7 @@ module PaperApplicationsTestHelper
 
   def complete_paper_application_attestations
     check 'application[terms_accepted]' if page.has_unchecked_field?('application[terms_accepted]', wait: 1)
-    check 'application[medical_release_authorized]' if page.has_unchecked_field?('application[medical_release_authorized]', wait: 1)
+    check 'application[disability_information_release_authorized]' if page.has_unchecked_field?('application[disability_information_release_authorized]', wait: 1)
     check 'application[information_verified]' if page.has_unchecked_field?('application[information_verified]', wait: 1)
     sync_paper_submit_gate
   end
@@ -97,7 +97,7 @@ module PaperApplicationsTestHelper
     within find('fieldset', text: 'Disability Information'), &
   end
 
-  def within_medical_provider_fieldset(&)
+  def within_certifying_professional_fieldset(&)
     within find('fieldset', text: 'Certifying Professional Information'), &
   end
 

@@ -14,35 +14,35 @@ class ApplicationContactChangeAuditTest < ActiveSupport::TestCase
   end
 
   test 'creating an application records no provider change event' do
-    assert_equal 0, Event.where(action: 'medical_provider_info_updated', auditable: @application).count
+    assert_equal 0, Event.where(action: 'certifying_professional_info_updated', auditable: @application).count
   end
 
   test 'a staff edit records old and new provider values without a review flag' do
-    @application.update_columns(medical_provider_email: 'original@example.test')
+    @application.update_columns(certifying_professional_email: 'original@example.test')
 
-    @application.update!(medical_provider_email: 'updated-provider@example.test')
+    @application.update!(certifying_professional_email: 'updated-provider@example.test')
 
-    event = Event.find_by!(action: 'medical_provider_info_updated', auditable: @application)
+    event = Event.find_by!(action: 'certifying_professional_info_updated', auditable: @application)
     assert_equal @admin, event.user
     assert_equal({ 'old' => 'o***@e***.test', 'new' => 'u***@e***.test' },
-                 event.metadata['changes']['medical_provider_email'])
-    assert_equal ['medical_provider_email'], event.metadata['changes'].keys
+                 event.metadata['changes']['certifying_professional_email'])
+    assert_equal ['certifying_professional_email'], event.metadata['changes'].keys
     assert_nil event.metadata['review_required']
   end
 
   test 'provider values typed into a draft are not recorded' do
     draft = create(:application, :draft)
 
-    draft.update!(medical_provider_email: 'draft-provider@example.test')
+    draft.update!(certifying_professional_email: 'draft-provider@example.test')
 
-    assert_equal 0, Event.where(action: 'medical_provider_info_updated', auditable: draft).count
+    assert_equal 0, Event.where(action: 'certifying_professional_info_updated', auditable: draft).count
   end
 
   test 'two different provider edits in quick succession are both recorded' do
-    @application.update!(medical_provider_phone: '410-555-0111')
-    @application.update!(medical_provider_phone: '410-555-0122')
+    @application.update!(certifying_professional_phone: '410-555-0111')
+    @application.update!(certifying_professional_phone: '410-555-0122')
 
-    assert_equal 2, Event.where(action: 'medical_provider_info_updated', auditable: @application).count
+    assert_equal 2, Event.where(action: 'certifying_professional_info_updated', auditable: @application).count
   end
 
   test 'alternate contact edits still record old and new values' do
@@ -59,7 +59,7 @@ class ApplicationContactChangeAuditTest < ActiveSupport::TestCase
     create(:secure_request_form, application: @application, recipient: @application.user)
     assert_predicate @application, :provider_info_requests_visible?
 
-    @application.update_columns(medical_provider_email: '')
+    @application.update_columns(certifying_professional_email: '')
     @application.secure_request_forms.update_all(status: SecureRequestForm.statuses[:revoked], revoked_at: Time.current)
     assert_predicate @application.reload, :provider_info_requests_visible?
   end

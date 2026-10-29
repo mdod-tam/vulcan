@@ -1,13 +1,13 @@
 # frozen_string_literal: true
 
 module Admin
-  # Activity history text for alternate contact and medical provider changes.
+  # Activity history text for alternate contact and certifying professional changes.
   module ContactChangeAuditHelper
     def contact_field_change_label(log)
       case log.action
       when 'alternate_contact_updated'
         'Alternate Contact Updated'
-      when 'medical_provider_info_updated'
+      when 'certifying_professional_info_updated'
         log.metadata['review_required'] ? 'Provider Info Replaced - Review' : 'Provider Info Updated'
       end
     end

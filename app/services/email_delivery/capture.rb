@@ -86,7 +86,7 @@ module EmailDelivery
 
     def delivery_identity(origin, notification)
       recipient = origin.respond_to?(:recipient) ? origin.recipient : notification&.recipient || @recipient
-      recipient = nil if @context['mail_action'].start_with?('MedicalProviderMailer#')
+      recipient = nil if @context['mail_action'].start_with?('CertifyingProfessionalMailer#')
       application = origin.is_a?(Application) ? origin : (origin.application if origin.respond_to?(:application))
       { recipient: recipient, owner: destination_owner(origin, recipient), application: application }
     end

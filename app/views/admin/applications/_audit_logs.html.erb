@@ -82,7 +82,7 @@
                         "Voucher Cancelled"
                       when "profile_updated", *UserProfile::PROFILE_CHANGE_ON_BEHALF_ACTIONS
                         "Profile Updated"
-                      when 'alternate_contact_updated', 'medical_provider_info_updated'
+                      when 'alternate_contact_updated', 'certifying_professional_info_updated'
                         contact_field_change_label(log)
                       when 'proof_secure_submission_refused'
                         'Secure Proof Upload Refused'
@@ -182,7 +182,7 @@
                   when log.is_a?(Notification)
                     case log.action
                     when "disability_certification_requested"
-                      "Disability certification requested from #{@application.medical_provider_name}"
+                      "Disability certification requested from #{@application.certifying_professional_name}"
                     when "disability_certification_received"
                       "Disability certification received from provider"
                     when "disability_certification_approved"
@@ -256,7 +256,7 @@
                       editor_name = log.user&.full_name || 'Unknown user'
                       changes_summary = log.metadata['changes']&.keys&.map(&:humanize)&.join(', ') || 'profile fields'
                       "#{editor_name} (#{editor_role}) updated #{user_name}'s profile (#{changes_summary})"
-                    when 'alternate_contact_updated', 'medical_provider_info_updated'
+                    when 'alternate_contact_updated', 'certifying_professional_info_updated'
                       contact_field_change_detail(log)
                     when 'proof_resubmission_request_failed'
                       proof_label = log.metadata['proof_type'].to_s.humanize.downcase

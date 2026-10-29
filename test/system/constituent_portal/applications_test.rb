@@ -40,10 +40,10 @@ class ApplicationsSystemTest < ApplicationSystemTestCase
     assert_no_text 'pay stubs'
     assert_no_text 'paystubs'
 
-    assert_text 'Medical Professional Information'
+    assert_text 'Certifying Professional Information'
     assert_text 'Doctor / Physician'
     assert_text 'Audiologist'
-    assert_no_text 'other medical professional'
+    assert_no_text 'other certifying professional'
   end
 
   test 'can submit application with valid data' do
@@ -71,9 +71,9 @@ class ApplicationsSystemTest < ApplicationSystemTestCase
     select 'Maryland', from: 'State'
     find('input[name*="zip_code"]').set('21401')
     within '#certifying-professional-fields' do
-      find('input[name="application[medical_provider_attributes][name]"]').set('Dr. Jane Smith')
-      find('input[name="application[medical_provider_attributes][phone]"]').set('2025551234')
-      find('input[name="application[medical_provider_attributes][email]"]').set('drsmith@example.com')
+      find('input[name="application[certifying_professional_attributes][name]"]').set('Dr. Jane Smith')
+      find('input[name="application[certifying_professional_attributes][phone]"]').set('2025551234')
+      find('input[name="application[certifying_professional_attributes][email]"]').set('drsmith@example.com')
     end
     attach_cleared_document 'application_income_proof', @valid_pdf, make_visible: true
     attach_cleared_document 'application_residency_proof', @valid_image, make_visible: true
@@ -228,9 +228,9 @@ class ApplicationsSystemTest < ApplicationSystemTestCase
     draft = Application.where(user: @dependent, managing_guardian_id: @user.id).sole
     assert_equal 2, draft.household_size
     fill_complete_application_form
-    find('input[name="application[medical_provider_attributes][fax]"]').set('2025555678')
+    find('input[name="application[certifying_professional_attributes][fax]"]').set('2025555678')
     find_field('Household Size').click
-    wait_until(time: 10) { draft.reload.medical_provider_fax == '2025555678' }
+    wait_until(time: 10) { draft.reload.certifying_professional_fax == '2025555678' }
     assert_equal '12 Original Dependent Road', @dependent.reload.physical_address_1,
                  'the edited address requires the full form save'
     assert_selector "form[action='#{constituent_portal_applications_path}'][data-controller~='autosave']"
@@ -247,8 +247,8 @@ class ApplicationsSystemTest < ApplicationSystemTestCase
     assert_field 'Household Size', with: '3', disabled: false
     assert_equal 60_000, find_field('Annual Income', disabled: false).value.to_f
     assert_field 'Street Address', with: '456 Oak Ave', disabled: false
-    assert_selector 'input[name="application[medical_provider_attributes][name]"][value="Dr. Jane Smith"]:not([disabled])'
-    assert_selector 'input[name="application[medical_provider_attributes][fax]"][value="2025555678"]:not([disabled])'
+    assert_selector 'input[name="application[certifying_professional_attributes][name]"][value="Dr. Jane Smith"]:not([disabled])'
+    assert_selector 'input[name="application[certifying_professional_attributes][fax]"][value="2025555678"]:not([disabled])'
     assert_selector 'input[name="save_draft"]:not([disabled])'
     assert_selector 'input[name="submit_application"]:disabled'
     assert_equal [draft.id], Application.where(user: @dependent).pluck(:id)
@@ -259,11 +259,11 @@ class ApplicationsSystemTest < ApplicationSystemTestCase
     assert_selector '[data-autosave-target="status"][role="status"][aria-live="polite"]', text: I18n.t('applications.autosave.unsaved')
     take_evidence_screenshot('application-autosaved-dependent-refusal', full: true, html: true)
 
-    find('input[name="application[medical_provider_attributes][name]"]').set('Dr. Corrected Provider')
-    find('input[name="application[medical_provider_attributes][fax]"]').set('')
+    find('input[name="application[certifying_professional_attributes][name]"]').set('Dr. Corrected Provider')
+    find('input[name="application[certifying_professional_attributes][fax]"]').set('')
     fill_in 'Street Address', with: '78 Corrected Dependent Road'
     assert_field 'Street Address', with: '78 Corrected Dependent Road', disabled: false
-    assert_equal '', find('input[name="application[medical_provider_attributes][fax]"]').value
+    assert_equal '', find('input[name="application[certifying_professional_attributes][fax]"]').value
     assert_empty page.evaluate_script('window.__systemTestErrors')
     take_evidence_screenshot('application-autosaved-dependent-corrected-retry', full: true, html: true)
     find('input[name="save_draft"]').click
@@ -273,8 +273,8 @@ class ApplicationsSystemTest < ApplicationSystemTestCase
     draft.reload
     assert_equal ['draft', @dependent.id, @user.id], [draft.status, draft.user_id, draft.managing_guardian_id]
     assert_equal [3, 60_000], [draft.household_size, draft.annual_income.to_i]
-    assert_equal 'Dr. Corrected Provider', draft.medical_provider_name
-    assert draft.medical_provider_fax.blank?, 'the cleared provider field must remain cleared after the full save'
+    assert_equal 'Dr. Corrected Provider', draft.certifying_professional_name
+    assert draft.certifying_professional_fax.blank?, 'the cleared provider field must remain cleared after the full save'
     assert_equal '78 Corrected Dependent Road', @dependent.reload.physical_address_1
     assert_equal guardian_address, @user.reload.physical_address_1
     assert_equal 'open', review_case.reload.status
@@ -373,9 +373,9 @@ class ApplicationsSystemTest < ApplicationSystemTestCase
     check 'Vision'
 
     within '#certifying-professional-fields' do
-      find('input[name="application[medical_provider_attributes][name]"]').set('Dr. Test Provider')
-      find('input[name="application[medical_provider_attributes][phone]"]').set('2025551234')
-      find('input[name="application[medical_provider_attributes][email]"]').set('test@example.com')
+      find('input[name="application[certifying_professional_attributes][name]"]').set('Dr. Test Provider')
+      find('input[name="application[certifying_professional_attributes][phone]"]').set('2025551234')
+      find('input[name="application[certifying_professional_attributes][email]"]').set('test@example.com')
     end
 
     check 'I authorize the release and sharing of my disability-related information as described above'
@@ -457,10 +457,10 @@ class ApplicationsSystemTest < ApplicationSystemTestCase
     check 'Mobility'
 
     within '#certifying-professional-fields' do
-      find('input[name="application[medical_provider_attributes][name]"]').set('').set('Dr. Robert Johnson')
-      find('input[name="application[medical_provider_attributes][phone]"]').set('').set('4105551234')
-      find('input[name="application[medical_provider_attributes][fax]"]').set('').set('4105555678')
-      find('input[name="application[medical_provider_attributes][email]"]').set('').set('dr.johnson@example.com')
+      find('input[name="application[certifying_professional_attributes][name]"]').set('').set('Dr. Robert Johnson')
+      find('input[name="application[certifying_professional_attributes][phone]"]').set('').set('4105551234')
+      find('input[name="application[certifying_professional_attributes][fax]"]').set('').set('4105555678')
+      find('input[name="application[certifying_professional_attributes][email]"]').set('').set('dr.johnson@example.com')
     end
 
     check 'I authorize the release and sharing of my disability-related information as described above'
@@ -482,10 +482,10 @@ class ApplicationsSystemTest < ApplicationSystemTestCase
     assert_equal 60_000, application.annual_income.to_i
     assert application.self_certify_disability
 
-    assert_equal 'Dr. Robert Johnson', application.medical_provider_name
-    assert_equal '4105551234', application.medical_provider_phone
-    assert_equal '4105555678', application.medical_provider_fax
-    assert_equal 'dr.johnson@example.com', application.medical_provider_email
+    assert_equal 'Dr. Robert Johnson', application.certifying_professional_name
+    assert_equal '4105551234', application.certifying_professional_phone
+    assert_equal '4105555678', application.certifying_professional_fax
+    assert_equal 'dr.johnson@example.com', application.certifying_professional_email
 
     assert_equal @dependent.id, application.user_id
 
@@ -517,27 +517,27 @@ class ApplicationsSystemTest < ApplicationSystemTestCase
     refute_checked_field 'Cognition'
 
     within '#certifying-professional-fields' do
-      assert_selector 'input[name="application[medical_provider_attributes][name]"]', wait: 10
+      assert_selector 'input[name="application[certifying_professional_attributes][name]"]', wait: 10
 
-      name_field = find('input[name="application[medical_provider_attributes][name]"]')
+      name_field = find('input[name="application[certifying_professional_attributes][name]"]')
       puts "DEBUG: Name field value: '#{name_field.value}'" if ENV['VERBOSE_TESTS']
 
       # Empty provider fields bypass the form-value assertions below. Persistence assertions still run.
       if name_field.value.blank?
-        puts 'WARNING: Medical provider fields are empty in edit form - this is a form binding issue, not a data persistence issue'
-        puts 'The medical provider data was verified to be correctly saved in the database above'
+        puts 'WARNING: Certifying professional fields are empty in edit form - this is a form binding issue, not a data persistence issue'
+        puts 'The certifying professional data was verified to be correctly saved in the database above'
       else
         assert_equal 'Dr. Robert Johnson', name_field.value
 
-        phone_field = find('input[name="application[medical_provider_attributes][phone]"]')
+        phone_field = find('input[name="application[certifying_professional_attributes][phone]"]')
         assert_equal '4105551234', phone_field.value
 
-        email_field = find('input[name="application[medical_provider_attributes][email]"]')
+        email_field = find('input[name="application[certifying_professional_attributes][email]"]')
         assert_equal 'dr.johnson@example.com', email_field.value
 
         # The fax field is optional.
-        if page.has_css?('input[name="application[medical_provider_attributes][fax]"]', wait: 1)
-          fax_field = find('input[name="application[medical_provider_attributes][fax]"]')
+        if page.has_css?('input[name="application[certifying_professional_attributes][fax]"]', wait: 1)
+          fax_field = find('input[name="application[certifying_professional_attributes][fax]"]')
           assert_equal '4105555678', fax_field.value
         end
       end

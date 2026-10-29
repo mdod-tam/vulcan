@@ -10,7 +10,7 @@ module Admin
     setup do
       @admin = create(:admin)
       @evaluator = create(:user, :evaluator)
-      @medical_provider = create(:user, :medical_provider)
+      @certifying_professional = create(:user, :certifying_professional)
       @application = create(:application, :draft)
 
       setup_active_storage_test
@@ -92,8 +92,8 @@ module Admin
       @application.update!(disability_certification_status: 'not_requested')
 
       @application.update!(
-        medical_provider_name: 'Dr. Test Provider',
-        medical_provider_email: 'provider@example.com'
+        certifying_professional_name: 'Dr. Test Provider',
+        certifying_professional_email: 'provider@example.com'
       )
 
       visit admin_application_path(@application)

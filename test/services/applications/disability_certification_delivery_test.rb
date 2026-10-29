@@ -7,7 +7,7 @@ module Applications
     setup do
       @admin = create(:admin)
       ensure_system_audit_actor!
-      @application = create(:application, medical_provider_email: 'provider@example.com', disability_certification_status: :not_requested)
+      @application = create(:application, certifying_professional_email: 'provider@example.com', disability_certification_status: :not_requested)
       @service = DisabilityCertificationService.new(application: @application, actor: @admin)
     end
 

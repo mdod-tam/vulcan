@@ -170,7 +170,7 @@ module Admin
       attach_and_accept_proofs
       fill_in_application_details(household_size: 2, annual_income: 20_000)
       fill_in_disability_information
-      fill_in_medical_provider_information
+      fill_in_certifying_professional_information
       complete_paper_application_attestations
     end
 

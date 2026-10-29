@@ -68,7 +68,7 @@ module Applications
         AutosaveRevisions.new(target_application).prepare!(context: @form.autosave_context, revision: @form.autosave_revision)
         update_user_attributes
         create_or_update_application
-        set_medical_provider_details
+        set_certifying_professional_details
         attach_file_uploads
         save_application_with_audit
       end
@@ -272,7 +272,7 @@ module Applications
         self_certify_disability: @form.self_certify_disability,
         terms_accepted: @form.terms_accepted,
         information_verified: @form.information_verified,
-        medical_release_authorized: @form.medical_release_authorized,
+        disability_information_release_authorized: @form.disability_information_release_authorized,
         submission_method: @form.submission_method,
         application_date: target_application.application_date || Date.current,
         alternate_contact_name: @form.alternate_contact_name,
@@ -289,11 +289,11 @@ module Applications
       target_application.assign_attributes(attributes)
     end
 
-    def set_medical_provider_details
-      target_application.medical_provider_name = @form.medical_provider_name unless @form.medical_provider_name.nil?
-      target_application.medical_provider_phone = @form.medical_provider_phone unless @form.medical_provider_phone.nil?
-      target_application.medical_provider_fax = @form.medical_provider_fax unless @form.medical_provider_fax.nil?
-      target_application.medical_provider_email = @form.medical_provider_email unless @form.medical_provider_email.nil?
+    def set_certifying_professional_details
+      target_application.certifying_professional_name = @form.certifying_professional_name unless @form.certifying_professional_name.nil?
+      target_application.certifying_professional_phone = @form.certifying_professional_phone unless @form.certifying_professional_phone.nil?
+      target_application.certifying_professional_fax = @form.certifying_professional_fax unless @form.certifying_professional_fax.nil?
+      target_application.certifying_professional_email = @form.certifying_professional_email unless @form.certifying_professional_email.nil?
     end
 
     # Proofs from the portal form are multipart uploads, resolved through UploadedDocument before attaching

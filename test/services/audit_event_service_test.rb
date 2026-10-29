@@ -32,7 +32,7 @@ class AuditEventServiceTest < ActiveSupport::TestCase
 
   test 'change fingerprints match caller hashes and persisted JSON metadata' do
     %w[profile_updated profile_updated_by_guardian profile_created_by_admin_via_paper
-       alternate_contact_updated medical_provider_info_updated].each do |action|
+       alternate_contact_updated certifying_professional_info_updated].each do |action|
       metadata = { operation_id: 'first-edit', changes: { first_name: { old: 'Before', new: 'After' } } }
       event = AuditEventService.log(action: action, actor: @admin, auditable: @template, metadata: metadata)
 

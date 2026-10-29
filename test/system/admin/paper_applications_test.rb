@@ -48,7 +48,7 @@ module Admin
       fill_in_applicant_information(first_name: 'John', last_name: 'Doe')
       fill_in_application_details(household_size: 1, annual_income: 15_000)
       fill_in_disability_information
-      fill_in_medical_provider_information
+      fill_in_certifying_professional_information
 
       attach_and_accept_proofs
       complete_paper_application_attestations
@@ -87,7 +87,7 @@ module Admin
       end
 
       fill_in_disability_information
-      fill_in_medical_provider_information
+      fill_in_certifying_professional_information
 
       # Move focus to trigger blur validation.
       find('h1').click
@@ -261,7 +261,7 @@ module Admin
       fill_in_applicant_information(first_name: 'John', last_name: 'Doe')
       fill_in_application_details(household_size: 2, annual_income: 30_000)
       fill_in_disability_information
-      fill_in_medical_provider_information
+      fill_in_certifying_professional_information
 
       within_proof_documents_fieldset do
         choose 'reject_income_proof'
@@ -593,9 +593,9 @@ module Admin
 
       provider_fieldset = page.find('fieldset', text: 'Certifying Professional Information', visible: true)
       within provider_fieldset do
-        fill_in 'application_medical_provider_name', with: 'doctor'
-        fill_in 'application_medical_provider_phone', with: '2027775656'
-        fill_in 'application_medical_provider_email', with: 'doc@tor.net'
+        fill_in 'application_certifying_professional_name', with: 'doctor'
+        fill_in 'application_certifying_professional_phone', with: '2027775656'
+        fill_in 'application_certifying_professional_email', with: 'doc@tor.net'
       end
 
       proof_scans = {}
@@ -632,9 +632,9 @@ module Admin
       assert_field 'application[household_size]', with: '5'
       assert_field 'application[annual_income]', with: '29999'
       assert find_field('application[maryland_resident]').checked?
-      assert_field 'application[medical_provider_name]', with: 'doctor'
-      assert_field 'application[medical_provider_phone]', with: '2027775656'
-      assert_field 'application[medical_provider_email]', with: 'doc@tor.net'
+      assert_field 'application[certifying_professional_name]', with: 'doctor'
+      assert_field 'application[certifying_professional_phone]', with: '2027775656'
+      assert_field 'application[certifying_professional_email]', with: 'doc@tor.net'
       assert find_field('accept_income_proof').checked?
       assert find_field('accept_residency_proof').checked?
       proof_scans.each do |field, scan|
@@ -786,9 +786,9 @@ module Admin
       end
 
       within 'fieldset', text: 'Certifying Professional Information' do
-        fill_in 'application[medical_provider_name]', with: 'Dr. Test'
-        fill_in 'application[medical_provider_phone]', with: '555-999-8888'
-        fill_in 'application[medical_provider_email]', with: 'dr.test@example.com'
+        fill_in 'application[certifying_professional_name]', with: 'Dr. Test'
+        fill_in 'application[certifying_professional_phone]', with: '555-999-8888'
+        fill_in 'application[certifying_professional_email]', with: 'dr.test@example.com'
       end
 
       # Valid income alone does not satisfy the final submit gate.
@@ -798,7 +798,7 @@ module Admin
       assert_selector '#paper-submit-gate-status', text: /I authorize the release and sharing of my disability-related information/, wait: 5
 
       check 'application[maryland_resident]'
-      check 'application[medical_release_authorized]'
+      check 'application[disability_information_release_authorized]'
       check 'application[terms_accepted]'
       check 'application[information_verified]'
 
@@ -825,7 +825,7 @@ module Admin
       # Re-establish the blocked gate so the named-status state is captured as the test's last
       # interaction; a mid-test full-page capture degrades this Cuprite session until later
       # scan polls miss their assert window.
-      uncheck 'application[medical_release_authorized]'
+      uncheck 'application[disability_information_release_authorized]'
       assert_selector '#paper-submit-gate-status', text: /I authorize the release and sharing of my disability-related information/, wait: 5
       assert_button 'Submit Paper Application', disabled: true
       page.scroll_to(:top)

@@ -23,8 +23,8 @@ module Admin
       attach_and_accept_proofs
       fill_in_application_details(household_size: 2, annual_income: 20_000)
       fill_in_disability_information
-      fill_in_medical_provider_information(name: 'Dr. Jane Smith', email: 'dr.smith@example.com')
-      fill_in 'application[medical_provider_fax]', with: '555-987-6544'
+      fill_in_certifying_professional_information(name: 'Dr. Jane Smith', email: 'dr.smith@example.com')
+      fill_in 'application[certifying_professional_fax]', with: '555-987-6544'
       fill_in 'application[alternate_contact_name]', with: 'Jane Doe'
       select 'Neighbor', from: 'application[alternate_contact_relationship_type]'
       fill_in 'application[alternate_contact_phone]', with: '555-123-4567'
@@ -41,7 +41,7 @@ module Admin
       assert_equal %w[Complete Paper], [application.user.first_name, application.user.last_name]
       assert_equal [2, 20_000], [application.household_size, application.annual_income.to_i]
       assert_equal ['Dr. Jane Smith', 'dr.smith@example.com', '555-987-6544'],
-                   [application.medical_provider_name, application.medical_provider_email, application.medical_provider_fax]
+                   [application.certifying_professional_name, application.certifying_professional_email, application.certifying_professional_fax]
       assert_equal ['Jane Doe', 'neighbor', '555-123-4567', 'jane.doe@example.com'],
                    [application.alternate_contact_name, application.alternate_contact_relationship_type,
                     application.alternate_contact_phone, application.alternate_contact_email]

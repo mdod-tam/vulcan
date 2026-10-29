@@ -11,7 +11,7 @@ module Applications
 
     setup do
       @admin = create(:admin)
-      @application = create(:application, :in_progress, :income_not_required, medical_provider_email: 'provider@example.test')
+      @application = create(:application, :in_progress, :income_not_required, certifying_professional_email: 'provider@example.test')
       @user = @application.user
       %i[id_proof residency_proof].each do |proof|
         attachment = @application.public_send(proof)
@@ -25,7 +25,7 @@ module Applications
       @original_flag = @flag.enabled
       @control = FeatureFlag.find_by!(name: EmailDelivery.category_control('certification'))
       @original_control = @control.slice(:enabled, :delivery_generation)
-      load_seeded_email_templates('medical_provider_request_certification')
+      load_seeded_email_templates('certifying_professional_request_certification')
       clear_enqueued_jobs
       Current.user = @admin
     end
@@ -74,7 +74,7 @@ module Applications
 
     test 'missing provider email records a visible refusal without undoing escalation' do
       @flag.update!(enabled: true)
-      @application.update_columns(medical_provider_email: nil)
+      @application.update_columns(certifying_professional_email: nil)
       @application.escalate_to_dcf!(actor: @admin)
       assert @application.reload.status_awaiting_dcf?
       assert @application.dcf_auto_request_not_sent?

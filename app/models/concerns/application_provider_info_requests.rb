@@ -20,9 +20,9 @@ module ApplicationProviderInfoRequests
       quoted_table = connection.quote_table_name(table_name)
 
       where(
-        "#{quoted_table}.medical_provider_name IS NULL OR #{quoted_table}.medical_provider_name = '' OR " \
-        "#{quoted_table}.medical_provider_phone IS NULL OR #{quoted_table}.medical_provider_phone = '' OR " \
-        "#{quoted_table}.medical_provider_email IS NULL OR #{quoted_table}.medical_provider_email = ''"
+        "#{quoted_table}.certifying_professional_name IS NULL OR #{quoted_table}.certifying_professional_name = '' OR " \
+        "#{quoted_table}.certifying_professional_phone IS NULL OR #{quoted_table}.certifying_professional_phone = '' OR " \
+        "#{quoted_table}.certifying_professional_email IS NULL OR #{quoted_table}.certifying_professional_email = ''"
       )
     }
 

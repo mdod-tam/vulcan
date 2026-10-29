@@ -2,41 +2,41 @@
 
 require 'test_helper'
 
-class MedicalProviderMailerTest < ActionMailer::TestCase
+class CertifyingProfessionalMailerTest < ActionMailer::TestCase
   setup do
     @constituent = create(:constituent, :with_address_and_phone)
     @application = create(:application,
                           user: @constituent,
-                          medical_provider_email: 'provider@example.com',
-                          medical_provider_name: 'Dr. Smith')
+                          certifying_professional_email: 'provider@example.com',
+                          certifying_professional_name: 'Dr. Smith')
 
     request_cert_template_mock = mock('request_cert_template')
     request_cert_template_mock.stubs(:render).returns(["Mock Request Cert Subject for #{@constituent.full_name}",
                                                        "Mock Request Cert Body for #{@constituent.full_name}"])
     request_cert_template_mock.stubs(:enabled?).returns(true)
-    MedicalProviderMailer.any_instance.stubs(:find_text_template)
-                         .with('medical_provider_request_certification', locale: 'en')
-                         .returns(request_cert_template_mock)
+    CertifyingProfessionalMailer.any_instance.stubs(:find_text_template)
+                                .with('certifying_professional_request_certification', locale: 'en')
+                                .returns(request_cert_template_mock)
 
     rejected_template_mock = mock('rejected_template')
     rejected_template_mock.stubs(:render).returns(["Certification Rejected: #{@constituent.full_name}",
                                                    'Text Rejection Reason: Incomplete documentation, Expired license'])
     rejected_template_mock.stubs(:enabled?).returns(true)
-    MedicalProviderMailer.any_instance.stubs(:find_text_template)
-                         .with('medical_provider_certification_rejected', locale: 'en')
-                         .returns(rejected_template_mock)
+    CertifyingProfessionalMailer.any_instance.stubs(:find_text_template)
+                                .with('certifying_professional_certification_rejected', locale: 'en')
+                                .returns(rejected_template_mock)
   end
 
   test 'request_certification' do
     emails = capture_emails do
-      MedicalProviderMailer.with(application: @application).request_certification.deliver_now
+      CertifyingProfessionalMailer.with(application: @application).request_certification.deliver_now
     end
 
     assert_equal 1, emails.size
     email = emails.first
 
     assert_equal ['no_reply@mdmat.org'], email.from
-    assert_equal [@application.medical_provider_email], email.to
+    assert_equal [@application.certifying_professional_email], email.to
     assert_equal [ProgramContact.support_email], email.reply_to
     expected_subject = "Mock Request Cert Subject for #{@constituent.full_name}"
     assert_equal expected_subject, email.subject
@@ -49,7 +49,7 @@ class MedicalProviderMailerTest < ActionMailer::TestCase
     rejection_reason = 'Incomplete documentation, Expired license'
 
     emails = capture_emails do
-      MedicalProviderMailer.with(
+      CertifyingProfessionalMailer.with(
         application: @application,
         rejection_reason: rejection_reason,
         admin: create(:admin)
@@ -60,12 +60,12 @@ class MedicalProviderMailerTest < ActionMailer::TestCase
     email = emails.first
 
     assert_equal ['no_reply@mdmat.org'], email.from
-    assert_equal [@application.medical_provider_email], email.to
+    assert_equal [@application.certifying_professional_email], email.to
     assert_match(/Certification/i, email.subject)
   end
 
   test 'build_rejection_variables includes secure upload resubmission instructions when provided' do
-    mailer = MedicalProviderMailer.new
+    mailer = CertifyingProfessionalMailer.new
     mailer.params = {
       application: @application,
       rejection_reason: 'Missing signature',
@@ -83,7 +83,7 @@ class MedicalProviderMailerTest < ActionMailer::TestCase
   end
 
   test 'build_rejection_variables omits secure upload resubmission step when no secure upload URL exists' do
-    mailer = MedicalProviderMailer.new
+    mailer = CertifyingProfessionalMailer.new
     mailer.params = {
       application: @application,
       rejection_reason: 'Missing signature',
@@ -98,7 +98,7 @@ class MedicalProviderMailerTest < ActionMailer::TestCase
   end
 
   test 'build_request_certification_variables includes constituent contact info and static form URL' do
-    mailer = MedicalProviderMailer.new
+    mailer = CertifyingProfessionalMailer.new
     mailer.params = {
       application: @application,
       timestamp: Time.current.iso8601
@@ -115,7 +115,7 @@ class MedicalProviderMailerTest < ActionMailer::TestCase
   end
 
   test 'build_request_certification_variables includes secure upload instructions when provided' do
-    mailer = MedicalProviderMailer.new
+    mailer = CertifyingProfessionalMailer.new
     mailer.params = {
       application: @application,
       timestamp: Time.current.iso8601,
@@ -130,7 +130,7 @@ class MedicalProviderMailerTest < ActionMailer::TestCase
   end
 
   test 'certification error logging uses application identity and omits private exception details' do
-    mailer = MedicalProviderMailer.new
+    mailer = CertifyingProfessionalMailer.new
     original_logger = Rails.logger
     log_output = StringIO.new
     raw_url = 'https://example.test/secure_certification_form?token=secret-token'
@@ -155,17 +155,17 @@ class MedicalProviderMailerTest < ActionMailer::TestCase
     english_template = mock('english_rejected_template')
     english_template.stubs(:render).returns(['Certificacion rechazada', 'Motivo traducido'])
     english_template.stubs(:enabled?).returns(true)
-    MedicalProviderMailer.any_instance.expects(:find_text_template)
-                         .with('medical_provider_certification_rejected', locale: 'en')
-                         .returns(english_template)
+    CertifyingProfessionalMailer.any_instance.expects(:find_text_template)
+                                .with('certifying_professional_certification_rejected', locale: 'en')
+                                .returns(english_template)
 
-    email = MedicalProviderMailer.with(
+    email = CertifyingProfessionalMailer.with(
       application: @application,
       rejection_reason: 'Falta informacion',
       admin: create(:admin)
     ).certification_rejected
 
-    assert_equal [@application.medical_provider_email], email.to
+    assert_equal [@application.certifying_professional_email], email.to
     assert_equal 'Certificacion rechazada', email.subject
   end
 end

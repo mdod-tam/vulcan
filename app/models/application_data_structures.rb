@@ -1,8 +1,8 @@
 # frozen_string_literal: true
 
 module ApplicationDataStructures
-  # Represents medical provider contact information
-  MedicalProviderInfo = Struct.new(:name, :phone, :fax, :email, keyword_init: true) do
+  # Represents certifying professional contact information
+  CertifyingProfessionalInfo = Struct.new(:name, :phone, :fax, :email, keyword_init: true) do
     def present?
       name.present? || phone.present? || fax.present? || email.present?
     end

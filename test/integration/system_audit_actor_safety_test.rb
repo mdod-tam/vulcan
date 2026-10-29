@@ -40,7 +40,7 @@ class SystemAuditActorSafetyTest < ActionDispatch::IntegrationTest
 
     test "public resends with #{actor_state} actor preserve expired requests without issuing replacements" do
       register_conflicting_constituent if actor_state == :constituent
-      application = create(:application, :in_progress, medical_provider_email: 'provider@example.test')
+      application = create(:application, :in_progress, certifying_professional_email: 'provider@example.test')
       vendor = create(:vendor)
       cases = [
         [:secure_request_form, { application: application, kind: :provider_info_request }, secure_provider_info_form_resend_path],
@@ -68,7 +68,7 @@ class SystemAuditActorSafetyTest < ActionDispatch::IntegrationTest
 
     test "certification upload with #{actor_state} actor fails before storing or submitting" do
       register_conflicting_constituent if actor_state == :constituent
-      application = create(:application, :in_progress, medical_provider_email: 'provider@example.test')
+      application = create(:application, :in_progress, certifying_professional_email: 'provider@example.test')
       token = SecureRequestForm.generate_public_token
       form = create(:certification_upload_form, application: application, raw_token: token)
       file = fixture_file_upload('disability_certification_valid.pdf', 'application/pdf')

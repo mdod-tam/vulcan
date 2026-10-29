@@ -11,9 +11,9 @@ class DisabilityCertificationTest < ApplicationSystemTestCase
     @application = create(:application,
                           user: @constituent,
                           status: 'in_progress',
-                          medical_provider_name: 'Dr. Jane Smith',
-                          medical_provider_email: 'drsmith@example.com',
-                          medical_provider_phone: '555-555-5555')
+                          certifying_professional_name: 'Dr. Jane Smith',
+                          certifying_professional_email: 'drsmith@example.com',
+                          certifying_professional_phone: '555-555-5555')
   end
 
   test 'admin can view disability certification section' do
@@ -27,8 +27,8 @@ class DisabilityCertificationTest < ApplicationSystemTestCase
 
     assert_text 'Disability Certification', wait: 10
 
-    assert_text @application.medical_provider_name, wait: 10
-    assert_text @application.medical_provider_phone, wait: 10
+    assert_text @application.certifying_professional_name, wait: 10
+    assert_text @application.certifying_professional_phone, wait: 10
 
     clear_pending_network_connections if respond_to?(:clear_pending_network_connections)
   end
@@ -104,7 +104,7 @@ class DisabilityCertificationTest < ApplicationSystemTestCase
 
     assert_text 'Disability Certification', wait: 10
 
-    assert_text @application.medical_provider_name, wait: 10
+    assert_text @application.certifying_professional_name, wait: 10
 
     assert_selector '[role="status"]', text: 'Requested', wait: 10
 
@@ -113,7 +113,7 @@ class DisabilityCertificationTest < ApplicationSystemTestCase
 
   test 'admin sees appropriate error for invalid requests' do
     # Bypass validation to exercise the missing-email state.
-    @application.update_columns(medical_provider_email: nil)
+    @application.update_columns(certifying_professional_email: nil)
 
     system_test_sign_in(@admin)
     wait_for_turbo

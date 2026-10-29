@@ -10,9 +10,9 @@ active:
   residency_proof_status: not_reviewed
   maryland_resident: true
   self_certify_disability: true
-  medical_provider_name: "Dr. Alice Smith"
-  medical_provider_phone: "555-555-5555"
-  medical_provider_email: "alice.smith@example.com"
+  certifying_professional_name: "Dr. Alice Smith"
+  certifying_professional_phone: "555-555-5555"
+  certifying_professional_email: "alice.smith@example.com"
   disability_certification_status: requested
 
 approved:
@@ -25,9 +25,9 @@ approved:
   residency_proof_status: approved
   maryland_resident: true
   self_certify_disability: true
-  medical_provider_name: "Dr. Bob Jones"
-  medical_provider_phone: "555-555-6666"
-  medical_provider_email: "bob.jones@example.com"
+  certifying_professional_name: "Dr. Bob Jones"
+  certifying_professional_phone: "555-555-6666"
+  certifying_professional_email: "bob.jones@example.com"
   disability_certification_status: approved
 
 draft:
@@ -40,9 +40,9 @@ draft:
   residency_proof_status: not_reviewed
   maryland_resident: true
   self_certify_disability: true
-  medical_provider_name: "Dr. Carol Williams"
-  medical_provider_phone: "555-555-7777"
-  medical_provider_email: "carol.williams@example.com"
+  certifying_professional_name: "Dr. Carol Williams"
+  certifying_professional_phone: "555-555-7777"
+  certifying_professional_email: "carol.williams@example.com"
   disability_certification_status: not_requested
 
 in_review:
@@ -55,9 +55,9 @@ in_review:
   residency_proof_status: not_reviewed
   maryland_resident: true
   self_certify_disability: true
-  medical_provider_name: "Dr. David Brown"
-  medical_provider_phone: "555-555-8888"
-  medical_provider_email: "david.brown@example.com"
+  certifying_professional_name: "Dr. David Brown"
+  certifying_professional_phone: "555-555-8888"
+  certifying_professional_email: "david.brown@example.com"
   disability_certification_status: received
 
 complete:
@@ -70,9 +70,9 @@ complete:
   residency_proof_status: approved
   maryland_resident: true
   self_certify_disability: true
-  medical_provider_name: "Dr. Eve Green"
-  medical_provider_phone: "555-555-9999"
-  medical_provider_email: "eve.green@example.com"
+  certifying_professional_name: "Dr. Eve Green"
+  certifying_professional_phone: "555-555-9999"
+  certifying_professional_email: "eve.green@example.com"
   disability_certification_status: approved
 
 # Applications for proof testing
@@ -86,10 +86,10 @@ one:
   maryland_resident: true
   terms_accepted: true
   information_verified: true
-  medical_release_authorized: true
-  medical_provider_name: Dr. Test Provider
-  medical_provider_phone: 555-555-0003
-  medical_provider_email: provider@example.com
+  disability_information_release_authorized: true
+  certifying_professional_name: Dr. Test Provider
+  certifying_professional_phone: 555-555-0003
+  certifying_professional_email: provider@example.com
   household_size: 2
   annual_income: 25000
   self_certify_disability: true
@@ -106,10 +106,10 @@ two:
   maryland_resident: true
   terms_accepted: true
   information_verified: true
-  medical_release_authorized: true
-  medical_provider_name: Dr. Past Provider
-  medical_provider_phone: 555-555-0004
-  medical_provider_email: past.provider@example.com
+  disability_information_release_authorized: true
+  certifying_professional_name: Dr. Past Provider
+  certifying_professional_phone: 555-555-0004
+  certifying_professional_email: past.provider@example.com
   household_size: 1
   annual_income: 20000
   self_certify_disability: true
@@ -124,9 +124,9 @@ draft_application:
   annual_income: "50000"
   household_size: 3
   self_certify_disability: false
-  medical_provider_name: "Good Health Clinic"
-  medical_provider_phone: "555-123-4567"
-  medical_provider_email: "info@goodhealthclinic.com"
+  certifying_professional_name: "Good Health Clinic"
+  certifying_professional_phone: "555-123-4567"
+  certifying_professional_email: "info@goodhealthclinic.com"
   submission_method: web
 
 submitted_application:
@@ -138,9 +138,9 @@ submitted_application:
   annual_income: "65000"
   household_size: 4
   self_certify_disability: true
-  medical_provider_name: "Downtown Medical"
-  medical_provider_phone: "555-987-6543"
-  medical_provider_email: "contact@downtownmed.com"
+  certifying_professional_name: "Downtown Medical"
+  certifying_professional_phone: "555-987-6543"
+  certifying_professional_email: "contact@downtownmed.com"
   income_proof_status: approved
   residency_proof_status: approved
   disability_certification_status: received
@@ -155,9 +155,9 @@ approved_application:
   annual_income: "80000"
   household_size: 2
   self_certify_disability: false
-  medical_provider_name: "City Health Partners"
-  medical_provider_phone: "555-111-2222"
-  medical_provider_email: "appointments@cityhealth.com"
+  certifying_professional_name: "City Health Partners"
+  certifying_professional_phone: "555-111-2222"
+  certifying_professional_email: "appointments@cityhealth.com"
   income_proof_status: approved
   residency_proof_status: approved
   disability_certification_status: approved
@@ -171,9 +171,9 @@ submitted_proofs_pending_application:
   annual_income: "70000"
   household_size: 3
   self_certify_disability: false
-  medical_provider_name: "Downtown Medical"
-  medical_provider_phone: "555-987-6543"
-  medical_provider_email: "contact@downtownmed.com"
+  certifying_professional_name: "Downtown Medical"
+  certifying_professional_phone: "555-987-6543"
+  certifying_professional_email: "contact@downtownmed.com"
   income_proof_status: not_reviewed
   residency_proof_status: not_reviewed
   disability_certification_status: not_requested
@@ -187,9 +187,9 @@ awaiting_disability_certification_application:
   annual_income: "90000"
   household_size: 2
   self_certify_disability: false
-  medical_provider_name: "City Health Partners"
-  medical_provider_phone: "555-111-2222"
-  medical_provider_email: "appointments@cityhealth.com"
+  certifying_professional_name: "City Health Partners"
+  certifying_professional_phone: "555-111-2222"
+  certifying_professional_email: "appointments@cityhealth.com"
   income_proof_status: approved
   residency_proof_status: approved
   disability_certification_status: requested
@@ -203,9 +203,9 @@ new_user_application:
   annual_income: "55000"
   household_size: 2
   self_certify_disability: true
-  medical_provider_name: "New Health Clinic"
-  medical_provider_phone: "555-222-3333"
-  medical_provider_email: "info@newhealthclinic.com"
+  certifying_professional_name: "New Health Clinic"
+  certifying_professional_phone: "555-222-3333"
+  certifying_professional_email: "info@newhealthclinic.com"
   income_proof_status: approved
   residency_proof_status: not_reviewed
   disability_certification_status: requested
@@ -219,9 +219,9 @@ wilbur_application:
   annual_income: "68000"
   household_size: 4
   self_certify_disability: true
-  medical_provider_name: "Baltimore Medical Center"
-  medical_provider_phone: "555-444-5555"
-  medical_provider_email: "contact@baltimoremedical.com"
+  certifying_professional_name: "Baltimore Medical Center"
+  certifying_professional_phone: "555-444-5555"
+  certifying_professional_email: "contact@baltimoremedical.com"
   income_proof_status: approved
   residency_proof_status: approved
   disability_certification_status: received
@@ -237,9 +237,9 @@ pending_application:
   residency_proof_status: not_reviewed
   maryland_resident: true
   self_certify_disability: true
-  medical_provider_name: "Pending Provider"
-  medical_provider_phone: "555-666-7777"
-  medical_provider_email: "pending.provider@example.com"
+  certifying_professional_name: "Pending Provider"
+  certifying_professional_phone: "555-666-7777"
+  certifying_professional_email: "pending.provider@example.com"
   disability_certification_status: not_requested
 
 # Additional application statuses needed by SeedLookupHelpers
@@ -253,9 +253,9 @@ training_request_application:
   residency_proof_status: approved
   maryland_resident: true
   self_certify_disability: true
-  medical_provider_name: "Training Provider"
-  medical_provider_phone: "555-333-4444"
-  medical_provider_email: "training.provider@example.com"
+  certifying_professional_name: "Training Provider"
+  certifying_professional_phone: "555-333-4444"
+  certifying_professional_email: "training.provider@example.com"
   disability_certification_status: approved
   submission_method: web
 
@@ -269,9 +269,9 @@ submitted_status_application:
   residency_proof_status: approved
   maryland_resident: true
   self_certify_disability: true
-  medical_provider_name: "Submitted Provider"
-  medical_provider_phone: "555-777-8888"
-  medical_provider_email: "submitted.provider@example.com"
+  certifying_professional_name: "Submitted Provider"
+  certifying_professional_phone: "555-777-8888"
+  certifying_professional_email: "submitted.provider@example.com"
   disability_certification_status: approved
   submission_method: web
 
@@ -285,9 +285,9 @@ awaiting_dcf_application:
   residency_proof_status: approved
   maryland_resident: true
   self_certify_disability: true
-  medical_provider_name: "Awaiting Provider"
-  medical_provider_phone: "555-999-0000"
-  medical_provider_email: "awaiting.provider@example.com"
+  certifying_professional_name: "Awaiting Provider"
+  certifying_professional_phone: "555-999-0000"
+  certifying_professional_email: "awaiting.provider@example.com"
   disability_certification_status: requested
   submission_method: paper
 
@@ -301,8 +301,8 @@ needs_information_application:
   residency_proof_status: rejected
   maryland_resident: true
   self_certify_disability: true
-  medical_provider_name: "Needs Info Provider"
-  medical_provider_phone: "555-123-9999"
-  medical_provider_email: "needsinfo.provider@example.com"
+  certifying_professional_name: "Needs Info Provider"
+  certifying_professional_phone: "555-123-9999"
+  certifying_professional_email: "needsinfo.provider@example.com"
   disability_certification_status: not_requested
   submission_method: web

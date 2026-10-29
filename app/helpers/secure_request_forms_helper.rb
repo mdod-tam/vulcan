@@ -314,8 +314,8 @@ module SecureRequestFormsHelper
   end
 
   def secure_request_cert_upload_target(metadata, application)
-    provider_name = metadata['provider_name'].presence || application.medical_provider_name.presence
-    provider_email = metadata['provider_email'].presence || application.medical_provider_email.presence
+    provider_name = metadata['provider_name'].presence || application.certifying_professional_name.presence
+    provider_email = metadata['provider_email'].presence || application.certifying_professional_email.presence
     masked_email = provider_email.present? ? secure_request_masked_email(provider_email) : nil
 
     if provider_name.present? && masked_email.present?

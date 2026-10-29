@@ -126,9 +126,9 @@ module Applications
           annual_income: '18000',
           maryland_resident: true,
           self_certify_disability: true,
-          medical_provider_name: 'Dr. Smith',
-          medical_provider_phone: '301-555-1313',
-          medical_provider_email: 'dr.smith@example.com'
+          certifying_professional_name: 'Dr. Smith',
+          certifying_professional_phone: '301-555-1313',
+          certifying_professional_email: 'dr.smith@example.com'
         },
         income_proof_action: 'accept',
         income_proof: income_blob_signed_id,

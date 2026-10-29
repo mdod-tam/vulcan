@@ -80,9 +80,9 @@ class ApplicationIngressCharacterizationTest < ActionDispatch::IntegrationTest
           annual_income: 12_000,
           maryland_resident: '1',
           self_certify_disability: '1',
-          medical_provider_name: 'Dr. Paper',
-          medical_provider_phone: '555-111-2222',
-          medical_provider_email: 'paper-doctor@example.com'
+          certifying_professional_name: 'Dr. Paper',
+          certifying_professional_phone: '555-111-2222',
+          certifying_professional_email: 'paper-doctor@example.com'
         },
         income_proof_action: 'accept',
         income_proof: scanned_reference('income_proof.pdf', user: @admin, purpose: :proof, slot: 'income_proof'),

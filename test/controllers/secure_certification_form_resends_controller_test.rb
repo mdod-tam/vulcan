@@ -5,8 +5,8 @@ require 'test_helper'
 class SecureCertificationFormResendsControllerTest < ActionDispatch::IntegrationTest
   setup do
     @application = create(:application, :in_progress,
-                          medical_provider_name: 'Dr. Provider',
-                          medical_provider_email: 'provider@example.com')
+                          certifying_professional_name: 'Dr. Provider',
+                          certifying_professional_email: 'provider@example.com')
     Rails.cache.clear
     @raw_token = SecureRequestForm.generate_public_token
     @secure_request_form = create(:certification_upload_form,

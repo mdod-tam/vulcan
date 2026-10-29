@@ -831,7 +831,7 @@ module Webhooks
       scan = DocumentScan.find_by!(continuation: 'docuseal')
       scan.update!(status: :clean)
 
-      [{ document_signing_submission_id: 'new-submission' }, { medical_provider_email: 'new-provider@example.com' }].each do |changes|
+      [{ document_signing_submission_id: 'new-submission' }, { certifying_professional_email: 'new-provider@example.com' }].each do |changes|
         @application.update!(changes)
         assert_no_difference ['ActiveStorage::Attachment.count', 'Event.count', 'Notification.count'] do
           assert_equal :superseded, DocumentSigning::AcceptScannedDocument.call(scan)

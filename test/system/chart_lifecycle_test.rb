@@ -74,11 +74,11 @@ class ChartLifecycleTest < ApplicationSystemTestCase
     capture('application-modal-edit')
     page.execute_script('window.__modalTurboVisits = []; document.addEventListener("turbo:visit", e => window.__modalTurboVisits.push(e.detail))')
     within '#application-edit-modal' do
-      fill_in 'application_medical_provider_name', with: 'Updated Professional'
+      fill_in 'application_certifying_professional_name', with: 'Updated Professional'
       click_button 'Update Application'
     end
     assert_no_selector 'dialog[open]'
-    assert_equal 'Updated Professional', application.reload.medical_provider_name
+    assert_equal 'Updated Professional', application.reload.certifying_professional_name
     assert_equal 'replace', page.evaluate_script('window.__modalTurboVisits.at(-1).action')
     assert_empty page.evaluate_script('window.__systemTestErrors')
     capture('application-modal-saved')

@@ -81,11 +81,11 @@ module ApplicationHelper
 
   # check_box_tag has no form binding or hidden field, so an unchecked box is an absent key.
   # A submitted value wins. Otherwise the stored value decides.
-  def medical_release_authorized_checked?(application)
-    submitted = params.dig(:application, :medical_release_authorized)
+  def disability_information_release_authorized_checked?(application)
+    submitted = params.dig(:application, :disability_information_release_authorized)
     return ActiveModel::Type::Boolean.new.cast(submitted) if submitted.present?
 
-    application.present? && application.medical_release_authorized.present?
+    application.present? && application.disability_information_release_authorized.present?
   end
 
   # Submitted values are raw strings, so cast them instead of comparing with "1".

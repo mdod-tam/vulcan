@@ -102,12 +102,12 @@ module Admin
 
       assert_no_field 'Status'
       assert_no_select 'application[status]'
-      fill_in 'application[medical_provider_name]', with: 'Dr. Edited'
+      fill_in 'application[certifying_professional_name]', with: 'Dr. Edited'
       click_button 'Update Application'
 
       assert_text 'Application updated.'
       @application.reload
-      assert_equal 'Dr. Edited', @application.medical_provider_name
+      assert_equal 'Dr. Edited', @application.certifying_professional_name
       assert_equal original_status, @application.status
     end
 

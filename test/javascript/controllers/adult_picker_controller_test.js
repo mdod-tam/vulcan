@@ -56,10 +56,10 @@ describe("AdultPickerController", () => {
         product_names: ["Phone"],
         household_size: 2,
         annual_income: 18000,
-        medical_provider_name: "Dr. Test",
-        medical_provider_phone: "555-333-4444",
-        medical_provider_fax: "555-333-5555",
-        medical_provider_email: "doctor@example.com"
+        certifying_professional_name: "Dr. Test",
+        certifying_professional_phone: "555-333-4444",
+        certifying_professional_fax: "555-333-5555",
+        certifying_professional_email: "doctor@example.com"
       })
     })
 
@@ -74,7 +74,7 @@ describe("AdultPickerController", () => {
         <div id="onFileSummary" class="hidden">
           <div id="onFileSummaryContent"></div>
           <button type="button" id="incomeCopyButton" class="hidden">Income</button>
-          <button type="button" id="medicalCopyButton" class="hidden">Medical</button>
+          <button type="button" id="certifyingProfessionalCopyButton" class="hidden">Use last application certifying professional</button>
         </div>
 
         <div id="contactModeSection" class="hidden">
@@ -103,10 +103,10 @@ describe("AdultPickerController", () => {
         <input type="text" name="constituent[referral_source]" value="" />
         <input type="text" name="application[household_size]" value="" />
         <input type="text" name="application[annual_income]" value="" />
-        <input type="text" name="application[medical_provider_name]" value="" />
-        <input type="text" name="application[medical_provider_phone]" value="" />
-        <input type="text" name="application[medical_provider_fax]" value="" />
-        <input type="text" name="application[medical_provider_email]" value="" />
+        <input type="text" name="application[certifying_professional_name]" value="" />
+        <input type="text" name="application[certifying_professional_phone]" value="" />
+        <input type="text" name="application[certifying_professional_fax]" value="" />
+        <input type="text" name="application[certifying_professional_email]" value="" />
       </div>
     `
 
@@ -125,7 +125,7 @@ describe("AdultPickerController", () => {
     defineTarget("onFileSummary", "#onFileSummary")
     defineTarget("onFileSummaryContent", "#onFileSummaryContent")
     defineTarget("incomeCopyButton", "#incomeCopyButton")
-    defineTarget("medicalCopyButton", "#medicalCopyButton")
+    defineTarget("certifyingProfessionalCopyButton", "#certifyingProfessionalCopyButton")
     defineTarget("contactModeSection", "#contactModeSection")
     defineTarget("verificationSection", "#verificationSection")
     defineTarget("verificationCheckbox", "#verificationCheckbox")
@@ -157,7 +157,7 @@ describe("AdultPickerController", () => {
 
     expect(setFieldValue).not.toHaveBeenCalled()
     expect(setVisible).toHaveBeenCalledWith(controller.incomeCopyButtonTarget, true)
-    expect(setVisible).toHaveBeenCalledWith(controller.medicalCopyButtonTarget, true)
+    expect(setVisible).toHaveBeenCalledWith(controller.certifyingProfessionalCopyButtonTarget, true)
   })
 
   // A restored retry has no search result to fill the card from, so the context response must name the applicant.
@@ -201,20 +201,20 @@ describe("AdultPickerController", () => {
     expect(fixture.querySelector('input[name="constituent[date_of_birth]"]').value).toBe("01/01/1980")
   })
 
-  it("copies medical provider fields only when explicitly requested", () => {
+  it("copies certifying professional fields only when explicitly requested", () => {
     controller._adultApplicationContext = {
-      medical_provider_name: "Dr. Test",
-      medical_provider_phone: "555-333-4444",
-      medical_provider_fax: "555-333-5555",
-      medical_provider_email: "doctor@example.com"
+      certifying_professional_name: "Dr. Test",
+      certifying_professional_phone: "555-333-4444",
+      certifying_professional_fax: "555-333-5555",
+      certifying_professional_email: "doctor@example.com"
     }
 
-    controller.useLastApplicationMedicalProvider()
+    controller.useLastApplicationCertifyingProfessional()
 
-    expect(setFieldValue).toHaveBeenCalledWith('input[name="application[medical_provider_name]"]', "Dr. Test")
-    expect(setFieldValue).toHaveBeenCalledWith('input[name="application[medical_provider_phone]"]', "555-333-4444")
-    expect(setFieldValue).toHaveBeenCalledWith('input[name="application[medical_provider_fax]"]', "555-333-5555")
-    expect(setFieldValue).toHaveBeenCalledWith('input[name="application[medical_provider_email]"]', "doctor@example.com")
+    expect(setFieldValue).toHaveBeenCalledWith('input[name="application[certifying_professional_name]"]', "Dr. Test")
+    expect(setFieldValue).toHaveBeenCalledWith('input[name="application[certifying_professional_phone]"]', "555-333-4444")
+    expect(setFieldValue).toHaveBeenCalledWith('input[name="application[certifying_professional_fax]"]', "555-333-5555")
+    expect(setFieldValue).toHaveBeenCalledWith('input[name="application[certifying_professional_email]"]', "doctor@example.com")
   })
 
   it("disables existing-adult-only controls when selection is cleared", () => {
