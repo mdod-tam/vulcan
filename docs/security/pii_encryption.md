@@ -13,8 +13,7 @@ Encryption covers the declarations below, not every piece of personal informatio
 | [UserProfile](../../app/models/concerns/user_profile.rb) | `email`, `phone`, `dependent_email`, `dependent_phone`, `ssn_last4`, `date_of_birth` | `password_digest`, `physical_address_1`, `physical_address_2`, `city`, `state`, `zip_code`, `business_tax_id` |
 | [TotpCredential](../../app/models/totp_credential.rb) | — | `secret` |
 | [WebauthnCredential](../../app/models/webauthn_credential.rb) | — | `public_key` |
-| [SecureRequestForm](../../app/models/secure_request_form.rb) | `recipient_email`, `recipient_phone` | — |
-| [MedicalProviderSecureRequestForm](../../app/models/medical_provider_secure_request_form.rb) | `provider_email` | — |
+| [SecureRequestForm](../../app/models/secure_request_form.rb) | `recipient_email`, `recipient_phone` (a certification link's `recipient_email` is the provider's) | — |
 | [VendorSecureRequestForm](../../app/models/vendor_secure_request_form.rb) | `recipient_email` | — |
 | [Application](../../app/models/application.rb) | — | `document_signing_audit_url`, `document_signing_document_url` |
 | [EmailDeliveryAttempt](../../app/models/email_delivery_attempt.rb) | — | `destination` |

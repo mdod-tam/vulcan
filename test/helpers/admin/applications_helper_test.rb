@@ -39,26 +39,15 @@ module Admin
     end
 
     test 'disability certification action state counts active secure upload forms' do
-      active_form = create(:medical_provider_secure_request_form, application: @application)
-      create(:medical_provider_secure_request_form, :submitted, application: @application)
+      active_form = create(:certification_upload_form, application: @application)
+      create(:certification_upload_form, :submitted, application: @application)
 
-      state = disability_certification_action_state(@application, secure_request_forms: @application.medical_provider_secure_request_forms)
+      state = disability_certification_action_state(@application, secure_request_forms: @application.certification_upload_forms)
 
       assert_equal 1, state.active_secure_cert_upload_forms
       assert_equal 'A secure upload link is already active. Send DocuSeal as an additional option?',
                    state.docuseal_confirm
       assert_predicate active_form.reload, :active?
-    end
-
-    test 'disability certification action state describes multiple active secure upload forms as additional DocuSeal options' do
-      create(:medical_provider_secure_request_form, application: @application, provider_email: 'primary@example.test')
-      create(:medical_provider_secure_request_form, application: @application, provider_email: 'backup@example.test')
-
-      state = disability_certification_action_state(@application, secure_request_forms: @application.medical_provider_secure_request_forms)
-
-      assert_equal 2, state.active_secure_cert_upload_forms
-      assert_equal '2 secure upload links are already active. Send DocuSeal as an additional option?',
-                   state.docuseal_confirm
     end
 
     test 'disability certification action state reflects provider readiness and DocuSeal additional option copy' do

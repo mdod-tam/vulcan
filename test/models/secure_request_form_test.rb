@@ -298,4 +298,129 @@ class SecureRequestFormTest < ActiveSupport::TestCase
     assert_equal 'manual_revocation', event.metadata['reason']
     assert_not form.revoke!(actor: admin), 'a second revoke is a no-op'
   end
+
+  # Certification upload links go to the application's certifying provider, who is not a user.
+
+  test 'a certification link is addressed to the provider and snapshots the provider on file' do
+    application = create(:application, medical_provider_name: 'Dr. Provider', medical_provider_email: 'provider@example.test')
+    form = create(:certification_upload_form, application: application)
+
+    assert_nil form.recipient
+    assert_nil form.delivery_owner
+    assert_nil form.delivery_source
+    assert_predicate form, :recipient_role_provider?
+    assert_equal 'provider@example.test', form.recipient_email
+    assert_equal 'Dr. Provider', form.recipient_name
+  end
+
+  test 'a certification link uses the default locale whatever the applicant speaks' do
+    applicant = create(:constituent, locale: 'es')
+    application = create(:application, user: applicant)
+
+    assert_equal I18n.default_locale, create(:certification_upload_form, application: application).delivery_locale
+  end
+
+  test 'a certification link needs the provider email' do
+    form = build(:certification_upload_form, recipient_email: nil)
+
+    assert_not form.valid?
+    assert_includes form.errors[:recipient_email], "can't be blank"
+  end
+
+  test 'a certification link refuses a user recipient and a delivery owner' do
+    user = create(:constituent)
+
+    with_recipient = build(:certification_upload_form, recipient: user)
+    with_owner = build(:certification_upload_form, delivery_owner: user, delivery_source: :constituent)
+
+    [with_recipient, with_owner].each do |form|
+      assert_not form.valid?
+      assert_includes form.errors[:base], 'A certification link has no user recipient or delivery owner'
+    end
+  end
+
+  test 'a proof or provider-info link still needs a recipient and a delivery owner' do
+    %i[provider_info_request id_proof_resubmission].each do |kind|
+      form = build(:secure_request_form, kind: kind, recipient: nil, recipient_email: 'x@example.test', recipient_phone: nil, delivery_owner: nil, delivery_source: nil)
+
+      assert_not form.valid?, kind
+      assert_includes form.errors[:recipient], 'must exist', kind
+      assert_includes form.errors[:delivery_owner], "can't be blank", kind
+    end
+  end
+
+  test 'the database keeps a certification link free of users and every other link addressed to one' do
+    user = create(:constituent)
+    provider_with_user = build(:certification_upload_form, recipient: user)
+    user_link_without_user = build(:secure_request_form, recipient: nil, recipient_email: 'x@example.test', recipient_phone: nil)
+
+    [provider_with_user, user_link_without_user].each do |form|
+      assert_raises(ActiveRecord::StatementInvalid) { form.save!(validate: false) }
+    end
+  end
+
+  test 'the database allows one active certification link per application' do
+    application = create(:application, medical_provider_email: 'provider@example.test')
+    create(:certification_upload_form, application: application)
+
+    assert_raises(ActiveRecord::RecordNotUnique) do
+      build(:certification_upload_form, application: application, recipient_email: 'second@example.test').save!(validate: false)
+    end
+    assert_nothing_raised do
+      create(:certification_upload_form, :revoked, application: application)
+      create(:certification_upload_form, :submitted, application: create(:application, medical_provider_email: 'provider@example.test'))
+    end
+  end
+
+  test 'the certification scope is the only way a certification token resolves' do
+    raw_token = SecureRequestForm.generate_public_token
+    form = create(:certification_upload_form, raw_token: raw_token)
+    proof_token = SecureRequestForm.generate_public_token
+    create(:secure_request_form, kind: :income_proof_resubmission, raw_token: proof_token)
+
+    assert_equal form, SecureRequestForm.certification_upload.from_public_token(raw_token)
+    assert_nil SecureRequestForm.certification_upload.from_public_token(proof_token),
+               'a proof token must resolve to nothing in the certification scope'
+  end
+
+  test 'open_certification_upload_for_application matches the application, kind, and lifecycle' do
+    form = create(:certification_upload_form)
+    create(:certification_upload_form, :revoked, application: form.application)
+    create(:certification_upload_form)
+    create(:secure_request_form, application: form.application, kind: :provider_info_request)
+
+    found = SecureRequestForm.open_certification_upload_for_application(application_id: form.application_id)
+
+    assert_equal [form], found.to_a
+  end
+
+  test 'certification links name their own audit actions and keep the provider in their metadata' do
+    form = create(:certification_upload_form)
+
+    assert_equal 'cert_upload_request_revoked', form.revocation_audit_action
+    assert_equal 'cert_upload_request_expired', form.expiration_audit_action
+    assert_equal({ application_id: form.application_id, secure_request_form_id: form.id, request_batch_id: form.request_batch_id,
+                   provider_name: form.recipient_name, provider_email: form.recipient_email, requested_channel: 'email' },
+                 form.audit_metadata)
+  end
+
+  test 'an application lists user-recipient links and certification links separately' do
+    application = create(:application)
+    user_link = create(:secure_request_form, application: application)
+    certification_link = create(:certification_upload_form, application: application)
+
+    assert_equal [user_link], application.secure_request_forms.to_a
+    assert_equal [certification_link], application.certification_upload_forms.to_a
+    assert_empty SecureRequestForm.with_incomplete_delivery_provenance.where(id: certification_link.id)
+  end
+
+  test 'destroying an application removes both kinds of link' do
+    application = create(:application)
+    create(:secure_request_form, application: application)
+    create(:certification_upload_form, application: application)
+
+    assert_difference 'SecureRequestForm.count', -2 do
+      application.destroy!
+    end
+  end
 end

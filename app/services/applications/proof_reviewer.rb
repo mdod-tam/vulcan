@@ -2,105 +2,62 @@
 
 module Applications
   class ProofReviewer
-    class CommitUnconfirmed < StandardError; end
-
-    attr_reader :proof_review, :warning
+    attr_reader :proof_review
 
     def initialize(application, admin)
       @application = application
       @admin = admin
     end
 
+    # Set when the review committed but a later step failed.
+    def warning = @commit&.warning
+
     def review(proof_type:, status:, rejection_reason: nil, rejection_reason_code: nil, notes: nil)
-      @warning = nil
-      @expected_review_attributes = nil
       Rails.logger.debug { "Starting review with proof_type: #{proof_type.inspect}, status: #{status.inspect}" }
 
       @proof_type_key = proof_type.to_s
       @status_key = status.to_s
+      @proof_review = nil
+      @lifecycle_history_ids = []
+      @lifecycle_audit_ids = []
+      @commit = ReviewCommit.new(application: @application, subject: 'proof review', again: 'reviewing it again') { durable_state }
 
       Rails.logger.debug { "Converted values - proof_type: #{@proof_type_key.inspect}, status: #{@status_key.inspect}" }
 
-      with_single_proof_review_context do
-        ApplicationRecord.transaction do
-          @previous_application_state = @application.attributes_for_database.slice('status', "#{@proof_type_key}_proof_status")
-          create_or_update_proof_review(rejection_reason, rejection_reason_code, notes)
-          update_application_status
-          purge_if_rejected
-          reconcile_if_approved
-          @expected_review_attributes = @proof_review.attributes_for_database
-          @expected_application_state = @application.attributes_for_database.slice('status', "#{@proof_type_key}_proof_status")
+      @commit.run(on_committed: ->(error) { @proof_review.log_follow_up_failure(error) }) do
+        with_single_proof_review_context do
+          @commit.transaction do
+            create_or_update_proof_review(rejection_reason, rejection_reason_code, notes)
+            update_application_status
+            purge_if_rejected
+            reconcile_if_approved
+          end
         end
-      end
 
-      process_re_rejection_side_effects
+        process_re_rejection_side_effects
+      end
 
       true
-    rescue StandardError => e
-      Rails.logger.error "Proof review failed: #{e.class.name} for application #{@application.id}"
-
-      case review_commit_state
-      when :committed
-        @warning = 'The proof review was saved, but a follow-up step did not finish. Check this application before reviewing it again.'
-        record_incomplete_follow_up(e)
-        true
-      when :unknown
-        raise CommitUnconfirmed, 'The proof review may have been saved, but that could not be confirmed. Check this application before reviewing it again.'
-      else
-        raise
-      end
     end
 
     private
 
-    # Match this operation's review and application writes, not merely an existing row.
-    def review_commit_state
-      return :rolled_back unless @expected_review_attributes
-
-      stored_review = ProofReview.find_by(id: @proof_review.id)
-      return :rolled_back if stored_review.nil? && @previous_review_attributes['id'].nil?
-      return :unknown unless stored_review
-
-      stored_attributes = stored_review.attributes_for_database
-      if stored_attributes == @expected_review_attributes
-        return :unknown if @expected_review_attributes == @previous_review_attributes &&
-                           @expected_application_state == @previous_application_state
-
-        return :committed if application_writes_present?
-      elsif stored_attributes == @previous_review_attributes
-        return :rolled_back
-      end
-
-      :unknown
-    rescue StandardError => e
-      Rails.logger.error "Could not confirm proof review commit for Application #{@application.id}: #{e.class.name}"
-      :unknown
-    end
-
-    def application_writes_present?
-      application_state = Application.find(@application.id).attributes_for_database.slice(*@expected_application_state.keys)
-      return false unless application_state == @expected_application_state
-      return true if @expected_application_state['status'] == @previous_application_state['status']
-
-      @lifecycle_history_ids.any? &&
-        ApplicationStatusChange.where(id: @lifecycle_history_ids).count == @lifecycle_history_ids.size &&
-        @lifecycle_audit_ids.any? && Event.where(id: @lifecycle_audit_ids).count == @lifecycle_audit_ids.size
-    end
-
-    def record_incomplete_follow_up(error)
-      AuditEventService.log(
-        action: 'proof_review_follow_up_failed',
-        actor: @admin,
-        auditable: @application,
-        metadata: { proof_review_id: @proof_review.id, proof_type: @proof_type_key, error_class: error.class.name }
-      )
-    rescue StandardError => e
-      Rails.logger.error "Could not record proof review follow-up failure for Application #{@application.id}: #{e.class.name}"
+    # The facts one review writes. ReviewCommit compares them before the writes, after them, and after an error.
+    # The review row is the one the review finds or creates, so a rolled-back new row reads as absent.
+    def durable_state
+      review = if @proof_review&.id
+                 ProofReview.find_by(id: @proof_review.id)
+               else
+                 @application.proof_reviews.find_by(proof_type: @proof_type_key, status: @status_key)
+               end
+      {
+        review: review&.attributes_for_database,
+        application: Application.where(id: @application.id).pick(:status, "#{@proof_type_key}_proof_status"),
+        lifecycle: [ApplicationStatusChange.where(id: @lifecycle_history_ids).count, Event.where(id: @lifecycle_audit_ids).count]
+      }
     end
 
     def reconcile_if_approved
-      @lifecycle_history_ids = []
-      @lifecycle_audit_ids = []
       return unless @status_key == 'approved'
 
       @application.reload
@@ -121,11 +78,9 @@ module Applications
         code: rejection_reason_code,
         proof_type: @proof_type_key,
         fallback: rejection_reason,
-        interpolations: rejection_reason_interpolations
+        application: @application
       )
-      find_attributes      = build_find_attributes
-      @proof_review        = @application.proof_reviews.find_or_initialize_by(find_attributes)
-      @previous_review_attributes = @proof_review.attributes_for_database
+      @proof_review = ProofReview.for_decision(@application, proof_type: @proof_type_key, status: @status_key)
 
       assign = {
         admin: @admin,
@@ -140,10 +95,8 @@ module Applications
         assign[:rejection_reason] = nil
       end
 
-      @proof_review.assign_attributes(assign)
       apply_submission_method_from_latest_submission_event
-      set_reviewed_at_if_needed
-      @proof_review.save!
+      @proof_review.record!(**assign)
 
       Rails.logger.debug do
         "Saved ProofReview ID: #{@proof_review.id}, status: #{@proof_review.status}, " \
@@ -152,26 +105,9 @@ module Applications
     end
 
     def process_re_rejection_side_effects
-      return unless repeat_rejection?
+      return unless @proof_review.repeat_rejection?
 
       @proof_review.apply_repeat_rejection_side_effects!
-    end
-
-    def repeat_rejection?
-      return false if @proof_review.previously_new_record?
-      return false unless @status_key == 'rejected'
-
-      true
-    end
-
-    def build_find_attributes
-      { proof_type: @proof_type_key, status: @status_key }
-    end
-
-    def set_reviewed_at_if_needed
-      # Updating an existing record skips the `on: :create` `set_reviewed_at` callback,
-      # so set `reviewed_at` here. Presence validation requires it before save!.
-      @proof_review.reviewed_at = Time.current unless @proof_review.new_record?
     end
 
     def apply_submission_method_from_latest_submission_event
@@ -186,18 +122,6 @@ module Applications
       event = @application.latest_proof_submission_event(@proof_type_key)
       event&.metadata&.fetch('submission_method', nil).presence ||
         event&.metadata&.fetch(:submission_method, nil).presence
-    end
-
-    def rejection_reason_interpolations
-      { address: application_address_text }
-    end
-
-    def application_address_text
-      [
-        @application.user&.physical_address_1,
-        @application.user&.physical_address_2,
-        [@application.user&.city, @application.user&.state, @application.user&.zip_code].compact.join(' ')
-      ].compact_blank.join(' ').squish
     end
 
     def update_application_status

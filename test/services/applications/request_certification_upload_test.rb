@@ -17,11 +17,11 @@ module Applications
     test 'certification request failure logs omit personal validation details' do
       invalid_record = User.new
       invalid_record.errors.add(:base, 'Contact private-certification@example.test at 410-555-0199')
-      MedicalProviderSecureRequestForm.stubs(:create!).raises(ActiveRecord::RecordInvalid.new(invalid_record))
+      SecureRequestForm.stubs(:create!).raises(ActiveRecord::RecordInvalid.new(invalid_record))
       messages = []
 
       result = Rails.logger.stub(:warn, ->(message) { messages << message }) do
-        assert_no_difference ['MedicalProviderSecureRequestForm.count', 'Notification.count', 'ApplicationStatusChange.count', 'Event.count'] do
+        assert_no_difference ['SecureRequestForm.certification_upload.count', 'Notification.count', 'ApplicationStatusChange.count', 'Event.count'] do
           RequestCertificationUpload.new(application: @application, actor: @actor).call
         end
       end
@@ -40,7 +40,7 @@ module Applications
         result = RequestCertificationUpload.new(application: @application, actor: @actor).call
       end
       assert_predicate result, :success?
-      original = result.data.fetch(:medical_provider_secure_request_form)
+      original = result.data.fetch(:secure_request_form)
       initial_state = @application.reload.attributes.slice(*DisabilityCertificationService::STATE_FIELDS)
       notification = Notification.find_by!(notifiable: @application, action: 'cert_upload_requested')
       history = @application.status_changes.where(change_type: :disability_certification).sole
@@ -83,7 +83,7 @@ module Applications
           AuditEventService.expects(:log).with(has_entries(action: 'disability_certification_requested')).raises(StandardError, 'audit unavailable')
         end
 
-        result = assert_no_difference ['MedicalProviderSecureRequestForm.count', 'Notification.count', 'ApplicationStatusChange.count', 'Event.count'] do
+        result = assert_no_difference ['SecureRequestForm.certification_upload.count', 'Notification.count', 'ApplicationStatusChange.count', 'Event.count'] do
           RequestCertificationUpload.new(application: @application, actor: @actor).call
         end
 
@@ -114,7 +114,7 @@ module Applications
       assert_equal 1, @application.disability_certification_request_count
       secure_notification = Notification.find_by!(notifiable: @application, action: 'cert_upload_requested')
       provider_notification = Notification.find_by!(notifiable: @application, action: 'disability_certification_requested')
-      form = MedicalProviderSecureRequestForm.find(secure_notification.metadata['medical_provider_secure_request_form_id'])
+      form = SecureRequestForm.find(secure_notification.metadata['secure_request_form_id'])
       assert_predicate form, :revoked?
       assert_equal 'suppressed', secure_notification.delivery_status
       assert_equal @application.disability_certification_requested_at,
@@ -125,7 +125,7 @@ module Applications
     test 'fails explicitly when provider email is missing' do
       application = create(:application, :draft, medical_provider_email: nil)
 
-      result = assert_no_difference('MedicalProviderSecureRequestForm.count') do
+      result = assert_no_difference('SecureRequestForm.certification_upload.count') do
         RequestCertificationUpload.new(application: application, actor: @actor).call
       end
 
@@ -135,22 +135,22 @@ module Applications
     end
 
     test 'creates secure cert upload form and audit-only notification' do
-      result = assert_difference('MedicalProviderSecureRequestForm.count', 1) do
+      result = assert_difference('SecureRequestForm.certification_upload.count', 1) do
         assert_difference("Notification.where(action: 'cert_upload_requested').count", 1) do
           RequestCertificationUpload.new(application: @application, actor: @actor).call
         end
       end
 
       assert_predicate result, :success?
-      form = result.data.fetch(:medical_provider_secure_request_form)
+      form = result.data.fetch(:secure_request_form)
       token = Rack::Utils.parse_nested_query(URI.parse(result.data.fetch(:secure_upload_url)).query).fetch('token')
       notification = Notification.find_by!(notifiable: @application, action: 'cert_upload_requested')
 
-      assert_equal form.id, MedicalProviderSecureRequestForm.from_public_token(token).id
+      assert_equal form.id, SecureRequestForm.certification_upload.from_public_token(token).id
       assert_predicate form, :kind_certification_upload?
-      assert_equal 'provider@example.com', form.provider_email
-      assert_equal 'Dr. Provider', form.provider_name
-      assert_equal form.id, notification.metadata.fetch('medical_provider_secure_request_form_id')
+      assert_equal 'provider@example.com', form.recipient_email
+      assert_equal 'Dr. Provider', form.recipient_name
+      assert_equal form.id, notification.metadata.fetch('secure_request_form_id')
       assert_equal 'provider@example.com', notification.metadata.fetch('provider_email')
       assert_equal 'Dr. Provider', notification.metadata.fetch('provider_name')
       assert_not notification.metadata.key?('secure_upload_url')
@@ -174,10 +174,10 @@ module Applications
       result = RequestCertificationUpload.new(application: application, actor: @actor).call
 
       assert_predicate result, :success?
-      form = result.data.fetch(:medical_provider_secure_request_form)
+      form = result.data.fetch(:secure_request_form)
       notification = Notification.find_by!(notifiable: application, action: 'cert_upload_requested')
 
-      assert_equal 'provider-tracking@example.com', form.provider_email
+      assert_equal 'provider-tracking@example.com', form.recipient_email
       assert_equal guardian, notification.recipient
     end
 
@@ -195,10 +195,10 @@ module Applications
       result = RequestCertificationUpload.new(application: application, actor: @actor).call
 
       assert_predicate result, :success?
-      form = result.data.fetch(:medical_provider_secure_request_form)
+      form = result.data.fetch(:secure_request_form)
       notification = Notification.find_by!(notifiable: application, action: 'cert_upload_requested')
 
-      assert_equal 'provider-dependent@example.com', form.provider_email
+      assert_equal 'provider-dependent@example.com', form.recipient_email
       assert_equal dependent, notification.recipient
     end
 
@@ -240,7 +240,7 @@ module Applications
       assert_not application.income_proof.attached?
       assert_not application.residency_proof.attached?
 
-      result = assert_difference('MedicalProviderSecureRequestForm.count', 1) do
+      result = assert_difference('SecureRequestForm.certification_upload.count', 1) do
         RequestCertificationUpload.new(application: application, actor: @actor).call
       end
 
@@ -267,9 +267,9 @@ module Applications
 
     test 'staff resend during cooldown fails without creating replacement' do
       first_result = RequestCertificationUpload.new(application: @application, actor: @actor).call
-      original = first_result.data.fetch(:medical_provider_secure_request_form)
+      original = first_result.data.fetch(:secure_request_form)
 
-      result = assert_no_difference('MedicalProviderSecureRequestForm.count') do
+      result = assert_no_difference('SecureRequestForm.certification_upload.count') do
         RequestCertificationUpload.new(
           application: @application,
           actor: @actor,
@@ -284,7 +284,7 @@ module Applications
 
     test 'resend after cooldown revokes prior link and creates replacement' do
       first_result = RequestCertificationUpload.new(application: @application, actor: @actor).call
-      original = first_result.data.fetch(:medical_provider_secure_request_form)
+      original = first_result.data.fetch(:secure_request_form)
 
       travel_to original.sent_at + 2.hours do
         result = assert_difference("Event.where(auditable: @application, action: 'cert_upload_request_revoked').count", 1) do
@@ -300,17 +300,14 @@ module Applications
 
       assert_predicate original.reload, :revoked?
       revocation_event = Event.find_by!(auditable: @application, action: 'cert_upload_request_revoked')
-      assert_equal original.id, revocation_event.metadata.fetch('medical_provider_secure_request_form_id')
+      assert_equal original.id, revocation_event.metadata.fetch('secure_request_form_id')
       assert_equal 'replacement_request', revocation_event.metadata.fetch('reason')
-      assert_equal 1, MedicalProviderSecureRequestForm.open_certification_upload_for_provider(
-        application_id: @application.id,
-        provider_email: @application.medical_provider_email
-      ).count
+      assert_equal 1, SecureRequestForm.open_certification_upload_for_application(application_id: @application.id).count
     end
 
     test 'revoked certification upload request appears in application audit logs' do
       first_result = RequestCertificationUpload.new(application: @application, actor: @actor).call
-      original = first_result.data.fetch(:medical_provider_secure_request_form)
+      original = first_result.data.fetch(:secure_request_form)
 
       travel_to original.sent_at + 2.hours do
         RequestCertificationUpload.new(
@@ -330,7 +327,7 @@ module Applications
 
     test 'public recovery is neutral during cooldown' do
       first_result = RequestCertificationUpload.new(application: @application, actor: @actor).call
-      original = first_result.data.fetch(:medical_provider_secure_request_form)
+      original = first_result.data.fetch(:secure_request_form)
 
       result = RequestCertificationUpload.new(
         application: @application,
@@ -341,32 +338,26 @@ module Applications
 
       assert_predicate result, :success?
       assert_predicate original.reload, :status_sent?
-      assert_equal 1, MedicalProviderSecureRequestForm.open_certification_upload_for_provider(
-        application_id: @application.id,
-        provider_email: @application.medical_provider_email
-      ).count
+      assert_equal 1, SecureRequestForm.open_certification_upload_for_application(application_id: @application.id).count
     end
 
     test 'manually revoked certification upload request does not block immediate replacement' do
       first_result = RequestCertificationUpload.new(application: @application, actor: @actor).call
-      original = first_result.data.fetch(:medical_provider_secure_request_form)
+      original = first_result.data.fetch(:secure_request_form)
       original.revoke!(actor: @actor, reason: :manual_revocation)
 
-      result = assert_difference('MedicalProviderSecureRequestForm.count', 1) do
+      result = assert_difference('SecureRequestForm.certification_upload.count', 1) do
         RequestCertificationUpload.new(application: @application, actor: @actor).call
       end
 
       assert_predicate result, :success?
       assert_predicate original.reload, :revoked?
-      assert_equal 1, MedicalProviderSecureRequestForm.open_certification_upload_for_provider(
-        application_id: @application.id,
-        provider_email: @application.medical_provider_email
-      ).count
+      assert_equal 1, SecureRequestForm.open_certification_upload_for_application(application_id: @application.id).count
     end
 
     test 'resend targets the provider email on file now, not the expired link snapshot' do
       first_result = RequestCertificationUpload.new(application: @application, actor: @actor).call
-      original = first_result.data.fetch(:medical_provider_secure_request_form)
+      original = first_result.data.fetch(:secure_request_form)
       @application.update!(medical_provider_email: 'updated-provider@example.com')
 
       travel_to original.sent_at + 2.hours do
@@ -379,8 +370,8 @@ module Applications
         assert_predicate result, :success?
       end
 
-      replacement = MedicalProviderSecureRequestForm.status_sent.order(:sent_at).last
-      assert_equal 'updated-provider@example.com', replacement.provider_email
+      replacement = SecureRequestForm.certification_upload.status_sent.order(:sent_at).last
+      assert_equal 'updated-provider@example.com', replacement.recipient_email
       assert_predicate original.reload, :revoked?
     end
 
@@ -449,7 +440,7 @@ module Applications
       mailer.expects(:request_certification).returns(mail)
       MedicalProviderMailer.expects(:with).returns(mailer)
 
-      result = assert_difference('MedicalProviderSecureRequestForm.count', 1) do
+      result = assert_difference('SecureRequestForm.certification_upload.count', 1) do
         assert_difference("Notification.where(action: 'cert_upload_requested').count", 1) do
           RequestCertificationUpload.new(
             application: @application,
@@ -464,17 +455,14 @@ module Applications
                    result.message
       assert_predicate @application.reload, :disability_certification_status_requested?
 
-      form = result.data.fetch(:medical_provider_secure_request_form)
+      form = result.data.fetch(:secure_request_form)
       notification = Notification.find_by!(notifiable: @application, action: 'cert_upload_requested')
       delivery_error = notification.metadata.fetch('delivery_error')
 
       assert_predicate form.reload, :revoked?
-      assert_equal 0, MedicalProviderSecureRequestForm.open_certification_upload_for_provider(
-        application_id: @application.id,
-        provider_email: @application.medical_provider_email
-      ).count
+      assert_equal 0, SecureRequestForm.open_certification_upload_for_application(application_id: @application.id).count
       assert_equal 'error', notification.delivery_status
-      assert_equal form.id, delivery_error.fetch('medical_provider_secure_request_form_id')
+      assert_equal form.id, delivery_error.fetch('secure_request_form_id')
       assert_equal form.request_batch_id, delivery_error.fetch('request_batch_id')
       assert_equal 'StandardError', delivery_error.fetch('error_class')
       assert_equal 'Email could not be sent.', delivery_error.fetch('message')

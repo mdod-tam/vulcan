@@ -92,7 +92,7 @@ class SecureRequestEmailSuppressionTest < ActiveSupport::TestCase
     application = provider_application
     set_email(false, 'op-1')
 
-    result = assert_no_difference('MedicalProviderSecureRequestForm.count') do
+    result = assert_no_difference('SecureRequestForm.certification_upload.count') do
       Applications::RequestCertificationUpload.new(application: application, actor: @admin, deliver_email: true).call
     end
 
@@ -105,7 +105,7 @@ class SecureRequestEmailSuppressionTest < ActiveSupport::TestCase
     application = provider_application
     set_email(false, 'op-1')
 
-    result = assert_difference('MedicalProviderSecureRequestForm.count', 1) do
+    result = assert_difference('SecureRequestForm.certification_upload.count', 1) do
       Applications::RequestCertificationUpload.new(application: application, actor: @admin, deliver_email: false).call
     end
 
@@ -144,14 +144,14 @@ class SecureRequestEmailSuppressionTest < ActiveSupport::TestCase
     test "#{kind} configuration refusal creates no request and is reported as an error" do
       service = configuration_test_service(kind)
       FeatureFlag.find_by!(name: EmailDelivery::GLOBAL_CONTROL).destroy!
-      counts = [SecureRequestForm.count, VendorSecureRequestForm.count, MedicalProviderSecureRequestForm.count]
+      counts = [SecureRequestForm.count, VendorSecureRequestForm.count]
 
       result = service.call
 
       assert result.failure?
       assert result.data&.dig(:configuration_error), result.inspect
       assert_not result.data[:delivery_suppressed]
-      assert_equal counts, [SecureRequestForm.count, VendorSecureRequestForm.count, MedicalProviderSecureRequestForm.count]
+      assert_equal counts, [SecureRequestForm.count, VendorSecureRequestForm.count]
       assert_empty ActionMailer::Base.deliveries
     end
   end
@@ -208,7 +208,7 @@ class SecureRequestEmailSuppressionTest < ActiveSupport::TestCase
 
       assert result.failure?
       assert result.data[:configuration_error], result.inspect
-      key = kind == :w9 ? :vendor_secure_request_form : :medical_provider_secure_request_form
+      key = kind == :w9 ? :vendor_secure_request_form : :secure_request_form
       form = result.data.fetch(key)
       assert form.reload.revoked?
       notification = Notification.where('metadata->>? = ?', "#{key}_id", form.id.to_s).order(:id).last

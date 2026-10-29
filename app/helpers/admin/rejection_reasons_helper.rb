@@ -2,13 +2,6 @@
 
 module Admin
   module RejectionReasonsHelper
-    def rejection_reason_body(proof_type:, code:, locale: 'en', fallback: nil, interpolations: {})
-      reason = RejectionReason.resolve(code: code, proof_type: proof_type, locale: locale)
-      body = reason&.body.presence || fallback.presence || code.to_s.humanize
-
-      interpolate_rejection_reason_body(body, interpolations)
-    end
-
     def rejection_reason_locale_label(locale)
       locale.to_s == 'es' ? 'Spanish (ES)' : 'English (EN)'
     end
@@ -36,17 +29,6 @@ module Admin
       editor_name = reason.updated_by&.full_name.presence || 'System'
       formatted_time = reason.updated_at.strftime('%B %d, %Y at %I:%M %p')
       "Last updated (#{reason.locale.to_s.upcase}): #{formatted_time} by #{editor_name}"
-    end
-
-    private
-
-    def interpolate_rejection_reason_body(body, interpolations)
-      return body if interpolations.blank?
-      return body unless body.include?('%{') || body.include?('%<')
-
-      body % interpolations.transform_keys(&:to_sym)
-    rescue KeyError, ArgumentError
-      body
     end
   end
 end

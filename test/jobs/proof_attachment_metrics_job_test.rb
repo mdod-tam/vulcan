@@ -10,7 +10,6 @@ class ProofAttachmentMetricsJobTest < ActiveJob::TestCase
     # Delete child rows before their parents because of foreign keys.
     ApplicationStatusChange.delete_all
     ProofReview.delete_all
-    MedicalProviderSecureRequestForm.delete_all
     SecureRequestForm.delete_all
     Application.delete_all
     GuardianRelationship.delete_all

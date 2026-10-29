@@ -79,20 +79,6 @@
         </div>
       </div>
       
-      <%
-        address_1 = @application.user&.physical_address_1.to_s
-        address_2 = @application.user&.physical_address_2.presence || ''
-        cert_city = @application.user&.city.to_s
-        cert_state = @application.user&.state.to_s
-        cert_zip = @application.user&.zip_code.to_s
-        cert_full_address = "#{address_1} #{address_2} #{cert_city}, #{cert_state} #{cert_zip}".squish
-        cert_interpolations = { address: cert_full_address }
-
-        cert_reason_codes = %w[missing_signature missing_functional_limitations incomplete_disability_documentation missing_provider_credentials outdated_certification incorrect_form_used]
-        cert_reason_texts = cert_reason_codes.index_with do |code|
-          rejection_reason_body(proof_type: 'disability_certification', code: code, locale: 'en', interpolations: cert_interpolations)
-        end
-      %>
       <div id="disability_certification_rejection" class="mt-4 hidden" data-document-proof-handler-target="rejectionSection">
         <div class="space-y-4">
           <div>
@@ -108,8 +94,8 @@
                     data-action="change->document-proof-handler#handleReasonSelectionChanged"
                     data-document-proof-handler-target="rejectionReasonSelect">
               <option value="">Select a reason</option>
-              <% cert_reason_codes.each do |code| %>
-                <option value="<%= code %>" data-reason-text="<%= cert_reason_texts[code] %>"><%= RejectionReason.label_for(code) %></option>
+              <% RejectionReason.options_for(locale: 'en', proof_type: 'disability_certification').each do |reason| %>
+                <option value="<%= reason.code %>" data-reason-text="<%= reason.body_for(@application) %>"><%= RejectionReason.label_for(reason.code) %></option>
               <% end %>
               <option value="other">Other (custom reason)</option>
             </select>

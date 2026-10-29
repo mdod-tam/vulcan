@@ -75,7 +75,7 @@ module Applications
       when 'provider_info_requested', 'proof_resubmission_requested'
         [event.recipient_id, metadata['secure_request_form_id'], metadata['request_batch_id']].compact.join('-')
       when 'cert_upload_requested'
-        metadata['medical_provider_secure_request_form_id'].to_s
+        metadata['secure_request_form_id'].to_s
       end
     end
 
@@ -92,7 +92,7 @@ module Applications
       when 'provider_info_request_revoked', 'proof_resubmission_request_revoked'
         [metadata['secure_request_form_id'], metadata['request_batch_id']].compact.join('-')
       when 'cert_upload_request_revoked'
-        metadata['medical_provider_secure_request_form_id'].to_s
+        metadata['secure_request_form_id'].to_s
       when 'proof_resubmission_request_failed'
         metadata['proof_review_id'].to_s
       when 'shipment_added', 'shipment_corrected', 'fulfillment_mode_changed',

@@ -180,7 +180,7 @@ module Applications
     end
 
     test 'an outstanding secure request keeps certification requested even when it predates the unsent email' do
-      create(:medical_provider_secure_request_form, application: @application, requested_by: @admin, created_at: 1.hour.ago)
+      create(:certification_upload_form, application: @application, requested_by: @admin, created_at: 1.hour.ago)
       assert @service.request_certification.success?
       issued_at = @application.reload.disability_certification_requested_at
       toggle(false)

@@ -50,7 +50,7 @@ class DocumentScansController < ApplicationController
     if secure_context?
       @secure_form = case params[:secure_form_type]
                      when 'proof' then SecureRequestForm.from_public_token(params[:token])
-                     when 'certification' then MedicalProviderSecureRequestForm.from_public_token(params[:token])
+                     when 'certification' then SecureRequestForm.certification_upload.from_public_token(params[:token])
                      when 'w9' then VendorSecureRequestForm.from_public_token(params[:token])
                      end
       head :not_found unless @secure_form&.active_for_public_use? && secure_kind_matches?

@@ -10,7 +10,7 @@
 #
 # It's strongly recommended that you check this file into your version control system.
 
-ActiveRecord::Schema[8.1].define(version: 2026_10_27_220000) do
+ActiveRecord::Schema[8.1].define(version: 2026_10_28_180100) do
   # These are extensions that must be enabled in order to support this database
   enable_extension "pg_catalog.plpgsql"
 
@@ -226,7 +226,7 @@ ActiveRecord::Schema[8.1].define(version: 2026_10_27_220000) do
     t.index ["user_id", "purpose", "slot", "form_context"], name: "index_document_scans_on_recovery"
     t.index ["user_id"], name: "index_document_scans_on_user_id"
     t.check_constraint "((user_id IS NOT NULL)::integer + (secure_form_id IS NOT NULL)::integer + COALESCE((continuation::text = 'docuseal'::text)::integer, 0)) <= 1", name: "document_scans_owner"
-    t.check_constraint "status::text = ANY (ARRAY['pending'::character varying, 'clean'::character varying, 'blocked'::character varying, 'failed'::character varying]::text[])", name: "document_scans_status"
+    t.check_constraint "status::text = ANY (ARRAY['pending'::character varying::text, 'clean'::character varying::text, 'blocked'::character varying::text, 'failed'::character varying::text])", name: "document_scans_status"
   end
 
   create_table "document_storage_deletions", force: :cascade do |t|
@@ -523,32 +523,6 @@ ActiveRecord::Schema[8.1].define(version: 2026_10_27_220000) do
     t.index ["vendor_id"], name: "index_invoices_on_vendor_id"
   end
 
-  create_table "medical_provider_secure_request_forms", force: :cascade do |t|
-    t.bigint "application_id", null: false
-    t.datetime "created_at", null: false
-    t.datetime "expires_at", null: false
-    t.integer "kind", default: 0, null: false
-    t.string "provider_email", null: false
-    t.string "provider_name"
-    t.string "public_token_digest", null: false
-    t.string "request_batch_id", null: false
-    t.bigint "requested_by_id"
-    t.datetime "revoked_at"
-    t.datetime "sent_at", null: false
-    t.integer "status", default: 0, null: false
-    t.datetime "submitted_at"
-    t.datetime "updated_at", null: false
-    t.datetime "expiration_recorded_at"
-    t.index ["application_id", "kind", "provider_email", "sent_at"], name: "idx_med_provider_secure_forms_on_app_kind_email_sent"
-    t.index ["application_id", "kind", "provider_email"], name: "idx_med_provider_secure_forms_one_active_provider", unique: true, where: "((status = 0) AND (kind = 0))"
-    t.index ["application_id"], name: "index_medical_provider_secure_request_forms_on_application_id"
-    t.index ["expires_at"], name: "index_med_provider_secure_forms_on_open_expiration", where: "((status = 0) AND (submitted_at IS NULL) AND (revoked_at IS NULL) AND (expiration_recorded_at IS NULL))"
-    t.index ["public_token_digest"], name: "idx_med_provider_secure_forms_on_public_token_digest", unique: true
-    t.index ["requested_by_id"], name: "index_medical_provider_secure_request_forms_on_requested_by_id"
-    t.check_constraint "kind = 0", name: "medical_provider_secure_request_forms_kind_check"
-    t.check_constraint "status = ANY (ARRAY[0, 1, 2])", name: "medical_provider_secure_request_forms_status_check"
-  end
-
   create_table "notifications", force: :cascade do |t|
     t.string "action"
     t.bigint "actor_id"
@@ -729,7 +703,7 @@ ActiveRecord::Schema[8.1].define(version: 2026_10_27_220000) do
     t.string "public_token_digest", null: false
     t.integer "recipient_channel", null: false
     t.string "recipient_email"
-    t.bigint "recipient_id", null: false
+    t.bigint "recipient_id"
     t.string "recipient_phone"
     t.string "recipient_relationship_type"
     t.integer "recipient_role", null: false
@@ -743,21 +717,25 @@ ActiveRecord::Schema[8.1].define(version: 2026_10_27_220000) do
     t.bigint "delivery_owner_id"
     t.string "delivery_source"
     t.datetime "expiration_recorded_at"
+    t.string "recipient_name"
     t.index ["application_id", "kind", "recipient_id", "sent_at"], name: "idx_secure_request_forms_on_app_kind_recipient_sent_at"
     t.index ["application_id", "kind", "recipient_id"], name: "idx_secure_request_forms_one_active_id_proof_recipient", unique: true, where: "((status = 0) AND (kind = 1))"
     t.index ["application_id", "kind", "recipient_id"], name: "idx_secure_request_forms_one_active_income_proof_recipient", unique: true, where: "((status = 0) AND (kind = 3))"
     t.index ["application_id", "kind", "recipient_id"], name: "idx_secure_request_forms_one_active_provider_recipient", unique: true, where: "((status = 0) AND (kind = 0))"
     t.index ["application_id", "kind", "recipient_id"], name: "idx_secure_request_forms_one_active_residency_proof_recipient", unique: true, where: "((status = 0) AND (kind = 2))"
     t.index ["application_id", "kind", "request_batch_id"], name: "idx_secure_request_forms_on_app_kind_batch"
+    t.index ["application_id"], name: "idx_secure_request_forms_one_active_certification_upload", unique: true, where: "((status = 0) AND (kind = 4))"
     t.index ["application_id"], name: "index_secure_request_forms_on_application_id"
     t.index ["delivery_owner_id"], name: "index_secure_request_forms_on_delivery_owner_id"
     t.index ["expires_at"], name: "index_secure_request_forms_on_open_expiration", where: "((status = 0) AND (submitted_at IS NULL) AND (revoked_at IS NULL) AND (expiration_recorded_at IS NULL))"
     t.index ["public_token_digest"], name: "idx_secure_request_forms_on_public_token_digest", unique: true
     t.index ["recipient_id"], name: "index_secure_request_forms_on_recipient_id"
     t.index ["requested_by_id"], name: "index_secure_request_forms_on_requested_by_id"
-    t.check_constraint "kind = ANY (ARRAY[0, 1, 2, 3])", name: "secure_request_forms_kind_check"
+    t.check_constraint "kind <> 4 OR recipient_id IS NULL AND delivery_owner_id IS NULL AND delivery_source IS NULL AND recipient_role = 2 AND recipient_channel = 0 AND recipient_email IS NOT NULL", name: "secure_request_forms_certification_provider_check"
+    t.check_constraint "kind = 4 OR recipient_id IS NOT NULL AND (recipient_role = ANY (ARRAY[0, 1]))", name: "secure_request_forms_user_recipient_check"
+    t.check_constraint "kind = ANY (ARRAY[0, 1, 2, 3, 4])", name: "secure_request_forms_kind_check"
     t.check_constraint "recipient_channel = ANY (ARRAY[0, 1, 2])", name: "secure_request_forms_recipient_channel_check"
-    t.check_constraint "recipient_role = ANY (ARRAY[0, 1])", name: "secure_request_forms_recipient_role_check"
+    t.check_constraint "recipient_role = ANY (ARRAY[0, 1, 2])", name: "secure_request_forms_recipient_role_check"
     t.check_constraint "status = ANY (ARRAY[0, 1, 2])", name: "secure_request_forms_status_check"
   end
 
@@ -1249,8 +1227,6 @@ ActiveRecord::Schema[8.1].define(version: 2026_10_27_220000) do
   add_foreign_key "invoice_generation_failures", "users", column: "vendor_id"
   add_foreign_key "invoices", "users", column: "paid_by_id"
   add_foreign_key "invoices", "users", column: "vendor_id"
-  add_foreign_key "medical_provider_secure_request_forms", "applications", on_delete: :cascade
-  add_foreign_key "medical_provider_secure_request_forms", "users", column: "requested_by_id"
   add_foreign_key "notifications", "users", column: "actor_id"
   add_foreign_key "notifications", "users", column: "recipient_id"
   add_foreign_key "policy_changes", "policies"

@@ -5,7 +5,6 @@ module EmailDelivery
   class Capture
     REQUEST_KEYS = {
       'secure_request_form_id' => SecureRequestForm,
-      'medical_provider_secure_request_form_id' => MedicalProviderSecureRequestForm,
       'vendor_secure_request_form_id' => VendorSecureRequestForm
     }.freeze
 

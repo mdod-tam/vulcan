@@ -37,14 +37,21 @@ module DocumentSigning
       submitter  = submission['submitters']&.first
 
       @application.with_lock do
-        @application.update!(
-          document_signing_service: @service_type,
-          document_signing_submission_id: submission['id'].to_s,
-          document_signing_submitter_id: submitter&.dig('id').to_s,
-          document_signing_status: :sent,
-          document_signing_requested_at: Time.current,
-          disability_certification_status: :requested,
-          disability_certification_requested_at: Time.current
+        requested_at = Time.current
+        @application.transition_disability_certification_status!(
+          :requested,
+          actor: @actor,
+          action: 'disability_certification_requested',
+          attributes: {
+            document_signing_service: @service_type,
+            document_signing_submission_id: submission['id'].to_s,
+            document_signing_submitter_id: submitter&.dig('id').to_s,
+            document_signing_status: :sent,
+            document_signing_requested_at: requested_at,
+            disability_certification_requested_at: requested_at
+          },
+          metadata: { submission_method: 'document_signing', provider_name: @application.medical_provider_name,
+                      requested_by_id: @actor.id }
         )
 
         # increment! updates each counter in the database, not from the loaded value.

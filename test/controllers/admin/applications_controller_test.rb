@@ -234,7 +234,7 @@ module Admin
           'application_id' => @application.id,
           'provider_name' => 'Dr. Secure Cert',
           'provider_email' => 'provider@example.test',
-          'medical_provider_secure_request_form_id' => 702
+          'secure_request_form_id' => 702
         }
       )
 
@@ -376,6 +376,22 @@ module Admin
         assert_redirected_to admin_application_path(@application)
         assert_equal message, flash[:notice]
         assert_not_includes flash[:notice], 'provider notified'
+      end
+
+      test "#{format} unconfirmed certification rejection redirects with non-retry guidance" do
+        message = 'The certification rejection may have been saved, but that could not be confirmed. ' \
+                  'Check this application before rejecting it again.'
+        Applications::DisabilityCertificationReviewer.any_instance.expects(:reject).returns(
+          BaseService::Result.new(success: false, message: message, data: { commit_state: :unknown })
+        )
+
+        patch update_certification_status_admin_application_path(@application),
+              params: { status: 'rejected', rejection_reason: 'Missing signature' }, headers: { 'Accept' => format }
+
+        assert_redirected_to admin_application_path(@application)
+        assert_response :see_other
+        assert_equal message, flash[:alert]
+        assert_not_includes flash[:alert], 'Failed to reject certification'
       end
 
       test "#{format} proof approval keeps committed follow-up warning on its redirect" do
@@ -618,6 +634,44 @@ module Admin
 
       assert_select "dialog#proofRejectionModal button[data-reason-code='missing_name'][data-reason-text='#{income_body}']"
       assert_select "dialog#disabilityCertificationRejectionModal button[data-reason-code='missing_signature'][data-reason-text='#{disability_certification_body}']"
+    end
+
+    test 'show page fills the applicant address into reason previews, including for a dependent' do
+      create(:rejection_reason, code: 'zz_preview_address', proof_type: 'residency', body: 'Send proof for %<address>s.')
+      dependent_application = create(:application, :for_dependent,
+                                     dependent_attrs: { first_name: 'Dependent', last_name: 'User', email: generate(:email),
+                                                        physical_address_1: '123 Main St', city: 'Baltimore', state: 'MD',
+                                                        zip_code: '21201' })
+
+      get admin_application_path(dependent_application)
+
+      assert_response :success
+      assert_select "dialog#proofRejectionModal button[data-reason-code='zz_preview_address']" \
+                    "[data-reason-text='Send proof for 123 Main St Baltimore, MD 21201.']"
+    end
+
+    test 'show page offers certification reasons in English and proof reasons in the applicant locale' do
+      @application.user.update!(locale: 'es')
+      create(:rejection_reason, code: 'zz_cert_locale', proof_type: 'disability_certification', locale: 'en', body: 'English certification text')
+      create(:rejection_reason, code: 'zz_cert_locale', proof_type: 'disability_certification', locale: 'es', body: 'Texto de certificacion')
+      create(:rejection_reason, code: 'zz_proof_locale', proof_type: 'income', locale: 'en', body: 'English income text')
+      create(:rejection_reason, code: 'zz_proof_locale', proof_type: 'income', locale: 'es', body: 'Texto de ingresos')
+
+      get admin_application_path(@application)
+
+      assert_response :success
+      assert_select "dialog#disabilityCertificationRejectionModal button[data-reason-code='zz_cert_locale'][data-reason-text='English certification text']"
+      assert_select "dialog#proofRejectionModal button[data-reason-code='zz_proof_locale'][data-reason-text='Texto de ingresos']"
+    end
+
+    test 'show page certification upload form offers the stored certification reasons, including ones an admin added' do
+      create(:rejection_reason, code: 'zz_admin_added', proof_type: 'disability_certification', body: 'Added by an admin')
+
+      get admin_application_path(@application)
+
+      assert_response :success
+      assert_select "select#rejection_reason_code_select option[value='zz_admin_added'][data-reason-text='Added by an admin']"
+      assert_select "select#rejection_reason_code_select option[value='missing_signature']"
     end
 
     test 'show page includes accessible rejection reason button attributes' do

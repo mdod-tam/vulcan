@@ -1,6 +1,6 @@
 # frozen_string_literal: true
 
-# Certification status predicates and rejection-review readers for Application.
+# Certification status predicates, rejection-review readers, and the certification status writer for Application.
 module CertificationManagement
   extend ActiveSupport::Concern
 
@@ -52,5 +52,40 @@ module CertificationManagement
   # @return [Boolean] True if rejection was requested with reason
   def rejection_requested?(status, params)
     status == :rejected && params[:rejection_reason].present?
+  end
+
+  # The one writer of the certification status. It moves the status, records its history row, and logs its
+  # audit event in one transaction, as transition_status! does for the application status. A repeat of the
+  # current status is still recorded: a second rejection is a new decision.
+  #
+  # actor:      who made the change; required
+  # action:     audit action; request flows name the request instead of a status change
+  # attributes: other columns that change with it, such as verification or the request timestamp and count
+  # metadata:   stored on the history row and the audit event
+  # notes:      stored on the history row only
+  #
+  # The audit event gets its own operation id, so a second change within the audit dedup window is not dropped.
+  # Returns the history row.
+  def transition_disability_certification_status!(new_status, actor:, action: 'disability_certification_status_changed',
+                                                  attributes: {}, metadata: {}, notes: nil)
+    raise ArgumentError, 'actor is required' if actor.blank?
+
+    with_lock do
+      old_status = disability_certification_status
+      # The certification status is unrelated to proof consistency, as in the request flows.
+      Current.set(skip_proof_validation: true) do
+        update!(attributes.merge(disability_certification_status: new_status))
+      end
+
+      details = { change_type: 'disability_certification' }.merge(metadata)
+      change = status_changes.create!(
+        from_status: old_status, to_status: disability_certification_status, user: actor, notes: notes,
+        change_type: :disability_certification, metadata: notes.present? ? details.merge(notes: notes) : details
+      )
+      audit_metadata = details.merge(application_id: id, old_status: old_status, new_status: disability_certification_status)
+      AuditEventService.log(action: action, actor: actor, auditable: self,
+                            metadata: audit_metadata.reverse_merge(operation_id: "disability-certification-status-change-#{change.id}"))
+      change
+    end
   end
 end

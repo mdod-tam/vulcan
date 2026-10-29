@@ -148,7 +148,7 @@ module Applications
       return { reason: custom_reason.presence || 'Other', reason_code: nil } if selected_reason.blank? || selected_reason == 'other'
 
       reason = RejectionReason.resolve_text(
-        code: selected_reason, proof_type: 'disability_certification', fallback: selected_reason
+        code: selected_reason, proof_type: 'disability_certification', fallback: selected_reason, application: @application
       )
       { reason: reason, reason_code: selected_reason }
     end

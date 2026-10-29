@@ -497,6 +497,19 @@ class ApplicationNotificationsMailerTest < ActionMailer::TestCase
     assert_includes email.body.to_s, "Reason: #{@proof_review.rejection_reason}"
   end
 
+  test 'proof_rejected states the applicant address the way the stored reason does' do
+    @user.update!(physical_address_1: '123 Main St', physical_address_2: 'Apt 4', city: 'Baltimore', state: 'MD', zip_code: '21201')
+    create(:rejection_reason, code: 'zz_mail_address', proof_type: 'residency', body: 'Send proof for %<address>s.')
+    proof_review = create(:proof_review, :rejected, application: @application, proof_type: :residency,
+                                                    rejection_reason: 'Stored text that the code replaces at send time',
+                                                    rejection_reason_code: 'zz_mail_address')
+
+    email = ApplicationNotificationsMailer.proof_rejected(@application, proof_review)
+    email.deliver_now
+
+    assert_includes email.body.to_s, 'Reason: Send proof for 123 Main St Apt 4 Baltimore, MD 21201.'
+  end
+
   test 'proof_requested includes secure upload url for paper application email delivery' do
     @application.update!(submission_method: :paper)
     @user.update!(communication_preference: :email)

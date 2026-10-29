@@ -295,7 +295,7 @@ module Admin
         action: 'cert_upload_requested',
         metadata: {
           'application_id' => application.id,
-          'medical_provider_secure_request_form_id' => 501,
+          'secure_request_form_id' => 501,
           'provider_name' => 'Dr. Secure',
           'provider_email' => 'secure@example.test',
           'requested_channel' => 'email',
@@ -320,7 +320,7 @@ module Admin
         action: 'cert_upload_request_revoked',
         metadata: {
           'application_id' => application.id,
-          'medical_provider_secure_request_form_id' => 601,
+          'secure_request_form_id' => 601,
           'provider_name' => 'Awaiting Provider',
           'provider_email' => 'awaiting.provider@example.com',
           'reason' => 'replacement_request'
@@ -411,7 +411,7 @@ module Admin
                            medical_provider_name: 'Dr. Secure',
                            medical_provider_email: 'secure@example.test',
                            disability_certification_status: :requested)
-      create(:medical_provider_secure_request_form, application: application)
+      create(:certification_upload_form, application: application)
 
       get admin_application_path(application)
 
@@ -673,7 +673,7 @@ module Admin
       messages = []
 
       Rails.logger.stub(:error, ->(message) { messages << message }) do
-        assert_no_difference ['MedicalProviderSecureRequestForm.count', 'Notification.count', 'Event.count'] do
+        assert_no_difference ['SecureRequestForm.certification_upload.count', 'Notification.count', 'Event.count'] do
           post admin_application_certification_upload_request_path(application)
         end
       end
@@ -763,10 +763,10 @@ module Admin
       application = create(:application,
                            medical_provider_name: 'Dr. Secure',
                            medical_provider_email: 'secure@example.test')
-      secure_request_form = create(:medical_provider_secure_request_form,
+      secure_request_form = create(:certification_upload_form,
                                    application: application,
-                                   provider_name: 'Dr. Secure',
-                                   provider_email: 'secure@example.test')
+                                   recipient_name: 'Dr. Secure',
+                                   recipient_email: 'secure@example.test')
 
       get admin_application_path(application)
 
@@ -781,16 +781,16 @@ module Admin
       assert_redirected_to admin_application_path(application)
       assert_response :see_other
       event = Event.find_by!(auditable: application, action: 'cert_upload_request_revoked')
-      assert_equal secure_request_form.id, event.metadata.fetch('medical_provider_secure_request_form_id')
+      assert_equal secure_request_form.id, event.metadata.fetch('secure_request_form_id')
       assert_equal 'manual_revocation', event.metadata.fetch('reason')
     end
 
     test 'certification revocation failure logs omit personal validation details' do
       application = create(:application)
-      form = create(:medical_provider_secure_request_form, application: application)
+      form = create(:certification_upload_form, application: application)
       invalid_record = User.new
       invalid_record.errors.add(:base, 'Contact private-certification@example.test at 410-555-0199')
-      MedicalProviderSecureRequestForm.any_instance.stubs(:revoke!).raises(ActiveRecord::RecordInvalid.new(invalid_record))
+      SecureRequestForm.any_instance.stubs(:revoke!).raises(ActiveRecord::RecordInvalid.new(invalid_record))
       messages = []
 
       Rails.logger.stub(:error, ->(message) { messages << message }) do

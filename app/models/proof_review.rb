@@ -36,6 +36,26 @@ class ProofReview < ApplicationRecord
   scope :rejections, -> { where(status: :rejected) }
   scope :last_3_days, -> { where('created_at > ?', 3.days.ago) }
 
+  # The row for one decision on an application. A proof type and a status keep a single row between them,
+  # so a repeat decision updates that row instead of adding another.
+  def self.for_decision(application, proof_type:, status:)
+    application.proof_reviews.find_or_initialize_by(proof_type: proof_type, status: status)
+  end
+
+  # Saves the decision. A new row stamps reviewed_at when it is created; a repeat decision stamps it here.
+  def record!(**attributes)
+    assign_attributes(attributes)
+    self.reviewed_at = Time.current unless new_record?
+    save!
+    self
+  end
+
+  # The decision just saved was a rejection that updated an existing row. A new row's own after-commit
+  # callback applies the rejection side effects; a repeat applies them with apply_repeat_rejection_side_effects!.
+  def repeat_rejection?
+    status_rejected? && !previously_new_record?
+  end
+
   def apply_repeat_rejection_side_effects!
     return if proof_type_disability_certification?
     return unless status_rejected?
@@ -47,6 +67,18 @@ class ProofReview < ApplicationRecord
 
     log_rejection_audit_event
     issue_proof_resubmission_form
+  end
+
+  # The review committed and a later step failed. This event lets staff find the review and check it.
+  def log_follow_up_failure(error)
+    AuditEventService.log(
+      action: 'proof_review_follow_up_failed',
+      actor: admin,
+      auditable: application,
+      metadata: { proof_review_id: id, proof_type: proof_type, error_class: error.class.name }
+    )
+  rescue StandardError => e
+    Rails.logger.error "Could not record proof review follow-up failure for Application #{application_id}: #{e.class.name}"
   end
 
   private
@@ -168,6 +200,8 @@ class ProofReview < ApplicationRecord
     Rails.logger.error "Failed to record proof resubmission request failure for ProofReview #{id}: #{e.class.name}"
   end
 
+  # Each rejection decision has its own operation id. Without one, the audit dedup window keeps only the
+  # first proof_rejected event of an application, so rejecting two proofs in one intake would lose the second.
   def log_rejection_audit_event
     AuditEventService.log(
       action: 'proof_rejected',
@@ -177,7 +211,8 @@ class ProofReview < ApplicationRecord
         proof_type: proof_type,
         rejection_reason: rejection_reason,
         submission_method: submission_method,
-        rejection_reason_code: rejection_reason_code
+        rejection_reason_code: rejection_reason_code,
+        operation_id: "proof-review-#{id}-rejected-#{reviewed_at.utc.iso8601(6)}"
       }.compact
     )
   end

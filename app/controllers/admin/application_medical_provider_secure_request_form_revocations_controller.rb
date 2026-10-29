@@ -30,7 +30,7 @@ module Admin
     private
 
     def set_form
-      @form = @application.medical_provider_secure_request_forms.find(
+      @form = @application.certification_upload_forms.find(
         params[:medical_provider_secure_request_form_id]
       )
     end

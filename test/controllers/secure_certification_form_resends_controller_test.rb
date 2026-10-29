@@ -8,8 +8,8 @@ class SecureCertificationFormResendsControllerTest < ActionDispatch::Integration
                           medical_provider_name: 'Dr. Provider',
                           medical_provider_email: 'provider@example.com')
     Rails.cache.clear
-    @raw_token = MedicalProviderSecureRequestForm.generate_public_token
-    @secure_request_form = create(:medical_provider_secure_request_form,
+    @raw_token = SecureRequestForm.generate_public_token
+    @secure_request_form = create(:certification_upload_form,
                                   :expired,
                                   application: @application,
                                   raw_token: @raw_token)

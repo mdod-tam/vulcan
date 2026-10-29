@@ -98,29 +98,9 @@ class ProofAttachmentService
     transaction.after_rollback { log_failure_audit_event(error, context) }
   end
 
-  def self.record_metrics(result, proof_type, status)
-    record_basic_logging(result, proof_type, status)
-    context = build_context(result, proof_type, status)
-    record_datadog_metrics(result, context, proof_type, status)
-  rescue StandardError => e
-    Rails.logger.error "Failed to record proof metrics: #{e.class.name}"
-  end
-
-  def self.record_basic_logging(result, proof_type, status)
-    if result[:success]
-      Rails.logger.info "Proof #{proof_type} #{status} completed in #{result[:duration_ms]}ms"
-    elsif Rails.env.test? && result[:error]&.message.to_s.match?(/mismatched digest/i)
-      Rails.logger.debug do
-        "[EXPECTED_TEST_ATTACHMENT] Proof #{proof_type} #{status} failed in #{result[:duration_ms]}ms: #{result[:error]&.class&.name}"
-      end
-    else
-      Rails.logger.error "Proof #{proof_type} #{status} failed in #{result[:duration_ms]}ms: #{result[:error]&.class&.name}"
-    end
-  end
-
+  # The failure audit's metadata. Only a failed result reaches it, so no blob size is reported.
   def self.build_context(result, proof_type, status)
     context = build_base_context(result, proof_type, status)
-    add_blob_size_to_context(context, result)
     add_error_details_to_context(context, result)
     context
   end
@@ -136,32 +116,10 @@ class ProofAttachmentService
     }
   end
 
-  def self.add_blob_size_to_context(context, result)
-    return unless result[:success] && result[:blob_size].present?
-
-    context[:blob_size_bytes] = result[:blob_size]
-  end
-
   def self.add_error_details_to_context(context, result)
     return unless result[:error]
 
     context[:error_class] = result[:error].class.name
-  end
-
-  def self.record_datadog_metrics(result, _context, proof_type, status)
-    return unless defined?(Datadog)
-
-    tags = [
-      "proof_type:#{proof_type}",
-      "status:#{status}",
-      "success:#{result[:success]}",
-      "environment:#{Rails.env}"
-    ]
-    Datadog.increment('proof_attachments.operations', tags: tags)
-    Datadog.timing('proof_attachments.duration', result[:duration_ms], tags: tags)
-    return unless result[:success] && result[:blob_size].present?
-
-    Datadog.histogram('proof_attachments.size', result[:blob_size], tags: tags)
   end
 
   class << self
@@ -269,24 +227,12 @@ class ProofAttachmentService
       method ? method.to_sym : SubmissionMethodValidator.validate(submission_method)
     end
 
+    # Returns the result. A failure is recorded and returned, not raised.
     def with_service_flow(context)
-      start_time = Time.current
-      result = { success: false, error: nil, duration_ms: 0 }
-
-      begin
-        ApplicationRecord.transaction do
-          yield(result)
-        end
-      rescue StandardError => e
-        result[:success] = false
-        result[:error] = e
-        record_failure(e, context)
-      ensure
-        result[:duration_ms] = ((Time.current - start_time) * 1000).round
-        record_metrics(result, context.fetch(:proof_type), context.fetch(:status))
+      subject = "Proof #{context.fetch(:proof_type)} #{context.fetch(:status)}"
+      AttachmentOperation.measure(subject, on_error: ->(error) { record_failure(error, context) }) do |result|
+        ApplicationRecord.transaction { yield(result) }
       end
-
-      result
     end
 
     def log_attachment_events(context)
@@ -365,13 +311,7 @@ class ProofAttachmentService
         code: raw_reason,
         proof_type: proof_type.to_s,
         fallback: raw_reason,
-        interpolations: {
-          address: [
-            application.user&.physical_address_1,
-            application.user&.physical_address_2,
-            [application.user&.city, application.user&.state, application.user&.zip_code].compact.join(' ')
-          ].compact_blank.join(' ').squish
-        }
+        application: application
       )
       reason_text = resolved[:text]
       reason_code = resolved[:code]
@@ -384,16 +324,16 @@ class ProofAttachmentService
           notes: notes || 'Rejected during paper application submission'
         )
 
-        application.proof_reviews.create!(
+        review = ProofReview.for_decision(application, proof_type: proof_type, status: :rejected).record!(
           admin: admin,
-          proof_type: proof_type,
-          status: 'rejected',
           rejection_reason: reason_text,
           rejection_reason_code: reason_code,
           notes: notes,
-          reviewed_at: Time.current,
           submission_method: submission_method
         )
+        # A new review applies its rejection side effects in its own after-commit callback. A repeat applies them here.
+        ActiveRecord.after_all_transactions_commit { review.apply_repeat_rejection_side_effects! } if review.repeat_rejection?
+        review
       end
     end
 

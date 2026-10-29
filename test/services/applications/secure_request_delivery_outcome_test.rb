@@ -192,7 +192,7 @@ class SecureRequestDeliveryOutcomeTest < ActiveSupport::TestCase
       test "#{service_class} #{collisions == 1 ? 'retries a digest collision' : 'rolls back exhausted digest retries'}" do
         service, owner, form_key, = single_request_service(service_class)
         original = if service_class == Applications::RequestCertificationUpload
-                     create(:medical_provider_secure_request_form, application: owner, requested_by: @actor, sent_at: 2.hours.ago)
+                     create(:certification_upload_form, application: owner, requested_by: @actor, sent_at: 2.hours.ago)
                    else
                      create(:vendor_secure_request_form, vendor: owner, requested_by: @actor, sent_at: 2.hours.ago)
                    end
@@ -242,7 +242,7 @@ class SecureRequestDeliveryOutcomeTest < ActiveSupport::TestCase
       service, owner, = single_request_service(service_class)
       NotificationService.stubs(:create_and_deliver!).returns(nil)
 
-      result = assert_no_difference ['Notification.count', 'MedicalProviderSecureRequestForm.count', 'VendorSecureRequestForm.count',
+      result = assert_no_difference ['Notification.count', 'SecureRequestForm.count', 'VendorSecureRequestForm.count',
                                      'ApplicationStatusChange.count', 'Event.count'] do
         service.call
       end
@@ -311,7 +311,7 @@ class SecureRequestDeliveryOutcomeTest < ActiveSupport::TestCase
     if service_class == Applications::RequestCertificationUpload
       application = create(:application, :in_progress, medical_provider_name: 'Dr. Provider', medical_provider_email: 'provider@example.test')
       [service_class.new(application: application, actor: @actor, deliver_email: true), application,
-       :medical_provider_secure_request_form, 'cert_upload_requested']
+       :secure_request_form, 'cert_upload_requested']
     else
       vendor = create(:vendor, w9_status: :not_submitted)
       [service_class.new(vendor: vendor, actor: @actor), vendor, :vendor_secure_request_form, 'w9_resubmission_requested']

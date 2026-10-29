@@ -46,7 +46,7 @@ There is no single return convention, and truthiness is not a safe test — a re
 | Result | How to read it |
 | --- | --- |
 | `BaseService::Result` | `success?` / `failure?`, plus `message` and `data`. |
-| Attachment-service hash | `result[:success]`, with `result[:error]` on failure. |
+| Attachment-service hash | `result[:success]`, with `result[:error]` on failure, and `result[:duration_ms]`. [`AttachmentOperation`](../../app/services/attachment_operation.rb) builds it and logs one outcome line. Each service keeps its own failure contract: proof methods and `update_certification_status` return the error, while certification attach, accept, and reject raise it. |
 | Paper intake boolean | `errors`, `commit_confirmed?`, and `warning_message` — see below. |
 | Audit or notification record | The record, or `nil`. A created record doesn't mean anything was delivered. |
 
@@ -55,6 +55,16 @@ There is no single return convention, and truthiness is not a safe test — a re
 An `after_commit` callback can raise after the application is already committed. Reporting that as a failed save invites staff to enter the application a second time, so [`PaperApplicationService#create`](../../app/services/applications/paper_application_service.rb) distinguishes three outcomes: `false` means nothing was committed and the form should re-render with `errors`; `true` with a confirmed commit means the application exists, with `warning_message` covering callbacks, delivery, or reconciliation that needs attention; `true` with an unconfirmed commit means the database could not confirm the write, and staff are sent to the applications list to check before retrying.
 
 The service checks durable state when handling transaction errors rather than trusting an in-memory `persisted?`, and does not rerun a callback that may have half-completed.
+
+### Reviews say whether the decision saved
+
+[`ProofReviewer`](../../app/services/applications/proof_reviewer.rb) and [`DisabilityCertificationReviewer`](../../app/services/applications/disability_certification_reviewer.rb) ask the same question when an error escapes a review: did the decision commit? [`Applications::ReviewCommit`](../../app/services/applications/review_commit.rb) answers it from facts the reviewer reads from the database before the writes, inside the transaction after them, and again after the error.
+
+- Matching the in-transaction facts means the decision saved. The reviewer keeps it, reports a warning, and attempts a `proof_review_follow_up_failed` event.
+- Matching the starting facts means it rolled back, and the original error propagates.
+- Anything else raises `ReviewCommit::Unconfirmed`, and the admin is told to check the application before deciding again. That includes a failed read and a review that changed nothing, because an unchanged row cannot prove a commit.
+
+Inside a transaction the caller holds, such as certification rejection during paper intake, `ReviewCommit` gives no verdict. The caller owns the commit and decides what its own outcome means.
 
 ## State, history, and delivery stay together
 

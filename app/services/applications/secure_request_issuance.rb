@@ -1,7 +1,8 @@
 # frozen_string_literal: true
 
 module Applications
-  # Shared issuance mechanics for applicant/guardian proof and provider-info links.
+  # Lock inventory, recipient resolution, and per-recipient replacement for applicant/guardian
+  # proof and provider-info links. SecureFormReplacement owns cooldown, revocation, and token creation.
   # The caller keeps workflow validation and delivery inside/outside the lock, respectively.
   class SecureRequestIssuance
     IssuedRequest = Data.define(:secure_request_form, :raw_token, :notification_id)
@@ -56,12 +57,12 @@ module Applications
 
     # The caller's issuance transaction also owns replacement revocations and tracking.
     def replace_request!(candidate:, request_batch_id:, notification_type:, tracking_metadata: {})
-      requests = open_requests_for(candidate.recipient.id)
-      minutes = SecureFormPolicy.resend_cooldown_minutes(requests.order(sent_at: :desc).first)
-      raise CooldownActive, minutes if minutes
-
-      requests.order(:id).lock.each { |form| form.revoke!(actor: @context.actor, reason: :replacement_request) }
-      issued = SecureRequestForm.create_with_public_token!(request_attributes(candidate, request_batch_id))
+      issued = SecureFormReplacement.replace!(
+        open: open_requests_for(candidate.recipient.id),
+        actor: @context.actor,
+        attributes: request_attributes(candidate),
+        request_batch_id: request_batch_id
+      )
       form = issued.secure_request_form
       notification = NotificationService.create_and_deliver!(
         type: notification_type,
@@ -121,12 +122,10 @@ module Applications
       }.compact
     end
 
-    def request_attributes(candidate, request_batch_id)
+    def request_attributes(candidate)
       {
         application: @context.application,
         kind: @kind,
-        status: :sent,
-        request_batch_id: request_batch_id,
         recipient: candidate.recipient,
         recipient_email: candidate.email,
         recipient_phone: candidate.phone,
@@ -134,10 +133,7 @@ module Applications
         recipient_role: candidate.recipient_role,
         recipient_relationship_type: candidate.recipient_relationship_type,
         delivery_owner: candidate.delivery_owner,
-        delivery_source: candidate.delivery_source&.to_s,
-        expires_at: SecureFormPolicy.expires_at,
-        sent_at: Time.current,
-        requested_by: @context.actor
+        delivery_source: candidate.delivery_source&.to_s
       }
     end
   end

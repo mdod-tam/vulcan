@@ -158,7 +158,11 @@ module Admin
       end
 
       test "#{format} proof review redirects to the application when saved state cannot be confirmed" do
-        ProofReview.stubs(:find_by).raises(ActiveRecord::ConnectionNotEstablished, 'verification unavailable')
+        # The connection is lost as the callback fails, so the reads that follow cannot confirm the commit.
+        ProofReview.any_instance.stubs(:handle_post_review_actions).with do
+          ProofReview.stubs(:find_by).raises(ActiveRecord::ConnectionNotEstablished, 'verification unavailable')
+          true
+        end.raises(StandardError, 'after commit failed')
 
         submit_review(format)
 
