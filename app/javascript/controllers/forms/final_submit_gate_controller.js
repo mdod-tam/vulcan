@@ -1,8 +1,13 @@
 import { Controller } from "@hotwired/stimulus"
 import { documentUploadBlocker } from "../../utils/document_upload_state"
-
-const REQUIRED_CONTROL_SELECTOR =
-  'input[required]:not([type="radio"]):not([type="hidden"]):not([type="submit"]):not([type="button"]):not([type="reset"]), select[required], textarea[required]'
+import {
+  blockingCheckboxGroups,
+  blockingRadioGroups,
+  blockingRequiredControls,
+  elementIsVisible as isElementVisible,
+  formatIncompleteMessage,
+  incompleteGroupLabels
+} from "../../utils/submit_gate_state"
 
 export default class extends Controller {
   static targets = ["submitButton", "status"]
@@ -113,10 +118,11 @@ export default class extends Controller {
     const template = this.element.dataset.finalSubmitGateIncompleteDetailMessage
     if (!template) return base
 
-    const labels = this._incompleteGroupLabels()
-    if (labels.length === 0) return base
-
-    return `${base} ${template.replace("%{items}", labels.join(", "))}`
+    return formatIncompleteMessage(
+      base,
+      template,
+      incompleteGroupLabels(this.element, (element) => this.elementIsVisible(element))
+    )
   }
 
   _readyMessage() {
@@ -124,52 +130,16 @@ export default class extends Controller {
       "Application is ready to submit."
   }
 
-  _incompleteGroupLabels() {
-    const labels = [
-      ...this._blockingRequiredControls(),
-      ...this._blockingRadioGroups().map((group) => group[0]),
-      ...this._blockingCheckboxGroups()
-    ].map((element) => this._groupLabelFor(element))
-
-    return [...new Set(labels.filter(Boolean))]
-  }
-
-  // A fieldset legend names the decision for grouped inputs. A radio label names only one option.
-  // Single controls use their own label when available.
-  _groupLabelFor(element) {
-    if (!element) return null
-
-    const type = (element.type || "").toLowerCase()
-    const ownLabel = element.labels?.[0]?.textContent?.trim()
-
-    if (type !== "radio" && type !== "checkbox" && ownLabel) return ownLabel
-
-    const legend = element.closest("fieldset")?.querySelector(":scope > legend")?.textContent?.trim()
-
-    return legend || ownLabel || element.getAttribute("aria-label") || element.name || null
-  }
-
   _blockingRequiredControls() {
-    return this._enabledVisibleFields(REQUIRED_CONTROL_SELECTOR).filter((field) => this._fieldInvalid(field))
+    return blockingRequiredControls(this.element, (element) => this.elementIsVisible(element))
   }
 
   _blockingRadioGroups() {
-    const radios = this._enabledVisibleFields('input[type="radio"][required]')
-    const names = [...new Set(radios.map((radio) => radio.name).filter(Boolean))]
-
-    return names
-      .map((name) => radios.filter((radio) => radio.name === name))
-      .filter((group) => group.length > 0 && !group.some((radio) => radio.checked))
+    return blockingRadioGroups(this.element, (element) => this.elementIsVisible(element))
   }
 
   _blockingCheckboxGroups() {
-    return Array.from(this.element.querySelectorAll("[data-requires-one-checkbox]"))
-      .filter((group) => this.elementIsVisible(group))
-      .filter((group) => {
-        const checkboxes = Array.from(group.querySelectorAll('input[type="checkbox"]'))
-          .filter((field) => !field.disabled && this.elementIsVisible(field))
-        return checkboxes.length > 0 && !checkboxes.some((field) => field.checked)
-      })
+    return blockingCheckboxGroups(this.element, (element) => this.elementIsVisible(element))
   }
 
   _requiredControlsBlockSubmit() {
@@ -184,24 +154,7 @@ export default class extends Controller {
     return this._blockingCheckboxGroups().length > 0
   }
 
-  _enabledVisibleFields(selector) {
-    return Array.from(this.element.querySelectorAll(selector))
-      .filter((field) => !field.disabled && this.elementIsVisible(field))
-  }
-
-  _fieldInvalid(field) {
-    if ((field.type || "").toLowerCase() === "file") {
-      return field.required && (!field.files || field.files.length === 0)
-    }
-
-    if (typeof field.checkValidity === "function") {
-      return !field.checkValidity()
-    }
-
-    return String(field.value || "").trim() === ""
-  }
-
   elementIsVisible(element) {
-    return !!(element.offsetParent || element.getClientRects().length)
+    return isElementVisible(element)
   }
 }

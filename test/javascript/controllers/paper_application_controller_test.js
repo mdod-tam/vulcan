@@ -240,27 +240,31 @@ describe("PaperApplicationController", () => {
     document.body.innerHTML = `
       <form data-controller="paper-application">
         <fieldset data-requires-one-checkbox="true">
-          <input type="checkbox" name="constituent[hearing_disability]">
-          <input type="checkbox" name="constituent[vision_disability]">
+          <legend>Disability type</legend>
+          <label><input type="checkbox" name="constituent[hearing_disability]"> Hearing</label>
+          <label><input type="checkbox" name="constituent[vision_disability]"> Vision</label>
         </fieldset>
-        <input type="checkbox" name="application[maryland_resident]" required>
-        <input type="checkbox" name="application[information_verified]" required>
-        <input type="text" name="constituent[first_name]" required>
+        <label><input type="checkbox" name="application[maryland_resident]" required> Maryland resident</label>
+        <label><input type="checkbox" name="application[information_verified]" required> Contact information verified</label>
+        <label>First name <input type="text" name="constituent[first_name]" required></label>
         <fieldset>
-          <input type="radio" name="income_proof_action" value="upload_only" required>
-          <input type="radio" name="income_proof_action" value="accept" required>
-          <input type="radio" name="income_proof_action" value="reject" required>
+          <legend>Income proof</legend>
+          <label>Upload <input type="radio" name="income_proof_action" value="upload_only" required></label>
+          <label>Accept <input type="radio" name="income_proof_action" value="accept" required></label>
+          <label>Reject <input type="radio" name="income_proof_action" value="reject" required></label>
         </fieldset>
-        <input type="file" name="income_proof" required>
+        <label>Income proof file <input type="file" name="income_proof" required></label>
         <fieldset>
-          <input type="checkbox" name="no_medical_provider_information">
+          <legend>Certifying Professional Information</legend>
+          <label><input type="checkbox" name="no_medical_provider_information"> No certifying professional information provided</label>
           <p class="text-sm">Provider description</p>
           <div class="grid">
-            <input type="text" name="application[medical_provider_name]">
-            <input type="tel" name="application[medical_provider_phone]">
-            <input type="email" name="application[medical_provider_email]">
+            <label>Provider name <input type="text" name="application[medical_provider_name]"></label>
+            <label>Provider phone <input type="tel" name="application[medical_provider_phone]"></label>
+            <label>Provider email <input type="email" name="application[medical_provider_email]"></label>
           </div>
-          <input type="checkbox" name="application[medical_release_authorized]" value="1">
+          <input type="hidden" name="application[medical_release_authorized]" value="0">
+          <label>I authorize medical release <input type="checkbox" name="application[medical_release_authorized]" value="1"></label>
         </fieldset>
         <p data-paper-application-target="status"></p>
         <button type="submit" data-paper-application-target="submitButton">Submit</button>
@@ -306,7 +310,11 @@ describe("PaperApplicationController", () => {
 
     directController.syncFormState()
     expect(submitButton.disabled).toBe(true)
-    expect(status.textContent).toBe("Complete all required confirmations before submitting.")
+    expect(status.textContent).toBe(
+      "Complete all required confirmations before submitting. " +
+      "Still needed: Maryland resident, Contact information verified, First name, " +
+      "Income proof file, No certifying professional information provided, Income proof, Disability type."
+    )
 
     document.querySelector('input[name="constituent[hearing_disability]"]').checked = true
     document.querySelector('input[name="application[maryland_resident]"]').checked = true
@@ -316,10 +324,16 @@ describe("PaperApplicationController", () => {
 
     directController.syncFormState()
     expect(submitButton.disabled).toBe(true)
+    expect(status.textContent).toBe(
+      "Complete all required confirmations before submitting. Still needed: First name, Income proof file."
+    )
 
     document.querySelector('input[name="constituent[first_name]"]').value = "Ada"
     directController.syncFormState()
     expect(submitButton.disabled).toBe(true)
+    expect(status.textContent).toBe(
+      "Complete all required confirmations before submitting. Still needed: Income proof file."
+    )
 
     const incomeProof = document.querySelector('input[name="income_proof"]')
     Object.defineProperty(incomeProof, "files", {
@@ -335,13 +349,26 @@ describe("PaperApplicationController", () => {
     directController.syncFormState()
 
     expect(submitButton.disabled).toBe(true)
+    expect(status.textContent).toBe(
+      "Complete all required confirmations before submitting. " +
+      "Still needed: Provider phone, Provider email, I authorize medical release."
+    )
 
     document.querySelector('input[name="application[medical_provider_phone]"]').value = "555-111-2222"
     document.querySelector('input[name="application[medical_provider_email]"]').value = "dr.test@example.com"
-    document.querySelector('input[name="application[medical_release_authorized]"]').checked = true
+    directController.syncFormState()
+
+    expect(submitButton.disabled).toBe(true)
+    expect(status.textContent).toBe(
+      "Complete all required confirmations before submitting. Still needed: I authorize medical release."
+    )
+
+    // The form renders a hidden "0" companion before the checkbox, so scope by type like the real markup.
+    document.querySelector('input[type="checkbox"][name="application[medical_release_authorized]"]').checked = true
     directController.syncFormState()
 
     expect(submitButton.disabled).toBe(false)
+    expect(status.textContent).toBe("Paper application is ready to submit.")
   })
 
   test("dependent submit gate names a missing guardian and preserves upload priority", () => {

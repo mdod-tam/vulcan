@@ -1139,7 +1139,9 @@
           </div>
         <% end %>
         <%= render 'identity_review', review: @identity_review, submitted: submitted_params, guardian: false %>
-        <p id="paper-submit-gate-status" class="sr-only" aria-live="polite" data-paper-application-target="status"></p>
+        <%# The gate status stays visible so a disabled submit button always explains the exact
+            outstanding items; the controller names them once Stimulus connects. %>
+        <p id="paper-submit-gate-status" class="mt-2 text-xs text-gray-600 text-right" role="status" aria-live="polite" data-paper-application-target="status">Complete all required confirmations before submitting.</p>
         <div class="flex flex-col sm:flex-row justify-end gap-3">
           <%= link_to "Cancel", admin_applications_path,
               class: "btn btn-outline" %>

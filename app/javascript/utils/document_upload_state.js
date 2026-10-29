@@ -1,5 +1,7 @@
+import { elementIsVisible } from "./submit_gate_state"
+
 // All upload submit guards use the same active-field rule and the widget's localized explanation.
-export function documentUploadBlocker(root, isVisible = element => !!(element.offsetParent || element.getClientRects().length)) {
+export function documentUploadBlocker(root, isVisible = elementIsVisible) {
   const widgets = Array.from(root.querySelectorAll("[data-scan-state]"))
   if (root.matches("[data-scan-state]")) widgets.unshift(root)
   for (const widget of widgets) {

@@ -794,6 +794,9 @@ module Admin
       # Valid income alone does not satisfy the final submit gate.
       assert_button 'Submit Paper Application', disabled: true
 
+      # The visible gate status names the outstanding authorization rather than only disabling the button.
+      assert_selector '#paper-submit-gate-status', text: /I authorize medical release/, wait: 5
+
       check 'application[maryland_resident]'
       check 'application[medical_release_authorized]'
       check 'application[terms_accepted]'
@@ -818,6 +821,15 @@ module Admin
       JS
 
       assert_button 'Submit Paper Application', disabled: false, wait: 10
+
+      # Re-establish the blocked gate so the named-status state is captured as the test's last
+      # interaction; a mid-test full-page capture degrades this Cuprite session until later
+      # scan polls miss their assert window.
+      uncheck 'application[medical_release_authorized]'
+      assert_selector '#paper-submit-gate-status', text: /I authorize medical release/, wait: 5
+      assert_button 'Submit Paper Application', disabled: true
+      page.scroll_to(:top)
+      take_screenshot('paper-gate-names-missing-release-authorization', html: true, full: true)
     end
   end
 end
