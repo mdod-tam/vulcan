@@ -795,7 +795,7 @@ module Admin
       assert_button 'Submit Paper Application', disabled: true
 
       # The visible gate status names the outstanding authorization rather than only disabling the button.
-      assert_selector '#paper-submit-gate-status', text: /I authorize medical release/, wait: 5
+      assert_selector '#paper-submit-gate-status', text: /I authorize the release and sharing of my disability-related information/, wait: 5
 
       check 'application[maryland_resident]'
       check 'application[medical_release_authorized]'
@@ -826,7 +826,7 @@ module Admin
       # interaction; a mid-test full-page capture degrades this Cuprite session until later
       # scan polls miss their assert window.
       uncheck 'application[medical_release_authorized]'
-      assert_selector '#paper-submit-gate-status', text: /I authorize medical release/, wait: 5
+      assert_selector '#paper-submit-gate-status', text: /I authorize the release and sharing of my disability-related information/, wait: 5
       assert_button 'Submit Paper Application', disabled: true
       page.scroll_to(:top)
       take_screenshot('paper-gate-names-missing-release-authorization', html: true, full: true)

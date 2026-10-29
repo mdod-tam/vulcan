@@ -19,18 +19,16 @@ function buildForm() {
       </fieldset>
       <fieldset>
         <legend>Certifying Professional Information</legend>
-        <input type="checkbox" id="release" name="application[medical_release_authorized]" required>
-        <label for="release">
-          <span>I authorize medical release</span>
-          <span>I authorize the program to contact this provider to verify my disability certification</span>
-        </label>
+        <input type="checkbox" id="release" name="application[medical_release_authorized]" required aria-describedby="disability_release_hint">
+        <label for="release"><span>I authorize the release and sharing of my disability-related information.</span></label>
+        <p id="disability_release_hint">The program may contact this provider to verify my disability certification.</p>
       </fieldset>
       <fieldset>
         <legend>Income proof</legend>
         <label>Accept <input type="radio" name="income_proof_action" value="accept" required></label>
         <label>Reject <input type="radio" name="income_proof_action" value="reject" required></label>
       </fieldset>
-      <label>Provider name <input type="text" name="application[medical_provider_name]" required></label>
+      <label>Provider Name <input type="text" name="application[medical_provider_name]" required></label>
     </form>
   `
   return document.querySelector("form")
@@ -47,7 +45,6 @@ describe("submit_gate_state", () => {
     const form = buildForm()
     // jsdom performs no layout, so rendered elements report no boxes.
     expect(elementIsVisible(form.querySelector("label"))).toBe(false)
-    expect(alwaysVisible(form.querySelector("label"))).toBe(true)
   })
 
   test("finds blocking required controls, radio groups, and checkbox groups", () => {
@@ -68,9 +65,9 @@ describe("submit_gate_state", () => {
   test("a standalone requirement is named by its own label, not its enclosing fieldset legend", () => {
     const release = buildForm().querySelector('input[name="application[medical_release_authorized]"]')
 
-    expect(controlLabel(release)).toBe(
-      "I authorize medical release I authorize the program to contact this provider to verify my disability certification"
-    )
+    // Helper text linked through aria-describedby stays out of the accessible name, so the
+    // status line carries the exact outstanding item without the explanation sentence.
+    expect(controlLabel(release)).toBe("I authorize the release and sharing of my disability-related information.")
   })
 
   test("grouped decisions are named by their legend, and unlabeled controls fall back to aria-label then name", () => {
@@ -94,8 +91,8 @@ describe("submit_gate_state", () => {
     const form = buildForm()
 
     expect(incompleteGroupLabels(form, alwaysVisible)).toEqual([
-      "I authorize medical release I authorize the program to contact this provider to verify my disability certification",
-      "Provider name",
+      "I authorize the release and sharing of my disability-related information.",
+      "Provider Name",
       "Income proof",
       "Disability type"
     ])
@@ -104,9 +101,13 @@ describe("submit_gate_state", () => {
   test("formatIncompleteMessage keeps the base message without a template or labels", () => {
     const base = "Complete all required confirmations before submitting."
 
-    expect(formatIncompleteMessage(base, null, ["Provider name"])).toBe(base)
+    expect(formatIncompleteMessage(base, null, ["Provider Name"])).toBe(base)
     expect(formatIncompleteMessage(base, "Still needed: %{items}.", [])).toBe(base)
-    expect(formatIncompleteMessage(base, "Still needed: %{items}.", ["Provider name", "Income proof"]))
-      .toBe("Complete all required confirmations before submitting. Still needed: Provider name, Income proof.")
+    expect(formatIncompleteMessage(base, "Still needed: %{items}.", ["Provider Name", "Income proof"]))
+      .toBe("Complete all required confirmations before submitting. Still needed: Provider Name, Income proof.")
+    // A label ending in a period is a sentence in the form but a list item here, so the
+    // template's period is the only one rendered.
+    expect(formatIncompleteMessage(base, "Still needed: %{items}.", ["I authorize the release and sharing of my disability-related information."]))
+      .toBe("Complete all required confirmations before submitting. Still needed: I authorize the release and sharing of my disability-related information.")
   })
 })

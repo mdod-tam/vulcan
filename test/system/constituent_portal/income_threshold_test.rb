@@ -62,7 +62,7 @@ module ConstituentPortal
       assert_selector "input[name='submit_application'][disabled]"
 
       attach_required_documents
-      within('#medical-provider-fields') do
+      within('#certifying-professional-fields') do
         fill_in 'Name', with: 'Dr. Smith'
         fill_in 'Phone', with: '555-123-4567'
         fill_in 'Email', with: 'dr.smith@example.com'

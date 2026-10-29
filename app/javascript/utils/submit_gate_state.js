@@ -10,12 +10,12 @@ export function elementIsVisible(element) {
   return !!(element.offsetParent || element.getClientRects().length)
 }
 
-export function enabledVisibleFields(root, selector, isVisible = elementIsVisible) {
+function enabledVisibleFields(root, selector, isVisible = elementIsVisible) {
   return Array.from(root.querySelectorAll(selector))
     .filter((field) => !field.disabled && isVisible(field))
 }
 
-export function fieldInvalid(field) {
+function fieldInvalid(field) {
   if ((field.type || "").toLowerCase() === "file") {
     return field.required && (!field.files || field.files.length === 0)
   }
@@ -68,7 +68,7 @@ function controlName(element) {
 
 // A grouped decision is named by its fieldset legend, because a member label names only
 // one option ("Hearing" does not explain an entirely unchecked disability-type group).
-function groupLegend(element) {
+export function groupLabel(element) {
   if (!element) return null
 
   return displayText(element.closest("fieldset")?.querySelector(":scope > legend")?.textContent) ||
@@ -76,14 +76,11 @@ function groupLegend(element) {
 }
 
 // A standalone requirement is named by its own label: that text is the exact outstanding
-// item ("I authorize medical release", "Provider Name"), which is what a blocked submitter
-// needs. The legend is only a fallback for an unlabeled control.
+// item ("I authorize the release and sharing of my disability-related information",
+// "Provider Name"), which is what a blocked submitter needs. The legend is only a fallback
+// for an unlabeled control.
 export function controlLabel(element) {
-  return controlName(element) || groupLegend(element)
-}
-
-export function groupLabel(element) {
-  return groupLegend(element)
+  return controlName(element) || groupLabel(element)
 }
 
 export function incompleteGroupLabels(root, isVisible = elementIsVisible) {
@@ -97,8 +94,11 @@ export function incompleteGroupLabels(root, isVisible = elementIsVisible) {
 
 // Forms may supply a detail template ("Still needed: %{items}."); without one the base
 // message survives untouched so the JavaScript never bypasses a view's message copy.
+// Items drop one trailing period so a sentence-punctuated label never double-punctuates
+// the rendered list.
 export function formatIncompleteMessage(baseMessage, detailTemplate, labels) {
   if (!detailTemplate || labels.length === 0) return baseMessage
 
-  return `${baseMessage} ${detailTemplate.replace("%{items}", labels.join(", "))}`
+  const items = labels.map((label) => label.replace(/\.$/, "")).join(", ")
+  return `${baseMessage} ${detailTemplate.replace("%{items}", items)}`
 }

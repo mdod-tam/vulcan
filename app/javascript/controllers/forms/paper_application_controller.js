@@ -212,7 +212,7 @@ export default class extends Controller {
 
   // Names every blocking requirement the admin can see, so a disabled submit button never
   // leaves staff hunting across this long form for the missing item (for example the
-  // medical release authorization under Certifying Professional Information).
+  // disability information release under Certifying Professional Information).
   _incompleteMessage() {
     const base = "Complete all required confirmations before submitting.";
 

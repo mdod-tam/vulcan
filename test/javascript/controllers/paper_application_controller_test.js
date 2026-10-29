@@ -244,9 +244,13 @@ describe("PaperApplicationController", () => {
           <label><input type="checkbox" name="constituent[hearing_disability]"> Hearing</label>
           <label><input type="checkbox" name="constituent[vision_disability]"> Vision</label>
         </fieldset>
-        <label><input type="checkbox" name="application[maryland_resident]" required> Maryland resident</label>
-        <label><input type="checkbox" name="application[information_verified]" required> Contact information verified</label>
-        <label>First name <input type="text" name="constituent[first_name]" required></label>
+        <div>
+          <input type="checkbox" id="application_maryland_resident" name="application[maryland_resident]" required aria-describedby="maryland_resident_hint">
+          <label for="application_maryland_resident">The applicant has marked that they are a resident of Maryland</label>
+          <p id="maryland_resident_hint">This will be verified through the residency proof process</p>
+        </div>
+        <label><input type="checkbox" name="application[information_verified]" required> I verify that the information entered from the paper application is accurate and complete</label>
+        <label>First Name <input type="text" name="constituent[first_name]" required></label>
         <fieldset>
           <legend>Income proof</legend>
           <label>Upload <input type="radio" name="income_proof_action" value="upload_only" required></label>
@@ -259,12 +263,16 @@ describe("PaperApplicationController", () => {
           <label><input type="checkbox" name="no_medical_provider_information"> No certifying professional information provided</label>
           <p class="text-sm">Provider description</p>
           <div class="grid">
-            <label>Provider name <input type="text" name="application[medical_provider_name]"></label>
-            <label>Provider phone <input type="tel" name="application[medical_provider_phone]"></label>
-            <label>Provider email <input type="email" name="application[medical_provider_email]"></label>
+            <label>Provider Name <input type="text" name="application[medical_provider_name]"></label>
+            <label>Provider Phone <input type="tel" name="application[medical_provider_phone]"></label>
+            <label>Provider Email <input type="email" name="application[medical_provider_email]"></label>
           </div>
           <input type="hidden" name="application[medical_release_authorized]" value="0">
-          <label>I authorize medical release <input type="checkbox" name="application[medical_release_authorized]" value="1"></label>
+          <div>
+            <input type="checkbox" id="application_medical_release_authorized" name="application[medical_release_authorized]" value="1" aria-describedby="disability_release_hint">
+            <label for="application_medical_release_authorized">I authorize the release and sharing of my disability-related information.</label>
+            <p id="disability_release_hint">The program may contact this provider to verify my disability certification.</p>
+          </div>
         </fieldset>
         <p data-paper-application-target="status"></p>
         <button type="submit" data-paper-application-target="submitButton">Submit</button>
@@ -312,8 +320,9 @@ describe("PaperApplicationController", () => {
     expect(submitButton.disabled).toBe(true)
     expect(status.textContent).toBe(
       "Complete all required confirmations before submitting. " +
-      "Still needed: Maryland resident, Contact information verified, First name, " +
-      "Income proof file, No certifying professional information provided, Income proof, Disability type."
+      "Still needed: The applicant has marked that they are a resident of Maryland, " +
+      "I verify that the information entered from the paper application is accurate and complete, " +
+      "First Name, Income proof file, No certifying professional information provided, Income proof, Disability type."
     )
 
     document.querySelector('input[name="constituent[hearing_disability]"]').checked = true
@@ -325,7 +334,7 @@ describe("PaperApplicationController", () => {
     directController.syncFormState()
     expect(submitButton.disabled).toBe(true)
     expect(status.textContent).toBe(
-      "Complete all required confirmations before submitting. Still needed: First name, Income proof file."
+      "Complete all required confirmations before submitting. Still needed: First Name, Income proof file."
     )
 
     document.querySelector('input[name="constituent[first_name]"]').value = "Ada"
@@ -351,7 +360,7 @@ describe("PaperApplicationController", () => {
     expect(submitButton.disabled).toBe(true)
     expect(status.textContent).toBe(
       "Complete all required confirmations before submitting. " +
-      "Still needed: Provider phone, Provider email, I authorize medical release."
+      "Still needed: Provider Phone, Provider Email, I authorize the release and sharing of my disability-related information."
     )
 
     document.querySelector('input[name="application[medical_provider_phone]"]').value = "555-111-2222"
@@ -360,7 +369,7 @@ describe("PaperApplicationController", () => {
 
     expect(submitButton.disabled).toBe(true)
     expect(status.textContent).toBe(
-      "Complete all required confirmations before submitting. Still needed: I authorize medical release."
+      "Complete all required confirmations before submitting. Still needed: I authorize the release and sharing of my disability-related information."
     )
 
     // The form renders a hidden "0" companion before the checkbox, so scope by type like the real markup.

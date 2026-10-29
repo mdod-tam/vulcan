@@ -23,7 +23,7 @@ module ConstituentPortal
       check 'I certify that I have a disability that affects my ability to access telecommunications services'
       clear_disability_type_checkboxes
 
-      within '#medical-provider-fields' do
+      within '#certifying-professional-fields' do
         fill_in 'Name', with: 'Dr. Smith'
         fill_in 'Phone', with: '555-123-4567'
         fill_in 'Email', with: 'dr.smith@example.com'
@@ -49,7 +49,7 @@ module ConstituentPortal
 
       check 'Hearing'
 
-      within '#medical-provider-fields' do
+      within '#certifying-professional-fields' do
         fill_in 'Name', with: 'Dr. Smith'
         fill_in 'Phone', with: '555-123-4567'
         fill_in 'Email', with: 'dr.smith@example.com'
@@ -80,7 +80,7 @@ module ConstituentPortal
       check 'Vision'
       check 'Mobility'
 
-      within '#medical-provider-fields' do
+      within '#certifying-professional-fields' do
         fill_in 'Name', with: 'Dr. Smith'
         fill_in 'Phone', with: '555-123-4567'
         fill_in 'Email', with: 'dr.smith@example.com'
@@ -111,7 +111,7 @@ module ConstituentPortal
       fill_in 'Annual Income', with: 50_000
 
       # Drafts skip provider validation. This provider info is optional here.
-      within '#medical-provider-fields' do
+      within '#certifying-professional-fields' do
         fill_in 'Name', with: 'Draft Doctor'
         fill_in 'Phone', with: '555-000-0000'
         fill_in 'Email', with: 'draft@example.com'
@@ -132,7 +132,7 @@ module ConstituentPortal
       fill_in 'Annual Income', with: 50_000
 
       # Drafts skip provider validation. This provider info is optional here.
-      within '#medical-provider-fields' do
+      within '#certifying-professional-fields' do
         fill_in 'Name', with: 'Draft Doctor'
         fill_in 'Phone', with: '555-000-0000'
         fill_in 'Email', with: 'draft@example.com'
@@ -156,7 +156,7 @@ module ConstituentPortal
       check 'Hearing'
       check 'Cognition'
 
-      within '#medical-provider-fields' do
+      within '#certifying-professional-fields' do
         fill_in 'Name', with: 'Dr. Smith'
         fill_in 'Phone', with: '555-123-4567'
         fill_in 'Email', with: 'dr.smith@example.com'
@@ -190,7 +190,7 @@ module ConstituentPortal
       accept_submit_confirmations
 
       # A blank provider name makes the server reject the submission.
-      within '#medical-provider-fields' do
+      within '#certifying-professional-fields' do
         fill_in 'Phone', with: '555-123-4567'
         fill_in 'Email', with: 'test@example.com'
         check 'I authorize the release and sharing of my disability-related information as described above'
@@ -219,7 +219,7 @@ module ConstituentPortal
       check 'Mobility'
       check 'Cognition'
 
-      within '#medical-provider-fields' do
+      within '#certifying-professional-fields' do
         fill_in 'Name', with: 'Dr. Smith'
         fill_in 'Phone', with: '555-123-4567'
         fill_in 'Email', with: 'dr.smith@example.com'
