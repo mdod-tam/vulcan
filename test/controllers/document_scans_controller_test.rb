@@ -118,6 +118,32 @@ class DocumentScansControllerTest < ActionDispatch::IntegrationTest
     end
   end
 
+  test 'a secure scan stops staging once the application is archived' do
+    application = create(:application, income_proof_required: true)
+    proof_token = SecureRequestForm.generate_public_token
+    create(:secure_request_form, application: application, kind: :income_proof_resubmission, raw_token: proof_token)
+    certification_token = SecureRequestForm.generate_public_token
+    create(:certification_upload_form, application: application, raw_token: certification_token)
+    uploads = [['proof', proof_token, 'income_proof', 'income_proof.pdf'],
+               ['certification', certification_token, 'disability_certification', 'disability_certification_valid.pdf']]
+
+    uploads.each do |type, token, slot, file|
+      post document_scans_path, params: { file: fixture_file_upload(file, 'application/pdf'), purpose: type,
+                                          slot: slot, secure_form_type: type, token: token }
+      assert_response :accepted, "#{type} scans stage while the application is open"
+    end
+
+    application.update_columns(status: Application.statuses[:archived])
+
+    uploads.each do |type, token, slot, file|
+      assert_no_difference 'DocumentScan.count' do
+        post document_scans_path, params: { file: fixture_file_upload(file, 'application/pdf'), purpose: type,
+                                            slot: slot, secure_form_type: type, token: token }
+      end
+      assert_response :not_found, "#{type} scans must not stage for an archived application"
+    end
+  end
+
   test 'a secure scan stages only for the form type that names its kind' do
     proof_token = SecureRequestForm.generate_public_token
     create(:secure_request_form, application: create(:application, income_proof_required: true), kind: :income_proof_resubmission,

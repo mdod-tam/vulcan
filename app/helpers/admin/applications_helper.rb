@@ -192,6 +192,7 @@ module Admin
     end
 
     def show_secure_cert_upload_button?(application)
+      return false unless application.certification_requestable_via_secure_form?
       return false if application.disability_certification_status_approved?
       return true if application.disability_certification_status_rejected?
 

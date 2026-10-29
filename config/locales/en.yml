@@ -347,6 +347,8 @@ en:
         expired: "This secure link has expired."
         invalid_request: "This secure link is no longer available."
         attachment_failed: "The certification document could not be attached. Please try again."
+        request_not_needed: "A secure certification upload link cannot be sent because this application is closed."
+        no_longer_needed: "This document no longer needs to be uploaded. Contact the program if you have questions."
     alternate_contact_relationship_types:
       parent: "Parent"
       spouse: "Spouse"

@@ -298,7 +298,6 @@ class Application < ApplicationRecord
 
   def self.expire_training_request_metrics_cache!
     Rails.cache.delete('admin_dashboard_metrics')
-    Rails.cache.delete('dashboard_metrics_training_requests')
   rescue StandardError => e
     Rails.logger.warn "[Application] Cache expiry failed (non-fatal): #{e.class.name}"
   end

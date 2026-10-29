@@ -163,7 +163,6 @@ Rails.application.routes.draw do
     resources :paper_applications, only: %i[new create] do
       collection do
         post :send_rejection_notification
-        post :reject_for_income
         get :dependent_form
         get :recipient_preference
       end
@@ -184,7 +183,6 @@ Rails.application.routes.draw do
       member do
         post :assign_voucher
         post :review_proof
-        post :update_proof_status
         patch :approve
         patch :reject
         post :assign_evaluator

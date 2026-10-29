@@ -122,10 +122,8 @@ module Admin
     end
 
     def update_proof_status
-      admin_user = validate_and_prepare_admin_user
-
-      service = ProofReviewService.new(@application, admin_user, params)
-      result = service.call
+      # Admin::BaseController#require_admin! has already refused any user who is not an administrator.
+      result = ProofReviewService.new(@application, current_user, params).call
 
       if result.success?
         handle_successful_review(result)
@@ -137,20 +135,6 @@ module Admin
           error_message: result.message,
           html_render_action: :show
         )
-      end
-    end
-
-    # @return [User] The current user, reloaded when its type names an administrator class but admin? is false
-    def validate_and_prepare_admin_user
-      Rails.logger.info "Current user ID: #{current_user.id}; Current user type: #{current_user.type}, admin? method result: #{current_user.admin?}"
-
-      if current_user.admin?
-        current_user
-      elsif current_user.type == 'Users::Administrator'
-        User.find(current_user.id)
-      else
-        Rails.logger.error 'Non-admin user attempting to perform admin action'
-        current_user
       end
     end
 
@@ -598,33 +582,6 @@ module Admin
       @equipment_audit_records = Equipment::AuditRecords.for(@audit_logs)
     end
 
-    def load_notifications
-      Notification
-        .select('id, recipient_id, actor_id, notifiable_id, notifiable_type, action, read_at, ' \
-                'created_at, message_id, delivery_status, metadata')
-        .where(notifiable_type: 'Application', notifiable_id: @application.id)
-        .where(action: %w[
-                 disability_certification_requested disability_certification_received
-                 disability_certification_approved disability_certification_rejected
-                 review_requested documents_requested proof_approved proof_rejected
-               ])
-        .order(created_at: :desc)
-    end
-
-    def load_application_events
-      Event
-        .select('id, user_id, action, created_at, metadata, change_values')
-        .includes(:user)
-        .where("action IN (?) AND (metadata->>'application_id' = ? OR metadata @> ?)",
-               %w[
-                 voucher_assigned voucher_redeemed voucher_expired voucher_cancelled
-                 application_created evaluator_assigned trainer_assigned
-               ],
-               @application.id.to_s,
-               { application_id: @application.id }.to_json)
-        .order(created_at: :desc)
-    end
-
     def load_audit_logs_with_service
       return unless @application
 
@@ -671,10 +628,6 @@ module Admin
       permitted.push(:household_size, :annual_income) if @application.income_proof_required?
 
       params.expect(application: permitted)
-    end
-
-    def require_admin!
-      redirect_to root_path, alert: t('shared.unauthorized') unless current_user&.admin?
     end
 
     def filtered_scope(scope)

@@ -109,6 +109,8 @@ class ProofReviewService < BaseService
 
   def proof_resubmission_delivered?
     return true unless proof_review&.persisted? && proof_review.created_at.present?
+    # An archived application is sent the archive notice, so no upload link is owed.
+    return true if application.status_archived?
 
     Applications::RequestProofResubmission.delivery_confirmed_for_review?(proof_review)
   end

@@ -52,7 +52,7 @@ module Applications
                end
       {
         review: review&.attributes_for_database,
-        application: Application.where(id: @application.id).pick(:status, "#{@proof_type_key}_proof_status"),
+        application: Application.where(id: @application.id).pick(:status, "#{@proof_type_key}_proof_status", :total_rejections),
         lifecycle: [ApplicationStatusChange.where(id: @lifecycle_history_ids).count, Event.where(id: @lifecycle_audit_ids).count]
       }
     end

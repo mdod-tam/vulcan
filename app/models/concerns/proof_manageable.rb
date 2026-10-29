@@ -31,8 +31,10 @@ module ProofManageable
   end
 
   # Secure proof links serve rejected proofs or missing proofs with not_reviewed status.
+  # An archived application is closed: ProofReview refuses to review it, so an upload could never be reviewed.
   # Issuance, the admin send button, and public submission all use this rule.
   def proof_requestable_via_secure_form?(proof_type)
+    return false if status_archived?
     return false if proof_type.to_s == 'income' && !income_proof_required?
     return false if public_send("#{proof_type}_proof_status_approved?")
     return true if public_send("#{proof_type}_proof_status_rejected?")

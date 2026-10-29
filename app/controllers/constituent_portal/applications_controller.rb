@@ -497,11 +497,6 @@ module ConstituentPortal
       render json: { success: false, errors: { base: [message] } }, status: status
     end
 
-    def redirect_to_app(app)
-      notice = params[:submit_application] ? 'Application submitted successfully!' : 'Application saved as draft.'
-      redirect_to constituent_portal_application_path(app), notice: notice
-    end
-
     def build_certifying_professional_for_form
       @application.certifying_professional_attributes ||= {} if @application
       provider_params = {

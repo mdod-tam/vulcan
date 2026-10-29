@@ -20,9 +20,9 @@ class Voucher < ApplicationRecord
 
   enum :status, {
     active: 0,
-    redeemed: 2,    # Fully used
-    expired: 3,
-    cancelled: 4    # Cancelled by an admin
+    redeemed: 1,    # Fully used
+    expired: 2,
+    cancelled: 3    # Cancelled by an admin
   }, default: :active, prefix: :voucher
 
   scope :available, -> { where(status: :active) }

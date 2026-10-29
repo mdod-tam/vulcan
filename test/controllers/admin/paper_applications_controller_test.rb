@@ -1196,27 +1196,49 @@ module Admin
       assert_match 'Rejection letter has been queued for printing', flash[:notice]
     end
 
-    test 'reject_for_income is gated when income collection is disabled' do
-      FeatureFlag.enable!(:vouchers_enabled)
-
-      post reject_for_income_admin_paper_applications_path, headers: default_headers, params: {
-        first_name: 'John', last_name: 'Doe', date_of_birth: '01/15/1980', email: 'john@example.com'
-      }
-
-      assert_redirected_to new_admin_paper_application_path
-      assert_match 'Income rejection is not available', flash[:alert]
-    end
-
     test 'send_rejection_notification is gated when income collection is disabled' do
       FeatureFlag.enable!(:vouchers_enabled)
 
-      post send_rejection_notification_admin_paper_applications_path, headers: default_headers, params: {
-        first_name: 'John', last_name: 'Doe', date_of_birth: '01/15/1980', email: 'john@example.com',
-        communication_preference: 'email'
-      }
+      assert_no_difference -> { Event.where(action: 'income_threshold_rejection_no_application').count } do
+        post send_rejection_notification_admin_paper_applications_path, headers: default_headers, params: {
+          first_name: 'John', last_name: 'Doe', date_of_birth: '01/15/1980', email: 'john@example.com',
+          communication_preference: 'email'
+        }
+      end
 
       assert_redirected_to admin_applications_path
       assert_match 'Income rejection is not available', flash[:alert]
+    end
+
+    test 'sending a rejection notification records who sent it and why' do
+      assert_difference -> { Event.where(action: 'income_threshold_rejection_no_application').count }, 1 do
+        post send_rejection_notification_admin_paper_applications_path, headers: default_headers, params: {
+          first_name: 'John', last_name: 'Doe', email: 'john.doe@example.com',
+          household_size: '2', annual_income: '100000', communication_preference: 'email'
+        }
+      end
+
+      event = Event.where(action: 'income_threshold_rejection_no_application').order(:id).last
+      assert_equal @admin, event.user
+      assert_nil event.auditable
+      assert_equal '2', event.metadata['household_size']
+      assert_equal '100000', event.metadata['income']
+      assert_predicate event.metadata['threshold'], :positive?
+      assert_equal 'j***@e***.com', event.metadata['constituent_email'], 'the applicant contact is masked in the audit record'
+      assert_equal 'J*** D***', event.metadata['constituent_name']
+    end
+
+    test 'a rejection letter that cannot be queued is not audited as sent' do
+      ApplicationNotificationsMailer.expects(:income_threshold_exceeded).never
+
+      assert_no_difference -> { Event.where(action: 'income_threshold_rejection_no_application').count } do
+        post send_rejection_notification_admin_paper_applications_path, headers: default_headers, params: {
+          first_name: 'No', last_name: 'Account', email: "no-account-#{SecureRandom.hex(4)}@example.com",
+          household_size: '2', annual_income: '100000', communication_preference: 'letter'
+        }
+      end
+
+      assert_match 'Cannot queue a mailed letter', flash[:alert]
     end
 
     test 'should not enqueue jobs when transaction fails' do

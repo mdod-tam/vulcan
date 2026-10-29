@@ -87,6 +87,15 @@ module Admin
       assert show_secure_cert_upload_button?(@application)
     end
 
+    test 'secure cert upload button is hidden for an archived application' do
+      @application.update!(disability_certification_status: :rejected)
+      assert show_secure_cert_upload_button?(@application)
+
+      @application.update_columns(status: Application.statuses[:archived])
+
+      assert_not show_secure_cert_upload_button?(@application.reload)
+    end
+
     test 'secure cert upload button is hidden when a not requested certification is already attached' do
       @application.update!(disability_certification_status: :not_requested)
       attach_disability_certification
