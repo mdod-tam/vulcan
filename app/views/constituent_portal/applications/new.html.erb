@@ -192,7 +192,7 @@
           <%# Certifying professional. fields_for does not fetch a non-association attribute.
               Without the explicit object, the inputs show no value on edit or after a refused save. %>
           <%= form.fields_for :medical_provider_attributes, @application.medical_provider_attributes do |mp| %>
-            <%= render "medical_provider_form", form: mp %>
+            <%= render "certifying_professional_form", form: mp %>
           <% end %>
         </div>
 

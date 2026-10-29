@@ -1,6 +1,14 @@
 import { Controller } from "@hotwired/stimulus";
 import { setVisible } from "../../utils/visibility";
 import { documentUploadBlocker } from "../../utils/document_upload_state";
+import {
+  blockingCheckboxGroups,
+  blockingRadioGroups,
+  blockingRequiredControls,
+  elementIsVisible as isElementVisible,
+  formatIncompleteMessage,
+  incompleteGroupLabels
+} from "../../utils/submit_gate_state";
 
 export default class extends Controller {
   static targets = [
@@ -85,7 +93,7 @@ export default class extends Controller {
       const message = uploadBlocker?.validationMessage || (guardianSelectionBlocks
         ? "Select or create a guardian before submitting this dependent's application."
         : (disable
-          ? "Complete all required confirmations before submitting."
+          ? this._incompleteMessage()
           : "Paper application is ready to submit."));
       if (this.statusTarget.textContent !== message) this.statusTarget.textContent = message;
     }
@@ -179,48 +187,40 @@ export default class extends Controller {
   }
 
   _requiredControlsBlockSubmit() {
-    return this._enabledVisibleFields('input[type="checkbox"][required]')
-      .concat(this._enabledVisibleFields(
-        'input[required]:not([type="checkbox"]):not([type="radio"]):not([type="hidden"]):not([type="submit"]):not([type="button"]):not([type="reset"]), select[required], textarea[required]'
-      ))
-      .some((field) => this._fieldInvalid(field));
+    return this._blockingRequiredControls().length > 0;
   }
 
   _requiredRadioGroupBlocksSubmit() {
-    const radios = this._enabledVisibleFields('input[type="radio"][required]');
-    const names = [...new Set(radios.map((radio) => radio.name).filter(Boolean))];
-
-    return names.some((name) => {
-      const group = radios.filter((radio) => radio.name === name);
-      return group.length > 0 && !group.some((radio) => radio.checked);
-    });
+    return this._blockingRadioGroups().length > 0;
   }
 
   _checkboxGroupBlocksSubmit() {
-    return Array.from(this.element.querySelectorAll("[data-requires-one-checkbox]"))
-      .filter((group) => this.elementIsVisible(group))
-      .some((group) => {
-        const checkboxes = Array.from(group.querySelectorAll('input[type="checkbox"]'))
-          .filter((field) => !field.disabled && this.elementIsVisible(field));
-        return checkboxes.length > 0 && !checkboxes.some((field) => field.checked);
-      });
+    return this._blockingCheckboxGroups().length > 0;
   }
 
-  _enabledVisibleFields(selector) {
-    return Array.from(this.element.querySelectorAll(selector))
-      .filter((field) => !field.disabled && this.elementIsVisible(field));
+  _blockingRequiredControls() {
+    return blockingRequiredControls(this.element, (field) => this.elementIsVisible(field));
   }
 
-  _fieldInvalid(field) {
-    if ((field.type || "").toLowerCase() === "file") {
-      return field.required && (!field.files || field.files.length === 0);
-    }
+  _blockingRadioGroups() {
+    return blockingRadioGroups(this.element, (field) => this.elementIsVisible(field));
+  }
 
-    if (typeof field.checkValidity === "function") {
-      return !field.checkValidity();
-    }
+  _blockingCheckboxGroups() {
+    return blockingCheckboxGroups(this.element, (field) => this.elementIsVisible(field));
+  }
 
-    return String(field.value || "").trim() === "";
+  // Names every blocking requirement the admin can see, so a disabled submit button never
+  // leaves staff hunting across this long form for the missing item (for example the
+  // disability information release under Certifying Professional Information).
+  _incompleteMessage() {
+    const base = "Complete all required confirmations before submitting.";
+
+    return formatIncompleteMessage(
+      base,
+      "Still needed: %{items}.",
+      incompleteGroupLabels(this.element, (field) => this.elementIsVisible(field))
+    );
   }
 
   /**
@@ -267,7 +267,7 @@ export default class extends Controller {
   }
 
   elementIsVisible(element) {
-    return !!(element.offsetParent || element.getClientRects().length);
+    return isElementVisible(element);
   }
 
   /**

@@ -31,7 +31,7 @@ module ConstituentPortal
       check 'Vision'
 
       # Medical provider information.
-      within '#medical-provider-fields' do
+      within '#certifying-professional-fields' do
         fill_in 'Name', with: 'Benjamin Rush'
         fill_in 'Phone', with: '2022222323'
         fill_in 'Email', with: 'thunderbolts@rush.med'
@@ -100,7 +100,7 @@ module ConstituentPortal
       check 'I certify that I have a disability that affects my ability to access telecommunications services'
       check 'Hearing'
 
-      within '#medical-provider-fields' do
+      within '#certifying-professional-fields' do
         fill_in 'Name', with: 'Dr. Jane Smith'
         fill_in 'Phone', with: '2025551234'
         fill_in 'Email', with: 'drsmith@example.com'
@@ -137,7 +137,7 @@ module ConstituentPortal
       check 'Vision'
       check 'Mobility'
 
-      within '#medical-provider-fields' do
+      within '#certifying-professional-fields' do
         fill_in 'Name', with: 'Dr. Benjamin Franklin'
         fill_in 'Phone', with: '2025559876'
         fill_in 'Email', with: 'bfranklin@example.com'
@@ -193,7 +193,7 @@ module ConstituentPortal
       check 'Speech'
       check 'Cognition'
 
-      within '#medical-provider-fields' do
+      within '#certifying-professional-fields' do
         fill_in 'Name', with: 'Dr. Medical Provider'
         fill_in 'Phone', with: '2025551234'
         fill_in 'Email', with: 'doctor@example.com'

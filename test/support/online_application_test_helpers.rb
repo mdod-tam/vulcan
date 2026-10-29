@@ -8,7 +8,7 @@ module OnlineApplicationTestHelpers
     fill_in 'Annual Income', with: annual_income
     check 'I certify that I have a disability that affects my ability to access telecommunications services'
     check 'Hearing'
-    within '#medical-provider-fields' do
+    within '#certifying-professional-fields' do
       fill_in 'Name', with: 'Dr. Smith'
       fill_in 'Phone', with: '555-123-4567'
       fill_in 'Email', with: 'dr.smith@example.com'

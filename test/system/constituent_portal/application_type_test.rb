@@ -29,7 +29,7 @@ module ConstituentPortal
       check 'I certify that I have a disability that affects my ability to access telecommunications services'
       check 'Hearing'
 
-      within '#medical-provider-fields' do
+      within '#certifying-professional-fields' do
         find('input[name="application[medical_provider_attributes][name]"]').set('').set('Dr. Test Provider')
         find('input[name="application[medical_provider_attributes][phone]"]').set('').set('2025551234')
         find('input[name="application[medical_provider_attributes][email]"]').set('').set('test@example.com')
@@ -83,7 +83,7 @@ module ConstituentPortal
         find('label', text: 'Hearing').find(:xpath, '..//input[@type="checkbox"]').check
       end
 
-      within '#medical-provider-fields' do
+      within '#certifying-professional-fields' do
         find('input[name="application[medical_provider_attributes][name]"]').set('').set('Dr. Test Provider')
         find('input[name="application[medical_provider_attributes][phone]"]').set('').set('2025551234')
         find('input[name="application[medical_provider_attributes][email]"]').set('').set('test@example.com')

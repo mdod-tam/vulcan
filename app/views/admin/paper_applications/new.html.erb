@@ -473,10 +473,12 @@
                       required: true,
                       "aria-required": "true",
                       "aria-describedby": "self_certify_hint" %>
-                  <label for="applicant_attributes_self_certify_disability" class="ml-3">
-                    <span class="form-label">The applicant certifies that they have a disability that affects their ability to access telecommunications services</span>
-                    <span id="self_certify_hint" class="block text-xs text-gray-500 mt-1">Required for program eligibility</span>
-                  </label>
+                  <div class="ml-3">
+                    <label for="applicant_attributes_self_certify_disability">
+                      <span class="form-label">The applicant certifies that they have a disability that affects their ability to access telecommunications services</span>
+                    </label>
+                    <p id="self_certify_hint" class="text-xs text-gray-500 mt-1">Required for program eligibility</p>
+                  </div>
                 </div>
 
                 <fieldset class="mt-4" data-requires-one-checkbox="true" aria-describedby="paper-applicant-disability-help">
@@ -520,7 +522,7 @@
                         "aria-required": "true" %>
                   </div>
                   <div>
-                    <%= a.label :medical_provider_phone, "Phone", class: "form-label required-label" %>
+                    <%= a.label :medical_provider_phone, "Provider Phone", class: "form-label required-label" %>
                     <%= a.telephone_field :medical_provider_phone,
                         required: true,
                         placeholder: "XXX-XXX-XXXX",
@@ -528,7 +530,7 @@
                         "aria-required": "true" %>
                   </div>
                   <div>
-                    <%= a.label :medical_provider_email, "Email", class: "form-label required-label" %>
+                    <%= a.label :medical_provider_email, "Provider Email", class: "form-label required-label" %>
                     <%= a.email_field :medical_provider_email,
                         required: true,
                         class: "form-input mt-1",
@@ -543,11 +545,13 @@
 
                 <div class="mt-6 flex items-start">
                   <%= a.check_box :medical_release_authorized,
-                      { required: true, class: "mt-1 h-4 w-4 text-primary-600 border-gray-300 rounded" } %>
-                  <label for="application_medical_release_authorized" class="ml-3">
-                    <span class="form-label required-label">I authorize medical release</span>
-                    <span class="block text-xs text-gray-500 mt-1">I authorize the program to contact this provider to verify my disability certification</span>
-                  </label>
+                      { required: true, class: "mt-1 h-4 w-4 text-primary-600 border-gray-300 rounded", 'aria-describedby': 'disability_release_hint' } %>
+                  <div class="ml-3">
+                    <label for="application_medical_release_authorized">
+                      <span class="form-label required-label">I authorize the release and sharing of my disability-related information.</span>
+                    </label>
+                    <p id="disability_release_hint" class="text-xs text-gray-500 mt-1">The program may contact this provider to verify my disability certification.</p>
+                  </div>
                 </div>
               <% end %>
 
@@ -903,11 +907,14 @@
                     <%= a.check_box :maryland_resident,
                         class: "mt-1 h-4 w-4 text-primary-600 border-gray-300 rounded",
                         required: true,
-                        "aria-required": "true" %>
-                    <label for="application_maryland_resident" class="ml-3">
-                      <span class="form-label required-label">The applicant has marked that they are a resident of Maryland</span>
-                      <span class="block text-xs text-gray-500 mt-1">This will be verified through the residency proof process</span>
-                    </label>
+                        "aria-required": "true",
+                        'aria-describedby': 'maryland_resident_hint' %>
+                    <div class="ml-3">
+                      <label for="application_maryland_resident">
+                        <span class="form-label required-label">The applicant has marked that they are a resident of Maryland</span>
+                      </label>
+                      <p id="maryland_resident_hint" class="text-xs text-gray-500 mt-1">This will be verified through the residency proof process</p>
+                    </div>
                   </div>
                 </div>
               <% end %>
@@ -1139,7 +1146,10 @@
           </div>
         <% end %>
         <%= render 'identity_review', review: @identity_review, submitted: submitted_params, guardian: false %>
-        <p id="paper-submit-gate-status" class="sr-only" aria-live="polite" data-paper-application-target="status"></p>
+        <%# The gate status stays visible so a disabled submit button always explains the current
+            blocker: the upload scan state, a missing guardian, or the named outstanding items
+            once Stimulus connects. %>
+        <p id="paper-submit-gate-status" class="mt-2 text-xs text-gray-600 text-right" role="status" aria-live="polite" data-paper-application-target="status">Complete all required confirmations before submitting.</p>
         <div class="flex flex-col sm:flex-row justify-end gap-3">
           <%= link_to "Cancel", admin_applications_path,
               class: "btn btn-outline" %>

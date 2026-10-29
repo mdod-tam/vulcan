@@ -1,5 +1,5 @@
-<div id="medical-provider-fields" class="space-y-4 p-4 bg-white border border-gray-200 rounded" data-testid="medical-provider-fields">
-  <h3 id="medical-info-heading" class="text-base font-medium text-gray-900">Certifying Professional Information and Authorization to Contact</h3>
+<div id="certifying-professional-fields" class="space-y-4 p-4 bg-white border border-gray-200 rounded" data-testid="certifying-professional-fields">
+  <h3 id="certifying-professional-info-heading" class="text-base font-medium text-gray-900">Certifying Professional Information and Authorization to Contact</h3>
   
   <p class="text-sm text-gray-700 mb-4">
     Please provide contact information for your Doctor or a qualified Certifying Professional. 
@@ -97,14 +97,14 @@
           class: "mt-1 h-4 w-4 text-primary-600 border-gray-300 rounded",
           required: true,
           "aria-required": "true",
-          "aria-describedby": "medical-release-description",
+          "aria-describedby": "disability-release-description",
           id: "application_medical_release_authorized" %>
       <%= label_tag "application[medical_release_authorized]",
           "I authorize the release and sharing of my disability-related information as described above",
           class: "ml-2 block text-sm font-medium text-info-800 required-label",
           for: "application_medical_release_authorized" %>
     </div>
-    <p id="medical-release-description" class="text-xs text-info-600 ml-6 mt-1">
+    <p id="disability-release-description" class="text-xs text-info-600 ml-6 mt-1">
       This authorization is required to process your MAT application and verify your eligibility.
     </p>
   </div>

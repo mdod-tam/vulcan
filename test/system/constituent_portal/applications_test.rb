@@ -59,7 +59,7 @@ class ApplicationsSystemTest < ApplicationSystemTestCase
   # ApplicationCreator also enforces the rule under lock when a case opens after GET.
 
   # A complete form prevents a disabled submit control from producing a false pass.
-  # The medical release uses its label because its id differs from its parameter name.
+  # The disability information release uses its label because its id differs from its parameter name.
   def fill_complete_application_form
     check 'I certify that I am a resident of Maryland'
     fill_in 'Household Size', with: 3
@@ -70,7 +70,7 @@ class ApplicationsSystemTest < ApplicationSystemTestCase
     find('input[name*="city"]').set('Annapolis')
     select 'Maryland', from: 'State'
     find('input[name*="zip_code"]').set('21401')
-    within '#medical-provider-fields' do
+    within '#certifying-professional-fields' do
       find('input[name="application[medical_provider_attributes][name]"]').set('Dr. Jane Smith')
       find('input[name="application[medical_provider_attributes][phone]"]').set('2025551234')
       find('input[name="application[medical_provider_attributes][email]"]').set('drsmith@example.com')
@@ -372,7 +372,7 @@ class ApplicationsSystemTest < ApplicationSystemTestCase
     check 'I certify that I have a disability that affects my ability to access telecommunications services'
     check 'Vision'
 
-    within '#medical-provider-fields' do
+    within '#certifying-professional-fields' do
       find('input[name="application[medical_provider_attributes][name]"]').set('Dr. Test Provider')
       find('input[name="application[medical_provider_attributes][phone]"]').set('2025551234')
       find('input[name="application[medical_provider_attributes][email]"]').set('test@example.com')
@@ -405,14 +405,14 @@ class ApplicationsSystemTest < ApplicationSystemTestCase
     check 'Hearing'
     check 'Vision'
 
-    within '#medical-provider-fields' do
+    within '#certifying-professional-fields' do
       fill_in 'Name', with: 'Dr. Jane Smith'
       fill_in 'Phone', with: '2025551234'
       fill_in 'Email', with: 'drsmith@example.com'
     end
 
     # Clear the required provider name to exercise invalid form input.
-    within '#medical-provider-fields' do
+    within '#certifying-professional-fields' do
       fill_in 'Name', with: ''
     end
 
@@ -427,7 +427,7 @@ class ApplicationsSystemTest < ApplicationSystemTestCase
     assert_checked_field 'Hearing'
     assert_checked_field 'Vision'
 
-    within '#medical-provider-fields' do
+    within '#certifying-professional-fields' do
       assert_field 'Phone', with: '2025551234'
       assert_field 'Email', with: 'drsmith@example.com'
     end
@@ -456,7 +456,7 @@ class ApplicationsSystemTest < ApplicationSystemTestCase
     check 'Vision'
     check 'Mobility'
 
-    within '#medical-provider-fields' do
+    within '#certifying-professional-fields' do
       find('input[name="application[medical_provider_attributes][name]"]').set('').set('Dr. Robert Johnson')
       find('input[name="application[medical_provider_attributes][phone]"]').set('').set('4105551234')
       find('input[name="application[medical_provider_attributes][fax]"]').set('').set('4105555678')
@@ -516,7 +516,7 @@ class ApplicationsSystemTest < ApplicationSystemTestCase
     refute_checked_field 'Speech'
     refute_checked_field 'Cognition'
 
-    within '#medical-provider-fields' do
+    within '#certifying-professional-fields' do
       assert_selector 'input[name="application[medical_provider_attributes][name]"]', wait: 10
 
       name_field = find('input[name="application[medical_provider_attributes][name]"]')
