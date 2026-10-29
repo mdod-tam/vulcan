@@ -53,6 +53,9 @@ class ProofReview < ApplicationRecord
     assign_attributes(attributes)
     self.reviewed_at = Time.current unless new_record?
     transaction do
+      # The insert takes a shared lock on the application row for the foreign key. Two rejections that each
+      # held it would deadlock asking for the exclusive lock, so the exclusive lock comes first.
+      application.lock! if counts_toward_rejection_limit?
       save!
       count_rejection! if counts_toward_rejection_limit?
     end
@@ -247,14 +250,12 @@ class ProofReview < ApplicationRecord
     status_rejected? && !proof_type_disability_certification?
   end
 
-  # Runs inside record!'s transaction, so an error rolls the decision back. The total is kept for the notices,
-  # which wait for the commit.
+  # Runs inside record!'s transaction under the application lock it took, so an error rolls the decision back.
+  # The total is kept for the notices, which wait for the commit.
   def count_rejection!
-    application.with_lock do
-      application.update!(total_rejections: application.total_rejections + 1)
-      @rejection_total = application.total_rejections
-      archive_application_if_exceeded if @rejection_total > MAX_REJECTIONS
-    end
+    application.update!(total_rejections: application.total_rejections + 1)
+    @rejection_total = application.total_rejections
+    archive_application_if_exceeded if @rejection_total > MAX_REJECTIONS
   end
 
   # Sent after the commit. A failure here must not fail a review that has committed.

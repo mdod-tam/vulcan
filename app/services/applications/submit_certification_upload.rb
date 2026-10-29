@@ -93,10 +93,10 @@ module Applications
       )
     end
 
+    # The refusal stands whether or not its audit event is written, as for a refused proof upload.
     def log_refused_submission
-      AuditEventService.log(
+      PublicAuditActor.log_audit(
         action: 'cert_secure_submission_refused',
-        actor: @system_actor,
         auditable: application,
         metadata: {
           secure_request_form_id: secure_request_form.id,

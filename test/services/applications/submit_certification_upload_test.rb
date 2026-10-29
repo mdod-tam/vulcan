@@ -256,6 +256,21 @@ module Applications
       assert_not Event.exists?(auditable: @application, action: 'cert_submitted_via_secure_form')
     end
 
+    test 'an archived refusal still shows the neutral message when its audit event cannot be written' do
+      @application.update_columns(status: Application.statuses[:archived])
+      failed_event = Event.new
+      failed_event.errors.add(:base, 'Metadata is invalid')
+      AuditEventService.stubs(:log).raises(ActiveRecord::RecordInvalid.new(failed_event))
+
+      result = submit_upload
+
+      assert_not result.success?
+      assert_equal I18n.t('applications.certification_upload.messages.no_longer_needed'), result.message
+      assert_not_includes result.message, 'Metadata is invalid'
+      assert_predicate @secure_request_form.reload, :status_sent?
+      assert_not @application.reload.disability_certification.attached?
+    end
+
     test 'a correction requested after a DocuSeal rejection replaces the primary certification' do
       attach_docuseal_primary
       record_certification_rejection(at: 2.days.ago)
