@@ -31,6 +31,14 @@ module CertificationManagement
     !disability_certification_status.in?(%w[received approved])
   end
 
+  # Secure provider links follow the proof rule for a closed application (see
+  # ProofManageable#proof_requestable_via_secure_form?). Certification status is not part of it: an upload
+  # after approval or receipt is kept aside by DisabilityCertificationAttachmentService.accept_submission.
+  # Issuance, the admin send button, and public submission all use this rule.
+  def certification_requestable_via_secure_form?
+    !status_archived?
+  end
+
   def disability_certification_status_approved?
     disability_certification_status == 'approved'
   end

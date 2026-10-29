@@ -178,41 +178,7 @@ module Admin
       end
     end
 
-    def reject_for_income
-      unless FeatureFlag.income_proof_required?
-        redirect_to new_admin_paper_application_path, alert: 'Income rejection is not available when income collection is disabled.'
-        return
-      end
-
-      constituent_params = build_constituent_params_for_notification
-      notification_params = build_notification_params
-      recipient = resolve_constituent_notification_recipient(constituent_params)
-
-      if requested_letter_delivery?(notification_params) && !recipient.is_a?(User)
-        handle_error_response(
-          html_redirect_path: admin_applications_path,
-          error_message: 'Cannot queue a mailed letter without an existing constituent account.'
-        )
-        return
-      end
-
-      # Income rejection sends a notice without creating an application.
-      ApplicationNotificationsMailer.income_threshold_exceeded(
-        recipient,
-        notification_params
-      ).deliver_later
-
-      # No application exists to own this audit event.
-      log_income_threshold_rejection(constituent_params, notification_params)
-
-      handle_success_response(
-        html_redirect_path: admin_applications_path,
-        html_message: rejection_success_message(notification_params),
-        turbo_message: rejection_success_message(notification_params),
-        turbo_redirect_path: admin_applications_path
-      )
-    end
-
+    # Income rejection sends a notice without creating an application.
     def send_rejection_notification
       unless FeatureFlag.income_proof_required?
         redirect_to admin_applications_path, alert: 'Income rejection is not available when income collection is disabled.'
@@ -230,6 +196,9 @@ module Admin
         )
         return
       end
+
+      # No application exists to own this audit event. It comes first so no notice goes out unrecorded.
+      log_income_threshold_rejection(constituent_params, notification_params)
 
       ApplicationNotificationsMailer.income_threshold_exceeded(
         recipient,

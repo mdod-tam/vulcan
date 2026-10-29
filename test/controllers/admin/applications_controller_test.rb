@@ -424,6 +424,27 @@ module Admin
       end
     end
 
+    test 'update_proof_status is routed for PATCH only' do
+      path = "/admin/applications/#{@application.id}/update_proof_status"
+
+      recognized = Rails.application.routes.recognize_path(path, method: :patch)
+      assert_equal 'update_proof_status', recognized[:action]
+      assert_raises(ActionController::RoutingError) { Rails.application.routes.recognize_path(path, method: :post) }
+    end
+
+    test 'a user who is not an administrator cannot review a proof' do
+      sign_out
+      sign_in_for_integration_test(create(:constituent, email: generate(:email)))
+      ProofReviewService.expects(:new).never
+
+      assert_no_difference ['ProofReview.count', 'Event.count'] do
+        patch update_proof_status_admin_application_path(@application), params: { proof_type: 'income', status: 'approved' }
+      end
+
+      assert_not_authorized
+      assert_equal 'not_reviewed', @application.reload.income_proof_status
+    end
+
     test 'rejected proof warnings retain resubmission failure guidance in the Turbo response' do
       warning = 'The proof review was saved, but workflow follow-up failed.'
       ProofReviewService.any_instance.expects(:call).returns(

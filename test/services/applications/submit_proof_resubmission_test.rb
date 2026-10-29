@@ -192,6 +192,24 @@ module Applications
       assert_predicate @secure_request_form.reload, :status_sent?
     end
 
+    test 'refuses an upload for an archived application and records the refusal' do
+      # A rejected proof is requestable on its own, so only the archived status can refuse this upload.
+      application = create(:application, :archived, income_proof_status: :rejected)
+      form = create(:secure_request_form, kind: :income_proof_resubmission, application: application)
+
+      result = SubmitProofResubmission.new(
+        application: application,
+        secure_request_form: form,
+        file: cleared_proof(@file, form)
+      ).call
+
+      assert_not result.success?
+      assert_equal I18n.t('applications.proof_resubmission.messages.no_longer_needed'), result.message
+      assert_not application.reload.income_proof.attached?
+      assert_predicate form.reload, :status_sent?
+      assert Event.exists?(auditable: application, action: 'proof_secure_submission_refused')
+    end
+
     test 'issuance and submission agree for every proof state' do
       admin = create(:admin)
       states = {

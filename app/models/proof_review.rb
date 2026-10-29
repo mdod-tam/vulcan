@@ -12,6 +12,9 @@ class ProofReview < ApplicationRecord
 
   REVIEWABLE_PROOF_TYPES = %w[income id residency].freeze
 
+  # The rejection that reaches this total sends a warning. A rejection past it archives the application.
+  MAX_REJECTIONS = 8
+
   def self.reviewable_proof_types
     REVIEWABLE_PROOF_TYPES
   end
@@ -43,28 +46,32 @@ class ProofReview < ApplicationRecord
   end
 
   # Saves the decision. A new row stamps reviewed_at when it is created; a repeat decision stamps it here.
+  # A rejection is counted, and the application archived once it passes the limit, in the same transaction
+  # as the decision. If that fails, the decision rolls back with it.
   def record!(**attributes)
+    @rejection_total = nil
     assign_attributes(attributes)
     self.reviewed_at = Time.current unless new_record?
-    save!
+    transaction do
+      # The insert takes a shared lock on the application row for the foreign key. Two rejections that each
+      # held it would deadlock asking for the exclusive lock, so the exclusive lock comes first.
+      application.lock! if counts_toward_rejection_limit?
+      save!
+      count_rejection! if counts_toward_rejection_limit?
+    end
     self
   end
 
   # The decision just saved was a rejection that updated an existing row. A new row's own after-commit
-  # callback applies the rejection side effects; a repeat applies them with apply_repeat_rejection_side_effects!.
+  # callback applies the rejection notices; a repeat applies them with apply_repeat_rejection_side_effects!.
   def repeat_rejection?
     status_rejected? && !previously_new_record?
   end
 
   def apply_repeat_rejection_side_effects!
-    return if proof_type_disability_certification?
-    return unless status_rejected?
+    return unless counts_toward_rejection_limit?
 
-    ActiveRecord::Base.transaction do
-      increment_rejections_if_rejected
-      check_max_rejections
-    end
-
+    notify_rejection_limit
     log_rejection_audit_event
     issue_proof_resubmission_form
   end
@@ -122,7 +129,7 @@ class ProofReview < ApplicationRecord
     return if status.blank?
 
     begin
-      process_rejection_flow
+      notify_rejection_limit
       send_status_notification
     rescue StandardError => e
       Rails.logger.error "Failed to process proof review #{id} actions for application #{application_id}: #{e.class.name}"
@@ -138,20 +145,6 @@ class ProofReview < ApplicationRecord
     Rails.logger.debug { "Processing proof review for Application ID: #{application.id}" }
     Rails.logger.debug do
       "Status details: raw: #{status.inspect}, before type cast: #{status_before_type_cast.inspect}, rejected?: #{status_rejected?}"
-    end
-  end
-
-  def process_rejection_flow
-    return if proof_type_disability_certification?
-
-    ActiveRecord::Base.transaction do
-      if status_rejected?
-        Rails.logger.debug 'Status is rejected, handling rejection flow'
-        increment_rejections_if_rejected
-        check_max_rejections
-      else
-        Rails.logger.debug 'Status is approved, skipping rejection flow'
-      end
     end
   end
 
@@ -171,6 +164,9 @@ class ProofReview < ApplicationRecord
   end
 
   def issue_proof_resubmission_form
+    # An application archived by this rejection is sent the archive notice, not an upload link it could not use.
+    return if application.status_archived?
+
     result = Applications::RequestProofResubmission.new(
       application: application,
       actor: admin,
@@ -249,26 +245,27 @@ class ProofReview < ApplicationRecord
     resolver.known_recipients.find { |recipient| recipient.id == default_recipient_id } || application.user
   end
 
-  def increment_rejections_if_rejected
-    application.with_lock do
-      application.total_rejections += 1
-      application.save!
-    end
-  rescue StandardError => e
-    Rails.logger.error "ProofReview#increment_rejections_if_rejected failed for application #{application.id}: #{e.class.name}"
-    errors.add(:base, "Failed to update rejection count. Please try again. Status: #{e.message}")
-    raise ActiveRecord::Rollback
+  # A disability certification review has its own rejection flow and does not count toward the limit.
+  def counts_toward_rejection_limit?
+    status_rejected? && !proof_type_disability_certification?
   end
 
-  def check_max_rejections
-    application.with_lock do
-      send_max_rejections_warning if application.total_rejections >= 8
-      archive_application_if_exceeded if application.total_rejections > 8
-    end
+  # Runs inside record!'s transaction under the application lock it took, so an error rolls the decision back.
+  # The total is kept for the notices, which wait for the commit.
+  def count_rejection!
+    application.update!(total_rejections: application.total_rejections + 1)
+    @rejection_total = application.total_rejections
+    archive_application_if_exceeded if @rejection_total > MAX_REJECTIONS
+  end
+
+  # Sent after the commit. A failure here must not fail a review that has committed.
+  def notify_rejection_limit
+    return unless @rejection_total
+
+    send_max_rejections_warning if @rejection_total >= MAX_REJECTIONS
+    ApplicationNotificationsMailer.max_rejections_reached(application).deliver_later if @rejection_total > MAX_REJECTIONS
   rescue StandardError => e
-    Rails.logger.error "ProofReview#check_max_rejections failed for application #{application.id}: #{e.class.name}"
-    errors.add(:base, 'Failed to process rejection limits')
-    raise ActiveRecord::Rollback
+    Rails.logger.error "Failed to send rejection limit notices for ProofReview #{id}: #{e.class.name}"
   end
 
   def send_max_rejections_warning
@@ -297,7 +294,6 @@ class ProofReview < ApplicationRecord
       notes: 'Application archived after exceeding maximum proof rejections',
       metadata: { trigger: 'max_proof_rejections' }
     )
-    ApplicationNotificationsMailer.max_rejections_reached(application).deliver_later
   end
 
   def admin_must_be_admin_type

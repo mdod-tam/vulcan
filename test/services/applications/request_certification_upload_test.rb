@@ -34,6 +34,18 @@ module Applications
       assert_includes messages.join, @application.id.to_s
     end
 
+    test 'an archived application cannot issue a certification link' do
+      @application.update_columns(status: Application.statuses[:archived])
+
+      result = nil
+      assert_no_difference ['SecureRequestForm.certification_upload.count', 'Notification.count', 'ApplicationStatusChange.count', 'Event.count'] do
+        result = RequestCertificationUpload.new(application: @application, actor: @actor).call
+      end
+
+      assert_predicate result, :failure?
+      assert_equal I18n.t('applications.certification_upload.messages.request_not_needed', locale: @actor.effective_locale), result.message
+    end
+
     test 'preparation records one initial transition and secure resends do not count provider requests' do
       result = nil
       assert_no_emails do

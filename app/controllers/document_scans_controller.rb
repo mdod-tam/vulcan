@@ -65,7 +65,7 @@ class DocumentScansController < ApplicationController
     when 'proof'
       type = SecureRequestForm::PROOF_TYPES_BY_KIND[@secure_form.kind]
       type && @secure_form.application.proof_requestable_via_secure_form?(type)
-    when 'certification' then @secure_form.kind_certification_upload?
+    when 'certification' then @secure_form.kind_certification_upload? && @secure_form.application.certification_requestable_via_secure_form?
     when 'w9' then @secure_form.kind_w9_upload? && @secure_form.vendor.w9_requestable_via_secure_form?
     end
   end

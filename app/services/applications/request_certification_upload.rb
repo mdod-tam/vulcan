@@ -21,6 +21,7 @@ module Applications
 
     def call
       with_issuance_errors(application) do
+        return failure(message(:request_not_needed)) unless application.certification_requestable_via_secure_form?
         return failure(message(:provider_email_required)) if provider_email.blank?
         return failure(message(:unsupported_channel)) unless channel == :email
 

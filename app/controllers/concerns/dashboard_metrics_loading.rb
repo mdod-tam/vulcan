@@ -43,64 +43,6 @@ module DashboardMetricsLoading
                  training_needing_reassignment_count: Application.needing_trainer_reassignment.count)
   end
 
-  def load_simple_counts
-    safe_assign(:open_applications_count, cached_count('open_apps') { Application.active.count })
-    safe_assign(:pending_services_count, cached_count('pending_services') { Application.where(status: :approved).count })
-  end
-
-  def load_reporting_service_data
-    service_result = Applications::ReportingService.new.generate_index_data
-    return unless service_result.is_a?(BaseService::Result) && service_result.success?
-
-    # Keep the reporting service from replacing locally owned metrics.
-    service_result.data.to_h.each do |key, value|
-      next if excluded_reporting_keys.include?(key.to_s)
-      next if key.to_s.blank? || value.nil?
-
-      instance_variable_set("@#{key}", value)
-    end
-  end
-
-  def load_remaining_metrics
-    load_proof_review_counts
-    load_certification_review_counts
-    load_training_request_counts
-  end
-
-  def load_print_queue_count
-    safe_assign(:print_queue_pending_count, cached_count('print_queue_pending') { PrintQueueItem.unreleased.count })
-  end
-
-  def load_proof_review_counts
-    proofs_count = cached_count('proofs_needing_review') do
-      Application.with_proofs_needing_review.distinct.count
-    end
-
-    safe_assign(:proofs_needing_review_count, proofs_count)
-  end
-
-  def load_certification_review_counts
-    disability_certs_count = cached_count('disability_certs_to_review') do
-      Application.where.not(status: %i[rejected archived])
-                 .where(disability_certification_status: :received)
-                 .count
-    end
-
-    digitally_signed_count = cached_count('digitally_signed_needs_review') do
-      Application.where(document_signing_status: :signed)
-                 .where.not(disability_certification_status: :approved)
-                 .count
-    end
-
-    safe_assign(:disability_certs_to_review_count, disability_certs_count)
-    safe_assign(:digitally_signed_needs_review_count, digitally_signed_count)
-  end
-
-  def load_training_request_counts
-    training_count = cached_count('training_requests') { calculate_training_requests_count }
-    safe_assign(:training_requests_count, training_count)
-  end
-
   def load_fiscal_year_data
     current_fy = current_fiscal_year
     previous_fy = current_fy - 1
@@ -307,10 +249,6 @@ module DashboardMetricsLoading
   def fiscal_year_start
     year = current_fiscal_year
     Date.new(year, 7, 1)
-  end
-
-  def cached_count(key, expires_in: 5.minutes, &)
-    Rails.cache.fetch("dashboard_metrics_#{key}", expires_in: expires_in, &)
   end
 
   # These metrics have local owners outside the reporting service.

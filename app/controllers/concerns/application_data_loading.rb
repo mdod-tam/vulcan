@@ -108,43 +108,6 @@ module ApplicationDataLoading
     scope.order(application_date: :desc, id: :desc)
   end
 
-  # @param application [Application] The application
-  # @param actions [Array<String>, nil] Notification actions, or nil for defaults
-  # @return [ActiveRecord::Relation] Notifications
-  def load_application_notifications(application, actions: nil)
-    actions ||= %w[
-      disability_certification_requested disability_certification_received
-      disability_certification_approved disability_certification_rejected
-      review_requested documents_requested proof_approved proof_rejected
-    ]
-
-    Notification
-      .select('id, recipient_id, actor_id, notifiable_id, notifiable_type, action, read_at, ' \
-              'created_at, message_id, delivery_status, metadata')
-      .where(notifiable_type: 'Application', notifiable_id: application.id)
-      .where(action: actions)
-      .order(created_at: :desc)
-  end
-
-  # @param application [Application] The application
-  # @param actions [Array<String>, nil] Event actions, or nil for defaults
-  # @return [ActiveRecord::Relation] The events
-  def load_application_events(application, actions: nil)
-    actions ||= %w[
-      voucher_assigned voucher_redeemed voucher_expired voucher_cancelled
-      application_created evaluator_assigned trainer_assigned
-    ]
-
-    Event
-      .select('id, user_id, action, created_at, metadata, change_values')
-      .includes(:user)
-      .where("action IN (?) AND (metadata->>'application_id' = ? OR metadata @> ?)",
-             actions,
-             application.id.to_s,
-             { application_id: application.id }.to_json)
-      .order(created_at: :desc)
-  end
-
   private
 
   # @param attachment_names [Array<String>, nil] Names to use or nil for default

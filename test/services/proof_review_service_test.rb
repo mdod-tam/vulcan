@@ -71,6 +71,40 @@ class ProofReviewServiceTest < ActiveSupport::TestCase
     assert_not Current.reviewing_single_proof?
   end
 
+  test 'a rejection that cannot be counted fails the review and leaves the application unchanged' do
+    @application.update!(total_rejections: ProofReview::MAX_REJECTIONS)
+    Application.any_instance.stubs(:transition_status!).raises(ActiveRecord::RecordInvalid.new(@application))
+
+    result = nil
+    assert_no_difference ['ProofReview.count', 'ApplicationStatusChange.count', 'Event.count', 'Notification.count'] do
+      assert_no_enqueued_jobs do
+        result = ProofReviewService.new(@application, @admin,
+                                        { proof_type: 'residency', status: 'rejected', rejection_reason: 'Unreadable' }).call
+      end
+    end
+
+    assert result.failure?
+    assert_equal 'The proof review could not be completed. Check this application before reviewing it again.', result.message
+    assert_nil result.data&.dig(:commit_state), 'a rolled-back review is not an unknown commit'
+    @application.reload
+    assert_equal 'not_reviewed', @application.residency_proof_status
+    assert_equal ProofReview::MAX_REJECTIONS, @application.total_rejections
+    assert_equal 'in_progress', @application.status
+    assert_predicate @application.residency_proof, :attached?, 'the proof is not purged when the review rolls back'
+  end
+
+  test 'the rejection that archives the application reports no upload request owed' do
+    @application.update!(total_rejections: ProofReview::MAX_REJECTIONS)
+
+    result = ProofReviewService.new(@application, @admin,
+                                    { proof_type: 'residency', status: 'rejected', rejection_reason: 'Unreadable' }).call
+
+    assert result.success?, result.message
+    assert_predicate @application.reload, :status_archived?
+    assert_equal true, result.data[:resubmission_delivered], 'the admin is not told to resend a link the archived application refuses'
+    assert_not @application.events.exists?(action: 'proof_resubmission_request_failed')
+  end
+
   test 'a rejected review with a blank reason returns corrective feedback without saving' do
     ['', " \t\n "].each do |reason|
       result = nil
@@ -452,6 +486,24 @@ class ProofReviewCommitOutcomeTest < ActiveSupport::TestCase
     assert_equal review.id, failure.metadata['proof_review_id']
     assert_equal 'StandardError', failure.metadata['error_class']
     assert_not Current.reviewing_single_proof?
+  end
+
+  test 'a committed rejection past the limit keeps its count and archive when a follow-up step fails' do
+    @application.update!(total_rejections: ProofReview::MAX_REJECTIONS)
+    ProofReview.any_instance.stubs(:handle_post_review_actions).raises(StandardError, 'after commit failed')
+
+    result = ProofReviewService.new(@application, @admin,
+                                    { proof_type: 'residency', status: 'rejected', rejection_reason: 'Unreadable' }).call
+
+    assert result.success?, result.message
+    assert_match(/review was saved.*follow-up step/, result.data[:warning])
+    @application.reload
+    assert @application.proof_reviews.exists?(proof_type: :residency, status: :rejected)
+    assert_equal 'rejected', @application.residency_proof_status, 'the proof status is written after the archive'
+    assert_not @application.residency_proof.attached?, 'the rejected proof is purged after the archive'
+    assert_equal ProofReview::MAX_REJECTIONS + 1, @application.total_rejections
+    assert_predicate @application, :status_archived?
+    assert @application.events.exists?(action: 'proof_review_follow_up_failed')
   end
 
   test 'failed commit verification reports uncertainty without suggesting the review failed' do

@@ -358,6 +358,8 @@ es:
         expired: "Este enlace seguro ha vencido."
         invalid_request: "Este enlace seguro ya no está disponible."
         attachment_failed: "No se pudo adjuntar el documento de certificación. Inténtelo de nuevo."
+        request_not_needed: "No se puede enviar un enlace seguro para subir la certificación porque esta solicitud está cerrada."
+        no_longer_needed: "Ya no es necesario subir este documento. Comuníquese con el programa si tiene preguntas."
     alternate_contact:
       portal_help: "Puede proporcionar una persona de contacto alternativa que pueda ayudar con su solicitud. Los contactos alternativos son solo informativos y no reciben enlaces seguros de flujo de trabajo ni notificaciones de flujo de trabajo."
       admin_help: "Los contactos alternativos son solo informativos y no reciben enlaces seguros de flujo de trabajo ni notificaciones de flujo de trabajo."

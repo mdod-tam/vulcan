@@ -45,6 +45,19 @@ module Applications
       end
     end
 
+    test 'an archived application cannot issue a request for a rejected proof' do
+      @application.update_columns(status: Application.statuses[:archived])
+      @mailer_delivery.expects(:deliver_now).never
+
+      assert_not @application.proof_requestable_via_secure_form?(:income)
+
+      result = nil
+      assert_no_difference ['SecureRequestForm.count', 'Notification.count', 'Event.count'] do
+        result = RequestProofResubmission.new(application: @application, actor: @actor, proof_type: :income).call
+      end
+      assert_predicate result, :failure?
+    end
+
     test 'delivery_confirmed_for_review? reflects active secure request forms' do
       assert_not RequestProofResubmission.delivery_confirmed_for_review?(@proof_review)
 
@@ -450,6 +463,8 @@ module Applications
         proof_type: :id,
         rejection_reason: 'Old blurry upload'
       )
+      # The review factory attaches the proof with a direct row, so this object's attachment cache is stale.
+      application.reload
       application.update!(id_proof_status: :not_reviewed)
       application.id_proof.purge if application.id_proof.attached?
 

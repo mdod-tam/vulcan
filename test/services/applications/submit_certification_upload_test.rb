@@ -235,6 +235,42 @@ module Applications
       assert_not @application.reload.disability_certification.attached?
     end
 
+    test 'refuses an upload for an archived application and records the refusal' do
+      @application.update_columns(status: Application.statuses[:archived])
+      status_before = @application.reload.disability_certification_status
+
+      result = submit_upload
+
+      assert_not result.success?
+      assert_equal I18n.t('applications.certification_upload.messages.no_longer_needed'), result.message
+      @application.reload
+      assert_not @application.disability_certification.attached?
+      assert_equal 0, @application.additional_disability_certifications.count
+      assert_equal status_before, @application.disability_certification_status
+      assert_predicate @secure_request_form.reload, :status_sent?, 'a refused upload leaves the link unused'
+
+      event = Event.find_by!(auditable: @application, action: 'cert_secure_submission_refused')
+      assert_equal @secure_request_form.id, event.metadata.fetch('secure_request_form_id')
+      assert_equal 'certification_no_longer_requestable', event.metadata.fetch('reason')
+      assert_equal User.system_user, event.user
+      assert_not Event.exists?(auditable: @application, action: 'cert_submitted_via_secure_form')
+    end
+
+    test 'an archived refusal still shows the neutral message when its audit event cannot be written' do
+      @application.update_columns(status: Application.statuses[:archived])
+      failed_event = Event.new
+      failed_event.errors.add(:base, 'Metadata is invalid')
+      AuditEventService.stubs(:log).raises(ActiveRecord::RecordInvalid.new(failed_event))
+
+      result = submit_upload
+
+      assert_not result.success?
+      assert_equal I18n.t('applications.certification_upload.messages.no_longer_needed'), result.message
+      assert_not_includes result.message, 'Metadata is invalid'
+      assert_predicate @secure_request_form.reload, :status_sent?
+      assert_not @application.reload.disability_certification.attached?
+    end
+
     test 'a correction requested after a DocuSeal rejection replaces the primary certification' do
       attach_docuseal_primary
       record_certification_rejection(at: 2.days.ago)

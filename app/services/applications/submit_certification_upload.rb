@@ -28,6 +28,12 @@ module Applications
       return failure(message(:attachment_failed)) unless @system_actor
 
       submit_under_lock(application) do
+        # Another path can archive the application after the link was sent.
+        unless application.certification_requestable_via_secure_form?
+          log_refused_submission
+          next failure(message(:no_longer_needed))
+        end
+
         attach_result = accept_certification
         raise_attachment_failure(attach_result[:error]) unless attach_result[:success]
 
@@ -84,6 +90,19 @@ module Applications
         actor: @system_actor,
         auditable: application,
         metadata: secure_upload_metadata.merge(additional_certification_metadata(attach_result))
+      )
+    end
+
+    # The refusal stands whether or not its audit event is written, as for a refused proof upload.
+    def log_refused_submission
+      PublicAuditActor.log_audit(
+        action: 'cert_secure_submission_refused',
+        auditable: application,
+        metadata: {
+          secure_request_form_id: secure_request_form.id,
+          request_batch_id: secure_request_form.request_batch_id,
+          reason: 'certification_no_longer_requestable'
+        }
       )
     end
 

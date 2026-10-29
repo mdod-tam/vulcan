@@ -71,42 +71,6 @@ class ProofReviewTest < ActiveSupport::TestCase
     assert @application.income_proof_status_approved?
   end
 
-  def test_archives_application_after_max_rejections
-    @application.update!(total_rejections: 8)
-
-    @application.income_proof.attach(
-      io: StringIO.new('dummy'),
-      filename: 'proof.pdf',
-      content_type: 'application/pdf'
-    )
-
-    proof_review = build(:proof_review,
-                         application: @application,
-                         admin: @admin,
-                         proof_type: :income,
-                         status: :rejected,
-                         rejection_reason: 'Final rejection')
-
-    assert_difference -> { ApplicationStatusChange.count }, 1 do
-      assert_difference -> { Event.where(action: 'application_status_changed').count }, 1 do
-        proof_review.save!
-      end
-    end
-
-    @application.reload
-    assert @application.status_archived?
-
-    status_change = @application.status_changes.last
-    assert_equal 'archived', status_change.to_status
-    assert_equal @admin, status_change.user
-    assert_equal 'Application archived after exceeding maximum proof rejections', status_change.notes
-    assert_equal 'max_proof_rejections', status_change.metadata['trigger']
-
-    audit_event = @application.events.where(action: 'application_status_changed').last
-    assert_equal @admin, audit_event.user
-    assert_equal 'max_proof_rejections', audit_event.metadata['trigger']
-  end
-
   def test_prevents_review_of_archived_application
     application = create(:application, :archived)
 
