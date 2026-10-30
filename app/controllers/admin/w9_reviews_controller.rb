@@ -65,12 +65,5 @@ module Admin
     def w9_review_params
       params.expect(w9_review: %i[status rejection_reason_code rejection_reason reviewed_blob_id])
     end
-
-    def require_admin!
-      return if current_user&.admin?
-
-      flash[:alert] = t('alerts.unauthorized_action')
-      redirect_to root_path
-    end
   end
 end

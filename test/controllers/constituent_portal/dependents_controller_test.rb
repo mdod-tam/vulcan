@@ -265,7 +265,7 @@ module ConstituentPortal
       assert_equal 'Typed', dependent.first_name
       assert_equal @guardian.email, dependent.effective_email,
                    'communications must still route to the guardian after the failed attempt'
-      assert_equal User.normalize_phone(@guardian.phone), User.normalize_phone(dependent.effective_phone),
+      assert_equal PhoneNumber.normalize(@guardian.phone), PhoneNumber.normalize(dependent.effective_phone),
                    'phone communications must still route to the guardian after the failed attempt'
       assert_not_equal typed_email, dependent.effective_email
     end
@@ -854,7 +854,7 @@ module ConstituentPortal
 
       get constituent_portal_dependent_path(@dependent)
       assert_redirected_to root_path
-      assert_equal 'Access denied. Constituent-only area.', flash[:alert]
+      assert_equal I18n.t('alerts.unauthorized_action'), flash[:alert]
     end
 
     # Request replay

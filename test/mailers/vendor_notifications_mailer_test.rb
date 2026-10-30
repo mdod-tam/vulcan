@@ -148,6 +148,27 @@ class VendorNotificationsMailerTest < ActionMailer::TestCase
     assert_not_includes rejected_text, 'Your W9 form requires attention'
   end
 
+  test 'a Spanish vendor receives Spanish W9 expiry status boxes and dates' do
+    VendorNotificationsMailer.any_instance.unstub(:find_text_template)
+    @vendor.update!(locale: 'es')
+    @vendor.stubs(:w9_expiration_date).returns(Date.new(2026, 12, 5))
+    @vendor.stubs(:associated?).returns(false)
+    load_seeded_email_templates('vendor_notifications_w9_expiring_soon', 'vendor_notifications_w9_expired')
+
+    travel_to Date.new(2026, 11, 25) do
+      date = I18n.l(@vendor.w9_expiration_date, format: :long, locale: :es)
+      expiring = decoded_text_part(VendorNotificationsMailer.with(vendor: @vendor).w9_expiring_soon.deliver_now)
+      expired = decoded_text_part(VendorNotificationsMailer.with(vendor: @vendor).w9_expired.deliver_now)
+
+      assert_includes expiring, I18n.t('vendor_notifications.w9_expiring_soon.warning', days: 10, date: date, locale: :es)
+      assert_includes expired, I18n.t('vendor_notifications.w9_expired.warning', date: date, locale: :es)
+      [expiring, expired].each do |text|
+        assert_includes text, I18n.t('vendor_notifications.action_required', locale: :es)
+        assert_not_includes text, 'Action Required'
+      end
+    end
+  end
+
   test 'approval seeds preserve existing administrator content and delivery controls in both locales' do
     VendorNotificationsMailer.any_instance.unstub(:find_text_template)
 

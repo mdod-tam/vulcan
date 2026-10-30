@@ -130,19 +130,19 @@ class ApplicationWorkflowPredicatesTest < ActiveSupport::TestCase
     assert app.required_proofs_approved?
   end
 
-  test 'voucher_issuable? requires voucher fulfillment, approved status, and cert' do
+  test 'can_create_voucher? requires voucher fulfillment, approved status, and cert' do
     app = create(:application, :completed, :voucher_fulfillment)
     app.reload
-    assert app.voucher_issuable?
+    assert app.can_create_voucher?
   end
 
-  test 'voucher_issuable? returns false for equipment fulfillment' do
+  test 'can_create_voucher? returns false for equipment fulfillment' do
     app = create(:application, :completed, :with_all_proofs)
     assert app.equipment_fulfillment?
-    assert_not app.voucher_issuable?
+    assert_not app.can_create_voucher?
   end
 
-  test 'voucher_issuable? returns false when voucher already exists' do
+  test 'can_create_voucher? returns false when voucher already exists' do
     app = create(:application, :completed, :voucher_fulfillment)
     app.reload
     app.vouchers.create!(
@@ -151,10 +151,10 @@ class ApplicationWorkflowPredicatesTest < ActiveSupport::TestCase
       remaining_value: 100,
       status: :active
     )
-    assert_not app.voucher_issuable?
+    assert_not app.can_create_voucher?
   end
 
-  test 'voucher_issuable? returns false without all required proofs approved' do
+  test 'can_create_voucher? returns false without all required proofs approved' do
     app = create(:application, :approved, :voucher_fulfillment)
     app.update_columns(
       disability_certification_status: Application.disability_certification_statuses[:approved],
@@ -165,7 +165,7 @@ class ApplicationWorkflowPredicatesTest < ActiveSupport::TestCase
     app.reload
 
     assert_not app.required_proofs_approved?
-    assert_not app.voucher_issuable?
+    assert_not app.can_create_voucher?
   end
 
   test 'with_proofs_needing_review includes income not_reviewed only when income required' do
@@ -231,7 +231,7 @@ class ApplicationWorkflowPredicatesTest < ActiveSupport::TestCase
 
     assert_not app.can_create_voucher?
     assert_no_difference -> { Voucher.where(application: app).count } do
-      assert_not app.assign_voucher!(assigned_by: create(:admin))
+      assert_predicate Vouchers::IssuanceService.new(app, actor: create(:admin)).call, :failure?
     end
   end
 

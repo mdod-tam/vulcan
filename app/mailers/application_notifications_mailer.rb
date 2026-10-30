@@ -2,13 +2,7 @@
 
 class ApplicationNotificationsMailer < ApplicationMailer # rubocop:disable Metrics/ClassLength
   layout false
-  include Rails.application.routes.url_helpers
   include Mailers::ApplicationNotificationsHelper
-  include Mailers::SharedPartialHelpers
-
-  def self.default_url_options
-    Rails.application.config.action_mailer.default_url_options
-  end
 
   def application_submitted(application)
     @application = application
@@ -354,33 +348,9 @@ class ApplicationNotificationsMailer < ApplicationMailer # rubocop:disable Metri
   end
 
   def build_base_email_variables(template:, organization_name: nil, locale: nil, subject_variables: {})
-    header_title = header_title_from_template_subject(template: template, subject_variables: subject_variables)
-    org_name = organization_name || Policy.get('organization_name') || 'Maryland Accessible Telecommunications'
-    footer_contact_email = ProgramContact.support_email
-    footer_website_url = ProgramContact.website_url
-    header_logo_url = safe_asset_path('logo.png')
-
-    {
-      header_text: header_text(title: header_title, logo_url: header_logo_url, locale: locale),
-      footer_text: footer_text(
-        contact_email: footer_contact_email,
-        website_url: footer_website_url,
-        organization_name: org_name,
-        show_automated_message: true,
-        locale: locale
-      ),
-      header_logo_url: header_logo_url,
-      header_subtitle: nil,
-      support_email: footer_contact_email,
-      office_address: ProgramContact.office_address,
-      program_website_url: ProgramContact.website_url
-    }
-  end
-
-  def safe_asset_path(asset_name)
-    ActionController::Base.helpers.asset_path(asset_name, host: default_url_options[:host])
-  rescue StandardError
-    nil
+    envelope_variables(template: template, locale: locale, subject_variables: subject_variables,
+                       organization_name: organization_name || Policy.get('organization_name') || 'Maryland Accessible Telecommunications')
+      .merge(header_subtitle: nil, office_address: ProgramContact.office_address, program_website_url: ProgramContact.website_url)
   end
 
   def build_proof_approved_variables(application, proof_review, template:, locale: nil)

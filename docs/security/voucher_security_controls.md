@@ -8,9 +8,9 @@ Redemption checks the vendor, the applicant verification, the voucher state, and
 
 ## Issuing a voucher
 
-`Application#assign_voucher!` ([VoucherManagement](../../app/models/concerns/voucher_management.rb)) is the only path that issues one. It checks the feature flag — a configuration switch — first. It then holds a database lock on the application while it evaluates eligibility and creates the voucher. Two approvals racing cannot both pass the "no existing voucher" test.
+[Vouchers::IssuanceService](../../app/services/vouchers/issuance_service.rb) is the only path that issues one. It checks the feature flag — a configuration switch — first. It then holds a database lock on the application while it evaluates eligibility and creates the voucher. Two approvals racing cannot both pass the "no existing voucher" test.
 
-Eligibility requires voucher fulfillment, an approved application, approved required proofs and disability certification, and no existing voucher. Normal entry points are the approval transition through [IssueInitialVoucherJob](../../app/jobs/issue_initial_voucher_job.rb) and the admin assignment action.
+Eligibility requires voucher fulfillment, an approved application, approved required proofs and disability certification, and no existing voucher. Normal entry points are the approval paths (`Applications::Approver` and automatic approval), which queue [IssueInitialVoucherJob](../../app/jobs/issue_initial_voucher_job.rb), and the admin assignment action.
 
 [Voucher](../../app/models/voucher.rb) calculates the initial value from the constituent's disability flags and policy values. It generates a random 12-character code. The database also has a unique index on the code. Model validations keep the initial and remaining values non-negative and keep the remaining value no greater than the initial value.
 
@@ -47,7 +47,7 @@ Vendor eligibility has one rule, `Users::Vendor#can_process_vouchers?` (approved
 
 Vouchers have four states: `active`, `redeemed`, `expired`, and `cancelled`. Full redemption consumes the balance. Expiry is calculated from issue time and the policy validity period. The model checks elapsed expiry during redemption even if the status has not yet changed.
 
-[CheckVoucherExpirationJob](../../app/jobs/check_voucher_expiration_job.rb) is the entry point for batch expiration processing. It warns each voucher once when it enters the expiring-soon window. It expires vouchers past their validity period. The expired notice comes from the `Voucher` status callback — code that runs on status change — so every path to `expired` sends it once. Admin cancellation runs through [Admin::VouchersController](../../app/controllers/admin/vouchers_controller.rb) and `Voucher#cancel!`.
+[CheckVoucherExpirationJob](../../app/jobs/check_voucher_expiration_job.rb) is the entry point for batch expiration processing. It warns each voucher once when it enters the expiring-soon window. It expires vouchers past their validity period. [Vouchers::ExpirationProcessorService](../../app/services/vouchers/expiration_processor_service.rb) is the only code that writes `expired` and the only sender of the expired notice, so a voucher is notified once when it expires. Writing the status elsewhere sends nothing. Admin cancellation runs through [Admin::VouchersController](../../app/controllers/admin/vouchers_controller.rb) and `Voucher#cancel!`.
 
 Issuance owns `voucher_assigned`, redemption owns `voucher_redeemed`, and the admin controller owns `voucher_cancelled` and `voucher_updated`. Model callbacks record status changes. [VoucherAuditLogBuilder](../../app/services/vouchers/voucher_audit_log_builder.rb) assembles the displayed history.
 

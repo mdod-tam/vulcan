@@ -65,12 +65,7 @@ module Applications
       # would match unrelated users sharing the dependent's real phone.
       return if attrs[:email].present? && User.system_generated_email?(attrs[:email])
 
-      find_by_phone if attrs[:phone].present?
-    end
-
-    def find_by_phone
-      formatted_phone = User.new(phone: attrs[:phone]).phone
-      User.find_by_phone(formatted_phone)
+      User.find_by_phone(attrs[:phone]) if attrs[:phone].present?
     end
 
     def create_new_user
@@ -118,7 +113,7 @@ module Applications
     def build_user
       user = Users::Constituent.new(attrs)
       user.verified = true
-      user.instance_variable_set(:@validate_disability_required, true) if @require_disability_validation
+      user.require_disability_selection = true if @require_disability_validation
 
       if email_backed_portal_account_from_attrs?
         initial_password = SecureRandom.hex(8)
@@ -147,7 +142,7 @@ module Applications
       attrs[:email] = User.normalize_email(attrs[:email]) if attrs[:email].present?
       return if attrs[:phone].blank?
 
-      normalized_phone = User.normalize_phone(attrs[:phone])
+      normalized_phone = PhoneNumber.normalize(attrs[:phone])
       attrs[:phone] = normalized_phone if normalized_phone.present?
     end
 

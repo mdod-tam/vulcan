@@ -51,11 +51,8 @@ module UserProfile
     validate :dependent_phone_number_must_be_valid, if: :dependent_phone_changed?
     # Unreadable input is never stored: it would reach the encrypted column and identity lookups.
     typed_date_input :date_of_birth
-    validate :constituent_must_have_disability, if: :validate_constituent_disability?
     validate :validate_address_for_letter_preference
     validate :email_delivery_requires_real_email
-    validate :admin_contact_update_must_remain_reachable, on: :update, if: :validate_admin_contact_update?
-    validate :self_service_profile_requires_email_backing, on: :update, if: :self_service_constituent_profile_update?
     before_validation :normalize_portal_self_registration_phone_type, if: :portal_self_registration?
     validate :portal_self_registration_phone_type_matches_phone, if: :portal_self_registration?
     validate :portal_self_registration_requires_email_backed_account, if: :portal_self_registration?
@@ -79,8 +76,13 @@ module UserProfile
   # The mailing address on one line, as rejection reasons state it: "123 Main St Apt 4 Baltimore, MD 21201".
   # Missing parts are left out without leaving stray punctuation.
   def mailing_address_line
+    mailing_address_lines.join(' ')
+  end
+
+  # The mailing address as separate lines: street, second street line, then "City, ST 12345".
+  def mailing_address_lines
     locality = [city.presence, [state, zip_code].compact_blank.join(' ').presence].compact.join(', ')
-    [physical_address_1, physical_address_2, locality].compact_blank.join(' ')
+    [physical_address_1, physical_address_2, locality].compact_blank
   end
 
   # The column is encrypted text holding ISO dates, so reading goes through the same parser as
@@ -129,32 +131,19 @@ module UserProfile
   end
 
   def format_phone_number
-    self.phone = nil if phone.blank?
-    return if phone.blank?
-
-    digits = phone.gsub(/\D/, '')
-    digits = digits[1..] if digits.length == 11 && digits.start_with?('1')
-    self.phone = if digits.length == 10
-                   digits.gsub(/(\d{3})(\d{3})(\d{4})/, '\1-\2-\3')
-                 else
-                   phone
-                 end
+    self.phone = PhoneNumber.normalize(phone)
   end
 
   def phone_number_must_be_valid
     return if phone.blank?
 
-    digits = phone.gsub(/\D/, '')
-    digits = digits[1..] if digits.length == 11 && digits.start_with?('1')
-    errors.add(:phone, 'must be a valid 10-digit US phone number') if digits.length != 10
+    errors.add(:phone, 'must be a valid 10-digit US phone number') unless PhoneNumber.valid?(phone)
   end
 
   def dependent_phone_number_must_be_valid
     return if dependent_phone.blank?
 
-    digits = dependent_phone.gsub(/\D/, '')
-    digits = digits[1..] if digits.length == 11 && digits.start_with?('1')
-    errors.add(:dependent_phone, 'must be a valid 10-digit US phone number') if digits.length != 10
+    errors.add(:dependent_phone, 'must be a valid 10-digit US phone number') unless PhoneNumber.valid?(dependent_phone)
   end
 
   def validate_address_for_letter_preference
@@ -165,19 +154,6 @@ module UserProfile
     errors.add(:city, 'is required when notification method is set to letter') if city.blank?
     errors.add(:state, 'is required when notification method is set to letter') if state.blank?
     errors.add(:zip_code, 'is required when notification method is set to letter') if zip_code.blank?
-  end
-
-  def constituent_must_have_disability
-    return unless constituent_user_type?
-
-    errors.add(:base, 'At least one disability must be selected.') unless disability_selected?
-  end
-
-  def validate_constituent_disability?
-    return false unless constituent_user_type?
-    return false if new_record? && !@validate_disability_required
-
-    applications.exists? || @validate_disability_required
   end
 
   def saved_changes_to_profile_fields?
@@ -233,8 +209,6 @@ module UserProfile
     return add_portal_self_registration_unavailable_contact_error if portal_self_registration?
 
     errors.add(:email, 'has already been taken')
-  rescue StandardError => e
-    Rails.logger.warn "Email uniqueness check failed: #{e.class.name}"
   end
 
   def phone_must_be_unique
@@ -245,8 +219,6 @@ module UserProfile
     return add_portal_self_registration_unavailable_contact_error if portal_self_registration? && conflicting_user.present? && !conflicting_user.real_email?
 
     errors.add(:phone, 'has already been taken')
-  rescue StandardError => e
-    Rails.logger.warn "Phone uniqueness check failed: #{e.class.name}"
   end
 
   def paper_context_no_email?
@@ -257,28 +229,10 @@ module UserProfile
     Current.paper_context && phone.blank?
   end
 
-  # Persisted phone-only and address-only constituents can remain editable without an email.
-  # This validation exception does not grant public portal access.
+  # Users::Constituent widens this: a persisted phone-only or address-only constituent can stay editable
+  # without an email. That exception does not grant public portal access.
   def email_optional?
-    retiring_for_merge || paper_context_no_email? ||
-      (persisted? && constituent_user_type? && portal_phone_only_without_email?) ||
-      (persisted? && constituent_user_type? && address_only_contact?)
-  end
-
-  def validate_admin_contact_update?
-    !Current.paper_context && !merge_in_progress && constituent_user_type?
-  end
-
-  def self_service_constituent_profile_update?
-    !Current.paper_context && Current.user == self && constituent_user_type?
-  end
-
-  def self_service_profile_requires_email_backing
-    errors.add(:email, :blank) unless real_email?
-  end
-
-  def constituent_user_type?
-    type == 'Users::Constituent'
+    retiring_for_merge || paper_context_no_email?
   end
 
   def email_delivery_requires_real_email
@@ -296,27 +250,6 @@ module UserProfile
     return false if User.system_generated_email?(dependent_email)
 
     true
-  end
-
-  def dependent_with_deliverable_contact_phone?
-    return false if dependent_phone.blank?
-
-    User.new(phone: dependent_phone).real_phone?
-  end
-
-  def admin_contact_update_must_remain_reachable
-    return if real_email? || real_phone?
-    return if dependent_with_deliverable_contact_email?
-    return if dependent_with_deliverable_contact_phone?
-
-    unless deliver_via_letter?
-      errors.add(:communication_preference, 'must be letter when no email or phone is on file')
-      return
-    end
-
-    return if was_address_only_contact?
-
-    errors.add(:base, 'Cannot clear all contact information outside paper intake.')
   end
 
   def portal_self_registration?
@@ -357,12 +290,5 @@ module UserProfile
   def add_portal_self_registration_unavailable_contact_error
     errors.add(:base, :portal_self_registration_unavailable_contact,
                support_email: portal_registration_support_email, support_phone: portal_registration_support_phone)
-  end
-
-  def was_address_only_contact?
-    return true if new_record?
-
-    prior = User.new(email: attribute_in_database(:email), phone: attribute_in_database(:phone))
-    !prior.real_email? && !prior.real_phone?
   end
 end

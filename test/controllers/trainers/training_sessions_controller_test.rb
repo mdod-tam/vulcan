@@ -153,8 +153,8 @@ module Trainers
       report = new_session(:completed, internal_notes: 'Own authored observations', constituent_summary: 'Own shared summary')
       application = report.application
       contact_email = application.user.email
-      assert application.unassign_trainer!(actor: @admin)
-      assert application.assign_trainer!(@other_trainer, actor: @admin)
+      assert_predicate Applications::TrainerAssignment.unassign(application, actor: @admin), :success?
+      assert_predicate Applications::TrainerAssignment.assign(application, @other_trainer, actor: @admin), :success?
       newer = create(:training_session, :completed, application: application, trainer: @other_trainer,
                                                     internal_notes: 'NEW TRAINER REPORT SENTINEL', constituent_summary: 'New shared summary')
       cancelled = create(:training_session, :cancelled, application: application, trainer: @other_trainer,
@@ -428,7 +428,7 @@ module Trainers
     test 'a stale form overtaken by removal is denied after locked recheck without rendering contact details' do
       constructor = ::TrainingSessions::CompleteService.method(:new)
       remove_before_service = lambda do |*arguments|
-        assert @application.unassign_trainer!(actor: @admin)
+        assert_predicate Applications::TrainerAssignment.unassign(@application, actor: @admin), :success?
         constructor.call(*arguments)
       end
 
@@ -506,7 +506,7 @@ module Trainers
     test 'follow-up lists exclude removed coverage and older outcomes superseded by an open session' do
       eligible = new_session(:cancelled)
       removed = new_session(:no_show)
-      assert removed.application.unassign_trainer!(actor: @admin)
+      assert_predicate Applications::TrainerAssignment.unassign(removed.application, actor: @admin), :success?
       superseded = new_session(:cancelled)
       create(:training_session, :scheduled, application: superseded.application, trainer: @trainer)
 

@@ -13,20 +13,11 @@ module UserContactPredicates
   MAILING_ADDRESS_FIELDS = %i[physical_address_1 city state zip_code].freeze
 
   def real_email?
-    return false if email.blank?
-    return false unless email.to_s.match?(URI::MailTo::EMAIL_REGEXP)
-    return false if User.system_generated_email?(email)
-
-    true
+    User.real_email_address?(email)
   end
 
   def real_phone?
-    return false if phone.blank?
-    return false if User.synthetic_dependent_phone?(phone)
-
-    digits = phone.gsub(/\D/, '')
-    digits = digits[1..] if digits.length == 11 && digits.start_with?('1')
-    digits.length == 10
+    PhoneNumber.real?(phone)
   end
 
   def sms_capable_phone?

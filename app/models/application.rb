@@ -27,10 +27,8 @@ class Application < ApplicationRecord
   include ProofConsistencyValidation
   include ApplicationProviderInfoRequests
   include CertificationManagement
-  include VoucherManagement
   include TrainingManagement
   include EvaluationManagement
-  include PractitionerAssignment
   include Applications::EquipmentFulfillment
   include ContactChangeAudit
 
@@ -149,12 +147,6 @@ class Application < ApplicationRecord
   after_update :reconcile_pending_letters_after_owner_change
 
   scope :draft, -> { where(status: :draft) }
-  scope :search_by_last_name, lambda { |query|
-    includes(:user, :proof_reviews, :training_sessions, :evaluations)
-      .where('users.last_name ILIKE ?', "%#{query}%")
-      .references(:users)
-  }
-
   scope :draft_for_constituent, lambda { |user_id|
     draft.where(user_id: user_id)
   }
@@ -186,16 +178,11 @@ class Application < ApplicationRecord
       .or(for_dependents_of(guardian_user))
   }
 
-  # Ownership permits edits for an unmanaged applicant or the managing guardian.
+  # Applications an unmanaged applicant or a managing guardian controls, for viewing and editing alike.
   # Callers must also require draft status before allowing an edit.
-  scope :editable_by, lambda { |user|
+  scope :accessible_by, lambda { |user|
     where('(applications.user_id = :user_id AND applications.managing_guardian_id IS NULL)
            OR applications.managing_guardian_id = :user_id', user_id: user.id)
-  }
-
-  # Viewing uses the same ownership boundary as editing.
-  scope :accessible_by, lambda { |user|
-    editable_by(user)
   }
 
   # Completion requires a submitted application, approved income/residency proofs, and at least one voucher, all redeemed.
@@ -294,12 +281,6 @@ class Application < ApplicationRecord
       .group(:last_visited_step)
       .order(count_all: :desc)
       .count
-  end
-
-  def self.expire_training_request_metrics_cache!
-    Rails.cache.delete('admin_dashboard_metrics')
-  rescue StandardError => e
-    Rails.logger.warn "[Application] Cache expiry failed (non-fatal): #{e.class.name}"
   end
 
   def self.batch_update_status(ids, new_status, actor:) # rubocop:disable Metrics/PerceivedComplexity
@@ -421,11 +402,6 @@ class Application < ApplicationRecord
         )
       )
 
-      if target_status == 'approved' && voucher_fulfillment?
-        assignment_method = metadata[:trigger].to_s == 'auto_approval' ? 'automatic' : 'manual_approval'
-        IssueInitialVoucherJob.perform_later(id, actor.id, assignment_method)
-      end
-
       true
     end
   end
@@ -472,17 +448,6 @@ class Application < ApplicationRecord
 
   def proofs_reviewable?
     %w[income id residency].any? { |proof_type| proof_type_reviewable?(proof_type) }
-  end
-
-  def proof_review_button_text(proof_type)
-    case proof_review_state(proof_type)
-    when :resubmitted
-      'Review Resubmitted Proof'
-    when :rejected
-      'Review Rejected Proof'
-    else
-      'Review Proof'
-    end
   end
 
   # @param proof_type [String] The proof type ("income", "residency", or "id")
@@ -536,8 +501,13 @@ class Application < ApplicationRecord
       (!income_proof_required? || income_proof_status_approved?)
   end
 
-  def voucher_issuable?
-    can_create_voucher?
+  # Eligible for a voucher: voucher fulfillment, every requirement approved, and none issued yet.
+  def can_create_voucher?
+    voucher_fulfillment? &&
+      status_approved? &&
+      required_proofs_approved? &&
+      disability_certification_status_approved? &&
+      !vouchers.exists?
   end
 
   def active_training_session
@@ -595,22 +565,12 @@ class Application < ApplicationRecord
     )&.relationship_type
   end
 
-  def editable_by?(user)
-    return false unless user
-
-    is_owner = user_id == user.id && managing_guardian_id.nil?
-    is_managing_guardian = managing_guardian_id == user.id
-
-    is_owner || is_managing_guardian
-  end
-
+  # The unmanaged applicant or the managing guardian, for viewing and editing alike.
+  # Callers must also require draft status before allowing an edit.
   def accessible_by?(user)
-    # Viewing uses the same ownership boundary as editing.
-    editable_by?(user)
-  end
+    return false unless user&.id
 
-  def viewable_by?(user)
-    accessible_by?(user)
+    (user_id == user.id && managing_guardian_id.nil?) || managing_guardian_id == user.id
   end
 
   private

@@ -46,7 +46,7 @@ module ConstituentCommunicationLabelsHelper
   def display_contact_phone(user)
     phone = user.respond_to?(:effective_phone) ? user.effective_phone : user.phone
     return NO_PHONE_ON_FILE if phone.blank?
-    return NO_PHONE_ON_FILE if User.synthetic_dependent_phone?(phone)
+    return NO_PHONE_ON_FILE if PhoneNumber.synthetic?(phone)
 
     phone
   end

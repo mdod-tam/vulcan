@@ -65,7 +65,7 @@ module ConstituentPortal
 
       # Explicit guardian choices ignore submitted contact. A stale hidden value must not cause replay refusal.
       fields['email'] = User.normalize_email(@attrs[:email]).to_s unless @use_guardian_email
-      fields['phone'] = User.normalize_phone(@attrs[:phone]).to_s unless @use_guardian_phone
+      fields['phone'] = PhoneNumber.normalize(@attrs[:phone]).to_s unless @use_guardian_phone
 
       fields
     end

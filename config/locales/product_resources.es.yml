@@ -21,7 +21,6 @@ es:
       empty: Las compras completadas con vales y los envíos del programa aparecerán aquí. La capacitación con un dispositivo de demostración no lo agrega a esta lista.
       dashboard: Volver al panel
       back: Volver a Dispositivos
-      access_denied: Esta página está disponible para los solicitantes.
       sources:
         voucher_purchase: Comprado con vale
         program_shipment: Enviado por el programa

@@ -1066,10 +1066,10 @@ module ConstituentPortal
       get new_constituent_portal_application_path
       assert_response :success
 
-      thresholds_json = @controller.fpl_thresholds_json
-      modifier = @controller.fpl_modifier_value
+      client_data = IncomeThresholdCalculationService.client_data
+      modifier = client_data[:modifier]
 
-      thresholds = JSON.parse(thresholds_json)
+      thresholds = client_data[:thresholds]
       assert_equal 15_650, thresholds['1']
       assert_equal 21_150, thresholds['2']
       assert_equal 26_650, thresholds['3']

@@ -19,13 +19,15 @@ class ApplicationAssigneeValidationTest < ActiveSupport::TestCase
     candidates = [nil, build(:evaluator), create(:evaluator, status: :inactive), wrong_role, create(:constituent)]
 
     candidates.each do |candidate|
+      result = nil
       assert_no_difference ['Evaluation.count', 'Notification.count', "Event.where(action: 'evaluator_assigned').count"] do
         assert_no_enqueued_emails do
-          assert_not @application.assign_evaluator!(candidate)
+          result = Applications::EvaluatorAssignment.assign(@application, candidate, actor: @admin)
         end
       end
 
-      assert_includes @application.errors[:base], 'Select an active evaluator.'
+      assert_predicate result, :failure?
+      assert_equal 'Select an active evaluator.', result.message
       assert_equal before, evaluation.reload.attributes
       assert_equal products, evaluation.recommended_product_ids
     end
@@ -40,8 +42,8 @@ class ApplicationAssigneeValidationTest < ActiveSupport::TestCase
     granted_evaluator = create(:trainer)
     create(:role_capability, user: granted_evaluator, capability: 'can_evaluate')
 
-    assert @application.assign_trainer!(granted_trainer, actor: admin), @application.errors.full_messages.to_sentence
-    assert @application.assign_evaluator!(granted_evaluator, actor: admin), @application.errors.full_messages.to_sentence
+    assert_predicate Applications::TrainerAssignment.assign(@application, granted_trainer, actor: admin), :success?
+    assert_predicate Applications::EvaluatorAssignment.assign(@application, granted_evaluator, actor: admin), :success?
     assert_equal granted_trainer, @application.reload.assigned_trainer
     assert_equal granted_evaluator, @application.latest_evaluation.evaluator
   end
@@ -52,10 +54,12 @@ class ApplicationAssigneeValidationTest < ActiveSupport::TestCase
     inactive_admin = create(:admin, status: :inactive)
 
     [create(:constituent), create(:evaluator), inactive_admin, nil].each do |actor|
-      assert_not @application.assign_evaluator!(evaluator, actor: actor)
-      assert_includes @application.errors[:base], 'Only an administrator can assign an evaluator.'
-      assert_not @application.assign_trainer!(trainer, actor: actor)
-      assert_includes @application.errors[:base], 'Only an administrator can assign a trainer.'
+      result = Applications::EvaluatorAssignment.assign(@application, evaluator, actor: actor)
+      assert_predicate result, :failure?
+      assert_equal 'Only an administrator can assign an evaluator.', result.message
+      result = Applications::TrainerAssignment.assign(@application, trainer, actor: actor)
+      assert_predicate result, :failure?
+      assert_equal 'Only an administrator can assign a trainer.', result.message
     end
   end
 
@@ -66,13 +70,15 @@ class ApplicationAssigneeValidationTest < ActiveSupport::TestCase
     evaluator.update!(status: :inactive)
     before = evaluation.attributes
 
+    result = nil
     assert_no_difference ['Evaluation.count', 'Notification.count', "Event.where(action: 'evaluator_reassigned').count"] do
       assert_no_enqueued_emails do
-        assert_not @application.reassign_evaluator!(evaluator, actor: admin)
+        result = Applications::EvaluatorAssignment.reassign(@application, evaluator, actor: admin)
       end
     end
 
-    assert_includes @application.errors[:base], 'Select an active evaluator.'
+    assert_predicate result, :failure?
+    assert_equal 'Select an active evaluator.', result.message
     assert_equal before, evaluation.reload.attributes
   end
 
@@ -84,13 +90,15 @@ class ApplicationAssigneeValidationTest < ActiveSupport::TestCase
     application_attributes = @application.reload.attributes
 
     candidates.each do |candidate|
+      result = nil
       assert_no_difference ['TrainingSession.count', 'Notification.count', 'Event.count'] do
         assert_no_enqueued_jobs do
-          assert_equal false, @application.assign_trainer!(candidate)
+          result = Applications::TrainerAssignment.assign(@application, candidate, actor: @admin)
         end
       end
 
-      assert_equal ['Select an active trainer.'], @application.errors[:base]
+      assert_predicate result, :failure?
+      assert_equal 'Select an active trainer.', result.message
     end
 
     assert_equal application_attributes, @application.reload.attributes

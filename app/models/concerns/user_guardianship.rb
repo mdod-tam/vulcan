@@ -223,7 +223,12 @@ module UserGuardianship
   end
 
   def usable_contact_value(field, value)
-    value if User.new(field => value).public_send("real_#{field}?")
+    value if real_contact_value?(field, value)
+  end
+
+  # @param field [Symbol] :email or :phone
+  def real_contact_value?(field, value)
+    field == :phone ? PhoneNumber.real?(value) : User.real_email_address?(value)
   end
 
   def guardian_contact_value(field, guardian)
@@ -231,7 +236,7 @@ module UserGuardianship
   end
 
   def normalize_contact(field, value)
-    User.public_send("normalize_#{field}", value).to_s
+    (field == :phone ? PhoneNumber.normalize(value) : User.normalize_email(value)).to_s
   end
 
   def owned_contact(value, owner, source)

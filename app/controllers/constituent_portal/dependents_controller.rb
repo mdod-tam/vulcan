@@ -137,20 +137,12 @@ module ConstituentPortal
     end
 
     def dependent_user_params
-      params.expect(dependent: %i[first_name last_name email phone phone_type date_of_birth
-                                  hearing_disability vision_disability
-                                  speech_disability mobility_disability cognition_disability
-                                  newsletter_signup])
+      params.expect(dependent: [:first_name, :last_name, :email, :phone, :phone_type, :date_of_birth,
+                                *Users::Constituent::DISABILITY_FLAGS, :newsletter_signup])
     end
 
     def guardian_relationship_params
       params.expect(guardian_relationship: [:relationship_type])
-    end
-
-    def require_constituent!
-      return if current_user&.constituent?
-
-      redirect_to root_path, alert: 'Access denied. Constituent-only area.'
     end
 
     def set_current_user
@@ -420,7 +412,7 @@ module ConstituentPortal
     # Derive the strategy and guardian contact again from the locked guardian.
     def preallocated_synthetic_phone_from(dependent_attrs)
       return unless @contact_strategy_service&.params&.[](:phone_strategy) == 'guardian'
-      return unless User.synthetic_dependent_phone?(dependent_attrs[:phone])
+      return unless PhoneNumber.synthetic?(dependent_attrs[:phone])
 
       dependent_attrs[:phone]
     end

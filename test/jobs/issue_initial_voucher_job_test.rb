@@ -13,16 +13,17 @@ class IssueInitialVoucherJobTest < ActiveJob::TestCase
     FeatureFlag.disable!(:vouchers_enabled)
   end
 
-  test 'delegates initial voucher assignment to the application' do
+  test 'delegates initial voucher assignment to the issuance service' do
     application = create(:application)
     actor = create(:admin)
 
     Application.expects(:find_by).with(id: application.id).returns(application)
     User.expects(:find_by).with(id: actor.id).returns(actor)
-    application.expects(:maybe_assign_initial_voucher!).with(
-      actor: actor,
-      assignment_method: :automatic
-    ).once
+    service = mock('issuance service')
+    service.expects(:call).once
+    Vouchers::IssuanceService.expects(:new).with(
+      application, actor: actor, assignment_method: :automatic, raise_on_failure: true
+    ).returns(service)
 
     IssueInitialVoucherJob.perform_now(application.id, actor.id)
   end
@@ -59,7 +60,7 @@ class IssueInitialVoucherJobTest < ActiveJob::TestCase
 
     Application.stubs(:find_by).with(id: application.id).returns(application)
     User.stubs(:find_by).with(id: actor.id).returns(actor)
-    application.stubs(:maybe_assign_initial_voucher!).raises(StandardError, 'voucher write failed')
+    Vouchers::IssuanceService.any_instance.stubs(:call).raises(StandardError, 'voucher write failed')
 
     assert_enqueued_jobs 1, only: IssueInitialVoucherJob do
       IssueInitialVoucherJob.perform_now(application.id, actor.id)

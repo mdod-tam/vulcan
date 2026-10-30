@@ -252,34 +252,37 @@ class ApplicationTest < ActiveSupport::TestCase
     assert_not application.service_window_active?
   end
 
-  test 'assign_trainer! fails outside the service window' do
+  test 'trainer assignment fails outside the service window' do
     Policy.find_or_create_by(key: 'waiting_period_years').update!(value: 3)
     application = create(:application, status: :approved, application_date: 4.years.ago.to_date)
     trainer = create(:trainer)
 
+    result = nil
     assert_no_difference -> { TrainingSession.count } do
-      assert_not application.assign_trainer!(trainer)
+      result = Applications::TrainerAssignment.assign(application, trainer, actor: @admin)
     end
 
-    assert_includes application.errors[:base], I18n.t('activerecord.errors.models.application.attributes.base.training_service_window')
+    assert_predicate result, :failure?
+    assert_equal I18n.t('activerecord.errors.models.application.attributes.base.training_service_window'), result.message
   end
 
-  test 'assign_trainer! fails when completed training session quota is exhausted' do
+  test 'trainer assignment fails when completed training session quota is exhausted' do
     Policy.find_or_create_by(key: 'waiting_period_years').update!(value: 3)
     Policy.find_or_create_by(key: 'max_training_sessions').update!(value: 3)
     application = create(:application, status: :approved, application_date: 2.years.ago.to_date)
     trainer = create(:trainer)
     create_list(:training_session, 3, :completed, application: application, trainer: trainer)
 
+    result = nil
     assert_no_difference -> { TrainingSession.count } do
-      assert_not application.assign_trainer!(trainer)
+      result = Applications::TrainerAssignment.assign(application, trainer, actor: @admin)
     end
 
-    assert_includes application.errors[:base],
-                    I18n.t('activerecord.errors.models.application.attributes.base.training_session_quota_exhausted')
+    assert_predicate result, :failure?
+    assert_equal I18n.t('activerecord.errors.models.application.attributes.base.training_session_quota_exhausted'), result.message
   end
 
-  test 'assign_trainer! fails when an active training session exists' do
+  test 'trainer assignment fails when an active training session exists' do
     Policy.find_or_create_by(key: 'waiting_period_years').update!(value: 3)
     Policy.find_or_create_by(key: 'max_training_sessions').update!(value: 3)
     application = create(:application, status: :approved, application_date: 2.years.ago.to_date)
@@ -290,12 +293,14 @@ class ApplicationTest < ActiveSupport::TestCase
 
     assert_no_difference ['TrainingSession.count', 'Notification.count', 'Event.count'] do
       assert_no_enqueued_jobs do
-        assert_equal false, application.assign_trainer!(nil)
-        assert_equal ['Select an active trainer.'], application.errors[:base]
+        result = Applications::TrainerAssignment.assign(application, nil, actor: @admin)
+        assert_predicate result, :failure?
+        assert_equal 'Select an active trainer.', result.message
 
         2.times do
-          assert_equal false, application.assign_trainer!(trainer)
-          assert_equal [I18n.t('activerecord.errors.models.application.attributes.base.training_session_active')], application.errors[:base]
+          result = Applications::TrainerAssignment.assign(application, trainer, actor: @admin)
+          assert_predicate result, :failure?
+          assert_equal I18n.t('activerecord.errors.models.application.attributes.base.training_session_active'), result.message
         end
       end
     end
@@ -304,22 +309,21 @@ class ApplicationTest < ActiveSupport::TestCase
     assert_equal session_attributes, training_session.reload.attributes
   end
 
-  test 'assign_trainer! can recover from an eligibility rejection and create the requested session audit and notification once' do
+  test 'trainer assignment can recover from an eligibility rejection and create the requested session audit and notification once' do
     Policy.find_or_create_by!(key: 'waiting_period_years').update!(value: 3)
     Policy.find_or_create_by!(key: 'max_training_sessions').update!(value: 3)
     application = create(:application, status: :approved, application_date: 2.years.ago.to_date)
     trainer = create(:trainer)
     application_attributes = application.reload.attributes
 
-    assert_equal false, application.assign_trainer!(nil)
-    assert_equal ['Select an active trainer.'], application.errors[:base]
+    refusal = Applications::TrainerAssignment.assign(application, nil, actor: @admin)
+    assert_predicate refusal, :failure?
+    assert_equal 'Select an active trainer.', refusal.message
 
-    Current.user = @admin
     assert_difference ['TrainingSession.count', "Event.where(action: 'trainer_assigned').count"], 1 do
-      assert_equal true, application.assign_trainer!(trainer)
+      assert_predicate Applications::TrainerAssignment.assign(application, trainer, actor: @admin), :success?
     end
 
-    assert_empty application.errors
     assert_equal application_attributes.except('assigned_trainer_id', 'updated_at'), application.reload.attributes.except('assigned_trainer_id', 'updated_at')
     assert_equal trainer.id, application.assigned_trainer_id
     training_session = application.training_sessions.sole
@@ -331,7 +335,7 @@ class ApplicationTest < ActiveSupport::TestCase
     assert_equal trainer.id, event.metadata['trainer_id']
   end
 
-  test 'assign_trainer! audit failure rolls back the requested session without a notification or job' do
+  test 'trainer assignment audit failure rolls back the requested session without a notification or job' do
     Policy.find_or_create_by!(key: 'waiting_period_years').update!(value: 3)
     Policy.find_or_create_by!(key: 'max_training_sessions').update!(value: 3)
     application = create(:application, status: :approved, application_date: 2.years.ago.to_date)
@@ -342,19 +346,20 @@ class ApplicationTest < ActiveSupport::TestCase
     audit_failure = ActiveRecord::RecordInvalid.new(invalid_event)
     AuditEventService.stubs(:log).raises(audit_failure)
 
-    Current.user = @admin
+    result = nil
     assert_no_difference ['TrainingSession.count', 'Notification.count', 'Event.count'] do
       assert_no_enqueued_jobs do
-        assert_equal false, application.assign_trainer!(trainer)
+        result = Applications::TrainerAssignment.assign(application, trainer, actor: @admin)
       end
     end
 
-    assert_equal [invalid_event.errors.full_messages.to_sentence], application.errors[:base]
+    assert_predicate result, :failure?
+    assert_equal invalid_event.errors.full_messages.to_sentence, result.message
     assert_equal application_attributes, application.reload.attributes
     assert_empty application.training_sessions
   end
 
-  test 'unassign_trainer! cancels open training sessions with admin initiator' do
+  test 'trainer unassignment cancels open training sessions with admin initiator' do
     Policy.find_or_create_by(key: 'waiting_period_years').update!(value: 3)
     Policy.find_or_create_by(key: 'max_training_sessions').update!(value: 3)
     application = create(:application, status: :approved, application_date: 2.years.ago.to_date)
@@ -364,7 +369,7 @@ class ApplicationTest < ActiveSupport::TestCase
     training_session = create(:training_session, :requested, application: application, trainer: trainer, internal_notes: 'Private scheduling context')
 
     assert_difference -> { Event.where(action: 'trainer_unassigned').count }, 1 do
-      assert application.unassign_trainer!(actor: admin)
+      assert_predicate Applications::TrainerAssignment.unassign(application, actor: admin), :success?
     end
 
     training_session.reload
@@ -378,19 +383,21 @@ class ApplicationTest < ActiveSupport::TestCase
     assert_equal [training_session.id], event.metadata['training_session_ids']
   end
 
-  test 'assign_evaluator! fails outside the service window' do
+  test 'evaluator assignment fails outside the service window' do
     Policy.find_or_create_by(key: 'waiting_period_years').update!(value: 3)
     application = create(:application, status: :approved, application_date: 4.years.ago.to_date)
     evaluator = create(:evaluator)
 
+    result = nil
     assert_no_difference -> { Evaluation.count } do
-      assert_not application.assign_evaluator!(evaluator)
+      result = Applications::EvaluatorAssignment.assign(application, evaluator, actor: @admin)
     end
 
-    assert_includes application.errors[:base], I18n.t('activerecord.errors.models.application.attributes.base.evaluation_service_window')
+    assert_predicate result, :failure?
+    assert_equal I18n.t('activerecord.errors.models.application.attributes.base.evaluation_service_window'), result.message
   end
 
-  test 'assign_evaluator! reuses cancelled evaluation instead of creating another' do
+  test 'evaluator assignment reuses cancelled evaluation instead of creating another' do
     Policy.find_or_create_by(key: 'waiting_period_years').update!(value: 3)
     application = create(:application, status: :approved, application_date: 2.years.ago.to_date)
     original_evaluator = create(:evaluator)
@@ -402,10 +409,8 @@ class ApplicationTest < ActiveSupport::TestCase
                         status: :cancelled,
                         notes: 'Constituent called to cancel',
                         post_completion_notes: 'Follow-up outreach attempted')
-    Current.user = create(:admin)
-
     assert_no_difference -> { Evaluation.count } do
-      assert application.assign_evaluator!(new_evaluator)
+      assert_predicate Applications::EvaluatorAssignment.assign(application, new_evaluator, actor: @admin), :success?
     end
 
     evaluation.reload
@@ -419,11 +424,9 @@ class ApplicationTest < ActiveSupport::TestCase
     assert_empty evaluation.attendees
     assert_empty evaluation.products_tried
     assert_empty evaluation.recommended_product_ids
-  ensure
-    Current.user = nil
   end
 
-  test 'assign_evaluator! reuses legacy rescheduled evaluation instead of creating another' do
+  test 'evaluator assignment reuses legacy rescheduled evaluation instead of creating another' do
     Policy.find_or_create_by(key: 'waiting_period_years').update!(value: 3)
     application = create(:application, status: :approved, application_date: 2.years.ago.to_date)
     new_evaluator = create(:evaluator)
@@ -433,10 +436,8 @@ class ApplicationTest < ActiveSupport::TestCase
                         status: :rescheduled,
                         evaluation_date: 1.week.from_now,
                         notes: 'Legacy reschedule note')
-    Current.user = create(:admin)
-
     assert_no_difference -> { Evaluation.count } do
-      assert application.assign_evaluator!(new_evaluator)
+      assert_predicate Applications::EvaluatorAssignment.assign(application, new_evaluator, actor: @admin), :success?
     end
 
     evaluation.reload
@@ -444,11 +445,9 @@ class ApplicationTest < ActiveSupport::TestCase
     assert_equal 'requested', evaluation.status
     assert_nil evaluation.evaluation_date
     assert_equal 'Legacy reschedule note', evaluation.notes
-  ensure
-    Current.user = nil
   end
 
-  test 'assign_evaluator! does not reset active scheduled evaluation' do
+  test 'evaluator assignment does not reset active scheduled evaluation' do
     Policy.find_or_create_by(key: 'waiting_period_years').update!(value: 3)
     application = create(:application, status: :approved, application_date: 2.years.ago.to_date)
     original_evaluator = create(:evaluator)
@@ -461,56 +460,51 @@ class ApplicationTest < ActiveSupport::TestCase
                         evaluation_date: scheduled_time,
                         location: 'Library',
                         notes: 'Scheduled evaluation')
-    Current.user = create(:admin)
 
+    result = nil
     assert_no_difference -> { Evaluation.count } do
-      assert_not application.assign_evaluator!(create(:evaluator))
+      result = Applications::EvaluatorAssignment.assign(application, create(:evaluator), actor: @admin)
     end
 
+    assert_predicate result, :failure?
     evaluation.reload
     assert_equal original_evaluator, evaluation.evaluator
     assert_equal 'scheduled', evaluation.status
     assert_in_delta scheduled_time, evaluation.evaluation_date, 1.second
     assert_equal 'Library', evaluation.location
     assert_equal 'Scheduled evaluation', evaluation.notes
-    assert_includes application.errors[:base],
-                    I18n.t('activerecord.errors.models.application.attributes.base.evaluation_assignment_closed')
-  ensure
-    Current.user = nil
+    assert_equal I18n.t('activerecord.errors.models.application.attributes.base.evaluation_assignment_closed'), result.message
   end
 
-  test 'assign_evaluator! uses a valid renewal evaluation type when constituent has prior evaluations' do
+  test 'evaluator assignment uses a valid renewal evaluation type when constituent has prior evaluations' do
     Policy.find_or_create_by(key: 'waiting_period_years').update!(value: 3)
     constituent = create(:constituent)
     prior_application = create(:application, status: :approved, application_date: 4.years.ago.to_date, user: constituent)
     create(:evaluation, :completed, application: prior_application, constituent: constituent)
     application = create(:application, status: :approved, application_date: 1.year.ago.to_date, user: constituent)
-    Current.user = create(:admin)
-
     assert_difference -> { Evaluation.count }, 1 do
-      assert application.assign_evaluator!(create(:evaluator))
+      assert_predicate Applications::EvaluatorAssignment.assign(application, create(:evaluator), actor: @admin), :success?
     end
 
     assert_equal 'renewal', application.latest_evaluation.evaluation_type
-  ensure
-    Current.user = nil
   end
 
-  test 'assign_evaluator! does not create another evaluation after completion' do
+  test 'evaluator assignment does not create another evaluation after completion' do
     Policy.find_or_create_by(key: 'waiting_period_years').update!(value: 3)
     application = create(:application, status: :approved, application_date: 2.years.ago.to_date)
     evaluator = create(:evaluator)
     create(:evaluation, :completed, application: application, constituent: application.user, evaluator: evaluator)
 
+    result = nil
     assert_no_difference -> { Evaluation.count } do
-      assert_not application.assign_evaluator!(create(:evaluator))
+      result = Applications::EvaluatorAssignment.assign(application, create(:evaluator), actor: @admin)
     end
 
-    assert_includes application.errors[:base],
-                    I18n.t('activerecord.errors.models.application.attributes.base.evaluation_assignment_closed')
+    assert_predicate result, :failure?
+    assert_equal I18n.t('activerecord.errors.models.application.attributes.base.evaluation_assignment_closed'), result.message
   end
 
-  test 'assign_evaluator! does not reuse cancelled evaluation when completed history exists' do
+  test 'evaluator assignment does not reuse cancelled evaluation when completed history exists' do
     Policy.find_or_create_by(key: 'waiting_period_years').update!(value: 3)
     application = create(:application, status: :approved, application_date: 2.years.ago.to_date)
     create(:evaluation, :completed, application: application, constituent: application.user)
@@ -519,19 +513,17 @@ class ApplicationTest < ActiveSupport::TestCase
                                   constituent: application.user,
                                   status: :cancelled,
                                   notes: 'Cancelled follow-up')
-    Current.user = create(:admin)
 
+    result = nil
     assert_no_difference -> { Evaluation.count } do
-      assert_not application.assign_evaluator!(create(:evaluator))
+      result = Applications::EvaluatorAssignment.assign(application, create(:evaluator), actor: @admin)
     end
 
+    assert_predicate result, :failure?
     cancelled_evaluation.reload
     assert_equal 'cancelled', cancelled_evaluation.status
     assert_equal 'Cancelled follow-up', cancelled_evaluation.notes
-    assert_includes application.errors[:base],
-                    I18n.t('activerecord.errors.models.application.attributes.base.evaluation_assignment_closed')
-  ensure
-    Current.user = nil
+    assert_equal I18n.t('activerecord.errors.models.application.attributes.base.evaluation_assignment_closed'), result.message
   end
 
   test 'equipment application remains pending evaluation after cancelled or no-show evaluation' do

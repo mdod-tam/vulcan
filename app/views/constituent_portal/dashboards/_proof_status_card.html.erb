@@ -1,0 +1,43 @@
+<%# One proof's status for an application: its review state, why it was rejected, and a link to upload a replacement. %>
+<div>
+  <div class="flex items-center justify-between">
+    <div>
+      <h4 class="text-base font-medium text-gray-900"><%= label %> Proof</h4>
+      <% if application.public_send("#{proof_type}_proof_status") == 'approved' %>
+        <div class="flex items-center mt-2">
+          <div class="badge badge-success">
+            Approved
+          </div>
+        </div>
+      <% elsif application.public_send("#{proof_type}_proof_status") == 'rejected' %>
+        <div class="flex items-center mt-2">
+          <div class="badge badge-danger">
+            Rejected
+          </div>
+          <% if get_latest_rejection_reason(application, proof_type).present? %>
+            <span class="ml-2 text-sm text-gray-600">
+              Reason: <%= get_latest_rejection_reason(application, proof_type) %>
+            </span>
+          <% end %>
+        </div>
+        <% if get_latest_rejection_date(application, proof_type).present? %>
+          <div class="mt-1 text-sm text-gray-600">
+            Rejected on: <%= get_latest_rejection_date(application, proof_type).strftime('%B %d, %Y') %>
+          </div>
+        <% end %>
+      <% else %>
+        <div class="flex items-center mt-2">
+          <div class="badge badge-info">
+            Pending Review
+          </div>
+        </div>
+      <% end %>
+    </div>
+
+    <% if can_resubmit_proof?(application, proof_type, @max_proof_submissions) %>
+      <%= link_to "Upload New #{label} Proof",
+                  new_proof_constituent_portal_application_path(application, proof_type: proof_type),
+                  class: 'btn btn-primary' %>
+    <% end %>
+  </div>
+</div>

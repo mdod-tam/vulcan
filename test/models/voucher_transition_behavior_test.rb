@@ -275,7 +275,7 @@ class VoucherTransitionBehaviorTest < ActiveSupport::TestCase
     app.reload
 
     assert app.voucher_fulfillment?, 'voucher_fulfillment? should remain true after voucher issuance'
-    assert_not app.voucher_issuable?, 'voucher_issuable? should be false once a voucher exists'
+    assert_not app.can_create_voucher?, 'can_create_voucher? should be false once a voucher exists'
   end
 
   test 're-transition to approved does not double enqueue or issue voucher' do
@@ -287,7 +287,7 @@ class VoucherTransitionBehaviorTest < ActiveSupport::TestCase
 
     assert_no_enqueued_jobs only: IssueInitialVoucherJob do
       assert_no_difference -> { Voucher.where(application: app).count } do
-        assert app.transition_status!(:approved, actor: admin)
+        assert Applications::Approver.new(app, by: admin).call
       end
     end
   end

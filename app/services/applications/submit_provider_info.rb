@@ -93,15 +93,10 @@ module Applications
     def normalized_provider_params
       params.merge(
         PHONE_NUMBER_FIELDS.index_with do |field|
-          normalize_phone_number(params[field])
+          value = params[field]
+          value.blank? ? value : PhoneNumber.normalize(value)
         end
       )
-    end
-
-    def normalize_phone_number(value)
-      return value if value.blank?
-
-      value.delete('-').gsub(/(\d{3})(\d{3})(\d{4})/, '\1-\2-\3')
     end
 
     def log_submission(previous_presence)

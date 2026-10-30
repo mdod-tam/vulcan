@@ -12,12 +12,6 @@ module Admin
 
     private
 
-    def require_admin!
-      return if current_user&.admin?
-
-      redirect_to root_path, alert: t('shared.unauthorized')
-    end
-
     def set_current_attributes
       Current.user_agent = request.user_agent
       Current.ip_address = request.remote_ip

@@ -18,13 +18,13 @@ module Admin
 
     # GET /admin/email_templates/:id
     def show
-      @en_sample_data = view_context.sample_data_for_template(
+      @en_sample_data = EmailTemplates::SampleData.for_template_name(
         @email_template.name,
         locale: 'en',
         subject: @en_template&.subject,
         format: @email_template.format
       )
-      @es_sample_data = view_context.sample_data_for_template(
+      @es_sample_data = EmailTemplates::SampleData.for_template_name(
         @email_template.name,
         locale: 'es',
         subject: @es_template&.subject,
@@ -56,7 +56,7 @@ module Admin
 
     # GET /admin/email_templates/:id/new_test_email
     def new_test_email
-      sample_data = view_context.sample_data_for_template(
+      sample_data = EmailTemplates::SampleData.for_template_name(
         @email_template.name,
         locale: @email_template.locale,
         subject: @email_template.subject,
@@ -348,9 +348,7 @@ module Admin
     end
 
     def draft_preview_locals_for(template)
-      sample_data = view_context.sample_data_for_email_template(template,
-                                                                locale: template.locale,
-                                                                subject: template.subject)
+      sample_data = EmailTemplates::SampleData.for_template(template, locale: template.locale, subject: template.subject)
       rendered_subject, rendered_body = template.render(**sample_data)
 
       {
@@ -457,7 +455,7 @@ module Admin
     end
 
     def test_mail_delivery
-      sample_data = helpers.sample_data_for_template(
+      sample_data = EmailTemplates::SampleData.for_template_name(
         @email_template.name,
         locale: @email_template.locale,
         subject: @email_template.subject,

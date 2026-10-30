@@ -8,10 +8,7 @@ module Applications
       city state zip_code communication_preference locale
       preferred_means_of_communication referral_source
     ].freeze
-    APPLICANT_DISABILITY_FIELDS = %i[
-      hearing_disability vision_disability speech_disability
-      mobility_disability cognition_disability
-    ].freeze
+    APPLICANT_DISABILITY_FIELDS = Users::Constituent::DISABILITY_FLAGS
 
     attr_reader :constituent, :guardian_user_for_app, :identity_review, :created_portal_user_ids
 

@@ -113,13 +113,7 @@ module ApplicationDataLoading
   # @param attachment_names [Array<String>, nil] Names to use or nil for default
   # @return [Array<String>] Resolved attachment names
   def resolve_attachment_names(attachment_names)
-    return attachment_names if attachment_names
-
-    begin
-      self.class.const_get(:WANTED_ATTACHMENT_NAMES)
-    rescue StandardError
-      DEFAULT_ATTACHMENT_NAMES
-    end
+    attachment_names || DEFAULT_ATTACHMENT_NAMES
   end
 
   # @param ids [Array<Integer>] Application IDs

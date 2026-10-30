@@ -217,10 +217,7 @@ class Evaluation < ApplicationRecord
   def update_application_record
     return unless status_completed? && application.needs_review_since.present?
 
-    # Clear only this review marker; completion does not resubmit the application's intake fields.
-    return if application.update_column(:needs_review_since, nil, touch: true) # rubocop:disable Rails/SkipsModelValidations -- Review bookkeeping only.
-
-    raise ActiveRecord::RecordNotSaved.new('Evaluation review clearance was not recorded.', application)
+    application.clear_review_marker!
   end
 
   # Checked for a new or changed assignee only, so a former assignee who lost eligibility can still be cancelled or edited.

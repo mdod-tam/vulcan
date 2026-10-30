@@ -4,6 +4,7 @@ class ApplicationMailer < ActionMailer::Base
   abstract!
 
   include SecureErrorSanitizer
+  include Mailers::SharedPartialHelpers
 
   class NoopDelivery
     attr_reader :channel, :reason
@@ -28,6 +29,8 @@ class ApplicationMailer < ActionMailer::Base
       super(message || "Communication delivery suppressed: #{@reason}")
     end
   end
+
+  ORGANIZATION_NAME = 'Maryland Accessible Telecommunications Program'
 
   helper :mailer
 
@@ -300,6 +303,69 @@ class ApplicationMailer < ActionMailer::Base
     rendered_subject.presence || fallback.to_s
   rescue StandardError
     fallback.to_s
+  end
+
+  # Template method for a notification written from an editable text template: resolve the template, let the
+  # block build its variables, then send a printed letter when the recipient prefers one (only with
+  # letters: true) and an email otherwise. A failure is recorded against the recipient and re-raised.
+  #
+  # @param template_name [String] The EmailTemplate name
+  # @param recipient [User] The person whose routing, locale and error record the message follows
+  # @param locale [String] The template locale
+  # @param letters [Boolean] Whether a recipient's letter preference routes the message to print
+  # @param application [Application, nil] The application a letter belongs to
+  # @param letter_type [Symbol, nil] The letter's type
+  # @param to [String, nil] The address, when it is not the recipient's own
+  # @yield [template] Returns the variables the template renders with
+  def deliver_notification(template_name, recipient:, locale:, letters: false, application: nil, letter_type: nil, to: nil) # rubocop:disable Metrics/ParameterLists
+    template = notification_template(template_name, locale)
+    variables = yield(template)
+
+    if letters && queue_letter_if_preferred(recipient, template_name, variables, locale: locale, application: application, letter_type: letter_type)
+      return noop_letter_delivery
+    end
+
+    send_email(to || recipient_email_for(recipient), template, variables)
+  rescue StandardError => e
+    log_mail_error(e, recipient, template_name)
+    raise
+  end
+
+  def notification_template(template_name, locale)
+    find_text_template(template_name, locale: locale)
+  rescue ActiveRecord::RecordNotFound => e
+    Rails.logger.error "Missing EmailTemplate for #{template_name}: #{e.class.name}"
+    raise "Email template (text format) not found for #{template_name}"
+  end
+
+  # The header and footer variables every notification template shares.
+  # @param organization_name [String, nil] The footer's organization name, when the caller overrides the policy
+  # @return [Hash] header_text, footer_text, header_logo_url and support_email
+  def envelope_variables(template:, locale:, fallback_title: '', subject_variables: {}, organization_name: nil)
+    title = header_title_from_template_subject(template: template, subject_variables: subject_variables, fallback: fallback_title)
+    support_email = ProgramContact.support_email
+    logo_url = mailer_logo_url
+
+    {
+      header_text: header_text(title: title, logo_url: logo_url, locale: locale),
+      footer_text: footer_text(contact_email: support_email, website_url: ProgramContact.website_url,
+                               organization_name: organization_name || Policy.get('organization_name') || ORGANIZATION_NAME,
+                               show_automated_message: true, locale: locale),
+      header_logo_url: logo_url,
+      support_email: support_email
+    }
+  end
+
+  # The logo is decoration, so an asset that cannot be resolved leaves the header without it.
+  def mailer_logo_url
+    ActionController::Base.helpers.asset_path('logo.png', host: default_url_options[:host])
+  rescue StandardError
+    nil
+  end
+
+  # The mailing address on lines, as a template variable.
+  def constituent_address_text(user)
+    user.mailing_address_lines.join("\n")
   end
 
   def log_mail_error(error, user, template_name)

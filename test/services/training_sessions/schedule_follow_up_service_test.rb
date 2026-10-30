@@ -43,8 +43,8 @@ module TrainingSessions
 
     test 'removed and reassigned trainers cannot create from historical cancellation' do
       admin = create(:admin)
-      assert @application.unassign_trainer!(actor: admin)
-      assert @application.assign_trainer!(create(:trainer), actor: admin)
+      assert_predicate Applications::TrainerAssignment.unassign(@application, actor: admin), :success?
+      assert_predicate Applications::TrainerAssignment.assign(@application, create(:trainer), actor: admin), :success?
 
       assert_no_difference ['TrainingSession.count', 'Event.count'] do
         result = ScheduleFollowUpService.new(@source, @trainer, scheduled_for: 3.days.from_now, reschedule_reason: 'Makeup').call

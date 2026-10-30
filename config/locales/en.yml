@@ -521,6 +521,21 @@ en:
            %{download_form_url}
         2. Fax: Send the updated form to 410-767-4276
   vendor_notifications:
+    action_required: "Action Required"
+    association_required: "Your association requires a valid W9."
+    association_requirement_title: "Association Requirement"
+    w9_approved:
+      header_title: "W9 Form Approved"
+    w9_expiring_soon:
+      header_title: "W9 Form Expiring Soon"
+      title: "W9 Expiring Soon"
+      warning: "Your W9 form on file will expire in %{days} days on %{date}."
+      info: "Please visit the vendor portal to upload a new W9 form to avoid any disruption. %{association}"
+    w9_expired:
+      header_title: "W9 Form Has Expired - Action Required"
+      title: "W9 Expired"
+      warning: "Your W9 form on file expired on %{date}."
+      info: "Please visit the vendor portal immediately to upload a new W9 form to avoid payment delays. %{association}"
     w9_rejected:
       header_title: "W9 Form Requires Attention"
       title: "W9 Rejected"
@@ -617,7 +632,6 @@ en:
       sign_in_aria: "Sign in to your account"
       sign_up: "Sign Up"
       sign_up_aria: "Sign up for a new account"
-    unauthorized: "Not authorized"
     enabled: "Enabled"
     disabled: "Disabled"
     view: "View"

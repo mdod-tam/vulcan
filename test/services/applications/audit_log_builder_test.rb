@@ -109,8 +109,8 @@ module Applications
       evaluation = create(:evaluation, application: application, constituent: application.user, evaluator: evaluator)
 
       freeze_time do
-        assert application.reassign_evaluator!(replacement, actor: @admin), application.errors.full_messages.to_sentence
-        assert application.reassign_evaluator!(evaluator, actor: @admin), application.errors.full_messages.to_sentence
+        assert_predicate Applications::EvaluatorAssignment.reassign(application, replacement, actor: @admin), :success?
+        assert_predicate Applications::EvaluatorAssignment.reassign(application, evaluator, actor: @admin), :success?
 
         events = Event.where(action: 'evaluator_reassigned', auditable: evaluation).order(:id).to_a
         displayed = AuditLogBuilder.new(application).build_deduplicated_audit_logs.grep(Event)

@@ -21,7 +21,7 @@ module Applications
       @guardian_user = guardian_user
       @dependent_user = dependent_user
       @preallocated_synthetic_phone = preallocated_synthetic_phone if
-        User.synthetic_dependent_phone?(preallocated_synthetic_phone)
+        PhoneNumber.synthetic?(preallocated_synthetic_phone)
       @email_backed_portal_created_user_ids = []
       @errors = []
     end

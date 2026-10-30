@@ -26,15 +26,21 @@ module ConstituentPortal
     protected
 
     def get_latest_rejection_reason(application, proof_type)
-      latest_review = application.proof_reviews.where(proof_type: proof_type, status: :rejected)
-                                 .order(created_at: :desc).first
+      latest_review = latest_rejected_review(application, proof_type)
       latest_review&.notes || latest_review&.rejection_reason
     end
 
     def get_latest_rejection_date(application, proof_type)
-      latest_review = application.proof_reviews.where(proof_type: proof_type, status: :rejected)
-                                 .order(created_at: :desc).first
-      latest_review&.created_at
+      latest_rejected_review(application, proof_type)&.created_at
+    end
+
+    # Read once per application and proof for the page, however many cards ask.
+    def latest_rejected_review(application, proof_type)
+      @latest_rejected_reviews ||= {}
+      @latest_rejected_reviews.fetch([application.id, proof_type]) do
+        @latest_rejected_reviews[[application.id, proof_type]] =
+          application.proof_reviews.where(proof_type: proof_type, status: :rejected).order(created_at: :desc).first
+      end
     end
 
     def can_resubmit_proof?(application, proof_type, max_submissions)
@@ -46,12 +52,6 @@ module ConstituentPortal
     end
 
     private
-
-    def require_constituent!
-      return if current_user&.constituent?
-
-      redirect_to root_path, alert: 'Access denied'
-    end
 
     def load_applications
       # Drafts have separate continuation links.
@@ -111,36 +111,7 @@ module ConstituentPortal
     end
 
     def load_proof_status_information
-      return unless @active_application
-
       @max_proof_submissions = Policy.get('max_proof_submissions') || 3
-      load_income_proof_information
-      load_residency_proof_information
-      load_id_proof_information
-    end
-
-    def load_income_proof_information
-      @income_proof_status = @active_application.income_proof_status
-      @income_proof_rejection_reason = get_latest_rejection_reason(@active_application, 'income')
-      @income_proof_rejection_date = get_latest_rejection_date(@active_application, 'income')
-      @income_proof_submission_count = count_proof_submissions(@active_application, 'income')
-      @can_resubmit_income_proof = can_resubmit_proof?(@active_application, 'income', @max_proof_submissions)
-    end
-
-    def load_residency_proof_information
-      @residency_proof_status = @active_application.residency_proof_status
-      @residency_proof_rejection_reason = get_latest_rejection_reason(@active_application, 'residency')
-      @residency_proof_rejection_date = get_latest_rejection_date(@active_application, 'residency')
-      @residency_proof_submission_count = count_proof_submissions(@active_application, 'residency')
-      @can_resubmit_residency_proof = can_resubmit_proof?(@active_application, 'residency', @max_proof_submissions)
-    end
-
-    def load_id_proof_information
-      @id_proof_status = @active_application.id_proof_status
-      @id_proof_rejection_reason = get_latest_rejection_reason(@active_application, 'id')
-      @id_proof_rejection_date = get_latest_rejection_date(@active_application, 'id')
-      @id_proof_submission_count = count_proof_submissions(@active_application, 'id')
-      @can_resubmit_id_proof = can_resubmit_proof?(@active_application, 'id', @max_proof_submissions)
     end
 
     def load_recent_activities

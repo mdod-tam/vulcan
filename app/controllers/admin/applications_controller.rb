@@ -2,10 +2,6 @@
 
 module Admin
   class ApplicationsController < BaseController
-    WANTED_ATTACHMENT_NAMES = %w[income_proof residency_proof id_proof disability_certification].freeze
-
-    include ActionView::Helpers::TagHelper
-    include ActionView::Helpers::JavaScriptHelper
     include RedirectHelper
     include Admin::ApplicationStatusProcessor
     include TurboStreamResponseHandling
@@ -16,10 +12,8 @@ module Admin
     before_action :set_application, only: %i[
       show edit update
       review_proof update_proof_status
-      approve reject assign_evaluator reassign_evaluator assign_trainer reassign_trainer request_evaluation
-      update_certification_status resend_disability_certification assign_voucher
-      upload_disability_certification send_document_signing_request
-      queue_disability_certification_form
+      approve reject
+      update_certification_status upload_disability_certification
     ]
 
     def index
@@ -89,14 +83,6 @@ module Admin
       end
     end
 
-    def search
-      @applications = Application.search_by_last_name(params[:q])
-    end
-
-    def filter
-      @applications = Application.includes(:user, :managing_guardian).where(status: params[:status])
-    end
-
     def batch_approve
       result = Application.batch_update_status(params[:ids], :approved, actor: current_user)
       if result[:success]
@@ -137,6 +123,58 @@ module Admin
         )
       end
     end
+
+    def approve
+      process_application_status_update(:approve)
+    end
+
+    def reject
+      process_application_status_update(:reject)
+    end
+
+    def update_certification_status
+      status = @application.normalize_certification_status(params[:status])
+      # This status action does not accept a new certification file.
+      if @application.rejection_requested?(status, params)
+        process_certification_rejection
+      else
+        update_existing_certification_status(status)
+      end
+    end
+
+    # Charts show the fiscal-year cohort by current status.
+    def charts
+      service_result = Applications::ReportingService.new.generate_index_chart_data
+      @metrics = if service_result.is_a?(BaseService::Result) && service_result.success?
+                   service_result.data
+                 else
+                   empty_index_chart_metrics
+                 end
+
+      render partial: 'charts_section', layout: false
+    end
+
+    def upload_disability_certification
+      status = params[:disability_certification_status]
+
+      if status.blank?
+        redirect_to admin_application_path(@application),
+                    alert: t('.m_blank')
+        return
+      end
+
+      if status == 'approved'
+        process_accepted_certification
+      elsif status == 'rejected'
+        if params[:disability_certification_rejection_reason].blank? && params[:rejection_reason_code].blank?
+          redirect_to admin_application_path(@application), alert: t('.m_rejection_reason')
+          return
+        end
+        process_certification_rejection
+      end
+    end
+
+    private
 
     # Approval can reconcile application or certification status, so it requires a full Turbo redirect.
     def handle_successful_review(result)
@@ -203,102 +241,6 @@ module Admin
       return false unless result.data.is_a?(Hash)
 
       result.data[:resubmission_delivered] == false
-    end
-
-    def approve
-      process_application_status_update(:approve)
-    end
-
-    def reject
-      process_application_status_update(:reject)
-    end
-
-    def assign_evaluator
-      evaluator = User.assignable_for(:can_evaluate).find_by(id: assignment_selection_id(:evaluator_id))
-
-      if @application.assign_evaluator!(evaluator, actor: current_user)
-        redirect_to admin_application_path(@application),
-                    notice: t('.eval_assign_pass')
-      else
-        redirect_to admin_application_path(@application),
-                    alert: @application.errors.full_messages.to_sentence.presence || t('.eval_assign_fail')
-      end
-    end
-
-    def reassign_evaluator
-      evaluator = User.assignable_for(:can_evaluate).find_by(id: assignment_selection_id(:evaluator_id))
-
-      if @application.reassign_evaluator!(evaluator, actor: current_user)
-        redirect_to admin_application_path(@application), notice: 'Evaluator reassigned. Existing appointment details have been preserved.'
-      else
-        redirect_to admin_application_path(@application), alert: @application.errors.full_messages.to_sentence
-      end
-    end
-
-    def assign_trainer
-      trainer = User.assignable_for(:can_train).find_by(id: assignment_selection_id(:trainer_id))
-
-      if @application.assign_trainer!(trainer, actor: current_user)
-        flash[:alert] = 'Saved. A training notice could not be queued. Do not repeat the assignment.' if @application.training_notification_outcomes.any?(&:warning?)
-        redirect_to admin_application_path(@application),
-                    notice: t('.trainer_assign_pass')
-      else
-        redirect_to admin_application_path(@application),
-                    alert: @application.errors.full_messages.to_sentence.presence || t('.trainer_assign_fail')
-      end
-    end
-
-    def reassign_trainer
-      trainer = User.assignable_for(:can_train).find_by(id: assignment_selection_id(:trainer_id))
-
-      if @application.reassign_trainer!(trainer, actor: current_user, expected_version: params[:expected_version].to_s)
-        flash[:alert] = 'Saved. A training notice could not be queued. Do not repeat the reassignment.' if @application.training_notification_outcomes.any?(&:warning?)
-        redirect_to admin_application_path(@application), notice: t('.trainer_reassign_pass')
-      else
-        redirect_to admin_application_path(@application),
-                    alert: @application.errors.full_messages.to_sentence.presence || t('.trainer_reassign_fail')
-      end
-    end
-
-    def unassign_trainer
-      @application = Application.find(params[:id])
-
-      if @application.unassign_trainer!(actor: current_user, reason: params[:unassign_reason])
-        if @application.training_notification_outcomes.any?(&:warning?)
-          flash[:alert] = 'Coverage removed. A cancellation notice could not be queued. Do not repeat the removal.'
-        end
-        redirect_to admin_application_path(@application),
-                    notice: t('.trainer_unassign_pass')
-      else
-        redirect_to admin_application_path(@application),
-                    alert: @application.errors.full_messages.to_sentence.presence || t('.trainer_unassign_fail')
-      end
-    end
-
-    # The request timestamp adds an approved application to the evaluation queue.
-    # Any evaluation created at or after the request closes it.
-    def request_evaluation
-      @application.request_evaluation!(actor: current_user)
-      redirect_to admin_application_path(@application),
-                  notice: 'Evaluation requested. Assign an evaluator when ready.'
-    rescue ArgumentError => e
-      redirect_to admin_application_path(@application), alert: e.message
-    rescue ActiveRecord::RecordInvalid => e
-      redirect_to admin_application_path(@application),
-                  alert: e.record.errors.full_messages.to_sentence.presence || e.message
-    rescue StandardError => e
-      Rails.logger.error "Failed to request evaluation for application #{@application.id}: #{e.class.name}"
-      redirect_to admin_application_path(@application), alert: 'Failed to request evaluation.'
-    end
-
-    def update_certification_status
-      status = @application.normalize_certification_status(params[:status])
-      # This status action does not accept a new certification file.
-      if @application.rejection_requested?(status, params)
-        process_certification_rejection
-      else
-        update_existing_certification_status(status)
-      end
     end
 
     # Accepts modal params (rejection_reason, rejection_reason_code) and
@@ -377,117 +319,6 @@ module Admin
       )
     end
 
-    def resend_disability_certification
-      service = Applications::DisabilityCertificationService.new(
-        application: @application,
-        actor: current_user
-      )
-
-      result = service.request_certification
-
-      if result.success?
-        redirect_to admin_application_path(@application),
-                    notice: t('.c_request_pass')
-      else
-        redirect_to admin_application_path(@application),
-                    alert: "Failed to process certification request: #{result.message}"
-      end
-    end
-
-    def send_document_signing_request
-      result = DocumentSigning::SubmissionService.new(
-        application: @application,
-        actor: current_user,
-        service: 'docuseal'
-      ).call
-
-      if result.success?
-        redirect_to admin_application_path(@application),
-                    notice: t('.d_sign_request_pass')
-      elsif result.data.is_a?(Hash) && result.data[:delivery_suppressed]
-        # Delivery suppression permits staff to print the form.
-        redirect_to admin_application_path(@application), alert: result.message
-      else
-        redirect_to admin_application_path(@application),
-                    alert: "Failed to send signing request: #{result.message}"
-      end
-    end
-
-    def assign_voucher
-      if @application.assign_voucher!(assigned_by: current_user)
-        redirect_to admin_application_path(@application),
-                    notice: t('.v_assign_pass')
-      else
-        redirect_to admin_application_path(@application),
-                    alert: t('.v_assign_fail')
-      end
-    end
-
-    # Without app/assets/pdfs/disability_certification_form.pdf, generate a PDF with application and provider details.
-    def queue_disability_certification_form
-      pregenerated_path = Rails.root.join('app/assets/pdfs/disability_certification_form.pdf')
-      pdf_source = if File.exist?(pregenerated_path)
-                     { type: :pregenerated, source: pregenerated_path }
-                   else
-                     { type: :generated }
-                   end
-
-      result = Applications::DisabilityCertificationPdfService.new(
-        application: @application,
-        actor: current_user,
-        pdf_source: pdf_source,
-        request_key: params.require(:operation_id)
-      ).call
-
-      respond_to do |format|
-        if result.success?
-          flash.now[:notice] = "#{t('.queue_print_pass')} #{view_context.link_to('View print queue', admin_print_queue_index_path)}".html_safe
-          format.turbo_stream do
-            render turbo_stream: turbo_stream.update('flash', partial: 'shared/flash')
-          end
-          format.html { redirect_to admin_print_queue_index_path, notice: t('.queue_print_pass') }
-        else
-          flash.now[:alert] = result.message || 'Failed to queue DCF for printing.'
-          format.turbo_stream do
-            render turbo_stream: turbo_stream.update('flash', partial: 'shared/flash'), status: :unprocessable_content
-          end
-          format.html { redirect_to admin_application_path(@application), alert: result.message || 'Failed to queue DCF for printing.' }
-        end
-      end
-    end
-
-    # Charts show the fiscal-year cohort by current status.
-    def charts
-      service_result = Applications::ReportingService.new.generate_index_chart_data
-      @metrics = if service_result.is_a?(BaseService::Result) && service_result.success?
-                   service_result.data
-                 else
-                   empty_index_chart_metrics
-                 end
-
-      render partial: 'charts_section', layout: false
-    end
-
-    def upload_disability_certification
-      status = params[:disability_certification_status]
-
-      if status.blank?
-        redirect_to admin_application_path(@application),
-                    alert: t('.m_blank')
-        return
-      end
-
-      if status == 'approved'
-        process_accepted_certification
-      elsif status == 'rejected'
-        if params[:disability_certification_rejection_reason].blank? && params[:rejection_reason_code].blank?
-          redirect_to admin_application_path(@application), alert: t('.m_rejection_reason')
-          return
-        end
-        process_certification_rejection
-      end
-    end
-
     def process_accepted_certification
       if params[:disability_certification].blank?
         redirect_to admin_application_path(@application),
@@ -523,12 +354,8 @@ module Admin
         status: status,
         admin: current_user,
         submission_method: extract_submission_method,
-        metadata: request_metadata
+        metadata: basic_request_metadata
       )
-    end
-
-    def request_metadata
-      basic_request_metadata
     end
 
     def handle_certification_result(result)
@@ -542,8 +369,6 @@ module Admin
                     alert: "Failed to process disability certification: #{result[:error]&.message}"
       end
     end
-
-    private
 
     def prepare_application_show
       load_application_show_associations(@application)
@@ -590,25 +415,12 @@ module Admin
       @secure_request_delivery_owners_by_id = audit_log_builder.delivery_owners_by_id
     end
 
-    def sort_column
-      params[:sort] || 'application_date'
-    end
-
-    def sort_direction
-      %w[asc desc].include?(params[:direction]) ? params[:direction] : 'desc'
-    end
-
     # Each action loads its additional associations.
     def set_application
       # The loader queries attachment metadata without variants or updates to association caches.
       @application = load_application_with_attachments(params[:id])
     rescue ActiveRecord::RecordNotFound
-      redirect_to admin_applications_path, alert: t('.app_not_found')
-    end
-
-    def assignment_selection_id(name)
-      selected_id = params[name]
-      selected_id if selected_id.to_s.match?(/\A[1-9]\d*\z/)
+      redirect_to admin_applications_path, alert: t('alerts.app_not_found')
     end
 
     # Status is not editable here: it changes only through workflow actions, which go through
@@ -639,7 +451,7 @@ module Admin
       end
     rescue StandardError => e
       Rails.logger.error "Filter error: #{e.class.name}"
-      flash.now[:alert] = t(unfiltered_error)
+      flash.now[:alert] = t('alerts.unfiltered_error')
       scope
     end
 
@@ -651,7 +463,7 @@ module Admin
     end
 
     def empty_index_chart_metrics
-      start_year = current_fiscal_year
+      start_year = FiscalYear.current_start_year
       empty_counts = Application.statuses.keys.index_with { 0 }
       {
         current_fy: start_year,

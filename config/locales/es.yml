@@ -6,6 +6,7 @@ es:
     sign_in_required: "Inicie sesión para continuar."
     session_expired: "Su sesión ha expirado; vuelva a iniciar sesión."
     session_fail: "No se pudo iniciar la sesión."
+    unauthorized_action: "No tiene autorización para realizar esta acción."
   layouts:
     secure_public:
       program_name: "Programa de Telecomunicaciones Accesibles de Maryland"
@@ -700,6 +701,21 @@ es:
            %{download_form_url}
         2. Fax: Envíe el formulario actualizado al 410-767-4276
   vendor_notifications:
+    action_required: "Acción requerida"
+    association_required: "Su asociación requiere un formulario W9 vigente."
+    association_requirement_title: "Requisito de asociación"
+    w9_approved:
+      header_title: "Formulario W9 aprobado"
+    w9_expiring_soon:
+      header_title: "El formulario W9 vence pronto"
+      title: "W9 vence pronto"
+      warning: "Su formulario W9 archivado vencerá en %{days} días el %{date}."
+      info: "Visite el portal de proveedor para cargar un nuevo formulario W9 y evitar interrupciones. %{association}"
+    w9_expired:
+      header_title: "El formulario W9 venció - Se requiere acción"
+      title: "W9 vencido"
+      warning: "Su formulario W9 archivado venció el %{date}."
+      info: "Visite el portal de proveedor de inmediato para cargar un nuevo formulario W9 y evitar retrasos en los pagos. %{association}"
     w9_rejected:
       header_title: "El formulario W9 requiere atención"
       title: "W9 rechazado"

@@ -1,12 +1,6 @@
 # frozen_string_literal: true
 
 class CertifyingProfessionalMailer < ApplicationMailer
-  include Rails.application.routes.url_helpers
-
-  def self.default_url_options
-    Rails.application.config.action_mailer.default_url_options
-  end
-
   # requested adapts NotificationService arguments to mailer parameters.
 
   def requested(notifiable, notification)
@@ -135,7 +129,7 @@ class CertifyingProfessionalMailer < ApplicationMailer
       constituent_dob_formatted: format_constituent_dob(constituent),
       constituent_phone_formatted: format_constituent_phone(constituent),
       constituent_email: format_constituent_email(constituent),
-      constituent_address_formatted: format_constituent_address(constituent),
+      constituent_address_formatted: constituent_address_text(constituent),
       application_id: application.id,
       download_form_url: build_download_form_url,
       secure_upload_url: params[:secure_upload_url].to_s,
@@ -190,14 +184,6 @@ class CertifyingProfessionalMailer < ApplicationMailer
 
   def format_constituent_email(constituent)
     constituent.email.presence || 'Not Provided'
-  end
-
-  def format_constituent_address(constituent)
-    [
-      constituent.physical_address_1,
-      constituent.physical_address_2,
-      "#{constituent.city}, #{constituent.state} #{constituent.zip_code}"
-    ].compact_blank.join("\n")
   end
 
   def build_download_form_url

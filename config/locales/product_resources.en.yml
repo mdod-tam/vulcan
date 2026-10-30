@@ -21,7 +21,6 @@ en:
       empty: Completed voucher purchases and program shipments will appear here. Training on a demonstration device does not add it to this list.
       dashboard: Back to dashboard
       back: Back to Devices
-      access_denied: This page is available to constituents.
       sources:
         voucher_purchase: Purchased with voucher
         program_shipment: Shipped by the program

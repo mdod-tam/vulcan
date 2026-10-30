@@ -95,7 +95,7 @@ module Admin
 
       get admin_products_path
       assert_redirected_to root_path
-      assert_equal 'Unauthorized access', flash[:alert]
+      assert_equal I18n.t('alerts.unauthorized_action'), flash[:alert]
     end
 
     def test_unauthenticated_user_cannot_access

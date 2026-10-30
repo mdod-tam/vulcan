@@ -1,13 +1,7 @@
 # frozen_string_literal: true
 
 class VendorNotificationsMailer < ApplicationMailer
-  include Rails.application.routes.url_helpers
   include ActionView::Helpers::NumberHelper
-  include Mailers::SharedPartialHelpers
-
-  def self.default_url_options
-    Rails.application.config.action_mailer.default_url_options
-  end
 
   def invoice_generated
     invoice      = params[:invoice]
@@ -49,7 +43,7 @@ class VendorNotificationsMailer < ApplicationMailer
       vendor,
       status: :success,
       template: text_template,
-      fallback_header_title: 'W9 Form Approved',
+      fallback_header_title: I18n.t('vendor_notifications.w9_approved.header_title', locale: locale),
       status_box_title: I18n.t('vendor_onboarding.approval_notice.title', locale: locale),
       status_box_message: I18n.t('vendor_onboarding.approval_notice.body', locale: locale),
       subject_variables: { vendor_business_name: vendor.business_name },
@@ -134,18 +128,18 @@ class VendorNotificationsMailer < ApplicationMailer
     text_template = find_text_template(template_name, locale: locale)
 
     days_until_expiry = (vendor.w9_expiration_date - Date.current).to_i
-    expiration_date_formatted = vendor.w9_expiration_date.strftime('%B %d, %Y')
-    association_msg = vendor.associated? ? 'Your association requires a valid W9.' : ''
+    expiration_date_formatted = I18n.l(vendor.w9_expiration_date, format: :long, locale: locale)
+    association_msg = w9_association_message(vendor, locale)
 
-    warning_msg = "Your W9 form on file will expire in #{days_until_expiry} days on #{expiration_date_formatted}."
-    info_msg    = "Please visit the vendor portal to upload a new W9 form to avoid any disruption. #{association_msg}"
+    warning_msg = I18n.t('vendor_notifications.w9_expiring_soon.warning', days: days_until_expiry, date: expiration_date_formatted, locale: locale)
+    info_msg    = I18n.t('vendor_notifications.w9_expiring_soon.info', association: association_msg, locale: locale)
 
     variables = build_w9_variables(
       vendor,
       status: :warning,
       template: text_template,
-      fallback_header_title: 'W9 Form Expiring Soon',
-      status_box_title: 'W9 Expiring Soon',
+      fallback_header_title: I18n.t('vendor_notifications.w9_expiring_soon.header_title', locale: locale),
+      status_box_title: I18n.t('vendor_notifications.w9_expiring_soon.title', locale: locale),
       status_box_message: warning_msg,
       status_box_attribute: :status_box_warning_text,
       subject_variables: { days_until_expiry: days_until_expiry, expiration_date_formatted: expiration_date_formatted,
@@ -153,7 +147,7 @@ class VendorNotificationsMailer < ApplicationMailer
       locale: locale
     )
                 .merge(
-                  status_box_info_text: status_box_text(status: :info, title: 'Action Required', message: info_msg),
+                  status_box_info_text: status_box_text(status: :info, title: I18n.t('vendor_notifications.action_required', locale: locale), message: info_msg),
                   days_until_expiry: days_until_expiry,
                   expiration_date_formatted: expiration_date_formatted,
                   vendor_association_message: association_msg,
@@ -174,26 +168,26 @@ class VendorNotificationsMailer < ApplicationMailer
     template_name = 'vendor_notifications_w9_expired'
     text_template = find_text_template(template_name, locale: locale)
 
-    expiration_date_formatted = vendor.w9_expiration_date.strftime('%B %d, %Y')
-    association_msg = vendor.associated? ? 'Your association requires a valid W9.' : ''
+    expiration_date_formatted = I18n.l(vendor.w9_expiration_date, format: :long, locale: locale)
+    association_msg = w9_association_message(vendor, locale)
 
-    warning_msg = "Your W9 form on file expired on #{expiration_date_formatted}."
-    info_msg    = "Please visit the vendor portal immediately to upload a new W9 form to avoid payment delays. #{association_msg}"
+    warning_msg = I18n.t('vendor_notifications.w9_expired.warning', date: expiration_date_formatted, locale: locale)
+    info_msg    = I18n.t('vendor_notifications.w9_expired.info', association: association_msg, locale: locale)
 
     variables = build_w9_variables(
       vendor,
       status: :error,
       template: text_template,
-      fallback_header_title: 'W9 Form Has Expired - Action Required',
-      status_box_title: 'W9 Expired',
+      fallback_header_title: I18n.t('vendor_notifications.w9_expired.header_title', locale: locale),
+      status_box_title: I18n.t('vendor_notifications.w9_expired.title', locale: locale),
       status_box_message: warning_msg,
       status_box_attribute: :status_box_error_text,
       subject_variables: { expiration_date_formatted: expiration_date_formatted, vendor_business_name: vendor.business_name },
       locale: locale
     )
                 .merge(
-                  status_box_warning_text: w9_association_warning_text(association_msg),
-                  status_box_info_text: status_box_text(status: :info, title: 'Action Required', message: info_msg),
+                  status_box_warning_text: w9_association_warning_text(association_msg, locale),
+                  status_box_info_text: status_box_text(status: :info, title: I18n.t('vendor_notifications.action_required', locale: locale), message: info_msg),
                   expiration_date_formatted: expiration_date_formatted,
                   vendor_association_message: association_msg,
                   vendor_portal_url: resolve_vendor_portal_url
@@ -248,10 +242,10 @@ class VendorNotificationsMailer < ApplicationMailer
       vendor_business_name: vendor.business_name,
       header_title: header_title,
       status_box_attribute => status_box_text(status: status, title: status_box_title, message: status_box_message),
-      header_text: header_text(title: header_title, logo_url: logo_url, locale: locale),
+      header_text: header_text(title: header_title, logo_url: mailer_logo_url, locale: locale),
       footer_text: footer_text(organization_name: org_name, contact_email: ProgramContact.support_email, website_url: org_url, show_automated_message: true,
                                locale: locale),
-      header_logo_url: logo_url,
+      header_logo_url: mailer_logo_url,
       header_subtitle: nil,
       support_email: ProgramContact.support_email
     }.compact
@@ -306,12 +300,6 @@ class VendorNotificationsMailer < ApplicationMailer
     end.join("\n")
   end
 
-  def logo_url
-    ActionController::Base.helpers.asset_path('logo.png', host: default_url_options[:host])
-  rescue StandardError
-    nil
-  end
-
   def org_name
     Policy.get('organization_name') || 'MAT Program'
   end
@@ -324,10 +312,14 @@ class VendorNotificationsMailer < ApplicationMailer
     defined?(vendor_portal_root_url) ? vendor_portal_root_url(host: default_url_options[:host]) : org_url
   end
 
-  def w9_association_warning_text(association_msg)
+  def w9_association_message(vendor, locale)
+    vendor.associated? ? I18n.t('vendor_notifications.association_required', locale: locale) : ''
+  end
+
+  def w9_association_warning_text(association_msg, locale)
     return '' if association_msg.blank?
 
-    status_box_text(status: :warning, title: 'Association Requirement', message: association_msg)
+    status_box_text(status: :warning, title: I18n.t('vendor_notifications.association_requirement_title', locale: locale), message: association_msg)
   end
 
   def generate_invoice_pdf(invoice, vendor, transactions)

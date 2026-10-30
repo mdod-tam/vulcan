@@ -121,7 +121,7 @@ module Admin
 
         assert_response :success
         assert_select '#referral-quarter-heading', text: 'Q4 FY26'
-        assert_equal({ 'First day' => 1, 'Last day' => 1 }, assigns(:referral_quarter_data))
+        assert_equal({ 'First day' => 1, 'Last day' => 1 }, assigns(:report).referral_quarter_data)
       end
     end
 

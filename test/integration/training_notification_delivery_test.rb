@@ -162,7 +162,7 @@ class TrainingNotificationDeliveryTest < ActiveSupport::TestCase
 
   test 'administrative removal queues one cancellation while retaining report history' do
     requested = create(:training_session, application: @application, trainer: @trainer, internal_notes: PRIVATE_TEXT)
-    assert @application.unassign_trainer!(actor: @admin, reason: PRIVATE_TEXT)
+    assert_predicate Applications::TrainerAssignment.unassign(@application, actor: @admin, reason: PRIVATE_TEXT), :success?
     assert_equal 1, mail_jobs.length
     notice = notification(requested, 'training_cancelled')
     assert_equal @admin.id, notice.actor_id
@@ -355,14 +355,14 @@ class TrainingNotificationDeliveryTest < ActiveSupport::TestCase
   test 'a queued assignment is suppressed before resolving contacts after removal and reassignment' do
     load_seeded_email_templates('training_session_notifications_trainer_assigned')
     @application.update!(assigned_trainer: nil)
-    assert @application.assign_trainer!(@trainer, actor: @admin)
+    assert_predicate Applications::TrainerAssignment.assign(@application, @trainer, actor: @admin), :success?
     session = @application.latest_training_session
     notice = notification(session, 'trainer_assigned')
     old_assignment_job = mail_jobs.sole
-    assert @application.unassign_trainer!(actor: @admin, reason: 'Coverage changed')
+    assert_predicate Applications::TrainerAssignment.unassign(@application, actor: @admin, reason: 'Coverage changed'), :success?
     @replacement_trainer = create(:trainer)
     @constituent.update!(email: "new-contact-#{SecureRandom.hex(6)}@example.com", physical_address_1: 'Newly private contact address')
-    assert @application.assign_trainer!(@replacement_trainer, actor: @admin)
+    assert_predicate Applications::TrainerAssignment.assign(@application, @replacement_trainer, actor: @admin), :success?
 
     Applications::ContactContext.expects(:new).never
     assert_no_difference -> { ActionMailer::Base.deliveries.count } do
@@ -383,10 +383,10 @@ class TrainingNotificationDeliveryTest < ActiveSupport::TestCase
     notice = Notification.find_by!(notifiable: @application, action: 'training_requested')
     assert_equal 'assigned_trainer', notice.metadata['recipient_audience']
     old_request_job = mail_jobs.sole
-    assert @application.unassign_trainer!(actor: @admin, reason: 'Coverage changed')
+    assert_predicate Applications::TrainerAssignment.unassign(@application, actor: @admin, reason: 'Coverage changed'), :success?
     @replacement_trainer = create(:trainer)
     @constituent.update!(first_name: 'New private applicant identity')
-    assert @application.assign_trainer!(@replacement_trainer, actor: @admin)
+    assert_predicate Applications::TrainerAssignment.assign(@application, @replacement_trainer, actor: @admin), :success?
 
     assert_no_difference -> { ActionMailer::Base.deliveries.count } do
       ActiveJob::Base.execute(old_request_job)
@@ -405,7 +405,7 @@ class TrainingNotificationDeliveryTest < ActiveSupport::TestCase
     notice = Notification.find_by!(notifiable: @application, action: 'training_requested', recipient: @admin)
     assert_equal 'assignment_queue_admin', notice.metadata['recipient_audience']
     queue_job = mail_jobs.find { |job| job.dig('email_delivery_context', 'notification_id') == notice.id }
-    assert @application.assign_trainer!(@trainer, actor: @admin)
+    assert_predicate Applications::TrainerAssignment.assign(@application, @trainer, actor: @admin), :success?
 
     assert_difference -> { ActionMailer::Base.deliveries.count }, 1 do
       ActiveJob::Base.execute(queue_job)
@@ -419,7 +419,7 @@ class TrainingNotificationDeliveryTest < ActiveSupport::TestCase
     load_seeded_email_templates('training_session_notifications_trainer_assigned')
     @trainer.update!(communication_preference: :letter, physical_address_1: 'Training Office', city: 'Baltimore', state: 'MD', zip_code: '21201')
     @application.update!(assigned_trainer: nil)
-    assert @application.assign_trainer!(@trainer, actor: @admin)
+    assert_predicate Applications::TrainerAssignment.assign(@application, @trainer, actor: @admin), :success?
     session = @application.latest_training_session
     notice = notification(session, 'trainer_assigned')
     assert_equal 'email', notice.metadata['actual_delivery_channel']
@@ -598,7 +598,7 @@ class TrainingNotificationDeliveryTest < ActiveSupport::TestCase
   end
 
   def reassign_training(trainer)
-    @application.reload.reassign_trainer!(trainer, actor: @admin, expected_version: @application.training_assignment_version)
+    Applications::TrainerAssignment.reassign(@application.reload, trainer, actor: @admin, expected_version: @application.training_assignment_version)
   end
 
   def notification(session, action)

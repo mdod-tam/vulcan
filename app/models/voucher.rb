@@ -15,7 +15,6 @@ class Voucher < ApplicationRecord
 
   before_validation :generate_code, on: :create
   before_validation :set_initial_values, on: :create
-  after_update :check_status_changes
   after_update :log_status_change, if: -> { saved_change_to_status? && respond_to?(:events) }
 
   enum :status, {
@@ -55,22 +54,6 @@ class Voucher < ApplicationRecord
     return nil unless issued_at
 
     ((issued_at + Policy.voucher_validity_period) - Time.current).to_i / 1.day
-  end
-
-  def activate_if_valid!
-    # Redeemed and cancelled are final states.
-    return if %w[redeemed cancelled].include?(status)
-
-    if status == 'active'
-      update!(status: :expired) if expired?
-      return
-    end
-
-    if expired?
-      update!(status: :expired)
-    else
-      update!(status: :active)
-    end
   end
 
   # Checks only voucher state and amount. Identity verification (date of birth)
@@ -249,15 +232,6 @@ class Voucher < ApplicationRecord
 
     product_data.map do |id, qty|
       { id: id, quantity: qty }
-    end
-  end
-
-  def check_status_changes
-    return unless saved_change_to_status?
-
-    case status
-    when 'expired'
-      VoucherNotificationsMailer.with(voucher: self).voucher_expired.deliver_later
     end
   end
 

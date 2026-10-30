@@ -28,7 +28,7 @@ module Applications
         recipients = covered ? [application.assigned_trainer] : User.admins.to_a
         ActiveRecord.after_all_transactions_commit do
           recipients.each { |recipient| outcomes << notify(recipient, audience: audience) }
-          Application.expire_training_request_metrics_cache!
+          Reports::AdminDashboardMetrics.expire!
         end
       end
       success(message(covered ? :submitted_covered : :submitted), { notification_outcomes: outcomes })

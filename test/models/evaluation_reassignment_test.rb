@@ -28,7 +28,7 @@ class EvaluationReassignmentTest < ActiveSupport::TestCase
 
     assert_no_difference('Evaluation.count') do
       assert_difference('Event.where(action: "evaluator_reassigned").count', 1) do
-        assert @application.reassign_evaluator!(@replacement, actor: @admin)
+        assert_predicate Applications::EvaluatorAssignment.reassign(@application, @replacement, actor: @admin), :success?
       end
     end
 
@@ -45,7 +45,7 @@ class EvaluationReassignmentTest < ActiveSupport::TestCase
 
   test 'a no-show assignment is still open and transfers without losing its outcome history' do
     @evaluation.update!(status: :no_show)
-    assert @application.reassign_evaluator!(@replacement, actor: @admin)
+    assert_predicate Applications::EvaluatorAssignment.reassign(@application, @replacement, actor: @admin), :success?
     assert_equal 'no_show', @evaluation.reload.status
     assert_equal @replacement.id, @evaluation.evaluator_id
     assert_equal 'Interpreter arrangements', @evaluation.notes
@@ -55,20 +55,22 @@ class EvaluationReassignmentTest < ActiveSupport::TestCase
     @evaluation.update!(status: :cancelled)
     evaluation_attributes = @evaluation.reload.attributes
 
+    result = nil
     assert_no_difference ['Event.count', 'Notification.count'] do
       assert_no_enqueued_jobs do
-        assert_equal false, @application.reassign_evaluator!(@replacement, actor: @admin)
+        result = Applications::EvaluatorAssignment.reassign(@application, @replacement, actor: @admin)
       end
     end
+    assert_predicate result, :failure?
 
-    assert_equal [I18n.t('activerecord.errors.models.application.attributes.base.evaluation_assignment_closed')], @application.errors[:base]
+    assert_equal I18n.t('activerecord.errors.models.application.attributes.base.evaluation_assignment_closed'), result.message
     assert_equal evaluation_attributes, @evaluation.reload.attributes
   end
 
   test 'a historical completed evaluation does not block transfer of a separate open evaluation' do
     create(:evaluation, :completed, application: @application, constituent: @application.user, evaluator: @evaluator)
 
-    assert @application.reassign_evaluator!(@replacement, actor: @admin)
+    assert_predicate Applications::EvaluatorAssignment.reassign(@application, @replacement, actor: @admin), :success?
     assert_equal @replacement.id, @evaluation.reload.evaluator_id
     assert_equal [@evaluator.id], @application.evaluations.completed_sessions.pluck(:evaluator_id)
   end
@@ -78,13 +80,15 @@ class EvaluationReassignmentTest < ActiveSupport::TestCase
     evaluation_attributes = @evaluation.reload.attributes
     application_attributes = @application.reload.attributes
 
+    result = nil
     assert_no_difference ['Evaluation.count', 'Event.count', 'Notification.count'] do
       assert_no_enqueued_jobs do
-        assert_equal false, @application.reassign_evaluator!(@replacement, actor: @admin)
+        result = Applications::EvaluatorAssignment.reassign(@application, @replacement, actor: @admin)
       end
     end
+    assert_predicate result, :failure?
 
-    assert_equal [I18n.t('activerecord.errors.models.application.attributes.base.evaluation_assignment_closed')], @application.errors[:base]
+    assert_equal I18n.t('activerecord.errors.models.application.attributes.base.evaluation_assignment_closed'), result.message
     assert_equal evaluation_attributes, @evaluation.reload.attributes
     assert_equal application_attributes, @application.reload.attributes
   end
@@ -93,20 +97,24 @@ class EvaluationReassignmentTest < ActiveSupport::TestCase
     evaluation_attributes = @evaluation.reload.attributes
     application_attributes = @application.reload.attributes
 
+    result = nil
     assert_no_difference ['Evaluation.count', 'Event.count', 'Notification.count'] do
       assert_no_enqueued_jobs do
-        assert_equal false, @application.reassign_evaluator!(@replacement, actor: @evaluator)
+        result = Applications::EvaluatorAssignment.reassign(@application, @replacement, actor: @evaluator)
       end
     end
-    assert_equal [I18n.t('activerecord.errors.models.application.attributes.base.evaluation_service_window')], @application.errors[:base]
+    assert_predicate result, :failure?
+    assert_equal I18n.t('activerecord.errors.models.application.attributes.base.evaluation_service_window'), result.message
 
     @replacement.update!(status: :inactive)
+    result = nil
     assert_no_difference ['Evaluation.count', 'Event.count', 'Notification.count'] do
       assert_no_enqueued_jobs do
-        assert_equal false, @application.reassign_evaluator!(@replacement, actor: @admin)
+        result = Applications::EvaluatorAssignment.reassign(@application, @replacement, actor: @admin)
       end
     end
-    assert_equal ['Select an active evaluator.'], @application.errors[:base]
+    assert_predicate result, :failure?
+    assert_equal 'Select an active evaluator.', result.message
     assert_equal evaluation_attributes, @evaluation.reload.attributes
     assert_equal application_attributes, @application.reload.attributes
   end
@@ -117,13 +125,15 @@ class EvaluationReassignmentTest < ActiveSupport::TestCase
     application_attributes = @application.reload.attributes
     evaluation_attributes = @evaluation.reload.attributes
 
+    result = nil
     assert_no_difference ['Evaluation.count', 'Event.count', 'Notification.count'] do
       assert_no_enqueued_jobs do
-        assert_equal false, stale_application.reassign_evaluator!(@replacement, actor: @admin)
+        result = Applications::EvaluatorAssignment.reassign(stale_application, @replacement, actor: @admin)
       end
     end
+    assert_predicate result, :failure?
 
-    assert_equal [I18n.t('activerecord.errors.models.application.attributes.base.evaluation_service_window')], stale_application.errors[:base]
+    assert_equal I18n.t('activerecord.errors.models.application.attributes.base.evaluation_service_window'), result.message
     assert_equal application_attributes, @application.reload.attributes
     assert_equal evaluation_attributes, @evaluation.reload.attributes
   end
@@ -132,13 +142,15 @@ class EvaluationReassignmentTest < ActiveSupport::TestCase
     application = create(:application, status: :approved, application_date: Date.current)
     application_attributes = application.reload.attributes
 
+    result = nil
     assert_no_difference ['Evaluation.count', 'Event.count', 'Notification.count'] do
       assert_no_enqueued_jobs do
-        assert_equal false, application.reassign_evaluator!(@replacement, actor: @admin)
+        result = Applications::EvaluatorAssignment.reassign(application, @replacement, actor: @admin)
       end
     end
+    assert_predicate result, :failure?
 
-    assert_equal [I18n.t('activerecord.errors.models.application.attributes.base.evaluation_assignment_closed')], application.errors[:base]
+    assert_equal I18n.t('activerecord.errors.models.application.attributes.base.evaluation_assignment_closed'), result.message
     assert_equal application_attributes, application.reload.attributes
   end
 
@@ -148,11 +160,10 @@ class EvaluationReassignmentTest < ActiveSupport::TestCase
 
     assert_no_difference ['Evaluation.count', 'Event.count', 'Notification.count'] do
       assert_no_enqueued_jobs do
-        assert_equal true, @application.reassign_evaluator!(@evaluator, actor: @admin)
+        assert_predicate Applications::EvaluatorAssignment.reassign(@application, @evaluator, actor: @admin), :success?
       end
     end
 
-    assert_empty @application.errors
     assert_equal evaluation_attributes, @evaluation.reload.attributes
     assert_equal application_attributes, @application.reload.attributes
   end
@@ -165,13 +176,15 @@ class EvaluationReassignmentTest < ActiveSupport::TestCase
     evaluation_attributes = @evaluation.reload.attributes
     application_attributes = @application.reload.attributes
 
+    result = nil
     assert_no_difference ['Evaluation.count', 'Event.count', 'Notification.count'] do
       assert_no_enqueued_jobs do
-        assert_equal false, @application.reassign_evaluator!(@replacement, actor: @admin)
+        result = Applications::EvaluatorAssignment.reassign(@application, @replacement, actor: @admin)
       end
     end
+    assert_predicate result, :failure?
 
-    assert_equal ['Evaluator is invalid'], @application.errors[:base]
+    assert_equal 'Evaluator is invalid', result.message
     assert_equal evaluation_attributes, @evaluation.reload.attributes
     assert_equal application_attributes, @application.reload.attributes
   end
@@ -183,13 +196,15 @@ class EvaluationReassignmentTest < ActiveSupport::TestCase
     evaluation_attributes = @evaluation.reload.attributes
     application_attributes = @application.reload.attributes
 
+    result = nil
     assert_no_difference ['Evaluation.count', 'Event.count', 'Notification.count'] do
       assert_no_enqueued_jobs do
-        assert_equal false, @application.reassign_evaluator!(@replacement, actor: @admin)
+        result = Applications::EvaluatorAssignment.reassign(@application, @replacement, actor: @admin)
       end
     end
+    assert_predicate result, :failure?
 
-    assert_equal ['Audit record unavailable'], @application.errors[:base]
+    assert_equal 'Audit record unavailable', result.message
     assert_equal evaluation_attributes, @evaluation.reload.attributes
     assert_equal application_attributes, @application.reload.attributes
   end
@@ -197,8 +212,8 @@ class EvaluationReassignmentTest < ActiveSupport::TestCase
   test 'each transfer inside the audit deduplication window retains its actors and both assignments' do
     freeze_time do
       assert_difference('Event.where(action: "evaluator_reassigned", auditable: @evaluation).count', 2) do
-        assert @application.reassign_evaluator!(@replacement, actor: @admin)
-        assert @application.reassign_evaluator!(@evaluator, actor: @admin)
+        assert_predicate Applications::EvaluatorAssignment.reassign(@application, @replacement, actor: @admin), :success?
+        assert_predicate Applications::EvaluatorAssignment.reassign(@application, @evaluator, actor: @admin), :success?
       end
 
       events = Event.where(action: 'evaluator_reassigned', auditable: @evaluation).order(:id).to_a
@@ -208,7 +223,7 @@ class EvaluationReassignmentTest < ActiveSupport::TestCase
       assert_equal 2, events.map { |event| event.metadata['operation_id'] }.uniq.size
 
       assert_no_difference('Event.where(action: "evaluator_reassigned", auditable: @evaluation).count') do
-        assert @application.reassign_evaluator!(@evaluator, actor: @admin)
+        assert_predicate Applications::EvaluatorAssignment.reassign(@application, @evaluator, actor: @admin), :success?
       end
 
       assert_equal @evaluator.id, @evaluation.reload.evaluator_id
