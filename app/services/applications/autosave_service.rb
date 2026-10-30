@@ -219,8 +219,7 @@ module Applications
     end
 
     def autosave_target_for(attribute_name)
-      user_fields = %w[hearing_disability vision_disability speech_disability
-                       mobility_disability cognition_disability]
+      user_fields = Users::Constituent::DISABILITY_FLAGS.map(&:to_s)
       application_fields = %w[annual_income household_size maryland_resident
                               self_certify_disability terms_accepted information_verified
                               disability_information_release_authorized certifying_professional_name
@@ -277,8 +276,7 @@ module Applications
     end
 
     def cast_user_field_value(attribute, value)
-      if %w[hearing_disability vision_disability speech_disability
-            mobility_disability cognition_disability].include?(attribute)
+      if Users::Constituent::DISABILITY_FLAGS.map(&:to_s).include?(attribute)
         ActiveModel::Type::Boolean.new.cast(value)
       else
         value

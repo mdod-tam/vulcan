@@ -3,5 +3,4 @@ en:
     save_warning: "Saved. The notification could not be queued; contact program staff. Do not submit again."
     request_warning: "Your request was saved. The notice could not be queued; contact program staff. Do not submit again."
     coverage_changed: "Trainer coverage has changed."
-    access_denied: "Access denied"
     open_appointment: "Open appointment: Session #%{number}"

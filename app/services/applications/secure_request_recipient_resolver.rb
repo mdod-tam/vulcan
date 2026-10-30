@@ -257,7 +257,7 @@ module Applications
       return false if phone.blank?
       return false unless phone_type.to_s == 'text'
 
-      User.new(phone: phone).real_phone?
+      PhoneNumber.real?(phone)
     end
 
     # Overrides use available_channels. The caller's locked delivery_participants_eligible?

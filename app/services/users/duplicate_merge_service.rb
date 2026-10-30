@@ -721,7 +721,7 @@ module Users
         when 'email'
           User.normalize_email(form.recipient_email) != User.normalize_email(final_email)
         when 'sms'
-          User.normalize_phone(form.recipient_phone) != User.normalize_phone(final_phone)
+          PhoneNumber.normalize(form.recipient_phone) != PhoneNumber.normalize(final_phone)
         when 'letter'
           final_address_source == 'duplicate'
         else

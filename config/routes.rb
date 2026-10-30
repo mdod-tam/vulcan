@@ -26,10 +26,13 @@ Rails.application.routes.draw do
   get 'apply', to: 'pages#apply', as: :apply
   get 'contact', to: 'pages#contact', as: :contact
   get 'disability_certification_form', to: 'disability_certification_forms#show', as: :disability_certification_form
-  get 'secure_certification_form/success', to: 'secure_certification_forms#success', as: :secure_certification_form_success
-  resource :secure_certification_form, only: %i[show update]
-  resource :secure_certification_form_resend, only: %i[new create], controller: 'secure_certification_form_resends'
-  get 'secure_certification_form_resend/sent', to: 'secure_certification_form_resends#sent', as: :secure_certification_form_resend_sent
+  # Public secure forms: the form, its success page, and a request for a new link once it expires.
+  %w[certification provider_info w9 proof].each do |kind|
+    get "secure_#{kind}_form/success", to: "secure_#{kind}_forms#success", as: :"secure_#{kind}_form_success"
+    resource :"secure_#{kind}_form", only: %i[show update]
+    resource :"secure_#{kind}_form_resend", only: %i[new create], controller: "secure_#{kind}_form_resends"
+    get "secure_#{kind}_form_resend/sent", to: "secure_#{kind}_form_resends#sent", as: :"secure_#{kind}_form_resend_sent"
+  end
 
   # Welcome/Onboarding
   get 'welcome', to: 'welcome#index', as: :welcome
@@ -87,37 +90,6 @@ Rails.application.routes.draw do
     end
   end
 
-  get 'secure_provider_info_form/success',
-      to: 'secure_provider_info_forms#success',
-      as: :secure_provider_info_form_success
-  resource :secure_provider_info_form, only: %i[show update]
-  resource :secure_provider_info_form_resend,
-           only: %i[new create],
-           controller: 'secure_provider_info_form_resends'
-  get 'secure_provider_info_form_resend/sent',
-      to: 'secure_provider_info_form_resends#sent',
-      as: :secure_provider_info_form_resend_sent
-  get 'secure_w9_form/success',
-      to: 'secure_w9_forms#success',
-      as: :secure_w9_form_success
-  resource :secure_w9_form, only: %i[show update]
-  resource :secure_w9_form_resend,
-           only: %i[new create],
-           controller: 'secure_w9_form_resends'
-  get 'secure_w9_form_resend/sent',
-      to: 'secure_w9_form_resends#sent',
-      as: :secure_w9_form_resend_sent
-  get 'secure_proof_form/success',
-      to: 'secure_proof_forms#success',
-      as: :secure_proof_form_success
-  resource :secure_proof_form, only: %i[show update]
-  resource :secure_proof_form_resend,
-           only: %i[new create],
-           controller: 'secure_proof_form_resends'
-  get 'secure_proof_form_resend/sent',
-      to: 'secure_proof_form_resends#sent',
-      as: :secure_proof_form_resend_sent
-
   namespace :admin do
     resource :dashboard, only: [:show], controller: :dashboards
     root to: 'dashboards#show'
@@ -174,29 +146,30 @@ Rails.application.routes.draw do
       collection do
         post :batch_approve
         post :batch_reject
-        get  :search
-        get  :filter
-        get  :dashboard
         get  :charts
       end
 
       member do
-        post :assign_voucher
         post :review_proof
         patch :approve
         patch :reject
-        post :assign_evaluator
-        post :reassign_evaluator
-        post :assign_trainer
-        post :reassign_trainer
-        post :unassign_trainer
-        post :request_evaluation
         patch :update_proof_status
         patch :update_certification_status
-        post :resend_disability_certification
         patch :upload_disability_certification
-        post :send_document_signing_request
-        post :queue_disability_certification_form
+
+        post :assign_voucher, to: 'application_vouchers#assign_voucher'
+
+        post :assign_evaluator, to: 'application_evaluations#assign_evaluator'
+        post :reassign_evaluator, to: 'application_evaluations#reassign_evaluator'
+        post :request_evaluation, to: 'application_evaluations#request_evaluation'
+
+        post :assign_trainer, to: 'application_trainers#assign_trainer'
+        post :reassign_trainer, to: 'application_trainers#reassign_trainer'
+        post :unassign_trainer, to: 'application_trainers#unassign_trainer'
+
+        post :resend_disability_certification, to: 'application_certification_forms#resend_disability_certification'
+        post :send_document_signing_request, to: 'application_certification_forms#send_document_signing_request'
+        post :queue_disability_certification_form, to: 'application_certification_forms#queue_disability_certification_form'
       end
 
       resources :notes, only: %i[create update], controller: 'application_notes'

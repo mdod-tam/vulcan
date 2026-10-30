@@ -54,9 +54,9 @@ module TrainingSessions
       @replacement = create(:trainer)
       removal = lambda do
         application = Application.find(@application.id)
-        removed = application.unassign_trainer!(actor: User.find(@admin.id))
-        assigned = application.assign_trainer!(User.find(@replacement.id), actor: User.find(@admin.id))
-        raise 'Coverage transfer failed' unless removed && assigned
+        removed = Applications::TrainerAssignment.unassign(application, actor: User.find(@admin.id))
+        assigned = Applications::TrainerAssignment.assign(application, User.find(@replacement.id), actor: User.find(@admin.id))
+        raise 'Coverage transfer failed' unless removed.success? && assigned.success?
 
         BaseService::Result.new(success: true)
       end

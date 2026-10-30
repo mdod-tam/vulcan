@@ -4,12 +4,6 @@ require 'test_helper'
 
 module Admin
   class EmailTemplatesTest < ActiveSupport::TestCase
-    MockViewContext = Struct.new(:sample_data_for_template) do
-      def sample_data_for_template(_template_name, **_kwargs)
-        { 'name' => 'System Test User' }
-      end
-    end
-
     setup do
       DatabaseCleaner.clean if defined?(DatabaseCleaner)
 
@@ -22,10 +16,7 @@ module Admin
                                                       body: '<p>HTML Body %<name>s</p>')
       @template_text = create(:email_template, :text, name: text_name, subject: 'Text Subject', body: 'Text Body %<name>s')
 
-      # Stub view_context with a lightweight sample-data provider.
-      Admin::EmailTemplatesController.any_instance.stubs(:view_context).returns(
-        MockViewContext.new
-      )
+      EmailTemplates::SampleData.stubs(:for_template_name).returns({ 'name' => 'System Test User' })
     end
 
     teardown do

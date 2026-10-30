@@ -27,11 +27,11 @@ module Users
 
     test 'assignment commits first: removal then sees the new work and asks for a fresh confirmation' do
       race_commands!(
-        -> { Application.find(@application.id).assign_trainer!(User.find(@practitioner.id), actor: User.find(@admin.id)) },
+        -> { Applications::TrainerAssignment.assign(Application.find(@application.id), User.find(@practitioner.id), actor: User.find(@admin.id)) },
         -> { revoke_training }
       )
 
-      assert_equal true, @holder_result
+      assert_predicate @holder_result, :success?
       assert_equal :confirmation_required, @contender_result.status
       assert_equal 1, @contender_result.impact.sole.open_count
       assert User.find(@practitioner.id).explicit_grant?('can_train')
@@ -41,12 +41,12 @@ module Users
     test 'removal commits first: assignment then waits, re-reads eligibility, and refuses' do
       race_commands!(
         -> { revoke_training },
-        -> { Application.find(@application.id).tap { |application| @refusal = application }.assign_trainer!(User.find(@practitioner.id), actor: User.find(@admin.id)) }
+        -> { Applications::TrainerAssignment.assign(Application.find(@application.id), User.find(@practitioner.id), actor: User.find(@admin.id)) }
       )
 
       assert @holder_result.changed?, @holder_result.message
-      assert_equal false, @contender_result
-      assert_includes @refusal.errors[:base], 'Select an active trainer.'
+      assert_predicate @contender_result, :failure?
+      assert_equal 'Select an active trainer.', @contender_result.message
       assert_not User.find(@practitioner.id).assignable_trainer?
       assert_empty TrainingSession.where(application_id: @application.id)
     end

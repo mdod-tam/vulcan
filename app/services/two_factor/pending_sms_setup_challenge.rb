@@ -8,16 +8,8 @@ module TwoFactor
     TERMINAL_STATUSES = %w[approved expired max_attempts_reached not_found].freeze
     DUPLICATE_SEND_MESSAGE = 'A verification code is being sent. Please wait a moment.'
 
-    def self.normalize_phone(phone_number)
-      digits = phone_number.to_s.gsub(/\D/, '')
-      digits = digits[1..] if digits.length == 11 && digits.start_with?('1')
-      return digits.gsub(/(\d{3})(\d{3})(\d{4})/, '\1-\2-\3') if digits.length == 10
-
-      phone_number.to_s
-    end
-
     def self.cache_key(user_id, phone_number)
-      "two_factor:pending_sms_setup:#{user_id}:#{normalize_phone(phone_number)}"
+      "two_factor:pending_sms_setup:#{user_id}:#{PhoneNumber.normalize(phone_number)}"
     end
 
     def self.lock_key(user_id, phone_number)
@@ -36,7 +28,7 @@ module TwoFactor
     def initialize(session:, user:, phone_number:)
       @session = session
       @user = user
-      @phone_number = self.class.normalize_phone(phone_number)
+      @phone_number = PhoneNumber.normalize(phone_number).to_s
     end
 
     def prepare!

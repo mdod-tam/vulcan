@@ -1,13 +1,7 @@
 # frozen_string_literal: true
 
 class EvaluatorMailer < ApplicationMailer
-  include Rails.application.routes.url_helpers
-  include Mailers::SharedPartialHelpers
   include ConstituentCommunicationLabelsHelper
-
-  def self.default_url_options
-    Rails.application.config.action_mailer.default_url_options
-  end
 
   # Expects .with(evaluation:, recipient:, operation_id:). The recipient is the evaluator the notice was
   # written for, never whoever holds the evaluation when the job runs.
@@ -17,16 +11,12 @@ class EvaluatorMailer < ApplicationMailer
     superseded = superseded_assignment_delivery(evaluation, operation_id: params[:operation_id], assignee: evaluator)
     return superseded if superseded
 
-    template_name = 'evaluator_mailer_new_evaluation_assigned'
     # The assignment template has only an English seed.
     locale = 'en'
 
-    text_template = load_email_template(template_name, locale: locale)
-    variables = build_new_evaluation_variables(evaluation, evaluator, template: text_template, locale: locale)
-    send_email(recipient_email_for(evaluator), text_template, variables)
-  rescue StandardError => e
-    log_mail_error(e, evaluator, template_name)
-    raise
+    deliver_notification('evaluator_mailer_new_evaluation_assigned', recipient: evaluator, locale: locale) do |template|
+      build_new_evaluation_variables(evaluation, evaluator, template: template, locale: locale)
+    end
   end
 
   # Expects evaluation passed via .with(evaluation: ...)
@@ -36,7 +26,7 @@ class EvaluatorMailer < ApplicationMailer
     contact = Applications::ContactContext.new(application: evaluation.application)
     locale = resolve_template_locale(recipient: contact.applicant)
 
-    text_template = load_email_template(template_name, locale: locale)
+    text_template = notification_template(template_name, locale)
     variables = build_submission_confirmation_variables(evaluation, template: text_template, locale: locale)
 
     return noop_letter_delivery if queue_letter_if_needed(evaluation, contact, template_name, variables, locale: locale)
@@ -49,30 +39,19 @@ class EvaluatorMailer < ApplicationMailer
 
   private
 
-  def load_email_template(template_name, locale: nil)
-    find_text_template(template_name, locale: locale)
-  rescue ActiveRecord::RecordNotFound => e
-    Rails.logger.error "Missing EmailTemplate for #{template_name}: #{e.class.name}"
-    raise "Email templates not found for #{template_name}"
-  end
-
   def build_new_evaluation_variables(evaluation, evaluator, template:, locale: nil)
     constituent = evaluation.constituent
     application = evaluation.application
     contact = Applications::ContactContext.new(application: application)
 
     evaluation_url = safe_evaluation_url(evaluation)
-    header_title = header_title_from_template_subject(
-      template: template,
-      subject_variables: { application_id: application.id },
-      fallback: "New Evaluation Assigned - Application ##{application.id}"
-    )
-    header_data = build_header_footer_data(header_title, locale: locale)
+    envelope = envelope_variables(template: template, locale: locale, subject_variables: { application_id: application.id },
+                                  fallback_title: "New Evaluation Assigned - Application ##{application.id}", organization_name: 'MAT Program')
 
     {
       evaluator_full_name: evaluator.full_name,
       constituent_full_name: constituent.full_name,
-      constituent_address_formatted: format_constituent_address(contact.address_owner),
+      constituent_address_formatted: constituent_address_text(contact.address_owner),
       constituent_phone_formatted: contact.phone.presence || 'Not Provided',
       constituent_email: contact.email.presence || 'Not Provided',
       constituent_contact_method: contact_method_label(contact.phone_type),
@@ -87,7 +66,7 @@ class EvaluatorMailer < ApplicationMailer
         title: 'Evaluation Assignment',
         message: 'Please contact the constituent to schedule or complete this evaluation when you have the required information.'
       ),
-      **header_data
+      **envelope
     }.compact
   end
 
@@ -97,12 +76,9 @@ class EvaluatorMailer < ApplicationMailer
     evaluator = evaluation.evaluator
     submission_date_formatted = evaluation.report_submitted_at&.strftime('%B %d, %Y at %I:%M %p %Z') || 'Not recorded'
 
-    header_title = header_title_from_template_subject(
-      template: template,
-      subject_variables: { application_id: application.id },
-      fallback: "Your Evaluation has been Submitted - Application ##{application.id}"
-    )
-    header_data = build_header_footer_data(header_title, locale: locale)
+    envelope = envelope_variables(template: template, locale: locale, subject_variables: { application_id: application.id },
+                                  fallback_title: "Your Evaluation has been Submitted - Application ##{application.id}",
+                                  organization_name: 'MAT Program')
 
     {
       constituent_first_name: constituent.first_name,
@@ -115,7 +91,7 @@ class EvaluatorMailer < ApplicationMailer
         title: I18n.t('evaluator_mailer.status_boxes.submitted.title', locale: locale),
         message: I18n.t('evaluator_mailer.status_boxes.submitted.message', locale: locale)
       ),
-      **header_data
+      **envelope
     }.compact
   end
 
@@ -123,42 +99,6 @@ class EvaluatorMailer < ApplicationMailer
     evaluators_evaluation_url(evaluation, host: default_url_options[:host])
   rescue StandardError
     '#'
-  end
-
-  def build_header_footer_data(title, locale: nil)
-    footer_contact_email = ProgramContact.support_email
-    footer_website_url = ProgramContact.website_url
-    footer_show_automated_message = true
-    footer_organization_name = Policy.get('organization_name') || 'MAT Program'
-    header_logo_url = safe_logo_url
-
-    {
-      header_text: header_text(title: title, logo_url: header_logo_url, locale: locale),
-      footer_text: footer_text(
-        contact_email: footer_contact_email,
-        website_url: footer_website_url,
-        show_automated_message: footer_show_automated_message,
-        organization_name: footer_organization_name,
-        locale: locale
-      ),
-      header_logo_url: header_logo_url,
-      header_subtitle: nil,
-      support_email: footer_contact_email
-    }
-  end
-
-  def safe_logo_url
-    ActionController::Base.helpers.asset_path('logo.png', host: default_url_options[:host])
-  rescue StandardError
-    nil
-  end
-
-  def format_constituent_address(constituent)
-    [
-      constituent.physical_address_1,
-      constituent.physical_address_2,
-      "#{constituent.city}, #{constituent.state} #{constituent.zip_code}"
-    ].compact_blank.join("\n")
   end
 
   def format_disabilities_html(constituent)

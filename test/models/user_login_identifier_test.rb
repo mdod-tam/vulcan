@@ -188,7 +188,7 @@ class UserLoginIdentifierTest < ActiveSupport::TestCase
     user = create(:constituent, phone: '000-000-1234',
                                 email: "placeholder.#{SecureRandom.hex(3)}@example.com")
 
-    assert User.placeholder_phone?(user.phone)
+    assert PhoneNumber.synthetic?(user.phone)
     assert_nil User.find_by_login_identifier(user.phone)
   end
 
@@ -196,8 +196,8 @@ class UserLoginIdentifierTest < ActiveSupport::TestCase
     user = create(:constituent, phone: '000-123-4567',
                                 email: "synthetic.#{SecureRandom.hex(3)}@example.com")
 
-    assert User.synthetic_dependent_phone?(user.phone)
-    assert User.placeholder_phone?(user.phone)
+    assert PhoneNumber.synthetic?(user.phone)
+    assert PhoneNumber.synthetic?(user.phone)
     assert_nil User.find_by_login_identifier(user.phone)
     assert_nil User.find_by_login_identifier('0001234567')
   end
@@ -228,13 +228,28 @@ class UserLoginIdentifierTest < ActiveSupport::TestCase
     assert_nil User.find_by_login_identifier(dependent.phone)
   end
 
-  test 'placeholder_phone? handles nil and blank' do
-    assert_not User.placeholder_phone?(nil)
-    assert_not User.placeholder_phone?('')
-  end
-
   test 'system_generated_email? handles nil and blank' do
     assert_not User.system_generated_email?(nil)
     assert_not User.system_generated_email?('')
+  end
+  test 'identity lookups surface database errors instead of reporting no match' do
+    User.stubs(:find_by).raises(ActiveRecord::StatementInvalid, 'connection lost')
+
+    assert_raises(ActiveRecord::StatementInvalid) { User.find_by_email('someone@example.com') }
+    assert_raises(ActiveRecord::StatementInvalid) { User.find_by_phone('410-555-1234') }
+    assert_raises(ActiveRecord::StatementInvalid) { User.find_by_login_identifier('someone@example.com') }
+  end
+
+  test 'existence checks surface database errors instead of reporting a free identifier' do
+    User.stubs(:where).raises(ActiveRecord::StatementInvalid, 'connection lost')
+
+    assert_raises(ActiveRecord::StatementInvalid) { User.exists_with_email?('someone@example.com') }
+    assert_raises(ActiveRecord::StatementInvalid) { User.exists_with_phone?('410-555-1234') }
+  end
+
+  test 'a uniqueness check that cannot run fails validation loudly instead of passing' do
+    User.stubs(:exists_with_email?).raises(ActiveRecord::StatementInvalid, 'connection lost')
+
+    assert_raises(ActiveRecord::StatementInvalid) { build(:constituent, email: 'new.person@example.com').valid? }
   end
 end

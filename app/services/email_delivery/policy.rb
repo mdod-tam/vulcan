@@ -35,7 +35,7 @@ module EmailDelivery
                            'templates' => template_rows(entry, params).map { |row| template_scope_for(row) })
       if entry.essential == :sms_only_login
         context['sms_credential_id'] = params[:sms_credential_id]
-        context['sms_destination_key'] = EmailDeliveryAttempt.recipient_key(SmsCredential.normalize_phone_number(params[:phone_number]))
+        context['sms_destination_key'] = EmailDeliveryAttempt.recipient_key(PhoneNumber.normalize(params[:phone_number]))
       end
       context['denied_channels'] = initial_denials(context)
       context

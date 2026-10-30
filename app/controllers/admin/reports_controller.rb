@@ -2,21 +2,10 @@
 
 module Admin
   class ReportsController < Admin::BaseController
-    include DashboardMetricsLoading
-
     def index
       @vouchers_enabled = FeatureFlag.enabled?(:vouchers_enabled)
+      @report = Reports::FiscalYearReport.new
 
-      load_fiscal_year_data
-      load_fiscal_year_application_counts
-      load_fiscal_year_voucher_counts if @vouchers_enabled
-      load_fiscal_year_service_counts
-      load_vendor_data if @vouchers_enabled
-      load_applications_chart_data
-      load_vouchers_chart_data if @vouchers_enabled
-      load_services_chart_data
-      load_disability_type_data
-      load_referral_source_data
       load_equipment_by_type_data
       load_mfr_reports_data
     end

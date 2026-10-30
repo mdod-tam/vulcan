@@ -67,7 +67,11 @@ module ApplicationHelper
   end
 
   def proof_review_button_text(application, proof_type)
-    application.proof_review_button_text(proof_type)
+    case application.proof_review_state(proof_type)
+    when :resubmitted then 'Review Resubmitted Proof'
+    when :rejected then 'Review Rejected Proof'
+    else 'Review Proof'
+    end
   end
 
   def proof_review_button_class(application, proof_type)

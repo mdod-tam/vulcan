@@ -25,7 +25,6 @@ class ApplicationStorageDecoratorTest < ActiveSupport::TestCase
 
   test 'attachment preload names include id proof' do
     assert_includes ApplicationDataLoading::DEFAULT_ATTACHMENT_NAMES, 'id_proof'
-    assert_includes Admin::ApplicationsController::WANTED_ATTACHMENT_NAMES, 'id_proof'
   end
 
   private

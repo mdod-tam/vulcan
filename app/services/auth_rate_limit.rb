@@ -86,7 +86,7 @@ class AuthRateLimit
       return nil
     end
 
-    User.normalize_phone(stripped)
+    PhoneNumber.normalize(stripped)
   end
 
   def self.request_ip_digest(request)

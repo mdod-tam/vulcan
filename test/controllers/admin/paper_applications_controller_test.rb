@@ -1071,10 +1071,10 @@ module Admin
       get new_admin_paper_application_path, headers: default_headers
       assert_response :success
 
-      thresholds_json = @controller.fpl_thresholds_json
-      modifier = @controller.fpl_modifier_value
+      client_data = IncomeThresholdCalculationService.client_data
+      modifier = client_data[:modifier]
 
-      thresholds = JSON.parse(thresholds_json)
+      thresholds = client_data[:thresholds]
       assert_equal 15_650, thresholds['1']
       assert_equal 21_150, thresholds['2']
       assert_equal 26_650, thresholds['3']
@@ -1594,7 +1594,7 @@ module Admin
         }
       end
 
-      user = User.find_by(phone: User.normalize_phone(unique_phone))
+      user = User.find_by(phone: PhoneNumber.normalize(unique_phone))
       assert user, 'Expected phone-only user to be created'
       assert_nil user.email
       assert user.portal_access_eligible?

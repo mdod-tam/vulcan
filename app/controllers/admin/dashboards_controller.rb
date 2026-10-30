@@ -3,10 +3,8 @@
 module Admin
   # Admin dashboard: metrics, recent notifications, and the current admin's open notes.
   class DashboardsController < BaseController
-    include DashboardMetricsLoading
-
     def show
-      @metrics = load_dashboard_metrics
+      @metrics = Reports::AdminDashboardMetrics.call
 
       # Preload notifiable for Notification#message and actor for the view.
       @recent_notifications = Notification

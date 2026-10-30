@@ -154,8 +154,7 @@ class RegistrationsController < ApplicationController
       user: [:email, :password, :password_confirmation,
              :first_name, :last_name, :middle_initial,
              :date_of_birth, :phone, :phone_type, :timezone, :locale,
-             :hearing_disability, :vision_disability,
-             :speech_disability, :mobility_disability, :cognition_disability,
+             *Users::Constituent::DISABILITY_FLAGS,
              :communication_preference, :newsletter_signup,
              # Address fields for letter notifications
              :physical_address_1, :physical_address_2,

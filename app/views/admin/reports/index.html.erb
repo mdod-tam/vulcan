@@ -42,28 +42,28 @@
       </p>
       <div class="grid grid-cols-1 md:grid-cols-2 gap-4 mb-4">
         <div class="bg-gray-50 rounded p-4">
-          <h3 id="current-fy-heading" class="font-medium text-gray-700">Current Fiscal Year (<%= @current_fy_label %>)</h3>
+          <h3 id="current-fy-heading" class="font-medium text-gray-700">Current Fiscal Year (<%= @report.current_fy_label %>)</h3>
           <dl class="mt-2 grid grid-cols-1 gap-x-4 gap-y-2">
             <div class="flex justify-between">
               <dt class="text-sm text-gray-500">Applications Created:</dt>
-              <dd class="text-sm font-medium text-gray-900" aria-labelledby="current-fy-heading"><%= @current_fy_applications %></dd>
+              <dd class="text-sm font-medium text-gray-900" aria-labelledby="current-fy-heading"><%= @report.current_fy_applications %></dd>
             </div>
             <div class="flex justify-between">
               <dt class="text-sm text-gray-500">Draft Applications:</dt>
-              <dd class="text-sm font-medium text-gray-900" aria-labelledby="current-fy-heading"><%= @current_fy_draft_applications %></dd>
+              <dd class="text-sm font-medium text-gray-900" aria-labelledby="current-fy-heading"><%= @report.current_fy_draft_applications %></dd>
             </div>
           </dl>
 
           <div class="mt-4">
             <div class="relative h-[200px] w-full"
                  data-controller="chart"
-                 data-chart-data-value="<%= { 'Created' => @current_fy_applications, 'Draft' => @current_fy_draft_applications }.to_json %>"
+                 data-chart-data-value="<%= { 'Created' => @report.current_fy_applications, 'Draft' => @report.current_fy_draft_applications }.to_json %>"
                  data-chart-compact-value="true"
                  data-chart-dataset-label-value="Current Fiscal Year"
                  data-chart-title-value="Current FY Applications">
               <canvas data-chart-target="canvas" role="img" aria-label="Current FY Applications" aria-describedby="current-fy-applications-desc"></canvas>
               <div id="current-fy-applications-desc" class="sr-only">
-                Chart showing current fiscal year applications: <%= @current_fy_applications %> created and <%= @current_fy_draft_applications %> draft applications.
+                Chart showing current fiscal year applications: <%= @report.current_fy_applications %> created and <%= @report.current_fy_draft_applications %> draft applications.
               </div>
             </div>
           </div>
@@ -71,28 +71,28 @@
         </div>
 
         <div class="bg-gray-50 rounded p-4">
-          <h3 id="previous-fy-heading" class="font-medium text-gray-700">Previous Fiscal Year (<%= @previous_fy_label %>)</h3>
+          <h3 id="previous-fy-heading" class="font-medium text-gray-700">Previous Fiscal Year (<%= @report.previous_fy_label %>)</h3>
           <dl class="mt-2 grid grid-cols-1 gap-x-4 gap-y-2">
             <div class="flex justify-between">
               <dt class="text-sm text-gray-500">Applications Created:</dt>
-              <dd class="text-sm font-medium text-gray-900" aria-labelledby="previous-fy-heading"><%= @previous_fy_applications %></dd>
+              <dd class="text-sm font-medium text-gray-900" aria-labelledby="previous-fy-heading"><%= @report.previous_fy_applications %></dd>
             </div>
             <div class="flex justify-between">
               <dt class="text-sm text-gray-500">Draft Applications:</dt>
-              <dd class="text-sm font-medium text-gray-900" aria-labelledby="previous-fy-heading"><%= @previous_fy_draft_applications %></dd>
+              <dd class="text-sm font-medium text-gray-900" aria-labelledby="previous-fy-heading"><%= @report.previous_fy_draft_applications %></dd>
             </div>
           </dl>
 
           <div class="mt-4">
             <div class="relative h-[200px] w-full"
                  data-controller="chart"
-                 data-chart-data-value="<%= { 'Created' => @previous_fy_applications, 'Draft' => @previous_fy_draft_applications }.to_json %>"
+                 data-chart-data-value="<%= { 'Created' => @report.previous_fy_applications, 'Draft' => @report.previous_fy_draft_applications }.to_json %>"
                  data-chart-compact-value="true"
                  data-chart-dataset-label-value="Previous Fiscal Year"
                  data-chart-title-value="Previous FY Applications">
               <canvas data-chart-target="canvas" role="img" aria-label="Previous FY Applications" aria-describedby="previous-fy-applications-desc"></canvas>
               <div id="previous-fy-applications-desc" class="sr-only">
-                Chart showing previous fiscal year applications: <%= @previous_fy_applications %> created and <%= @previous_fy_draft_applications %> draft applications.
+                Chart showing previous fiscal year applications: <%= @report.previous_fy_applications %> created and <%= @report.previous_fy_draft_applications %> draft applications.
               </div>
             </div>
           </div>
@@ -103,8 +103,8 @@
       <div class="mt-4">
         <div class="relative h-[300px] w-full"
              data-controller="chart"
-             data-chart-data-value="<%= @applications_chart_data[:current].to_json %>"
-             data-chart-comparison-data-value="<%= @applications_chart_data[:previous].to_json %>"
+             data-chart-data-value="<%= @report.applications_chart_data[:current].to_json %>"
+             data-chart-comparison-data-value="<%= @report.applications_chart_data[:previous].to_json %>"
              data-chart-title-value="Applications Comparison">
           <canvas data-chart-target="canvas" role="img" aria-label="Applications Comparison" aria-describedby="chart-description-applications"></canvas>
           <div id="chart-description-applications" class="sr-only">
@@ -121,61 +121,61 @@
 
         <div class="grid grid-cols-1 md:grid-cols-2 gap-4">
           <div class="bg-gray-50 rounded p-4">
-            <h4 id="current-fy-disabilities-heading" class="font-medium text-gray-700 mb-2">Current Fiscal Year (<%= @current_fy_label %>)</h4>
+            <h4 id="current-fy-disabilities-heading" class="font-medium text-gray-700 mb-2">Current Fiscal Year (<%= @report.current_fy_label %>)</h4>
             <dl class="space-y-1">
               <div class="flex justify-between text-sm">
                 <dt class="text-gray-600">Hearing:</dt>
-                <dd class="font-medium text-gray-900"><%= @current_fy_hearing_disability_count || 0 %></dd>
+                <dd class="font-medium text-gray-900"><%= @report.current_fy_hearing_disability_count || 0 %></dd>
               </div>
               <div class="flex justify-between text-sm">
                 <dt class="text-gray-600">Vision:</dt>
-                <dd class="font-medium text-gray-900"><%= @current_fy_vision_disability_count || 0 %></dd>
+                <dd class="font-medium text-gray-900"><%= @report.current_fy_vision_disability_count || 0 %></dd>
               </div>
               <div class="flex justify-between text-sm">
                 <dt class="text-gray-600">Speech:</dt>
-                <dd class="font-medium text-gray-900"><%= @current_fy_speech_disability_count || 0 %></dd>
+                <dd class="font-medium text-gray-900"><%= @report.current_fy_speech_disability_count || 0 %></dd>
               </div>
               <div class="flex justify-between text-sm">
                 <dt class="text-gray-600">Mobility:</dt>
-                <dd class="font-medium text-gray-900"><%= @current_fy_mobility_disability_count || 0 %></dd>
+                <dd class="font-medium text-gray-900"><%= @report.current_fy_mobility_disability_count || 0 %></dd>
               </div>
               <div class="flex justify-between text-sm">
                 <dt class="text-gray-600">Cognition:</dt>
-                <dd class="font-medium text-gray-900"><%= @current_fy_cognition_disability_count || 0 %></dd>
+                <dd class="font-medium text-gray-900"><%= @report.current_fy_cognition_disability_count || 0 %></dd>
               </div>
               <div class="flex justify-between text-sm pt-2 border-t border-gray-300">
                 <dt class="text-gray-700 font-semibold">Total Applications:</dt>
-                <dd class="font-bold text-gray-900"><%= @current_fy_total_disability_applications || 0 %></dd>
+                <dd class="font-bold text-gray-900"><%= @report.current_fy_total_disability_applications || 0 %></dd>
               </div>
             </dl>
           </div>
 
           <div class="bg-gray-50 rounded p-4">
-            <h4 id="previous-fy-disabilities-heading" class="font-medium text-gray-700 mb-2">Previous Fiscal Year (<%= @previous_fy_label %>)</h4>
+            <h4 id="previous-fy-disabilities-heading" class="font-medium text-gray-700 mb-2">Previous Fiscal Year (<%= @report.previous_fy_label %>)</h4>
             <dl class="space-y-1">
               <div class="flex justify-between text-sm">
                 <dt class="text-gray-600">Hearing:</dt>
-                <dd class="font-medium text-gray-900"><%= @previous_fy_hearing_disability_count || 0 %></dd>
+                <dd class="font-medium text-gray-900"><%= @report.previous_fy_hearing_disability_count || 0 %></dd>
               </div>
               <div class="flex justify-between text-sm">
                 <dt class="text-gray-600">Vision:</dt>
-                <dd class="font-medium text-gray-900"><%= @previous_fy_vision_disability_count || 0 %></dd>
+                <dd class="font-medium text-gray-900"><%= @report.previous_fy_vision_disability_count || 0 %></dd>
               </div>
               <div class="flex justify-between text-sm">
                 <dt class="text-gray-600">Speech:</dt>
-                <dd class="font-medium text-gray-900"><%= @previous_fy_speech_disability_count || 0 %></dd>
+                <dd class="font-medium text-gray-900"><%= @report.previous_fy_speech_disability_count || 0 %></dd>
               </div>
               <div class="flex justify-between text-sm">
                 <dt class="text-gray-600">Mobility:</dt>
-                <dd class="font-medium text-gray-900"><%= @previous_fy_mobility_disability_count || 0 %></dd>
+                <dd class="font-medium text-gray-900"><%= @report.previous_fy_mobility_disability_count || 0 %></dd>
               </div>
               <div class="flex justify-between text-sm">
                 <dt class="text-gray-600">Cognition:</dt>
-                <dd class="font-medium text-gray-900"><%= @previous_fy_cognition_disability_count || 0 %></dd>
+                <dd class="font-medium text-gray-900"><%= @report.previous_fy_cognition_disability_count || 0 %></dd>
               </div>
               <div class="flex justify-between text-sm pt-2 border-t border-gray-300">
                 <dt class="text-gray-700 font-semibold">Total Applications:</dt>
-                <dd class="font-bold text-gray-900"><%= @previous_fy_total_disability_applications || 0 %></dd>
+                <dd class="font-bold text-gray-900"><%= @report.previous_fy_total_disability_applications || 0 %></dd>
               </div>
             </dl>
           </div>
@@ -187,23 +187,23 @@
                aria-labelledby="disability-comparison-chart-heading disability-comparison-chart-desc"
                data-controller="chart"
                data-chart-data-value="<%= {
-                 'Hearing' => @current_fy_hearing_disability_count || 0,
-                 'Vision' => @current_fy_vision_disability_count || 0,
-                 'Speech' => @current_fy_speech_disability_count || 0,
-                 'Mobility' => @current_fy_mobility_disability_count || 0,
-                 'Cognition' => @current_fy_cognition_disability_count || 0
+                 'Hearing' => @report.current_fy_hearing_disability_count || 0,
+                 'Vision' => @report.current_fy_vision_disability_count || 0,
+                 'Speech' => @report.current_fy_speech_disability_count || 0,
+                 'Mobility' => @report.current_fy_mobility_disability_count || 0,
+                 'Cognition' => @report.current_fy_cognition_disability_count || 0
                }.to_json %>"
                data-chart-comparison-data-value="<%= {
-                 'Hearing' => @previous_fy_hearing_disability_count || 0,
-                 'Vision' => @previous_fy_vision_disability_count || 0,
-                 'Speech' => @previous_fy_speech_disability_count || 0,
-                 'Mobility' => @previous_fy_mobility_disability_count || 0,
-                 'Cognition' => @previous_fy_cognition_disability_count || 0
+                 'Hearing' => @report.previous_fy_hearing_disability_count || 0,
+                 'Vision' => @report.previous_fy_vision_disability_count || 0,
+                 'Speech' => @report.previous_fy_speech_disability_count || 0,
+                 'Mobility' => @report.previous_fy_mobility_disability_count || 0,
+                 'Cognition' => @report.previous_fy_cognition_disability_count || 0
                }.to_json %>"
                data-chart-title-value="Disability Type Comparison">
             <canvas data-chart-target="canvas" role="img" aria-label="Disability Type Comparison" aria-describedby="disability-comparison-chart-desc"></canvas>
             <div id="disability-comparison-chart-desc" class="sr-only">
-              Bar chart comparing disability types between current fiscal year (Hearing: <%= @current_fy_hearing_disability_count || 0 %>, Vision: <%= @current_fy_vision_disability_count || 0 %>, Speech: <%= @current_fy_speech_disability_count || 0 %>, Mobility: <%= @current_fy_mobility_disability_count || 0 %>, Cognition: <%= @current_fy_cognition_disability_count || 0 %>) and previous fiscal year (Hearing: <%= @previous_fy_hearing_disability_count || 0 %>, Vision: <%= @previous_fy_vision_disability_count || 0 %>, Speech: <%= @previous_fy_speech_disability_count || 0 %>, Mobility: <%= @previous_fy_mobility_disability_count || 0 %>, Cognition: <%= @previous_fy_cognition_disability_count || 0 %>).
+              Bar chart comparing disability types between current fiscal year (Hearing: <%= @report.current_fy_hearing_disability_count || 0 %>, Vision: <%= @report.current_fy_vision_disability_count || 0 %>, Speech: <%= @report.current_fy_speech_disability_count || 0 %>, Mobility: <%= @report.current_fy_mobility_disability_count || 0 %>, Cognition: <%= @report.current_fy_cognition_disability_count || 0 %>) and previous fiscal year (Hearing: <%= @report.previous_fy_hearing_disability_count || 0 %>, Vision: <%= @report.previous_fy_vision_disability_count || 0 %>, Speech: <%= @report.previous_fy_speech_disability_count || 0 %>, Mobility: <%= @report.previous_fy_mobility_disability_count || 0 %>, Cognition: <%= @report.previous_fy_cognition_disability_count || 0 %>).
             </div>
           </div>
         </div>
@@ -224,23 +224,23 @@
       <h2 id="voucher-statistics-heading" class="text-xl font-bold mb-4">Voucher Statistics</h2>
       <div class="grid grid-cols-1 md:grid-cols-2 gap-4 mb-4">
         <div class="bg-gray-50 rounded p-4">
-          <h3 id="current-fy-vouchers-heading" class="font-medium text-gray-700">Current Fiscal Year (<%= @current_fy_label %>)</h3>
+          <h3 id="current-fy-vouchers-heading" class="font-medium text-gray-700">Current Fiscal Year (<%= @report.current_fy_label %>)</h3>
           <dl class="mt-2 grid grid-cols-1 gap-x-4 gap-y-2">
             <div class="flex justify-between">
               <dt class="text-sm text-gray-500">Vouchers Issued:</dt>
-              <dd class="text-sm font-medium text-gray-900" aria-labelledby="current-fy-vouchers-heading"><%= @current_fy_vouchers %></dd>
+              <dd class="text-sm font-medium text-gray-900" aria-labelledby="current-fy-vouchers-heading"><%= @report.current_fy_vouchers %></dd>
             </div>
             <div class="flex justify-between">
               <dt class="text-sm text-gray-500">Active Unredeemed:</dt>
-              <dd class="text-sm font-medium text-gray-900" aria-labelledby="current-fy-vouchers-heading"><%= @current_fy_active_vouchers || 0 %></dd>
+              <dd class="text-sm font-medium text-gray-900" aria-labelledby="current-fy-vouchers-heading"><%= @report.current_fy_active_vouchers || 0 %></dd>
             </div>
             <div class="flex justify-between">
               <dt class="text-sm text-gray-500">Expired Vouchers:</dt>
-              <dd class="text-sm font-medium text-gray-900" aria-labelledby="current-fy-vouchers-heading"><%= @current_fy_expired_vouchers || 0 %></dd>
+              <dd class="text-sm font-medium text-gray-900" aria-labelledby="current-fy-vouchers-heading"><%= @report.current_fy_expired_vouchers || 0 %></dd>
             </div>
             <div class="flex justify-between">
               <dt class="text-sm text-gray-500">Total Voucher Value (Issued):</dt>
-              <dd class="text-sm font-medium text-gray-900" aria-labelledby="current-fy-vouchers-heading"><%= number_to_currency(@current_fy_voucher_value) %></dd>
+              <dd class="text-sm font-medium text-gray-900" aria-labelledby="current-fy-vouchers-heading"><%= number_to_currency(@report.current_fy_voucher_value) %></dd>
             </div>
           </dl>
 
@@ -248,18 +248,18 @@
             <div class="relative h-[200px] w-full"
                  data-controller="chart"
                  data-chart-data-value="<%= {
-                   'Issued' => @current_fy_vouchers,
-                   'Active' => @current_fy_active_vouchers || 0,
-                   'Expired' => @current_fy_expired_vouchers || 0
+                   'Issued' => @report.current_fy_vouchers,
+                   'Active' => @report.current_fy_active_vouchers || 0,
+                   'Expired' => @report.current_fy_expired_vouchers || 0
                  }.to_json %>"
                  data-chart-compact-value="true"
                  data-chart-dataset-label-value="Current Fiscal Year"
                  data-chart-title-value="Current FY Vouchers">
               <canvas data-chart-target="canvas" role="img" aria-label="Current FY Vouchers" aria-describedby="current-fy-vouchers-desc"></canvas>
               <div id="current-fy-vouchers-desc" class="sr-only">
-                Chart showing current fiscal year vouchers: <%= @current_fy_vouchers %> issued,
-                <%= @current_fy_active_vouchers || 0 %> active unredeemed, and
-                <%= @current_fy_expired_vouchers || 0 %> expired vouchers.
+                Chart showing current fiscal year vouchers: <%= @report.current_fy_vouchers %> issued,
+                <%= @report.current_fy_active_vouchers || 0 %> active unredeemed, and
+                <%= @report.current_fy_expired_vouchers || 0 %> expired vouchers.
               </div>
             </div>
           </div>
@@ -267,23 +267,23 @@
         </div>
 
         <div class="bg-gray-50 rounded p-4">
-          <h3 id="previous-fy-vouchers-heading" class="font-medium text-gray-700">Previous Fiscal Year (<%= @previous_fy_label %>)</h3>
+          <h3 id="previous-fy-vouchers-heading" class="font-medium text-gray-700">Previous Fiscal Year (<%= @report.previous_fy_label %>)</h3>
           <dl class="mt-2 grid grid-cols-1 gap-x-4 gap-y-2">
             <div class="flex justify-between">
               <dt class="text-sm text-gray-500">Vouchers Issued:</dt>
-              <dd class="text-sm font-medium text-gray-900" aria-labelledby="previous-fy-vouchers-heading"><%= @previous_fy_vouchers %></dd>
+              <dd class="text-sm font-medium text-gray-900" aria-labelledby="previous-fy-vouchers-heading"><%= @report.previous_fy_vouchers %></dd>
             </div>
             <div class="flex justify-between">
               <dt class="text-sm text-gray-500">Active Unredeemed:</dt>
-              <dd class="text-sm font-medium text-gray-900" aria-labelledby="previous-fy-vouchers-heading"><%= @previous_fy_active_vouchers || 0 %></dd>
+              <dd class="text-sm font-medium text-gray-900" aria-labelledby="previous-fy-vouchers-heading"><%= @report.previous_fy_active_vouchers || 0 %></dd>
             </div>
             <div class="flex justify-between">
               <dt class="text-sm text-gray-500">Expired Vouchers:</dt>
-              <dd class="text-sm font-medium text-gray-900" aria-labelledby="previous-fy-vouchers-heading"><%= @previous_fy_expired_vouchers || 0 %></dd>
+              <dd class="text-sm font-medium text-gray-900" aria-labelledby="previous-fy-vouchers-heading"><%= @report.previous_fy_expired_vouchers || 0 %></dd>
             </div>
             <div class="flex justify-between">
               <dt class="text-sm text-gray-500">Total Voucher Value (Issued):</dt>
-              <dd class="text-sm font-medium text-gray-900" aria-labelledby="previous-fy-vouchers-heading"><%= number_to_currency(@previous_fy_voucher_value) %></dd>
+              <dd class="text-sm font-medium text-gray-900" aria-labelledby="previous-fy-vouchers-heading"><%= number_to_currency(@report.previous_fy_voucher_value) %></dd>
             </div>
           </dl>
 
@@ -291,18 +291,18 @@
             <div class="relative h-[200px] w-full"
                  data-controller="chart"
                  data-chart-data-value="<%= {
-                   'Issued' => @previous_fy_vouchers,
-                   'Active' => @previous_fy_active_vouchers || 0,
-                   'Expired' => @previous_fy_expired_vouchers || 0
+                   'Issued' => @report.previous_fy_vouchers,
+                   'Active' => @report.previous_fy_active_vouchers || 0,
+                   'Expired' => @report.previous_fy_expired_vouchers || 0
                  }.to_json %>"
                  data-chart-compact-value="true"
                  data-chart-dataset-label-value="Previous Fiscal Year"
                  data-chart-title-value="Previous FY Vouchers">
               <canvas data-chart-target="canvas" role="img" aria-label="Previous FY Vouchers" aria-describedby="previous-fy-vouchers-desc"></canvas>
               <div id="previous-fy-vouchers-desc" class="sr-only">
-                Chart showing previous fiscal year vouchers: <%= @previous_fy_vouchers %> issued,
-                <%= @previous_fy_active_vouchers || 0 %> active unredeemed, and
-                <%= @previous_fy_expired_vouchers || 0 %> expired vouchers.
+                Chart showing previous fiscal year vouchers: <%= @report.previous_fy_vouchers %> issued,
+                <%= @report.previous_fy_active_vouchers || 0 %> active unredeemed, and
+                <%= @report.previous_fy_expired_vouchers || 0 %> expired vouchers.
               </div>
             </div>
           </div>
@@ -313,8 +313,8 @@
       <div class="mt-4">
         <div class="relative h-[300px] w-full"
              data-controller="chart"
-             data-chart-data-value="<%= @vouchers_chart_data[:current].to_json %>"
-             data-chart-comparison-data-value="<%= @vouchers_chart_data[:previous].to_json %>"
+             data-chart-data-value="<%= @report.vouchers_chart_data[:current].to_json %>"
+             data-chart-comparison-data-value="<%= @report.vouchers_chart_data[:previous].to_json %>"
              data-chart-title-value="Voucher Statistics Comparison">
           <canvas data-chart-target="canvas" role="img" aria-label="Voucher Statistics Comparison" aria-describedby="chart-description-vouchers"></canvas>
           <div id="chart-description-vouchers" class="sr-only">
@@ -327,23 +327,23 @@
         <h4 class="font-medium text-gray-700 mb-2">Voucher Value Comparison</h4>
         <div class="flex justify-between mb-2">
           <span class="text-sm text-gray-500">Current FY Total Value:</span>
-          <span class="text-sm font-medium text-gray-900"><%= number_to_currency(@current_fy_voucher_value) %></span>
+          <span class="text-sm font-medium text-gray-900"><%= number_to_currency(@report.current_fy_voucher_value) %></span>
         </div>
         <div class="flex justify-between mb-4">
           <span class="text-sm text-gray-500">Previous FY Total Value:</span>
-          <span class="text-sm font-medium text-gray-900"><%= number_to_currency(@previous_fy_voucher_value) %></span>
+          <span class="text-sm font-medium text-gray-900"><%= number_to_currency(@report.previous_fy_voucher_value) %></span>
         </div>
 
         <div class="relative h-[300px] w-full"
              data-controller="chart"
-             data-chart-data-value="<%= { 'Total Value' => @current_fy_voucher_value.to_f }.to_json %>"
-             data-chart-comparison-data-value="<%= { 'Total Value' => @previous_fy_voucher_value.to_f }.to_json %>"
+             data-chart-data-value="<%= { 'Total Value' => @report.current_fy_voucher_value.to_f }.to_json %>"
+             data-chart-comparison-data-value="<%= { 'Total Value' => @report.previous_fy_voucher_value.to_f }.to_json %>"
              data-chart-y-axis-label-value="Value ($)"
              data-chart-format-value="currency"
              data-chart-title-value="Voucher Value Comparison">
           <canvas data-chart-target="canvas" role="img" aria-label="Voucher Value Comparison" aria-describedby="voucher-value-comparison-desc"></canvas>
           <div id="voucher-value-comparison-desc" class="sr-only">
-            Chart comparing voucher values: Current fiscal year: <%= number_to_currency(@current_fy_voucher_value) %>, Previous fiscal year: <%= number_to_currency(@previous_fy_voucher_value) %>.
+            Chart comparing voucher values: Current fiscal year: <%= number_to_currency(@report.current_fy_voucher_value) %>, Previous fiscal year: <%= number_to_currency(@report.previous_fy_voucher_value) %>.
           </div>
         </div>
       </div>
@@ -354,28 +354,28 @@
       <h2 id="services-overview-heading" class="text-xl font-bold mb-4">Services Overview</h2>
       <div class="grid grid-cols-1 md:grid-cols-2 gap-4 mb-4">
         <div class="bg-gray-50 rounded p-4">
-          <h3 id="current-fy-services-heading" class="font-medium text-gray-700">Current Fiscal Year (<%= @current_fy_label %>)</h3>
+          <h3 id="current-fy-services-heading" class="font-medium text-gray-700">Current Fiscal Year (<%= @report.current_fy_label %>)</h3>
           <dl class="mt-2 grid grid-cols-1 gap-x-4 gap-y-2">
             <div class="flex justify-between">
               <dt class="text-sm text-gray-500">Training Sessions:</dt>
-              <dd class="text-sm font-medium text-gray-900" aria-labelledby="current-fy-services-heading"><%= @current_fy_trainings %></dd>
+              <dd class="text-sm font-medium text-gray-900" aria-labelledby="current-fy-services-heading"><%= @report.current_fy_trainings %></dd>
             </div>
             <div class="flex justify-between">
               <dt class="text-sm text-gray-500">Evaluation Sessions:</dt>
-              <dd class="text-sm font-medium text-gray-900" aria-labelledby="current-fy-services-heading"><%= @current_fy_evaluations %></dd>
+              <dd class="text-sm font-medium text-gray-900" aria-labelledby="current-fy-services-heading"><%= @report.current_fy_evaluations %></dd>
             </div>
           </dl>
 
           <div class="mt-4">
             <div class="relative h-[200px] w-full"
                  data-controller="chart"
-                 data-chart-data-value="<%= { 'Training' => @current_fy_trainings, 'Evaluation' => @current_fy_evaluations }.to_json %>"
+                 data-chart-data-value="<%= { 'Training' => @report.current_fy_trainings, 'Evaluation' => @report.current_fy_evaluations }.to_json %>"
                  data-chart-compact-value="true"
                  data-chart-dataset-label-value="Current Fiscal Year"
                  data-chart-title-value="Current FY Services">
               <canvas data-chart-target="canvas" role="img" aria-label="Current FY Services" aria-describedby="current-fy-services-desc"></canvas>
               <div id="current-fy-services-desc" class="sr-only">
-                Chart showing current fiscal year services: <%= @current_fy_trainings %> training sessions and <%= @current_fy_evaluations %> evaluation sessions.
+                Chart showing current fiscal year services: <%= @report.current_fy_trainings %> training sessions and <%= @report.current_fy_evaluations %> evaluation sessions.
               </div>
             </div>
           </div>
@@ -383,28 +383,28 @@
         </div>
 
         <div class="bg-gray-50 rounded p-4">
-          <h3 id="previous-fy-services-heading" class="font-medium text-gray-700">Previous Fiscal Year (<%= @previous_fy_label %>)</h3>
+          <h3 id="previous-fy-services-heading" class="font-medium text-gray-700">Previous Fiscal Year (<%= @report.previous_fy_label %>)</h3>
           <dl class="mt-2 grid grid-cols-1 gap-x-4 gap-y-2">
             <div class="flex justify-between">
               <dt class="text-sm text-gray-500">Training Sessions:</dt>
-              <dd class="text-sm font-medium text-gray-900" aria-labelledby="previous-fy-services-heading"><%= @previous_fy_trainings %></dd>
+              <dd class="text-sm font-medium text-gray-900" aria-labelledby="previous-fy-services-heading"><%= @report.previous_fy_trainings %></dd>
             </div>
             <div class="flex justify-between">
               <dt class="text-sm text-gray-500">Evaluation Sessions:</dt>
-              <dd class="text-sm font-medium text-gray-900" aria-labelledby="previous-fy-services-heading"><%= @previous_fy_evaluations %></dd>
+              <dd class="text-sm font-medium text-gray-900" aria-labelledby="previous-fy-services-heading"><%= @report.previous_fy_evaluations %></dd>
             </div>
           </dl>
 
           <div class="mt-4">
             <div class="relative h-[200px] w-full"
                  data-controller="chart"
-                 data-chart-data-value="<%= { 'Training' => @previous_fy_trainings, 'Evaluation' => @previous_fy_evaluations }.to_json %>"
+                 data-chart-data-value="<%= { 'Training' => @report.previous_fy_trainings, 'Evaluation' => @report.previous_fy_evaluations }.to_json %>"
                  data-chart-compact-value="true"
                  data-chart-dataset-label-value="Previous Fiscal Year"
                  data-chart-title-value="Previous FY Services">
               <canvas data-chart-target="canvas" role="img" aria-label="Previous FY Services" aria-describedby="previous-fy-services-desc"></canvas>
               <div id="previous-fy-services-desc" class="sr-only">
-                Chart showing previous fiscal year services: <%= @previous_fy_trainings %> training sessions and <%= @previous_fy_evaluations %> evaluation sessions.
+                Chart showing previous fiscal year services: <%= @report.previous_fy_trainings %> training sessions and <%= @report.previous_fy_evaluations %> evaluation sessions.
               </div>
             </div>
           </div>
@@ -423,11 +423,11 @@
           <dl class="grid grid-cols-1 sm:grid-cols-2 gap-x-6 gap-y-2">
             <div>
               <dt class="text-sm text-gray-500">Training requests awaiting session</dt>
-              <dd class="text-sm font-medium text-gray-900"><%= @training_requests_count %></dd>
+              <dd class="text-sm font-medium text-gray-900"><%= @report.training_requests_count %></dd>
             </div>
             <div>
               <dt class="text-sm text-gray-500">Evaluation requests awaiting session</dt>
-              <dd class="text-sm font-medium text-gray-900"><%= @evaluation_requests_count %></dd>
+              <dd class="text-sm font-medium text-gray-900"><%= @report.evaluation_requests_count %></dd>
             </div>
           </dl>
         </div>
@@ -439,16 +439,16 @@
               <thead>
                 <tr>
                   <th scope="col" class="py-2 pr-3 text-left font-medium text-gray-700">Training status</th>
-                  <th scope="col" class="px-3 py-2 text-right font-medium text-gray-700"><%= @current_fy_label %></th>
-                  <th scope="col" class="py-2 pl-3 text-right font-medium text-gray-700"><%= @previous_fy_label %></th>
+                  <th scope="col" class="px-3 py-2 text-right font-medium text-gray-700"><%= @report.current_fy_label %></th>
+                  <th scope="col" class="py-2 pl-3 text-right font-medium text-gray-700"><%= @report.previous_fy_label %></th>
                 </tr>
               </thead>
               <tbody class="divide-y divide-gray-100">
                 <% training_statuses.each do |status| %>
                   <tr>
                     <th scope="row" class="py-2 pr-3 text-left font-normal text-gray-600"><%= status.humanize %></th>
-                    <td class="px-3 py-2 text-right font-medium text-gray-900"><%= @current_fy_training_status_counts.fetch(status, 0) %></td>
-                    <td class="py-2 pl-3 text-right font-medium text-gray-900"><%= @previous_fy_training_status_counts.fetch(status, 0) %></td>
+                    <td class="px-3 py-2 text-right font-medium text-gray-900"><%= @report.current_fy_training_status_counts.fetch(status, 0) %></td>
+                    <td class="py-2 pl-3 text-right font-medium text-gray-900"><%= @report.previous_fy_training_status_counts.fetch(status, 0) %></td>
                   </tr>
                 <% end %>
               </tbody>
@@ -461,16 +461,16 @@
               <thead>
                 <tr>
                   <th scope="col" class="py-2 pr-3 text-left font-medium text-gray-700">Evaluation status</th>
-                  <th scope="col" class="px-3 py-2 text-right font-medium text-gray-700"><%= @current_fy_label %></th>
-                  <th scope="col" class="py-2 pl-3 text-right font-medium text-gray-700"><%= @previous_fy_label %></th>
+                  <th scope="col" class="px-3 py-2 text-right font-medium text-gray-700"><%= @report.current_fy_label %></th>
+                  <th scope="col" class="py-2 pl-3 text-right font-medium text-gray-700"><%= @report.previous_fy_label %></th>
                 </tr>
               </thead>
               <tbody class="divide-y divide-gray-100">
                 <% evaluation_statuses.each do |status| %>
                   <tr>
                     <th scope="row" class="py-2 pr-3 text-left font-normal text-gray-600"><%= status.humanize %></th>
-                    <td class="px-3 py-2 text-right font-medium text-gray-900"><%= @current_fy_evaluation_status_counts.fetch(status, 0) %></td>
-                    <td class="py-2 pl-3 text-right font-medium text-gray-900"><%= @previous_fy_evaluation_status_counts.fetch(status, 0) %></td>
+                    <td class="px-3 py-2 text-right font-medium text-gray-900"><%= @report.current_fy_evaluation_status_counts.fetch(status, 0) %></td>
+                    <td class="py-2 pl-3 text-right font-medium text-gray-900"><%= @report.previous_fy_evaluation_status_counts.fetch(status, 0) %></td>
                   </tr>
                 <% end %>
               </tbody>
@@ -494,8 +494,8 @@
 
         <div class="relative h-[300px] w-full"
              data-controller="chart"
-             data-chart-data-value="<%= @services_chart_data[:current].to_json %>"
-             data-chart-comparison-data-value="<%= @services_chart_data[:previous].to_json %>"
+             data-chart-data-value="<%= @report.services_chart_data[:current].to_json %>"
+             data-chart-comparison-data-value="<%= @report.services_chart_data[:previous].to_json %>"
              data-chart-title-value="Services Comparison">
           <canvas data-chart-target="canvas" role="img" aria-label="Services Comparison" aria-describedby="chart-description-services"></canvas>
           <div id="chart-description-services" class="sr-only">
@@ -514,24 +514,24 @@
           <dl class="mt-2 grid grid-cols-1 gap-x-4 gap-y-2">
             <div class="flex justify-between">
               <dt class="text-sm text-gray-500">Active Vendors (All Time):</dt>
-              <dd class="text-sm font-medium text-gray-900" aria-labelledby="vendor-summary-heading"><%= @active_vendors %></dd>
+              <dd class="text-sm font-medium text-gray-900" aria-labelledby="vendor-summary-heading"><%= @report.active_vendors %></dd>
             </div>
             <div class="flex justify-between">
               <dt class="text-sm text-gray-500">Active Vendors (Last 30 Days):</dt>
-              <dd class="text-sm font-medium text-gray-900" aria-labelledby="vendor-summary-heading"><%= @recent_active_vendors %></dd>
+              <dd class="text-sm font-medium text-gray-900" aria-labelledby="vendor-summary-heading"><%= @report.recent_active_vendors %></dd>
             </div>
           </dl>
 
           <div class="mt-4">
             <div class="relative h-[200px] w-full"
                  data-controller="chart"
-                 data-chart-data-value="<%= { 'Recent' => @recent_active_vendors, 'Other' => (@active_vendors - @recent_active_vendors) }.to_json %>"
+                 data-chart-data-value="<%= { 'Recent' => @report.recent_active_vendors, 'Other' => (@report.active_vendors - @report.recent_active_vendors) }.to_json %>"
                  data-chart-comparison-data-value="<%= {}.to_json %>"
                  data-chart-compact-value="true"
                  data-chart-title-value="Vendor Activity">
               <canvas data-chart-target="canvas" role="img" aria-label="Vendor Activity" aria-describedby="vendor-activity-desc"></canvas>
               <div id="vendor-activity-desc" class="sr-only">
-                Chart showing vendor activity: <%= @recent_active_vendors %> vendors active in the last month out of <%= @active_vendors %> total active vendors.
+                Chart showing vendor activity: <%= @report.recent_active_vendors %> vendors active in the last month out of <%= @report.active_vendors %> total active vendors.
               </div>
             </div>
           </div>
@@ -540,21 +540,21 @@
         <div class="bg-gray-50 rounded p-4">
           <h3 id="vendor-details-heading" class="font-medium text-gray-700 mb-2">Vendor Activity Details</h3>
           <p class="text-sm text-gray-500 mb-4">
-            <% if @active_vendors.zero? %>
+            <% if @report.active_vendors.zero? %>
               No vendors have recorded transactions yet.
             <% else %>
-              <%= @recent_active_vendors %> out of <%= @active_vendors %> vendors (<%= number_to_percentage((@recent_active_vendors.to_f / @active_vendors) * 100, precision: 1) %>) have had transactions in the last 30 days.
+              <%= @report.recent_active_vendors %> out of <%= @report.active_vendors %> vendors (<%= number_to_percentage((@report.recent_active_vendors.to_f / @report.active_vendors) * 100, precision: 1) %>) have had transactions in the last 30 days.
             <% end %>
           </p>
 
           <div class="flex flex-col space-y-2">
             <div class="flex items-center">
               <span class="inline-block w-3 h-3 bg-primary-600 rounded-full mr-2" aria-hidden="true"></span>
-              <span class="text-sm text-gray-700">Active Vendors (Last 30 Days): <%= @recent_active_vendors %></span>
+              <span class="text-sm text-gray-700">Active Vendors (Last 30 Days): <%= @report.recent_active_vendors %></span>
             </div>
             <div class="flex items-center">
               <span class="inline-block w-3 h-3 bg-gray-400 rounded-full mr-2" aria-hidden="true"></span>
-              <span class="text-sm text-gray-700">Other Active Vendors: <%= @active_vendors - @recent_active_vendors %></span>
+              <span class="text-sm text-gray-700">Other Active Vendors: <%= @report.active_vendors - @report.recent_active_vendors %></span>
             </div>
           </div>
         </div>
@@ -572,10 +572,10 @@
 
       <div class="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-4">
         <div class="bg-gray-50 rounded p-4">
-          <h3 id="referral-month-heading" class="font-medium text-gray-700 mb-2"><%= @referral_month_label %></h3>
-          <% if @referral_month_data&.any? %>
+          <h3 id="referral-month-heading" class="font-medium text-gray-700 mb-2"><%= @report.referral_month_label %></h3>
+          <% if @report.referral_month_data&.any? %>
             <dl class="space-y-1">
-              <% @referral_month_data.sort_by { |_k, v| -v }.each do |source, count| %>
+              <% @report.referral_month_data.sort_by { |_k, v| -v }.each do |source, count| %>
                 <div class="flex justify-between text-sm">
                   <dt class="text-gray-600"><%= source %>:</dt>
                   <dd class="font-medium text-gray-900"><%= count %></dd>
@@ -588,10 +588,10 @@
         </div>
 
         <div class="bg-gray-50 rounded p-4">
-          <h3 id="referral-quarter-heading" class="font-medium text-gray-700 mb-2"><%= @referral_quarter_label %></h3>
-          <% if @referral_quarter_data&.any? %>
+          <h3 id="referral-quarter-heading" class="font-medium text-gray-700 mb-2"><%= @report.referral_quarter_label %></h3>
+          <% if @report.referral_quarter_data&.any? %>
             <dl class="space-y-1">
-              <% @referral_quarter_data.sort_by { |_k, v| -v }.each do |source, count| %>
+              <% @report.referral_quarter_data.sort_by { |_k, v| -v }.each do |source, count| %>
                 <div class="flex justify-between text-sm">
                   <dt class="text-gray-600"><%= source %>:</dt>
                   <dd class="font-medium text-gray-900"><%= count %></dd>
@@ -604,10 +604,10 @@
         </div>
 
         <div class="bg-gray-50 rounded p-4">
-          <h3 id="referral-ytd-heading" class="font-medium text-gray-700 mb-2"><%= @referral_ytd_label %></h3>
-          <% if @referral_ytd_data&.any? %>
+          <h3 id="referral-ytd-heading" class="font-medium text-gray-700 mb-2"><%= @report.referral_ytd_label %></h3>
+          <% if @report.referral_ytd_data&.any? %>
             <dl class="space-y-1">
-              <% @referral_ytd_data.sort_by { |_k, v| -v }.each do |source, count| %>
+              <% @report.referral_ytd_data.sort_by { |_k, v| -v }.each do |source, count| %>
                 <div class="flex justify-between text-sm">
                   <dt class="text-gray-600"><%= source %>:</dt>
                   <dd class="font-medium text-gray-900"><%= count %></dd>
@@ -620,10 +620,10 @@
         </div>
 
         <div class="bg-gray-50 rounded p-4">
-          <h3 id="referral-prior-year-heading" class="font-medium text-gray-700 mb-2"><%= @referral_prior_year_label %></h3>
-          <% if @referral_prior_year_data&.any? %>
+          <h3 id="referral-prior-year-heading" class="font-medium text-gray-700 mb-2"><%= @report.referral_prior_year_label %></h3>
+          <% if @report.referral_prior_year_data&.any? %>
             <dl class="space-y-1">
-              <% @referral_prior_year_data.sort_by { |_k, v| -v }.each do |source, count| %>
+              <% @report.referral_prior_year_data.sort_by { |_k, v| -v }.each do |source, count| %>
                 <div class="flex justify-between text-sm">
                   <dt class="text-gray-600"><%= source %>:</dt>
                   <dd class="font-medium text-gray-900"><%= count %></dd>
@@ -631,23 +631,23 @@
               <% end %>
             </dl>
           <% else %>
-            <p class="text-sm text-gray-500">No applications submitted in <%= @referral_prior_year_label %></p>
+            <p class="text-sm text-gray-500">No applications submitted in <%= @report.referral_prior_year_label %></p>
           <% end %>
         </div>
       </div>
 
       <div class="mt-6 bg-gray-50 rounded p-4">
         <h4 id="referral-ytd-chart-heading" class="font-medium text-gray-700 mb-2">Referral Sources - Year to Date</h4>
-        <% if @referral_ytd_data&.any? %>
+        <% if @report.referral_ytd_data&.any? %>
           <div class="relative h-[300px] w-full"
                aria-labelledby="referral-ytd-chart-heading referral-ytd-chart-desc"
                data-controller="chart"
-               data-chart-data-value="<%= @referral_ytd_data.to_json %>"
+               data-chart-data-value="<%= @report.referral_ytd_data.to_json %>"
                data-chart-comparison-data-value="<%= {}.to_json %>"
                data-chart-title-value="Referral Sources (YTD)">
             <canvas data-chart-target="canvas" role="img" aria-label="Referral Sources (YTD)" aria-describedby="referral-ytd-chart-desc"></canvas>
             <div id="referral-ytd-chart-desc" class="sr-only">
-              Bar chart showing referral sources for the current fiscal year to date: <%= @referral_ytd_data.map { |k, v| "#{k}: #{v}" }.join(', ') %>.
+              Bar chart showing referral sources for the current fiscal year to date: <%= @report.referral_ytd_data.map { |k, v| "#{k}: #{v}" }.join(', ') %>.
             </div>
           </div>
         <% else %>

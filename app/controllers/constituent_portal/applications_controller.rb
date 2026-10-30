@@ -7,6 +7,7 @@ module ConstituentPortal
     around_action :with_viewer_locale, only: :request_training
 
     include ApplicationFormHandling
+    include FplClientData
     include ApplicationDataStructures
     include AddressHelper
     include CertifyingProfessionalHelper
@@ -150,34 +151,7 @@ module ConstituentPortal
       render_autosave_error('An error occurred during autosave', :internal_server_error)
     end
 
-    # Render FPL thresholds in data attributes so client validation needs no configuration request.
-    # See: app/services/income_threshold_calculation_service.rb
-    helper_method :fpl_thresholds_json, :fpl_modifier_value, :form_message_locale, :autosave_form_state
-
-    def fpl_thresholds_json
-      return '{}' unless FeatureFlag.income_proof_required?
-
-      thresholds = (1..8).to_h do |size|
-        result = IncomeThresholdCalculationService.call(size)
-        if result.success?
-          [size.to_s, result.data[:base_fpl]]
-        else
-          [size.to_s, 0]
-        end
-      end
-      thresholds.to_json
-    end
-
-    def fpl_modifier_value
-      return 0 unless FeatureFlag.income_proof_required?
-
-      result = IncomeThresholdCalculationService.call(1)
-      if result.success?
-        result.data[:modifier]
-      else
-        400
-      end
-    end
+    helper_method :form_message_locale, :autosave_form_state
 
     private
 
@@ -509,16 +483,8 @@ module ConstituentPortal
         :certifying_professional_attributes,
         # This checkbox controls form state. Application has no use_guardian_address attribute.
         :use_guardian_address,
-        :hearing_disability,
-        :vision_disability,
-        :speech_disability,
-        :mobility_disability,
-        :cognition_disability,
-        :physical_address_1,
-        :physical_address_2,
-        :city,
-        :state,
-        :zip_code
+        *ApplicationForm::DISABILITY_PARAMS,
+        *ApplicationForm::ADDRESS_PARAMS
       )
     end
 
@@ -549,7 +515,7 @@ module ConstituentPortal
         return
       end
 
-      return if @application.editable_by?(current_user)
+      return if @application.accessible_by?(current_user)
 
       if @application.for_dependent?
         redirect_to constituent_portal_application_path(@application),
@@ -562,22 +528,8 @@ module ConstituentPortal
 
     def application_params
       params.expect(
-        application: %i[
-          annual_income household_size maryland_resident self_certify_disability terms_accepted information_verified disability_information_release_authorized
-          certifying_professional_name certifying_professional_phone certifying_professional_fax certifying_professional_email
-          physical_address_1 physical_address_2 city state zip_code
-          use_guardian_address
-          hearing_disability vision_disability speech_disability mobility_disability cognition_disability
-          alternate_contact_name alternate_contact_phone alternate_contact_email alternate_contact_relationship_type
-          certifying_professional_attributes
-        ]
+        application: [*ApplicationForm::PORTAL_PARAMS, *ApplicationForm::CERTIFYING_PROFESSIONAL_PARAMS, :certifying_professional_attributes]
       )
-    end
-
-    def require_constituent!
-      return if current_user&.constituent?
-
-      redirect_to root_path, alert: 'Access denied'
     end
 
     def initialize_address

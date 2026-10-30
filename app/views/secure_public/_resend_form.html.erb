@@ -1,0 +1,14 @@
+<%# Asks for a new secure link once the old one has expired. scope: the i18n scope holding title, heading, body, submit, submitting %>
+<% content_for :title, t("#{scope}.title") %>
+
+<section class="card border border-gray-200 p-6" aria-labelledby="<%= scope.tr('._', '--') %>-title">
+  <h1 id="<%= scope.tr('._', '--') %>-title" class="text-2xl font-semibold text-gray-900"><%= t("#{scope}.heading") %></h1>
+  <p class="mt-3 text-sm text-gray-700"><%= t("#{scope}.body") %></p>
+
+  <%= form_with url: url_for(action: :create), method: :post, local: true, class: 'mt-6' do |form| %>
+    <%= hidden_field_tag :token, @token %>
+    <%= form.submit t("#{scope}.submit"),
+                    class: 'btn btn-primary min-h-11 w-full sm:w-auto',
+                    data: { turbo_submits_with: t("#{scope}.submitting") } %>
+  <% end %>
+</section>

@@ -69,14 +69,5 @@ module Admin
     def vendor_params
       params.expect(vendor: %i[business_name business_tax_id vendor_authorization_status])
     end
-
-    def require_admin!
-      return if current_user&.admin?
-
-      handle_error_response(
-        html_redirect_path: root_path,
-        error_message: 'You are not authorized to perform this action'
-      )
-    end
   end
 end

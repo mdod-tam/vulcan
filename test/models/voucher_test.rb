@@ -126,7 +126,7 @@ class VoucherTest < ActiveSupport::TestCase
     application = create(:application, :completed, :voucher_fulfillment, user: constituent)
 
     perform_enqueued_jobs do
-      application.assign_voucher!
+      Vouchers::IssuanceService.new(application, actor: create(:admin)).call
     end
 
     assert_equal 1, ActionMailer::Base.deliveries.size
@@ -138,7 +138,7 @@ class VoucherTest < ActiveSupport::TestCase
     application = create(:application, :completed, :voucher_fulfillment, user: constituent)
 
     assert_difference -> { Event.where(action: 'voucher_assigned').count }, 1 do
-      application.assign_voucher!
+      Vouchers::IssuanceService.new(application, actor: create(:admin)).call
     end
 
     event = Event.where(action: 'voucher_assigned').last
@@ -162,7 +162,7 @@ class VoucherTest < ActiveSupport::TestCase
       assert application.can_create_voucher?
 
       assert_difference -> { application.vouchers.count }, 1 do
-        assert application.assign_voucher!
+        assert_predicate Vouchers::IssuanceService.new(application, actor: create(:admin)).call, :success?
       end
     end
   end
@@ -265,12 +265,12 @@ class VoucherTest < ActiveSupport::TestCase
     end
   end
 
-  test 'sends notification when expired' do
+  test 'writing the expired status delivers no mail; the expiration processor sends the notice' do
     perform_enqueued_jobs do
       @voucher.update!(status: :expired)
     end
 
-    assert_equal 1, ActionMailer::Base.deliveries.size
+    assert_empty ActionMailer::Base.deliveries
   end
 
   private

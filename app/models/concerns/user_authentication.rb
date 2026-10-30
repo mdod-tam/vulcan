@@ -123,7 +123,7 @@ module UserAuthentication
   def password_reset_token_fingerprint
     contact_authority = [
       User.normalize_email(email).to_s,
-      User.normalize_phone(phone).to_s
+      PhoneNumber.normalize(phone).to_s
     ].join("\x1f")
 
     OpenSSL::HMAC.hexdigest('SHA256', password_digest.to_s, contact_authority)

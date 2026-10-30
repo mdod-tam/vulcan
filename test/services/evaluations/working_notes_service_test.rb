@@ -95,7 +95,7 @@ module Evaluations
     test 'stale former assignee cannot save after an assignment transfer' do
       stale_evaluation = Evaluation.find(@evaluation.id)
       replacement = create(:evaluator)
-      assert @application.reassign_evaluator!(replacement, actor: @admin)
+      assert_predicate Applications::EvaluatorAssignment.reassign(@application, replacement, actor: @admin), :success?
 
       assert_no_difference('Event.where(action: "evaluation_working_notes_updated").count') do
         result = WorkingNotesService.new(stale_evaluation, @evaluator, { working_notes: 'Stale note' }).call
@@ -192,7 +192,7 @@ module Evaluations
       assert initial_result.success?
       replacement = create(:evaluator)
 
-      assert @application.reassign_evaluator!(replacement, actor: @admin)
+      assert_predicate Applications::EvaluatorAssignment.reassign(@application, replacement, actor: @admin), :success?
       assert_equal 'Interpreter and contact arrangements', @evaluation.reload.working_notes
 
       result = WorkingNotesService.new(@evaluation, replacement, { working_notes: 'Replacement confirmed interpreter arrangements' }).call

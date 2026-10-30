@@ -47,12 +47,6 @@ module ConstituentPortal
 
     private
 
-    def require_constituent!
-      return if current_user&.constituent?
-
-      redirect_to root_path, alert: 'Access denied'
-    end
-
     def load_applications
       # Drafts have separate continuation links.
       @applications = current_user.applications.accessible_by(current_user)
@@ -111,36 +105,7 @@ module ConstituentPortal
     end
 
     def load_proof_status_information
-      return unless @active_application
-
       @max_proof_submissions = Policy.get('max_proof_submissions') || 3
-      load_income_proof_information
-      load_residency_proof_information
-      load_id_proof_information
-    end
-
-    def load_income_proof_information
-      @income_proof_status = @active_application.income_proof_status
-      @income_proof_rejection_reason = get_latest_rejection_reason(@active_application, 'income')
-      @income_proof_rejection_date = get_latest_rejection_date(@active_application, 'income')
-      @income_proof_submission_count = count_proof_submissions(@active_application, 'income')
-      @can_resubmit_income_proof = can_resubmit_proof?(@active_application, 'income', @max_proof_submissions)
-    end
-
-    def load_residency_proof_information
-      @residency_proof_status = @active_application.residency_proof_status
-      @residency_proof_rejection_reason = get_latest_rejection_reason(@active_application, 'residency')
-      @residency_proof_rejection_date = get_latest_rejection_date(@active_application, 'residency')
-      @residency_proof_submission_count = count_proof_submissions(@active_application, 'residency')
-      @can_resubmit_residency_proof = can_resubmit_proof?(@active_application, 'residency', @max_proof_submissions)
-    end
-
-    def load_id_proof_information
-      @id_proof_status = @active_application.id_proof_status
-      @id_proof_rejection_reason = get_latest_rejection_reason(@active_application, 'id')
-      @id_proof_rejection_date = get_latest_rejection_date(@active_application, 'id')
-      @id_proof_submission_count = count_proof_submissions(@active_application, 'id')
-      @can_resubmit_id_proof = can_resubmit_proof?(@active_application, 'id', @max_proof_submissions)
     end
 
     def load_recent_activities

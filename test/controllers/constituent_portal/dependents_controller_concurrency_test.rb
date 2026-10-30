@@ -178,9 +178,9 @@ module ConstituentPortal
       dependent = User.find_by!(email: dependent_email)
       assert merge_result.success?, "expected the merge (holder) to succeed: #{merge_result&.message}"
       assert_equal :redirect, create_response[:action]
-      assert_equal User.normalize_phone(surviving_guardian_phone), User.normalize_phone(dependent.dependent_phone),
+      assert_equal PhoneNumber.normalize(surviving_guardian_phone), PhoneNumber.normalize(dependent.dependent_phone),
                    'the snapshot must come from the locked guardian after merge contact selection'
-      assert_not_equal User.normalize_phone(discarded_guardian_phone), User.normalize_phone(dependent.dependent_phone),
+      assert_not_equal PhoneNumber.normalize(discarded_guardian_phone), PhoneNumber.normalize(dependent.dependent_phone),
                        'the pre-lock phone discarded by the merge must not become durable contact truth'
     ensure
       cleanup_duplicate_review_test_data!(
@@ -478,11 +478,11 @@ module ConstituentPortal
       assert_equal :redirect, update_response[:action]
 
       dependent.reload
-      assert_equal User.normalize_phone(surviving_guardian_phone), User.normalize_phone(dependent.dependent_phone),
+      assert_equal PhoneNumber.normalize(surviving_guardian_phone), PhoneNumber.normalize(dependent.dependent_phone),
                    'the snapshot must come from the locked guardian, i.e. the phone the merge left in place'
-      assert_not_equal User.normalize_phone(discarded_guardian_phone), User.normalize_phone(dependent.dependent_phone),
+      assert_not_equal PhoneNumber.normalize(discarded_guardian_phone), PhoneNumber.normalize(dependent.dependent_phone),
                        'the pre-lock guardian phone the merge discarded must never become dependent contact truth'
-      assert_equal User.normalize_phone(surviving_guardian_phone), User.normalize_phone(dependent.effective_phone),
+      assert_equal PhoneNumber.normalize(surviving_guardian_phone), PhoneNumber.normalize(dependent.effective_phone),
                    'effective_phone prefers dependent_phone, so a stale snapshot would misroute notifications'
     ensure
       cleanup_duplicate_review_test_data!(guardian, guardian_duplicate, admin, dependent)
@@ -520,7 +520,7 @@ module ConstituentPortal
       )
 
       assert_equal :redirect, update_response[:action]
-      assert_equal User.normalize_phone(pre_merge_guardian_phone), User.normalize_phone(dependent.reload.dependent_phone),
+      assert_equal PhoneNumber.normalize(pre_merge_guardian_phone), PhoneNumber.normalize(dependent.reload.dependent_phone),
                    'the edit committed first, so it correctly snapshotted the guardian phone of that moment'
       assert merge_result.success?, "expected the merge to proceed normally once the edit committed: #{merge_result&.message}"
     ensure

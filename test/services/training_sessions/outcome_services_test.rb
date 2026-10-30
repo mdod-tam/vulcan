@@ -182,7 +182,7 @@ module TrainingSessions
 
     test 'removed trainer stale forms fail after locked reload' do
       stale = TrainingSession.find(@session.id)
-      assert @application.unassign_trainer!(actor: create(:admin))
+      assert_predicate Applications::TrainerAssignment.unassign(@application, actor: create(:admin)), :success?
       assert_no_difference 'Event.count' do
         assert_not CompleteService.new(stale, @trainer, completion_params).call.success?
       end

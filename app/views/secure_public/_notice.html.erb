@@ -1,0 +1,11 @@
+<%# A public secure-form status page: a title, a heading and a body, and the program contact line when `contact` is set.
+    scope: the i18n scope holding title, heading, body (and contact_info) %>
+<% content_for :title, t("#{scope}.title") %>
+
+<section class="card border border-gray-200 p-6" aria-labelledby="<%= scope.tr('._', '--') %>-title">
+  <h1 id="<%= scope.tr('._', '--') %>-title" class="text-2xl font-semibold text-gray-900"><%= t("#{scope}.heading") %></h1>
+  <p class="mt-3 text-sm text-gray-700"><%= t("#{scope}.body") %></p>
+  <% if local_assigns[:contact] %>
+    <p class="mt-4 text-sm text-gray-700"><%= t("#{scope}.contact_info", email: support_email, phone: support_phone) %></p>
+  <% end %>
+</section>

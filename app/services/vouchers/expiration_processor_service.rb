@@ -1,8 +1,8 @@
 # frozen_string_literal: true
 
 module Vouchers
-  # Warns constituents before a voucher expires and expires vouchers past their validity period.
-  # The expired notice belongs to Voucher#check_status_changes, which runs for every path to expired.
+  # Warns constituents before a voucher expires, expires vouchers past their validity period, and sends the
+  # expired notice. This is the only path to the expired status.
   class ExpirationProcessorService < BaseService
     WARNING_ACTION = 'expiration_warning_requested'
     WARNING_HISTORY = [WARNING_ACTION, 'expiration_warning_sent'].freeze
@@ -43,6 +43,7 @@ module Vouchers
     def process_expired_vouchers
       expired_vouchers.find_each do |voucher|
         voucher.update!(status: :expired)
+        VoucherNotificationsMailer.with(voucher: voucher).voucher_expired.deliver_later
         next unless (actor = PublicAuditActor.system_audit_actor_or_report('voucher expired event'))
 
         voucher.events.create!(

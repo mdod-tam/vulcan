@@ -66,19 +66,47 @@ class ApplicationTransitionStatusTest < ActiveSupport::TestCase
     assert_equal 'approved', application.status
   end
 
-  test 'transition_status! enqueues initial voucher issuance on real approval transition' do
+  test 'transition_status! alone never enqueues voucher issuance' do
+    with_after_commit_callbacks do
+      admin = create(:admin)
+      application = create(:application, :in_progress, :voucher_fulfillment, user: create(:constituent, email: generate(:email)))
+
+      assert_no_enqueued_jobs only: IssueInitialVoucherJob do
+        assert application.transition_status!(:approved, actor: admin)
+      end
+    end
+  end
+
+  test 'manual approval enqueues initial voucher issuance on the real approval transition' do
     with_after_commit_callbacks do
       admin = create(:admin)
       constituent = create(:constituent, email: generate(:email))
       application = create(:application, :in_progress, :voucher_fulfillment, user: constituent)
 
       assert_enqueued_with(job: IssueInitialVoucherJob, args: [application.id, admin.id, 'manual_approval']) do
-        assert application.transition_status!(:approved, actor: admin)
+        assert Applications::Approver.new(application, by: admin).call
       end
     end
   end
 
-  test 'transition_status! does not enqueue initial voucher issuance for equipment fulfillment' do
+  test 'automatic approval enqueues initial voucher issuance as automatic' do
+    with_after_commit_callbacks do
+      admin = create(:admin)
+      application = create(:application, :in_progress, :voucher_fulfillment, user: create(:constituent, email: generate(:email)))
+      application.update_columns(
+        income_proof_status: Application.income_proof_statuses[:approved],
+        residency_proof_status: Application.residency_proof_statuses[:approved],
+        id_proof_status: Application.id_proof_statuses[:approved],
+        disability_certification_status: Application.disability_certification_statuses[:approved]
+      )
+
+      assert_enqueued_with(job: IssueInitialVoucherJob, args: [application.id, admin.id, 'automatic']) do
+        application.reconcile_workflow_state!(actor: admin)
+      end
+    end
+  end
+
+  test 'approval does not enqueue initial voucher issuance for equipment fulfillment' do
     with_after_commit_callbacks do
       admin = create(:admin)
       constituent = create(:constituent, email: generate(:email))
@@ -86,12 +114,12 @@ class ApplicationTransitionStatusTest < ActiveSupport::TestCase
 
       assert application.equipment_fulfillment?
       assert_no_enqueued_jobs only: IssueInitialVoucherJob do
-        assert application.transition_status!(:approved, actor: admin)
+        assert Applications::Approver.new(application, by: admin).call
       end
     end
   end
 
-  test 'transition_status! creates automatic voucher through issue job after approval commit' do
+  test 'approval creates automatic voucher through issue job after approval commit' do
     with_after_commit_callbacks do
       FeatureFlag.enable!(:vouchers_enabled)
       admin = create(:admin)
@@ -107,7 +135,7 @@ class ApplicationTransitionStatusTest < ActiveSupport::TestCase
       assert_difference -> { Voucher.where(application: application).count }, 1 do
         assert_difference -> { Event.where(action: 'voucher_assigned', auditable_type: 'Voucher').count }, 1 do
           perform_enqueued_jobs(only: IssueInitialVoucherJob) do
-            assert application.transition_status!(:approved, actor: admin)
+            assert Applications::Approver.new(application, by: admin).call
           end
         end
       end
@@ -134,9 +162,11 @@ class ApplicationTransitionStatusTest < ActiveSupport::TestCase
         disability_certification_status: Application.disability_certification_statuses[:approved]
       )
 
-      application.transition_status!(:approved, actor: admin)
+      assert Applications::Approver.new(application, by: admin).call
+      clear_enqueued_jobs
+      IssueInitialVoucherJob.enqueue_after_approval(application, actor: admin, assignment_method: :manual_approval)
 
-      Application.any_instance.stubs(:assign_voucher!).raises(StandardError, 'voucher write failed')
+      Vouchers::IssuanceService.any_instance.stubs(:call).raises(StandardError, 'voucher write failed')
       assert_enqueued_jobs 1, only: IssueInitialVoucherJob do
         assert_no_difference -> { Voucher.where(application: application).count } do
           IssueInitialVoucherJob.perform_now(application.id, admin.id)
@@ -148,7 +178,7 @@ class ApplicationTransitionStatusTest < ActiveSupport::TestCase
       assert_equal 1, ApplicationStatusChange.where(application: application, to_status: 'approved').count
       assert_equal 0, Voucher.where(application: application).count
     ensure
-      Application.any_instance.unstub(:assign_voucher!)
+      Vouchers::IssuanceService.any_instance.unstub(:call)
     end
   end
 

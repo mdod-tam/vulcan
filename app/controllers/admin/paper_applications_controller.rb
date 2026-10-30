@@ -5,6 +5,7 @@ module Admin
     include ParamCasting
     include TurboStreamResponseHandling
     include PaperQuickCreatePortalMarkers
+    include FplClientData
 
     before_action :cast_complex_boolean_params, only: %i[create]
 
@@ -15,10 +16,7 @@ module Admin
       preferred_means_of_communication referral_source newsletter_signup
     ].freeze
 
-    USER_DISABILITY_FIELDS = %i[
-      self_certify_disability hearing_disability vision_disability speech_disability
-      mobility_disability cognition_disability
-    ].freeze
+    USER_DISABILITY_FIELDS = [:self_certify_disability, *Users::Constituent::DISABILITY_FLAGS].freeze
 
     DEPENDENT_BASE_FIELDS = %i[
       first_name last_name date_of_birth
@@ -147,35 +145,6 @@ module Admin
         recipient_id: recipient&.id,
         communication_preference: recipient&.effective_communication_preference&.to_s
       }
-    end
-
-    # Client validation receives FPL data from IncomeThresholdCalculationService.
-    # See app/services/income_threshold_calculation_service.rb.
-    helper_method :fpl_thresholds_json, :fpl_modifier_value
-
-    def fpl_thresholds_json
-      return '{}' unless FeatureFlag.income_proof_required?
-
-      thresholds = (1..8).to_h do |size|
-        result = IncomeThresholdCalculationService.call(size)
-        if result.success?
-          [size.to_s, result.data[:base_fpl]]
-        else
-          [size.to_s, 0]
-        end
-      end
-      thresholds.to_json
-    end
-
-    def fpl_modifier_value
-      return 0 unless FeatureFlag.income_proof_required?
-
-      result = IncomeThresholdCalculationService.call(1)
-      if result.success?
-        result.data[:modifier]
-      else
-        400
-      end
     end
 
     # Income rejection sends a notice without creating an application.

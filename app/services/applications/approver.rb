@@ -16,7 +16,11 @@ module Applications
     # @return [Boolean] True if successful, false otherwise
     def call
       ApplicationRecord.transaction do
-        application.transition_status!(:approved, actor: actor)
+        application.with_lock do
+          newly_approved = !application.status_approved?
+          application.transition_status!(:approved, actor: actor)
+          IssueInitialVoucherJob.enqueue_after_approval(application, actor: actor, assignment_method: :manual_approval) if newly_approved
+        end
 
         AuditEventService.log(
           actor: actor,

@@ -454,7 +454,7 @@ module Admin
 
     def prefill_contact_phone(user)
       phone = user.phone
-      return nil if phone.blank? || User.synthetic_dependent_phone?(phone)
+      return nil if phone.blank? || PhoneNumber.synthetic?(phone)
 
       phone
     end

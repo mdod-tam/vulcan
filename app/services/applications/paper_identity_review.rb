@@ -87,7 +87,7 @@ module Applications
              end
       {
         email: User.normalize_email(data[:email]),
-        phone: User.normalize_phone(data[:phone]),
+        phone: PhoneNumber.normalize(data[:phone]),
         first_name: data[:first_name],
         last_name: data[:last_name],
         date_of_birth: DateInputNormalizer.normalize(data[:date_of_birth]),

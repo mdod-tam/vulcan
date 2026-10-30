@@ -1,13 +1,6 @@
 # frozen_string_literal: true
 
 class TrainingSessionNotificationsMailer < ApplicationMailer
-  include Rails.application.routes.url_helpers
-  include Mailers::SharedPartialHelpers
-
-  def self.default_url_options
-    Rails.application.config.action_mailer.default_url_options
-  end
-
   # The assignment actions take .with(recipient:, assignment:, operation_id:). The recipient is the person the
   # notice was written for, never whoever holds the assignment when the job runs.
   def trainer_assigned
@@ -60,249 +53,71 @@ class TrainingSessionNotificationsMailer < ApplicationMailer
   end
 
   def training_scheduled(training_session, notification = nil)
-    @application = training_session.application
-    constituent = training_session.constituent
-    locale = resolve_template_locale(recipient: constituent)
-    @notification_locale = locale
-    template_name = 'training_session_notifications_training_scheduled'
-    begin
-      text_template = find_text_template(template_name, locale: locale)
-    rescue ActiveRecord::RecordNotFound => e
-      Rails.logger.error "Missing EmailTemplate for #{template_name}: #{e.class.name}"
-      raise "Email templates not found for #{template_name}"
+    deliver_training_notice('training_session_notifications_training_scheduled', training_session, 'Training Scheduled') do
+      scheduled_for = notification_scheduled_for(training_session, notification)
+      {
+        **training_participants(training_session),
+        trainer_email: training_session.trainer.email,
+        trainer_phone_formatted: training_session.trainer.phone,
+        scheduled_date: formatted_training_date(scheduled_for),
+        scheduled_time: formatted_training_time(scheduled_for),
+        scheduled_date_formatted: formatted_training_date(scheduled_for),
+        scheduled_time_formatted: formatted_training_time(scheduled_for),
+        scheduled_location: notification_location(training_session, notification, @notification_locale)
+      }
     end
-
-    trainer = training_session.trainer
-    application = training_session.application
-
-    header_title = header_title_from_template_subject(
-      template: text_template,
-      subject_variables: { application_id: application.id },
-      fallback: "Training Scheduled - Application ##{application.id}"
-    )
-    footer_contact_email = ProgramContact.support_email
-    footer_website_url = ProgramContact.website_url
-    footer_show_automated_message = true
-    organization_name = Policy.get('organization_name') || 'Maryland Accessible Telecommunications Program'
-    header_logo_url = begin
-      ActionController::Base.helpers.asset_path('logo.png', host: default_url_options[:host])
-    rescue StandardError
-      nil
-    end
-
-    variables = {
-      constituent_name: constituent.full_name || 'Valued Constituent',
-      constituent_full_name: constituent.full_name || 'Valued Constituent',
-      trainer_name: trainer.full_name || 'Your Trainer',
-      trainer_full_name: trainer.full_name || 'Your Trainer',
-      trainer_email: trainer.email,
-      trainer_phone_formatted: trainer.phone,
-      scheduled_date: formatted_training_date(notification_scheduled_for(training_session, notification)),
-      scheduled_time: formatted_training_time(notification_scheduled_for(training_session, notification)),
-      scheduled_date_formatted: formatted_training_date(notification_scheduled_for(training_session, notification)),
-      scheduled_time_formatted: formatted_training_time(notification_scheduled_for(training_session, notification)),
-      scheduled_location: notification_location(training_session, notification, locale),
-      application_id: application.id,
-      header_text: header_text(title: header_title, logo_url: header_logo_url, locale: locale),
-      footer_text: footer_text(contact_email: footer_contact_email, website_url: footer_website_url,
-                               organization_name: organization_name, show_automated_message: footer_show_automated_message,
-                               locale: locale),
-      header_logo_url: header_logo_url,
-      header_subtitle: nil,
-      support_email: footer_contact_email
-    }.compact
-
-    return noop_letter_delivery if queue_letter_if_preferred(constituent, template_name, variables, locale: locale, application: application)
-
-    send_email(recipient_email_for(constituent), text_template, variables)
-  rescue StandardError => e
-    log_mail_error(e, trainer, template_name)
-    raise
   end
 
   def training_rescheduled(training_session, notification = nil)
-    @application = training_session.application
-    constituent = training_session.constituent
-    locale = resolve_template_locale(recipient: constituent)
-    @notification_locale = locale
-    template_name = 'training_session_notifications_training_rescheduled'
-    begin
-      text_template = find_text_template(template_name, locale: locale)
-    rescue ActiveRecord::RecordNotFound => e
-      Rails.logger.error "Missing EmailTemplate for #{template_name}: #{e.class.name}"
-      raise "Email templates not found for #{template_name}"
+    deliver_training_notice('training_session_notifications_training_rescheduled', training_session, 'Training Rescheduled') do
+      old_scheduled_for = notification_time(notification, 'old_scheduled_for')
+      scheduled_for = notification_scheduled_for(training_session, notification)
+      {
+        **training_participants(training_session),
+        trainer_email: training_session.trainer.email,
+        trainer_phone_formatted: training_session.trainer.phone,
+        old_scheduled_date: formatted_training_date(old_scheduled_for),
+        old_scheduled_time: formatted_training_time(old_scheduled_for),
+        old_scheduled_date_formatted: formatted_training_date(old_scheduled_for),
+        old_scheduled_time_formatted: formatted_training_time(old_scheduled_for),
+        scheduled_date: formatted_training_date(scheduled_for),
+        scheduled_time: formatted_training_time(scheduled_for),
+        scheduled_date_formatted: formatted_training_date(scheduled_for),
+        scheduled_time_formatted: formatted_training_time(scheduled_for),
+        scheduled_date_time_formatted: training_session_schedule_text(training_session, notification),
+        scheduled_location: notification_location(training_session, notification, @notification_locale),
+        # Existing stored templates use this placeholder. Supply the public scheduling fact, never the private rationale.
+        reschedule_reason: I18n.t('training_session_notifications.rescheduled_at_constituent_request', locale: @notification_locale)
+      }
     end
-
-    trainer = training_session.trainer
-    application = training_session.application
-    old_scheduled_for = notification_time(notification, 'old_scheduled_for')
-
-    header_title = header_title_from_template_subject(
-      template: text_template,
-      subject_variables: { application_id: application.id },
-      fallback: "Training Rescheduled - Application ##{application.id}"
-    )
-    footer_contact_email = ProgramContact.support_email
-    footer_website_url = ProgramContact.website_url
-    footer_show_automated_message = true
-    organization_name = Policy.get('organization_name') || 'Maryland Accessible Telecommunications Program'
-    header_logo_url = begin
-      ActionController::Base.helpers.asset_path('logo.png', host: default_url_options[:host])
-    rescue StandardError
-      nil
-    end
-
-    variables = {
-      constituent_name: constituent.full_name || 'Valued Constituent',
-      constituent_full_name: constituent.full_name || 'Valued Constituent',
-      trainer_name: trainer.full_name || 'Your Trainer',
-      trainer_full_name: trainer.full_name || 'Your Trainer',
-      trainer_email: trainer.email,
-      trainer_phone_formatted: trainer.phone,
-      old_scheduled_date: formatted_training_date(old_scheduled_for),
-      old_scheduled_time: formatted_training_time(old_scheduled_for),
-      old_scheduled_date_formatted: formatted_training_date(old_scheduled_for),
-      old_scheduled_time_formatted: formatted_training_time(old_scheduled_for),
-      scheduled_date: formatted_training_date(notification_scheduled_for(training_session, notification)),
-      scheduled_time: formatted_training_time(notification_scheduled_for(training_session, notification)),
-      scheduled_date_formatted: formatted_training_date(notification_scheduled_for(training_session, notification)),
-      scheduled_time_formatted: formatted_training_time(notification_scheduled_for(training_session, notification)),
-      scheduled_date_time_formatted: training_session_schedule_text(training_session, notification),
-      scheduled_location: notification_location(training_session, notification, locale),
-      # Existing stored templates use this placeholder. Supply the public scheduling fact, never the private rationale.
-      reschedule_reason: I18n.t('training_session_notifications.rescheduled_at_constituent_request', locale: locale),
-      application_id: application.id,
-      header_text: header_text(title: header_title, logo_url: header_logo_url, locale: locale),
-      footer_text: footer_text(contact_email: footer_contact_email, website_url: footer_website_url,
-                               organization_name: organization_name, show_automated_message: footer_show_automated_message,
-                               locale: locale),
-      header_logo_url: header_logo_url,
-      header_subtitle: nil,
-      support_email: footer_contact_email
-    }.compact
-
-    return noop_letter_delivery if queue_letter_if_preferred(constituent, template_name, variables, locale: locale, application: application)
-
-    send_email(recipient_email_for(constituent), text_template, variables)
-  rescue StandardError => e
-    log_mail_error(e, trainer, template_name)
-    raise
   end
 
   def training_cancelled(training_session, notification = nil)
-    @application = training_session.application
-    constituent = training_session.constituent
-    locale = resolve_template_locale(recipient: constituent)
-    @notification_locale = locale
-    template_name = 'training_session_notifications_training_cancelled'
-    begin
-      text_template = find_text_template(template_name, locale: locale)
-    rescue ActiveRecord::RecordNotFound => e
-      Rails.logger.error "Missing EmailTemplate for #{template_name}: #{e.class.name}"
-      raise "Email templates not found for #{template_name}"
+    deliver_training_notice('training_session_notifications_training_cancelled', training_session, 'Training Cancelled') do
+      scheduled_for = notification_scheduled_for(training_session, notification)
+      {
+        **training_participants(training_session).slice(:constituent_name, :constituent_full_name, :trainer_name),
+        scheduled_date: formatted_training_date(scheduled_for),
+        scheduled_time: formatted_training_time(scheduled_for),
+        scheduled_date_time_formatted: training_session_schedule_text(training_session, notification),
+        cancellation_message: cancellation_message(training_session, @notification_locale, notification),
+        scheduled_location: notification_location(training_session, notification, @notification_locale)
+      }
     end
-
-    trainer = training_session.trainer
-    application = training_session.application
-
-    header_title = header_title_from_template_subject(
-      template: text_template,
-      subject_variables: { application_id: application.id },
-      fallback: "Training Cancelled - Application ##{application.id}"
-    )
-    footer_contact_email = ProgramContact.support_email
-    footer_website_url = ProgramContact.website_url
-    footer_show_automated_message = true
-    organization_name = Policy.get('organization_name') || 'Maryland Accessible Telecommunications Program'
-    header_logo_url = begin
-      ActionController::Base.helpers.asset_path('logo.png', host: default_url_options[:host])
-    rescue StandardError
-      nil
-    end
-
-    variables = {
-      constituent_name: constituent.full_name || 'Valued Constituent',
-      constituent_full_name: constituent.full_name || 'Valued Constituent',
-      trainer_name: trainer.full_name || 'Your Trainer',
-      scheduled_date: formatted_training_date(notification_scheduled_for(training_session, notification)),
-      scheduled_time: formatted_training_time(notification_scheduled_for(training_session, notification)),
-      scheduled_date_time_formatted: training_session_schedule_text(training_session, notification),
-      cancellation_message: cancellation_message(training_session, locale, notification),
-      scheduled_location: notification_location(training_session, notification, locale),
-      application_id: application.id,
-      header_text: header_text(title: header_title, logo_url: header_logo_url, locale: locale),
-      footer_text: footer_text(contact_email: footer_contact_email, website_url: footer_website_url,
-                               organization_name: organization_name, show_automated_message: footer_show_automated_message,
-                               locale: locale),
-      header_logo_url: header_logo_url,
-      header_subtitle: nil,
-      support_email: footer_contact_email
-    }.compact
-
-    return noop_letter_delivery if queue_letter_if_preferred(constituent, template_name, variables, locale: locale, application: application)
-
-    send_email(recipient_email_for(constituent), text_template, variables)
-  rescue StandardError => e
-    log_mail_error(e, trainer, template_name)
-    raise
   end
 
   def no_show_notification(training_session, notification = nil)
-    @application = training_session.application
-    constituent = training_session.constituent
-    locale = resolve_template_locale(recipient: constituent)
-    @notification_locale = locale
-    template_name = 'training_session_notifications_training_no_show'
-    begin
-      text_template = find_text_template(template_name, locale: locale)
-    rescue ActiveRecord::RecordNotFound => e
-      Rails.logger.error "Missing EmailTemplate for #{template_name}: #{e.class.name}"
-      raise "Email templates not found for #{template_name}"
+    deliver_training_notice('training_session_notifications_training_no_show', training_session, 'Training Session Missed') do
+      scheduled_for = notification_scheduled_for(training_session, notification)
+      {
+        **training_participants(training_session),
+        trainer_email: training_session.trainer.email,
+        missed_date: formatted_training_date(scheduled_for),
+        missed_time: formatted_training_time(scheduled_for),
+        scheduled_date_time_formatted: training_session_schedule_text(training_session, notification),
+        scheduled_location: notification_location(training_session, notification, @notification_locale)
+      }
     end
-
-    trainer = training_session.trainer
-    application = training_session.application
-
-    header_title = header_title_from_template_subject(
-      template: text_template,
-      subject_variables: { application_id: application.id },
-      fallback: "Training Session Missed - Application ##{application.id}"
-    )
-    footer_contact_email = ProgramContact.support_email
-    footer_website_url = ProgramContact.website_url
-    footer_show_automated_message = true
-    organization_name = Policy.get('organization_name') || 'Maryland Accessible Telecommunications Program'
-    header_logo_url = begin
-      ActionController::Base.helpers.asset_path('logo.png', host: default_url_options[:host])
-    rescue StandardError
-      nil
-    end
-
-    variables = {
-      constituent_name: constituent.full_name || 'Valued Constituent',
-      constituent_full_name: constituent.full_name || 'Valued Constituent',
-      trainer_name: trainer.full_name || 'Your Trainer',
-      trainer_email: trainer.email,
-      missed_date: formatted_training_date(notification_scheduled_for(training_session, notification)),
-      missed_time: formatted_training_time(notification_scheduled_for(training_session, notification)),
-      scheduled_date_time_formatted: training_session_schedule_text(training_session, notification),
-      scheduled_location: notification_location(training_session, notification, locale),
-      application_id: application.id,
-      header_text: header_text(title: header_title, logo_url: header_logo_url, locale: locale),
-      footer_text: footer_text(contact_email: footer_contact_email, website_url: footer_website_url,
-                               organization_name: organization_name, show_automated_message: footer_show_automated_message,
-                               locale: locale),
-      header_logo_url: header_logo_url,
-      header_subtitle: nil,
-      support_email: footer_contact_email
-    }.compact
-
-    return noop_letter_delivery if queue_letter_if_preferred(constituent, template_name, variables, locale: locale, application: application)
-
-    send_email(recipient_email_for(constituent), text_template, variables)
-  rescue StandardError => e
-    log_mail_error(e, trainer, template_name)
-    raise
   end
 
   def training_completed(training_session, notification = nil)
@@ -343,6 +158,33 @@ class TrainingSessionNotificationsMailer < ApplicationMailer
 
   private
 
+  # The notices that tell the constituent about their session share one shape: a participants block, the
+  # notice's own variables, and the common envelope.
+  def deliver_training_notice(template_name, training_session, fallback_title)
+    @application = training_session.application
+    constituent = training_session.constituent
+    @notification_locale = resolve_template_locale(recipient: constituent)
+
+    deliver_notification(template_name, recipient: constituent, locale: @notification_locale, letters: true, application: @application) do |template|
+      yield.merge(
+        application_id: @application.id,
+        **envelope_variables(template: template, locale: @notification_locale, subject_variables: { application_id: @application.id },
+                             fallback_title: "#{fallback_title} - Application ##{@application.id}")
+      ).compact
+    end
+  end
+
+  def training_participants(training_session)
+    constituent = training_session.constituent
+    trainer = training_session.trainer
+    {
+      constituent_name: constituent.full_name || 'Valued Constituent',
+      constituent_full_name: constituent.full_name || 'Valued Constituent',
+      trainer_name: trainer.full_name || 'Your Trainer',
+      trainer_full_name: trainer.full_name || 'Your Trainer'
+    }
+  end
+
   def deliver_trainer_notice(template_name, fallback_title:, message:)
     training_session = params[:assignment]
     trainer = params[:recipient]
@@ -369,7 +211,7 @@ class TrainingSessionNotificationsMailer < ApplicationMailer
       trainer_email: trainer.email,
       trainer_phone_formatted: trainer.phone,
       constituent_full_name: constituent.full_name,
-      constituent_address_formatted: format_constituent_address(contact.address_owner).presence || localized_not_specified(locale),
+      constituent_address_formatted: constituent_address_text(contact.address_owner).presence || localized_not_specified(locale),
       constituent_phone_formatted: contact.phone.presence || localized_not_specified(locale),
       constituent_email: contact.email.presence || localized_not_specified(locale),
       constituent_disabilities_text_list: format_disabilities_text(constituent, locale),
@@ -438,14 +280,6 @@ class TrainingSessionNotificationsMailer < ApplicationMailer
     Time.zone.parse(raw_value.to_s)
   rescue ArgumentError, TypeError
     nil
-  end
-
-  def format_constituent_address(constituent)
-    [
-      constituent.physical_address_1,
-      constituent.physical_address_2,
-      [constituent.city, constituent.state, constituent.zip_code].compact_blank.join(' ')
-    ].compact_blank.join("\n")
   end
 
   def format_disabilities_text(constituent, locale)

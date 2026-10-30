@@ -23,11 +23,5 @@ module ConstituentPortal
     def authorized_sessions
       TrainingSession.completed_sessions.where(application: Application.accessible_by(current_user))
     end
-
-    def require_constituent!
-      return if current_user.constituent?
-
-      redirect_to root_path, alert: t('training_feedback.access_denied')
-    end
   end
 end

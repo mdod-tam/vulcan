@@ -145,8 +145,8 @@ module Trainers
 
     test 'removed and reassigned trainers keep completed authorship without current open or follow-up work' do
       report = create(:training_session, :completed, trainer: @trainer, application: @application, created_at: 2.days.ago)
-      assert @application.unassign_trainer!(actor: @admin)
-      assert @application.assign_trainer!(@other_trainer, actor: @admin)
+      assert_predicate Applications::TrainerAssignment.unassign(@application, actor: @admin), :success?
+      assert_predicate Applications::TrainerAssignment.assign(@application, @other_trainer, actor: @admin), :success?
       replacement = @application.latest_training_session
       sign_in_for_integration_test(@trainer)
 

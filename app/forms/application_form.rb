@@ -6,15 +6,26 @@ class ApplicationForm
   include ActiveModel::Attributes
   include ActiveModel::Validations
 
+  # The request inputs the application form is made of, in the groups its callers also permit or strip.
+  ADDRESS_PARAMS = %i[physical_address_1 physical_address_2 city state zip_code].freeze
+  DISABILITY_PARAMS = Users::Constituent::DISABILITY_FLAGS
+  ALTERNATE_CONTACT_PARAMS = %i[
+    alternate_contact_name alternate_contact_phone alternate_contact_email alternate_contact_relationship_type
+  ].freeze
+  CERTIFYING_PROFESSIONAL_PARAMS = %i[
+    certifying_professional_name certifying_professional_phone certifying_professional_fax certifying_professional_email
+  ].freeze
+  # What the constituent portal's application form submits.
+  PORTAL_PARAMS = [
+    :annual_income, :household_size, :maryland_resident, :self_certify_disability,
+    :terms_accepted, :information_verified, :disability_information_release_authorized, :use_guardian_address,
+    *ADDRESS_PARAMS, *DISABILITY_PARAMS, *ALTERNATE_CONTACT_PARAMS
+  ].freeze
+
   # Request inputs written straight to the typed attributes above. Strong parameters drop arrays and
   # hashes, so a malformed value never reaches a boolean or integer writer as a truthy object.
-  SCALAR_APPLICATION_PARAMS = %i[
-    annual_income household_size maryland_resident self_certify_disability
-    hearing_disability vision_disability speech_disability mobility_disability cognition_disability
-    terms_accepted information_verified disability_information_release_authorized use_guardian_address
-    user_id managing_guardian_id residency_proof income_proof id_proof
-    physical_address_1 physical_address_2 city state zip_code
-    alternate_contact_name alternate_contact_phone alternate_contact_email alternate_contact_relationship_type
+  SCALAR_APPLICATION_PARAMS = [
+    *PORTAL_PARAMS, :user_id, :managing_guardian_id, :residency_proof, :income_proof, :id_proof
   ].freeze
 
   attribute :annual_income, :string

@@ -42,7 +42,7 @@ module TrainingSessions
     end
 
     test 'removal between appointments revokes old completed report creation authority' do
-      assert @application.unassign_trainer!(actor: create(:admin))
+      assert_predicate Applications::TrainerAssignment.unassign(@application, actor: create(:admin)), :success?
       assert_nil @application.reload.assigned_trainer_id
       assert @source.reload.status_completed?
 

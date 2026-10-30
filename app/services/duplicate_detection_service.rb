@@ -84,7 +84,7 @@ class DuplicateDetectionService < BaseService
   end
 
   def contact_pair_present?
-    User.normalize_email(@attrs[:email]).present? && User.normalize_phone(@attrs[:phone]).present?
+    User.normalize_email(@attrs[:email]).present? && PhoneNumber.normalize(@attrs[:phone]).present?
   end
 
   def evaluate_exact_email
@@ -110,7 +110,7 @@ class DuplicateDetectionService < BaseService
   end
 
   def evaluate_exact_phone
-    phone = User.normalize_phone(@attrs[:phone])
+    phone = PhoneNumber.normalize(@attrs[:phone])
     return empty_result if phone.blank?
 
     matched_user = exclude_user(User.find_by_phone(phone))
@@ -125,7 +125,7 @@ class DuplicateDetectionService < BaseService
 
   def evaluate_email_phone_split
     email = User.normalize_email(@attrs[:email])
-    phone = User.normalize_phone(@attrs[:phone])
+    phone = PhoneNumber.normalize(@attrs[:phone])
 
     email_user = exclude_user(User.find_by_email(email))
     phone_user = exclude_user(User.find_by_phone(phone))
@@ -202,7 +202,7 @@ class DuplicateDetectionService < BaseService
   end
 
   def address_only_intake?
-    User.normalize_email(@attrs[:email]).blank? && User.normalize_phone(@attrs[:phone]).blank?
+    User.normalize_email(@attrs[:email]).blank? && PhoneNumber.normalize(@attrs[:phone]).blank?
   end
 
   def address_zip_match?(user)

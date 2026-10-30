@@ -27,20 +27,6 @@ class User < ApplicationRecord
     email_value.to_s.strip.downcase.presence
   end
 
-  def self.normalize_phone(phone_value)
-    return nil if phone_value.blank?
-
-    digits = phone_value.to_s.gsub(/\D/, '')
-    digits = digits[1..] if digits.length == 11 && digits.start_with?('1')
-    return digits.gsub(/(\d{3})(\d{3})(\d{4})/, '\1-\2-\3') if digits.length == 10
-
-    phone_value.to_s
-  end
-
-  def self.synthetic_dependent_phone?(phone_value)
-    normalize_phone(phone_value).to_s.gsub(/\D/, '').start_with?('000')
-  end
-
   def self.system_user
     PublicAuditActor.system_audit_actor_or_report('system operation')
   end
@@ -51,19 +37,13 @@ class User < ApplicationRecord
 
     # Rails encryption supports this ordinary find_by query.
     User.find_by(email: normalized_email)
-  rescue StandardError => e
-    Rails.logger.warn "find_by_email failed: #{e.class.name}"
-    nil
   end
 
   def self.find_by_phone(phone_value)
-    normalized_phone = normalize_phone(phone_value)
+    normalized_phone = PhoneNumber.normalize(phone_value)
     return nil if normalized_phone.blank?
 
     User.find_by(phone: normalized_phone)
-  rescue StandardError => e
-    Rails.logger.warn "find_by_phone failed: #{e.class.name}"
-    nil
   end
 
   def self.login_identifier_looks_like_email?(contact)
@@ -122,8 +102,9 @@ class User < ApplicationRecord
   end
   private_class_method :account_access_delivery_method_for
 
-  def self.placeholder_phone?(phone)
-    synthetic_dependent_phone?(phone)
+  # A well-formed address a person could read, as opposed to a blank or system-generated one.
+  def self.real_email_address?(email_value)
+    email_value.present? && email_value.to_s.match?(URI::MailTo::EMAIL_REGEXP) && !system_generated_email?(email_value)
   end
 
   def self.system_generated_email?(email)
@@ -139,21 +120,15 @@ class User < ApplicationRecord
     query = User.where(email: normalized_email)
     query = query.where.not(id: excluding_id) if excluding_id
     query.exists?
-  rescue StandardError => e
-    Rails.logger.warn "exists_with_email? failed: #{e.class.name}"
-    false
   end
 
   def self.exists_with_phone?(phone_value, excluding_id: nil)
-    normalized_phone = normalize_phone(phone_value)
+    normalized_phone = PhoneNumber.normalize(phone_value)
     return false if normalized_phone.blank?
 
     query = User.where(phone: normalized_phone)
     query = query.where.not(id: excluding_id) if excluding_id
     query.exists?
-  rescue StandardError => e
-    Rails.logger.warn "exists_with_phone? failed: #{e.class.name}"
-    false
   end
 
   has_many :document_scans, dependent: :nullify

@@ -8,12 +8,6 @@ module Authentication
     before_action :authenticate_user!
   end
 
-  def require_role(role)
-    return if current_user&.send("#{role}?")
-
-    redirect_to root_path, alert: 'Unauthorized access'
-  end
-
   private
 
   def session_activity_deadlines
@@ -155,15 +149,20 @@ module Authentication
     session[:return_to] = request.fullpath if request.get? || request.head?
   end
 
+  # The role guards for portals and admin pages. Every refusal sends the user home with one localized notice.
   def require_admin!
-    return if current_user.admin?
+    deny_role_access unless current_user&.admin?
+  end
 
-    redirect_to root_path, alert: 'Unauthorized access'
+  def require_constituent!
+    deny_role_access unless current_user&.constituent?
   end
 
   def require_evaluator!
-    return if current_user&.assignable_evaluator?
+    deny_role_access unless current_user&.assignable_evaluator?
+  end
 
-    redirect_to root_path, alert: 'Unauthorized access'
+  def deny_role_access
+    redirect_to root_path, alert: t('alerts.unauthorized_action')
   end
 end

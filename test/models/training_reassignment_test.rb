@@ -16,7 +16,7 @@ class TrainingReassignmentTest < ActiveSupport::TestCase
   end
 
   def reassign(trainer = @replacement, actor: @admin, version: @application.training_assignment_version)
-    @application.reassign_trainer!(trainer, actor: actor, expected_version: version)
+    Applications::TrainerAssignment.reassign(@application, trainer, actor: actor, expected_version: version)
   end
 
   test 'transfers the open row and the coverage, keeping schedules, outcomes and notes' do
@@ -24,10 +24,12 @@ class TrainingReassignmentTest < ActiveSupport::TestCase
     completed = create(:training_session, :completed, application: @application, trainer: @trainer)
     previous_operation = @scheduled.assignment_operation_id
 
+    result = nil
     assert_difference -> { Event.where(action: 'trainer_reassigned').count }, 1 do
-      assert reassign
+      result = reassign
     end
 
+    assert_predicate result, :success?
     assert_equal @replacement.id, @application.reload.assigned_trainer_id
     assert_equal @replacement.id, @scheduled.reload.trainer_id
     assert_equal before, @scheduled.attributes.except('trainer_id', 'updated_at', 'assignment_operation_id')
@@ -39,14 +41,14 @@ class TrainingReassignmentTest < ActiveSupport::TestCase
     assert_equal @scheduled.assignment_operation_id, event.metadata['operation_id']
     assert_equal [@trainer.id], event.metadata['previous_trainer_ids']
     assert_equal [@scheduled.id], event.metadata['training_session_ids']
-    assert_equal 2, @application.training_notification_outcomes.size
-    assert(@application.training_notification_outcomes.none?(&:warning?))
+    assert_equal 2, result.data[:notification_outcomes].size
+    assert(result.data[:notification_outcomes].none?(&:warning?))
   end
 
   test 'a no-show resolved by a later session is history and keeps its trainer' do
     assert_equal [@scheduled.id], @application.open_training_assignments.ids
 
-    assert reassign
+    assert_predicate reassign, :success?
 
     assert_equal @trainer.id, @no_show.reload.trainer_id
     assert_equal 'Missed once', @no_show.internal_notes
@@ -57,7 +59,7 @@ class TrainingReassignmentTest < ActiveSupport::TestCase
     @no_show.update_columns(created_at: 1.day.ago)
     assert_equal [@no_show.id], @application.open_training_assignments.ids
 
-    assert reassign
+    assert_predicate reassign, :success?
 
     assert_equal @replacement.id, @no_show.reload.trainer_id
     assert_equal @trainer.id, @scheduled.reload.trainer_id
@@ -66,7 +68,7 @@ class TrainingReassignmentTest < ActiveSupport::TestCase
   test 'queues one notice for the new trainer and one for the constituent after commit' do
     assert_difference -> { Notification.where(action: 'trainer_reassigned', recipient: @replacement).count }, 1 do
       assert_difference -> { Notification.where(action: 'training_trainer_changed', recipient: @application.user).count }, 1 do
-        assert reassign
+        assert_predicate reassign, :success?
       end
     end
 
@@ -78,11 +80,13 @@ class TrainingReassignmentTest < ActiveSupport::TestCase
     [@no_show, @scheduled].each { |session| session.update_columns(status: TrainingSession.statuses[:completed]) }
     version = @application.training_assignment_version
 
+    result = nil
     assert_no_difference ['Event.count', 'Notification.count'] do
-      assert_no_enqueued_jobs { assert_equal false, reassign(version: version) }
+      assert_no_enqueued_jobs { result = reassign(version: version) }
     end
 
-    assert_equal ['There is no open training to transfer.'], @application.errors[:base]
+    assert_predicate result, :failure?
+    assert_equal 'There is no open training to transfer.', result.message
     assert_equal @trainer.id, @application.reload.assigned_trainer_id
   end
 
@@ -91,31 +95,36 @@ class TrainingReassignmentTest < ActiveSupport::TestCase
     third = create(:trainer)
     @scheduled.update!(trainer: third)
 
+    result = nil
     assert_no_difference ['Event.count', 'Notification.count'] do
-      assert_equal false, reassign(version: version)
+      result = reassign(version: version)
     end
 
-    assert_equal ['Training assignments changed. Review the current assignment and try again.'], @application.errors[:base]
+    assert_predicate result, :failure?
+    assert_equal 'Training assignments changed. Review the current assignment and try again.', result.message
     assert_equal third.id, @scheduled.reload.trainer_id
     assert_equal @trainer.id, @no_show.reload.trainer_id
   end
 
   test 'refuses a non-administrator, an ineligible replacement, and an expired service window' do
-    assert_equal false, reassign(actor: @trainer)
-    assert_equal ['Only an administrator can reassign a trainer.'], @application.errors[:base]
+    result = reassign(actor: @trainer)
+    assert_predicate result, :failure?
+    assert_equal 'Only an administrator can reassign a trainer.', result.message
 
-    assert_equal false, reassign(create(:evaluator))
-    assert_equal ['Select an active trainer.'], @application.errors[:base]
+    result = reassign(create(:evaluator))
+    assert_predicate result, :failure?
+    assert_equal 'Select an active trainer.', result.message
 
     @application.update!(application_date: 4.years.ago.to_date)
-    assert_equal false, reassign
-    assert_equal [I18n.t('activerecord.errors.models.application.attributes.base.training_service_window')], @application.errors[:base]
+    result = reassign
+    assert_predicate result, :failure?
+    assert_equal I18n.t('activerecord.errors.models.application.attributes.base.training_service_window'), result.message
     assert_equal [@trainer.id], [@no_show, @scheduled].map { |session| session.reload.trainer_id }.uniq
   end
 
   test 'transferring to the current assignee is a no-op without audit or notices' do
     assert_no_difference ['Event.count', 'Notification.count'] do
-      assert_no_enqueued_jobs { assert reassign(@trainer) }
+      assert_no_enqueued_jobs { assert_predicate reassign(@trainer), :success? }
     end
   end
 
@@ -124,10 +133,10 @@ class TrainingReassignmentTest < ActiveSupport::TestCase
     session = create(:training_session, :scheduled, application: other, trainer: @trainer)
     @trainer.update!(status: :suspended)
 
-    assert reassign
+    assert_predicate reassign, :success?
     assert_equal @replacement.id, @scheduled.reload.trainer_id
 
-    assert other.unassign_trainer!(actor: @admin, reason: 'Coverage ended')
+    assert_predicate Applications::TrainerAssignment.unassign(other, actor: @admin, reason: 'Coverage ended'), :success?
     assert session.reload.status_cancelled?
   end
 
@@ -138,7 +147,7 @@ class TrainingReassignmentTest < ActiveSupport::TestCase
     attributes = [@no_show, @scheduled].map { |session| session.reload.attributes }
 
     assert_no_difference ['Event.count', 'Notification.count'] do
-      assert_no_enqueued_jobs { assert_equal false, reassign }
+      assert_no_enqueued_jobs { assert_predicate reassign, :failure? }
     end
 
     assert_equal(attributes, [@no_show, @scheduled].map { |session| session.reload.attributes })
@@ -150,15 +159,18 @@ class TrainingReassignmentTest < ActiveSupport::TestCase
     @trainer.update_columns(status: User.statuses[:suspended])
     assert_includes Application.needing_trainer_reassignment.ids, @application.id
 
+    result = nil
     assert_difference -> { Event.where(action: 'trainer_reassigned').count }, 1 do
       assert_no_difference 'Notification.count' do
-        assert_no_enqueued_jobs { assert reassign }
+        assert_no_enqueued_jobs { result = reassign }
       end
     end
 
+    assert_predicate result, :success?
+
     assert_equal @replacement.id, @application.reload.assigned_trainer_id
     assert_equal [@trainer.id], [@no_show, @scheduled].map { |session| session.reload.trainer_id }.uniq
-    assert_empty @application.training_notification_outcomes
+    assert_empty result.data[:notification_outcomes]
     assert_equal [], Event.find_by!(action: 'trainer_reassigned', auditable: @application).metadata['training_session_ids']
     assert_not_includes Application.needing_trainer_reassignment.ids, @application.id
   end
@@ -182,7 +194,7 @@ class TrainingReassignmentTest < ActiveSupport::TestCase
   test 'cancelling removes the operation a queued transfer notice was written for' do
     queued = @scheduled.reload.assignment_operation_id
 
-    assert @application.unassign_trainer!(actor: @admin)
+    assert_predicate Applications::TrainerAssignment.unassign(@application, actor: @admin), :success?
 
     assert @scheduled.reload.status_cancelled?
     assert_predicate @scheduled.assignment_operation_id, :present?
@@ -194,11 +206,13 @@ class TrainingReassignmentTest < ActiveSupport::TestCase
     stale_admin = User.find(@admin.id)
     @admin.update_columns(status: User.statuses[:suspended])
 
+    result = nil
     assert_no_difference ['Event.count', 'Notification.count'] do
-      assert_equal false, @application.unassign_trainer!(actor: stale_admin)
+      result = Applications::TrainerAssignment.unassign(@application, actor: stale_admin)
     end
+    assert_predicate result, :failure?
 
-    assert_equal ['Only an administrator can remove trainer coverage.'], @application.errors[:base]
+    assert_equal 'Only an administrator can remove trainer coverage.', result.message
     assert_equal @trainer.id, @application.reload.assigned_trainer_id
     assert @scheduled.reload.status_scheduled?
   end

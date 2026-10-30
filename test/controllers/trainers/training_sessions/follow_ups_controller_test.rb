@@ -64,7 +64,7 @@ module Trainers
       end
 
       test 'a removed trainer cannot schedule from their historical cancellation' do
-        assert @application.unassign_trainer!(actor: create(:admin))
+        assert_predicate Applications::TrainerAssignment.unassign(@application, actor: create(:admin)), :success?
         assert_no_difference ['TrainingSession.count', 'Event.count'] do
           post trainers_training_session_follow_up_path(@source), params: valid_params
         end

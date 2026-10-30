@@ -57,6 +57,14 @@ class EvaluatorMailerTest < ActionMailer::TestCase
     assert_includes body, 'Delivery: Email'
   end
 
+  test 'the footer names the program as MAT Program' do
+    email = capture_emails do
+      EvaluatorMailer.with(assignment_notice_params(@evaluation, @evaluation.evaluator)).new_evaluation_assigned.deliver_now
+    end.first
+
+    assert_includes decoded_text_part(email), 'MAT Program'
+  end
+
   test 'new_evaluation_assigned uses English template for Spanish locale evaluator' do
     @evaluator.update!(locale: 'es')
 

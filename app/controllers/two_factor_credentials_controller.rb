@@ -311,7 +311,7 @@ class TwoFactorCredentialsController < ApplicationController
   end
 
   def existing_sms_credential_for(phone)
-    normalized_phone = SmsCredential.normalize_phone_number(phone)
+    normalized_phone = PhoneNumber.normalize(phone)
     current_user.sms_credentials.find_by(phone_number: normalized_phone)
   end
 

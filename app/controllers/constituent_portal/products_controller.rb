@@ -26,11 +26,5 @@ module ConstituentPortal
     def product_history
       @product_history ||= Applications::ProductHistory.new(applications: Application.accessible_by(current_user))
     end
-
-    def require_constituent!
-      return if current_user&.constituent?
-
-      redirect_to root_path, alert: t('product_resources.devices.access_denied')
-    end
   end
 end

@@ -86,6 +86,7 @@ module ApplicationStatusManagement
           notes: 'Auto-approved based on all requirements being met',
           metadata: { trigger: 'auto_approval', source: trigger&.to_s }.compact
         )
+        IssueInitialVoucherJob.enqueue_after_approval(self, actor: actor, assignment_method: :automatic)
         return
       end
 

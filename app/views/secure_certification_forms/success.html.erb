@@ -1,6 +1,1 @@
-<% content_for :title, t('.title') %>
-
-<section class="card border border-gray-200 p-6" aria-labelledby="secure-certification-success-title">
-  <h1 id="secure-certification-success-title" class="text-2xl font-semibold text-gray-900"><%= t('.heading') %></h1>
-  <p class="mt-3 text-sm text-gray-700"><%= t('.body') %></p>
-</section>
+<%= render 'secure_public/notice', scope: 'secure_certification_forms.success' %>

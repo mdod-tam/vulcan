@@ -15,6 +15,13 @@ module Users
                               if: -> { new_record? || will_save_change_to_date_of_birth? },
                               unless: :rejected_date_of_birth_input
 
+    # Set by paper and guardian intake, which must collect at least one disability before the record exists.
+    attr_accessor :require_disability_selection
+
+    validate :must_have_disability, if: :validate_disability?
+    validate :admin_contact_update_must_remain_reachable, on: :update, if: :validate_admin_contact_update?
+    validate :self_service_profile_requires_email_backing, on: :update, if: :self_service_profile_update?
+
     scope :needs_evaluation, -> { joins(:applications).where(applications: { status: :approved }) }
     scope :active, -> { where.not(status: %i[withdrawn rejected expired]) }
     scope :ytd, lambda {
@@ -22,6 +29,8 @@ module Users
     }
 
     DISABILITY_TYPES = %w[hearing vision speech mobility cognition].freeze
+    # The attribute names of the disability flags, for permitting and copying them as a group.
+    DISABILITY_FLAGS = DISABILITY_TYPES.map { |type| :"#{type}_disability" }.freeze
 
     DISABILITY_TYPES.each do |type|
       attribute :"#{type}_disability", :boolean, default: false
@@ -39,10 +48,6 @@ module Users
       applications.active.order(application_date: :desc).first
     end
 
-    def disability_selected?
-      hearing_disability || vision_disability || speech_disability || mobility_disability || cognition_disability
-    end
-
     # Identity-matching path. Paper intake calls it for each new applicant. Keep log messages PII-free.
     # `config.filter_parameters` does not redact values interpolated into a message, so log only
     # counts and types. To find which records matched, run the query in a console.
@@ -57,6 +62,58 @@ module Users
       end
 
       build_duplicate_query(first_name, last_name, formatted_date)
+    end
+
+    private
+
+    # A constituent's disabilities are checked once they have an application, or when intake asks for the check.
+    def must_have_disability
+      errors.add(:base, 'At least one disability must be selected.') unless disability_selected?
+    end
+
+    def validate_disability?
+      return false if new_record? && !require_disability_selection
+
+      applications.exists? || require_disability_selection
+    end
+
+    # Contact details cannot be cleared outside paper intake unless another route still reaches the constituent.
+    def admin_contact_update_must_remain_reachable
+      return if real_email? || real_phone?
+      return if dependent_with_deliverable_contact_email?
+      return if PhoneNumber.real?(dependent_phone)
+
+      unless deliver_via_letter?
+        errors.add(:communication_preference, 'must be letter when no email or phone is on file')
+        return
+      end
+
+      return if was_address_only_contact?
+
+      errors.add(:base, 'Cannot clear all contact information outside paper intake.')
+    end
+
+    def self_service_profile_requires_email_backing
+      errors.add(:email, :blank) unless real_email?
+    end
+
+    def validate_admin_contact_update?
+      !Current.paper_context && !merge_in_progress
+    end
+
+    def self_service_profile_update?
+      !Current.paper_context && Current.user == self
+    end
+
+    def was_address_only_contact?
+      return true if new_record?
+
+      !User.real_email_address?(attribute_in_database(:email)) && !PhoneNumber.real?(attribute_in_database(:phone))
+    end
+
+    # A persisted phone-only or address-only constituent can stay editable without an email.
+    def email_optional?
+      super || (persisted? && (portal_phone_only_without_email? || address_only_contact?))
     end
 
     class << self

@@ -61,6 +61,13 @@ module ProofManageable
     true
   end
 
+  # Clears the review marker alone, without resubmitting the application's intake fields to validation.
+  def clear_review_marker!
+    return if update_column(:needs_review_since, nil, touch: true) # rubocop:disable Rails/SkipsModelValidations -- Review bookkeeping only.
+
+    raise ActiveRecord::RecordNotSaved.new('Review marker was not cleared.', self)
+  end
+
   # Purges all proof attachments. Resets only the income and residency statuses.
   # @param admin_user [User] must be an admin
   # @return [Boolean] false if the purge fails

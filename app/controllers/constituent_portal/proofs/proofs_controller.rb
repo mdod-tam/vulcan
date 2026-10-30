@@ -72,12 +72,6 @@ module ConstituentPortal
         redirect_to constituent_portal_dashboard_path, alert: 'Application not found'
       end
 
-      def require_constituent!
-        return if current_user&.constituent?
-
-        redirect_to root_path, alert: 'Access denied'
-      end
-
       def ensure_can_submit_proof
         return if @application.can_submit_proof?
 

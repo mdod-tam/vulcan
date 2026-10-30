@@ -352,7 +352,7 @@
           </span>
         <% end %>
 
-        <% if @application.editable_by?(current_user) %>
+        <% if @application.accessible_by?(current_user) %>
           <%= link_to edit_constituent_portal_application_path(@application),
               class: "btn btn-primary",
               "aria-label": "Edit this application" do %>
