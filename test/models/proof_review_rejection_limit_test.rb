@@ -50,7 +50,11 @@ class ProofReviewRejectionLimitTest < ActiveSupport::TestCase
 
     assert_equal ProofReview::MAX_REJECTIONS, @application.reload.total_rejections
     assert_not_predicate @application, :status_archived?
-    assert_max_rejections_mail_count 1
+    notification = Notification.find_by!(action: 'max_rejections_warning', notifiable: @application)
+    assert_equal @admin.id, notification.recipient_id
+    assert_equal @admin.id, notification.actor_id
+    assert_nil notification.delivery_status
+    assert_max_rejections_mail_count 0
   end
 
   test 'the rejection past the limit archives the application and queues the notice after the commit' do
@@ -76,7 +80,7 @@ class ProofReviewRejectionLimitTest < ActiveSupport::TestCase
     assert_equal @admin, audit_event.user
     assert_equal 'max_proof_rejections', audit_event.metadata['trigger']
 
-    assert_max_rejections_mail_count 2
+    assert_max_rejections_mail_count 1
   end
 
   test 'the rejection that archives the application is audited but issues no upload link' do

@@ -57,5 +57,7 @@ es:
       invalid_code: "El código de verificación no es válido. Inténtelo de nuevo."
       expired_code: "El código de verificación venció. Solicite uno nuevo."
       max_attempts_reached: "Se alcanzó el número máximo de intentos. Solicite un código nuevo."
+      totp_rate_limited: "Demasiados intentos de verificación. Espere 15 minutos y vuelva a iniciar sesión."
+      verification_rate_limited: "Demasiadas solicitudes de verificación. Espere un minuto y vuelva a iniciar sesión."
       verification_service_unavailable: "Tenemos problemas temporales para verificar los códigos. Inténtelo de nuevo."
       sms_unavailable: "La verificación por mensaje de texto no está disponible"

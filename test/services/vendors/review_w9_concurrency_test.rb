@@ -61,6 +61,22 @@ module Vendors
       cleanup(vendor, admin)
     end
 
+    test 'a rejection-limit warning belongs to the reviewing administrator' do
+      vendor = create(:vendor, :with_w9, w9_rejections_count: 7)
+      admin = create(:admin)
+      result = ReviewW9.new(vendor: vendor, admin: admin,
+                            attributes: { status: 'rejected', reviewed_blob_id: vendor.w9_form.blob.id,
+                                          rejection_reason_code: 'other', rejection_reason: 'Correct the document.' }).call
+
+      assert_predicate result, :success?
+      notification = Notification.find_by!(notifiable: vendor, action: 'vendor_max_w9_rejections_warning')
+      assert_equal admin.id, notification.recipient_id
+      assert_equal admin.id, notification.actor_id
+      assert_nil notification.delivery_status
+    ensure
+      cleanup(vendor, admin)
+    end
+
     private
 
     def decide(vendor_id, admin_id, blob_id)

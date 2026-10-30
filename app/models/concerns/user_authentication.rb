@@ -9,6 +9,9 @@ module UserAuthentication
   PASSWORD_MIN_LENGTH = 12
   MAX_LOGIN_ATTEMPTS = 5
   LOCK_DURATION = 1.hour
+  TOTP_MAX_ATTEMPTS = 5
+  TOTP_ATTEMPT_PERIOD = 15.minutes
+  TWO_FACTOR_SIGN_IN_EXPIRY = 10.minutes
 
   included do
     # has_secure_password defines its own :password_reset token from the password salt.
@@ -26,7 +29,7 @@ module UserAuthentication
     end
 
     # Match Rails' password-reset salt binding without storing the password digest in the browser.
-    generates_token_for :two_factor_sign_in do
+    generates_token_for :two_factor_sign_in, expires_in: TWO_FACTOR_SIGN_IN_EXPIRY do
       password_salt&.last(10)
     end
 
@@ -109,7 +112,66 @@ module UserAuthentication
       sms_credentials.verified.exists?
   end
 
+  # The account row serializes guesses across browsers, IP addresses, and application workers.
+  # Restarting the password step does not clear this failure window.
+  def verify_totp(code)
+    with_lock do
+      if public_login_active?
+        reset_totp_attempt_window if totp_attempt_window_started_at.nil? ||
+                                     totp_attempt_window_started_at <= TOTP_ATTEMPT_PERIOD.ago
+        totp_failed_attempts >= TOTP_MAX_ATTEMPTS ? :rate_limited : check_totp_code(code)
+      else
+        :inactive
+      end
+    end
+  end
+
   private
+
+  def reset_totp_attempt_window
+    assign_attributes(totp_failed_attempts: 0, totp_attempt_window_started_at: Time.current)
+  end
+
+  def check_totp_code(code)
+    credential = matching_totp_credential(code)
+    if credential
+      credential.update!(last_used_at: Time.current)
+      persist_totp_attempt_budget!(attempts: 0, window_started_at: nil)
+      :verified
+    else
+      persist_totp_attempt_budget!(attempts: totp_failed_attempts + 1,
+                                   window_started_at: totp_attempt_window_started_at)
+      if totp_failed_attempts >= TOTP_MAX_ATTEMPTS
+        # A failed audit write must not roll back the budget and reopen guesses.
+        ActiveRecord.after_all_transactions_commit do
+          PublicAuditActor.log_audit(
+            action: 'two_factor_verification_rate_limited', auditable: self,
+            metadata: { factor: 'totp', target_user_id: id }
+          )
+        end
+        :rate_limited
+      else
+        :invalid
+      end
+    end
+  end
+
+  def persist_totp_attempt_budget!(attempts:, window_started_at:)
+    # These locked auth counters do not change profile, contact, or password fields.
+    # Skip their unrelated validations/callbacks; the lockout audit is recorded explicitly above.
+    # rubocop:disable-next Rails/SkipsModelValidations
+    updated = update_columns(totp_failed_attempts: attempts, totp_attempt_window_started_at: window_started_at,
+                             updated_at: Time.current)
+    raise ActiveRecord::RecordNotSaved, 'TOTP attempt budget could not be persisted' unless updated
+  end
+
+  def matching_totp_credential(code)
+    return unless code.is_a?(String) && code.bytesize == 6 && code.match?(/\A[0-9]{6}\z/)
+
+    totp_credentials.detect do |candidate|
+      ROTP::TOTP.new(candidate.secret).verify(code, drift_behind: 30, drift_ahead: 30)
+    end
+  end
 
   def revoke_sessions_after_password_change
     # Reload so a previously loaded association cannot leave a newer session active.

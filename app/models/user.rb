@@ -132,13 +132,14 @@ class User < ApplicationRecord
   end
 
   has_many :document_scans, dependent: :nullify
-  has_many :events, dependent: :destroy
+  has_many :events, dependent: :restrict_with_error
+  has_many :audit_events, as: :auditable, class_name: 'Event', dependent: :restrict_with_error
   has_many :received_notifications,
            class_name: 'Notification',
            foreign_key: :recipient_id,
-           dependent: :destroy,
+           dependent: :restrict_with_error,
            inverse_of: :recipient
-  has_many :applications, inverse_of: :user, dependent: :nullify
+  has_many :applications, inverse_of: :user, dependent: :restrict_with_error
   # Work assigned to this user as a practitioner, by discipline. A grant gives either discipline to its other role.
   has_many :assigned_training_sessions, class_name: 'TrainingSession', foreign_key: :trainer_id,
                                         inverse_of: :trainer, dependent: :restrict_with_error
@@ -221,7 +222,49 @@ class User < ApplicationRecord
     true
   end
 
+  def deactivate!(actor:)
+    change_login_status!(:inactive, actor: actor)
+  end
+
+  def reactivate!(actor:)
+    change_login_status!(:active, actor: actor)
+  end
+
   private
+
+  def change_login_status!(new_status, actor:)
+    raise ArgumentError, 'actor is required' if actor.blank?
+
+    User.transaction do
+      locked_users = User.lock_for_merge_integrity!(self, actor)
+      user = locked_users.fetch(id)
+      admin = locked_users.fetch(actor.id)
+      validate_login_status_change!(user, admin)
+
+      unless user.status == new_status.to_s
+        old_status = user.status
+        user.update!(status: new_status)
+        revoked_sessions = user.sessions.destroy_all.size
+        AuditEventService.log(
+          action: new_status == :inactive ? 'user_deactivated' : 'user_reactivated',
+          actor: admin,
+          auditable: user,
+          metadata: { old_status: old_status, new_status: new_status.to_s,
+                      revoked_sessions_count: revoked_sessions, operation_id: SecureRandom.uuid }
+        )
+      end
+    end
+    reload
+  end
+
+  def validate_login_status_change!(user, actor)
+    user.errors.add(:base, 'An active administrator is required') unless actor.admin? && actor.public_login_active?
+    user.errors.add(:base, 'You cannot change your own account status') if actor.id == user.id
+    system_account = User.normalize_email(user.email) == PublicAuditActor::SYSTEM_AUDIT_EMAIL
+    user.errors.add(:base, 'The system audit account cannot be deactivated or reactivated') if system_account
+    user.errors.add(:base, 'A merged record cannot be reactivated or deactivated') if user.merged?
+    raise ActiveRecord::RecordInvalid, user if user.errors.any?
+  end
 
   def active_application
     applications.where.not(status: 'draft').order(created_at: :desc).first

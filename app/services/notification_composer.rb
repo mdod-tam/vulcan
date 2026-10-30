@@ -30,6 +30,10 @@ class NotificationComposer
 
   private
 
+  def message_for_voucher_expired
+    I18n.t('notifications.messages.voucher_expired')
+  end
+
   def application_reference(application = nil)
     application ||= notifiable_application
     return 'Application missing' unless application&.id

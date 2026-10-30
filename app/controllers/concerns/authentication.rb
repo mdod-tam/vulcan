@@ -41,6 +41,10 @@ module Authentication
                        end
 
     clear_expired_session if @current_session.respond_to?(:expired?) && @current_session.expired?
+    if @current_session && !@current_session.user.public_login_active?
+      @current_session.destroy! if @current_session.persisted?
+      clear_expired_session
+    end
 
     @current_session
   end
@@ -49,7 +53,7 @@ module Authentication
     return if cookies.signed[:session_token].blank?
 
     # Load the user association only when a caller needs it.
-    Session.find_by(session_token: cookies.signed[:session_token])
+    Session.for_token(cookies.signed[:session_token]).take
   end
 
   def find_test_session
@@ -94,13 +98,13 @@ module Authentication
   def find_signed_cookie_session
     return if cookies.signed[:session_token].blank?
 
-    Session.find_by(session_token: cookies.signed[:session_token])
+    Session.for_token(cookies.signed[:session_token]).take
   end
 
   def find_unsigned_cookie_session
     return if cookies[:session_token].blank?
 
-    Session.find_by(session_token: cookies[:session_token])
+    Session.for_token(cookies[:session_token]).take
   end
 
   # JSON callers need a 401 response. The sign-in action has no JSON responder.

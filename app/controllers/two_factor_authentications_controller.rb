@@ -13,6 +13,10 @@ class TwoFactorAuthenticationsController < ApplicationController
                      only: %i[verify verify_method process_verification verification_options setup select_sms_verification resend_sms_verification]
   skip_before_action :enforce_required_mfa_enrollment
 
+  rate_limit to: 30, within: 1.minute, only: %i[process_verification verify_code],
+             by: -> { AuthRateLimit.request_ip_digest(request) },
+             with: :refuse_excessive_verification_requests
+
   # GET /two_factor_authentication/setup
   def setup
     @user = find_setup_user
@@ -289,6 +293,16 @@ class TwoFactorAuthenticationsController < ApplicationController
       webauthn_verification_params.to_h
     else
       params
+    end
+  end
+
+  def refuse_excessive_verification_requests
+    TwoFactorAuth.abort_authentication(session)
+    response.headers['Cache-Control'] = 'no-store'
+    message = t('two_factor_verification.errors.verification_rate_limited')
+    respond_to do |format|
+      format.json { render json: { error: message, error_code: 'rate_limited' }, status: :too_many_requests }
+      format.any { redirect_to sign_in_path, alert: message, status: :see_other }
     end
   end
 

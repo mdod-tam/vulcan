@@ -196,73 +196,12 @@ module Admin
       end
     end
 
-    def destroy
-      @user = User.find(params[:id])
+    def deactivate
+      change_login_status(:deactivate!)
+    end
 
-      if protected_system_user?(@user)
-        AuditEventService.log(
-          action: 'admin_user_deletion_blocked',
-          actor: current_user,
-          auditable: @user,
-          metadata: user_audit_metadata(@user).merge(
-            admin_id: current_user.id,
-            admin_name: current_user.full_name,
-            reason: 'system_user'
-          )
-        )
-        redirect_to admin_user_path(@user), alert: 'You cannot delete the system user.'
-        return
-      end
-
-      if @user == current_user
-        AuditEventService.log(
-          action: 'admin_user_deletion_blocked',
-          actor: current_user,
-          auditable: @user,
-          metadata: user_audit_metadata(@user).merge(
-            admin_id: current_user.id,
-            admin_name: current_user.full_name,
-            reason: 'self_deletion'
-          )
-        )
-        redirect_to admin_user_path(@user), alert: 'You cannot delete your own user account.'
-        return
-      end
-
-      metadata = user_audit_metadata(@user).merge(
-        admin_id: current_user.id,
-        admin_name: current_user.full_name
-      )
-
-      AuditEventService.log(
-        action: 'admin_user_deletion_attempted',
-        actor: current_user,
-        auditable: @user,
-        metadata: metadata
-      )
-
-      begin
-        @user.destroy!
-      rescue ActiveRecord::ActiveRecordError => e
-        AuditEventService.log(
-          action: 'admin_user_deletion_failed',
-          actor: current_user,
-          auditable: @user,
-          metadata: metadata.merge(error_class: e.class.name)
-        )
-
-        redirect_to admin_user_path(@user),
-                    alert: "Could not delete #{@user.full_name}. The failure was logged for review."
-        return
-      end
-
-      AuditEventService.log(
-        action: 'admin_user_deleted',
-        actor: current_user,
-        metadata: metadata
-      )
-
-      redirect_to admin_users_path, notice: "Deleted user #{metadata[:target_user_name]}."
+    def reactivate
+      change_login_status(:reactivate!)
     end
 
     def constituents
@@ -392,6 +331,24 @@ module Admin
 
     def turbo_frame_request_for_search_results?
       turbo_frame_request_id&.end_with?('_search_results') || params[:turbo_frame_id]&.end_with?('_search_results')
+    end
+
+    def change_login_status(action)
+      @user = User.find(params.expect(:id))
+      @user.public_send(action, actor: current_user)
+      notice = if action == :deactivate!
+                 'User deactivated. History was preserved and sessions were revoked.'
+               else
+                 'User reactivated. The user can sign in again.'
+               end
+      redirect_to admin_user_path(@user), notice: notice
+    rescue ActiveRecord::RecordInvalid => e
+      alert = if e.record.is_a?(User) && e.record.id == @user.id
+                e.record.errors.full_messages.to_sentence
+              else
+                'The account status could not be changed. No changes were saved.'
+              end
+      redirect_to admin_user_path(@user), alert: alert
     end
 
     def protected_system_user?(user)

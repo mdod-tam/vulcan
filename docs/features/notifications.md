@@ -8,8 +8,8 @@ Rails flash messages give immediate request feedback.
 
 ## The normal flow
 
-1. The workflow calls `NotificationService.create_and_deliver!` with an action, recipient, and related record.
-2. The service creates a `Notification`. With `deliver: true`, its private [NotificationDispatch](../../app/services/email_delivery/notification_dispatch.rb) adapts the catalog arguments and attempts delivery; `deliver: false` creates history only. Creation failure returns `nil`.
+1. The workflow calls `NotificationService.create_and_deliver!` with an action, recipient, explicit actor, and related record.
+2. The service creates a `Notification`. With `deliver: true`, its private [NotificationDispatch](../../app/services/email_delivery/notification_dispatch.rb) adapts the catalog arguments and attempts delivery; `deliver: false` creates history only. Creation failure raises after safe diagnostics and a `notification_creation_failed` audit when storage is available. That audit participates in the caller transaction: a rolled-back workflow does not leave a false committed notification failure; a failure during post-commit follow-up remains visible without undoing the completed operation.
 3. The mailer builds the message and resolves its destination. Preference-sensitive messages can become letters in the print queue.
 4. Routing metadata records the actual channel and reason. A queued message doesn't mean the recipient got it.
 
@@ -19,6 +19,7 @@ The requested channel is `:email`, `:letter`, or record-only `:sms`, and what ha
 
 | Communication | Owner and behavior |
 | --- | --- |
+| Voucher expiration | [ExpirationProcessorService](../../app/services/vouchers/expiration_processor_service.rb) locks each voucher and commits its expired status, business audit, and record-only notification together. It then dispatches the notice independently of the active-voucher scope. |
 | Ordinary notification | [NotificationService](../../app/services/notification_service.rb) creates the row and calls the mapped mailer. |
 | Proof approval | [`ProofDecisionFollowUp`](../../app/services/applications/proof_decision_follow_up.rb) records the audit event and a notification without sending a message. |
 | Proof rejection | [RequestProofResubmission](../../app/services/applications/request_proof_resubmission.rb) issues the secure upload request. A failed delivery leaves the review saved and lets staff see a warning. A link that cannot be issued records `proof_resubmission_request_failed`. |
@@ -32,6 +33,8 @@ Proof rejection belongs exclusively to the secure-request flow, which gives the 
 ### Record-only actions
 
 `proof_approved`, `disability_certification_received`, `disability_certification_approved`, and `documents_requested` intentionally send nothing. The first three reflect status visible in the portal; `documents_requested` has no delivery mailer.
+
+Proof and W9 rejection-limit warnings are in-app notices for the administrator who made the decision. Their actor remains that reviewer. They do not send the constituent-facing closure email; proof rejection beyond the limit sends that closure notice separately after the application is archived.
 
 When delivery is requested for these actions, routing metadata records `none` / `no_email_action`. This is expected behavior.
 
@@ -56,6 +59,10 @@ In the notification list, recipients see basic delivery status on their own noti
 Shared communication policy refusals use one locked notification writer. All dominates the independent Email, Printed letters and SMS switches; category settings apply across channels. Letter admission and authenticated POST release use the same captured policy. Intentional suppression stores `suppressed`; missing or unreadable settings store `error` with `delivery_error.message`. Both record actual channel `none`. The enqueue adapter preserves that distinction, and routing or delivery-error updates merge fresh metadata under a row lock so they cannot erase a worker's refusal. Public account-recovery responses do not expose these internal outcomes.
 
 Assignment notices (a trainer or evaluator told they hold work, and the constituent told their trainer changed) are written for one person and one assignment operation. Their mailers take `.with(recipient:, assignment:, operation_id:)`, and each assignment row stores the operation that last gave it to its assignee (`assignment_operation_id`). At delivery the mailer checks that the row still carries that operation and that the assignee still holds it and may still take that kind of work (the recipient of a trainer or evaluator notice, the trainer a constituent notice names); otherwise it records an `assignment_superseded` outcome and sends nothing. So two transfers before delivery send only the later notice, and returning work to an earlier recipient does not revive the earlier notice. A recipient or assignment deleted before delivery is recorded the same way instead of failing the job. [Notifier tests](../../test/integration/training_notification_delivery_test.rb) and [evaluator notice tests](../../test/models/evaluation_assignment_notice_test.rb) cover both disciplines.
+
+Notification actors are explicit. A human action names the person who performed it; an automatic expiration names the configured system audit account. The service never substitutes an unrelated administrator or the support contact. If a system actor is missing, expiration fails before changing the voucher.
+
+Expiration notice intents retain their original communication-policy capture and delivery correlation. A crash before dispatch or a failed queue write is retried by the next sweep using that same intent, even though the voucher is already expired. Accepted queued jobs remain owned by the queue. Transport and letter replay checks use the retained identity if an enqueue is repeated. An intentional suppression is terminal; changing communication controls does not authorize replaying the old request. Delivery errors and captures remain on the notification for staff inspection.
 
 Account recovery uses the same operation with `deliver: false` and verifies the returned row before committing its recovery request. `audit: true` sets the notification row's `audited` flag without composing a generic `Event`. Business audit events belong to their workflow owners.
 

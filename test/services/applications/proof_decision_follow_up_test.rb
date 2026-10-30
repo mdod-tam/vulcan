@@ -57,6 +57,52 @@ module Applications
       follow_up(review)
     end
 
+    test 'an approval notification creation failure keeps the decision and records the incomplete follow-up' do
+      review = create(:proof_review, application: @application, admin: @admin, proof_type: :income, status: :approved)
+      Notification.stubs(:create!).raises(ActiveRecord::RecordInvalid.new(Notification.new))
+
+      assert_difference -> { Event.where(action: 'notification_creation_failed', auditable: @application).count }, 1 do
+        follow_up(review)
+      end
+
+      assert review.reload.status_approved?
+      assert_not Notification.exists?(notifiable: @application, action: 'proof_approved')
+      event = Event.find_by!(action: 'notification_creation_failed', auditable: @application)
+      assert_equal @admin.id, event.user_id
+      assert_equal 'proof_approved', event.metadata['notification_type']
+    end
+
+    test 'the rejection-limit warning goes to its reviewer with truthful actor attribution' do
+      @application.update!(total_rejections: ProofReview::MAX_REJECTIONS - 1)
+      review = ProofReview.for_decision(@application, proof_type: :income, status: :rejected)
+                          .record!(admin: @admin, rejection_reason: 'Unreadable')
+
+      follow_up(review)
+
+      notification = Notification.find_by!(notifiable: @application, action: 'max_rejections_warning')
+      assert_equal @admin.id, notification.recipient_id
+      assert_equal @admin.id, notification.actor_id
+      assert_nil notification.delivery_status
+      assert_equal @admin.id, Event.find_by!(auditable: @application, action: 'max_rejections_warning').metadata['recipient_id']
+    end
+
+    test 'distinct rejection-limit decisions retain their audit while repeated follow-up is deduplicated' do
+      freeze_time do
+        @application.update!(total_rejections: ProofReview::MAX_REJECTIONS - 1)
+        income = ProofReview.for_decision(@application, proof_type: :income, status: :rejected)
+                            .record!(admin: @admin, rejection_reason: 'Unreadable')
+        follow_up(income)
+        residency = ProofReview.for_decision(@application, proof_type: :residency, status: :rejected)
+                               .record!(admin: @admin, rejection_reason: 'Unreadable')
+
+        assert_difference -> { Event.where(action: 'max_rejections_warning', auditable: @application).count }, 1 do
+          follow_up(residency)
+          follow_up(income)
+        end
+        assert_equal 2, Event.where(action: 'max_rejections_warning', auditable: @application).count
+      end
+    end
+
     test 'a paper rejection requests a secure resubmission and queues the rejection letter' do
       @application.user.update!(communication_preference: :letter, phone_type: :voice)
       @application.update!(income_proof_status: :rejected)

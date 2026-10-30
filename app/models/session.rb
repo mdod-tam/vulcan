@@ -1,22 +1,34 @@
 # frozen_string_literal: true
 
+require 'active_support/core_ext/securerandom'
+
 class Session < ApplicationRecord
   IDLE_TIMEOUT = 30.minutes
   ACTIVITY_WRITE_INTERVAL = 1.minute
 
   belongs_to :user
 
-  # 44 base58 characters carry at least the 256 bits of a 32-byte token. The database unique index
-  # rejects a duplicate.
-  has_secure_token :session_token, length: 44, on: :validation
+  # The raw token is available to its issuer only; stored sessions retain its digest.
+  attr_reader :session_token
 
-  validates :session_token, presence: true
+  validates :session_token_digest, presence: true
   validates :ip_address, presence: true
   validates :user_agent, presence: true
 
-  before_validation :set_initial_activity, on: :create
+  before_validation :generate_session_token, :set_initial_activity, on: :create
 
   before_create :set_expiry
+
+  scope :for_token, ->(token) { where(session_token_digest: digest_token(token)) }
+
+  def self.digest_token(token)
+    Digest::SHA256.hexdigest(token.to_s)
+  end
+
+  def session_token=(token)
+    @session_token = token
+    self.session_token_digest = token.present? ? self.class.digest_token(token) : nil
+  end
 
   def expired?(at: Time.current)
     expires_at.nil? || expires_at <= at || last_active_at <= at - IDLE_TIMEOUT
@@ -55,6 +67,10 @@ class Session < ApplicationRecord
   end
 
   private
+
+  def generate_session_token
+    self.session_token = self.class.generate_unique_secure_token(length: 44) if session_token.blank?
+  end
 
   def set_initial_activity
     self.last_active_at ||= Time.current

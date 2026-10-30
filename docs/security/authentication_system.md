@@ -22,7 +22,9 @@ Required password changes and MFA enrollment take priority. Pending MFA verifica
 
 Session creation itself is [`ApplicationController#_create_and_set_session_cookie`](../../app/controllers/application_controller.rb). It locks the user and rechecks them before writing a [`Session`](../../app/models/session.rb). Password-only sign-in also re-verifies the submitted identifier and password inside that lock. A merge or credential change landing mid-request therefore cannot be accepted on stale reads. Registration uses this same session owner. After the session transaction commits, it resets the Rails browser session, preserves the intended return path, and sets the signed login cookie. Password and MFA sign-in use that same completion boundary.
 
-The signed `session_token` cookie identifies the session row. [`Authentication`](../../app/controllers/concerns/authentication.rb) resolves it on every later request. Sign-out deletes the session, the cookie, and any pending MFA state.
+The signed `session_token` cookie carries a random 44-character token. The session row stores only its SHA-256 digest; [`Authentication`](../../app/controllers/concerns/authentication.rb) digests the verified cookie value for lookup on later requests. Raw tokens are available in memory when issued, never stored in the session table. The digest cutover revokes existing sessions rather than retaining a raw-token compatibility reader. Sign-out deletes the session, the cookie, and any pending MFA state.
+
+Session resolution also checks `public_login_active?`. An existing session for an inactive, suspended, or merged account is revoked and its browser authentication cleared on the next request, including JSON activity requests. New sign-in and pending MFA retain their existing activity checks.
 
 ## Session lifetime
 
@@ -50,13 +52,15 @@ Administrators, evaluators, trainers, and vendors must enroll; constituents may.
 
 Registration and verification are split across [`TwoFactorCredentialsController`](../../app/controllers/two_factor_credentials_controller.rb), [`TwoFactorAuthenticationsController`](../../app/controllers/two_factor_authentications_controller.rb), the shared [`TwoFactorVerification`](../../app/controllers/concerns/two_factor_verification.rb) concern, and [`TwoFactorAuth`](../../config/initializers/two_factor_auth.rb), the initializer that holds the temporary user, challenge, return path, and completion state. SMS send and resend lifetimes are in [`TwoFactor::SmsLoginChallenge`](../../app/services/two_factor/sms_login_challenge.rb) and [`TwilioVerifyService`](../../app/services/twilio_verify_service.rb).
 
-Two ordering details matter. JSON and WebAuthn completion must create the session before clearing the challenge. Resolving the temporary MFA user rechecks `public_login_active?`, so an account retired mid-sign-in cannot finish verifying.
+Two ordering details matter. JSON and WebAuthn completion must create the session before clearing the challenge. Resolving the temporary MFA user rechecks `public_login_active?`, so an account retired mid-sign-in cannot finish verifying. The password-bound pending sign-in token expires after 10 minutes; a late second factor requires a fresh password step.
+
+TOTP permits five failed guesses per account in a 15-minute window starting with the first failure. The account row lock serializes checks and failure writes across browsers, IP addresses, and application workers. Attempt and reset bookkeeping writes only its auth fields and timestamp, independently of profile validation and callbacks. Exhaustion clears pending browser state; signing in with the password again cannot reset the account's budget. A successful TOTP check clears earlier failures, and the next attempt after the window ends starts a new budget. The lockout event is recorded after commit so an audit failure cannot reopen guesses. Verification submissions also share Rails' native limit of 30 per minute per IP address across the controller's verification actions. That cache-backed limit returns JSON 429 or redirects HTML/Turbo callers to sign-in with translated guidance.
 
 The public sign-in locale — the language and region setting — is carried into MFA redirects and verification URLs. It does not come from the matched account. The method chooser and the security-key, authenticator-app, and SMS verification pages support English and Spanish, including code errors and SMS send and resend feedback.
 
 Credential lookup, challenge, and signature failures return the same JSON 422 response and `verification_failed` code with translated retry guidance. These JSON responses go to the verification pages' own browser scripts, which request JSON; 422 means the request was rejected. Server logs retain the failure category, without sending verifier details to the browser.
 
-A verified key followed by a session creation failure returns `session_failed` with guidance to sign in again. If the temporary MFA user no longer resolves, verification returns `user_session` with the same sign-in guidance. JSON verification failures use 422 regardless of locale. Non-JSON HTTP failures produce a status-only console diagnostic and generic user feedback.
+A verified key followed by a session creation failure returns `session_failed` with guidance to sign in again. If the temporary MFA user no longer resolves, verification returns `user_session` with the same sign-in guidance. Factor-validation JSON failures use 422 regardless of locale; the IP request limit uses 429. Non-JSON HTTP failures produce a status-only console diagnostic and generic user feedback.
 
 Missing or cleared pending MFA state makes a JSON security-key options request return 401; HTML and Turbo navigation redirect to sign-in. The key page uses its rendered English or Spanish sign-in guidance for that 401 without reading server error details. Reactivating an account does not restore cleared pending state: start again with password sign-in before another verification attempt.
 
@@ -102,7 +106,7 @@ A JSON caller that silently retries will just fail again. If the page holds sele
 
 `bin/rails db:bootstrap` provisions `system@mdmat.org` ([bootstrapping an environment](../infrastructure/setup_and_maintenance.md#bootstrapping-an-environment)). Public requests do not create it. A registration that needs a duplicate-review case also depends on this actor and rolls back if it is absent.
 
-MFA verification mostly writes Rails logs through `TwoFactorAuth` rather than `Event` rows. Attempt history is therefore not in the audit trail.
+MFA verification mostly writes Rails logs through `TwoFactorAuth`. Exhausting the durable TOTP account budget additionally records `two_factor_verification_rate_limited` through `PublicAuditActor`, with the account as the audit target rather than an authenticated actor. A missing system actor or audit-write failure is reported by that owner without reopening the durable account budget. Individual failure categories remain in Rails logs; submitted codes are filtered.
 
 ## Troubleshooting
 
@@ -122,6 +126,7 @@ Tests simulate Twilio Verify and accept `123456`. Development falls back to the 
 - [Sessions](../../test/controllers/sessions_controller_test.rb), [idle and absolute lifetime](../../test/models/session_test.rb), [real-cookie activity flow](../../test/integration/session_activity_test.rb), [enrollment policy](../../test/controllers/mfa_enrollment_policy_test.rb)
 - [Password sign-in and registration cookie attributes](../../test/integration/session_cookie_test.rb) — browser-session lifetime, HttpOnly, SameSite=Lax, and the stored 24-hour deadline.
 - [WebAuthn verification](../../test/controllers/two_factor_authentication_webauthn_test.rb), [SMS selection](../../test/controllers/two_factor_authentication_sms_selection_test.rb)
+- [MFA attempt budgets and pending-login expiry](../../test/integration/two_factor_attempt_limit_test.rb) — account limits across browsers/IPs, restart and expiry behavior, translated guidance, and the native IP throttle.
 - [Password reset](../../test/controllers/passwords_controller_test.rb), [concurrent resets](../../test/controllers/passwords_controller_concurrency_test.rb)
 - [Recovery requests](../../test/controllers/account_recovery_controller_test.rb), [admin approval](../../test/controllers/admin/recovery_requests_controller_test.rb)
 - [Twilio Verify](../../test/services/twilio_verify_service_test.rb)

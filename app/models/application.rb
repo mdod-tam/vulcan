@@ -98,18 +98,18 @@ class Application < ApplicationRecord
              class_name: 'User',
              optional: true
 
-  has_many :training_sessions, class_name: 'TrainingSession', dependent: :destroy
+  has_many :training_sessions, class_name: 'TrainingSession', dependent: :restrict_with_error
   has_many :trainers, through: :training_sessions
-  has_many :evaluations, dependent: :destroy
-  has_many :notifications, as: :notifiable, dependent: :destroy
-  has_many :proof_reviews, dependent: :destroy
-  has_many :status_changes, class_name: 'ApplicationStatusChange', dependent: :destroy
-  has_many :events, as: :auditable, dependent: :destroy
+  has_many :evaluations, dependent: :restrict_with_error
+  has_many :notifications, as: :notifiable, dependent: :restrict_with_error
+  has_many :proof_reviews, dependent: :restrict_with_error
+  has_many :status_changes, class_name: 'ApplicationStatusChange', dependent: :restrict_with_error
+  has_many :events, as: :auditable, dependent: :restrict_with_error
   has_many :vouchers, dependent: :restrict_with_error
   has_many :equipment_needs, dependent: :restrict_with_error
   has_many :equipment_items, dependent: :restrict_with_error
-  has_many :application_notes, dependent: :destroy
-  has_many :certification_upload_forms, -> { certification_upload }, class_name: 'SecureRequestForm', inverse_of: :application, dependent: :destroy
+  has_many :application_notes, dependent: :restrict_with_error
+  has_many :certification_upload_forms, -> { certification_upload }, class_name: 'SecureRequestForm', inverse_of: :application, dependent: :restrict_with_error
   has_and_belongs_to_many :products
   has_one_attached :income_proof
   has_one_attached :residency_proof
@@ -373,6 +373,7 @@ class Application < ApplicationRecord
 
       return true if old_status == target_status
 
+      validate_status_transition!(target_status)
       update!(status: target_status)
 
       status_changes.create!(
@@ -574,6 +575,17 @@ class Application < ApplicationRecord
   end
 
   private
+
+  def validate_status_transition!(target_status)
+    errors.clear
+    if status_rejected? || status_archived?
+      errors.add(:status, "cannot transition from #{status}")
+    elsif target_status == 'approved' && !all_requirements_met?
+      errors.add(:status, 'cannot be approved until all required proofs and disability certification are approved')
+    end
+
+    raise ActiveRecord::RecordInvalid, self if errors.any?
+  end
 
   def reconcile_pending_letters_after_owner_change
     return unless saved_changes.keys.intersect?(PrintQueueItem::APPLICATION_IDENTITY_FIELDS)

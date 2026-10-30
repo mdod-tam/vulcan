@@ -22,7 +22,7 @@ class ApplicationTransitionStatusTest < ActiveSupport::TestCase
   end
 
   test 'transition_status! creates one status change and event with explicit actor, notes, and metadata' do
-    application = create(:application, :in_progress, user: @constituent)
+    application = create(:application, :completed, :in_progress, user: @constituent)
     Current.user = @other_admin
 
     assert_difference -> { ApplicationStatusChange.where(application: application).count }, 1 do
@@ -69,7 +69,7 @@ class ApplicationTransitionStatusTest < ActiveSupport::TestCase
   test 'transition_status! alone never enqueues voucher issuance' do
     with_after_commit_callbacks do
       admin = create(:admin)
-      application = create(:application, :in_progress, :voucher_fulfillment, user: create(:constituent, email: generate(:email)))
+      application = create(:application, :completed, :in_progress, :voucher_fulfillment, user: create(:constituent, email: generate(:email)))
 
       assert_no_enqueued_jobs only: IssueInitialVoucherJob do
         assert application.transition_status!(:approved, actor: admin)
@@ -81,7 +81,7 @@ class ApplicationTransitionStatusTest < ActiveSupport::TestCase
     with_after_commit_callbacks do
       admin = create(:admin)
       constituent = create(:constituent, email: generate(:email))
-      application = create(:application, :in_progress, :voucher_fulfillment, user: constituent)
+      application = create(:application, :completed, :in_progress, :voucher_fulfillment, user: constituent)
 
       assert_enqueued_with(job: IssueInitialVoucherJob, args: [application.id, admin.id, 'manual_approval']) do
         assert Applications::Approver.new(application, by: admin).call
@@ -92,7 +92,7 @@ class ApplicationTransitionStatusTest < ActiveSupport::TestCase
   test 'automatic approval enqueues initial voucher issuance as automatic' do
     with_after_commit_callbacks do
       admin = create(:admin)
-      application = create(:application, :in_progress, :voucher_fulfillment, user: create(:constituent, email: generate(:email)))
+      application = create(:application, :completed, :in_progress, :voucher_fulfillment, user: create(:constituent, email: generate(:email)))
       application.update_columns(
         income_proof_status: Application.income_proof_statuses[:approved],
         residency_proof_status: Application.residency_proof_statuses[:approved],
@@ -110,7 +110,7 @@ class ApplicationTransitionStatusTest < ActiveSupport::TestCase
     with_after_commit_callbacks do
       admin = create(:admin)
       constituent = create(:constituent, email: generate(:email))
-      application = create(:application, :in_progress, user: constituent)
+      application = create(:application, :completed, :in_progress, user: constituent)
 
       assert application.equipment_fulfillment?
       assert_no_enqueued_jobs only: IssueInitialVoucherJob do
@@ -124,7 +124,7 @@ class ApplicationTransitionStatusTest < ActiveSupport::TestCase
       FeatureFlag.enable!(:vouchers_enabled)
       admin = create(:admin)
       constituent = create(:constituent, email: generate(:email))
-      application = create(:application, :in_progress, :voucher_fulfillment, user: constituent)
+      application = create(:application, :completed, :in_progress, :voucher_fulfillment, user: constituent)
       application.update_columns(
         income_proof_status: Application.income_proof_statuses[:approved],
         residency_proof_status: Application.residency_proof_statuses[:approved],
@@ -154,7 +154,7 @@ class ApplicationTransitionStatusTest < ActiveSupport::TestCase
       FeatureFlag.enable!(:vouchers_enabled)
       admin = create(:admin)
       constituent = create(:constituent, email: generate(:email))
-      application = create(:application, :in_progress, :voucher_fulfillment, user: constituent)
+      application = create(:application, :completed, :in_progress, :voucher_fulfillment, user: constituent)
       application.update_columns(
         income_proof_status: Application.income_proof_statuses[:approved],
         residency_proof_status: Application.residency_proof_statuses[:approved],
@@ -183,7 +183,7 @@ class ApplicationTransitionStatusTest < ActiveSupport::TestCase
   end
 
   test 'transition_status! requires an explicit actor' do
-    application = create(:application, :in_progress, user: @constituent)
+    application = create(:application, :completed, :in_progress, user: @constituent)
 
     error = assert_raises(ArgumentError) do
       application.transition_status!(:approved, actor: nil)
@@ -193,14 +193,14 @@ class ApplicationTransitionStatusTest < ActiveSupport::TestCase
   end
 
   test 'application lifecycle wrappers require an explicit user' do
-    application = create(:application, :in_progress, user: @constituent)
+    application = create(:application, :completed, :in_progress, user: @constituent)
 
     assert_raises(ArgumentError) { application.approve! }
     assert_raises(ArgumentError) { application.reject! }
   end
 
   test 'transition_status! rolls back the status change if status audit logging fails' do
-    application = create(:application, :in_progress, user: @constituent)
+    application = create(:application, :completed, :in_progress, user: @constituent)
 
     AuditEventService.stub :log, ->(**) { raise 'status audit failed' } do
       error = assert_raises(RuntimeError) do
@@ -214,6 +214,57 @@ class ApplicationTransitionStatusTest < ActiveSupport::TestCase
     assert_equal 'in_progress', application.status
     assert_equal 0, ApplicationStatusChange.where(application: application, to_status: 'approved').count
     assert_equal 0, Event.where(auditable: application, action: 'application_status_changed').count
+  end
+
+  test 'approval requires each configured proof and disability certification' do
+    %i[income_proof_status residency_proof_status id_proof_status disability_certification_status].each do |field|
+      pending_status = field == :disability_certification_status ? :not_requested : :not_reviewed
+      application = create(:application, :completed, :in_progress, income_proof_required: true, field => pending_status)
+
+      assert_no_difference ['Event.count', 'ApplicationStatusChange.count', 'Voucher.count'] do
+        assert_not application.approve!(user: @admin), "#{field} must block approval"
+      end
+
+      assert application.reload.status_in_progress?
+    end
+  end
+
+  test 'approval respects the stored optional income proof requirement' do
+    application = create(:application, :completed, :in_progress, :income_not_required,
+                         income_proof_status: :not_reviewed)
+
+    assert application.approve!(user: @admin)
+
+    assert application.reload.status_approved?
+  end
+
+  test 'rejected and archived applications cannot be implicitly reopened or approved' do
+    %i[rejected archived].each do |status|
+      application = create(:application, :completed, status: status)
+
+      assert_no_difference ['Event.count', 'ApplicationStatusChange.count', 'Voucher.count'] do
+        assert_not application.approve!(user: @admin)
+        assert_raises(ActiveRecord::RecordInvalid) do
+          application.transition_status!(:in_progress, actor: @admin)
+        end
+      end
+
+      assert_equal status.to_s, application.reload.status
+    end
+  end
+
+  test 'batch approval rolls back eligible approvals when any application is ineligible' do
+    eligible = create(:application, :completed, :in_progress)
+    ineligible = create(:application, :in_progress)
+
+    assert_no_difference ['Event.count', 'ApplicationStatusChange.count', 'Voucher.count'] do
+      result = Application.batch_update_status([eligible.id, ineligible.id], :approved, actor: @admin)
+      assert_not result[:success]
+      assert_equal 0, result[:success_count]
+    end
+
+    assert eligible.reload.status_in_progress?
+    assert ineligible.reload.status_in_progress?
   end
 
   private

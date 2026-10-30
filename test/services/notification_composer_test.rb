@@ -13,6 +13,14 @@ class NotificationComposerTest < ActiveSupport::TestCase
     Current.reset
   end
 
+  test 'voucher expiration history is localized for the current viewer' do
+    { en: 'Your voucher has expired.', es: 'Su vale ha vencido.' }.each do |locale, expected|
+      I18n.with_locale(locale) do
+        assert_equal expected, NotificationComposer.generate('voucher_expired', nil)
+      end
+    end
+  end
+
   test 'generate message for proof_approved' do
     message = NotificationComposer.generate(
       'proof_approved',

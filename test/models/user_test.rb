@@ -31,6 +31,58 @@ class UserTest < ActiveSupport::TestCase
     assert_match(/WHERE.+"users"\."type" = 'Users::Administrator'/, scope_sql)
   end
 
+  test 'deletion preserves both the actor and subject of audit history' do
+    actor = create(:admin)
+    Event.where(auditable_type: 'User', auditable_id: [actor.id, @existing_constituent.id]).delete_all
+    event = AuditEventService.log(actor: actor, action: 'user_history', auditable: @existing_constituent)
+
+    [actor, @existing_constituent].each do |user|
+      assert_no_difference ['User.count', 'Event.count'] do
+        assert_not user.destroy
+      end
+      assert User.exists?(user.id)
+    end
+
+    assert_equal actor.id, event.reload.user_id
+    assert_equal @existing_constituent.id, event.auditable_id
+  end
+
+  test 'deletion preserves received notification history' do
+    Event.where(auditable: @existing_constituent).delete_all
+    assert_empty @existing_constituent.events
+    notification = Notification.create!(recipient: @existing_constituent, action: 'retained_notice', notifiable: @another_guardian)
+
+    assert_no_difference ['User.count', 'Notification.count'] do
+      assert_not @existing_constituent.destroy
+    end
+
+    assert_equal @existing_constituent.id, notification.reload.recipient_id
+  end
+
+  test 'constituent deletion preserves their applications' do
+    Event.where(auditable: @existing_constituent).delete_all
+    assert_empty @existing_constituent.events
+    application = create(:application, user: @existing_constituent)
+
+    assert_no_difference ['User.count', 'Application.count'] do
+      assert_not @existing_constituent.destroy
+    end
+
+    assert_equal @existing_constituent.id, application.reload.user_id
+  end
+
+  test 'deactivation rechecks the administrators current account status' do
+    actor = create(:admin)
+    stale_actor = User.find(actor.id)
+    actor.update!(status: :inactive)
+
+    assert_no_difference 'Event.count' do
+      assert_raises(ActiveRecord::RecordInvalid) { @existing_constituent.deactivate!(actor: stale_actor) }
+    end
+
+    assert @existing_constituent.reload.active?
+  end
+
   test 'should not save constituent with duplicate email' do
     constituent = build(:constituent, email: @existing_constituent.email)
     assert_not constituent.save, 'Saved constituent with duplicate email'
@@ -122,18 +174,26 @@ class UserTest < ActiveSupport::TestCase
     assert_not(create(:constituent).dependent?)
   end
 
-  test 'destroying a guardian user destroys their guardian_relationships_as_guardian' do
-    GuardianRelationship.create!(guardian_user: @guardian_user, dependent_user: @dependent_user1, relationship_type: 'Parent')
-    assert_difference('GuardianRelationship.count', -1) do
-      @guardian_user.destroy
+  test 'deletion preserves a guardians audit history and dependent relationships' do
+    relationship = GuardianRelationship.create!(guardian_user: @guardian_user, dependent_user: @dependent_user1, relationship_type: 'Parent')
+
+    assert_no_difference ['GuardianRelationship.count', 'User.count', 'Event.count'] do
+      assert_not @guardian_user.destroy
     end
+
+    assert_equal @guardian_user.id, relationship.reload.guardian_id
+    assert @guardian_user.errors.any?
   end
 
-  test 'destroying a dependent user destroys their guardian_relationships_as_dependent' do
-    GuardianRelationship.create!(guardian_user: @guardian_user, dependent_user: @dependent_user1, relationship_type: 'Parent')
-    assert_difference('GuardianRelationship.count', -1) do
-      @dependent_user1.destroy
+  test 'deletion preserves a dependents audit history and guardian relationships' do
+    relationship = GuardianRelationship.create!(guardian_user: @guardian_user, dependent_user: @dependent_user1, relationship_type: 'Parent')
+
+    assert_no_difference ['GuardianRelationship.count', 'User.count', 'Event.count'] do
+      assert_not @dependent_user1.destroy
     end
+
+    assert_equal @dependent_user1.id, relationship.reload.dependent_id
+    assert @dependent_user1.errors.any?
   end
 
   # --- Authorization Method Tests ---

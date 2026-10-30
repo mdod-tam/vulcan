@@ -26,6 +26,27 @@ class ApplicationTest < ActiveSupport::TestCase
     skip 'Skipping notification test until compatible with new guards'
   end
 
+  test 'deletion preserves each kind of application lifecycle history' do
+    history_writers = [
+      ->(application) { AuditEventService.log(actor: @admin, action: 'retained_history', auditable: application) },
+      ->(application) { application.status_changes.create!(user: @admin, from_status: 'draft', to_status: 'in_progress') },
+      ->(application) { application.proof_reviews.create!(admin: @admin, proof_type: :disability_certification, status: :rejected, rejection_reason: 'Missing signature') },
+      ->(application) { application.notifications.create!(recipient: application.user, actor: @admin, action: 'retained_notice') }
+    ]
+
+    history_writers.each do |write_history|
+      application = create(:application)
+      history = write_history.call(application)
+
+      assert_no_difference ['Application.count', 'Event.count', 'ApplicationStatusChange.count', 'ProofReview.count', 'Notification.count'] do
+        assert_not application.destroy
+      end
+
+      assert history.class.exists?(history.id)
+      assert Application.exists?(application.id)
+    end
+  end
+
   test 'submitted application requires provider info before DCF routing or approval' do
     application = build(:application, :in_progress,
                         certifying_professional_name: nil,
