@@ -9,9 +9,15 @@ class DocumentScanAcceptanceTest < ActiveSupport::TestCase
       application = create(:application, :with_income_proof)
       original = application.income_proof.blob
       replacement = scanned_fixture(admin, :proof, verdict)
-      result = ProofAttachmentService.attach_proof(application: application, proof_type: :income,
-                                                   blob_or_file: replacement.signed_id, admin: admin, submission_method: :web)
-      assert_equal verdict == 'clean', result[:success]
+      attach = lambda do
+        ProofAttachmentService.attach_proof(application: application, proof_type: :income,
+                                            blob_or_file: replacement.signed_id, admin: admin, submission_method: :web)
+      end
+      if verdict == 'clean'
+        assert attach.call[:success]
+      else
+        assert_raises(UploadedDocument::Refused, &attach)
+      end
       assert_equal verdict == 'clean' ? replacement.id : original.id, application.reload.income_proof.blob.id
       assert original.service.exist?(original.key)
     end

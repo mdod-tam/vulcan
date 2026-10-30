@@ -52,6 +52,7 @@ class PrintedLetterDeliveryIntegrationTest < ActiveSupport::TestCase
         proof_type: :income,
         rejection_reason: 'Missing income details'
       )
+      Applications::ProofDecisionFollowUp.new(proof_review).call
     end
 
     secure_request_form = SecureRequestForm.where(application: application).order(:created_at).last
@@ -116,7 +117,7 @@ class PrintedLetterDeliveryIntegrationTest < ActiveSupport::TestCase
     Current.paper_context = true
 
     assert_difference('PrintQueueItem.count', 1) do
-      create(
+      proof_review = create(
         :proof_review,
         :rejected,
         application: application,
@@ -124,6 +125,7 @@ class PrintedLetterDeliveryIntegrationTest < ActiveSupport::TestCase
         proof_type: :income,
         rejection_reason: 'Missing income details'
       )
+      Applications::ProofDecisionFollowUp.new(proof_review).call
     end
 
     secure_request_form = SecureRequestForm.where(application: application).order(:created_at).last

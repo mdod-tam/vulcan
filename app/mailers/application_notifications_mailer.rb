@@ -96,6 +96,7 @@ class ApplicationNotificationsMailer < ApplicationMailer # rubocop:disable Metri
         template: text_template,
         locale: locale
       )
+      letter_type = DocumentType.fetch(proof_review.proof_type).rejection_letter_type
 
       if secure_request_form.present?
         if secure_request_form.recipient_channel_letter?
@@ -104,7 +105,7 @@ class ApplicationNotificationsMailer < ApplicationMailer # rubocop:disable Metri
             recipient: recipient,
             template_name: template_name,
             variables: variables.merge(proof_type: proof_review.proof_type),
-            letter_type: proof_rejection_letter_type(proof_review.proof_type),
+            letter_type: letter_type,
             application: application,
             print_recipient: letter_recipient,
             secure_request_form: secure_request_form
@@ -117,7 +118,7 @@ class ApplicationNotificationsMailer < ApplicationMailer # rubocop:disable Metri
 
       return noop_letter_delivery if queue_letter_if_preferred(
         recipient, template_name, variables.merge(proof_type: proof_review.proof_type),
-        locale: locale, letter_type: proof_rejection_letter_type(proof_review.proof_type), application: application
+        locale: locale, letter_type: letter_type, application: application
       )
 
       send_proof_rejected_email(recipient, text_template, variables)
@@ -834,18 +835,5 @@ class ApplicationNotificationsMailer < ApplicationMailer # rubocop:disable Metri
                              hours: SecureFormPolicy.link_expiration_hours
                            )
                          }).compact
-  end
-
-  def proof_rejection_letter_type(proof_type)
-    case proof_type.to_s
-    when 'income'
-      :income_proof_rejected
-    when 'residency'
-      :residency_proof_rejected
-    when 'id'
-      :id_proof_rejected
-    else
-      :other_notification
-    end
   end
 end

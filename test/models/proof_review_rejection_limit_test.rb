@@ -3,7 +3,8 @@
 require 'test_helper'
 
 # ProofReview#record! counts each rejection and archives the application past the limit, in the same
-# transaction as the decision. Notices wait for the commit.
+# transaction as the decision. The notices come from ProofDecisionFollowUp, which the writers run once their
+# transaction has committed.
 class ProofReviewRejectionLimitTest < ActiveSupport::TestCase
   include ActiveJob::TestHelper
 
@@ -117,7 +118,7 @@ class ProofReviewRejectionLimitTest < ActiveSupport::TestCase
 
   test 'a failed notice does not fail a review that has committed' do
     @application.update!(total_rejections: ProofReview::MAX_REJECTIONS - 1)
-    ProofReview.any_instance.stubs(:send_max_rejections_warning).raises(StandardError, 'warning failed')
+    Applications::ProofDecisionFollowUp.any_instance.stubs(:send_max_rejections_warning).raises(StandardError, 'warning failed')
 
     assert_difference -> { ProofReview.count }, 1 do
       reject(:income)
@@ -128,9 +129,12 @@ class ProofReviewRejectionLimitTest < ActiveSupport::TestCase
 
   private
 
+  # Records the rejection and follows up on it, as the writers do once their transaction commits.
   def reject(proof_type, reason: 'Unreadable')
-    ProofReview.for_decision(@application, proof_type: proof_type, status: :rejected)
-               .record!(admin: @admin, rejection_reason: reason)
+    review = ProofReview.for_decision(@application, proof_type: proof_type, status: :rejected)
+                        .record!(admin: @admin, rejection_reason: reason)
+    Applications::ProofDecisionFollowUp.new(review).call
+    review
   end
 
   def max_rejections_mail_jobs

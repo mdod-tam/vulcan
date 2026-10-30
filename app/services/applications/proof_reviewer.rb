@@ -25,16 +25,14 @@ module Applications
       Rails.logger.debug { "Converted values - proof_type: #{@proof_type_key.inspect}, status: #{@status_key.inspect}" }
 
       @commit.run(on_committed: ->(error) { @proof_review.log_follow_up_failure(error) }) do
-        with_single_proof_review_context do
-          @commit.transaction do
-            create_or_update_proof_review(rejection_reason, rejection_reason_code, notes)
-            update_application_status
-            purge_if_rejected
-            reconcile_if_approved
-          end
+        @commit.transaction do
+          create_or_update_proof_review(rejection_reason, rejection_reason_code, notes)
+          update_application_status
+          purge_if_rejected
+          reconcile_if_approved
         end
 
-        process_re_rejection_side_effects
+        follow_up_on_decision
       end
 
       true
@@ -104,10 +102,10 @@ module Applications
       end
     end
 
-    def process_re_rejection_side_effects
-      return unless @proof_review.repeat_rejection?
-
-      @proof_review.apply_repeat_rejection_side_effects!
+    # A new decision and a repeat rejection alike follow up once the transaction that recorded them, and any
+    # transaction around it, has committed.
+    def follow_up_on_decision
+      ActiveRecord.after_all_transactions_commit { ProofDecisionFollowUp.new(@proof_review).call }
     end
 
     def apply_submission_method_from_latest_submission_event
@@ -152,10 +150,6 @@ module Applications
 
       Rails.logger.debug { "[ProofReviewer] Status is rejected for #{@proof_type_key}, attempting purge." }
       @application.purge_rejected_proof(@proof_type_key)
-    end
-
-    def with_single_proof_review_context(&)
-      Current.set(reviewing_single_proof: true, &)
     end
   end
 end

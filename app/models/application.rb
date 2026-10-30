@@ -637,7 +637,6 @@ class Application < ApplicationRecord
   end
 
   def waiting_period_completed
-    return if Application.skip_wait_period_validation
     return unless user
 
     waiting_period = Policy.waiting_period_years

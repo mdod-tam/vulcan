@@ -223,6 +223,7 @@ module Applications
                    'the other draft must never have been touched -- autosave must never substitute a different application'
       assert_nil other_draft_never_touched.household_size
     ensure
+      DocumentScan.where(user: user).delete_all if user
       other_draft_never_touched&.destroy
       draft&.destroy
       user&.destroy
@@ -403,9 +404,17 @@ module Applications
         terms_accepted: true,
         information_verified: true,
         disability_information_release_authorized: true,
+        income_proof: submitted_proof('income_proof.pdf', user: user),
+        residency_proof: submitted_proof('residency_proof.pdf', user: user, slot: 'residency_proof'),
         is_submission: true
       )
       ApplicationCreator.call(form)
+    end
+
+    # A submission leaves draft only with its required proofs.
+    def submitted_proof(fixture, user:, slot: 'income_proof')
+      upload = Rack::Test::UploadedFile.new(Rails.root.join('test/fixtures/files', fixture), 'application/pdf')
+      scanned_upload(upload, user: user, slot: slot).signed_id
     end
 
     def run_role_conversion(user)

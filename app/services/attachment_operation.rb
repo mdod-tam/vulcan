@@ -1,11 +1,27 @@
 # frozen_string_literal: true
 
-# Measures one operation of ProofAttachmentService or DisabilityCertificationAttachmentService.
+# What ProofAttachmentService and DisabilityCertificationAttachmentService share around one operation.
 #
-# It owns the result hash both services return ({ success:, error:, duration_ms: } plus what the operation adds),
-# the elapsed time, and the single outcome log line. Each service keeps its own failure contract: whether the
-# error is raised to the caller and what is audited.
+# measure owns the result hash both services return ({ success:, error:, duration_ms: } plus what the operation
+# adds), the elapsed time, and the single outcome log line. verify_attached! confirms an attached file is stored.
+# Each service keeps its own failure contract: whether the error is raised to the caller and what is audited.
 module AttachmentOperation
+  # A file that was just attached is not on the record once it is read back from the database.
+  class NotStored < StandardError; end
+
+  # Confirms the file just attached is stored. The record is reloaded, so the answer comes from the database and
+  # not from an association loaded before the attach.
+  #
+  # @param record [ApplicationRecord] the record the file was attached to
+  # @param name [Symbol, String] the attachment name, such as :income_proof
+  # @raise [NotStored] when the record has no attachment under +name+
+  def self.verify_attached!(record, name)
+    record.reload
+    return if record.public_send(name).attached?
+
+    raise NotStored, "#{name} is not attached after save and reload"
+  end
+
   # @param subject [String] names the operation in its log line, such as "Proof income approved"
   # @param reraise [Boolean] raise the error to the caller after the outcome is logged
   # @param on_error [#call, nil] receives the error before the outcome is logged

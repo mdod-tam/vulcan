@@ -15,6 +15,7 @@ module Applications
     end
 
     teardown do
+      ProofReview.skip_callback(:commit, :after, @review_commit_failure) if @review_commit_failure
       cleanup_duplicate_review_test_data!(@admin, @constituent)
     end
 
@@ -142,7 +143,7 @@ module Applications
     end
 
     test 'a committed rejection whose follow-up step fails is reported as saved, without contacting the provider' do
-      ProofReview.any_instance.stubs(:handle_post_review_actions).raises(StandardError, 'private callback failure')
+      fail_review_commit('private callback failure')
       RequestCertificationUpload.any_instance.expects(:call).never
       CertifyingProfessionalNotifier.any_instance.expects(:send_certification_rejection_notice).never
 
@@ -165,10 +166,9 @@ module Applications
 
     test 'a rejection whose commit cannot be confirmed fails without suggesting it was lost' do
       # The connection is lost as the callback fails, so the reads that follow cannot confirm the commit.
-      ProofReview.any_instance.stubs(:handle_post_review_actions).with do
+      fail_review_commit('private callback failure') do
         ApplicationStatusChange.stubs(:where).raises(ActiveRecord::ConnectionNotEstablished, 'verification unavailable')
-        true
-      end.raises(StandardError, 'private callback failure')
+      end
       RequestCertificationUpload.any_instance.expects(:call).never
       CertifyingProfessionalNotifier.any_instance.expects(:send_certification_rejection_notice).never
 
@@ -216,6 +216,16 @@ module Applications
     end
 
     private
+
+    # Any step the commit itself triggers can fail after the rejection is saved. A certification rejection has no
+    # follow-up of its own at commit time, so a callback on the review it saves stands in for one. Teardown removes it.
+    def fail_review_commit(message, &before_failing)
+      @review_commit_failure = lambda do |_review|
+        before_failing&.call
+        raise StandardError, message
+      end
+      ProofReview.after_commit(@review_commit_failure, on: :create)
+    end
 
     def paper_documents(notes: nil)
       @paper_errors = []

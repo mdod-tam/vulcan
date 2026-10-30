@@ -77,9 +77,8 @@ class ApplicationCertificationStatusWriterTest < ActiveSupport::TestCase
     assert_empty @application.status_changes.disability_certification
   end
 
-  test 'a proof that is inconsistent on its own does not block a certification status change' do
+  test 'an approved proof with no attachment does not block a certification status change' do
     @application.update_columns(id_proof_status: Application.id_proof_statuses[:approved])
-    assert_not @application.valid?, 'precondition: the application is invalid because of its approved proof with no attachment'
 
     @application.transition_disability_certification_status!(:received, actor: @admin)
 

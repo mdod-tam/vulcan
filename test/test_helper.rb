@@ -280,5 +280,3 @@ ActionMailer::Base.deliveries = []
 
 ActiveJob::Base.queue_adapter = :test
 Rails.application.config.active_storage.service = :test
-
-Application.skip_wait_period_validation = true

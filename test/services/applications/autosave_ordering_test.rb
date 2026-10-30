@@ -51,6 +51,7 @@ module Applications
     end
 
     test 'successful submission clears revision metadata and refuses delayed autosaves' do
+      attach_required_proofs(@draft)
       assert save_field('household_size', '9', 5)[:success]
       @context = SecureRandom.uuid
       assert save_field('household_size', '8', 1)[:success]
@@ -68,6 +69,7 @@ module Applications
     end
 
     test 'a rolled back submission retains the draft revision metadata' do
+      attach_required_proofs(@draft)
       assert save_field('household_size', '9', 5)[:success]
       before = @draft.reload.attributes
       submitted = form(household_size: 7, autosave_revision: 6)
@@ -155,6 +157,12 @@ module Applications
                             id: @draft&.id, field_name: "application[#{field}]", field_value: value,
                             autosave_context: @context, autosave_revision: revision
                           }).call
+    end
+
+    # A submission leaves draft only with its required proofs. A draft saved earlier with uploads already holds them.
+    def attach_required_proofs(application)
+      application.income_proof.attach(io: file_fixture('income_proof.pdf').open, filename: 'income.pdf', content_type: 'application/pdf')
+      application.residency_proof.attach(io: file_fixture('residency_proof.pdf').open, filename: 'residency.pdf', content_type: 'application/pdf')
     end
 
     def form(**attributes)

@@ -5,7 +5,7 @@ require 'test_helper'
 class ApplicationStatusChangeLifecycleTest < ActiveSupport::TestCase
   setup do
     @admin = create(:admin)
-    @application = create(:application, :draft)
+    @application = create(:application, :draft, :with_income_proof, :with_residency_proof)
   end
 
   test 'lifecycle includes status transitions from transition_status!' do

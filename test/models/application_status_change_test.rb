@@ -14,7 +14,7 @@ class ApplicationStatusChangeTest < ActiveSupport::TestCase
   end
 
   test 'transition_status! creates single ApplicationStatusChange record' do
-    application = create(:application, :draft, user: @constituent)
+    application = create(:application, :draft, :with_income_proof, :with_residency_proof, user: @constituent)
 
     initial_count = ApplicationStatusChange.count
 
@@ -29,7 +29,7 @@ class ApplicationStatusChangeTest < ActiveSupport::TestCase
   end
 
   test 'transition_status! method creates single record with notes' do
-    application = create(:application, :draft, user: @constituent)
+    application = create(:application, :draft, :with_income_proof, :with_residency_proof, user: @constituent)
 
     initial_count = ApplicationStatusChange.count
 
@@ -69,7 +69,7 @@ class ApplicationStatusChangeTest < ActiveSupport::TestCase
   end
 
   test 'multiple sequential status changes create separate records' do
-    application = create(:application, :draft, user: @constituent)
+    application = create(:application, :draft, :with_income_proof, :with_residency_proof, user: @constituent)
 
     initial_count = ApplicationStatusChange.count
 
@@ -93,7 +93,7 @@ class ApplicationStatusChangeTest < ActiveSupport::TestCase
 
   test 'status change attributes actor explicitly without Current.user' do
     Current.user = nil
-    application = create(:application, :draft, user: @constituent)
+    application = create(:application, :draft, :with_income_proof, :with_residency_proof, user: @constituent)
 
     initial_count = ApplicationStatusChange.count
 

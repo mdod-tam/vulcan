@@ -252,7 +252,7 @@ module Admin
 
     # An unconfirmed commit routes to the list because the application page could return not found.
     test 'an unconfirmed commit redirects to the list with the warning and no success notice' do
-      ProofReview.any_instance.stubs(:handle_post_review_actions).raises(StandardError, 'after commit exploded')
+      Applications::ProofDecisionFollowUp.any_instance.stubs(:call).raises(StandardError, 'after commit exploded')
       Application.stubs(:exists?).raises(ActiveRecord::ConnectionNotEstablished, 'database went away')
       params = rollback_probe_params.merge(id_proof_action: 'reject', id_proof_rejection_reason: 'none_provided')
 
@@ -267,7 +267,7 @@ module Admin
     # Also fail generate_success_message to represent a continuing database outage.
     # Stub this method because failing the proof_reviews association would interrupt the transaction itself.
     test 'a continuing database failure still reaches the list warning rather than an error' do
-      ProofReview.any_instance.stubs(:handle_post_review_actions).raises(StandardError, 'after commit exploded')
+      Applications::ProofDecisionFollowUp.any_instance.stubs(:call).raises(StandardError, 'after commit exploded')
       Application.stubs(:exists?).raises(ActiveRecord::ConnectionNotEstablished, 'database went away')
       Admin::PaperApplicationsController.any_instance
                                         .stubs(:generate_success_message)
@@ -283,7 +283,7 @@ module Admin
 
     # Unconfirmed writes skip notices and access warnings. Keep the quick-create markers available for later recovery.
     test 'an unconfirmed commit keeps the quick-created portal markers for a retry' do
-      ProofReview.any_instance.stubs(:handle_post_review_actions).raises(StandardError, 'after commit exploded')
+      Applications::ProofDecisionFollowUp.any_instance.stubs(:call).raises(StandardError, 'after commit exploded')
       Application.stubs(:exists?).raises(ActiveRecord::ConnectionNotEstablished, 'database went away')
       params = rollback_probe_params.merge(id_proof_action: 'reject', id_proof_rejection_reason: 'none_provided')
 
@@ -296,7 +296,7 @@ module Admin
     end
 
     test 'a confirmed post-commit failure still redirects to the application' do
-      ProofReview.any_instance.stubs(:handle_post_review_actions).raises(StandardError, 'after commit exploded')
+      Applications::ProofDecisionFollowUp.any_instance.stubs(:call).raises(StandardError, 'after commit exploded')
       params = rollback_probe_params.merge(id_proof_action: 'reject', id_proof_rejection_reason: 'none_provided')
 
       post admin_paper_applications_path, headers: default_headers, params: params

@@ -12,7 +12,7 @@ class ProofReviewConcurrencyTest < ActiveSupport::TestCase
 
   test 'a rejection takes the application lock before inserting its review, so concurrent rejections cannot deadlock' do
     admin = create(:admin)
-    application = create(:application)
+    application = create(:application, :with_income_proof)
 
     holder_ready = Queue.new
     release_holder = Queue.new
@@ -35,8 +35,6 @@ class ProofReviewConcurrencyTest < ActiveSupport::TestCase
     contender_thread = on_own_connection do
       contender_pid_queue << backend_pid
       review = ProofReview.for_decision(Application.find(application.id), proof_type: :income, status: :rejected)
-      # The post-commit notices are not under test.
-      review.define_singleton_method(:handle_post_review_actions) { nil }
       review.record!(admin: admin, rejection_reason: 'Unreadable')
     end
 

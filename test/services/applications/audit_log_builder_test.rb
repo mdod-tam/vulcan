@@ -5,7 +5,6 @@ require 'test_helper'
 module Applications
   class AuditLogBuilderTest < ActiveSupport::TestCase
     setup do
-      Application.any_instance.stubs(:require_proof_validations?).returns(false)
       Application.any_instance.stubs(:verify_proof_attachments).returns(true)
 
       @application = create(:application,
@@ -25,7 +24,8 @@ module Applications
         to_status: 'submitted'
       )
 
-      @proof_review = ProofReview.create!(
+      @proof_review = create(
+        :proof_review,
         application: @application,
         admin: @admin,
         proof_type: 'income',
@@ -50,7 +50,6 @@ module Applications
     end
 
     teardown do
-      Application.any_instance.unstub(:require_proof_validations?)
       Application.any_instance.unstub(:verify_proof_attachments)
     end
 

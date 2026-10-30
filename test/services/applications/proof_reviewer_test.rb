@@ -7,7 +7,7 @@ module Applications
     include ProofResubmissionTestHelper
 
     setup do
-      @application = create(:application, :in_progress)
+      @application = create(:application, :in_progress, :with_income_proof)
       @admin = create(:admin)
       @reviewer = ProofReviewer.new(@application, @admin)
 

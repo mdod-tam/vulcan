@@ -20,7 +20,7 @@ The requested channel is `:email`, `:letter`, or record-only `:sms`, and what ha
 | Communication | Owner and behavior |
 | --- | --- |
 | Ordinary notification | [NotificationService](../../app/services/notification_service.rb) creates the row and calls the mapped mailer. |
-| Proof approval | `ProofReview` records the audit event and a notification without sending a message. |
+| Proof approval | [`ProofDecisionFollowUp`](../../app/services/applications/proof_decision_follow_up.rb) records the audit event and a notification without sending a message. |
 | Proof rejection | [RequestProofResubmission](../../app/services/applications/request_proof_resubmission.rb) issues the secure upload request. A failed delivery leaves the review saved and lets staff see a warning. A link that cannot be issued records `proof_resubmission_request_failed`. |
 | Request for provider details | [RequestProviderInfo](../../app/services/applications/request_provider_info.rb) owns the secure request and delivery. |
 | Disability certification | [DisabilityCertificationService](../../app/services/applications/disability_certification_service.rb) and [DisabilityCertificationReviewer](../../app/services/applications/disability_certification_reviewer.rb) own provider requests and follow-up. Fax delivery is unavailable with the installed client; historical callbacks remain handled. DocuSeal signing has separate tracking. |

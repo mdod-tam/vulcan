@@ -221,24 +221,7 @@ module Letters
     end
 
     def letter_type_from_template
-      return proof_rejected_letter_type if template_name == 'application_notifications_proof_rejected'
-
       LETTER_TYPE_BY_TEMPLATE.fetch(template_name, :other_notification)
-    end
-
-    def proof_rejected_letter_type
-      proof_type = variables[:proof_type] || variables['proof_type']
-      proof_type = proof_type.to_s
-      case proof_type
-      when 'income'
-        :income_proof_rejected
-      when 'residency'
-        :residency_proof_rejected
-      when 'id'
-        :id_proof_rejected
-      else
-        :other_notification
-      end
     end
 
     def template_requires_shared_partials?

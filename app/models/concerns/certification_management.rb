@@ -80,10 +80,7 @@ module CertificationManagement
 
     with_lock do
       old_status = disability_certification_status
-      # The certification status is unrelated to proof consistency, as in the request flows.
-      Current.set(skip_proof_validation: true) do
-        update!(attributes.merge(disability_certification_status: new_status))
-      end
+      update!(attributes.merge(disability_certification_status: new_status))
 
       details = { change_type: 'disability_certification' }.merge(metadata)
       change = status_changes.create!(

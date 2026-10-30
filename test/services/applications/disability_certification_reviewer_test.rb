@@ -10,15 +10,11 @@ module Applications
       @service = DisabilityCertificationReviewer.new(@application, @admin)
       ActiveRecord.stubs(:after_all_transactions_commit).yields
 
-      # The completed factory approves proofs without attachments, which fails proof validation.
-      # A plain update would fail silently and leave these values unsaved on @application.
-      Current.set(skip_proof_validation: true) do
-        @application.update!(
-          certifying_professional_name: 'Dr. Test Provider',
-          certifying_professional_email: 'provider@example.com',
-          certifying_professional_fax: '555-123-4567'
-        )
-      end
+      @application.update!(
+        certifying_professional_name: 'Dr. Test Provider',
+        certifying_professional_email: 'provider@example.com',
+        certifying_professional_fax: '555-123-4567'
+      )
     end
 
     test 'successfully rejects a disability certification' do

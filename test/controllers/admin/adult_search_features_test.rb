@@ -43,43 +43,29 @@ module Admin
     end
 
     test 'adult_application_context marks ineligible with active application' do
-      original_skip = Application.skip_wait_period_validation
-      Application.skip_wait_period_validation = true
+      constituent = create(:constituent, email: generate(:email))
+      create(:application, :in_progress, user: constituent)
 
-      begin
-        constituent = create(:constituent, email: generate(:email))
-        create(:application, :in_progress, user: constituent)
+      get adult_application_context_admin_user_path(constituent), headers: default_headers, as: :json
+      assert_response :success
 
-        get adult_application_context_admin_user_path(constituent), headers: default_headers, as: :json
-        assert_response :success
-
-        json = response.parsed_body
-        assert_equal false, json['eligible_now']
-        assert_equal 'active_application', json['ineligibility_reason']
-        assert_nil json['eligible_after']
-      ensure
-        Application.skip_wait_period_validation = original_skip
-      end
+      json = response.parsed_body
+      assert_equal false, json['eligible_now']
+      assert_equal 'active_application', json['ineligibility_reason']
+      assert_nil json['eligible_after']
     end
 
     test 'adult_application_context allows a recent rejection without a waiting date' do
-      original_skip = Application.skip_wait_period_validation
-      Application.skip_wait_period_validation = false
+      constituent = create(:constituent, email: generate(:email))
+      create(:application, :rejected, user: constituent, application_date: 1.year.ago)
 
-      begin
-        constituent = create(:constituent, email: generate(:email))
-        create(:application, :rejected, user: constituent, application_date: 1.year.ago)
+      get adult_application_context_admin_user_path(constituent), headers: default_headers, as: :json
+      assert_response :success
 
-        get adult_application_context_admin_user_path(constituent), headers: default_headers, as: :json
-        assert_response :success
-
-        json = response.parsed_body
-        assert_equal true, json['eligible_now']
-        assert_nil json['ineligibility_reason']
-        assert_nil json['eligible_after']
-      ensure
-        Application.skip_wait_period_validation = original_skip
-      end
+      json = response.parsed_body
+      assert_equal true, json['eligible_now']
+      assert_nil json['ineligibility_reason']
+      assert_nil json['eligible_after']
     end
 
     test 'both search wrappers use approved-only admission and preserve selection metadata' do

@@ -1,6 +1,9 @@
 # frozen_string_literal: true
 
 FactoryBot.define do
+  # A direct attachment row leaves the application's loaded attachment association stale, so attached? still reads false.
+  reset_attachment = ->(application, name) { application.association(:"#{name}_attachment").reset }
+
   factory :proof_review do
     application factory: %i[application]
     admin
@@ -9,8 +12,7 @@ FactoryBot.define do
     reviewed_at { Time.current }
 
     after(:build) do |proof_review|
-      # This guard does not verify an ID or disability certification attachment.
-      next if proof_review.application.income_proof.attached? && proof_review.application.residency_proof.attached?
+      next if proof_review.proof_type.blank? || proof_review.application.document_attachment_for(proof_review.proof_type).attached?
 
       original_context = Thread.current[:paper_application_context]
       Thread.current[:paper_application_context] = true
@@ -37,22 +39,26 @@ FactoryBot.define do
         blob.update_column(:created_at, 2.minutes.ago)
 
         proof_type = proof_review.proof_type.to_sym
+        attachment_name = DocumentType.fetch(proof_type).attachment_name
 
         # A direct attachment row does not save the persisted application.
         if proof_review.application.persisted?
           ActiveStorage::Attachment.create(
-            name: "#{proof_type}_proof",
+            name: attachment_name.to_s,
             record_type: 'Application',
             record_id: proof_review.application.id,
             blob_id: blob.id
           )
+          reset_attachment.call(proof_review.application, attachment_name)
 
-          proof_review.application.update_column(
-            "#{proof_type}_proof_status",
-            Application.public_send("#{proof_type}_proof_statuses")[proof_review.status.to_s]
-          )
+          if ProofReview.reviewable_proof_type?(proof_type)
+            proof_review.application.update_column(
+              "#{proof_type}_proof_status",
+              Application.public_send("#{proof_type}_proof_statuses")[proof_review.status.to_s]
+            )
+          end
         else
-          proof_review.application.public_send(:"#{proof_type}_proof").attach(blob)
+          proof_review.application.public_send(attachment_name).attach(blob)
         end
       ensure
         Thread.current[:paper_application_context] = original_context
@@ -97,6 +103,7 @@ FactoryBot.define do
               record_id: proof_review.application.id,
               blob_id: blob.id
             )
+            reset_attachment.call(proof_review.application, :income_proof)
           else
             proof_review.application.income_proof.attach(blob)
           end
@@ -135,6 +142,7 @@ FactoryBot.define do
               record_id: proof_review.application.id,
               blob_id: blob.id
             )
+            reset_attachment.call(proof_review.application, :residency_proof)
           else
             proof_review.application.residency_proof.attach(blob)
           end

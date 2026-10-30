@@ -142,9 +142,10 @@ class ProofAttachmentServiceTest < ActiveSupport::TestCase
     assert_difference -> { Event.where(action: 'income_proof_attachment_failed', auditable: @application).count }, 1 do
       ApplicationRecord.transaction do
         @application.annual_income = stored_income + 1
-        result = ProofAttachmentService.attach_proof(application: @application, proof_type: :income, blob_or_file: refused,
-                                                     admin: @admin, submission_method: :paper)
-        assert_kind_of UploadedDocument::Refused, result[:error]
+        assert_raises(UploadedDocument::Refused) do
+          ProofAttachmentService.attach_proof(application: @application, proof_type: :income, blob_or_file: refused,
+                                              admin: @admin, submission_method: :paper)
+        end
         raise ActiveRecord::Rollback
       end
     end
@@ -155,9 +156,25 @@ class ProofAttachmentServiceTest < ActiveSupport::TestCase
     refused = fixture_file_upload('invalid.exe', 'application/octet-stream')
 
     assert_difference -> { Event.where(action: 'income_proof_attachment_failed', auditable: @application).count }, 1 do
-      ProofAttachmentService.attach_proof(application: @application, proof_type: :income, blob_or_file: refused,
-                                          admin: @admin, submission_method: :web)
+      assert_raises(UploadedDocument::Refused) do
+        ProofAttachmentService.attach_proof(application: @application, proof_type: :income, blob_or_file: refused,
+                                            admin: @admin, submission_method: :web)
+      end
     end
+  end
+
+  test 'a file that is not stored once the application is reloaded fails the operation and is audited' do
+    AttachmentOperation.stubs(:verify_attached!).raises(AttachmentOperation::NotStored, 'income_proof is not attached after save and reload')
+
+    result = ProofAttachmentService.attach_proof(application: @application, proof_type: :income, blob_or_file: @test_file_upload,
+                                                 status: :approved, admin: @admin, submission_method: :web)
+
+    assert_not result[:success]
+    assert_kind_of AttachmentOperation::NotStored, result[:error]
+    assert_not @application.reload.income_proof.attached?, 'the attachment rolled back with the failed operation'
+    assert_not_predicate @application, :income_proof_status_approved?
+    event = Event.where(action: 'income_proof_attachment_failed', auditable: @application).sole
+    assert_equal 'AttachmentOperation::NotStored', event.metadata['error_class']
   end
 
   test 'reject_proof_without_attachment sets rejected status without attachment' do
@@ -238,14 +255,13 @@ class ProofAttachmentServiceTest < ActiveSupport::TestCase
     assert_equal 1, log.string.scan(/Proof income not_reviewed completed in \d+ms/).size
   end
 
-  test 'a refused attachment returns its error and logs it in the outcome line' do
+  test 'a refused attachment is raised after its outcome line is logged' do
     log = StringIO.new
     refused = fixture_file_upload('invalid.exe', 'application/octet-stream')
-    result = Rails.stub(:logger, ActiveSupport::Logger.new(log)) { attach_income(refused) }
+    Rails.stub(:logger, ActiveSupport::Logger.new(log)) do
+      assert_raises(UploadedDocument::Refused) { attach_income(refused) }
+    end
 
-    assert_not result[:success]
-    assert_kind_of UploadedDocument::Refused, result[:error]
-    assert_equal %i[duration_ms error success], result.keys.sort
     assert_equal 1, log.string.scan(/Proof income not_reviewed failed in \d+ms: UploadedDocument::Refused/).size
   end
 
@@ -283,21 +299,23 @@ class ProofAttachmentServiceTest < ActiveSupport::TestCase
     @application.update!(income_proof_status: :rejected)
     oversized = pdf_upload(ProofUploadFormats::PROOF_MAX_BYTES + 1)
 
-    result = assert_no_difference('ActiveStorage::Blob.count') { attach_income(oversized) }
+    refusal = nil
+    assert_no_difference('ActiveStorage::Blob.count') do
+      refusal = assert_raises(UploadedDocument::Refused) { attach_income(oversized) }
+    end
 
-    assert_not result[:success]
-    assert_instance_of UploadedDocument::Refused, result[:error]
-    assert_equal :too_large, result[:error].reason
+    assert_equal :too_large, refusal.reason
     @application.reload
     assert_equal previous, @application.income_proof.blob
     assert_predicate @application, :income_proof_status_rejected?
   end
 
   test 'refuses a signed ID when the caller accepts only uploads' do
-    result = attach_income(stored_pdf_blob(3.kilobytes).signed_id, signed_ids: false)
+    refusal = assert_raises(UploadedDocument::Refused) do
+      attach_income(stored_pdf_blob(3.kilobytes).signed_id, signed_ids: false)
+    end
 
-    assert_not result[:success]
-    assert_equal :unsupported, result[:error].reason
+    assert_equal :unsupported, refusal.reason
   end
 
   private

@@ -74,6 +74,7 @@ module Applications
       )
 
       review = create(:proof_review, :rejected, application: application, admin: @admin, proof_type: :income)
+      ProofDecisionFollowUp.new(review).call
 
       event = Event.find_by!(action: 'proof_resubmission_request_failed', auditable: application)
       assert_equal review.id, event.metadata['proof_review_id']

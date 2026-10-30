@@ -6,8 +6,6 @@ module ProofTestHelper
     Current.user = nil
     Current.proof_attachment_service_context = nil
     Current.paper_context = nil
-    Current.skip_proof_validation = nil
-    Current.reviewing_single_proof = nil
   end
 
   def setup_clean_test_environment

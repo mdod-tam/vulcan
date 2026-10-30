@@ -75,7 +75,7 @@ module Admin
 
     # A callback failure after commit must route to the existing application to avoid duplicate submissions.
     test 'a post-commit failure lands on the real application with a warning, not a retry form' do
-      ProofReview.any_instance.stubs(:handle_post_review_actions).raises(StandardError, 'after commit exploded')
+      Applications::ProofDecisionFollowUp.any_instance.stubs(:call).raises(StandardError, 'after commit exploded')
 
       choose_adult_branch_through_the_ui
       fill_paper_form
@@ -231,7 +231,7 @@ module Admin
     # The application page could return not found after an unverified write. Route to the list with the duplicate
     # warning.
     test 'an unconfirmed write lands on the applications list with the warning and no success notice' do
-      ProofReview.any_instance.stubs(:handle_post_review_actions).raises(StandardError, 'after commit exploded')
+      Applications::ProofDecisionFollowUp.any_instance.stubs(:call).raises(StandardError, 'after commit exploded')
       Application.stubs(:exists?).raises(ActiveRecord::ConnectionNotEstablished, 'database went away')
 
       choose_adult_branch_through_the_ui

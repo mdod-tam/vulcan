@@ -26,8 +26,9 @@ class ProofAttachmentService
   #   - :signed_ids [Boolean] (optional, default: true) Whether a signed blob ID is an accepted input.
   #   - :min_bytes [Integer, nil] (optional) Smallest accepted file, for channels that require one.
   #
-  # @return [Hash] Result hash with :success, :error, and :duration_ms keys. A refused upload
-  #   leaves :error as an UploadedDocument::Refused and changes no proof state.
+  # @return [Hash] Result hash with :success, :error, and :duration_ms keys.
+  # @raise [UploadedDocument::Refused] when the file is refused. The refusal is audited as an attachment failure
+  #   and no proof state changes.
   def self.attach_proof(args)
     params = {
       status: :not_reviewed,
@@ -128,31 +129,29 @@ class ProofAttachmentService
     def perform_attachment_flow(result, params)
       flow_data = prepare_flow_data(params)
 
-      with_paper_context(flow_data.submission_method, flow_data.proof_type) do |original_paper_context|
-        attach_and_verify_initial_save(flow_data.application, flow_data.proof_type, flow_data.attachment_param)
-        context, event_metadata = log_attachment_events_from_flow_data(flow_data, params)
-        result[:blob_size] = flow_data.blob_size
-        result[:success] = true
+      attach_and_verify_initial_save(flow_data.application, flow_data.proof_type, flow_data.attachment_param)
+      context, event_metadata = log_attachment_events_from_flow_data(flow_data, params)
+      result[:blob_size] = flow_data.blob_size
+      result[:success] = true
 
-        # Keep reconciliation in the attachment transaction so attachment and workflow changes remain atomic.
-        # A caller with paper context already active owns final reconciliation.
-        # Otherwise, reconcile here even when this service temporarily enables paper context.
-        if params.fetch(:status).to_sym == :approved && !original_paper_context
-          reconcile_if_approved(
-            application: flow_data.application,
-            admin: params.fetch(:admin),
-            proof_type: flow_data.proof_type
-          )
-        end
-
-        send_notification(context, event_metadata)
+      # Keep reconciliation in the attachment transaction so attachment and workflow changes remain atomic.
+      # A caller with paper context already active owns final reconciliation. Otherwise, reconcile here,
+      # including for a paper submission.
+      if params.fetch(:status).to_sym == :approved && !Current.paper_context
+        reconcile_if_approved(
+          application: flow_data.application,
+          admin: params.fetch(:admin),
+          proof_type: flow_data.proof_type
+        )
       end
+
+      send_notification(context, event_metadata)
     end
 
     def attach_and_verify_initial_save(application, proof_type, blob)
       application.send(get_attachment_method_name(proof_type)).attach(blob)
       save_application_with_attachment(application)
-      verify_attachment_persisted(application, proof_type)
+      AttachmentOperation.verify_attached!(application, get_attachment_method_name(proof_type))
     end
 
     def get_attachment_method_name(proof_type)
@@ -163,22 +162,7 @@ class ProofAttachmentService
       application.save!
     rescue StandardError => e
       Rails.logger.error "Save failed for application #{application.id}: #{e.class.name}"
-      log_validation_errors(application) unless Rails.env.test? && ENV['VERBOSE_TESTS'].blank?
       raise "Failed to save application with attachment: #{e.message}"
-    end
-
-    def log_validation_errors(application)
-      Rails.logger.error "Validation failed for application #{application.id}"
-    end
-
-    def verify_attachment_persisted(application, proof_type)
-      application.reload
-
-      attachment_method = get_attachment_method_name(proof_type)
-      return if application.send(attachment_method).attached?
-
-      Rails.logger.error "Attachment failed to persist for #{proof_type} proof on application #{application.id}"
-      raise 'Attachment failed to persist after save and reload'
     end
 
     def log_error(error, application_id)
@@ -227,12 +211,17 @@ class ProofAttachmentService
       method ? method.to_sym : SubmissionMethodValidator.validate(submission_method)
     end
 
-    # Returns the result. A failure is recorded and returned, not raised.
+    # Returns the result. A failure is recorded and returned, not raised. A refused upload is the caller's input to
+    # correct, so it is recorded the same way and then raised, as every other upload consumer receives it. It is
+    # refused before any proof state changes, so nothing is left to roll back.
     def with_service_flow(context)
       subject = "Proof #{context.fetch(:proof_type)} #{context.fetch(:status)}"
-      AttachmentOperation.measure(subject, on_error: ->(error) { record_failure(error, context) }) do |result|
-        ApplicationRecord.transaction { yield(result) }
+      result = AttachmentOperation.measure(subject, on_error: ->(error) { record_failure(error, context) }) do |outcome|
+        ApplicationRecord.transaction { yield(outcome) }
       end
+      raise result[:error] if result[:error].is_a?(UploadedDocument::Refused)
+
+      result
     end
 
     def log_attachment_events(context)
@@ -291,8 +280,8 @@ class ProofAttachmentService
     end
 
     def send_notification(context, event_metadata)
-      # PaperApplicationService owns notifications while paper context is active.
-      return if Current.paper_context
+      # The paper intake owns notifications for a paper submission, and while its paper context is active.
+      return if context.submission_method.to_sym == :paper || Current.paper_context
 
       NotificationService.create_and_deliver!(
         type: "#{context.proof_type}_proof_attached",
@@ -316,25 +305,23 @@ class ProofAttachmentService
       reason_text = resolved[:text]
       reason_code = resolved[:code]
 
-      with_paper_context(submission_method, proof_type) do
-        application.reject_proof_without_attachment!(
-          proof_type,
-          admin: admin,
-          reason: reason_text,
-          notes: notes || 'Rejected during paper application submission'
-        )
+      application.reject_proof_without_attachment!(
+        proof_type,
+        admin: admin,
+        reason: reason_text,
+        notes: notes || 'Rejected during paper application submission'
+      )
 
-        review = ProofReview.for_decision(application, proof_type: proof_type, status: :rejected).record!(
-          admin: admin,
-          rejection_reason: reason_text,
-          rejection_reason_code: reason_code,
-          notes: notes,
-          submission_method: submission_method
-        )
-        # A new review applies its rejection side effects in its own after-commit callback. A repeat applies them here.
-        ActiveRecord.after_all_transactions_commit { review.apply_repeat_rejection_side_effects! } if review.repeat_rejection?
-        review
-      end
+      review = ProofReview.for_decision(application, proof_type: proof_type, status: :rejected).record!(
+        admin: admin,
+        rejection_reason: reason_text,
+        rejection_reason_code: reason_code,
+        notes: notes,
+        submission_method: submission_method
+      )
+      # A new rejection and a repeat follow up alike, once this transaction and any around it have committed.
+      ActiveRecord.after_all_transactions_commit { Applications::ProofDecisionFollowUp.new(review).call }
+      review
     end
 
     # Resolves the file before proof state changes. Refusal raises at this boundary.
@@ -372,14 +359,6 @@ class ProofAttachmentService
       )
 
       [context, log_attachment_events(context)]
-    end
-
-    # Yields the caller's own paper context so the block can tell whether an outer flow owns reconciliation.
-    def with_paper_context(submission_method, _proof_type)
-      outer_paper_context = Current.paper_context
-      return yield(outer_paper_context) unless submission_method.to_sym == :paper
-
-      Current.set(paper_context: true) { yield(outer_paper_context) }
     end
   end
 end

@@ -67,6 +67,24 @@ class DisabilityCertificationAttachmentServiceTest < ActiveSupport::TestCase
     end
   end
 
+  test 'a certification that is not stored after the attach raises and leaves the certification unchanged' do
+    AttachmentOperation.stubs(:verify_attached!).raises(AttachmentOperation::NotStored, 'disability_certification is not attached after save and reload')
+
+    assert_no_difference 'ActiveStorage::Attachment.count' do
+      assert_no_difference -> { ApplicationStatusChange.where(application: @application, change_type: :disability_certification).count } do
+        assert_raises(AttachmentOperation::NotStored) do
+          DisabilityCertificationAttachmentService.attach_certification(
+            application: @application, blob_or_file: @test_file, status: :approved,
+            admin: @admin, submission_method: :admin_upload
+          )
+        end
+      end
+    end
+
+    assert_not @application.reload.disability_certification.attached?
+    assert_equal 'not_requested', @application.disability_certification_status
+  end
+
   test 'attaches a cleared multipart snapshot' do
     assert_no_enqueued_jobs only: EmailDelivery::MailDeliveryJob do
       assert_difference 'ActiveStorage::Attachment.count' do

@@ -7,13 +7,6 @@ class DevelopmentApplicationsTest < ActiveSupport::TestCase
   setup do
     Rails.env.stubs(:development?).returns(true)
     @admin = User.find_by_email('admin@example.com')
-    # Exercise the submission rules that run in development too.
-    @original_proof_validation = ENV.fetch('REQUIRE_PROOF_VALIDATIONS', nil)
-    ENV['REQUIRE_PROOF_VALIDATIONS'] = 'true'
-  end
-
-  teardown do
-    ENV['REQUIRE_PROOF_VALIDATIONS'] = @original_proof_validation
   end
 
   test 'development examples do not consume real upload allocation quotas' do

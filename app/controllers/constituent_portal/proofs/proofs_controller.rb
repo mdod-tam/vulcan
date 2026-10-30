@@ -110,10 +110,11 @@ module ConstituentPortal
         result = ProofAttachmentService.attach_proof(build_attachment_params(is_resubmitting))
 
         return if result[:success]
-        return render_refused_upload(result[:error]) if result[:error].is_a?(UploadedDocument::Refused)
 
         Rails.logger.error "Failed to attach proof for application #{@application.id}: #{result[:error]&.class&.name}"
         raise "Failed to attach proof: #{result[:error]&.message}"
+      rescue UploadedDocument::Refused => e
+        render_refused_upload(e)
       end
 
       # A refused upload changes nothing. Restore the form with the reason and any earlier usable upload.

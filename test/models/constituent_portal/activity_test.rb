@@ -88,7 +88,8 @@ module ConstituentPortal
         created_at: time_base - 2.hours
       )
 
-      review = ProofReview.create!(
+      review = create(
+        :proof_review,
         application: @application,
         admin: admin_user,
         proof_type: 'income',

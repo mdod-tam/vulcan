@@ -21,8 +21,8 @@ The [initialization tasks](../infrastructure/setup_and_maintenance.md#baseline-t
 
 Four pieces of that setup surprise people:
 
-- **The waiting-period validation is disabled globally** (`Application.skip_wait_period_validation = true`). Testing that rule means enabling it deliberately and restoring the prior value.
-- **[Paper application context](../../test/support/paper_application_context_helpers.rb) changes validation.** It belongs to paper-intake scenarios; used in a portal test it can hide the defect under test.
+- **The waiting-period rule runs in every test.** An approved application inside `Policy.waiting_period_years` blocks a new one for the same user; build the history a test needs, and set `application_date` to move an application outside the period.
+- **[Paper application context](../../test/support/paper_application_context_helpers.rb) relaxes contact validation and defers delivery to paper intake.** It belongs to paper-intake scenarios; used in a portal test it can hide the defect under test. It does not change whether a proof rule runs.
 - **Income eligibility needs [`setup_fpl_policies`](../../test/support/fpl_policy_helpers.rb)** — thresholds come from policy rows, not constants.
 - **Transaction races need [`ConcurrencyTestHelper`](../../test/support/concurrency_test_helper.rb)**, because a second database connection cannot see uncommitted setup data.
 

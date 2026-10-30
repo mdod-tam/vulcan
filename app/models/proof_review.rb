@@ -1,7 +1,8 @@
 # frozen_string_literal: true
 
 # Admin review of an income, residency, or ID proof.
-# Disability certification reviews also use this model, but skip its rejection and notification side effects.
+# Disability certification reviews also use this model. A decision's follow-up (notices, audit, secure resubmission
+# request) is Applications::ProofDecisionFollowUp, scheduled by the writer that records it.
 class ProofReview < ApplicationRecord
   belongs_to :application
   belongs_to :admin, -> { where(type: 'Users::Administrator') }, class_name: 'User'
@@ -14,6 +15,9 @@ class ProofReview < ApplicationRecord
 
   # The rejection that reaches this total sends a warning. A rejection past it archives the application.
   MAX_REJECTIONS = 8
+
+  # The application's rejection total after the rejection this instance recorded; nil for any other decision.
+  attr_reader :rejection_total
 
   def self.reviewable_proof_types
     REVIEWABLE_PROOF_TYPES
@@ -28,11 +32,10 @@ class ProofReview < ApplicationRecord
   validates :reviewed_at, presence: true
   validates :rejection_reason, presence: true, if: :status_rejected?
   validate :application_must_be_active
-  validate :proof_must_be_attached, if: :should_validate_proof_attachment?
+  validate :proof_must_be_attached, unless: :attachment_optional?
   validate :admin_must_be_admin_type
 
   before_validation :set_reviewed_at, on: :create
-  after_commit :handle_post_review_actions, on: :create
 
   scope :recent, -> { order(created_at: :desc) }
   scope :by_admin, ->(admin_id) { where(admin_id: admin_id) }
@@ -62,20 +65,6 @@ class ProofReview < ApplicationRecord
     self
   end
 
-  # The decision just saved was a rejection that updated an existing row. A new row's own after-commit
-  # callback applies the rejection notices; a repeat applies them with apply_repeat_rejection_side_effects!.
-  def repeat_rejection?
-    status_rejected? && !previously_new_record?
-  end
-
-  def apply_repeat_rejection_side_effects!
-    return unless counts_toward_rejection_limit?
-
-    notify_rejection_limit
-    log_rejection_audit_event
-    issue_proof_resubmission_form
-  end
-
   # The review committed and a later step failed. This event lets staff find the review and check it.
   def log_follow_up_failure(error)
     AuditEventService.log(
@@ -94,160 +83,29 @@ class ProofReview < ApplicationRecord
     self.reviewed_at ||= Time.current
   end
 
+  def document_type
+    DocumentType.fetch(proof_type) if proof_type.present?
+  end
+
   def application_must_be_active
     errors.add(:application, 'cannot be reviewed when archived') if application&.status_archived?
   end
 
-  def should_validate_proof_attachment?
-    # A rejected disability certification or paper proof can have no attachment, in all environments.
-    return false if status_rejected? && proof_type_disability_certification?
-    return false if status_rejected? && submission_method_paper?
-
-    # Tests skip this validation unless VALIDATE_PROOF_ATTACHMENTS=true.
-    return false if Rails.env.test? && ENV['VALIDATE_PROOF_ATTACHMENTS'] != 'true'
-    return true if Rails.env.production?
-    return true if status_approved?
-
-    # Development and test accept a rejection with no attachment. Other non-production environments do not.
-    return false if status_rejected? && Rails.env.local?
-
-    true
+  # A rejected paper proof, or a document that can be rejected without a file, can have no attachment.
+  def attachment_optional?
+    status_rejected? && (document_type&.rejectable_without_file || submission_method_paper?)
   end
 
   def proof_must_be_attached
-    proof = case proof_type
-            when 'income' then application&.income_proof
-            when 'residency' then application&.residency_proof
-            when 'id' then application&.id_proof
-            when 'disability_certification' then application&.disability_certification
-            end
+    return if proof_type.blank? # The presence validation reports it.
+
+    proof = application&.document_attachment_for(proof_type)
     errors.add(:base, "No #{proof_type} proof found for review") unless proof&.attached?
   end
 
-  def handle_post_review_actions
-    log_initial_status
-    return if status.blank?
-
-    begin
-      notify_rejection_limit
-      send_status_notification
-    rescue StandardError => e
-      Rails.logger.error "Failed to process proof review #{id} actions for application #{application_id}: #{e.class.name}"
-      raise
-    end
-  end
-
-  def log_initial_status
-    Rails.logger.debug { "Starting handle_post_review_actions for ProofReview ID: #{id}" }
-    Rails.logger.debug { "Initial status check - status: #{status.inspect}, blank?: #{status.blank?}" }
-    return if status.blank?
-
-    Rails.logger.debug { "Processing proof review for Application ID: #{application.id}" }
-    Rails.logger.debug do
-      "Status details: raw: #{status.inspect}, before type cast: #{status_before_type_cast.inspect}, rejected?: #{status_rejected?}"
-    end
-  end
-
-  def send_status_notification
-    # Disability certification reviews have their own provider notification flow.
-    return if proof_type_disability_certification?
-
-    # Skip when the applicant or the admin record is missing.
-    return unless application&.user.present? && admin.present?
-
-    status_rejected? ? request_proof_resubmission : send_approval_notification
-  end
-
-  def request_proof_resubmission
-    log_rejection_audit_event
-    issue_proof_resubmission_form
-  end
-
-  def issue_proof_resubmission_form
-    # An application archived by this rejection is sent the archive notice, not an upload link it could not use.
-    return if application.status_archived?
-
-    result = Applications::RequestProofResubmission.new(
-      application: application,
-      actor: admin,
-      proof_type: proof_type.to_sym
-    ).call
-    return unless result.failure?
-
-    Rails.logger.warn("Proof resubmission request failed for ProofReview #{id}: #{result.message}")
-    log_resubmission_request_failure(result.message, delivery_suppressed: result.data.is_a?(Hash) && result.data[:delivery_suppressed])
-  rescue StandardError => e
-    Rails.logger.error "Failed to request proof resubmission for ProofReview #{id}: #{e.class.name}"
-    log_resubmission_request_failure(e.class.name)
-  end
-
-  # The rejection stands when its secure link cannot be sent. This audit event lets staff follow up.
-  # This method does not try a different recipient.
-  # delivery_suppressed means that the email controls stopped the email on purpose. It is not a delivery failure.
-  def log_resubmission_request_failure(reason, delivery_suppressed: false)
-    AuditEventService.log(
-      action: 'proof_resubmission_request_failed',
-      actor: admin,
-      auditable: application,
-      metadata: { proof_type: proof_type, proof_review_id: id, reason: reason.to_s,
-                  delivery_suppressed: delivery_suppressed.presence }.compact
-    )
-  rescue StandardError => e
-    Rails.logger.error "Failed to record proof resubmission request failure for ProofReview #{id}: #{e.class.name}"
-  end
-
-  # Each rejection decision has its own operation id. Without one, the audit dedup window keeps only the
-  # first proof_rejected event of an application, so rejecting two proofs in one intake would lose the second.
-  def log_rejection_audit_event
-    AuditEventService.log(
-      action: 'proof_rejected',
-      actor: admin,
-      auditable: application,
-      metadata: {
-        proof_type: proof_type,
-        rejection_reason: rejection_reason,
-        submission_method: submission_method,
-        rejection_reason_code: rejection_reason_code,
-        operation_id: "proof-review-#{id}-rejected-#{reviewed_at.utc.iso8601(6)}"
-      }.compact
-    )
-  end
-
-  # Records a notification for Recent Notifications, but sends no email or letter.
-  # Constituents see the proof status in the portal. Staff see the audit event.
-  def send_approval_notification
-    AuditEventService.log(
-      action: 'proof_approved',
-      actor: admin,
-      auditable: application,
-      metadata: { proof_type: proof_type }
-    )
-
-    # Queries filter on notifiable_type: 'Application', so the notifiable must be the application.
-    NotificationService.create_and_deliver!(
-      type: 'proof_approved',
-      recipient: proof_approval_recipient,
-      actor: admin,
-      notifiable: application,
-      metadata: { proof_type: proof_type },
-      channel: :email,
-      deliver: false
-    )
-  rescue StandardError => e
-    Rails.logger.error "Failed to send proof_approved notification for ProofReview #{id} via NotificationService: #{e.class.name}"
-    # A notification error must not fail the review.
-  end
-
-  def proof_approval_recipient
-    resolver = Applications::SecureRequestRecipientResolver.new(application: application)
-    default_recipient_id = resolver.default_recipient_ids.first
-
-    resolver.known_recipients.find { |recipient| recipient.id == default_recipient_id } || application.user
-  end
-
-  # A disability certification review has its own rejection flow and does not count toward the limit.
+  # A disability certification rejection has its own flow and does not count toward the limit.
   def counts_toward_rejection_limit?
-    status_rejected? && !proof_type_disability_certification?
+    status_rejected? && document_type&.counts_toward_rejection_limit
   end
 
   # Runs inside record!'s transaction under the application lock it took, so an error rolls the decision back.
@@ -256,35 +114,6 @@ class ProofReview < ApplicationRecord
     application.update!(total_rejections: application.total_rejections + 1)
     @rejection_total = application.total_rejections
     archive_application_if_exceeded if @rejection_total > MAX_REJECTIONS
-  end
-
-  # Sent after the commit. A failure here must not fail a review that has committed.
-  def notify_rejection_limit
-    return unless @rejection_total
-
-    send_max_rejections_warning if @rejection_total >= MAX_REJECTIONS
-    ApplicationNotificationsMailer.max_rejections_reached(application).deliver_later if @rejection_total > MAX_REJECTIONS
-  rescue StandardError => e
-    Rails.logger.error "Failed to send rejection limit notices for ProofReview #{id}: #{e.class.name}"
-  end
-
-  def send_max_rejections_warning
-    # Each rejection at a total of 8 or more logs and sends a new warning.
-    # Audit displays merge duplicates only within one 1-minute bucket (EventDeduplicationService).
-    AuditEventService.log(
-      action: 'max_rejections_warning',
-      actor: admin,
-      auditable: application,
-      metadata: { recipient_id: User.admins.first.id }
-    )
-
-    NotificationService.create_and_deliver!(
-      type: 'max_rejections_warning',
-      recipient: User.admins.first,
-      actor: admin,
-      notifiable: application,
-      channel: :email
-    )
   end
 
   def archive_application_if_exceeded
