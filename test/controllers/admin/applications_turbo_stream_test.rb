@@ -138,7 +138,7 @@ module Admin
         mark_document_clean!(@application.public_send(slot).blob, user: @user, slot: slot)
       end
       @application.update!(id_proof_status: :approved, disability_certification_status: :approved)
-      ProofReview.any_instance.stubs(:handle_post_review_actions).raises(StandardError, 'after commit failed')
+      Applications::ProofDecisionFollowUp.any_instance.stubs(:call).raises(StandardError, 'after commit failed')
     end
 
     teardown do
@@ -159,7 +159,7 @@ module Admin
 
       test "#{format} proof review redirects to the application when saved state cannot be confirmed" do
         # The connection is lost as the callback fails, so the reads that follow cannot confirm the commit.
-        ProofReview.any_instance.stubs(:handle_post_review_actions).with do
+        Applications::ProofDecisionFollowUp.any_instance.stubs(:call).with do
           ProofReview.stubs(:find_by).raises(ActiveRecord::ConnectionNotEstablished, 'verification unavailable')
           true
         end.raises(StandardError, 'after commit failed')

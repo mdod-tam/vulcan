@@ -284,10 +284,6 @@ class ApplicationSystemTestCase < ActionDispatch::SystemTestCase
   setup do
     track_chrome_processes('TEST_SETUP_START')
 
-    # The saved validation flag lets teardown restore the prior value.
-    @skip_flag_original = Application.skip_wait_period_validation
-    Application.skip_wait_period_validation = true
-
     track_chrome_processes('BEFORE_SESSION_RESET')
     begin
       Capybara.reset_sessions!
@@ -332,21 +328,11 @@ class ApplicationSystemTestCase < ActionDispatch::SystemTestCase
     system_test_sign_out
     track_chrome_processes('AFTER_SIGN_OUT')
 
-    # Restore the original flag to avoid leakage into later tests.
-    Application.skip_wait_period_validation = @skip_flag_original
     track_chrome_processes('TEST_TEARDOWN_COMPLETE')
   end
 
   def self.use_transactional_tests?
     false
-  end
-
-  def with_wait_period_skipped
-    original_value = Application.skip_wait_period_validation
-    Application.skip_wait_period_validation = true
-    yield
-  ensure
-    Application.skip_wait_period_validation = original_value
   end
 
   # This override preserves named screenshot calls and Rails' html: and screenshot: keywords.

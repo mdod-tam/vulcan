@@ -143,7 +143,7 @@ module Admin
     end
 
     def show_proof_history_submission_fallback?(application, proof_type)
-      application.public_send("#{proof_type}_proof").attached? && application.created_at.present?
+      application.document_attachment_for(proof_type).attached? && application.created_at.present?
     end
 
     def format_proof_history_detail(detail, application)

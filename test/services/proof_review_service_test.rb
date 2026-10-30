@@ -51,7 +51,6 @@ class ProofReviewServiceTest < ActiveSupport::TestCase
     assert_not_includes log_output.string, private_token
     assert_equal 'not_reviewed', @application.reload.income_proof_status
     assert_equal 'in_progress', @application.status
-    assert_not Current.reviewing_single_proof?
   end
 
   test 'reconciliation failure rolls back the proof review and proof status' do
@@ -68,7 +67,6 @@ class ProofReviewServiceTest < ActiveSupport::TestCase
     assert_equal 'The proof review could not be completed. Check this application before reviewing it again.', result.message
     assert_equal 'not_reviewed', @application.reload.income_proof_status
     assert_equal 'in_progress', @application.status
-    assert_not Current.reviewing_single_proof?
   end
 
   test 'a rejection that cannot be counted fails the review and leaves the application unchanged' do
@@ -119,7 +117,6 @@ class ProofReviewServiceTest < ActiveSupport::TestCase
       assert_equal 'Enter a rejection reason before submitting this review.', result.message
       assert_equal 'not_reviewed', @application.reload.income_proof_status
       assert_equal 'in_progress', @application.status
-      assert_not Current.reviewing_single_proof?
     end
   end
 
@@ -195,7 +192,6 @@ class ProofReviewServiceTest < ActiveSupport::TestCase
     assert_equal 'The proof review could not be completed. Check this application before reviewing it again.', result.message
     assert_equal 'not_reviewed', @application.reload.income_proof_status
     assert_equal 'in_progress', @application.status
-    assert_not Current.reviewing_single_proof?
   end
 
   test 'uses the reviewable proof type boundary from ProofReview' do
@@ -324,99 +320,77 @@ class ProofReviewServiceTest < ActiveSupport::TestCase
     mark_document_clean!(application.residency_proof.blob, user: application.user, slot: 'residency_proof')
     NotificationService.stubs(:create_and_deliver!).returns(true)
 
-    with_required_proof_validations do
-      result = ProofReviewService.new(
-        application,
-        @admin,
-        {
-          proof_type: 'residency',
-          status: 'rejected',
-          rejection_reason: 'Address mismatch'
-        }
-      ).call
+    result = ProofReviewService.new(
+      application,
+      @admin,
+      {
+        proof_type: 'residency',
+        status: 'rejected',
+        rejection_reason: 'Address mismatch'
+      }
+    ).call
 
-      assert result.success?, result.message
-    end
-
+    assert result.success?, result.message
     assert_equal 'rejected', application.reload.residency_proof_status
     assert_not application.income_proof.attached?
-    assert_not Current.reviewing_single_proof?
   end
 
   test 'rejecting income then residency and id succeeds after previous rejected proof attachments are purged' do
     NotificationService.stubs(:create_and_deliver!).returns(true)
 
-    with_required_proof_validations do
-      assert_difference -> { @application.reload.total_rejections }, 3 do
-        perform_enqueued_jobs(only: ActiveStorage::PurgeJob) do
-          income_result = ProofReviewService.new(
-            @application,
-            @admin,
-            {
-              proof_type: 'income',
-              status: 'rejected',
-              rejection_reason: 'Income documentation is not acceptable.'
-            }
-          ).call
-          assert income_result.success?, income_result.message
-        end
-        assert_not @application.reload.income_proof.attached?
-
-        perform_enqueued_jobs(only: ActiveStorage::PurgeJob) do
-          residency_result = ProofReviewService.new(
-            @application,
-            @admin,
-            {
-              proof_type: 'residency',
-              status: 'rejected',
-              rejection_reason: 'Residency documentation is not acceptable.'
-            }
-          ).call
-          assert residency_result.success?, residency_result.message
-        end
-        assert_not @application.reload.residency_proof.attached?
-
-        perform_enqueued_jobs(only: ActiveStorage::PurgeJob) do
-          id_result = ProofReviewService.new(
-            @application,
-            @admin,
-            {
-              proof_type: 'id',
-              status: 'rejected',
-              rejection_reason: 'ID documentation is not acceptable.'
-            }
-          ).call
-          assert id_result.success?, id_result.message
-        end
-        assert_not @application.reload.id_proof.attached?
+    assert_difference -> { @application.reload.total_rejections }, 3 do
+      perform_enqueued_jobs(only: ActiveStorage::PurgeJob) do
+        income_result = ProofReviewService.new(
+          @application,
+          @admin,
+          {
+            proof_type: 'income',
+            status: 'rejected',
+            rejection_reason: 'Income documentation is not acceptable.'
+          }
+        ).call
+        assert income_result.success?, income_result.message
       end
+      assert_not @application.reload.income_proof.attached?
+
+      perform_enqueued_jobs(only: ActiveStorage::PurgeJob) do
+        residency_result = ProofReviewService.new(
+          @application,
+          @admin,
+          {
+            proof_type: 'residency',
+            status: 'rejected',
+            rejection_reason: 'Residency documentation is not acceptable.'
+          }
+        ).call
+        assert residency_result.success?, residency_result.message
+      end
+      assert_not @application.reload.residency_proof.attached?
+
+      perform_enqueued_jobs(only: ActiveStorage::PurgeJob) do
+        id_result = ProofReviewService.new(
+          @application,
+          @admin,
+          {
+            proof_type: 'id',
+            status: 'rejected',
+            rejection_reason: 'ID documentation is not acceptable.'
+          }
+        ).call
+        assert id_result.success?, id_result.message
+      end
+      assert_not @application.reload.id_proof.attached?
     end
 
     assert_equal 'rejected', @application.income_proof_status
     assert_equal 'rejected', @application.residency_proof_status
     assert_equal 'rejected', @application.id_proof_status
-    assert_not Current.reviewing_single_proof?
   end
 
   private
 
   def review_income
     ProofReviewService.new(@application, @admin, { proof_type: 'income', status: 'approved' }).call
-  end
-
-  def with_required_proof_validations
-    previous_value = ENV.fetch('REQUIRE_PROOF_VALIDATIONS', nil)
-    ENV['REQUIRE_PROOF_VALIDATIONS'] = 'true'
-    Current.reset
-
-    yield
-  ensure
-    if previous_value.nil?
-      ENV.delete('REQUIRE_PROOF_VALIDATIONS')
-    else
-      ENV['REQUIRE_PROOF_VALIDATIONS'] = previous_value
-    end
-    Current.reset
   end
 end
 
@@ -468,7 +442,7 @@ class ProofReviewCommitOutcomeTest < ActiveSupport::TestCase
   end
 
   test 'a committed callback failure preserves review lifecycle history and audit with a warning' do
-    ProofReview.any_instance.stubs(:handle_post_review_actions).raises(StandardError, 'after commit failed')
+    Applications::ProofDecisionFollowUp.any_instance.stubs(:call).raises(StandardError, 'after commit failed')
 
     result = review_residency
 
@@ -485,12 +459,11 @@ class ProofReviewCommitOutcomeTest < ActiveSupport::TestCase
     failure = @application.events.where(action: 'proof_review_follow_up_failed').sole
     assert_equal review.id, failure.metadata['proof_review_id']
     assert_equal 'StandardError', failure.metadata['error_class']
-    assert_not Current.reviewing_single_proof?
   end
 
   test 'a committed rejection past the limit keeps its count and archive when a follow-up step fails' do
     @application.update!(total_rejections: ProofReview::MAX_REJECTIONS)
-    ProofReview.any_instance.stubs(:handle_post_review_actions).raises(StandardError, 'after commit failed')
+    Applications::ProofDecisionFollowUp.any_instance.stubs(:call).raises(StandardError, 'after commit failed')
 
     result = ProofReviewService.new(@application, @admin,
                                     { proof_type: 'residency', status: 'rejected', rejection_reason: 'Unreadable' }).call
@@ -508,7 +481,7 @@ class ProofReviewCommitOutcomeTest < ActiveSupport::TestCase
 
   test 'failed commit verification reports uncertainty without suggesting the review failed' do
     # The connection is lost as the callback fails, so the reads that follow cannot confirm the commit.
-    ProofReview.any_instance.stubs(:handle_post_review_actions).with do
+    Applications::ProofDecisionFollowUp.any_instance.stubs(:call).with do
       ProofReview.stubs(:find_by).raises(ActiveRecord::ConnectionNotEstablished, 'verification unavailable')
       true
     end.raises(StandardError, 'after commit failed')
@@ -529,10 +502,9 @@ class ProofReviewCommitOutcomeTest < ActiveSupport::TestCase
   end
 
   test 'a repeated rejection keeps its committed review and reports a follow-up failure' do
-    ProofReview.any_instance.stubs(:handle_post_review_actions).returns(true)
     review = create(:proof_review, application: @application, admin: @admin, proof_type: :residency,
                                    status: :rejected, rejection_reason: 'Old reason', reviewed_at: 1.day.ago)
-    ProofReview.any_instance.stubs(:apply_repeat_rejection_side_effects!).raises(StandardError, 'repeat follow-up failed')
+    Applications::ProofDecisionFollowUp.any_instance.stubs(:call).raises(StandardError, 'repeat follow-up failed')
 
     result = ProofReviewService.new(@application, @admin,
                                     { proof_type: 'residency', status: 'rejected', rejection_reason: 'New reason' }).call

@@ -110,7 +110,7 @@ module Applications
       holder_thread = on_own_connection do
         holder_pid_queue << backend_pid
         ActiveRecord::Base.transaction do
-          first_result = run_submission(user:, application: draft, attach_income_proof: true)
+          first_result = run_submission(user:, application: draft)
           holder_ready << true
           release_holder.pop
         end
@@ -122,7 +122,7 @@ module Applications
       second_result = nil
       contender_thread = on_own_connection do
         contender_pid_queue << backend_pid
-        second_result = run_submission(user:, application: draft, attach_income_proof: true)
+        second_result = run_submission(user:, application: draft)
       end
 
       confirm_blocked_then_release(
@@ -289,6 +289,7 @@ module Applications
       assert_equal 'draft', draft.reload.status
       assert_equal 0, ApplicationStatusChange.where(application: draft).count
     ensure
+      DocumentScan.where(user: user).delete_all if user
       draft&.destroy
       User.find_by(id: user&.id)&.destroy
     end
@@ -333,6 +334,7 @@ module Applications
       assert_equal 1, ApplicationStatusChange.where(application: draft).count
       assert_equal 'Users::Administrator', User.find(user.id).type
     ensure
+      DocumentScan.where(user: user).delete_all if user
       draft&.destroy
       User.find_by(id: user&.id)&.destroy
     end
@@ -448,7 +450,7 @@ module Applications
       ).call
     end
 
-    def run_submission(user:, application:, attach_income_proof: false)
+    def run_submission(user:, application:)
       form = ApplicationForm.new(
         current_user: User.find(user.id),
         application: Application.find(application.id),
@@ -466,7 +468,8 @@ module Applications
         terms_accepted: true,
         information_verified: true,
         disability_information_release_authorized: true,
-        income_proof: submission_income_proof(attach_income_proof, user: user),
+        income_proof: submitted_proof('income_proof.pdf', user: user),
+        residency_proof: submitted_proof('residency_proof.pdf', user: user, slot: 'residency_proof'),
         is_submission: true
       )
       ApplicationCreator.call(form)
@@ -495,14 +498,10 @@ module Applications
       ApplicationCreator.call(form)
     end
 
-    def submission_income_proof(attach, user:)
-      return unless attach
-
-      upload = Rack::Test::UploadedFile.new(
-        Rails.root.join('test/fixtures/files/income_proof.pdf'),
-        'application/pdf'
-      )
-      scanned_upload(upload, user: user).signed_id
+    # A submission leaves draft only with its required proofs.
+    def submitted_proof(fixture, user:, slot: 'income_proof')
+      upload = Rack::Test::UploadedFile.new(Rails.root.join('test/fixtures/files', fixture), 'application/pdf')
+      scanned_upload(upload, user: user, slot: slot).signed_id
     end
 
     def run_role_conversion(user)

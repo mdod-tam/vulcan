@@ -115,19 +115,15 @@ module Applications
     end
 
     test 'a recent rejected application permits the locked submission writer' do
-      original_skip = Application.skip_wait_period_validation
-      Application.skip_wait_period_validation = false
       @user.update!(hearing_disability: true)
       create(:application, :rejected, user: @user, application_date: 1.day.ago)
-      form = create_valid_form(@user)
+      form = create_valid_form_with_proofs(@user)
       form.is_submission = true
 
       assert_difference 'Application.count', 1 do
         result = ApplicationCreator.call(form)
         assert result.success?, result.error_messages.inspect
       end
-    ensure
-      Application.skip_wait_period_validation = original_skip
     end
 
     test 'an elapsed approved application still refuses the locked submission writer' do
@@ -145,7 +141,7 @@ module Applications
 
     test 'submission creates exactly one application_status_changed event' do
       application = create_application_for(@user)
-      form = create_form_with_application(@user, application)
+      form = with_proof_uploads(create_form_with_application(@user, application), @user)
       form.is_submission = true
 
       assert_difference -> { Event.where(action: 'application_status_changed').count }, 1 do
@@ -155,7 +151,7 @@ module Applications
     end
 
     test 'new submitted application logs creation as draft and submission as a separate status change' do
-      form = create_valid_form(@user)
+      form = create_valid_form_with_proofs(@user)
       form.is_submission = true
 
       assert_difference -> { Event.where(action: 'application_created').count }, 1 do
@@ -234,6 +230,7 @@ module Applications
         information_verified: true,
         disability_information_release_authorized: true
       )
+      attach_required_proofs(application)
       form = ApplicationForm.new(
         current_user: @user,
         application: application,
@@ -287,12 +284,13 @@ module Applications
     end
 
     test 'sets submission status correctly for submissions' do
-      form = create_valid_form(@user)
+      form = create_valid_form_with_proofs(@user)
       form.is_submission = true
 
       result = ApplicationCreator.call(form)
 
-      assert_equal 'in_progress', result.application.status
+      assert result.success?, result.error_messages.inspect
+      assert_equal 'in_progress', result.application.reload.status
     end
 
     test 'submitted online application requires provider info' do
@@ -393,7 +391,7 @@ module Applications
     end
 
     test 'dependent submission retains field changes before its later lifecycle save' do
-      application = create_dependent_draft
+      application = attach_required_proofs(create_dependent_draft)
       form = dependent_update_form(application)
       form.annual_income = '60000'
       form.locale = 'es'
@@ -623,7 +621,7 @@ module Applications
     test 'does not gate the candidate account named by someone else open case' do
       candidate = create(:constituent)
       open_registration_soft_match_case_for(@user, candidate: candidate)
-      form = create_valid_form(candidate)
+      form = with_proof_uploads(create_valid_form(candidate), candidate)
       form.is_submission = true
 
       result = ApplicationCreator.call(form)
@@ -633,7 +631,7 @@ module Applications
 
     test 'does not gate cases from sources other than registration soft match' do
       open_registration_soft_match_case_for(@user, source: :portal_dependent)
-      form = create_valid_form(@user)
+      form = create_valid_form_with_proofs(@user)
       form.is_submission = true
 
       result = ApplicationCreator.call(form)
@@ -650,7 +648,7 @@ module Applications
         resolved_by: create(:admin),
         resolved_at: Time.current
       )
-      form = create_valid_form(@user)
+      form = create_valid_form_with_proofs(@user)
       form.is_submission = true
 
       result = ApplicationCreator.call(form)
@@ -678,7 +676,7 @@ module Applications
     test 'does not gate a dependent application merely because the acting guardian has an open case' do
       create_guardian_relationship(@user, @dependent)
       open_registration_soft_match_case_for(@user)
-      form = create_valid_dependent_form(@user, @dependent)
+      form = with_proof_uploads(create_valid_dependent_form(@user, @dependent), @user)
       form.is_submission = true
 
       result = ApplicationCreator.call(form)
@@ -846,7 +844,18 @@ module Applications
 
     # Proof uploads let these assertions detect unintended attachments.
     def create_valid_form_with_proofs(user)
-      form = create_valid_form(user)
+      with_proof_uploads(create_valid_form(user), user)
+    end
+
+    # A draft that already holds its required proofs, as one saved earlier with uploads does.
+    def attach_required_proofs(application)
+      application.income_proof.attach(io: file_fixture('income_proof.pdf').open, filename: 'income.pdf', content_type: 'application/pdf')
+      application.residency_proof.attach(io: file_fixture('residency_proof.pdf').open, filename: 'residency.pdf', content_type: 'application/pdf')
+      application
+    end
+
+    # A submission leaves draft only with its required proofs, so a test that expects one to succeed carries them.
+    def with_proof_uploads(form, user)
       form.residency_proof = scanned_upload(fixture_file_upload('test/fixtures/files/residency_proof.pdf', 'application/pdf'), user: user, slot: 'residency_proof').signed_id
       form.income_proof = scanned_upload(fixture_file_upload('test/fixtures/files/income_proof.pdf', 'application/pdf'), user: user).signed_id
       form

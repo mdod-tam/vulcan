@@ -305,17 +305,17 @@ class ApplicationWorkflowPredicatesTest < ActiveSupport::TestCase
   end
 
   test 'require_proof_attachments skips income proof when not required' do
-    ENV['REQUIRE_PROOF_VALIDATIONS'] = 'true'
-    app = create(:application, :in_progress, :income_not_required)
+    app = create(:application, :draft, :income_not_required)
     app.residency_proof.attach(
       io: StringIO.new('residency proof'),
       filename: 'residency.pdf',
       content_type: 'application/pdf'
     )
+    app.status = :in_progress
+    app.valid?
 
-    assert app.valid?, "Expected valid without income proof: #{app.errors.full_messages}"
-  ensure
-    ENV.delete('REQUIRE_PROOF_VALIDATIONS')
+    assert_empty app.errors[:income_proof], "Expected no income proof requirement: #{app.errors.full_messages}"
+    assert_empty app.errors[:residency_proof]
   end
 
   test 'pending_proof_types omits income when not required' do

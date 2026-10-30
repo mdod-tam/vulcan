@@ -52,7 +52,7 @@ The workflow guides link to focused tests and explain the boundaries shared by p
 - **Lifecycle changes have side effects.** Use `Application#transition_status!` and `Application#reconcile_workflow_state!` to preserve status history and associated work. Application status, individual proof decisions, and disability certification are separate states; `Application#transition_disability_certification_status!` is the one writer of the certification status.
 - **Fulfillment is saved on each application.** At creation, `vouchers_enabled` determines voucher versus equipment fulfillment and whether income proof is required. Changing the flag does not rewrite existing applications; see [fulfillment settings](docs/features/application_workflow_guide.md#fulfillment-settings).
 - **History has several owners.** `Event`, `ApplicationStatusChange`, `ProofReview`, and `Notification` answer different questions. Use the [audit guide](docs/features/audit_event_tracking.md) and [notification guide](docs/features/notifications.md) when tracing an outcome.
-- **Paper context changes validation behavior.** `Current.paper_context` is scoped by paper-intake entry points. See [paper intake](docs/development/paper_application_architecture.md) before reusing that context.
+- **Paper context is intake state, not a proof-validation bypass.** `Current.paper_context` relaxes selected contact validations and tells the proof attachment service that paper intake owns reconciliation and delivery. It is scoped by paper-intake entry points. See [paper intake](docs/development/paper_application_architecture.md) before reusing that context.
 
 ## Documentation
 

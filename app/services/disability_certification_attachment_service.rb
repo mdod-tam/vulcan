@@ -122,26 +122,6 @@ class DisabilityCertificationAttachmentService
     end
   end
 
-  def self.attachment_verified?(application)
-    if application.disability_certification.attached?
-      attachment = application.disability_certification.attachment
-      Rails.logger.info "Attachment confirmed - ID: #{attachment.id}, Blob ID: #{attachment.blob_id}"
-      return true
-    end
-
-    # A stale attachment association can miss a stored record.
-    # Check the database before reporting failure.
-    attachment_exists = ActiveStorage::Attachment.exists?(record_type: 'Application',
-                                                          record_id: application.id,
-                                                          name: 'disability_certification')
-
-    return false unless attachment_exists
-
-    Rails.logger.warn 'Attachment exists in DB but not detected in model - forcing reset'
-    application.disability_certification.reset
-    true
-  end
-
   # Writes the status, status history, audit event, and notification. The attachment does not change.
   def self.update_certification_status_only(application, status, admin, submission_method, metadata)
     ActiveRecord::Base.transaction do
@@ -227,7 +207,7 @@ class DisabilityCertificationAttachmentService
     perform_attachment(params[:application], params[:blob])
     update_certification_status_only(params[:application], params[:status], params[:admin],
                                      params[:submission_method], params[:metadata])
-    verify_final_attachment(params[:application])
+    AttachmentOperation.verify_attached!(params[:application], :disability_certification)
 
     { blob_size: blob_size, status: params[:status].to_s }
   end
@@ -280,24 +260,10 @@ class DisabilityCertificationAttachmentService
     )
   end
 
+  # Attaches to a fresh record and confirms from the database that the file is stored, not from attach's return value.
   def self.perform_attachment(application, attachment_param)
-    Rails.logger.info "EXECUTING ATTACHMENT: disability_certification to application #{application.id}"
-
     fresh_application = Application.unscoped.find(application.id)
     fresh_application.disability_certification.attach(attachment_param)
-
-    # Verify the persisted attachment rather than relying on attach's return value.
-    Rails.logger.error "Failed to attach certification for application #{fresh_application.id}" unless fresh_application.disability_certification.attached?
-
-    reloaded_app = Application.unscoped.find(application.id)
-    raise 'Failed to verify attachment: disability_certification not attached after direct attachment' unless attachment_verified?(reloaded_app)
-
-    Rails.logger.info "Successfully verified disability certification attachment for application #{application.id}"
-    reloaded_app
-  end
-
-  def self.verify_final_attachment(application)
-    application.reload
-    raise 'Critical error: Attachment disappeared after status update' unless application.disability_certification.attached?
+    AttachmentOperation.verify_attached!(fresh_application, :disability_certification)
   end
 end

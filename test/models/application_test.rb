@@ -112,7 +112,7 @@ class ApplicationTest < ActiveSupport::TestCase
   test 'transition_status! logs application_status_changed with explicit constituent actor' do
     Current.force_notifications = false
 
-    application = create(:application, :draft)
+    application = create(:application, :draft, :with_income_proof, :with_residency_proof)
 
     Current.user = nil
 
@@ -138,7 +138,7 @@ class ApplicationTest < ActiveSupport::TestCase
   test 'transition_status! attributes audit to passed actor not Current.user' do
     Current.force_notifications = false
 
-    application = create(:application, :draft)
+    application = create(:application, :draft, :with_income_proof, :with_residency_proof)
     admin = create(:admin)
 
     Current.user = admin
@@ -162,7 +162,7 @@ class ApplicationTest < ActiveSupport::TestCase
   end
 
   test 'submit! transitions status to in_progress and logs audit event' do
-    application = create(:application, :draft)
+    application = create(:application, :draft, :with_income_proof, :with_residency_proof)
     actor = application.user
 
     assert_difference -> { ApplicationStatusChange.count }, 1 do
@@ -482,7 +482,7 @@ class ApplicationTest < ActiveSupport::TestCase
   test 'assign_evaluator! uses a valid renewal evaluation type when constituent has prior evaluations' do
     Policy.find_or_create_by(key: 'waiting_period_years').update!(value: 3)
     constituent = create(:constituent)
-    prior_application = create(:application, status: :approved, application_date: 2.years.ago.to_date, user: constituent)
+    prior_application = create(:application, status: :approved, application_date: 4.years.ago.to_date, user: constituent)
     create(:evaluation, :completed, application: prior_application, constituent: constituent)
     application = create(:application, status: :approved, application_date: 1.year.ago.to_date, user: constituent)
     Current.user = create(:admin)
@@ -545,8 +545,8 @@ class ApplicationTest < ActiveSupport::TestCase
   end
 
   test 'batch_update_status updates multiple applications and returns success' do
-    app1 = create(:application, :draft)
-    app2 = create(:application, :draft)
+    app1 = create(:application, :draft, :with_income_proof, :with_residency_proof)
+    app2 = create(:application, :draft, :with_income_proof, :with_residency_proof)
     admin = create(:admin)
 
     assert_difference -> { ApplicationStatusChange.count }, 2 do
@@ -579,7 +579,7 @@ class ApplicationTest < ActiveSupport::TestCase
   end
 
   test 'batch_update_status handles missing application IDs' do
-    app1 = create(:application, :draft)
+    app1 = create(:application, :draft, :with_income_proof, :with_residency_proof)
     admin = create(:admin)
 
     assert_no_difference -> { ApplicationStatusChange.count } do

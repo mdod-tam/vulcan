@@ -4,41 +4,26 @@ module ProofConsistencyValidation
   extend ActiveSupport::Concern
 
   included do
-    validate :validate_proof_status_consistent_with_application_status, unless: :skip_proof_validation?
-  end
-
-  def validate_proof_status_consistent_with_application_status
-    proofs_consistent_with_status
-  end
-
-  # Paper intake, ProofAttachmentService, purges and single-proof reviews manage proof state themselves,
-  # and the reviewer validates the selected proof. A new record or a draft has nothing to check yet.
-  def skip_proof_validation?
-    return true if Current.paper_context?
-    return true if Current.proof_attachment_service_context?
-    return true if Current.skip_proof_validation?
-    return true if Current.reviewing_single_proof?
-    return true if new_record?
-    return true if status_draft?
-
-    false
+    validate :newly_approved_proofs_are_attached
   end
 
   private
 
-  def proofs_consistent_with_status
-    return if submission_method&.to_sym == :paper
+  # Approving a proof needs the file it approves. Only the save that approves it is checked, so a later save of an
+  # application whose proof is already approved does not depend on who is saving it. A new record or a draft has
+  # nothing to approve yet, and a paper submission keeps its proofs on paper.
+  def newly_approved_proofs_are_attached
+    return if new_record? || status_draft? || submission_method_paper?
 
-    check_proof_consistency(:income_proof, income_proof_status, income_proof) if income_proof_required?
-    check_proof_consistency(:residency_proof, residency_proof_status, residency_proof)
-    check_proof_consistency(:id_proof, id_proof_status, id_proof)
+    check_newly_approved(:income_proof) if income_proof_required?
+    check_newly_approved(:residency_proof)
+    check_newly_approved(:id_proof)
   end
 
-  def check_proof_consistency(proof_sym, status, attachment)
-    # Only an approved proof needs an attachment. A rejected proof can have none, either because it came
-    # from a paper application or because it awaits resubmission.
-    return unless status == 'approved' && !attachment.attached?
+  def check_newly_approved(proof_name)
+    return unless public_send(:"will_save_change_to_#{proof_name}_status?", to: 'approved')
+    return if public_send(proof_name).attached?
 
-    errors.add(proof_sym, "must be attached when status is #{status}")
+    errors.add(proof_name, 'must be attached when status is approved')
   end
 end

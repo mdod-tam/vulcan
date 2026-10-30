@@ -26,14 +26,13 @@ module Applications
       end
     end
 
-    def self.call(user, applications: user.applications, excluding: nil, skip_wait_period: false, waiting_period_years: Policy.waiting_period_years)
-      new(applications, excluding: excluding, skip_wait_period: skip_wait_period, waiting_period_years: waiting_period_years).call
+    def self.call(user, applications: user.applications, excluding: nil, waiting_period_years: Policy.waiting_period_years)
+      new(applications, excluding: excluding, waiting_period_years: waiting_period_years).call
     end
 
     # A supplied inventory is authoritative, including when its records are locked by a portal writer.
-    def initialize(applications, excluding:, skip_wait_period:, waiting_period_years:)
+    def initialize(applications, excluding:, waiting_period_years:)
       @applications = Array(applications).select(&:persisted?).reject { |application| excluding && application.id == excluding.id }
-      @skip_wait_period = skip_wait_period
       @waiting_period_years = waiting_period_years
     end
 
@@ -42,7 +41,7 @@ module Applications
       result = Result.new(waiting_period_ends_at: approved_date && (approved_date + @waiting_period_years.years))
       result.reason = if @applications.any?(&:blocking_new_submission?)
                         :blocking_application
-                      elsif !@skip_wait_period && result.waiting_period_active?
+                      elsif result.waiting_period_active?
                         :waiting_period
                       end
       result

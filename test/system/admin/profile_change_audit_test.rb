@@ -115,7 +115,8 @@ module Admin
         created_at: 2.hours.ago
       )
 
-      proof_review = ProofReview.create!(
+      proof_review = create(
+        :proof_review,
         application: @application,
         admin: @admin,
         proof_type: 'income',

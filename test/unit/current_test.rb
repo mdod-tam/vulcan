@@ -13,41 +13,12 @@ class CurrentTest < ActiveSupport::TestCase
 
   test 'paper_context can be set and retrieved' do
     assert_nil Current.paper_context
-    assert_not Current.paper_context?
 
     Current.paper_context = true
     assert Current.paper_context
-    assert Current.paper_context?
 
     Current.paper_context = false
     assert_not Current.paper_context
-    assert_not Current.paper_context?
-  end
-
-  test 'skip_proof_validation can be set and retrieved' do
-    assert_nil Current.skip_proof_validation
-    assert_not Current.skip_proof_validation?
-
-    Current.skip_proof_validation = true
-    assert Current.skip_proof_validation
-    assert Current.skip_proof_validation?
-
-    Current.skip_proof_validation = false
-    assert_not Current.skip_proof_validation
-    assert_not Current.skip_proof_validation?
-  end
-
-  test 'reviewing_single_proof can be set and retrieved' do
-    assert_nil Current.reviewing_single_proof
-    assert_not Current.reviewing_single_proof?
-
-    Current.reviewing_single_proof = true
-    assert Current.reviewing_single_proof
-    assert Current.reviewing_single_proof?
-
-    Current.reviewing_single_proof = false
-    assert_not Current.reviewing_single_proof
-    assert_not Current.reviewing_single_proof?
   end
 
   test 'force_notifications can be set and retrieved' do
@@ -75,35 +46,34 @@ class CurrentTest < ActiveSupport::TestCase
 
   test 'multiple attributes can be set independently' do
     Current.paper_context = true
-    Current.skip_proof_validation = true
+    Current.force_notifications = true
     Current.test_user_id = 456
 
-    assert Current.paper_context?
-    assert Current.skip_proof_validation?
+    assert Current.paper_context
+    assert Current.force_notifications?
     assert_equal 456, Current.test_user_id
   end
 
   test 'reset clears all attributes' do
     Current.paper_context = true
-    Current.skip_proof_validation = true
+    Current.force_notifications = true
     Current.test_user_id = 789
 
     Current.reset
 
     assert_nil Current.paper_context
-    assert_nil Current.skip_proof_validation
+    assert_nil Current.force_notifications
     assert_nil Current.test_user_id
-    assert_not Current.paper_context?
-    assert_not Current.skip_proof_validation?
+    assert_not Current.force_notifications?
   end
 
   test 'set scopes nil, false, and true values to its block and restores each one' do
     [nil, false, true].each do |outer|
       Current.paper_context = outer
       Current.set(paper_context: true) do
-        assert Current.paper_context?
-        Current.set(paper_context: false) { assert_not Current.paper_context? }
-        assert Current.paper_context?
+        assert Current.paper_context
+        Current.set(paper_context: false) { assert_not Current.paper_context }
+        assert Current.paper_context
       end
       assert_equal outer, Current.paper_context
     end
@@ -120,10 +90,10 @@ class CurrentTest < ActiveSupport::TestCase
     assert_equal :early, early_return.call
     assert_nil Current.paper_context
 
-    assert_raises(RuntimeError) { Current.set(reviewing_single_proof: true) { raise 'boom' } }
-    assert_nil Current.reviewing_single_proof
+    assert_raises(RuntimeError) { Current.set(force_notifications: true) { raise 'boom' } }
+    assert_nil Current.force_notifications
 
-    Current.set(paper_context: true, reviewing_single_proof: true) { assert_same actor, Current.user }
+    Current.set(paper_context: true, force_notifications: true) { assert_same actor, Current.user }
     assert_same actor, Current.user
     assert_equal '203.0.113.9', Current.ip_address
   end
@@ -134,7 +104,7 @@ class CurrentTest < ActiveSupport::TestCase
 
   test 'attributes are isolated between test runs' do
     assert_nil Current.paper_context
-    assert_nil Current.skip_proof_validation
+    assert_nil Current.force_notifications
     assert_nil Current.test_user_id
   end
 end

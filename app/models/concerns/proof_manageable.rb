@@ -7,11 +7,9 @@
 module ProofManageable
   extend ActiveSupport::Concern
 
-  PROOF_TYPES = %w[income residency].freeze
-
   included do
     validates :income_proof, :residency_proof, :id_proof, document: { purpose: :proof }
-    validate :require_proof_attachments, if: :require_proof_validations?
+    validate :require_proof_attachments, if: :proofs_due_on_submission?
 
     after_save :set_needs_review_timestamp, if: :proof_attachments_changed?
   end
@@ -30,6 +28,11 @@ module ProofManageable
     !status_archived? && !status_approved?
   end
 
+  # The attachment for a document type: income, residency, id, or disability_certification.
+  def document_attachment_for(type)
+    public_send(DocumentType.fetch(type).attachment_name)
+  end
+
   # Secure proof links serve rejected proofs or missing proofs with not_reviewed status.
   # An archived application is closed: ProofReview refuses to review it, so an upload could never be reviewed.
   # Issuance, the admin send button, and public submission all use this rule.
@@ -39,7 +42,7 @@ module ProofManageable
     return false if public_send("#{proof_type}_proof_status_approved?")
     return true if public_send("#{proof_type}_proof_status_rejected?")
 
-    public_send("#{proof_type}_proof_status_not_reviewed?") && !public_send("#{proof_type}_proof").attached?
+    public_send("#{proof_type}_proof_status_not_reviewed?") && !document_attachment_for(proof_type).attached?
   end
 
   # The constituent portal accepts only a replacement for a rejected proof.
@@ -79,12 +82,11 @@ module ProofManageable
 
   # Applications::ProofReviewer calls this after it sets the rejected status.
   def purge_rejected_proof(proof_type_key)
-    attachment_name = :"#{proof_type_key}_proof"
-    attachment = public_send(attachment_name)
+    attachment = document_attachment_for(proof_type_key)
 
     return unless attachment.attached?
 
-    Rails.logger.info "[ProofManageable] Purging #{attachment_name} for App ##{id}."
+    Rails.logger.info "[ProofManageable] Purging #{attachment.name} for App ##{id}."
     attachment.purge_later
   end
 
@@ -92,8 +94,6 @@ module ProofManageable
 
   # A rejected proof can have no attachment until the constituent resubmits.
   def require_proof_attachments
-    return if new_record? || status_draft?
-
     if income_proof_required? && !income_proof_status_rejected? && !income_proof.attached?
       errors.add(:income_proof, 'must be attached. Please upload your income documentation.')
     end
@@ -103,24 +103,11 @@ module ProofManageable
     errors.add(:residency_proof, 'must be attached. Please upload your proof of Maryland residency.')
   end
 
-  def require_proof_validations?
-    return false if skip_validation_contexts?
-    return false if new_record? || status_draft?
-
-    submitted? || transitioning_from_draft?
-  end
-
-  def skip_validation_contexts?
-    (Rails.env.test? && ENV['REQUIRE_PROOF_VALIDATIONS'] != 'true') ||
-      Current.skip_proof_validation ||
-      Current.reviewing_single_proof? ||
-      Current.paper_context? ||
-      Current.proof_attachment_service_context? ||
-      submission_method_paper?
-  end
-
-  def transitioning_from_draft?
-    saved_change_to_status? && status_before_last_save == 'draft'
+  # The required proofs are due when an application leaves draft. A later save does not check them again, so the
+  # services that change proof state mid-flow need no way to switch the check off. A paper submission brings its
+  # proofs on paper.
+  def proofs_due_on_submission?
+    !new_record? && !submission_method_paper? && will_save_change_to_status?(from: 'draft')
   end
 
   def proof_attachments_changed?

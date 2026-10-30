@@ -67,6 +67,7 @@ class DisabilityValidationTest < ActiveSupport::TestCase
     )
 
     application = create(:application,
+                         :with_income_proof, :with_residency_proof,
                          user: @constituent,
                          status: :draft,
                          household_size: 1,
@@ -100,6 +101,7 @@ class DisabilityValidationTest < ActiveSupport::TestCase
       )
 
       application = create(:application,
+                           :with_income_proof, :with_residency_proof,
                            user: constituent,
                            status: :draft,
                            household_size: 1,
@@ -121,6 +123,7 @@ class DisabilityValidationTest < ActiveSupport::TestCase
     )
 
     application = create(:application,
+                         :with_income_proof, :with_residency_proof,
                          user: @constituent,
                          status: :draft,
                          household_size: 1,
@@ -140,6 +143,7 @@ class DisabilityValidationTest < ActiveSupport::TestCase
     )
 
     application = create(:application,
+                         :with_income_proof, :with_residency_proof,
                          user: @constituent,
                          status: :draft,
                          household_size: 1,

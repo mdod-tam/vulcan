@@ -4,13 +4,7 @@ require 'test_helper'
 
 class ApplicationSubmissionEligibilityTest < ActiveSupport::TestCase
   setup do
-    @original_skip = Application.skip_wait_period_validation
-    Application.skip_wait_period_validation = false
     @constituent = create(:constituent)
-  end
-
-  teardown do
-    Application.skip_wait_period_validation = @original_skip
   end
 
   test 'excludes the target application from its own sibling check' do
@@ -53,15 +47,6 @@ class ApplicationSubmissionEligibilityTest < ActiveSupport::TestCase
       assert_equal I18n.t('applications.creation.refusals.active_application', locale: :es),
                    Application.sibling_application_eligibility_error([approved], target_application: target, locale: :es)
     end
-  end
-
-  test 'skip_wait_period_validation does not suppress the active-sibling check' do
-    Application.skip_wait_period_validation = true
-    target = Application.new(user: @constituent, application_date: Date.current)
-    sibling = create(:application, :approved, user: @constituent)
-
-    assert_equal I18n.t('applications.creation.refusals.active_application', locale: :es),
-                 Application.sibling_application_eligibility_error([sibling], target_application: target, locale: :es)
   end
 
   # `identity_review_pending_for?` is the shared source of truth for both the locked writer and the

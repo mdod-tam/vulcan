@@ -27,7 +27,7 @@ module Applications
     attr_reader :params
 
     def process_proof(type)
-      action_key = type == :disability_certification ? "#{type}_action" : "#{type}_proof_action"
+      action_key = "#{DocumentType.fetch(type).attachment_name}_action"
       action = params[action_key] || params[action_key.to_sym]
 
       return true unless %w[upload_only accept reject approved rejected not_requested].include?(action)
@@ -63,7 +63,7 @@ module Applications
     end
 
     def submitted_document(type)
-      UploadedDocument.submitted(params, type == :disability_certification ? type.to_s : "#{type}_proof")
+      UploadedDocument.submitted(params, DocumentType.fetch(type).attachment_name.to_s)
     end
 
     def attach_document(type, upload, status:)
@@ -79,7 +79,6 @@ module Applications
                  )
                end
       return true if result[:success]
-      return add_error(result[:error].user_message_for(proof_upload_label(type).upcase_first)) if result[:error].is_a?(UploadedDocument::Refused)
 
       add_error("Error processing #{proof_upload_label(type)}: #{result[:error]&.message}")
     rescue UploadedDocument::Refused => e
@@ -89,13 +88,11 @@ module Applications
     end
 
     def process_reject_proof(type)
-      reason_key        = type == :disability_certification ? "#{type}_rejection_reason" : "#{type}_proof_rejection_reason"
-      custom_reason_key = type == :disability_certification ? "#{type}_custom_rejection_reason" : "#{type}_proof_custom_rejection_reason"
-      notes_key         = type == :disability_certification ? "#{type}_rejection_notes" : "#{type}_proof_rejection_notes"
-      selected_reason   = fetch_param(reason_key).to_s
-      custom_reason     = fetch_param(custom_reason_key).to_s.strip
-      legacy_notes      = fetch_param(notes_key).to_s.strip
-      custom_reason     = legacy_notes if custom_reason.blank? && legacy_notes.present?
+      field = DocumentType.fetch(type).attachment_name
+      selected_reason = fetch_param("#{field}_rejection_reason").to_s
+      custom_reason = fetch_param("#{field}_custom_rejection_reason").to_s.strip
+      legacy_notes = fetch_param("#{field}_rejection_notes").to_s.strip
+      custom_reason = legacy_notes if custom_reason.blank? && legacy_notes.present?
 
       result = if type == :disability_certification
                  reject_disability_certification(

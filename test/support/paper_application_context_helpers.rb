@@ -5,10 +5,6 @@ module PaperApplicationContextHelpers
   def setup_paper_application_context
     Thread.current[:paper_application_context] = true
     Current.paper_context = true
-    Current.skip_proof_validation = true
-
-    # Skip the waiting-period validation.
-    Application.skip_wait_period_validation = true
 
     # Ensure the single workflow feature flag exists with its default so that
     # stamp_workflow_defaults! and scrub_income_fields behave correctly.

@@ -92,6 +92,31 @@ class AttachmentOperationTest < ActiveSupport::TestCase
     assert_equal true, result[:success]
   end
 
+  test 'verify_attached! returns when the file is stored under the name' do
+    application = create(:application, :in_progress, skip_proofs: true)
+    application.income_proof.attach(io: StringIO.new('income'), filename: 'income.pdf', content_type: 'application/pdf')
+
+    assert_nil AttachmentOperation.verify_attached!(application, :income_proof)
+  end
+
+  test 'verify_attached! raises NotStored when nothing is stored under the name' do
+    application = create(:application, :in_progress, skip_proofs: true)
+    application.residency_proof.attach(io: StringIO.new('residency'), filename: 'residency.pdf', content_type: 'application/pdf')
+
+    error = assert_raises(AttachmentOperation::NotStored) { AttachmentOperation.verify_attached!(application, :income_proof) }
+
+    assert_includes error.message, 'income_proof'
+  end
+
+  test 'verify_attached! reads the database, not an association loaded before the attach' do
+    application = create(:application, :in_progress, skip_proofs: true)
+    assert_not application.income_proof.attached?, 'precondition: the association is loaded and empty'
+    blob = ActiveStorage::Blob.create_and_upload!(io: StringIO.new('income'), filename: 'income.pdf', content_type: 'application/pdf')
+    ActiveStorage::Attachment.create!(name: 'income_proof', record_type: 'Application', record_id: application.id, blob_id: blob.id)
+
+    assert_nil AttachmentOperation.verify_attached!(application, :income_proof)
+  end
+
   private
 
   def with_logger(io, level: Logger::INFO, &)

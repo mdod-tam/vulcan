@@ -21,17 +21,6 @@ module ConstituentPortal
     before_action :ensure_editable, only: %i[edit update]
     before_action :setup_address_for_form, only: %i[new edit]
     before_action :flag_pending_identity_review, only: %i[new edit]
-    before_action :set_paper_application_context, if: -> { Rails.env.test? }
-
-    # Test identity can come from ENV or Current instead of the session.
-    def current_user
-      if Rails.env.test? && (ENV['TEST_USER_ID'].present? || Current.test_user_id.present?)
-        test_user_id = ENV['TEST_USER_ID'] || Current.test_user_id
-        @current_user ||= User.find_by(id: test_user_id)
-        return @current_user if @current_user
-      end
-      super
-    end
 
     def index
       @applications = current_user.applications.order(created_at: :desc)
@@ -598,10 +587,6 @@ module ConstituentPortal
       @guardian_address = address_from_user(current_user) if applicant != current_user
       @use_guardian_address = ActiveModel::Type::Boolean.new.cast(params[:use_guardian_address] || application_params[:use_guardian_address])
       @address = @guardian_address if @use_guardian_address && @guardian_address.present?
-    end
-
-    def set_paper_application_context
-      Current.paper_context = true
     end
   end
 end

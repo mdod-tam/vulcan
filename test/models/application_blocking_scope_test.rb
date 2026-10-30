@@ -4,13 +4,7 @@ require 'test_helper'
 
 class ApplicationBlockingScopeTest < ActiveSupport::TestCase
   setup do
-    @original_skip = Application.skip_wait_period_validation
-    Application.skip_wait_period_validation = false
     @constituent = create(:constituent)
-  end
-
-  teardown do
-    Application.skip_wait_period_validation = @original_skip
   end
 
   test 'blocking_new_submission excludes archived and rejected' do
@@ -95,15 +89,10 @@ class ApplicationBlockingScopeTest < ActiveSupport::TestCase
     end
   end
 
-  test 'model waiting validation skips when requested and excludes its current persisted record' do
+  test 'model waiting validation excludes its current persisted record' do
     application = create(:application, :approved, user: @constituent)
     application.valid?(:create)
     assert_not(application.errors[:base].any? { |message| message.include?('wait') })
-
-    Application.skip_wait_period_validation = true
-    another = build(:application, user: @constituent)
-    another.valid?(:create)
-    assert_not(another.errors[:base].any? { |message| message.include?('wait') })
   end
 
   test 'archived app past waiting period allows new submission' do

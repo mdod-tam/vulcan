@@ -33,8 +33,6 @@ module Applications
         end
 
         attach_result = attach_proof
-        raise attach_result[:error] if attach_result[:error].is_a?(UploadedDocument::Refused)
-
         raise_attachment_failure(attach_result[:error]) unless attach_result[:success]
 
         complete_submission { log_submission }

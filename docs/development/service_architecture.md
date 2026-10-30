@@ -69,7 +69,7 @@ Inside a transaction the caller holds, such as certification rejection during pa
 ## State, history, and delivery stay together
 
 - Lifecycle changes go through [`Application#transition_status!`](../../app/models/application.rb) and [`#reconcile_workflow_state!`](../../app/models/concerns/application_status_management.rb); a raw status write skips history and follow-up.
-- Proof-rejection audit and resubmission delivery are already coordinated by [`ProofReview`](../../app/models/proof_review.rb) and `RequestProofResubmission` — a second sender duplicates the notice.
+- Proof-rejection audit and resubmission delivery are already coordinated by [`ProofDecisionFollowUp`](../../app/services/applications/proof_decision_follow_up.rb) and `RequestProofResubmission` — a second sender duplicates the notice.
 - `NotificationService.create_and_deliver!` owns notification creation and the optional `audited` row flag. Its private `EmailDelivery::NotificationDispatch` adapts catalog arguments and records delivery routing/outcomes. The operation returns a notification or `nil`; `deliver: false` records without dispatch, and some actions are permanently record-only. Business audit events remain with their workflow owners ([notifications](../features/notifications.md)).
 - `AuditEventService` writes events; [`EventDeduplicationService`](../../app/services/applications/event_deduplication_service.rb) only chooses what a timeline displays. Display deduplication does not make a write idempotent.
 - Secure requests record their logical recipient, delivery owner, and source at issuance, through the recipient resolver and [issuance integrity service](../../app/services/applications/secure_request_issuance_integrity.rb). Historical forms missing that ownership cannot have it reconstructed from today's contact data.
@@ -157,14 +157,12 @@ Deployment requires the additive migration before the new server code. All write
 
 | Attribute | Actual effect |
 | --- | --- |
-| `paper_context` | Paper intake relaxes selected profile and proof validations and changes callback handling. Set and restored by the owning service or controller. |
-| `skip_proof_validation` | Skips proof presence/consistency checks; used by certification-upload requests and test setup. |
-| `reviewing_single_proof` | Scoped by the proof reviewer while saving one decision, avoiding whole-application proof validation. |
-| `proof_attachment_service_context` | Tells model callbacks that the attachment service owns validation, events, and review timestamps. |
+| `paper_context` | Paper intake relaxes selected profile validations, and `ProofAttachmentService` leaves reconciliation and delivery to the intake. It does not change whether a proof validation runs. Set and restored by the owning service or controller. |
+| `proof_attachment_service_context` | Tells `ProofManageable` that the attachment service already stamped `needs_review_since`, so its after-save callback does not stamp it a second time. |
 | `force_notifications` | Declared but unused by production delivery paths. |
 | `test_user_id` | Lets test authentication restore a session, which can bypass the sign-in flow a test means to exercise. |
 
-The readers are in [`ProofManageable`](../../app/models/concerns/proof_manageable.rb), [`ProofConsistencyValidation`](../../app/models/concerns/proof_consistency_validation.rb), and [`Authentication`](../../app/controllers/concerns/authentication.rb). Temporary state is restored through block scope or `ensure`; paper context in particular is not a way to suppress validations, audit events, or notifications. Training commands explicitly schedule delivery through `TrainingSessionNotifier` after commit.
+The readers are in [`ProofManageable`](../../app/models/concerns/proof_manageable.rb), [`Authentication`](../../app/controllers/concerns/authentication.rb), [`UserProfile`](../../app/models/concerns/user_profile.rb), and [`ProofAttachmentService`](../../app/services/proof_attachment_service.rb). Temporary state is restored through block scope or `ensure`; paper context in particular is not a way to suppress validations, audit events, or notifications. Training commands explicitly schedule delivery through `TrainingSessionNotifier` after commit.
 
 ## Tests
 

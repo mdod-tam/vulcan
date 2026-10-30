@@ -34,7 +34,7 @@ Fingerprints are what separate a legitimate repeated action from a duplicate —
 | Workflow | Where its history belongs |
 | --- | --- |
 | Application lifecycle | Creation services log creation; `transition_status!` records real status changes as `application_status_changed`. Automatic approval uses that action with trigger metadata. |
-| Proof intake and review | Attachment services own upload history; `ProofReview` owns `proof_approved` and `proof_rejected`. Rejection delivery belongs to secure-request services. |
+| Proof intake and review | Attachment services own upload history; [`ProofDecisionFollowUp`](../../app/services/applications/proof_decision_follow_up.rb) owns `proof_approved` and `proof_rejected`, once the writer that recorded the decision commits. Rejection delivery belongs to secure-request services. |
 | Disability certification | Certification and document-signing services own provider requests, received documents, review, and signing outcomes. |
 | Duplicate review and merging | [CreateService](../../app/services/duplicate_review_cases/create_service.rb), [ResolutionService](../../app/services/duplicate_review_cases/resolution_service.rb), and [DuplicateMergeService](../../app/services/users/duplicate_merge_service.rb) own their respective case/merge events. |
 | Paper identity decisions | Case services record `duplicate_review_case_opened` and `duplicate_review_case_resolved` for self-applicant, guardian, and dependent decisions, in the business transaction. Keep-separate records one case per actual pair; existing-person selection creates no second user. See [paper intake](../development/paper_application_architecture.md). |

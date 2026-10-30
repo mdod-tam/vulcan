@@ -872,32 +872,26 @@ module Applications
       phone = unique_paper_phone
       original_email = "blocked-reuse-#{SecureRandom.hex(4)}@example.com"
       existing = create(:constituent, email: original_email, phone: phone)
-      original_skip = Application.skip_wait_period_validation
-      Application.skip_wait_period_validation = true
-      begin
-        create(:application, :in_progress, user: existing)
+      create(:application, :in_progress, user: existing)
 
-        service_params = {
-          no_email_address: '1',
-          constituent: @constituent_params.merge(
-            first_name: existing.first_name,
-            last_name: existing.last_name,
-            email: existing.email,
-            phone: phone,
-            physical_address_1: '500 Letter Lane',
-            city: 'Baltimore',
-            state: 'MD',
-            zip_code: '21201'
-          ),
-          application: @application_params
-        }
+      service_params = {
+        no_email_address: '1',
+        constituent: @constituent_params.merge(
+          first_name: existing.first_name,
+          last_name: existing.last_name,
+          email: existing.email,
+          phone: phone,
+          physical_address_1: '500 Letter Lane',
+          city: 'Baltimore',
+          state: 'MD',
+          zip_code: '21201'
+        ),
+        application: @application_params
+      }
 
-        service = PaperApplicationService.new(params: confirmed_paper_params(service_params, admin: @admin), admin: @admin, skip_proof_processing: true)
-        assert_not service.create
-        assert(service.errors.any? { |error| error.match?(/phone|taken|create user/i) })
-      ensure
-        Application.skip_wait_period_validation = original_skip
-      end
+      service = PaperApplicationService.new(params: confirmed_paper_params(service_params, admin: @admin), admin: @admin, skip_proof_processing: true)
+      assert_not service.create
+      assert(service.errors.any? { |error| error.match?(/phone|taken|create user/i) })
 
       existing.reload
       assert_equal original_email, existing.email
@@ -1508,7 +1502,7 @@ module Applications
 
     # ProofReview invokes post-review actions after commit. Failure then must not invite a duplicate submission.
     test 'a post-commit callback failure reports success with a warning, not failure' do
-      ProofReview.any_instance.stubs(:handle_post_review_actions).raises(StandardError, 'after commit exploded')
+      Applications::ProofDecisionFollowUp.any_instance.stubs(:call).raises(StandardError, 'after commit exploded')
       params = base_paper_params.merge(id_proof_action: 'reject', id_proof_rejection_reason: 'none_provided')
 
       service = paper_service_with_proofs(params)
@@ -1522,7 +1516,7 @@ module Applications
 
     # Failed commit verification leaves the outcome unknown. A retry form could duplicate a committed application.
     test 'a confirmed callback failure remains successful when recipient associations cannot be loaded' do
-      ProofReview.any_instance.stubs(:handle_post_review_actions).raises(StandardError, 'after commit exploded')
+      Applications::ProofDecisionFollowUp.any_instance.stubs(:call).raises(StandardError, 'after commit exploded')
       service = paper_service_with_proofs(base_paper_params.merge(id_proof_action: 'reject', id_proof_rejection_reason: 'none_provided'))
       original_new = PaperCreationFollowUp.method(:new)
       refuse_recipient_queries = lambda do |**args|
@@ -1560,7 +1554,7 @@ module Applications
     end
 
     test 'an unverifiable commit is not reported as a failure' do
-      ProofReview.any_instance.stubs(:handle_post_review_actions).raises(StandardError, 'after commit exploded')
+      Applications::ProofDecisionFollowUp.any_instance.stubs(:call).raises(StandardError, 'after commit exploded')
       Application.stubs(:exists?).raises(ActiveRecord::ConnectionNotEstablished, 'database went away')
       params = base_paper_params.merge(id_proof_action: 'reject', id_proof_rejection_reason: 'none_provided')
 
@@ -1652,7 +1646,7 @@ module Applications
 
     # Record a confirmed callback failure durably because the flash warning is temporary.
     test 'a confirmed post-commit callback failure is recorded durably' do
-      ProofReview.any_instance.stubs(:handle_post_review_actions).raises(StandardError, 'after commit exploded')
+      Applications::ProofDecisionFollowUp.any_instance.stubs(:call).raises(StandardError, 'after commit exploded')
       params = base_paper_params.merge(id_proof_action: 'reject', id_proof_rejection_reason: 'none_provided')
 
       service = paper_service_with_proofs(params)
@@ -1669,7 +1663,7 @@ module Applications
 
     # More record-dependent work could fail after commit verification fails and incorrectly offer a retry form.
     test 'an unverifiable commit does no further work against the record' do
-      ProofReview.any_instance.stubs(:handle_post_review_actions).raises(StandardError, 'after commit exploded')
+      Applications::ProofDecisionFollowUp.any_instance.stubs(:call).raises(StandardError, 'after commit exploded')
       Application.stubs(:exists?).raises(ActiveRecord::ConnectionNotEstablished, 'database went away')
       params = base_paper_params.merge(id_proof_action: 'reject', id_proof_rejection_reason: 'none_provided')
 
@@ -1717,7 +1711,7 @@ module Applications
 
     # Reconciliation and other follow-up warnings must both survive.
     test 'a post-commit failure and a reconciliation failure are both reported' do
-      ProofReview.any_instance.stubs(:handle_post_review_actions).raises(StandardError, 'after commit exploded')
+      Applications::ProofDecisionFollowUp.any_instance.stubs(:call).raises(StandardError, 'after commit exploded')
       Application.any_instance.stubs(:reconcile_workflow_state!).raises(StandardError, 'reconciliation exploded')
       params = base_paper_params.merge(id_proof_action: 'reject', id_proof_rejection_reason: 'none_provided')
 

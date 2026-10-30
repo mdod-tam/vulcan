@@ -7,7 +7,7 @@ module Applications
     include ProofResubmissionTestHelper
 
     setup do
-      @application = create(:application, :in_progress)
+      @application = create(:application, :in_progress, :with_income_proof)
       @admin = create(:admin)
       @reviewer = ProofReviewer.new(@application, @admin)
 
@@ -65,6 +65,19 @@ module Applications
       review = @application.proof_reviews.find_by!(proof_type: :income, status: :approved)
       assert_nil review.rejection_reason_code
       assert_nil review.rejection_reason
+    end
+
+    test 'approving a proof again after a replacement records another approval on the same review row' do
+      @reviewer.review(proof_type: :income, status: :approved)
+      assert_equal 1, Event.where(action: 'proof_approved', auditable: @application).count
+
+      # A replacement returns the proof to review, and the next approval updates the existing approved row.
+      @application.update!(income_proof_status: :not_reviewed)
+      assert_no_difference -> { @application.proof_reviews.where(proof_type: :income, status: :approved).count } do
+        assert_difference -> { Event.where(action: 'proof_approved', auditable: @application).count }, 1 do
+          ProofReviewer.new(@application, @admin).review(proof_type: :income, status: :approved)
+        end
+      end
     end
 
     test 'rejected review persists interpolated address-based rejection text' do

@@ -33,36 +33,22 @@ module Applications
     end
 
     test 'process_existing_self_applicant rejects constituent with active application' do
-      original_skip = Application.skip_wait_period_validation
-      Application.skip_wait_period_validation = true
+      create(:application, :in_progress, user: @constituent)
+      service_params = build_existing_adult_params(@constituent)
+      service = applicant_intake(service_params)
 
-      begin
-        create(:application, :in_progress, user: @constituent)
-        service_params = build_existing_adult_params(@constituent)
-        service = applicant_intake(service_params)
-
-        result = service.call
-        assert_not result
-        assert(@intake_errors.any? { |e| e.include?('active') || e.include?('pending') })
-      ensure
-        Application.skip_wait_period_validation = original_skip
-      end
+      result = service.call
+      assert_not result
+      assert(@intake_errors.any? { |e| e.include?('active') || e.include?('pending') })
     end
 
     test 'existing adult may apply after rejected history' do
-      original_skip = Application.skip_wait_period_validation
-      Application.skip_wait_period_validation = false
+      create(:application, :rejected, user: @constituent, application_date: 1.year.ago)
+      service_params = build_existing_adult_params(@constituent)
+      service = applicant_intake(service_params)
 
-      begin
-        create(:application, :rejected, user: @constituent, application_date: 1.year.ago)
-        service_params = build_existing_adult_params(@constituent)
-        service = applicant_intake(service_params)
-
-        assert service.call, @intake_errors.inspect
-        assert_empty @intake_errors
-      ensure
-        Application.skip_wait_period_validation = original_skip
-      end
+      assert service.call, @intake_errors.inspect
+      assert_empty @intake_errors
     end
 
     test 'process_existing_self_applicant updates contact info with audit trail' do

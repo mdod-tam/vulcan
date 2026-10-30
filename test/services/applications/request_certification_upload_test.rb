@@ -243,9 +243,6 @@ module Applications
     end
 
     test 'initial request transition does not require unrelated proof attachments' do
-      previous_validation_env = ENV.fetch('REQUIRE_PROOF_VALIDATIONS', nil)
-      ENV['REQUIRE_PROOF_VALIDATIONS'] = 'true'
-      Current.skip_proof_validation = nil
       application = create(:application, :in_progress,
                            certifying_professional_name: 'Dr. Provider',
                            certifying_professional_email: 'provider@example.com')
@@ -258,14 +255,6 @@ module Applications
 
       assert_predicate result, :success?
       assert_predicate application.reload, :disability_certification_status_requested?
-      assert_nil Current.skip_proof_validation
-    ensure
-      if previous_validation_env.nil?
-        ENV.delete('REQUIRE_PROOF_VALIDATIONS')
-      else
-        ENV['REQUIRE_PROOF_VALIDATIONS'] = previous_validation_env
-      end
-      Current.skip_proof_validation = nil
     end
 
     test 'does not overwrite rejected certification status' do

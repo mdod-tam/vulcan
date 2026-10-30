@@ -3,11 +3,6 @@
 module ApplicationSubmissionEligibility
   extend ActiveSupport::Concern
 
-  included do
-    # The test suite can disable the waiting-period rule globally.
-    cattr_accessor :skip_wait_period_validation, default: false
-  end
-
   # Mirrors the +blocking_new_submission+ scope for a loaded record without another query.
   def blocking_new_submission?
     !status_archived? && !status_rejected?
@@ -48,8 +43,7 @@ module ApplicationSubmissionEligibility
       waiting_period = Policy.waiting_period_years
       result = Applications::AdmissionEligibility.call(
         target_application.user,
-        applications: applications, excluding: target_application,
-        skip_wait_period: skip_wait_period_validation, waiting_period_years: waiting_period
+        applications: applications, excluding: target_application, waiting_period_years: waiting_period
       )
       case result.reason
       when :blocking_application then I18n.t('applications.creation.refusals.active_application', locale: locale)
