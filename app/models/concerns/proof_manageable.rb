@@ -68,25 +68,6 @@ module ProofManageable
     raise ActiveRecord::RecordNotSaved.new('Review marker was not cleared.', self)
   end
 
-  # Purges all proof attachments. Resets only the income and residency statuses.
-  # @param admin_user [User] must be an admin
-  # @return [Boolean] false if the purge fails
-  def purge_proofs(admin_user)
-    raise ArgumentError, 'Admin user required' unless admin_user&.admin?
-
-    transaction do
-      income_proof.purge if income_proof.attached?
-      residency_proof.purge if residency_proof.attached?
-      id_proof.purge if id_proof.attached?
-      update!(income_proof_status: :not_reviewed, residency_proof_status: :not_reviewed,
-              last_proof_submitted_at: nil, needs_review_since: nil)
-    end
-    true
-  rescue StandardError => e
-    Rails.logger.error "Failed to purge proofs for application #{id}: #{e.class.name}"
-    false
-  end
-
   # Applications::ProofReviewer calls this after it sets the rejected status.
   def purge_rejected_proof(proof_type_key)
     attachment = document_attachment_for(proof_type_key)

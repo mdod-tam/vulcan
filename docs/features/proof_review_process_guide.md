@@ -75,18 +75,21 @@ Each form is bound to one application and proof type. Submission requires it to 
 
 Starting points by question: [`ProofAttachmentService`](../../app/services/proof_attachment_service.rb) for how a file attaches and sets status — note it returns a hash with `:success` and `:error`, not the `BaseService::Result` that review and secure-request services return, and that it raises `UploadedDocument::Refused` when the file itself is refused, as every other upload consumer does. The refusal is audited as an attachment failure before it is raised, and no proof state changes. [`Admin::ApplicationsController#update_proof_status`](../../app/controllers/admin/applications_controller.rb) for how the application page's proof-review modals submit an admin decision. [`Application#required_proofs_approved?`](../../app/models/application.rb) for why an application has not advanced. Executable examples: [reviewer](../../test/services/applications/proof_reviewer_test.rb), [review service](../../test/services/proof_review_service_test.rb), and [secure upload](../../test/services/applications/submit_proof_resubmission_test.rb) tests — with real attachments in integration tests, since mocks skip the persistence being tested.
 
-## Scheduled jobs, including the broken ones
+## Scheduled jobs
 
 [`config/recurring.yml`](../../config/recurring.yml) schedules attachment metrics daily and consistency checks weekly in production. A checked-in schedule doesn't mean the queue worker is running.
 
 | Job | Behavior and limits |
 | --- | --- |
 | [ProofAttachmentMetricsJob](../../app/jobs/proof_attachment_metrics_job.rb) | Counts income/residency attachment success and failure events over 24 hours. Below 95% success **and** at least five failures it creates admin warning notifications with `deliver: false` — no email. ID and certification events are outside the metric. |
-| [ProofConsistencyCheckJob](../../app/jobs/proof_consistency_check_job.rb) | Logs income/residency proofs approved without files, or attached while `not_reviewed`. Its production alert branch calls an undefined `notify_admins`, so finding an inconsistency raises after logging. |
-| [ProofReviewReminderJob](../../app/jobs/proof_review_reminder_job.rb) | Would remind admins about applications whose `needs_review_since` passed three days ago. Nothing calls it and nothing schedules it. |
-| [CleanupOldProofsJob](../../app/jobs/cleanup_old_proofs_job.rb) | Targets archived applications untouched for 30 days, but calls `purge_proofs` without the admin argument it requires. Unscheduled, and would raise if it ran. |
+| [ProofConsistencyCheckJob](../../app/jobs/proof_consistency_check_job.rb) | Weekly. Logs a warning for each application whose income or residency proof is approved but has no file, then a total. It changes nothing and notifies no one, so the log is the only signal. An attached proof awaiting review is normal and is not reported. ID and certification proofs are outside the check. |
+| [ProofReviewReminderJob](../../app/jobs/proof_review_reminder_job.rb) | Would remind admins about applications whose `needs_review_since` passed three days ago. Nothing calls it and nothing schedules it. Do not schedule it as it stands: a proof review does not clear `needs_review_since`, only a completed evaluation does, so it would remind about applications whose proofs were reviewed long ago. |
 
-The last three need repair before anyone relies on them. For a metrics warning that never arrived, the window, covered event types, both thresholds, and notification creation errors are the places to look, with [metrics tests](../../test/jobs/proof_attachment_metrics_job_test.rb) as the reference.
+For a metrics warning that never arrived, the window, covered event types, both thresholds, and notification creation errors are the places to look, with [metrics tests](../../test/jobs/proof_attachment_metrics_job_test.rb) as the reference.
+
+### What removes old proof files
+
+A rejected proof's file is purged when the proof is rejected (`Application#purge_rejected_proof`). A replaced proof's old file is purged when the replacement saves, which is Active Storage's default. [CleanupUnattachedUploadsJob](../../app/jobs/cleanup_unattached_uploads_job.rb) removes uploads that were never attached after seven days. Approved proofs are kept, including those on archived applications: no retention period has been decided, and the [todo list](../future_work/mat_vulcan_todos.md#proofs-statuses-templates-tech-debt) records the question.
 
 ## Related
 

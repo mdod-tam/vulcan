@@ -31,11 +31,6 @@ class ProofManageableTest < ActiveSupport::TestCase
     skip('Skipping admin notification test')
   end
 
-  test 'purges proofs with audit trail' do
-    # SKIP: This test is too sensitive to callback timing in test environment
-    skip('Proof purging is tested in integration tests')
-  end
-
   test 'validates both income and residency proofs independently' do
     @application.income_proof.attach(@valid_pdf)
     @application.residency_proof.attach(@invalid_type)

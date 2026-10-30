@@ -151,6 +151,8 @@ DocuSeal go-live requirements
 - [ ] Refactor: use the centralized enums and update references.
 - [ ] Templates: standardize under `NotificationComposer` and remove one-offs.
 - [ ] Tests: enum usage, JSON accessors (if applicable).
+- [ ] Decide how long an archived application keeps its proof files. Today no job removes an approved proof, so those files stay until an admin rejects or replaces them. If the program sets a retention period, build one job that purges the files, records an audit event, leaves the proof statuses as they were, and covers ID and certification files too. The removed `CleanupOldProofsJob` did none of this and never ran.
+- [ ] Decide whether admins should get a stale-review reminder. `ProofReviewReminderJob` exists but is unscheduled, and `needs_review_since` is not cleared when a proof review completes, so it would have to be cleared at review time first.
 
 ## Mobile Proofs Workflow
 

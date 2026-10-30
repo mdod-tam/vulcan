@@ -1,74 +1,33 @@
 # frozen_string_literal: true
 
+# Weekly check for an income or residency proof that is approved but has no file. It only logs: it changes no proof
+# and notifies no one. A proof that is attached and still awaiting review is the normal state, not an inconsistency.
 class ProofConsistencyCheckJob < ApplicationJob
   queue_as :low_priority
+
+  CHECKED_DOCUMENTS = [DocumentType::INCOME, DocumentType::RESIDENCY].freeze
 
   def perform
     Rails.logger.info 'Starting proof consistency check job'
 
-    inconsistent_applications = []
-    total_checked = 0
+    total = CHECKED_DOCUMENTS.sum { |document_type| log_approved_without_file(document_type.attachment_name) }
 
-    Application.find_each do |app|
-      total_checked += 1
-
-      if check_proof_consistency(app, :income_proof)
-        inconsistent_applications << {
-          id: app.id,
-          type: 'income_proof',
-          status: app.income_proof_status,
-          attached: app.income_proof.attached?
-        }
-      end
-
-      if check_proof_consistency(app, :residency_proof)
-        inconsistent_applications << {
-          id: app.id,
-          type: 'residency_proof',
-          status: app.residency_proof_status,
-          attached: app.residency_proof.attached?
-        }
-      end
-    end
-
-    if inconsistent_applications.any?
-      log_inconsistencies(inconsistent_applications, total_checked)
-      notify_admins(inconsistent_applications) if Rails.env.production?
+    if total.zero?
+      Rails.logger.info 'Proof consistency check completed: no approved proof is missing its file'
     else
-      Rails.logger.info "Proof consistency check completed: No inconsistencies found in #{total_checked} applications"
+      Rails.logger.warn "Proof consistency check found #{total} approved proofs without an attached file"
     end
   end
 
   private
 
-  def check_proof_consistency(app, proof_type)
-    status_method = "#{proof_type}_status"
-    status = app.send(status_method)
-    attached = app.send(proof_type).attached?
+  # @return [Integer] how many applications have this proof approved without a file
+  def log_approved_without_file(attachment_name)
+    ids = Application.where("#{attachment_name}_status" => :approved).where.missing(:"#{attachment_name}_attachment").pluck(:id)
 
-    # Inconsistent: approved with no attachment, or attached but still not_reviewed.
-    if (status == 'approved' && !attached) ||
-       (attached && status == 'not_reviewed')
-      Rails.logger.warn "Inconsistent proof state for application #{app.id}: " \
-                        "#{proof_type} status is '#{status}' but attached? is #{attached}"
-      return true
+    ids.each do |id|
+      Rails.logger.warn "Inconsistent proof state for application #{id}: #{attachment_name} is approved but has no attached file"
     end
-
-    false
-  end
-
-  def log_inconsistencies(inconsistencies, total_checked)
-    Rails.logger.warn "Proof consistency check found #{inconsistencies.size} inconsistencies in #{total_checked} applications"
-
-    grouped = inconsistencies.group_by { |inc| inc[:type] }
-
-    grouped.each do |type, issues|
-      approved_missing = issues.count { |i| i[:status] == 'approved' && !i[:attached] }
-      attached_not_reviewed = issues.count { |i| i[:attached] && i[:status] == 'not_reviewed' }
-
-      Rails.logger.warn "#{type}: #{issues.size} total issues " \
-                        "(#{approved_missing} approved without attachment, " \
-                        "#{attached_not_reviewed} attached but not reviewed)"
-    end
+    ids.size
   end
 end
