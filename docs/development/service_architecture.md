@@ -162,7 +162,7 @@ Deployment requires the additive migration before the new server code. All write
 | `force_notifications` | Declared but unused by production delivery paths. |
 | `test_user_id` | Lets test authentication restore a session, which can bypass the sign-in flow a test means to exercise. |
 
-The readers are in [`ProofManageable`](../../app/models/concerns/proof_manageable.rb), [`ProofConsistencyValidation`](../../app/models/concerns/proof_consistency_validation.rb), and [`Authentication`](../../app/controllers/concerns/authentication.rb). Temporary state is restored through block scope or `ensure`; paper context in particular is not a way to suppress validations, audit events, or notifications. Training commands explicitly schedule delivery through `TrainingSessionNotifier` after commit.
+The readers are in [`ProofManageable`](../../app/models/concerns/proof_manageable.rb), [`Authentication`](../../app/controllers/concerns/authentication.rb), [`UserProfile`](../../app/models/concerns/user_profile.rb), and [`ProofAttachmentService`](../../app/services/proof_attachment_service.rb). Temporary state is restored through block scope or `ensure`; paper context in particular is not a way to suppress validations, audit events, or notifications. Training commands explicitly schedule delivery through `TrainingSessionNotifier` after commit.
 
 ## Tests
 

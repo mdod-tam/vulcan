@@ -7,36 +7,18 @@ class ProofManageableTest < ActiveSupport::TestCase
   include ActionDispatch::TestProcess::FixtureFile
 
   setup do
-    # Set paper application context for tests - but NOT for audit tests
-    setup_paper_application_context
-
     @application = create(:application, :in_progress_with_pending_proofs)
     @user = create(:constituent)
     @admin = create(:admin) # Needed for audit events
 
     @valid_pdf = fixture_file_upload('test/fixtures/files/residency_proof.pdf', 'application/pdf')
-    @large_pdf = fixture_file_upload('test/fixtures/files/large.pdf', 'application/pdf')
     @invalid_type = fixture_file_upload('test/fixtures/files/invalid.exe', 'application/x-msdownload')
-  end
-
-  teardown do
-    teardown_paper_application_context
   end
 
   test 'allows valid PDF uploads' do
     @application.income_proof.attach(@valid_pdf)
     assert @application.valid?
     assert @application.income_proof.attached?
-  end
-
-  test 'validates file size' do
-    # SKIPPED: File validation affected by paper_application_context; hard to test reliably in isolation
-    skip('Skipping file size validation test')
-  end
-
-  test 'validates mime types' do
-    # SKIPPED: File validation is affected by paper_application_context; hard to test reliably in isolation
-    skip('Skipping mime type validation test')
   end
 
   test 'creates audit trail on proof submission' do

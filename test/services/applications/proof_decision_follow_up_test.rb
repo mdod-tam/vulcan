@@ -105,15 +105,23 @@ module Applications
       first = ProofReview.for_decision(@application, proof_type: :income, status: :approved).record!(admin: @admin)
       follow_up(first)
 
-      travel AuditEventService::DEDUP_WINDOW + 1.second do
-        assert_no_difference -> { ProofReview.count } do
-          assert_difference -> { Event.where(action: 'proof_approved', auditable: @application).count }, 1 do
-            assert_difference -> { Notification.where(action: 'proof_approved', notifiable: @application).count }, 1 do
-              repeat = ProofReview.for_decision(@application, proof_type: :income, status: :approved).record!(admin: @admin)
-              follow_up(repeat)
-            end
+      assert_no_difference -> { ProofReview.count } do
+        assert_difference -> { Event.where(action: 'proof_approved', auditable: @application).count }, 1 do
+          assert_difference -> { Notification.where(action: 'proof_approved', notifiable: @application).count }, 1 do
+            repeat = ProofReview.for_decision(@application, proof_type: :income, status: :approved).record!(admin: @admin)
+            follow_up(repeat)
           end
         end
+      end
+    end
+
+    test 'approvals of two proofs in quick succession each keep their own audit event' do
+      income = ProofReview.for_decision(@application, proof_type: :income, status: :approved).record!(admin: @admin)
+      residency = ProofReview.for_decision(@application, proof_type: :residency, status: :approved).record!(admin: @admin)
+
+      assert_difference -> { Event.where(action: 'proof_approved', auditable: @application).count }, 2 do
+        follow_up(income)
+        follow_up(residency)
       end
     end
 

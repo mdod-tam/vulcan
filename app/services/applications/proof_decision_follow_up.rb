@@ -103,8 +103,13 @@ module Applications
       Rails.logger.error "Failed to record proof resubmission request failure for ProofReview #{review.id}: #{e.class.name}"
     end
 
-    # Each rejection decision has its own operation id. Without one, the audit dedup window keeps only the
-    # first proof_rejected event of an application, so rejecting two proofs in one intake would lose the second.
+    # Each decision has its own operation id. Without one, the audit dedup window keeps only the first event of an
+    # action for an application, so two proofs decided within it would lose the second event, such as rejecting two
+    # proofs in one intake. A repeat decision stamps a new reviewed_at, so it keeps its own event too.
+    def operation_id(outcome)
+      "proof-review-#{review.id}-#{outcome}-#{review.reviewed_at.utc.iso8601(6)}"
+    end
+
     def log_rejection_audit_event
       AuditEventService.log(
         action: 'proof_rejected',
@@ -115,7 +120,7 @@ module Applications
           rejection_reason: review.rejection_reason,
           submission_method: review.submission_method,
           rejection_reason_code: review.rejection_reason_code,
-          operation_id: "proof-review-#{review.id}-rejected-#{review.reviewed_at.utc.iso8601(6)}"
+          operation_id: operation_id('rejected')
         }.compact
       )
     end
@@ -127,7 +132,7 @@ module Applications
         action: 'proof_approved',
         actor: admin,
         auditable: application,
-        metadata: { proof_type: review.proof_type }
+        metadata: { proof_type: review.proof_type, operation_id: operation_id('approved') }
       )
 
       # Queries filter on notifiable_type: 'Application', so the notifiable must be the application.
