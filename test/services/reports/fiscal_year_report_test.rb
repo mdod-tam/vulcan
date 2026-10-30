@@ -47,6 +47,25 @@ module Reports
       assert_equal 'November 2026', FiscalYearReport.new(today: today).referral_month_label
     end
 
+    test 'chart data is keyed by label and defaults missing counts to zero' do
+      report = FiscalYearReport.new(today: Date.new(2026, 11, 1))
+
+      assert_equal %w[Hearing Vision Speech Mobility Cognition], report.disability_chart_data(:current).keys
+      assert report.disability_chart_data(:previous).values.all?(Integer)
+      assert_equal %w[Issued Active Expired], report.voucher_status_chart_data(:current).keys
+      assert report.voucher_status_chart_data(:previous).values.all?(Integer)
+    end
+
+    test 'the recent vendor share is a percentage and is zero without vendors' do
+      report = FiscalYearReport.new(today: Date.new(2026, 11, 1))
+      report.stubs(:active_vendors).returns(0)
+      assert_in_delta 0.0, report.recent_active_vendor_percentage
+
+      report.stubs(:active_vendors).returns(4)
+      report.stubs(:recent_active_vendors).returns(1)
+      assert_in_delta 25.0, report.recent_active_vendor_percentage
+    end
+
     test 'a figure is computed once however often the view reads it' do
       report = FiscalYearReport.new(today: Date.new(2026, 11, 1))
       report.current_fy_applications

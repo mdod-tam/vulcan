@@ -26,15 +26,21 @@ module ConstituentPortal
     protected
 
     def get_latest_rejection_reason(application, proof_type)
-      latest_review = application.proof_reviews.where(proof_type: proof_type, status: :rejected)
-                                 .order(created_at: :desc).first
+      latest_review = latest_rejected_review(application, proof_type)
       latest_review&.notes || latest_review&.rejection_reason
     end
 
     def get_latest_rejection_date(application, proof_type)
-      latest_review = application.proof_reviews.where(proof_type: proof_type, status: :rejected)
-                                 .order(created_at: :desc).first
-      latest_review&.created_at
+      latest_rejected_review(application, proof_type)&.created_at
+    end
+
+    # Read once per application and proof for the page, however many cards ask.
+    def latest_rejected_review(application, proof_type)
+      @latest_rejected_reviews ||= {}
+      @latest_rejected_reviews.fetch([application.id, proof_type]) do
+        @latest_rejected_reviews[[application.id, proof_type]] =
+          application.proof_reviews.where(proof_type: proof_type, status: :rejected).order(created_at: :desc).first
+      end
     end
 
     def can_resubmit_proof?(application, proof_type, max_submissions)

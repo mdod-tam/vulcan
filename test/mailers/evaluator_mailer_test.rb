@@ -57,12 +57,23 @@ class EvaluatorMailerTest < ActionMailer::TestCase
     assert_includes body, 'Delivery: Email'
   end
 
-  test 'the footer names the program as MAT Program' do
-    email = capture_emails do
-      EvaluatorMailer.with(assignment_notice_params(@evaluation, @evaluation.evaluator)).new_evaluation_assigned.deliver_now
-    end.first
+  test 'the footer uses the configured organization name and falls back to MAT Program' do
+    bodies = lambda do
+      emails = capture_emails do
+        EvaluatorMailer.with(assignment_notice_params(@evaluation, @evaluation.evaluator)).new_evaluation_assigned.deliver_now
+        EvaluatorMailer.with(evaluation: @evaluation).evaluation_submission_confirmation.deliver_now
+      end
+      emails.map { |email| decoded_text_part(email) }
+    end
 
-    assert_includes decoded_text_part(email), 'MAT Program'
+    assert(bodies.call.all? { |body| body.include?('MAT Program') })
+
+    Policy.stubs(:get).returns(nil)
+    Policy.stubs(:get).with('organization_name').returns('Configured Organization')
+
+    configured = bodies.call
+    assert_equal 2, configured.size
+    assert(configured.all? { |body| body.include?('Configured Organization') && body.exclude?('MAT Program') })
   end
 
   test 'new_evaluation_assigned uses English template for Spanish locale evaluator' do

@@ -46,7 +46,8 @@ class EvaluatorMailer < ApplicationMailer
 
     evaluation_url = safe_evaluation_url(evaluation)
     envelope = envelope_variables(template: template, locale: locale, subject_variables: { application_id: application.id },
-                                  fallback_title: "New Evaluation Assigned - Application ##{application.id}", organization_name: 'MAT Program')
+                                  fallback_title: "New Evaluation Assigned - Application ##{application.id}",
+                                  organization_name: footer_organization_name)
 
     {
       evaluator_full_name: evaluator.full_name,
@@ -78,7 +79,7 @@ class EvaluatorMailer < ApplicationMailer
 
     envelope = envelope_variables(template: template, locale: locale, subject_variables: { application_id: application.id },
                                   fallback_title: "Your Evaluation has been Submitted - Application ##{application.id}",
-                                  organization_name: 'MAT Program')
+                                  organization_name: footer_organization_name)
 
     {
       constituent_first_name: constituent.first_name,
@@ -93,6 +94,11 @@ class EvaluatorMailer < ApplicationMailer
       ),
       **envelope
     }.compact
+  end
+
+  # The configured organization name, or the short program name when none is configured.
+  def footer_organization_name
+    Policy.get('organization_name') || 'MAT Program'
   end
 
   def safe_evaluation_url(evaluation)

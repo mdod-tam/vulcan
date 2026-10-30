@@ -186,24 +186,19 @@
           <div class="relative h-[300px] w-full"
                aria-labelledby="disability-comparison-chart-heading disability-comparison-chart-desc"
                data-controller="chart"
-               data-chart-data-value="<%= {
-                 'Hearing' => @report.current_fy_hearing_disability_count || 0,
-                 'Vision' => @report.current_fy_vision_disability_count || 0,
-                 'Speech' => @report.current_fy_speech_disability_count || 0,
-                 'Mobility' => @report.current_fy_mobility_disability_count || 0,
-                 'Cognition' => @report.current_fy_cognition_disability_count || 0
-               }.to_json %>"
-               data-chart-comparison-data-value="<%= {
-                 'Hearing' => @report.previous_fy_hearing_disability_count || 0,
-                 'Vision' => @report.previous_fy_vision_disability_count || 0,
-                 'Speech' => @report.previous_fy_speech_disability_count || 0,
-                 'Mobility' => @report.previous_fy_mobility_disability_count || 0,
-                 'Cognition' => @report.previous_fy_cognition_disability_count || 0
-               }.to_json %>"
+               data-chart-data-value="<%= @report.disability_chart_data(:current).to_json %>"
+               data-chart-comparison-data-value="<%= @report.disability_chart_data(:previous).to_json %>"
                data-chart-title-value="Disability Type Comparison">
             <canvas data-chart-target="canvas" role="img" aria-label="Disability Type Comparison" aria-describedby="disability-comparison-chart-desc"></canvas>
             <div id="disability-comparison-chart-desc" class="sr-only">
-              Bar chart comparing disability types between current fiscal year (Hearing: <%= @report.current_fy_hearing_disability_count || 0 %>, Vision: <%= @report.current_fy_vision_disability_count || 0 %>, Speech: <%= @report.current_fy_speech_disability_count || 0 %>, Mobility: <%= @report.current_fy_mobility_disability_count || 0 %>, Cognition: <%= @report.current_fy_cognition_disability_count || 0 %>) and previous fiscal year (Hearing: <%= @report.previous_fy_hearing_disability_count || 0 %>, Vision: <%= @report.previous_fy_vision_disability_count || 0 %>, Speech: <%= @report.previous_fy_speech_disability_count || 0 %>, Mobility: <%= @report.previous_fy_mobility_disability_count || 0 %>, Cognition: <%= @report.previous_fy_cognition_disability_count || 0 %>).
+              Bar chart comparing disability types between current fiscal year
+              (Hearing: <%= @report.current_fy_hearing_disability_count || 0 %>, Vision: <%= @report.current_fy_vision_disability_count || 0 %>,
+              Speech: <%= @report.current_fy_speech_disability_count || 0 %>, Mobility: <%= @report.current_fy_mobility_disability_count || 0 %>,
+              Cognition: <%= @report.current_fy_cognition_disability_count || 0 %>)
+              and previous fiscal year
+              (Hearing: <%= @report.previous_fy_hearing_disability_count || 0 %>, Vision: <%= @report.previous_fy_vision_disability_count || 0 %>,
+              Speech: <%= @report.previous_fy_speech_disability_count || 0 %>, Mobility: <%= @report.previous_fy_mobility_disability_count || 0 %>,
+              Cognition: <%= @report.previous_fy_cognition_disability_count || 0 %>).
             </div>
           </div>
         </div>
@@ -247,11 +242,7 @@
           <div class="mt-4">
             <div class="relative h-[200px] w-full"
                  data-controller="chart"
-                 data-chart-data-value="<%= {
-                   'Issued' => @report.current_fy_vouchers,
-                   'Active' => @report.current_fy_active_vouchers || 0,
-                   'Expired' => @report.current_fy_expired_vouchers || 0
-                 }.to_json %>"
+                 data-chart-data-value="<%= @report.voucher_status_chart_data(:current).to_json %>"
                  data-chart-compact-value="true"
                  data-chart-dataset-label-value="Current Fiscal Year"
                  data-chart-title-value="Current FY Vouchers">
@@ -290,11 +281,7 @@
           <div class="mt-4">
             <div class="relative h-[200px] w-full"
                  data-controller="chart"
-                 data-chart-data-value="<%= {
-                   'Issued' => @report.previous_fy_vouchers,
-                   'Active' => @report.previous_fy_active_vouchers || 0,
-                   'Expired' => @report.previous_fy_expired_vouchers || 0
-                 }.to_json %>"
+                 data-chart-data-value="<%= @report.voucher_status_chart_data(:previous).to_json %>"
                  data-chart-compact-value="true"
                  data-chart-dataset-label-value="Previous Fiscal Year"
                  data-chart-title-value="Previous FY Vouchers">
@@ -343,7 +330,8 @@
              data-chart-title-value="Voucher Value Comparison">
           <canvas data-chart-target="canvas" role="img" aria-label="Voucher Value Comparison" aria-describedby="voucher-value-comparison-desc"></canvas>
           <div id="voucher-value-comparison-desc" class="sr-only">
-            Chart comparing voucher values: Current fiscal year: <%= number_to_currency(@report.current_fy_voucher_value) %>, Previous fiscal year: <%= number_to_currency(@report.previous_fy_voucher_value) %>.
+            Chart comparing voucher values: Current fiscal year: <%= number_to_currency(@report.current_fy_voucher_value) %>,
+            Previous fiscal year: <%= number_to_currency(@report.previous_fy_voucher_value) %>.
           </div>
         </div>
       </div>
@@ -543,7 +531,9 @@
             <% if @report.active_vendors.zero? %>
               No vendors have recorded transactions yet.
             <% else %>
-              <%= @report.recent_active_vendors %> out of <%= @report.active_vendors %> vendors (<%= number_to_percentage((@report.recent_active_vendors.to_f / @report.active_vendors) * 100, precision: 1) %>) have had transactions in the last 30 days.
+              <%= @report.recent_active_vendors %> out of <%= @report.active_vendors %> vendors
+              (<%= number_to_percentage(@report.recent_active_vendor_percentage, precision: 1) %>)
+              have had transactions in the last 30 days.
             <% end %>
           </p>
 

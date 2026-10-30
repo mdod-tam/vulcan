@@ -1,31 +1,28 @@
 <%# One proof's status for an application: its review state, why it was rejected, and a link to upload a replacement. %>
-<% status = application.public_send("#{proof_type}_proof_status") %>
 <div>
   <div class="flex items-center justify-between">
     <div>
       <h4 class="text-base font-medium text-gray-900"><%= label %> Proof</h4>
-      <% if status == 'approved' %>
+      <% if application.public_send("#{proof_type}_proof_status") == 'approved' %>
         <div class="flex items-center mt-2">
           <div class="badge badge-success">
             Approved
           </div>
         </div>
-      <% elsif status == 'rejected' %>
-        <% rejection_reason = get_latest_rejection_reason(application, proof_type) %>
-        <% rejection_date = get_latest_rejection_date(application, proof_type) %>
+      <% elsif application.public_send("#{proof_type}_proof_status") == 'rejected' %>
         <div class="flex items-center mt-2">
           <div class="badge badge-danger">
             Rejected
           </div>
-          <% if rejection_reason.present? %>
+          <% if get_latest_rejection_reason(application, proof_type).present? %>
             <span class="ml-2 text-sm text-gray-600">
-              Reason: <%= rejection_reason %>
+              Reason: <%= get_latest_rejection_reason(application, proof_type) %>
             </span>
           <% end %>
         </div>
-        <% if rejection_date.present? %>
+        <% if get_latest_rejection_date(application, proof_type).present? %>
           <div class="mt-1 text-sm text-gray-600">
-            Rejected on: <%= rejection_date.strftime('%B %d, %Y') %>
+            Rejected on: <%= get_latest_rejection_date(application, proof_type).strftime('%B %d, %Y') %>
           </div>
         <% end %>
       <% else %>

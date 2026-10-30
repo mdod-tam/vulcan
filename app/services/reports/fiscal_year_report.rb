@@ -47,6 +47,13 @@ module Reports
       end
     end
 
+    # The share of vendors with a transaction in the last 30 days, as a percentage.
+    def recent_active_vendor_percentage
+      return 0.0 if active_vendors.zero?
+
+      recent_active_vendors.to_f / active_vendors * 100
+    end
+
     def training_requests_count
       memo(:training_requests_count) { Application.with_pending_training_request.count }
     end
@@ -66,6 +73,18 @@ module Reports
         counts = voucher_counts(period)
         { 'Vouchers Issued' => counts[:issued], 'Active Unredeemed' => counts[:active], 'Expired' => counts[:expired] }
       end
+    end
+
+    # Disability counts by type for the comparison chart.
+    def disability_chart_data(period)
+      DISABILITY_TYPES.to_h { |type| [type.capitalize, public_send(:"#{period}_fy_#{type}_disability_count") || 0] }
+    end
+
+    # Issued, active and expired voucher counts for the compact chart.
+    def voucher_status_chart_data(period)
+      { 'Issued' => public_send(:"#{period}_fy_vouchers"),
+        'Active' => public_send(:"#{period}_fy_active_vouchers") || 0,
+        'Expired' => public_send(:"#{period}_fy_expired_vouchers") || 0 }
     end
 
     def services_chart_data

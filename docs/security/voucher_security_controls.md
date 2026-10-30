@@ -10,7 +10,7 @@ Redemption checks the vendor, the applicant verification, the voucher state, and
 
 [Vouchers::IssuanceService](../../app/services/vouchers/issuance_service.rb) is the only path that issues one. It checks the feature flag — a configuration switch — first. It then holds a database lock on the application while it evaluates eligibility and creates the voucher. Two approvals racing cannot both pass the "no existing voucher" test.
 
-Eligibility requires voucher fulfillment, an approved application, approved required proofs and disability certification, and no existing voucher. Normal entry points are the approval transition through [IssueInitialVoucherJob](../../app/jobs/issue_initial_voucher_job.rb) and the admin assignment action.
+Eligibility requires voucher fulfillment, an approved application, approved required proofs and disability certification, and no existing voucher. Normal entry points are the approval paths (`Applications::Approver` and automatic approval), which queue [IssueInitialVoucherJob](../../app/jobs/issue_initial_voucher_job.rb), and the admin assignment action.
 
 [Voucher](../../app/models/voucher.rb) calculates the initial value from the constituent's disability flags and policy values. It generates a random 12-character code. The database also has a unique index on the code. Model validations keep the initial and remaining values non-negative and keep the remaining value no greater than the initial value.
 

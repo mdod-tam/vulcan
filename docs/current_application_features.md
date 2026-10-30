@@ -48,7 +48,7 @@ The dependent owns the application; its managing guardian has responsibility for
 | Devices | Constituents and managing guardians see exact products from completed voucher purchases or active program shipments, grouped by beneficiary with source/date labels. Shipment does not confirm receipt; training on a demo model does not imply ownership. |
 | Product guidance | Staff publish an exact-product, explicitly localized link or PDF from product management. Devices, shared training reports, and current trainer preparation show preferred-language guidance and labeled alternatives. PDFs are public guidance; personalized history stays authorized. |
 
-[TrainingManagement](../app/models/concerns/training_management.rb) and [EvaluationManagement](../app/models/concerns/evaluation_management.rb) own assignment rules. Equipment applications do not automatically receive vouchers.
+[Applications::TrainerAssignment](../app/services/applications/trainer_assignment.rb) and [Applications::EvaluatorAssignment](../app/services/applications/evaluator_assignment.rb) own assignment rules. Equipment applications do not automatically receive vouchers.
 
 Training sessions and evaluations share the [status vocabulary](../app/models/concerns/status_management.rb): `requested`, `scheduled`, `confirmed`, `completed`, `cancelled`, and `no_show`. `rescheduled` remains for legacy/display compatibility; current rescheduling services set `scheduled` and record a reschedule event.
 
