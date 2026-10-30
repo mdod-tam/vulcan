@@ -23,6 +23,7 @@ module Admin
 
     # Status changes only through workflow actions (Application#transition_status!); the edit form has no status.
     test 'admin can see application status changes in audit log' do
+      attach_required_proofs(@application)
       @application.transition_status!(:in_progress, actor: @admin)
 
       visit admin_application_path(@application)
@@ -121,6 +122,7 @@ module Admin
 
     test 'admin can see evaluator assignments in audit log' do
       # Evaluation services are offered only within the service window after the application date.
+      attach_required_proofs(@application)
       @application.update!(status: 'approved', application_date: Date.current)
 
       visit admin_application_path(@application)
@@ -172,6 +174,14 @@ module Admin
         assert_text @admin.full_name
         assert_match(/Voucher \w+ assigned on \w+ \d{2}, \d{4} for \$[\d,]+\.\d{2}/, page.text)
       end
+    end
+
+    private
+
+    # An application leaves draft only with its required proofs.
+    def attach_required_proofs(application)
+      application.income_proof.attach(io: file_fixture('income_proof.pdf').open, filename: 'income.pdf', content_type: 'application/pdf')
+      application.residency_proof.attach(io: file_fixture('residency_proof.pdf').open, filename: 'residency.pdf', content_type: 'application/pdf')
     end
   end
 end

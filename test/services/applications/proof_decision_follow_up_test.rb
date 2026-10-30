@@ -101,6 +101,35 @@ module Applications
       end
     end
 
+    test 'a repeat approval follows up like a new one, so each approval has its own audit event and record' do
+      first = ProofReview.for_decision(@application, proof_type: :income, status: :approved).record!(admin: @admin)
+      follow_up(first)
+
+      travel AuditEventService::DEDUP_WINDOW + 1.second do
+        assert_no_difference -> { ProofReview.count } do
+          assert_difference -> { Event.where(action: 'proof_approved', auditable: @application).count }, 1 do
+            assert_difference -> { Notification.where(action: 'proof_approved', notifiable: @application).count }, 1 do
+              repeat = ProofReview.for_decision(@application, proof_type: :income, status: :approved).record!(admin: @admin)
+              follow_up(repeat)
+            end
+          end
+        end
+      end
+    end
+
+    test 'a disability certification review is refused, because its follow-up belongs to the certification flow' do
+      certification_review = create(:proof_review, application: @application, admin: @admin,
+                                                   proof_type: :disability_certification, status: :rejected,
+                                                   rejection_reason: 'Missing signature')
+
+      error = assert_raises(ArgumentError) { ProofDecisionFollowUp.new(certification_review) }
+
+      assert_includes error.message, 'disability_certification'
+      assert_no_difference -> { Event.where(action: 'proof_rejected', auditable: @application).count } do
+        assert_raises(ArgumentError) { ProofDecisionFollowUp.new(certification_review).call }
+      end
+    end
+
     test 'a decision whose application has no applicant is left alone' do
       review = rejected_review(:income)
       review.application.stubs(:user).returns(nil)

@@ -4,10 +4,17 @@ module Applications
   # What a recorded income, residency, or ID decision sets in motion once it has committed: the rejection-limit
   # notices, then either the rejection audit with a secure resubmission request or the approval record.
   #
-  # The writers that record a decision schedule this after their transaction commits, for a new decision and for a
-  # repeat rejection alike. A disability certification rejection has its own follow-up in DisabilityCertificationReviewer.
+  # The writers that record a decision schedule this after their transaction commits, for every decision they record:
+  # a new one, a repeat rejection, and a repeat approval, such as a proof approved again after a replacement.
+  # A disability certification rejection has its own follow-up in DisabilityCertificationReviewer, so a certification
+  # review must never be scheduled here.
   class ProofDecisionFollowUp
+    # @raise [ArgumentError] when the review is not an income, residency, or ID review
     def initialize(review)
+      unless ProofReview.reviewable_proof_type?(review.proof_type)
+        raise ArgumentError, "#{review.proof_type.inspect} reviews have their own follow-up, not ProofDecisionFollowUp"
+      end
+
       @review = review
     end
 

@@ -42,7 +42,7 @@ module ProofManageable
     return false if public_send("#{proof_type}_proof_status_approved?")
     return true if public_send("#{proof_type}_proof_status_rejected?")
 
-    public_send("#{proof_type}_proof_status_not_reviewed?") && !public_send("#{proof_type}_proof").attached?
+    public_send("#{proof_type}_proof_status_not_reviewed?") && !document_attachment_for(proof_type).attached?
   end
 
   # The constituent portal accepts only a replacement for a rejected proof.
@@ -82,12 +82,11 @@ module ProofManageable
 
   # Applications::ProofReviewer calls this after it sets the rejected status.
   def purge_rejected_proof(proof_type_key)
-    attachment_name = :"#{proof_type_key}_proof"
-    attachment = public_send(attachment_name)
+    attachment = document_attachment_for(proof_type_key)
 
     return unless attachment.attached?
 
-    Rails.logger.info "[ProofManageable] Purging #{attachment_name} for App ##{id}."
+    Rails.logger.info "[ProofManageable] Purging #{attachment.name} for App ##{id}."
     attachment.purge_later
   end
 

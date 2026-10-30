@@ -149,13 +149,9 @@ class ProofAttachmentService
     end
 
     def attach_and_verify_initial_save(application, proof_type, blob)
-      application.send(get_attachment_method_name(proof_type)).attach(blob)
+      application.document_attachment_for(proof_type).attach(blob)
       save_application_with_attachment(application)
-      AttachmentOperation.verify_attached!(application, get_attachment_method_name(proof_type))
-    end
-
-    def get_attachment_method_name(proof_type)
-      "#{proof_type}_proof"
+      AttachmentOperation.verify_attached!(application, DocumentType.fetch(proof_type).attachment_name)
     end
 
     def save_application_with_attachment(application)
@@ -234,8 +230,7 @@ class ProofAttachmentService
     end
 
     def build_event_metadata(context)
-      attachment_method = get_attachment_method_name(context.proof_type)
-      attached_blob = context.application.send(attachment_method).blob
+      attached_blob = context.application.document_attachment_for(context.proof_type).blob
       blob_id = attached_blob&.id
 
       context.metadata.merge(
@@ -331,7 +326,7 @@ class ProofAttachmentService
       blob = UploadedDocument.resolve!(
         params.fetch(:blob_or_file),
         record: application,
-        name: get_attachment_method_name(proof_type),
+        name: DocumentType.fetch(proof_type).attachment_name,
         signed_ids: params.fetch(:signed_ids),
         min_bytes: params.fetch(:min_bytes),
         scan_owner: params[:scan_owner] || params[:admin] || application.user

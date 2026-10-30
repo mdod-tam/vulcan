@@ -133,7 +133,7 @@ module Applications
     def validate_proof_attachment_if_approved
       return unless @status_key == 'approved'
 
-      attachment = @application.send("#{@proof_type_key}_proof")
+      attachment = @application.document_attachment_for(@proof_type_key)
       return DocumentScan.require_clean!(attachment.blob) if attachment.attached?
 
       raise ActiveRecord::RecordInvalid.new(@application),

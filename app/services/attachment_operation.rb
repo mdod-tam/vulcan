@@ -10,7 +10,8 @@ module AttachmentOperation
   class NotStored < StandardError; end
 
   # Confirms the file just attached is stored. The record is reloaded, so the answer comes from the database and
-  # not from an association loaded before the attach.
+  # not from an association loaded before the attach. The reload also discards any unsaved change on the record, so
+  # call this with a record whose changes are already saved.
   #
   # @param record [ApplicationRecord] the record the file was attached to
   # @param name [Symbol, String] the attachment name, such as :income_proof

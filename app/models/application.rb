@@ -454,8 +454,7 @@ class Application < ApplicationRecord
     return :not_applicable unless ProofReview.reviewable_proof_type?(proof_type)
     return :not_applicable if proof_type == 'income' && !income_proof_required?
 
-    attachment = public_send("#{proof_type}_proof")
-    return :missing_attachment unless attachment.attached?
+    return :missing_attachment unless document_attachment_for(proof_type).attached?
 
     if public_send("#{proof_type}_proof_status_approved?")
       return needs_proof_type_review?(proof_type) ? :resubmitted : :approved_current
