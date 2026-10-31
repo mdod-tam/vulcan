@@ -222,6 +222,10 @@ module Admin
 
     test 'admin cannot deactivate themself or the system audit account' do
       [@admin, ensure_system_audit_actor!].each do |user|
+        get admin_user_path(user)
+        assert_response :success
+        assert_select 'form[action=?]', deactivate_admin_user_path(user), count: 0
+        assert_select 'form[action=?]', reactivate_admin_user_path(user), count: 0
         assert_no_difference 'Event.count' do
           post deactivate_admin_user_path(user)
         end
@@ -232,6 +236,10 @@ module Admin
 
     test 'reactivation refuses a merged record' do
       user = create(:constituent, status: :inactive, merged_into_user: create(:constituent), merged_by: @admin, merged_at: Time.current)
+
+      get admin_user_path(user)
+      assert_response :success
+      assert_select 'form[action=?]', reactivate_admin_user_path(user), count: 0
 
       assert_no_difference 'Event.count' do
         post reactivate_admin_user_path(user)

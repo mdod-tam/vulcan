@@ -60,7 +60,7 @@ module Admin
         records: [@user, *@user.guardian_relationships_as_guardian.map(&:dependent_user)], associations: :applications
       ).call
       @contact_delivery_attention = EmailDelivery::Visibility.contact_attention(@user)
-      @access_events = Event.where(auditable: @user, action: %w[capability_granted capability_removed]).includes(:user)
+      @access_events = @user.audit_events.where(action: %w[capability_granted capability_removed]).includes(:user)
                             .order(created_at: :desc, id: :desc).limit(25)
     end
 
@@ -152,7 +152,7 @@ module Admin
     def destroy_mfa_tokens
       @user = User.find(params[:id])
 
-      if protected_system_user?(@user)
+      if @user.system_audit_account?
         AuditEventService.log(
           action: 'admin_user_mfa_tokens_blocked',
           actor: current_user,
@@ -349,10 +349,6 @@ module Admin
                 'The account status could not be changed. No changes were saved.'
               end
       redirect_to admin_user_path(@user), alert: alert
-    end
-
-    def protected_system_user?(user)
-      User.normalize_email(user.email) == PublicAuditActor::SYSTEM_AUDIT_EMAIL
     end
 
     def mfa_credential_counts(user)

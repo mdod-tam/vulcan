@@ -41,7 +41,7 @@
             aria: { label: "Delete MFA tokens for #{@user.full_name}" } do %>
           <span>Delete MFA Tokens</span>
         <% end %>
-        <% unless @user == current_user || @user.merged? || User.normalize_email(@user.email) == PublicAuditActor::SYSTEM_AUDIT_EMAIL %>
+        <% unless @user.login_status_change_refusal_reason(actor: current_user) %>
           <% if @user.inactive? || @user.suspended? %>
             <%= button_to reactivate_admin_user_path(@user),
                           method: :post,

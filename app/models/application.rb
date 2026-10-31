@@ -376,7 +376,7 @@ class Application < ApplicationRecord
       validate_status_transition!(target_status)
       update!(status: target_status)
 
-      status_changes.create!(
+      status_change = status_changes.create!(
         from_status: old_status,
         to_status: status,
         user: actor,
@@ -395,6 +395,7 @@ class Application < ApplicationRecord
         actor: actor,
         auditable: self,
         metadata: metadata.reverse_merge(
+          operation_id: "application_status_change:#{status_change.id}",
           application_id: id,
           old_status: old_status,
           new_status: status,
@@ -578,7 +579,7 @@ class Application < ApplicationRecord
 
   def validate_status_transition!(target_status)
     errors.clear
-    if status_rejected? || status_archived?
+    if status_archived? || (status_rejected? && target_status != 'archived')
       errors.add(:status, "cannot transition from #{status}")
     elsif target_status == 'approved' && !all_requirements_met?
       errors.add(:status, 'cannot be approved until all required proofs and disability certification are approved')

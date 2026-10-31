@@ -136,6 +136,33 @@ class TwoFactorAttemptLimitTest < ActionDispatch::IntegrationTest
     end
   end
 
+  test 'anonymous floods are counted before either verification action rejects the missing session' do
+    store = ActiveSupport::Cache::MemoryStore.new
+    native_store = TwoFactorAuthenticationsController.cache_store
+    native_store.stub(:increment, ->(*args, **options) { store.increment(*args, **options) }) do
+      freeze_time do
+        {
+          process_verification_two_factor_authentication_path(type: 'totp') => :unprocessable_content,
+          verify_code_two_factor_authentication_path => :unauthorized
+        }.each do |path, initial_status|
+          reset!
+          store.clear
+          30.times do
+            post path, params: { code: valid_code }, as: :json
+            assert_response initial_status
+          end
+          2.times do
+            assert_no_difference('Session.count') { post path, params: { code: valid_code, locale: 'es' }, as: :json }
+            assert_response :too_many_requests
+            assert_equal 'rate_limited', response.parsed_body.fetch('error_code')
+            assert_equal I18n.t('two_factor_verification.errors.verification_rate_limited', locale: :es), response.parsed_body.fetch('error')
+          end
+        end
+      end
+    end
+    assert_equal 0, @user.reload.totp_failed_attempts
+  end
+
   private
 
   def valid_code

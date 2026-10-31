@@ -52,7 +52,6 @@ module Authentication
   def find_production_session
     return if cookies.signed[:session_token].blank?
 
-    # Load the user association only when a caller needs it.
     Session.for_token(cookies.signed[:session_token]).take
   end
 

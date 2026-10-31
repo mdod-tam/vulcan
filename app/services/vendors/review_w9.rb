@@ -76,6 +76,8 @@ module Vendors
     def notify_rejection_limit
       NotificationService.create_and_deliver!(type: 'vendor_max_w9_rejections_warning', recipient: @admin,
                                               actor: @admin, notifiable: @vendor, channel: :email, audit: true, deliver: false)
+    rescue StandardError => e
+      Rails.logger.error("W9 rejection-limit warning for vendor #{@vendor.id} failed (#{e.class})")
     end
   end
 end

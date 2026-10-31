@@ -15,7 +15,7 @@ class TwoFactorAuthenticationsController < ApplicationController
 
   rate_limit to: 30, within: 1.minute, only: %i[process_verification verify_code],
              by: -> { AuthRateLimit.request_ip_digest(request) },
-             with: :refuse_excessive_verification_requests
+             with: :refuse_excessive_verification_requests, prepend: true
 
   # GET /two_factor_authentication/setup
   def setup
@@ -299,7 +299,7 @@ class TwoFactorAuthenticationsController < ApplicationController
   def refuse_excessive_verification_requests
     TwoFactorAuth.abort_authentication(session)
     response.headers['Cache-Control'] = 'no-store'
-    message = t('two_factor_verification.errors.verification_rate_limited')
+    message = I18n.t('two_factor_verification.errors.verification_rate_limited', locale: public_request_locale)
     respond_to do |format|
       format.json { render json: { error: message, error_code: 'rate_limited' }, status: :too_many_requests }
       format.any { redirect_to sign_in_path, alert: message, status: :see_other }

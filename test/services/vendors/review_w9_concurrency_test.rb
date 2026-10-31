@@ -77,6 +77,35 @@ module Vendors
       cleanup(vendor, admin)
     end
 
+    test 'an admin warning validation failure preserves the requested vendor delivery' do
+      vendor = create(:vendor, :with_w9, w9_rejections_count: 7)
+      admin = create(:admin)
+      original_create = Notification.method(:create!)
+      create_notification = lambda do |**attributes|
+        raise ActiveRecord::RecordInvalid, Notification.new if attributes[:action] == 'vendor_max_w9_rejections_warning'
+
+        original_create.call(**attributes)
+      end
+      result = nil
+
+      Notification.stub(:create!, create_notification) do
+        result = ReviewW9.new(vendor: vendor, admin: admin,
+                              attributes: { status: 'rejected', reviewed_blob_id: vendor.w9_form.blob.id,
+                                            rejection_reason_code: 'other', rejection_reason: 'Correct the document.' }).call
+      end
+
+      assert_predicate result, :success?
+      assert_equal 'requested', result.data[:delivery]
+      assert_predicate vendor.reload, :w9_status_rejected?
+      assert_equal 8, vendor.w9_rejections_count
+      assert_equal 1, vendor.vendor_secure_request_forms.count
+      failure_event = Event.find_by!(auditable: vendor, action: 'notification_creation_failed')
+      assert_equal admin.id, failure_event.user_id
+      assert_equal 'vendor_max_w9_rejections_warning', failure_event.metadata['notification_type']
+    ensure
+      cleanup(vendor, admin)
+    end
+
     private
 
     def decide(vendor_id, admin_id, blob_id)

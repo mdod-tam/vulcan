@@ -239,8 +239,6 @@ Rails.application.routes.draw do
     resources :users, except: %i[new destroy] do
       collection do
         get :search
-        get :evaluators
-        get :vendors
         get :constituents
       end
 

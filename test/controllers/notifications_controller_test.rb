@@ -47,6 +47,20 @@ class NotificationsControllerTest < ActionDispatch::IntegrationTest
     assert_not_nil @notification.reload.read_at
   end
 
+  test 'voucher expiration text uses the viewer locale rather than the ambient locale' do
+    @user.update!(locale: :es)
+    @notification.update!(action: 'voucher_expired')
+    sign_in_for_integration_test(@user)
+
+    I18n.with_locale(:en) do
+      get notifications_path
+
+      assert_response :success
+      assert_select "#notification_#{@notification.id}", text: /Su vale ha vencido\./
+      assert_select "#notification_#{@notification.id}", text: /Your voucher has expired\./, count: 0
+    end
+  end
+
   test 'user cannot mark another users notification as read' do
     sign_in_for_integration_test(@user)
 

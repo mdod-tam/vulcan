@@ -31,6 +31,15 @@ class UserTest < ActiveSupport::TestCase
     assert_match(/WHERE.+"users"\."type" = 'Users::Administrator'/, scope_sql)
   end
 
+  test 'system audit account identity uses the normalized reserved address across roles' do
+    reserved_email = " #{PublicAuditActor::SYSTEM_AUDIT_EMAIL.upcase} "
+
+    assert_predicate build(:admin, email: reserved_email), :system_audit_account?
+    assert_predicate build(:constituent, email: reserved_email), :system_audit_account?
+    assert_not_predicate @existing_constituent, :system_audit_account?
+    assert_not User.system_audit_email?(nil)
+  end
+
   test 'deletion preserves both the actor and subject of audit history' do
     actor = create(:admin)
     Event.where(auditable_type: 'User', auditable_id: [actor.id, @existing_constituent.id]).delete_all

@@ -27,6 +27,14 @@ class User < ApplicationRecord
     email_value.to_s.strip.downcase.presence
   end
 
+  def self.system_audit_email?(email_value)
+    normalize_email(email_value) == PublicAuditActor::SYSTEM_AUDIT_EMAIL
+  end
+
+  def system_audit_account?
+    self.class.system_audit_email?(email)
+  end
+
   def self.system_user
     PublicAuditActor.system_audit_actor_or_report('system operation')
   end
@@ -230,6 +238,15 @@ class User < ApplicationRecord
     change_login_status!(:active, actor: actor)
   end
 
+  def login_status_change_refusal_reason(actor:)
+    return 'An active administrator is required' unless actor&.admin? && actor.public_login_active?
+    return 'You cannot change your own account status' if actor.id == id
+    return 'The system audit account cannot be deactivated or reactivated' if system_audit_account?
+    return 'A merged record cannot be reactivated or deactivated' if merged?
+
+    nil
+  end
+
   private
 
   def change_login_status!(new_status, actor:)
@@ -258,11 +275,8 @@ class User < ApplicationRecord
   end
 
   def validate_login_status_change!(user, actor)
-    user.errors.add(:base, 'An active administrator is required') unless actor.admin? && actor.public_login_active?
-    user.errors.add(:base, 'You cannot change your own account status') if actor.id == user.id
-    system_account = User.normalize_email(user.email) == PublicAuditActor::SYSTEM_AUDIT_EMAIL
-    user.errors.add(:base, 'The system audit account cannot be deactivated or reactivated') if system_account
-    user.errors.add(:base, 'A merged record cannot be reactivated or deactivated') if user.merged?
+    reason = user.login_status_change_refusal_reason(actor: actor)
+    user.errors.add(:base, reason) if reason
     raise ActiveRecord::RecordInvalid, user if user.errors.any?
   end
 
