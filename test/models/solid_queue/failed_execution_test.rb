@@ -5,8 +5,9 @@ require 'test_helper'
 module SolidQueue
   # Solid Queue's own failure bookkeeping, run against db/queue_schema.rb, which must stay equal to the gem's schema.
   class FailedExecutionTest < ActiveSupport::TestCase
+    # DocumentScanQueueTest requires every ApplicationJob subclass to use a queue that config/queue.yml serves.
     class AlwaysFailsJob < ApplicationJob
-      queue_as :failed_execution_test
+      queue_as :low_priority
 
       def perform
         raise 'worker failure'
@@ -14,7 +15,7 @@ module SolidQueue
     end
 
     teardown do
-      SolidQueue::Job.where(queue_name: AlwaysFailsJob.queue_name).destroy_all
+      SolidQueue::Job.where(class_name: AlwaysFailsJob.name).destroy_all
       SolidQueue::Process.where(name: 'failed-execution-test').destroy_all
     end
 
@@ -24,6 +25,7 @@ module SolidQueue
                                             last_heartbeat_at: Time.current)
       claimed = SolidQueue::ReadyExecution.claim(AlwaysFailsJob.queue_name, 1, process.id).sole
 
+      assert_equal job.id, claimed.job_id
       assert_raises(RuntimeError) { claimed.perform }
 
       failed = job.reload.failed_execution
