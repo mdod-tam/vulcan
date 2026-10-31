@@ -23,16 +23,19 @@ class NotificationServiceTest < ActiveSupport::TestCase
     payloads = []
     subscriber = ->(*args) { payloads << args.last }
 
-    result = ActiveSupport::Notifications.subscribed(subscriber, 'notification_service.error') do
+    ActiveSupport::Notifications.subscribed(subscriber, 'notification_service.error') do
       Rails.logger.stub(:error, ->(message) { messages << message }) do
-        assert_no_difference ['Notification.count', 'Event.count'] do
-          NotificationService.create_and_deliver!(type: :account_created, recipient: @constituent, actor: @admin,
-                                                  notifiable: @application)
+        assert_no_difference 'Notification.count' do
+          assert_difference -> { Event.where(action: 'notification_creation_failed', auditable: @application).count }, 1 do
+            assert_raises(ActiveRecord::RecordInvalid) do
+              NotificationService.create_and_deliver!(type: :account_created, recipient: @constituent, actor: @admin,
+                                                      notifiable: @application)
+            end
+          end
         end
       end
     end
 
-    assert_nil result
     assert_equal 'ActiveRecord::RecordInvalid', payloads.sole[:error_class]
     assert_not payloads.sole.key?(:error)
     [messages.join, payloads.to_json].each do |diagnostics|
@@ -48,11 +51,11 @@ class NotificationServiceTest < ActiveSupport::TestCase
     NotificationService.stubs(:new).raises(error)
     messages = []
 
-    result = Rails.logger.stub(:error, ->(message) { messages << message }) do
-      NotificationService.create_and_deliver!(type: :account_created, recipient: @constituent)
+    Rails.logger.stub(:error, ->(message) { messages << message }) do
+      assert_raises(StandardError) do
+        NotificationService.create_and_deliver!(type: :account_created, recipient: @constituent)
+      end
     end
-
-    assert_nil result
     assert_includes messages.join, "recipient_id: #{@constituent.id}"
     assert_includes messages.join, 'StandardError'
     ['Private Patient', 'private-boundary@example.test', '410-555-0199', @constituent.email, @constituent.phone].each do |private_value|
@@ -205,17 +208,14 @@ class NotificationServiceTest < ActiveSupport::TestCase
     assert_equal 'registration', notification.metadata['workflow']
   end
 
-  test 'default actor retains administrator precedence and support account fallback' do
-    User.stubs(:admins).returns(User.where(id: @admin.id))
-    notification = NotificationService.create_and_deliver!(type: :account_created, recipient: @constituent,
-                                                           notifiable: @application, deliver: false)
-    assert_equal @admin, notification.actor
-
-    support = create(:constituent, email: ProgramContact.support_email)
-    User.stubs(:admins).returns(User.none)
-    notification = NotificationService.create_and_deliver!(type: :account_created, recipient: @constituent,
-                                                           notifiable: @application, deliver: false)
-    assert_equal support, notification.actor
+  test 'missing actors never select an unrelated administrator or support account' do
+    create(:constituent, email: ProgramContact.support_email)
+    assert_no_difference 'Notification.count' do
+      assert_raises(ArgumentError) do
+        NotificationService.create_and_deliver!(type: :account_created, recipient: @constituent,
+                                                notifiable: @application, deliver: false)
+      end
+    end
   end
 
   test 'mailer failure records a safe local outcome through the notification owner' do
@@ -238,7 +238,7 @@ class NotificationServiceTest < ActiveSupport::TestCase
     assert_not_includes notification.metadata.to_json, 'secret-token'
   end
 
-  test 'create_and_deliver! returns nil and logs error when creation fails' do
+  test 'creation failures propagate with a durable safe failure audit' do
     invalid = Notification.new
     invalid.errors.add(:notifiable, :invalid)
     Notification.expects(:create!).once.raises(ActiveRecord::RecordInvalid.new(invalid))
@@ -246,14 +246,31 @@ class NotificationServiceTest < ActiveSupport::TestCase
 
     Rails.logger.expects(:error).at_least_once
 
-    notification = NotificationService.create_and_deliver!(
-      type: :proof_approved,
-      recipient: @constituent,
-      actor: @admin,
-      notifiable: @application
-    )
+    assert_raises(ActiveRecord::RecordInvalid) do
+      NotificationService.create_and_deliver!(type: :proof_approved, recipient: @constituent, actor: @admin, notifiable: @application)
+    end
+    event = Event.find_by!(action: 'notification_creation_failed', auditable: @application)
+    assert_equal @admin.id, event.user_id
+    assert_equal @constituent.id, event.metadata['recipient_id']
+    assert_equal 'ActiveRecord::RecordInvalid', event.metadata['error_class']
+  end
 
-    assert_nil notification
+  test 'notification failure rolls back a caller transaction rather than reporting a committed success' do
+    invalid = Notification.new
+    invalid.errors.add(:recipient, :invalid)
+    Notification.stubs(:create!).raises(ActiveRecord::RecordInvalid.new(invalid))
+    before = @application.application_date
+
+    assert_no_difference -> { Event.where(action: 'notification_creation_failed', auditable: @application).count } do
+      assert_raises(ActiveRecord::RecordInvalid) do
+        ApplicationRecord.transaction do
+          @application.update!(application_date: 1.day.ago)
+          NotificationService.create_and_deliver!(type: :proof_approved, recipient: @constituent, actor: @admin,
+                                                  notifiable: @application, deliver: false)
+        end
+      end
+    end
+    assert_equal before, @application.reload.application_date
   end
 
   test 'training_requested routes application and notification context to application mailer' do
@@ -319,9 +336,9 @@ class NotificationServiceTest < ActiveSupport::TestCase
 
     NotificationService::PROOF_REJECTION_ACTIONS.each do |action|
       assert_no_difference 'Notification.count' do
-        notification = NotificationService.create_and_deliver!(type: action, recipient: @constituent, actor: @admin,
-                                                               notifiable: @application)
-        assert_nil notification
+        assert_raises(ArgumentError) do
+          NotificationService.create_and_deliver!(type: action, recipient: @constituent, actor: @admin, notifiable: @application)
+        end
       end
     end
   end

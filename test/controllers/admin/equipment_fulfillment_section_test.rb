@@ -61,17 +61,6 @@ module Admin
       assert_select "#equipment-item-#{item.id} span.badge.badge-info", text: 'Ordered'
     end
 
-    test 'failed application approval still renders current equipment devices' do
-      item = create(:equipment_item, application: @application)
-      Application.any_instance.stubs(:approve!).returns(false)
-
-      patch approve_admin_application_path(@application)
-
-      assert_response :unprocessable_content
-      assert_select "#equipment-item-#{item.id} h4", text: /#{Regexp.escape(item.product.name)}/
-      assert_select "#equipment-item-#{item.id} span.badge.badge-info", text: 'Ordered'
-    end
-
     test 'voucher applications have no equipment purchasing section' do
       @application.update!(fulfillment_type: :voucher)
 

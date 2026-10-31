@@ -80,7 +80,8 @@ module Applications
       create(:guardian_relationship, guardian_user: remaining_guardian, dependent_user: applicant)
       application = create(:application, user: applicant, managing_guardian: manager)
 
-      manager.destroy!
+      GuardianRelationship.find_by!(guardian_user: manager, dependent_user: applicant).destroy!
+      application.update!(managing_guardian: nil)
       contact = ContactContext.new(application: application.reload)
 
       assert_nil application.reload.managing_guardian

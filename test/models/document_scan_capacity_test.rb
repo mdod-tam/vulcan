@@ -41,7 +41,11 @@ class DocumentScanCapacityTest < ActiveSupport::TestCase
     assert_raises(DocumentScan::LimitExceeded) { stage(user: create(:constituent)) }
     DocumentScan.where(user: @user).find_each(&:dismiss!)
     assert_raises(DocumentScan::LimitExceeded) { stage(user: create(:constituent)) }
+    # Exercise ownerless scan accounting without retaining this synthetic profile audit.
+    @user.audit_events.where(action: 'profile_updated').delete_all
+    scan_ids = DocumentScan.where(user: @user).pluck(:id)
     @user.destroy!
+    assert_equal 50, DocumentScan.where(id: scan_ids, user_id: nil).count
     assert_raises(DocumentScan::LimitExceeded) { stage(user: create(:constituent)) }
     assert stage(user: create(:admin)).pending?
     assert stage(secure_form: create(:secure_request_form)).pending?

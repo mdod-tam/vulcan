@@ -102,16 +102,13 @@ class AdminEvaluatorReassignmentControllerTest < ActionDispatch::IntegrationTest
     assert_select 'noscript p', text: 'Enable JavaScript to confirm evaluator reassignment.'
   end
 
-  test 'reassignment rejects missing malformed unavailable and deleted selections without changing the appointment' do
+  test 'reassignment rejects missing malformed and unavailable selections without changing the appointment' do
     inactive = create(:evaluator, status: :inactive)
     wrong_role = create(:trainer)
-    deleted = create(:evaluator)
-    deleted_id = deleted.id
-    deleted.destroy!
     missing_id = User.maximum(:id) + 1
     before = @evaluation.attributes
 
-    [nil, '', missing_id, deleted_id, inactive.id, wrong_role.id, "#{@replacement.id}invalid", [@replacement.id]].each do |selected_id|
+    [nil, '', missing_id, inactive.id, wrong_role.id, "#{@replacement.id}invalid", [@replacement.id]].each do |selected_id|
       assert_no_difference ['Evaluation.count', 'Notification.count', "Event.where(action: 'evaluator_reassigned').count"] do
         assert_no_enqueued_emails do
           post reassign_evaluator_admin_application_path(@application), params: { evaluator_id: selected_id }

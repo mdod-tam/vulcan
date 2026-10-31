@@ -5,13 +5,14 @@ class NotificationService
   PROOF_REJECTION_ACTIONS = %w[proof_rejected id_proof_rejected income_proof_rejected residency_proof_rejected].freeze
 
   # Channel records the requested route; the mailer owns the actual email/letter route.
-  # Failure returns nil, including record-only creation failures.
+  # Creation failures raise. A delivery failure retains its Notification and delivery status.
   def self.create_and_deliver!(type:, recipient:, **options)
     new(type: type.to_s, recipient: recipient, options: options.symbolize_keys).call
   rescue StandardError => e
     recipient_id = recipient.id if recipient.respond_to?(:id)
     Rails.logger.error "NotificationService: Failed to create and deliver notification (type: #{type}, recipient_id: #{recipient_id}): #{e.class.name}"
-    nil
+    record_creation_failure(type, recipient, options, e)
+    raise
   end
 
   # A returned row is not proof of delivery. Record-only rows have no delivery status.
@@ -31,16 +32,11 @@ class NotificationService
   end
 
   def call
-    raise ArgumentError, 'Notification type and recipient are required' if @type.blank? || @recipient.blank?
+    raise ArgumentError, 'Notification type, recipient, and actor are required' if @type.blank? || @recipient.blank? || @options[:actor].blank?
 
-    if PROOF_REJECTION_ACTIONS.include?(@type)
-      Rails.logger.error "NotificationService: Refused to create '#{@type}' notification. Use Applications::RequestProofResubmission."
-      return nil
-    end
+    raise ArgumentError, "Use Applications::RequestProofResubmission for '#{@type}'" if PROOF_REJECTION_ACTIONS.include?(@type)
 
     notification = create_notification
-    return nil unless notification
-
     EmailDelivery::NotificationDispatch.new(notification, channel: @channel).call if @should_deliver
     notification
   end
@@ -48,7 +44,7 @@ class NotificationService
   private
 
   def create_notification
-    actor = @options[:actor] || default_actor
+    actor = @options.fetch(:actor)
     notifiable = @options[:notifiable]
     Rails.logger.info "Creating notification: #{@type} for #{@recipient.class.name}##{@recipient.id} " \
                       "by #{actor&.class&.name}##{actor&.id} about #{notifiable&.class&.name}##{notifiable&.id} via #{@channel}"
@@ -65,12 +61,25 @@ class NotificationService
   def record_creation_error(error, stage)
     ActiveSupport::Notifications.instrument('notification_service.error', type: @type, error_class: error.class.name, stage: stage)
     Rails.logger.error "NotificationService: Creation failed for type '#{@type}': #{error.class.name}"
-    nil
+    raise error
   end
 
-  def default_actor
-    User.admins.first || User.find_by(email: ProgramContact.support_email)
+  # In-transaction failures roll this audit back with the operation. A post-commit caller keeps
+  # the failure record and can report incomplete follow-up without pretending its write rolled back.
+  def self.record_creation_failure(type, recipient, options, error)
+    actor = options[:actor] || options['actor']
+    return unless actor&.persisted?
+
+    AuditEventService.log(
+      action: 'notification_creation_failed', actor: actor,
+      auditable: options[:notifiable] || options['notifiable'],
+      metadata: { notification_type: type.to_s, recipient_id: recipient&.id, error_class: error.class.name,
+                  operation_id: SecureRandom.uuid }
+    )
+  rescue StandardError => e
+    Rails.logger.error "NotificationService: Could not record creation failure: #{e.class.name}"
   end
+  private_class_method :record_creation_failure
 
   def finalized_metadata
     raw = @options[:metadata]

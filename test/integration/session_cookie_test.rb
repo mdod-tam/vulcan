@@ -18,6 +18,16 @@ class SessionCookieTest < ActionDispatch::IntegrationTest
       assert_redirected_to constituent_portal_dashboard_path
       assert_browser_session_cookie
       assert_equal 24.hours.from_now, user.sessions.last.expires_at
+      session_record = user.sessions.last
+      assert_nil session_record.session_token
+      assert_match(/\A[0-9a-f]{64}\z/, session_record.session_token_digest)
+      get edit_profile_path
+      assert_response :success
+      assert_difference -> { user.sessions.count }, -1 do
+        delete sign_out_path
+      end
+      get edit_profile_path
+      assert_redirected_to sign_in_path
     end
   end
 
@@ -40,7 +50,20 @@ class SessionCookieTest < ActionDispatch::IntegrationTest
       assert_browser_session_cookie
       user = User.find_by_email('cookie-registration@example.com')
       assert_equal 24.hours.from_now, user.sessions.last.expires_at
+      assert_nil user.sessions.last.session_token
+      get edit_profile_path
+      assert_response :success
     end
+  end
+
+  test 'a stored session digest cannot be replayed as the cookie token' do
+    user = create(:constituent)
+    post sign_in_path, params: { email: user.email, password: 'password1234' }
+    cookies[:session_token] = user.sessions.last.session_token_digest
+
+    get edit_profile_path
+
+    assert_redirected_to sign_in_path
   end
 
   private

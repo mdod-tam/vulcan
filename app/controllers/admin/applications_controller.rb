@@ -3,7 +3,6 @@
 module Admin
   class ApplicationsController < BaseController
     include RedirectHelper
-    include Admin::ApplicationStatusProcessor
     include TurboStreamResponseHandling
     include ApplicationDataLoading
     include Admin::ProviderInfoRequestLoading
@@ -12,7 +11,6 @@ module Admin
     before_action :set_application, only: %i[
       show edit update
       review_proof update_proof_status
-      approve reject
       update_certification_status upload_disability_certification
     ]
 
@@ -122,14 +120,6 @@ module Admin
           html_render_action: :show
         )
       end
-    end
-
-    def approve
-      process_application_status_update(:approve)
-    end
-
-    def reject
-      process_application_status_update(:reject)
     end
 
     def update_certification_status

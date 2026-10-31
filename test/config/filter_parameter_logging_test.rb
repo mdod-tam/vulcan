@@ -83,6 +83,8 @@ class FilterParameterLoggingTest < ActiveSupport::TestCase
       'contact' => '410-555-0198',
       'password' => 'password1234',
       'two_factor_sign_in_token' => 'private-pending-sign-in',
+      'session_token_digest' => 'private-session-digest',
+      'code' => '123456',
       'controller' => 'sessions',
       'action' => 'create'
     )
@@ -90,6 +92,8 @@ class FilterParameterLoggingTest < ActiveSupport::TestCase
     assert_equal '[FILTERED]', filtered['contact']
     assert_equal '[FILTERED]', filtered['password']
     assert_equal '[FILTERED]', filtered['two_factor_sign_in_token']
+    assert_equal '[FILTERED]', filtered['session_token_digest']
+    assert_equal '[FILTERED]', filtered['code']
     assert_equal 'sessions', filtered['controller']
     assert_equal 'create', filtered['action']
   end

@@ -35,12 +35,13 @@ class EmailDeliveryAuditActorTest < ActionDispatch::IntegrationTest
     assert_equal 'Users::Constituent', constituent.type
     reset!
 
-    post password_path, params: { contact: constituent.email }
+    assert_no_difference ['User.count', -> { Event.where(action: EmailDelivery::Outcome::SUPPRESSED).count }] do
+      post password_path, params: { contact: constituent.email }
+    end
 
     assert_redirected_to sign_in_path
     assert_empty ActionMailer::Base.deliveries
     assert_equal 'Users::Constituent', User.find(constituent.id).type
-    assert_not Event.exists?(action: EmailDelivery::Outcome::SUPPRESSED)
   end
 
   test 'the recurring invoice job does not promote a constituent at the system address' do
@@ -75,29 +76,35 @@ class EmailDeliveryAuditActorTest < ActionDispatch::IntegrationTest
     Current.reset
     voucher = overdue_voucher
 
-    CheckVoucherExpirationJob.perform_now
+    assert_no_difference ['User.count', 'Notification.count', 'Event.count'] do
+      error = assert_raises(StandardError) { CheckVoucherExpirationJob.perform_now }
+      assert_equal 'Failed to process voucher expirations', error.message
+    end
 
-    assert voucher.reload.voucher_expired?
+    assert voucher.reload.voucher_active?
     assert_equal 'Users::Constituent', User.find(constituent.id).type
     assert User.find(constituent.id).authenticate('password1234')
     assert_empty voucher.events
     assert_empty ActionMailer::Base.deliveries
   end
 
-  test 'scheduled expiry with no system account persists and reports the missing audit actor' do
+  test 'scheduled expiry with no system account refuses processing and reports the missing audit actor' do
     Current.reset
     voucher = overdue_voucher
     purposes = []
     subscriber = ->(*args) { purposes << args.last[:purpose] }
 
     ActiveSupport::Notifications.subscribed(subscriber, 'system_audit_actor_missing') do
-      assert_no_difference('User.count') { CheckVoucherExpirationJob.perform_now }
+      assert_no_difference ['User.count', 'Notification.count', 'Event.count'] do
+        error = assert_raises(StandardError) { CheckVoucherExpirationJob.perform_now }
+        assert_equal 'Failed to process voucher expirations', error.message
+      end
     end
 
-    assert voucher.reload.voucher_expired?
+    assert voucher.reload.voucher_active?
     assert_nil PublicAuditActor.system_audit_actor
     assert_empty voucher.events
-    assert_includes purposes, 'voucher status change'
+    assert_includes purposes, 'voucher expiration'
   end
 
   test 'a staff voucher transition retains its current actor' do

@@ -50,33 +50,41 @@ class ProofReviewRejectionLimitTest < ActiveSupport::TestCase
 
     assert_equal ProofReview::MAX_REJECTIONS, @application.reload.total_rejections
     assert_not_predicate @application, :status_archived?
-    assert_max_rejections_mail_count 1
+    notification = Notification.find_by!(action: 'max_rejections_warning', notifiable: @application)
+    assert_equal @admin.id, notification.recipient_id
+    assert_equal @admin.id, notification.actor_id
+    assert_nil notification.delivery_status
+    assert_max_rejections_mail_count 0
   end
 
-  test 'the rejection past the limit archives the application and queues the notice after the commit' do
-    @application.update!(total_rejections: ProofReview::MAX_REJECTIONS)
+  %i[in_progress rejected].each do |initial_status|
+    test "the rejection past the limit archives from #{initial_status} and queues the notice after commit" do
+      @application.transition_status!(initial_status, actor: @admin)
+      @application.update!(total_rejections: ProofReview::MAX_REJECTIONS)
 
-    assert_difference -> { ApplicationStatusChange.count }, 1 do
-      assert_difference -> { Event.where(action: 'application_status_changed').count }, 1 do
-        reject(:income, reason: 'Final rejection')
+      assert_difference -> { ApplicationStatusChange.count }, 1 do
+        assert_difference -> { Event.where(action: 'application_status_changed').count }, 1 do
+          reject(:income, reason: 'Final rejection')
+        end
       end
+
+      @application.reload
+      assert_predicate @application, :status_archived?
+      assert_equal ProofReview::MAX_REJECTIONS + 1, @application.total_rejections
+
+      status_change = @application.status_changes.last
+      assert_equal initial_status.to_s, status_change.from_status
+      assert_equal 'archived', status_change.to_status
+      assert_equal @admin, status_change.user
+      assert_equal 'Application archived after exceeding maximum proof rejections', status_change.notes
+      assert_equal 'max_proof_rejections', status_change.metadata['trigger']
+
+      audit_event = @application.events.where(action: 'application_status_changed').last
+      assert_equal @admin, audit_event.user
+      assert_equal 'max_proof_rejections', audit_event.metadata['trigger']
+
+      assert_max_rejections_mail_count 1
     end
-
-    @application.reload
-    assert_predicate @application, :status_archived?
-    assert_equal ProofReview::MAX_REJECTIONS + 1, @application.total_rejections
-
-    status_change = @application.status_changes.last
-    assert_equal 'archived', status_change.to_status
-    assert_equal @admin, status_change.user
-    assert_equal 'Application archived after exceeding maximum proof rejections', status_change.notes
-    assert_equal 'max_proof_rejections', status_change.metadata['trigger']
-
-    audit_event = @application.events.where(action: 'application_status_changed').last
-    assert_equal @admin, audit_event.user
-    assert_equal 'max_proof_rejections', audit_event.metadata['trigger']
-
-    assert_max_rejections_mail_count 2
   end
 
   test 'the rejection that archives the application is audited but issues no upload link' do

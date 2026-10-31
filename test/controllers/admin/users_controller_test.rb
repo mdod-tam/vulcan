@@ -29,7 +29,7 @@ module Admin
       end
     end
 
-    test 'show surfaces destructive admin actions with native confirmation messages' do
+    test 'show offers deactivation that preserves history instead of deletion' do
       user = create(:constituent)
 
       get admin_user_path(user), headers: { 'Turbo-Frame' => 'admin_user_show' }
@@ -40,22 +40,22 @@ module Admin
         assert_select 'button', text: 'Delete MFA Tokens'
       end
       assert_select 'form[action=?][method=?][data-turbo-confirm*=?]',
-                    admin_user_path(user), 'post', 'Deleting a user is permanent' do
-        assert_select 'button', text: 'Delete User'
+                    deactivate_admin_user_path(user), 'post', 'history will be preserved' do
+        assert_select 'button', text: 'Deactivate User'
       end
+      assert_select 'button', text: 'Delete User', count: 0
     end
 
-    test 'show surfaces stronger delete confirmation for constituent with approved application' do
-      user = create(:constituent)
-      create(:application, :completed, user: user)
+    test 'inactive users offer reactivation' do
+      user = create(:constituent, status: :inactive)
 
-      get admin_user_path(user), headers: { 'Turbo-Frame' => 'admin_user_show' }
+      get admin_user_path(user)
 
       assert_response :success
-      assert_select 'form[action=?][data-turbo-confirm*=?]',
-                    admin_user_path(user), 'This constituent has approved applications'
-      assert_select 'form[action=?][data-turbo-confirm*=?]',
-                    admin_user_path(user), 'application history, proofs, training, evaluations, and related records'
+      assert_select 'form[action=?]', reactivate_admin_user_path(user) do
+        assert_select 'button', text: 'Reactivate User'
+      end
+      assert_select 'form[action=?]', deactivate_admin_user_path(user), count: 0
     end
 
     test 'index and show do not surface reset password buttons' do
@@ -145,177 +145,133 @@ module Admin
       assert_redirected_to root_path
     end
 
-    test 'admin can delete a simple user' do
-      user = create(:admin)
-
-      assert_difference -> { Event.where(action: 'admin_user_deletion_attempted').count }, 1 do
-        assert_difference -> { Event.where(action: 'admin_user_deleted').count }, 1 do
-          assert_difference('User.count', -1) do
-            delete admin_user_path(user)
-          end
-        end
-      end
-
-      assert_redirected_to admin_users_path
-      assert_equal "Deleted user #{user.full_name}.", flash[:notice]
-      assert_nil User.find_by(id: user.id)
-
-      deleted_event = Event.find_by!(action: 'admin_user_deleted')
-      assert_equal @admin.id, deleted_event.user_id
-      assert_equal user.id, deleted_event.metadata['target_user_id']
-    end
-
-    test 'admin cannot delete themself' do
-      assert_difference -> { Event.where(action: 'admin_user_deletion_blocked').count }, 1 do
-        assert_no_difference('User.count') do
-          delete admin_user_path(@admin)
-        end
-      end
-
-      assert_redirected_to admin_user_path(@admin)
-      assert_equal 'You cannot delete your own user account.', flash[:alert]
-      assert User.exists?(@admin.id)
-    end
-
-    test 'admin cannot delete system user' do
-      system_user = ensure_system_audit_actor!
-
-      assert_difference -> { Event.where(action: 'admin_user_deletion_blocked').count }, 1 do
-        assert_no_difference('User.count') do
-          delete admin_user_path(system_user)
-        end
-      end
-
-      assert_redirected_to admin_user_path(system_user)
-      assert_equal 'You cannot delete the system user.', flash[:alert]
-      assert User.exists?(system_user.id)
-
-      event = Event.find_by!(action: 'admin_user_deletion_blocked', auditable: system_user)
-      assert_equal 'system_user', event.metadata['reason']
-    end
-
-    test 'admin deletion failure redirects back with alert' do
-      user = create(:admin)
-      Notification.create!(
-        recipient: @admin,
-        actor: user,
-        action: 'test_notification',
-        notifiable: create(:application)
-      )
-
-      assert_difference -> { Event.where(action: 'admin_user_deletion_failed').count }, 1 do
-        assert_no_difference('User.count') do
-          delete admin_user_path(user)
-        end
-      end
-
-      assert_redirected_to admin_user_path(user)
-      assert_match(/Could not delete #{Regexp.escape(user.full_name)}/, flash[:alert])
-      assert User.exists?(user.id)
-
-      event = Event.find_by!(action: 'admin_user_deletion_failed', auditable: user)
-      assert_equal @admin.id, event.user_id
-      assert_equal 'ActiveRecord::InvalidForeignKey', event.metadata['error_class']
-    end
-
-    test 'admin deletion failure logs recovery request blockers' do
-      user = create(:admin)
-      create(:recovery_request, user: user)
-
-      assert_difference -> { Event.where(action: 'admin_user_deletion_failed').count }, 1 do
-        assert_no_difference('User.count') do
-          delete admin_user_path(user)
-        end
-      end
-
-      assert_redirected_to admin_user_path(user)
-      assert_match(/Could not delete #{Regexp.escape(user.full_name)}/, flash[:alert])
-      assert User.exists?(user.id)
-
-      event = Event.find_by!(action: 'admin_user_deletion_failed', auditable: user)
-      assert_equal 'ActiveRecord::DeleteRestrictionError', event.metadata['error_class']
-    end
-
-    test 'admin deletion failure excludes sensitive exception details from diagnostics' do
-      user = create(:admin)
-      private_email = 'private-deletion@example.test'
-      private_phone = '410-555-0199'
-      user.errors.add(:base, "Contact #{private_email} at #{private_phone}")
-      error = ActiveRecord::RecordInvalid.new(user)
-      User.any_instance.stubs(:destroy!).raises(error)
-      log_output = StringIO.new
-      logger = ActiveSupport::TaggedLogging.new(ActiveSupport::Logger.new(log_output))
-
-      Rails.stub(:logger, logger) { delete admin_user_path(user) }
-
-      assert_redirected_to admin_user_path(user)
-      assert User.exists?(user.id)
-      event = Event.find_by!(action: 'admin_user_deletion_failed', auditable: user)
-      assert_equal 'ActiveRecord::RecordInvalid', event.metadata['error_class']
-      assert_not event.metadata.key?('error_message')
-      [event.metadata.to_json, log_output.string, flash[:alert]].each do |diagnostics|
-        assert_not_includes diagnostics, private_email
-        assert_not_includes diagnostics, private_phone
-      end
-    end
-
-    test 'admin deletion failure logs voucher blockers for constituent applications' do
+    test 'deactivation preserves application and audit history and revokes sessions' do
       user = create(:constituent)
       application = create(:application, :completed, user: user)
-      create(:voucher, application: application, vendor: nil)
+      authored_event = AuditEventService.log(actor: user, action: 'account_history', auditable: application)
+      notification = Notification.create!(recipient: user, actor: @admin, action: 'test_notification', notifiable: application)
+      user_session = create_test_session(user)
 
-      assert_difference -> { Event.where(action: 'admin_user_deletion_failed').count }, 1 do
-        assert_no_difference('User.count') do
-          assert_no_difference('Application.count') do
-            delete admin_user_path(user)
-          end
+      assert_no_difference ['User.count', 'Application.count', 'Notification.count'] do
+        assert_difference -> { Event.where(action: 'user_deactivated', auditable: user).count }, 1 do
+          post deactivate_admin_user_path(user)
         end
       end
 
       assert_redirected_to admin_user_path(user)
-      assert_match(/Could not delete #{Regexp.escape(user.full_name)}/, flash[:alert])
-      assert User.exists?(user.id)
-      assert Application.exists?(application.id)
-
-      event = Event.find_by!(action: 'admin_user_deletion_failed', auditable: user)
-      assert event.metadata['error_class'].present?
+      assert user.reload.inactive?
+      assert_not Session.exists?(user_session.id)
+      assert_equal user.id, authored_event.reload.user_id
+      assert_equal user.id, application.reload.user_id
+      assert_equal user.id, notification.reload.recipient_id
+      event = Event.find_by!(action: 'user_deactivated', auditable: user)
+      assert_equal @admin.id, event.user_id
+      assert_equal 'active', event.metadata['old_status']
+      assert_equal 'inactive', event.metadata['new_status']
+      assert_equal 1, event.metadata['revoked_sessions_count']
     end
 
-    test 'non admin cannot delete a user' do
-      sign_out
-      non_admin = create(:constituent)
-      user = create(:admin)
-      sign_in_for_integration_test non_admin
+    test 'reactivation is audited without restoring revoked sessions' do
+      user = create(:constituent, status: :inactive)
 
-      assert_no_difference('User.count') do
-        delete admin_user_path(user)
+      assert_difference -> { Event.where(action: 'user_reactivated', auditable: user).count }, 1 do
+        assert_no_difference 'Session.count' do
+          post reactivate_admin_user_path(user)
+        end
+      end
+
+      assert_redirected_to admin_user_path(user)
+      assert user.reload.public_login_active?
+      assert_equal @admin.id, Event.find_by!(action: 'user_reactivated', auditable: user).user_id
+    end
+
+    test 'deactivation and session revocation roll back when the audit cannot be recorded' do
+      user = create(:constituent)
+      user_session = create_test_session(user)
+      AuditEventService.stubs(:log).raises(ActiveRecord::RecordInvalid.new(Event.new))
+
+      post deactivate_admin_user_path(user)
+
+      assert_redirected_to admin_user_path(user)
+      assert_equal 'The account status could not be changed. No changes were saved.', flash[:alert]
+      assert user.reload.active?
+      assert Session.exists?(user_session.id)
+      assert_not Event.exists?(action: 'user_deactivated', auditable: user)
+    end
+
+    test 'repeated deactivation does not create another status audit' do
+      user = create(:constituent)
+      post deactivate_admin_user_path(user)
+
+      assert_no_difference 'Event.count' do
+        post deactivate_admin_user_path(user)
+      end
+
+      assert user.reload.inactive?
+    end
+
+    test 'a new deactivation after reactivation retains a distinct audit event' do
+      user = create(:constituent)
+      post deactivate_admin_user_path(user)
+      post reactivate_admin_user_path(user)
+
+      assert_difference -> { Event.where(action: 'user_deactivated', auditable: user).count }, 1 do
+        post deactivate_admin_user_path(user)
+      end
+    end
+
+    test 'admin cannot deactivate themself or the system audit account' do
+      [@admin, ensure_system_audit_actor!].each do |user|
+        get admin_user_path(user)
+        assert_response :success
+        assert_select 'form[action=?]', deactivate_admin_user_path(user), count: 0
+        assert_select 'form[action=?]', reactivate_admin_user_path(user), count: 0
+        assert_no_difference 'Event.count' do
+          post deactivate_admin_user_path(user)
+        end
+        assert_redirected_to admin_user_path(user)
+        assert user.reload.active?
+      end
+    end
+
+    test 'reactivation refuses a merged record' do
+      user = create(:constituent, status: :inactive, merged_into_user: create(:constituent), merged_by: @admin, merged_at: Time.current)
+
+      get admin_user_path(user)
+      assert_response :success
+      assert_select 'form[action=?]', reactivate_admin_user_path(user), count: 0
+
+      assert_no_difference 'Event.count' do
+        post reactivate_admin_user_path(user)
+      end
+
+      assert_redirected_to admin_user_path(user)
+      assert user.reload.inactive?
+      assert_match(/merged record/, flash[:alert])
+    end
+
+    test 'non admin cannot deactivate a user' do
+      sign_out
+      sign_in_for_integration_test create(:constituent)
+      user = create(:admin)
+
+      assert_no_difference 'Event.count' do
+        post deactivate_admin_user_path(user)
       end
 
       assert_redirected_to root_path
-      assert User.exists?(user.id)
+      assert user.reload.active?
     end
 
-    test 'deleting a constituent cascades to their applications' do
-      user = create(:constituent)
-      application = create(:application, :completed, user: user)
+    test 'show hides retirement actions for current admin and system audit account' do
+      [@admin, ensure_system_audit_actor!].each do |user|
+        get admin_user_path(user)
 
-      assert_difference('Users::Constituent.count', -1) do
-        assert_difference('Application.count', -1) do
-          delete admin_user_path(user)
-        end
+        assert_response :success
+        assert_select 'form[action=?]', deactivate_admin_user_path(user), count: 0
+        assert_select 'form[action=?]', reactivate_admin_user_path(user), count: 0
+        assert_select 'button', text: 'Delete User', count: 0
       end
-
-      assert_redirected_to admin_users_path
-      assert_nil User.find_by(id: user.id)
-      assert_nil Application.find_by(id: application.id)
-    end
-
-    test 'show does not surface delete user button for current admin' do
-      get admin_user_path(@admin), headers: { 'Turbo-Frame' => 'admin_user_show' }
-
-      assert_response :success
-      assert_select 'form[action=?]', admin_user_path(@admin), count: 0
-      assert_select 'button', text: 'Delete User', count: 0
     end
 
     test 'should create new constituent user as guardian' do

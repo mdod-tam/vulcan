@@ -143,9 +143,7 @@ module Applications
       assert_equal 0, Notification.where(notifiable: draft).count
       assert_equal 1, ActiveStorage::Attachment.where(record: draft, name: 'income_proof').count
     ensure
-      draft&.destroy
-      DocumentScan.where(user: user).delete_all if user
-      user&.destroy
+      cleanup_duplicate_review_test_data!(user)
     end
 
     test 'submission commits first: a stale save-draft fails closed without undoing lifecycle state' do
@@ -194,9 +192,7 @@ module Applications
       assert_equal 1, Event.where(action: 'application_status_changed', auditable: draft).count
       assert_equal 1, Event.where(action: 'application_updated', auditable: draft).count
     ensure
-      draft&.destroy
-      DocumentScan.where(user: user).delete_all if user
-      user&.destroy
+      cleanup_duplicate_review_test_data!(user)
     end
 
     test 'save-draft commits first: a waiting submission proceeds through the canonical lifecycle once' do
@@ -243,9 +239,7 @@ module Applications
       assert_equal 1, Event.where(action: 'application_updated', auditable: draft).count,
                    'rapid draft and submission updates share the existing audit deduplication window'
     ensure
-      draft&.destroy
-      DocumentScan.where(user: user).delete_all if user
-      user&.destroy
+      cleanup_duplicate_review_test_data!(user)
     end
 
     test 'role conversion commits first: final submission fails the exact constituent-role recheck' do
@@ -289,9 +283,7 @@ module Applications
       assert_equal 'draft', draft.reload.status
       assert_equal 0, ApplicationStatusChange.where(application: draft).count
     ensure
-      DocumentScan.where(user: user).delete_all if user
-      draft&.destroy
-      User.find_by(id: user&.id)&.destroy
+      cleanup_duplicate_review_test_data!(user)
     end
 
     test 'final submission commits first: later role conversion observes the serialized portal write' do
@@ -334,9 +326,7 @@ module Applications
       assert_equal 1, ApplicationStatusChange.where(application: draft).count
       assert_equal 'Users::Administrator', User.find(user.id).type
     ensure
-      DocumentScan.where(user: user).delete_all if user
-      draft&.destroy
-      User.find_by(id: user&.id)&.destroy
+      cleanup_duplicate_review_test_data!(user)
     end
 
     # ApplicationCreator reads the case under the applicant's User lock.

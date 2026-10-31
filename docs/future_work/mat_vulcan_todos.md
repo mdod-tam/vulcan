@@ -135,6 +135,8 @@ DocuSeal go-live requirements
 
 ## Audit & Event Tracking
 
+- [ ] Move invoice generation and notification-failure audit writes in `Invoices::GenerationService` and `Invoices::Workflow` through `AuditEventService`, preserving their transaction and retry identities.
+- [ ] Move `EmailDelivery::Outcome`, `Feedback`, and `LegacyMailJobs` audit writes through the canonical owner while preserving request-id deduplication and provider-event guards. Fix `LegacyMailJobs.remove!` deleting a queue job before its removal audit is durable; the queue and application stores require an explicit failure/retry contract.
 - [ ] Event browsing: settle the query shape and the indexes it needs.
 - [ ] Controller: `Admin::EventsController#index` (filters, pagination).
 - [ ] CSV export: service + controller action, scoped to the filters.

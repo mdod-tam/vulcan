@@ -9,6 +9,7 @@ module EmailDelivery
       recipient: 1,
       proof_attached: 2,
       vendor_params: 0,
+      voucher_params: 0,
       assignment: 0,
       notifiable: 1,
       notifiable_and_notification: 2

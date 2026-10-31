@@ -3,9 +3,10 @@
 module EmailDelivery
   # Adapts notification actions to mailers and records their actual delivery route.
   class NotificationDispatch
-    def initialize(notification, channel:)
+    def initialize(notification, channel:, context: nil)
       @notification = notification
       @channel = channel
+      @context = context
     end
 
     def call
@@ -73,7 +74,9 @@ module EmailDelivery
     end
 
     def send_notification_email(notification, mailer_class, method_name, requested_channel:)
-      EmailDelivery::Current.set(notification_id: notification.id) do
+      state = { notification_id: notification.id }
+      state.merge!(context: @context, queued: true) if @context
+      EmailDelivery::Current.set(state) do
         process_notification_mail(notification, mailer_class, method_name, requested_channel: requested_channel)
       end
     rescue ApplicationMailer::DeliverySkipped, EmailDelivery::ConfigurationError => e
@@ -124,6 +127,8 @@ module EmailDelivery
         mailer_class.public_send(method_name, application, proof_type)
       when :vendor_params
         mailer_class.with(vendor: notification.notifiable).public_send(method_name)
+      when :voucher_params
+        mailer_class.with(voucher: notification.notifiable).public_send(method_name)
       when :assignment
         mailer_class.with(recipient: notification.recipient, assignment: notification.notifiable,
                           operation_id: notification.metadata&.dig('operation_id')).public_send(method_name)

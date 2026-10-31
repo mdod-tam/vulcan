@@ -57,6 +57,8 @@ class ApplicationStatusChangeLifecycleTest < ActiveSupport::TestCase
   end
 
   test 'lifecycle counts approved only for status and legacy lifecycle rows' do
+    @application.update!(income_proof_status: :approved, residency_proof_status: :approved,
+                         id_proof_status: :approved, disability_certification_status: :approved)
     @application.transition_status!(:in_progress, actor: @admin, metadata: { trigger: 'test' })
     @application.transition_status!(:approved, actor: @admin, metadata: { trigger: 'test' })
 

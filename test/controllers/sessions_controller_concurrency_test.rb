@@ -189,6 +189,88 @@ class SessionsControllerConcurrencyTest < ActiveSupport::TestCase
     cleanup_duplicate_review_test_data!(user)
   end
 
+  test 'parallel TOTP checks serialize the final account attempt before another browser can verify' do
+    existing_system_actor = PublicAuditActor.system_audit_actor
+    system_actor = existing_system_actor || create(:admin, email: PublicAuditActor::SYSTEM_AUDIT_EMAIL)
+    user = create(:constituent, totp_failed_attempts: UserAuthentication::TOTP_MAX_ATTEMPTS - 1,
+                                totp_attempt_window_started_at: Time.current)
+    credential = user.totp_credentials.create!(secret: ROTP::Base32.random_base32, nickname: 'Authenticator')
+    holder_ready = Queue.new
+    release_holder = Queue.new
+    holder_pid_queue = Queue.new
+    first_outcome = nil
+    holder_thread = on_own_connection do
+      holder_pid_queue << backend_pid
+      User.transaction do
+        first_outcome = User.find(user.id).verify_totp('invalid-code')
+        holder_ready << true
+        release_holder.pop
+      end
+    end
+    holder_pid = wait_for_signal(holder_pid_queue, thread: holder_thread)
+    wait_for_signal(holder_ready, thread: holder_thread)
+
+    contender_pid_queue = Queue.new
+    second_outcome = nil
+    contender_thread = on_own_connection do
+      contender_pid_queue << backend_pid
+      second_outcome = User.find(user.id).verify_totp(ROTP::TOTP.new(credential.secret).now)
+    end
+    confirm_blocked_then_release(
+      wait_for_signal(contender_pid_queue, thread: contender_thread),
+      holder_pid:, release_queue: release_holder, holder_thread:, contender_thread:
+    )
+
+    assert_equal :rate_limited, first_outcome
+    assert_equal :rate_limited, second_outcome
+    assert_equal UserAuthentication::TOTP_MAX_ATTEMPTS, user.reload.totp_failed_attempts
+    events = Event.where(action: 'two_factor_verification_rate_limited', auditable: user)
+    assert_equal 1, events.count
+    assert_equal system_actor, events.first.user
+    assert_equal user.id, events.first.metadata.fetch('target_user_id')
+    assert_equal 'totp', events.first.metadata.fetch('factor')
+    assert_equal PublicAuditActor::PUBLIC_AUDIT_ACTOR_METADATA, events.first.metadata.fetch('public_audit_actor')
+    assert_equal 0, Event.where(user: user, action: 'two_factor_verification_rate_limited').count
+    assert_equal 0, user.sessions.count
+  ensure
+    TotpCredential.where(user: user).delete_all if user
+    cleanup_duplicate_review_test_data!(user)
+    cleanup_duplicate_review_test_data!(system_actor) unless existing_system_actor
+  end
+
+  test 'an audit failure after the TOTP failure window commits cannot reopen the budget' do
+    existing_system_actor = PublicAuditActor.system_audit_actor
+    system_actor = existing_system_actor || create(:admin, email: PublicAuditActor::SYSTEM_AUDIT_EMAIL)
+    user = create(:constituent, totp_failed_attempts: UserAuthentication::TOTP_MAX_ATTEMPTS - 1,
+                                totp_attempt_window_started_at: Time.current)
+    AuditEventService.expects(:log).once.raises(IOError, 'audit unavailable')
+    assert_equal :rate_limited, user.verify_totp('invalid-code')
+
+    assert_equal UserAuthentication::TOTP_MAX_ATTEMPTS, user.reload.totp_failed_attempts
+    assert_equal :rate_limited, user.verify_totp('invalid-code')
+    assert_equal 0, user.sessions.count
+  ensure
+    cleanup_duplicate_review_test_data!(user)
+    cleanup_duplicate_review_test_data!(system_actor) unless existing_system_actor
+  end
+
+  test 'a missing public audit sentinel neither creates an actor nor reopens TOTP attempts' do
+    user = create(:constituent, totp_failed_attempts: UserAuthentication::TOTP_MAX_ATTEMPTS - 1,
+                                totp_attempt_window_started_at: Time.current)
+
+    PublicAuditActor.stub(:system_audit_actor, nil) do
+      assert_no_difference(['User.count', 'Event.count']) do
+        assert_equal :rate_limited, user.verify_totp('invalid-code')
+      end
+    end
+
+    assert_equal UserAuthentication::TOTP_MAX_ATTEMPTS, user.reload.totp_failed_attempts
+    assert_equal :rate_limited, user.verify_totp('invalid-code')
+    assert_equal 0, user.sessions.count
+  ensure
+    cleanup_duplicate_review_test_data!(user)
+  end
+
   private
 
   def build_fixtures

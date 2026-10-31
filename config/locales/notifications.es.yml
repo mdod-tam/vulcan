@@ -1,0 +1,4 @@
+es:
+  notifications:
+    messages:
+      voucher_expired: "Su vale ha vencido."

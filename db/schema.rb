@@ -10,7 +10,7 @@
 #
 # It's strongly recommended that you check this file into your version control system.
 
-ActiveRecord::Schema[8.1].define(version: 2026_10_29_160000) do
+ActiveRecord::Schema[8.1].define(version: 2026_10_30_183000) do
   # These are extensions that must be enabled in order to support this database
   enable_extension "pg_catalog.plpgsql"
 
@@ -744,13 +744,13 @@ ActiveRecord::Schema[8.1].define(version: 2026_10_29_160000) do
     t.datetime "expires_at"
     t.integer "failed_attempts", default: 0
     t.string "ip_address"
-    t.string "session_token"
     t.datetime "updated_at", null: false
     t.string "user_agent"
     t.bigint "user_id", null: false
     t.datetime "last_active_at", null: false
+    t.string "session_token_digest", null: false
     t.index ["expires_at"], name: "index_sessions_on_expires_at"
-    t.index ["session_token"], name: "index_sessions_on_session_token", unique: true
+    t.index ["session_token_digest"], name: "index_sessions_on_session_token_digest", unique: true
     t.index ["user_id"], name: "index_sessions_on_user_id"
   end
 
@@ -1020,6 +1020,8 @@ ActiveRecord::Schema[8.1].define(version: 2026_10_29_160000) do
     t.string "webauthn_id"
     t.string "website_url"
     t.string "zip_code", limit: 300
+    t.integer "totp_failed_attempts", default: 0, null: false
+    t.datetime "totp_attempt_window_started_at"
     t.index ["business_name"], name: "index_users_on_business_name"
     t.index ["certifying_professional_id"], name: "index_users_on_certifying_professional_id"
     t.index ["dependent_email"], name: "index_users_on_dependent_email"
@@ -1039,6 +1041,7 @@ ActiveRecord::Schema[8.1].define(version: 2026_10_29_160000) do
     t.index ["w9_rejections_count"], name: "index_users_on_w9_rejections_count", where: "((type)::text = 'Users::Vendor'::text)"
     t.index ["w9_status"], name: "index_users_on_w9_status", where: "((type)::text = 'Users::Vendor'::text)"
     t.index ["webauthn_id"], name: "index_users_on_webauthn_id", unique: true
+    t.check_constraint "totp_failed_attempts >= 0", name: "users_totp_failed_attempts_nonnegative"
   end
 
   create_table "vendor_secure_request_forms", force: :cascade do |t|

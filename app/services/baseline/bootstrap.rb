@@ -18,9 +18,7 @@ module Baseline
       input = ADMINISTRATOR_ENV.transform_values { |name| env[name] }
       missing = ADMINISTRATOR_ENV.values_at(*input.select { |_key, value| value.blank? }.keys)
       raise ConfigurationError, "Set #{missing.join(', ')} before bootstrapping." if missing.any?
-      if User.normalize_email(input[:email]) == PublicAuditActor::SYSTEM_AUDIT_EMAIL
-        raise ConfigurationError, "#{ADMINISTRATOR_ENV[:email]} must differ from the system audit address."
-      end
+      raise ConfigurationError, "#{ADMINISTRATOR_ENV[:email]} must differ from the system audit address." if User.system_audit_email?(input[:email])
 
       input
     end
