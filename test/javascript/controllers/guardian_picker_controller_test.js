@@ -109,6 +109,12 @@ describe("GuardianPickerController", () => {
       configurable: true
     })
     Object.defineProperty(controller, 'hasApplicantTypeRadioDependentTarget', { value: true, configurable: true })
+
+    for (const name of ['lastApplicationSummary', 'lastApplicationSource', 'lastApplicationDetails',
+      'incomeCopyButton', 'certifyingProfessionalCopyButton']) {
+      Object.defineProperty(controller, `${name}Target`, { value: fixture.querySelector(`#${name}`), configurable: true })
+      Object.defineProperty(controller, `has${name[0].toUpperCase()}${name.slice(1)}Target`, { value: true, configurable: true })
+    }
     
     controller.dispatch = jest.fn()
     
@@ -256,6 +262,87 @@ describe("GuardianPickerController", () => {
       })
       
       jest.useRealTimers()
+    })
+  })
+
+  describe("last application response ownership", () => {
+    let requests
+
+    beforeEach(() => {
+      requests = []
+      global.fetch.mockImplementation(() => new Promise(resolve => requests.push(resolve)))
+    })
+
+    async function respond(index, data) {
+      requests[index]({ ok: true, json: async () => data })
+      await Promise.resolve()
+      await Promise.resolve()
+    }
+
+    const context = (id, income) => ({ success: true, application_id: id, annual_income: income,
+      certifying_professional_name: `Professional ${id}` })
+
+    it("clears old copy data immediately when a replacement guardian starts loading", async () => {
+      controller.selectGuardian('1', '')
+      await respond(0, context(11, 11000))
+      controller.selectGuardian('2', '')
+
+      controller.useLastApplicationIncomeInfo()
+      controller.useLastApplicationCertifyingProfessional()
+
+      expect(setFieldValue).not.toHaveBeenCalled()
+      expect(controller.lastApplicationSummaryTarget).toHaveClass('hidden')
+    })
+
+    it("copies only the selected guardian after responses arrive out of order", async () => {
+      controller.selectGuardian('1', '')
+      controller.selectGuardian('2', '')
+      await respond(1, context(22, 22000))
+      await respond(0, context(11, 11000))
+
+      controller.useLastApplicationIncomeInfo()
+      controller.useLastApplicationCertifyingProfessional()
+
+      expect(controller.guardianIdFieldTarget.value).toBe('2')
+      expect(setFieldValue).toHaveBeenCalledWith('input[name="application[annual_income]"]', 22000)
+      expect(setFieldValue).toHaveBeenCalledWith('input[name="application[certifying_professional_name]"]', 'Professional 22')
+      expect(controller.lastApplicationSummaryTarget).not.toHaveClass('hidden')
+    })
+
+    it("does not let an old empty result hide the current guardian context", async () => {
+      controller.selectGuardian('1', '')
+      controller.selectGuardian('2', '')
+      await respond(1, context(22, 22000))
+      await respond(0, { success: true, application_id: null })
+
+      controller.useLastApplicationIncomeInfo()
+
+      expect(setFieldValue).toHaveBeenCalledWith('input[name="application[annual_income]"]', 22000)
+      expect(controller.lastApplicationSummaryTarget).not.toHaveClass('hidden')
+    })
+
+    it("rejects an earlier response even after the same guardian is selected again", async () => {
+      controller.selectGuardian('1', '')
+      controller.selectGuardian('2', '')
+      controller.selectGuardian('1', '')
+      await respond(2, context(33, 33000))
+      await respond(0, context(11, 11000))
+
+      controller.useLastApplicationIncomeInfo()
+
+      expect(setFieldValue).toHaveBeenCalledWith('input[name="application[annual_income]"]', 33000)
+    })
+
+    it.each(['clearSelection', 'disconnect'])("invalidates pending responses on %s", async action => {
+      controller.selectGuardian('1', '')
+      controller[action]()
+      await respond(0, context(11, 11000))
+
+      controller.useLastApplicationIncomeInfo()
+      controller.useLastApplicationCertifyingProfessional()
+
+      expect(setFieldValue).not.toHaveBeenCalled()
+      expect(controller.lastApplicationSummaryTarget).toHaveClass('hidden')
     })
   })
   

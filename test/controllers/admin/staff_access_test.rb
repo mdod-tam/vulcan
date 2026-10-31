@@ -137,14 +137,13 @@ module Admin
     end
 
     test 'a refusal from the open dialog stays in the dialog' do
-      create(:role_capability, user: @evaluator, capability: 'can_train')
-      other_admin = create(:admin, status: :inactive)
-      sign_in_for_integration_test(other_admin)
-
-      patch update_capabilities_admin_user_path(@evaluator), params: revoke('can_train', 'op-4').merge(confirmation: 'anything'), headers: TURBO
+      assert_no_difference ['RoleCapability.count', 'Event.count'] do
+        patch update_capabilities_admin_user_path(@evaluator), params: revoke('can_evaluate', 'op-4').merge(confirmation: 'anything'), headers: TURBO
+      end
 
       assert_response :unprocessable_content
       assert_targets %w[staff_access_error]
+      assert_includes response.body, 'comes with this role and cannot be removed.'
     end
 
     test 'a role change warns for each actual loss, and an unchanged role is reported' do

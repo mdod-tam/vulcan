@@ -55,7 +55,7 @@ namespace :data_integrity do
       puts "Deleting #{orphaned_apps.count} orphaned applications..."
       orphaned_apps.each do |app|
         puts "  Deleting Application ID: #{app.id}"
-        app.destroy
+        app.destroy!
       end
       puts 'Deletion complete.'
     when 'assign'

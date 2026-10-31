@@ -42,6 +42,8 @@ The [autosave controller tests](../../test/controllers/constituent_portal/applic
 
 These are available states, not a promise that every transition between them is allowed by every workflow.
 
+Manual and automatic approval require the application's saved proof requirements and approved disability certification. Rejected and archived applications cannot return to active processing through an ordinary status transition. The admin profile editor does not change application status; lifecycle changes use the canonical transition owner.
+
 [Application#reconcile_workflow_state!](../../app/models/concerns/application_status_management.rb) reevaluates progress after document work:
 
 - Approved residency and ID proofs, plus income proof when required, satisfy the regular proof requirements.
@@ -66,6 +68,8 @@ For a dependent application, `application.user` is the dependent and `managing_g
 Communications may create notification history, email, printable letters, or workflow-specific SMS. Some actions, including individual proof approval, are intentionally record-only. Start with [notifications](notifications.md) rather than adding a mailer call at each lifecycle step.
 
 The application timeline combines several record types. It filters and deduplicates them for display; it is not the complete raw audit dataset. See [audit events](audit_event_tracking.md).
+
+Staff deactivate a user from the admin user page to stop account access while preserving application and audit history. Deactivation revokes existing sessions and records the responsible administrator. Reactivation is an explicit, audited action; it does not restore revoked sessions. User deletion is not an admin operation, and model restrictions prevent deletion of users or applications that retain history.
 
 ## Program policies
 

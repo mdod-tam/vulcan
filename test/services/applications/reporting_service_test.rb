@@ -494,13 +494,13 @@ module Applications
         jun30 = Time.zone.local(2026, 6, 30, 23, 59, 59)
         jul1 = Time.zone.local(2026, 7, 1, 0, 0, 0)
 
-        in_fy_app = create(:application, :draft, :with_income_proof, :with_residency_proof)
+        in_fy_app = create(:application, :completed, :draft, :with_income_proof, :with_residency_proof)
         in_fy_app.transition_status!(:in_progress, actor: admin, metadata: { trigger: 'test' })
         in_fy_app.transition_status!(:approved, actor: admin, metadata: { trigger: 'test' })
         ApplicationStatusChange.lifecycle.find_by(application: in_fy_app, to_status: 'approved')
                                .update!(changed_at: jun30)
 
-        out_fy_app = create(:application, :draft, :with_income_proof, :with_residency_proof)
+        out_fy_app = create(:application, :completed, :draft, :with_income_proof, :with_residency_proof)
         out_fy_app.transition_status!(:in_progress, actor: admin, metadata: { trigger: 'test' })
         out_fy_app.transition_status!(:approved, actor: admin, metadata: { trigger: 'test' })
         ApplicationStatusChange.lifecycle.find_by(application: out_fy_app, to_status: 'approved')
@@ -538,7 +538,7 @@ module Applications
           user: admin
         )
 
-        app = create(:application, :draft, :with_income_proof, :with_residency_proof, created_at: in_fy)
+        app = create(:application, :completed, :draft, :with_income_proof, :with_residency_proof, created_at: in_fy)
         app.transition_status!(:in_progress, actor: admin, metadata: { trigger: 'test' })
         app.transition_status!(:approved, actor: admin, metadata: { trigger: 'test' })
         ApplicationStatusChange.lifecycle.find_by(application: app, to_status: 'approved')
@@ -597,7 +597,7 @@ module Applications
         admin = create(:admin)
         in_fy = Date.new(2025, 8, 1)
 
-        app = create(:application, :draft, :with_income_proof, :with_residency_proof, created_at: in_fy)
+        app = create(:application, :completed, :draft, :with_income_proof, :with_residency_proof, created_at: in_fy)
         app.transition_status!(:in_progress, actor: admin, metadata: { trigger: 'test' })
         status_change = ApplicationStatusChange.lifecycle.find_by(application: app, to_status: 'in_progress')
         status_change.update!(changed_at: in_fy + 2.days)

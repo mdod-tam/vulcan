@@ -69,7 +69,7 @@ module Vendors
         attributes: request_form_attributes
       )
       request_form = issued.secure_request_form
-      notification = create_tracking_notification(request_form) || raise('Could not create W9 tracking notification')
+      notification = create_tracking_notification(request_form)
       Delivery.new(secure_request_form: request_form, raw_token: issued.raw_token, context: @email_context, notification_id: notification.id)
     end
 

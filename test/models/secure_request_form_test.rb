@@ -414,13 +414,16 @@ class SecureRequestFormTest < ActiveSupport::TestCase
     assert_empty SecureRequestForm.with_incomplete_delivery_provenance.where(id: certification_link.id)
   end
 
-  test 'destroying an application removes both kinds of link' do
+  test 'retained certification links prevent application deletion and preserve both kinds of link' do
     application = create(:application)
-    create(:secure_request_form, application: application)
-    create(:certification_upload_form, application: application)
+    user_link = create(:secure_request_form, application: application)
+    certification_link = create(:certification_upload_form, application: application)
 
-    assert_difference 'SecureRequestForm.count', -2 do
-      application.destroy!
+    assert_no_difference ['Application.count', 'SecureRequestForm.count'] do
+      assert_not application.destroy
     end
+    assert Application.exists?(application.id)
+    assert_equal application.id, user_link.reload.application_id
+    assert_equal application.id, certification_link.reload.application_id
   end
 end

@@ -2,7 +2,7 @@
 
 module Users
   class Constituent < User
-    has_many :applications, foreign_key: :user_id, dependent: :destroy
+    has_many :applications, foreign_key: :user_id, dependent: :restrict_with_error
     has_many :evaluations
     has_many :assigned_evaluators, through: :evaluations, source: :evaluator
 

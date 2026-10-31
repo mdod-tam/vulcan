@@ -17,6 +17,56 @@ module Admin
       perform_existing_guardian_selection_workflow
     end
 
+    test 'guardian context copies only the current selection after a delayed response' do
+      previous_guardian = create(:constituent, first_name: 'Previous', last_name: 'ContextGuardian')
+      current_guardian = create(:constituent, first_name: 'Current', last_name: 'ContextGuardian')
+      create(:application, :completed, user: previous_guardian, annual_income: 11_000,
+                                       certifying_professional_name: 'Previous Professional')
+      create(:application, :completed, user: current_guardian, annual_income: 22_000,
+                                       certifying_professional_name: 'Current Professional')
+      system_test_sign_in(create(:admin, verified: true))
+      visit new_admin_paper_application_path
+      choose 'applicant_is_minor'
+
+      page.execute_script(<<~JS)
+        const originalFetch = window.fetch.bind(window);
+        window.fetch = (input, options) => {
+          if (String(input).includes('/admin/users/#{previous_guardian.id}/last_application_values')) {
+            return new Promise((resolve, reject) => {
+              window.releaseGuardianContext = () => originalFetch(input, options).then(async response => {
+                await response.clone().text();
+                resolve(response);
+              }, reject);
+            });
+          }
+          return originalFetch(input, options);
+        };
+      JS
+
+      select_guardian_for_context_test(previous_guardian)
+      assert_no_selector '[data-guardian-picker-target="lastApplicationSummary"]', visible: true
+      within('#guardian-info-section') { click_button 'Change Selection' }
+      select_guardian_for_context_test(current_guardian)
+      assert_selector '[data-guardian-picker-target="lastApplicationDetails"]', text: '22,000'
+      choose 'accept_income_proof'
+
+      page.evaluate_async_script(<<~JS)
+        const done = arguments[0];
+        window.releaseGuardianContext().then(() => setTimeout(done, 0));
+      JS
+      within '#guardian-info-section' do
+        click_button 'Use last application household and income'
+        click_button 'Use last application certifying professional'
+      end
+      assert_equal current_guardian.applications.first.annual_income, find_field('application[annual_income]').value.to_d
+      assert_field 'application[certifying_professional_name]', with: 'Current Professional'
+      assert_selector '[data-guardian-picker-target="lastApplicationSource"]', text: current_guardian.full_name
+      take_evidence_screenshot('guardian-context-current-selection', full: true, html: true)
+
+      within('#guardian-info-section') { click_button 'Change Selection' }
+      assert_no_selector '[data-guardian-picker-target="lastApplicationSummary"]', visible: true
+    end
+
     test 'existing dependent contact refusal uses the shared contact-choice message' do
       guardian = create(:constituent, first_name: 'Shared', last_name: 'Guardian')
       dependent = create(
@@ -67,6 +117,16 @@ module Admin
     end
 
     private
+
+    def select_guardian_for_context_test(guardian)
+      within '#guardian-info-section' do
+        fill_in 'guardian_search_q', with: guardian.full_name
+        within '#guardian_search_results' do
+          find('li', text: guardian.full_name, wait: 10).click
+        end
+      end
+      assert_selector '[data-guardian-picker-target="selectedPane"]', text: guardian.full_name
+    end
 
     def perform_complete_guardian_creation_workflow
       admin = create(:admin, verified: true)

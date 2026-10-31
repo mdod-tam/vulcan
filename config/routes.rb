@@ -42,7 +42,6 @@ Rails.application.routes.draw do
   post 'sign_in', to: 'sessions#create'
   delete 'sign_out', to: 'sessions#destroy'
   get 'sign_out', to: 'sessions#destroy' # Retain direct sign-out links.
-  get 'sessions', to: 'sessions#index'
 
   # Registration
   get 'sign_up', to: 'registrations#new'
@@ -140,7 +139,7 @@ Rails.application.routes.draw do
       end
     end
 
-    resources :applications do
+    resources :applications, except: :destroy do
       resource :equipment_needs, only: %i[edit update]
 
       collection do
@@ -151,8 +150,6 @@ Rails.application.routes.draw do
 
       member do
         post :review_proof
-        patch :approve
-        patch :reject
         patch :update_proof_status
         patch :update_certification_status
         patch :upload_disability_certification
@@ -239,11 +236,9 @@ Rails.application.routes.draw do
       end
     end
 
-    resources :users do
+    resources :users, except: %i[new destroy] do
       collection do
         get :search
-        get :evaluators
-        get :vendors
         get :constituents
       end
 
@@ -251,16 +246,8 @@ Rails.application.routes.draw do
         get :dependents
         get :last_application_values
         get :adult_application_context
-        post :approve
-        post :suspend
         post :reactivate
-        post :assign_constituents
-        post :remove_constituents
-        post :update_availability
         post :deactivate
-        post :reset_password
-        post :remind_to_complete
-        post :assign_evaluator
         delete :mfa_tokens, action: :destroy_mfa_tokens
         patch :update_role
         patch :update_capabilities

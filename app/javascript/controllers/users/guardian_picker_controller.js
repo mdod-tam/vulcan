@@ -20,13 +20,17 @@ export default class extends Controller {
 
   connect() {
     this.selectedValue = !!(this.hasGuardianIdFieldTarget && this.guardianIdFieldTarget.value);
-    this._lastApplicationContext = null;
+    this.invalidateLastApplicationContext();
     this.togglePanes();
 
     if (this.selectedValue && this.guardianIdFieldTarget.value) {
       this.loadDependentsFrame(this.guardianIdFieldTarget.value);
       this.loadLastApplicationContext(this.guardianIdFieldTarget.value);
     }
+  }
+
+  disconnect() {
+    this.invalidateLastApplicationContext();
   }
 
   // selectGuardian and clearSelection are called by admin user search through its outlet.
@@ -48,8 +52,7 @@ export default class extends Controller {
     this.togglePanes();
     this.dispatchSelectionChange();
     this.clearDependentsFrame();
-    this._lastApplicationContext = null;
-    this.hideLastApplicationSummary();
+    this.invalidateLastApplicationContext();
   }
 
   togglePanes() {
@@ -71,6 +74,9 @@ export default class extends Controller {
   }
 
   async loadLastApplicationContext(guardianId) {
+    this.invalidateLastApplicationContext();
+    const generation = this._contextGeneration;
+
     try {
       const response = await fetch(`/admin/users/${guardianId}/last_application_values`, {
         headers: { 'Accept': 'application/json' },
@@ -78,6 +84,8 @@ export default class extends Controller {
       })
       if (!response.ok) return;
       const data = await response.json();
+      if (generation !== this._contextGeneration || !this.selectedValue ||
+          !this.hasGuardianIdFieldTarget || this.guardianIdFieldTarget.value !== String(guardianId)) return;
       if (!data.success || !data.application_id) return this.hideLastApplicationSummary();
 
       this._lastApplicationContext = data;
@@ -85,6 +93,11 @@ export default class extends Controller {
     } catch (e) {
       console.warn('loadLastApplicationContext failed', e);
     }
+  }
+
+  invalidateLastApplicationContext() {
+    this._contextGeneration = (this._contextGeneration || 0) + 1;
+    this.hideLastApplicationSummary();
   }
 
   showLastApplicationSummary(data) {

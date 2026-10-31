@@ -223,10 +223,7 @@ module Applications
                    'the other draft must never have been touched -- autosave must never substitute a different application'
       assert_nil other_draft_never_touched.household_size
     ensure
-      DocumentScan.where(user: user).delete_all if user
-      other_draft_never_touched&.destroy
-      draft&.destroy
-      user&.destroy
+      cleanup_duplicate_review_test_data!(user)
     end
 
     test 'role conversion commits first: autosave fails the exact constituent-role recheck with zero writes' do
@@ -270,8 +267,7 @@ module Applications
       assert_not User.find(user.id).vision_disability?
       assert_nil draft.reload.last_visited_step
     ensure
-      draft&.destroy
-      User.find_by(id: user&.id)&.destroy
+      cleanup_duplicate_review_test_data!(user)
     end
 
     test 'autosave commits first: later role conversion observes the serialized portal write' do
@@ -314,8 +310,7 @@ module Applications
       assert_equal 'vision_disability', draft.reload.last_visited_step
       assert_equal 'Users::Administrator', User.find(user.id).type
     ensure
-      draft&.destroy
-      User.find_by(id: user&.id)&.destroy
+      cleanup_duplicate_review_test_data!(user)
     end
 
     private

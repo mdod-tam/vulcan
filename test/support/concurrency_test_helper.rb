@@ -45,10 +45,18 @@ module ConcurrencyTestHelper
     DuplicateReviewCaseCandidate.where(duplicate_review_case_id: case_ids).delete_all
     DuplicateReviewCaseCandidate.where(candidate_user_id: ids).delete_all
     DuplicateReviewCase.where(id: case_ids).delete_all
-    # Application#destroy_all removes dependent children before their foreign keys can block deletion.
-    # PrintQueueItem comes first because Application has no reverse association for it.
+    # These committed test applications own their history rows. Remove those rows explicitly;
+    # Application#destroy now restricts deletion instead of cascading through retained history.
     application_ids = Application.where('user_id IN (?) OR managing_guardian_id IN (?)', ids, ids).pluck(:id)
     PrintQueueItem.where(application_id: application_ids).delete_all
+    SecureRequestForm.where(application_id: application_ids).destroy_all
+    ApplicationNote.where(application_id: application_ids).delete_all
+    ApplicationStatusChange.where(application_id: application_ids).delete_all
+    ProofReview.where(application_id: application_ids).delete_all
+    Notification.where(notifiable_type: 'Application', notifiable_id: application_ids).delete_all
+    Event.where(auditable_type: 'Application', auditable_id: application_ids).delete_all
+    TrainingSession.where(application_id: application_ids).destroy_all
+    Evaluation.where(application_id: application_ids).destroy_all
     Application.where(id: application_ids).destroy_all
     # Explicit deletion covers actor_id and resolved_by_id references before the user rows.
     Notification.where('recipient_id IN (?) OR actor_id IN (?)', ids, ids).delete_all

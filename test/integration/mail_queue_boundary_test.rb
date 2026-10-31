@@ -7,16 +7,16 @@ require 'test_helper'
 # application's transaction. These tests commit for real. Each test removes what it created.
 class MailQueueBoundaryTest < ActiveSupport::TestCase
   self.use_transactional_tests = false
+  include ConcurrencyTestHelper
 
   QUEUE_SCHEMA = Rails.root.join('db/queue_schema.rb')
 
   setup do
-    DatabaseCleaner.clean
-    @started_at = Time.current
     @control = FeatureFlag.find_by!(name: EmailDelivery::GLOBAL_CONTROL)
     @control_values = @control.slice(:enabled, :delivery_generation)
-    @system_user_existed = User.exists?(email: PublicAuditActor::SYSTEM_AUDIT_EMAIL)
-    ensure_system_audit_actor!
+    @system_actor_existed = PublicAuditActor.system_audit_actor.present?
+    @system_actor = ensure_system_audit_actor!
+    @system_actor_event_ids = @system_actor.events.pluck(:id)
     @admin = create(:admin)
     @user = create(:constituent)
     load_seeded_email_templates('user_mailer_password_reset')
@@ -31,18 +31,17 @@ class MailQueueBoundaryTest < ActiveSupport::TestCase
   teardown do
     DisabilityCertificationEmailJob.queue_adapter = @original_certification_adapter
     EmailDelivery::MailDeliveryJob.queue_adapter = @original_adapter
-    drop_queue_tables!
-    SolidQueue::Record.connects_to(**Rails.application.config.solid_queue.connects_to)
-    # These tests commit, so restore exactly what they changed for the tests that follow.
-    Event.where(created_at: @started_at..).delete_all
-    @control.update_columns(@control_values)
-    Notification.where(recipient: @user).destroy_all
-    @training_session&.destroy!
-    @application&.destroy!
-    @trainer&.destroy!
-    @user&.destroy
-    @admin&.destroy
-    User.where(email: PublicAuditActor::SYSTEM_AUDIT_EMAIL).destroy_all unless @system_user_existed
+    begin
+      drop_queue_tables!
+    ensure
+      SolidQueue::Record.connects_to(**Rails.application.config.solid_queue.connects_to)
+      @control.update_columns(@control_values)
+      @system_actor.events.where.not(id: @system_actor_event_ids).delete_all
+      owned_users = [@trainer, @user, @admin, (@system_actor unless @system_actor_existed)].compact
+      cleanup_duplicate_review_test_data!(owned_users)
+      assert_empty User.unscoped.where(id: owned_users.map(&:id)).pluck(:id)
+      assert_not Application.exists?(@application.id) if @application
+    end
   end
 
   test 'the queue uses its own connection to the application database' do

@@ -225,7 +225,7 @@ module Admin
         admin = create(:admin)
         fy_time = Date.new(2025, 8, 1)
 
-        app = create(:application, :draft, :with_income_proof, :with_residency_proof, created_at: fy_time)
+        app = create(:application, :completed, :draft, :with_income_proof, :with_residency_proof, created_at: fy_time)
         app.transition_status!(:approved, actor: admin, metadata: { trigger: 'test' })
         change = ApplicationStatusChange.lifecycle.find_by(application: app, to_status: 'approved')
         change.update!(changed_at: fy_time + 1.day)

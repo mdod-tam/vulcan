@@ -147,7 +147,7 @@ module Applications
         type: 'disability_certification_requested', recipient: recipient, actor: actor, notifiable: application,
         metadata: { provider: application.certifying_professional_name, provider_email: application.certifying_professional_email },
         channel: :email, deliver: false
-      ) || raise('Could not create certification tracking notification')
+      )
     end
   end
 end

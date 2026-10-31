@@ -6,6 +6,8 @@ An audit event should clearly describe the business action even when no message 
 
 Notifications record communication.
 
+History is retained when an account leaves service. Admin user management deactivates or reactivates accounts and records the responsible administrator; deactivation revokes sessions. Authored events keep their original user association. History-bearing users and applications cannot be destroyed through their model associations, and the admin user surface has no delete operation.
+
 ## How history is built
 
 | Responsibility | Owner |
@@ -61,6 +63,8 @@ Personal-value masking has one owner, [AuditMetadataPrivacy](../../app/services/
 Masking follows personal fields through nested hashes and collections and also applies to values wrapped in a secret or withheld field. Metadata name snapshots, including staff assignment and completion names, retain initials. The exact actor ID and any role metadata are preserved. `Event#user` remains the account association for authorized screens to resolve the actor's current identity, so a masked name snapshot does not remove attribution.
 
 The actor is the authenticated person who performed the action. Public proof and provider-info submissions instead record [PublicAuditActor](../../app/services/public_audit_actor.rb), since anyone can hold a bearer link; the person the submission was made for belongs in metadata rather than in the actor.
+
+Notification creation failures propagate to their workflow owner and attempt a `notification_creation_failed` event with the supplied actor, notification type, recipient ID and error class. An enclosing transaction rolls that event back with its failed operation; after a committed decision, it records incomplete follow-up without erasing the decision. Failed MFA verification uses the system audit actor and identifies the targeted account separately.
 
 `PublicAuditActor` resolves the administrator at `system@mdmat.org`, provisioned by [`bin/rails db:bootstrap`](../infrastructure/setup_and_maintenance.md#bootstrapping-an-environment). Missing that account skips public audit events; public registrations needing a duplicate-review case roll back. Creating a staff administrator alone does not satisfy this dependency.
 

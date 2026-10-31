@@ -46,7 +46,7 @@ module AuthenticationCore
     # Remove a Session row only if the cookie API still supplies its token.
     return if token.blank?
 
-    Session.where(session_token: token).delete_all
+    Session.for_token(token).delete_all
   end
 
   def update_current_user(user)

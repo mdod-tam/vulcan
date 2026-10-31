@@ -5,9 +5,9 @@ require 'timeout'
 
 class NotificationDeliveryConcurrencyTest < ActiveSupport::TestCase
   self.use_transactional_tests = false
+  include ConcurrencyTestHelper
 
   setup do
-    DatabaseCleaner.clean
     @threads = []
     @release_route = Queue.new
     @user = create(:constituent)
@@ -21,7 +21,7 @@ class NotificationDeliveryConcurrencyTest < ActiveSupport::TestCase
     @threads.each { |thread| thread.join(10) || thread.kill }
     Event.where("metadata->>'request_id' = ?", @request_id).delete_all
     @notification&.destroy!
-    @user&.destroy!
+    cleanup_duplicate_review_test_data!(@user)
   end
 
   %i[suppressed configuration_error].each do |outcome|
