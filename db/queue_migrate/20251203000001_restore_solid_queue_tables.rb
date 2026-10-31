@@ -1,10 +1,12 @@
 # frozen_string_literal: true
 
-# Restore Solid Queue tables that were incorrectly removed in migration
-# 20251202000001_remove_orphaned_solid_queue_tables_from_primary.
+# Creates the Solid Queue tables in the queue connection's database. Without
+# QUEUE_DATABASE_URL that is the application database, so a migrate-only
+# deploy depends on this migration; db/queue_schema.rb covers schema loads.
 #
-# The tables were NOT orphaned - they were being used and their absence c
-# causes Heroku to throw errors
+# Already applied to the deployed databases, so its behavior must not change.
+# Put schema changes in new queue migrations; later ones bring these tables in
+# line with the Solid Queue gem's own schema.
 class RestoreSolidQueueTables < ActiveRecord::Migration[8.0]
   def change # rubocop:disable Metrics/MethodLength
     # Core jobs table

@@ -107,3 +107,33 @@ For ongoing operations, keep `MAT_APP` set to the intended app:
 | Capture a database backup | `heroku pg:backups:capture DATABASE_URL --app "$MAT_APP"` |
 
 Capture a backup before data repairs or a deliberate template replacement. The [backup and recovery guide](backup_and_recovery.md) covers scheduling, retention, restoration on Heroku, and which secrets/settings must match. A database dump excludes uploaded files and encryption keys. Restoring an existing environment does not require `db:bootstrap`; rerunning it replaces recovered policies, flags, rejection reasons, and edited templates.
+
+### Queue schema changes
+
+Solid Queue's tables live in the application database unless `QUEUE_DATABASE_URL` is set, so on Heroku a queue migration runs against the live queue. The tables follow the Solid Queue gem's own schema (`lib/generators/solid_queue/install/templates/db/queue_schema.rb` in the installed gem).
+
+- **Add a new migration; never edit one that has run.** `db:migrate` skips recorded versions, so an edited migration changes new databases but leaves deployed ones as they were. Put queue migrations in `db/queue_migrate`. After upgrading the gem, `bin/rails solid_queue:update` copies its new migration there.
+- **Generate `db/queue_schema.rb` from an isolated database, never from a development or deployed one.** In a shared database the dump also contains application tables and any queue tables left over from earlier schemas. Build a throwaway database from the queue migrations alone, with `SCHEMA` naming a file that does not exist yet so Rails migrates from zero and writes the dump there:
+
+  ```bash
+  (
+    export RAILS_ENV=test DATABASE_URL=postgres://postgres@localhost:5432/queue_scratch \
+      QUEUE_DATABASE_URL=postgres://postgres@localhost:5432/queue_scratch_queue \
+      CABLE_DATABASE_URL=postgres://postgres@localhost:5432/queue_scratch_cable
+    bin/rails db:create
+    SCHEMA=tmp/queue_schema.rb bin/rails db:migrate:queue
+    bin/rails db:drop
+  )
+  cp tmp/queue_schema.rb db/queue_schema.rb
+  ```
+
+  The subshell keeps the scratch settings out of your session. Compare the result with the gem's template before committing it.
+- **Recreate development databases built from an older `db/schema.rb`.** They keep stray `solid_queue_*` tables in the primary database, and a development `db:migrate` dumps schema, so those tables reappear in `db/schema.rb`. Run `bin/rails db:reset` (development only; it discards the data) before migrating, and check that `git diff db/schema.rb` shows no `solid_queue` lines afterwards.
+- **Prove the upgrade on a database in the deployed state.** Fresh-database checks do not cover it. Use one scratch database for both `DATABASE_URL` and `QUEUE_DATABASE_URL`, as on Heroku. Load the committed `db/schema.rb` and the previous `db/queue_schema.rb` (`git show HEAD:db/queue_schema.rb`, passed through `SCHEMA` to `db:schema:load:queue`), add jobs and failure rows, run `db:migrate`, and confirm the rows survive and the structure matches the template.
+
+To deploy a queue migration to an existing environment:
+
+1. Capture a backup (`heroku pg:backups:capture DATABASE_URL --app "$MAT_APP"`).
+2. Stop the worker (`heroku ps:scale worker=0 --app "$MAT_APP"`). A worker that started before the release keeps the old column list for `solid_queue_*` tables and fails to record job failures once a column is dropped, until it restarts.
+3. Deploy. The release phase runs the migration, and a failed release leaves the previous release running. A migration that adds a unique index fails if existing rows break it; `AlignSolidQueueSchemaWithGem` checks first and reports it. Remove the duplicates (keep one row per key) and deploy again.
+4. Start the worker (`heroku ps:scale worker=1 --app "$MAT_APP"`) and check `heroku run bin/rails db:migrate:status --app "$MAT_APP"` and `heroku logs --tail --dyno worker --app "$MAT_APP"`.
