@@ -37,16 +37,20 @@ module DuplicateReviewCases
       end
     end
 
-    test 'subject deletion preserves duplicate review case for staff history' do
+    test 'subject deactivation preserves duplicate review case and audit history for staff' do
       result = create_case
       assert result.success?
       duplicate_case = result.data[:duplicate_review_case]
+      event_ids = @subject.audit_events.pluck(:id)
 
       assert_no_difference 'DuplicateReviewCase.count' do
-        @subject.destroy!
+        @subject.deactivate!(actor: @admin)
       end
 
-      assert_nil duplicate_case.reload.subject_user_id
+      assert @subject.reload.inactive?
+      assert_equal @subject.id, duplicate_case.reload.subject_user_id
+      assert_equal event_ids.sort, @subject.audit_events.where(id: event_ids).pluck(:id).sort
+      assert Event.exists?(auditable: @subject, user: @admin, action: 'user_deactivated')
     end
 
     test 'requires subject user and actor' do

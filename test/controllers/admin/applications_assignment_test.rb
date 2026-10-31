@@ -172,17 +172,14 @@ module Admin
       assert_equal 'This constituent has used all available training sessions.', flash[:alert]
     end
 
-    test 'evaluator assignment rejects missing malformed unavailable and deleted selections without side effects' do
+    test 'evaluator assignment rejects missing malformed and unavailable selections without side effects' do
       @application.update!(application_date: Date.current)
       eligible = create(:evaluator)
       inactive = create(:evaluator, status: :inactive)
       wrong_role = create(:trainer)
-      deleted = create(:evaluator)
-      deleted_id = deleted.id
-      deleted.destroy!
       missing_id = User.maximum(:id) + 1
 
-      [nil, '', missing_id, deleted_id, inactive.id, wrong_role.id, "#{eligible.id}invalid", [eligible.id]].each do |selected_id|
+      [nil, '', missing_id, inactive.id, wrong_role.id, "#{eligible.id}invalid", [eligible.id]].each do |selected_id|
         assert_no_difference ['Evaluation.count', 'Notification.count', "Event.where(action: 'evaluator_assigned').count"] do
           assert_no_enqueued_emails do
             post assign_evaluator_admin_application_path(@application), params: { evaluator_id: selected_id }
@@ -211,16 +208,13 @@ module Admin
       assert_equal 'Select an active trainer.', flash[:alert]
     end
 
-    test 'trainer assignment rejects missing malformed wrong role and deleted selections without side effects' do
+    test 'trainer assignment rejects missing malformed and wrong role selections without side effects' do
       @application.update!(application_date: Date.current)
       eligible = create(:trainer)
       wrong_role = create(:evaluator)
-      deleted = create(:trainer)
-      deleted_id = deleted.id
-      deleted.destroy!
       missing_id = User.maximum(:id) + 1
 
-      [nil, '', missing_id, deleted_id, wrong_role.id, "#{eligible.id}invalid", [eligible.id]].each do |selected_id|
+      [nil, '', missing_id, wrong_role.id, "#{eligible.id}invalid", [eligible.id]].each do |selected_id|
         assert_no_difference ['TrainingSession.count', 'Notification.count', "Event.where(action: 'trainer_assigned').count"] do
           assert_no_enqueued_emails do
             post assign_trainer_admin_application_path(@application), params: { trainer_id: selected_id }

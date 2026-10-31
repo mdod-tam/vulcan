@@ -9,7 +9,8 @@ module Vouchers
     include ConcurrencyTestHelper
 
     test 'concurrent sweeps serialize expiration and create one audit and durable notice' do
-      ensure_system_audit_actor!
+      system_actor_existed = PublicAuditActor.system_audit_actor.present?
+      system_actor = ensure_system_audit_actor!
       voucher = create(:voucher, issued_at: 10.years.ago, vendor: nil)
       EmailDelivery::NotificationDispatch.any_instance.stubs(:call).returns(true)
       ready = Queue.new
@@ -48,7 +49,8 @@ module Vouchers
         Event.where(auditable: voucher).delete_all
         Voucher.where(id: voucher.id).delete_all
       end
-      cleanup_duplicate_review_test_data!(voucher&.application&.user)
+      cleanup_duplicate_review_test_data!(voucher&.application&.user, (system_actor unless system_actor_existed))
+      assert_not User.unscoped.exists?(system_actor.id) if system_actor && !system_actor_existed
     end
   end
 end

@@ -164,6 +164,8 @@ class DocumentScanTest < ActiveSupport::TestCase
   test 'deleting an uploader preserves the clearance of their accepted document' do
     blob = ActiveStorage::Blob.create_and_upload!(io: StringIO.new('%PDF-1.4 document'), filename: 'document.pdf')
     mark_document_clean!(blob, user: @user)
+    # This orphan-scan fixture has no retained profile history.
+    @user.audit_events.where(action: 'profile_updated').delete_all
     @user.destroy!
     assert_nil DocumentScan.find_by!(blob: blob).user_id
     assert DocumentScan.cleared?(blob)

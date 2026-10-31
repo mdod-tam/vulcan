@@ -47,13 +47,19 @@ class UsersControllerTest < ActionDispatch::IntegrationTest
   end
 
   %i[inactive suspended].each do |status|
-    test "profile edit remains available to an unmerged #{status} user with an existing session" do
+    test "profile edit denies an unmerged #{status} user with an existing session" do
       @user.update!(status: status)
+      original_name = @user.first_name
+      session_ids = @user.sessions.pluck(:id)
+      assert_predicate session_ids, :any?
 
-      patch profile_path, params: { user: { first_name: 'Still Editable' } }
+      assert_no_difference 'Event.count' do
+        patch profile_path, params: { user: { first_name: 'Blocked Edit' } }
+      end
 
-      assert_redirected_to constituent_portal_dashboard_path
-      assert_equal 'Still Editable', @user.reload.first_name
+      assert_redirected_to sign_in_path
+      assert_equal original_name, @user.reload.first_name
+      assert_empty Session.where(id: session_ids)
       assert_not @user.merged?
     end
   end
