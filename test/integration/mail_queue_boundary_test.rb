@@ -31,7 +31,7 @@ class MailQueueBoundaryTest < ActiveSupport::TestCase
   teardown do
     DisabilityCertificationEmailJob.queue_adapter = @original_certification_adapter
     EmailDelivery::MailDeliveryJob.queue_adapter = @original_adapter
-    drop_queue_tables!
+    release_queue_tables!
     SolidQueue::Record.connects_to(**Rails.application.config.solid_queue.connects_to)
     # These tests commit, so restore exactly what they changed for the tests that follow.
     Event.where(created_at: @started_at..).delete_all
@@ -251,15 +251,26 @@ class MailQueueBoundaryTest < ActiveSupport::TestCase
   end
 
   # Create the queue tables in the application database without recording the queue schema's
-  # version, then give SolidQueue::Record its own pool on that database.
+  # version, then give SolidQueue::Record its own pool on that database. CI already points the
+  # queue at the application database, so the tables may exist; the test leaves them as it found them.
   def use_queue_tables_in_application_database!
     SolidQueue::Record.establish_connection(ActiveRecord::Base.connection_db_config.configuration_hash)
+    @queue_tables_created = SolidQueue::Record.connection.tables.none? { |table| table.start_with?('solid_queue_') }
     body = File.read(QUEUE_SCHEMA)[/define\(version: [\d_]+\) do\n(.*)\nend/m, 1]
     SolidQueue::Record.connection.instance_eval(body)
   end
 
-  def drop_queue_tables!
+  # Drop the tables this test created and empty the ones it found. Does nothing if setup never got
+  # as far as pointing SolidQueue::Record at the application database.
+  def release_queue_tables!
+    return if @queue_tables_created.nil?
+
     connection = SolidQueue::Record.connection
-    connection.tables.grep(/\Asolid_queue_/).each { |table| connection.drop_table(table, force: :cascade) }
+    tables = connection.tables.grep(/\Asolid_queue_/)
+    if @queue_tables_created
+      tables.each { |table| connection.drop_table(table, force: :cascade) }
+    else
+      connection.truncate_tables(*tables)
+    end
   end
 end

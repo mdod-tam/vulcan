@@ -14,11 +14,6 @@ module SolidQueue
       end
     end
 
-    teardown do
-      SolidQueue::Job.where(class_name: AlwaysFailsJob.name).destroy_all
-      SolidQueue::Process.where(name: 'failed-execution-test').destroy_all
-    end
-
     test 'a worker failure leaves one failed execution that retry puts back in the ready queue' do
       job = SolidQueue::Job.enqueue(AlwaysFailsJob.new)
       process = SolidQueue::Process.create!(kind: 'Worker', pid: ::Process.pid, name: 'failed-execution-test',
