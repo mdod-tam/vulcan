@@ -15,6 +15,7 @@
     "jest-environment-jsdom": "^29.7.0"
   },
   "scripts": {
+    "heroku-postbuild": "echo 'Rails assets:precompile builds JavaScript and CSS'",
     "build": "node esbuild.config.js",
     "build:css": "./node_modules/.bin/tailwindcss -i ./app/assets/stylesheets/application.tailwind.css -o ./app/assets/builds/application.css --minify",
     "test": "jest",

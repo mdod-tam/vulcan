@@ -53,6 +53,22 @@ Products come from [products.yml](../../test/fixtures/products.yml) in the demo 
 
 The system audit account is required at runtime: without it, public audit events and metrics alerts are skipped, expiration audits remain pending, secure-link recovery cannot issue a replacement without its original requester, certification uploads fail before storage, and DocuSeal callbacks return HTTP 503 for retry. Registrations requiring duplicate review roll back.
 
+## Heroku asset build
+
+Keep `heroku/nodejs` before `heroku/ruby`. Node installs the locked dependencies and prunes development dependencies. `package.json` provides a `heroku-postbuild` message instead of running its JavaScript build at this stage; Rails' `assets:precompile` owns both JavaScript and CSS compilation afterward. The asset builders are listed under `dependencies` in `package.json`, so Node's pruning retains them.
+
+For existing apps, set the bundling gems' supported skip-install flag as part of deployment, first on development and then on production after development verification:
+
+```bash
+heroku config:set SKIP_YARN_INSTALL=1 --app "$MAT_APP"
+```
+
+Changing a config var creates a release and restarts the app's dynos. `app.json` supplies this flag and the buildpack order for newly provisioned apps; editing that manifest does not update existing apps. Keep this flag scoped to Heroku: local installs, Docker and CI continue to prepare dependencies through their existing paths. Do not set `SKIP_JS_BUILD` or `SKIP_CSS_BUILD`, which would suppress the required asset compilation.
+
+On the next build, expect one Node dependency installation, the deferral message, and Rails' JavaScript and CSS builds without intervening Yarn installs. Confirm fingerprinted JS/CSS are present and a page loads both assets. If this flag is used on another environment, install dependencies before precompilation.
+
+Heroku installs the Ruby version recorded in `Gemfile.lock` (`4.0.9`); no chruby installation or Ruby config var is needed on Heroku. See [Heroku's Ruby version selection](https://devcenter.heroku.com/articles/ruby-support-reference#specify-a-ruby-version). Locally use `ruby-install ruby 4.0.9`, then `chruby ruby-4.0.9`, and install the bundle. When updating the pin, run `bundle update --ruby` under the selected Ruby and review the lockfile for unrelated dependency changes.
+
 ## Heroku deployment and operations
 
 The first release that includes the email delivery controls needs sending stopped during the deploy; follow [Releasing the delivery controls](email_system.md#releasing-the-delivery-controls).
