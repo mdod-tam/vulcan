@@ -57,5 +57,7 @@ en:
       invalid_code: "Invalid verification code. Please try again."
       expired_code: "Verification code has expired. Please request a new one."
       max_attempts_reached: "Maximum attempts reached. Please request a new code."
+      totp_rate_limited: "Too many verification attempts. Wait 15 minutes, then sign in again."
+      verification_rate_limited: "Too many verification requests. Wait one minute, then sign in again."
       verification_service_unavailable: "We're experiencing temporary issues verifying codes. Please try again."
       sms_unavailable: "SMS verification not available"

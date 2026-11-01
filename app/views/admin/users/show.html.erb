@@ -41,25 +41,27 @@
             aria: { label: "Delete MFA tokens for #{@user.full_name}" } do %>
           <span>Delete MFA Tokens</span>
         <% end %>
-        <% unless @user == current_user %>
-          <%
-            delete_user_confirm = if @user.is_a?(Users::Constituent) && @user.applications.where(status: Application.statuses[:approved]).exists?
-                                    "Are you sure?\n\nDeleting a user is permanent and should ONLY be done to clean up test users or invalid users.\n\nThis constituent has approved applications. Deleting this user can also delete application history, proofs, training, evaluations, and related records. Proceed?"
-                                  else
-                                    "Are you sure?\n\nDeleting a user is permanent and should ONLY be done to clean up test users or invalid users. Proceed?"
-                                  end
-          %>
-          <%= button_to admin_user_path(@user),
-              method: :delete,
-              form: {
-                class: "inline-flex",
-                data: {
-                  turbo_confirm: delete_user_confirm
-                }
-              },
-              class: "btn btn-danger",
-              aria: { label: "Delete user #{@user.full_name}" } do %>
-            <span>Delete User</span>
+        <% unless @user.login_status_change_refusal_reason(actor: current_user) %>
+          <% if @user.inactive? || @user.suspended? %>
+            <%= button_to reactivate_admin_user_path(@user),
+                          method: :post,
+                          form: { class: 'inline-flex' },
+                          class: 'btn btn-secondary',
+                          aria: { label: "Reactivate user #{@user.full_name}" } do %>
+              <span>Reactivate User</span>
+            <% end %>
+          <% else %>
+            <%= button_to deactivate_admin_user_path(@user),
+                          method: :post,
+                          form: {
+                            class: 'inline-flex',
+                            data: { turbo_confirm: 'Deactivate this user? Sign-in will be blocked and current sessions revoked. ' \
+                                                   'Their records and history will be preserved.' }
+                          },
+                          class: 'btn btn-danger-outline',
+                          aria: { label: "Deactivate user #{@user.full_name}" } do %>
+              <span>Deactivate User</span>
+            <% end %>
           <% end %>
         <% end %>
         <%= link_to admin_users_path,
@@ -79,6 +81,10 @@
         <div>
           <dt class="text-sm font-medium text-gray-700">Full Name</dt>
           <dd class="mt-1 text-sm text-gray-900"><%= @user.full_name %></dd>
+        </div>
+        <div>
+          <dt class="text-sm font-medium text-gray-700">Account Status</dt>
+          <dd class="mt-1 text-sm text-gray-900"><%= @user.status&.humanize || 'Active' %></dd>
         </div>
         <div>
           <dt class="text-sm font-medium text-gray-700">Email (delivery contact)</dt>

@@ -47,21 +47,22 @@ module Applications
     end
 
     def send_max_rejections_warning
-      # Each rejection at a total of 8 or more logs and sends a new warning.
-      # Audit displays merge duplicates only within one 1-minute bucket (EventDeduplicationService).
+      # Each rejection at the limit records a staff warning. Its operation id keeps distinct
+      # decisions while the canonical audit window suppresses a retry of the same decision.
       AuditEventService.log(
         action: 'max_rejections_warning',
         actor: admin,
         auditable: application,
-        metadata: { recipient_id: User.admins.first.id }
+        metadata: { recipient_id: admin.id, operation_id: operation_id('max_rejections_warning') }
       )
 
       NotificationService.create_and_deliver!(
         type: 'max_rejections_warning',
-        recipient: User.admins.first,
+        recipient: admin,
         actor: admin,
         notifiable: application,
-        channel: :email
+        channel: :email,
+        deliver: false
       )
     end
 

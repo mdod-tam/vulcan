@@ -249,6 +249,9 @@ class DisabilityCertificationAttachmentService
       channel: :email,
       deliver: false
     )
+  rescue ActiveRecord::RecordInvalid
+    # NotificationService records the failure; the reviewer reports missing tracking after commit.
+    nil
   end
 
   def self.resolve_rejection_reason_text(params)

@@ -201,6 +201,45 @@ class SessionActivityTest < ActionDispatch::IntegrationTest
     end
   end
 
+  %i[inactive suspended].each do |status|
+    test "an established signed-cookie session is revoked when the account becomes #{status}" do
+      post sign_in_path, params: { email: @user.email, password: 'password1234' }
+      session_record = @user.sessions.last
+      @user.update!(status: status)
+
+      post '/session_activity', as: :json
+
+      assert_response :unauthorized
+      assert_equal 'authentication_required', response.parsed_body.fetch('error')
+      assert_includes response.headers.fetch('Cache-Control'), 'no-store'
+      assert cookies[:session_token].blank?
+      assert_not Session.exists?(session_record.id)
+      # The integration wrapper restores its helper identity after requests; inspect the responder itself.
+      assert_nil controller.send(:current_user)
+      assert_nil controller.send(:current_session)
+
+      get edit_profile_path
+      assert_redirected_to sign_in_path
+      assert_nil controller.send(:current_user)
+    end
+  end
+
+  test 'a suspended administrator cannot continue an established MFA-authenticated session' do
+    admin = create(:admin)
+    credential = admin.totp_credentials.create!(secret: ROTP::Base32.random_base32, nickname: 'Authenticator')
+    post sign_in_path, params: { email: admin.email, password: 'password1234' }
+    post process_verification_two_factor_authentication_path(type: 'totp'), params: { code: ROTP::TOTP.new(credential.secret).now }
+    session_record = admin.sessions.last
+    assert session_record
+    admin.update!(status: :suspended)
+
+    get admin_users_path
+
+    assert_redirected_to sign_in_path
+    assert_not Session.exists?(session_record.id)
+    assert cookies[:session_token].blank?
+  end
+
   test 'public authentication status checks do not refresh activity' do
     freeze_time do
       post sign_in_path, params: { email: @user.email, password: 'password1234' }

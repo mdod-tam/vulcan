@@ -118,17 +118,19 @@ module TwoFactorVerification
   end
 
   def verify_totp_code(code, user)
-    user.totp_credentials.each do |credential|
-      totp = ROTP::TOTP.new(credential.secret)
-      next unless totp.verify(code, drift_behind: 30, drift_ahead: 30)
-
-      credential.update(last_used_at: Time.current)
-      log_verification_success(user.id, :totp, credential_id: credential.id)
-      return verification_passed # The controller completes sign-in.
+    case user.verify_totp(code)
+    when :verified
+      log_verification_success(user.id, :totp)
+      verification_passed
+    when :inactive
+      user_session_missing
+    when :rate_limited
+      TwoFactorAuth.abort_authentication(session)
+      verification_refused(t('two_factor_verification.errors.totp_rate_limited'), :rate_limited)
+    else
+      log_verification_failure(user.id, :totp, reason: :invalid_code)
+      verification_refused(t('two_factor_verification.errors.invalid_code'))
     end
-
-    log_verification_failure(user.id, :totp, credential_ids: user.totp_credentials.pluck(:id), reason: :invalid_code)
-    verification_refused(t('two_factor_verification.errors.invalid_code'))
   end
 
   def sms_credential_from_active_challenge(user, submitted_credential_id)

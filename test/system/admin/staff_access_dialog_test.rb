@@ -50,5 +50,33 @@ module Admin
       assert_equal [@evaluator.id], @session.application.training_sessions.reload.map(&:trainer_id).uniq
       assert_unchecked_field @checkbox
     end
+
+    test 'deactivation and reactivation preserve history while ending the users sessions' do
+      user_session = create_test_session(@evaluator)
+      click_link @evaluator.full_name
+      assert_selector 'h1', text: "User Details: #{@evaluator.full_name}"
+
+      dismiss_confirm { click_button 'Deactivate User' }
+      assert_button 'Deactivate User'
+      assert @evaluator.reload.active?
+      assert Session.exists?(user_session.id)
+      take_screenshot('admin-user-deactivation-cancelled', html: true, full: true)
+
+      accept_confirm { click_button 'Deactivate User' }
+      assert_text 'User deactivated. History was preserved and sessions were revoked.'
+      assert_button 'Reactivate User'
+      assert @evaluator.reload.inactive?
+      assert_not Session.exists?(user_session.id)
+      assert_equal @evaluator.id, @session.reload.trainer_id
+      assert RoleCapability.exists?(@grant.id)
+      take_screenshot('admin-user-deactivated-history-retained', html: true, full: true)
+
+      click_button 'Reactivate User'
+      assert_text 'User reactivated. The user can sign in again.'
+      assert_button 'Deactivate User'
+      assert @evaluator.reload.active?
+      assert_not Session.exists?(user_session.id)
+      take_screenshot('admin-user-reactivated', html: true, full: true)
+    end
   end
 end

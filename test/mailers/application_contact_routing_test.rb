@@ -45,7 +45,8 @@ class ApplicationContactRoutingTest < ActionMailer::TestCase
   test 'ordinary email retains applicant preference and language after the managing guardian is removed' do
     application, manager, remaining_guardian = dependent_application(own_email: true)
     remaining_guardian.update!(locale: 'es')
-    manager.destroy!
+    GuardianRelationship.find_by!(guardian_user: manager, dependent_user: application.user).destroy!
+    application.update!(managing_guardian: nil)
     application.reload
     assert_nil application.managing_guardian
     Letters::TextTemplateToPdfService.expects(:new).never

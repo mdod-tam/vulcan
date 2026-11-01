@@ -1,0 +1,4 @@
+en:
+  notifications:
+    messages:
+      voucher_expired: "Your voucher has expired."

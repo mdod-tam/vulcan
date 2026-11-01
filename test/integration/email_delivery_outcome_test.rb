@@ -20,13 +20,16 @@ class EmailDeliveryOutcomeTest < ActionDispatch::IntegrationTest
   test 'missing category configuration stays an error through the real notification caller' do
     FeatureFlag.find_by!(name: EmailDelivery.category_control('vendor')).destroy!
 
-    notification = notify_vendor
+    notification = nil
+    assert_difference -> { Event.where(action: EmailDelivery::Outcome::CONFIGURATION_ERROR).count }, 1 do
+      assert_no_difference -> { Event.where(action: EmailDelivery::Outcome::SUPPRESSED).count } do
+        notification = notify_vendor
+      end
+    end
 
     assert_configuration_error(notification)
     assert_empty(enqueued_jobs.select { |job| job[:job] == EmailDelivery::MailDeliveryJob })
     assert_empty ActionMailer::Base.deliveries
-    assert Event.exists?(action: EmailDelivery::Outcome::CONFIGURATION_ERROR)
-    assert_not Event.exists?(action: EmailDelivery::Outcome::SUPPRESSED)
     assert_not Event.exists?(auditable: notification, action: 'notification_w9_approved_sent')
   end
 

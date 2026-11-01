@@ -133,7 +133,7 @@ class PasswordsControllerConcurrencyTest < ActiveSupport::TestCase
     assert_not user.authenticate('NewPassword123!'),
                "zero side effects: the stale token's own password value must never have been applied"
   ensure
-    user&.destroy
+    cleanup_duplicate_review_test_data!(user)
   end
 
   # The signed-in and forced change path (PasswordsController#update to

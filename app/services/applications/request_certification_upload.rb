@@ -63,7 +63,7 @@ module Applications
       )
       request_form = issued.secure_request_form
 
-      notification = create_tracking_notification(request_form) || raise('Could not create certification tracking notification')
+      notification = create_tracking_notification(request_form)
       Delivery.new(secure_request_form: request_form, raw_token: issued.raw_token, context: @email_context, notification_id: notification.id)
     end
 

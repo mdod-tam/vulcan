@@ -48,7 +48,7 @@ class SessionsController < ApplicationController
     TwoFactorAuth.abort_authentication(session)
 
     if current_user&.sessions
-      session_to_destroy = current_user.sessions.find_by(session_token: cookies.signed[:session_token])
+      session_to_destroy = current_user.sessions.for_token(cookies.signed[:session_token]).take
       session_to_destroy&.destroy
     end
 

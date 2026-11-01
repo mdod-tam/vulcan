@@ -96,6 +96,11 @@ module Applications
       assert @application.reload.disability_certification_status_rejected?
       assert_equal 1, ApplicationStatusChange.where(application: @application, to_status: 'rejected').count
       assert_equal 1, Event.where(auditable: @application, action: 'disability_certification_status_changed').count
+      failure_event = Event.find_by!(auditable: @application, action: 'notification_creation_failed')
+      assert_equal @admin.id, failure_event.user_id
+      assert_equal 'disability_certification_rejected', failure_event.metadata['notification_type']
+      assert_equal 'ActiveRecord::RecordInvalid', failure_event.metadata['error_class']
+      assert_not_includes failure_event.metadata.to_json, 'Private notification validation failure'
       review = @application.proof_reviews.find_by!(proof_type: :disability_certification, status: :rejected)
       assert_equal 'Missing signature', review.rejection_reason
       assert_includes @paper_warnings.join(' '), 'Provider email submitted.'

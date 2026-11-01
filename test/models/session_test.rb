@@ -7,7 +7,7 @@ class SessionTest < ActiveSupport::TestCase
     @user = create(:constituent)
   end
 
-  test 'a new session gets a 44-character base58 token during validation without a uniqueness query' do
+  test 'a new session gets a 44-character token and persists only its digest' do
     [nil, ''].each do |blank_token|
       session = @user.sessions.new(ip_address: '127.0.0.1', user_agent: 'Session test', session_token: blank_token)
 
@@ -17,21 +17,28 @@ class SessionTest < ActiveSupport::TestCase
       token = session.session_token
       assert session.valid?
       assert_equal token, session.session_token
+      session.save!
+      stored = Session.find(session.id)
+      assert_nil stored.session_token
+      assert_equal Digest::SHA256.hexdigest(token), stored.session_token_digest
+      assert_not_includes stored.attributes.values, token
+      assert_equal stored, Session.for_token(token).take
     end
   end
 
-  test 'an explicitly supplied token survives validation and save' do
+  test 'an explicitly supplied token is digested before save' do
     session = @user.sessions.create!(ip_address: '127.0.0.1', user_agent: 'Session test', session_token: 'supplied-token')
 
-    assert_equal 'supplied-token', session.reload.session_token
+    assert_equal Digest::SHA256.hexdigest('supplied-token'), session.reload.session_token_digest
   end
 
-  test 'validating a stored session neither replaces its token nor regenerates a cleared one' do
-    session = create_session
-    original = session.session_token
+  test 'validating a stored session retains its digest without regenerating a raw token' do
+    session = Session.find(create_session.id)
+    original = session.session_token_digest
 
     assert session.valid?
-    assert_equal original, session.session_token
+    assert_nil session.session_token
+    assert_equal original, session.session_token_digest
 
     session.session_token = ''
     assert_not session.valid?
