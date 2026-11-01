@@ -1,7 +1,6 @@
 import * as WebAuthnJSON from "@github/webauthn-json";
 
 // Cached constants
-const CSRF_TOKEN = document.querySelector('meta[name="csrf-token"]')?.getAttribute("content") || null;
 const FETCH_TIMEOUT = 15000; // ms
 
 // Toggle verbose logging
@@ -29,9 +28,9 @@ const Logger = {
 const Auth = {
   debug: DEBUG,
 
-  // Retrieve CSRF token (cached)
+  // Turbo can replace the page token without reloading this module.
   getCSRFToken() {
-    return CSRF_TOKEN;
+    return document.querySelector('meta[name="csrf-token"]')?.getAttribute("content") || null;
   },
 
   // Build endpoint URL

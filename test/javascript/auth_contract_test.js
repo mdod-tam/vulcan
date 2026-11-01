@@ -9,7 +9,42 @@ beforeEach(() => {
   WebAuthnJSON.create.mockReset()
   WebAuthnJSON.get.mockReset()
 })
-afterEach(() => { jest.useRealTimers(); jest.restoreAllMocks() })
+afterEach(() => {
+  document.querySelector('meta[name="csrf-token"]')?.remove()
+  jest.useRealTimers()
+  jest.restoreAllMocks()
+})
+
+test('requests use the current page token after Turbo replaces the session token', async () => {
+  const token = document.createElement('meta')
+  token.name = 'csrf-token'
+  token.content = 'before-signup'
+  document.head.appendChild(token)
+  fetch.mockResolvedValue({ ok: true, status: 200, json: async () => ({}) })
+
+  await Auth.sendRequest('/options', 'POST', {})
+  token.content = 'after-signup'
+  await Auth.sendRequest('/credentials/webauthn', 'POST', {})
+
+  expect(fetch.mock.calls.map(([, request]) => request.headers['X-CSRF-Token']))
+    .toEqual(['before-signup', 'after-signup'])
+})
+
+test('registration reads the page token after the authenticator finishes', async () => {
+  const token = document.createElement('meta')
+  token.name = 'csrf-token'
+  token.content = 'before-authenticator'
+  document.head.appendChild(token)
+  WebAuthnJSON.create.mockImplementation(async () => {
+    token.content = 'current-token'
+    return { id: 'key' }
+  })
+  fetch.mockResolvedValue({ ok: true, status: 200, json: async () => ({}) })
+
+  await registerWebAuthn('/credentials/webauthn', { challenge: 'challenge' }, 'Laptop', null)
+
+  expect(fetch.mock.calls[0][1].headers['X-CSRF-Token']).toBe('current-token')
+})
 
 test('registration retains callback path nickname and feedback callback', async () => {
   const credential = { id: 'key', response: { attestationObject: 'attestation' } }

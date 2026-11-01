@@ -33,6 +33,7 @@ class AddCredentialController extends Controller {
   // Handle button click  (not form submission)
   async register(event) {
     event.preventDefault(); // Prevent default button click / form submission
+    this.clearNicknameError();
 
     // Show loading state
     if (process.env.NODE_ENV !== 'production') {
@@ -79,6 +80,7 @@ class AddCredentialController extends Controller {
         if (!this.hasCallbackUrlValue) {
           console.error("Missing callback URL value. Check the data attribute in the view.");
           console.error("Configuration error. Please try again or contact support.");
+          this.showRegistrationError("Configuration error. Please try again or contact support.");
           if (this.hasSubmitButtonTarget) {
             this.submitButtonTarget.disabled = false;
           }
@@ -99,6 +101,7 @@ class AddCredentialController extends Controller {
         if (!webauthnResult.success) {
           console.error("Security key registration failed:", webauthnResult.message || "Unknown error");
           console.error("Error details:", webauthnResult.details);
+          this.showRegistrationError(webauthnResult.message);
 
           if (this.hasSubmitButtonTarget) {
             this.submitButtonTarget.disabled = false;
@@ -106,7 +109,7 @@ class AddCredentialController extends Controller {
         }
         // Successful registrations will redirect automatically from auth.js
       } else {
-        this.showNicknameError(result.message || "Could not prepare your device or security key. Please try again.")
+        this.showRegistrationError(result.message || "Could not prepare your device or security key. Please try again.")
         if (this.hasSubmitButtonTarget) {
           this.submitButtonTarget.disabled = false;
         }
@@ -115,6 +118,7 @@ class AddCredentialController extends Controller {
     } catch (error) {
       console.error("Error in WebAuthn flow:", error);
       console.error(`Error: ${error.message || "Something went wrong. Please try again."}`);
+      this.showRegistrationError(error.message || "Something went wrong. Please try again.");
 
       if (this.hasSubmitButtonTarget) {
         this.submitButtonTarget.disabled = false;
@@ -138,6 +142,10 @@ class AddCredentialController extends Controller {
       this.nicknameInputTarget.classList.add("border-red-500", "focus:border-red-500", "focus:ring-red-500");
     }
 
+    this.showRegistrationError(message);
+  }
+
+  showRegistrationError(message) {
     if (this.hasStatusMessageTarget) {
       this.statusMessageTarget.textContent = message;
       this.statusMessageTarget.classList.remove("hidden");
