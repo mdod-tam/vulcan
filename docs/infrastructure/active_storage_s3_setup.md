@@ -61,6 +61,29 @@ The attachment route authenticates before looking up its ID. For generated signe
 
 Keep application-generated storage-service URLs out of sensitive-document views and APIs. Such URLs bypass application permission checks until their storage signature expires. A downloaded copy cannot be recalled. See [vendor onboarding setup](vendor_onboarding_setup.md) for first-release W9 verification.
 
+## Image processing prerequisites
+
+Authorized image representations use Rails' `:vips` processor with the `image_processing` and `ruby-vips` runtime gems. Install the native libvips library separately: `brew install vips` on macOS or `sudo apt-get install libvips42t64` on Ubuntu 24.04/26.04. Docker installs libvips in its base image, which is also used at runtime; both Rails CI workflows install the Ubuntu runtime package before tests.
+
+The representation route checks the original document's audience and scan clearance before processing. A generated image does not gain its own generic download audience. Original image and PDF downloads still stream their stored bytes; this setup does not add PDF/video conversion tools or expand accepted formats.
+
+On November 1, 2026, the development app `marylandaccessibletelecomdev` and production app `marylandaccessibletelecom` both used `heroku-26`, with `heroku/nodejs` followed by `heroku/ruby`, and both loaded `libvips.so.42` in one-off Ruby checks. No additional native-package buildpack is needed for these observed runtimes. Recheck after a stack or buildpack change:
+
+```bash
+heroku stack --app "$MAT_APP"
+heroku buildpacks --app "$MAT_APP"
+heroku run --no-tty --exit-code --app "$MAT_APP" -- ruby -rfiddle -e "Fiddle.dlopen('libvips.so.42'); puts 'libvips loaded'"
+```
+
+Keep Node.js before Ruby so assets use the Yarn version selected by `packageManager`. A successful gem installation alone does not prove that libvips can load. If the native check fails on another target, provision libvips for that stack and repeat it before releasing. [Rails' variant documentation](https://api.rubyonrails.org/classes/ActiveStorage/Variant.html) and [libvips installation instructions](https://www.libvips.org/install.html) describe the two dependencies.
+
+Validate this change on development before promoting it to production:
+
+1. Record the current successful release as the rollback target. Confirm the new build selects Yarn 4.12.0 without a duplicate-selector warning, and that the release phase succeeds.
+2. Check production-mode boot output for the missing-image-processing warning. In a one-off Rails runner, inspect `ActiveStorage.variant_processor` (`:vips`) and `ActiveStorage.variant_transformer` (`ActiveStorage::Transformers::Vips`).
+3. Upload a nonsensitive PNG through a supported proof form, wait for a clean scan, and request a signed `resize_to_limit` representation as its authorized owner. Check the returned dimensions and private/no-store headers. Repeat as an unrelated account and after logout; private image bytes must remain unavailable. Use `test/controllers/attachment_downloads_controller_test.rb` as the local regression case.
+4. Promote only after these checks pass on development. If verification fails after release, use the previous successful release as the normal rollback target.
+
 ## Public product guidance PDFs
 
 `ProductResource#document` holds public, product-specific program guidance rather than a constituent/session upload. Admin product management explains that saving publishes the resource and prohibits personal, application, or session information. Guidance requires exactly one safe absolute HTTP(S) URL or PDF, a title, and a supported authored language. PDFs have a 10 MB inclusive limit, must identify as PDF from content, and require a clean antivirus result. Use searchable/tagged PDFs, and captions/transcripts for externally hosted videos. The application does not convert PDFs or certify accessibility.

@@ -87,6 +87,8 @@ class W9DocumentsControllerTest < ActionDispatch::IntegrationTest
   end
 
   test 'ordinary blob and representation URLs refuse a W9 even to its owner' do
+    ActiveStorage::VariantWithRecord.any_instance.expects(:processed).never
+    ActiveStorage::Preview.any_instance.expects(:processed).never
     sign_in_as(@vendor)
     get rails_blob_path(@blob)
     assert_response :not_found

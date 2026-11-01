@@ -260,20 +260,42 @@ class AttachmentDownloadsControllerTest < ActionDispatch::IntegrationTest
   test 'representations authorize the original document before producing variants' do
     authenticate(create(:constituent))
     variation = ActiveStorage::Variation.encode(resize_to_limit: [10, 10])
+    ActiveStorage::VariantWithRecord.any_instance.expects(:processed).never
+    ActiveStorage::Preview.any_instance.expects(:processed).never
     assert_no_difference ['ActiveStorage::VariantRecord.count', 'ActiveStorage::Blob.count'] do
       get rails_blob_representation_proxy_path(@blob.signed_id, variation, 'proof.png')
       assert_response :not_found
     end
+    assert_private_response
+  end
 
+  test 'authorized clean image representations resize through libvips without granting derived blob access' do
+    @application.income_proof.attach(io: file_fixture('proof_representation.png').open,
+                                     filename: 'proof.png', content_type: 'image/png')
+    blob = @application.income_proof.blob
+    mark_document_clean!(blob, user: @application.user)
     authenticate(@application.user)
-    variant, generated = prepared_variant
-    get rails_representation_path(variant)
+    variant = blob.variant(resize_to_limit: [10, 10])
+
+    assert_difference 'ActiveStorage::VariantRecord.count', 1 do
+      get rails_representation_path(variant)
+    end
+
     assert_response :success
     assert_equal 'image/png', response.media_type
     assert_private_response
+    image = Vips::Image.new_from_buffer(response.body, '')
+    assert_equal [10, 5], [image.width, image.height]
 
+    generated = blob.variant_records.find_by!(variation_digest: variant.variation.digest).image.blob
     get rails_blob_path(generated)
     assert_response :not_found
+    assert_private_response
+
+    authenticate(create(:constituent))
+    get rails_representation_path(variant)
+    assert_response :not_found
+    assert_private_response
   end
 
   test 'redirect legacy and disk download routes are not mounted' do

@@ -49,10 +49,9 @@ RUN bundle install && \
     rm -rf ~/.bundle/ "${BUNDLE_PATH}"/ruby/*/cache "${BUNDLE_PATH}"/ruby/*/bundler/gems/*/.git && \
     bundle exec bootsnap precompile --gemfile
 
-# Install node modules (Yarn 4 is the checked-in release pinned by packageManager/.yarnrc.yml)
+# Corepack selects Yarn from packageManager in package.json.
 COPY package.json yarn.lock .yarnrc.yml ./
-COPY .yarn/releases ./.yarn/releases
-RUN ln -s /rails/.yarn/releases/yarn-4.12.0.cjs /usr/local/node/bin/yarn && \
+RUN corepack enable && \
     yarn install --immutable
 
 # Copy application code
