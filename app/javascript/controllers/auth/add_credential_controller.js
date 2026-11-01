@@ -17,7 +17,7 @@ class AddCredentialController extends Controller {
 
     this.requestKey = `add-credential-${this.identifier}-${Date.now()}`
 
-    // The register button's click starts registration, so the form has no submit handler.
+    // The form submits through the register action.
     this.form = this.element;
   }
 
@@ -27,6 +27,7 @@ class AddCredentialController extends Controller {
 
   async register(event) {
     event.preventDefault();
+    this.clearNicknameError();
 
     if (process.env.NODE_ENV !== 'production') {
       console.log("Preparing your security key...")
@@ -68,6 +69,7 @@ class AddCredentialController extends Controller {
         if (!this.hasCallbackUrlValue) {
           console.error("Missing callback URL value. Check the data attribute in the view.");
           console.error("Configuration error. Please try again or contact support.");
+          this.showRegistrationError("Configuration error. Please try again or contact support.");
           if (this.hasSubmitButtonTarget) {
             this.submitButtonTarget.disabled = false;
           }
@@ -79,12 +81,13 @@ class AddCredentialController extends Controller {
           console.log("Using callback URL:", callbackUrl)
         }
 
-        // No feedback element is passed, so a failure here is only logged to the console.
+        // This controller displays registration errors returned by auth.js.
         const webauthnResult = await registerWebAuthn(callbackUrl, credentialOptions, nickname, null);
 
         if (!webauthnResult.success) {
           console.error("Security key registration failed:", webauthnResult.message || "Unknown error");
           console.error("Error details:", webauthnResult.details);
+          this.showRegistrationError(webauthnResult.message);
 
           if (this.hasSubmitButtonTarget) {
             this.submitButtonTarget.disabled = false;
@@ -92,7 +95,7 @@ class AddCredentialController extends Controller {
         }
         // A successful registration redirects from auth.js.
       } else {
-        this.showNicknameError(result.message || "Could not prepare your device or security key. Please try again.")
+        this.showRegistrationError(result.message || "Could not prepare your device or security key. Please try again.")
         if (this.hasSubmitButtonTarget) {
           this.submitButtonTarget.disabled = false;
         }
@@ -101,6 +104,7 @@ class AddCredentialController extends Controller {
     } catch (error) {
       console.error("Error in WebAuthn flow:", error);
       console.error(`Error: ${error.message || "Something went wrong. Please try again."}`);
+      this.showRegistrationError(error.message || "Something went wrong. Please try again.");
 
       if (this.hasSubmitButtonTarget) {
         this.submitButtonTarget.disabled = false;
@@ -124,6 +128,10 @@ class AddCredentialController extends Controller {
       this.nicknameInputTarget.classList.add("border-danger-500");
     }
 
+    this.showRegistrationError(message);
+  }
+
+  showRegistrationError(message) {
     if (this.hasStatusMessageTarget) {
       this.statusMessageTarget.textContent = message;
       this.statusMessageTarget.classList.remove("hidden");
