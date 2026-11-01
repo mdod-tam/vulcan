@@ -68,7 +68,8 @@ External integrations are Postmark for email, Twilio for SMS/fax status handling
 
 - Ruby from [`.ruby-version`](.ruby-version) and Bundler.
 - PostgreSQL 18, which production and development use and CI tests against. A `pg_dump` used for backups or schema work must have a major version at least equal to the server's.
-- Node.js 24.x (see [`.node-version`](.node-version)) and Yarn 4.12.0, pinned by [`.yarnrc.yml`](.yarnrc.yml) and `packageManager` in [package.json](package.json).
+- Node.js 24.x (see [`.node-version`](.node-version)) and Corepack. `packageManager` in [package.json](package.json) selects Yarn 4.12.0; [`.yarnrc.yml`](.yarnrc.yml) retains the `node-modules` linker.
+- libvips for Active Storage image representations: `brew install vips` on macOS, or `sudo apt-get install libvips42t64` on Ubuntu 24.04/26.04. The `image_processing` and `ruby-vips` gems use this native library; Bundler does not install it. See [image processing setup](docs/infrastructure/active_storage_s3_setup.md#image-processing-prerequisites).
 - Chrome or Chromium when running browser tests.
 - The team credentials key, or an isolated development/test credentials setup as described below.
 
@@ -78,10 +79,12 @@ External integrations are Postmark for email, Twilio for SMS/fax status handling
 git clone https://github.com/mdod-tam/vulcan.git
 cd vulcan
 bundle install
-yarn install
+corepack enable
+yarn --version
+yarn install --immutable
 ```
 
-Use the checked-in Yarn release if your global launcher selects a different version: `node .yarn/releases/yarn-4.12.0.cjs install`.
+`yarn --version` should print `4.12.0`. If Corepack is missing, install it with `npm install --global corepack`, then run `corepack enable`. If a global Yarn launcher still selects another version, use `corepack yarn install --immutable` and correct the launcher in your `PATH`. Keep `packageManager` as the version source; immutable installs preserve `yarn.lock`.
 
 `bin/setup` currently passes the unsupported Yarn 1 `--check-files` option and ignores its failure. Use the installation and database commands here until that script is updated.
 
@@ -219,6 +222,8 @@ Development boots without scanner credentials. Testing real uploads requires bot
 ### Heroku-style deployment
 
 The checked-in [Procfile](Procfile) defines web, worker, and release processes. Start with a Heroku app and attached Postgres database; [Heroku's Rails guide](https://devcenter.heroku.com/articles/getting-started-with-rails8#create-a-heroku-app) covers provisioning. Set the [production configuration](#production-essentials), including storage and integration credentials.
+
+Keep `heroku/nodejs` before `heroku/ruby` so asset builds use Yarn selected by `packageManager`. Verify libvips in the target runtime before release; the current development and production apps on `heroku-26` load it without an additional buildpack. See [native-library checks and the development-first rollout](docs/infrastructure/active_storage_s3_setup.md#image-processing-prerequisites).
 
 For a running instance, follow the [session-migration maintenance window](docs/infrastructure/setup_and_maintenance.md#heroku-deployment-and-operations): stop old web and worker processes and pause scheduled jobs until the migration finishes and the new release is promoted. Everyone must sign in again afterward.
 

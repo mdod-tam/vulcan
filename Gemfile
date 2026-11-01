@@ -22,6 +22,8 @@ gem 'docuseal', '~> 1.0', '>= 1.0.5'
 gem 'http', '~> 6.0', '>= 6.0.2'
 # for grouping data by time periods
 gem 'groupdate', '~> 6.7'
+# Active Storage image representations use the libvips backend.
+gem 'image_processing', '~> 2.2'
 # build JSON APIs with ease [https://github.com/rails/jbuilder]
 gem 'jbuilder', '~> 2.14', '>= 2.14.1'
 # Deploy this application anywhere as a Docker container [https://kamal-deploy.org]
@@ -45,6 +47,7 @@ gem 'rails', '~> 8.1.4'
 gem 'rotp', '~> 6.3'
 # gem for QR code generation for TOTP
 gem 'rqrcode', '~> 3.2'
+gem 'ruby-vips', '~> 2.3', require: false
 # gem for creating zip files
 gem 'rubyzip', '~> 3.2'
 # hotwire's modest JavaScript framework [https://stimulus.hotwired.dev]
