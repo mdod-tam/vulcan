@@ -60,7 +60,7 @@ The [documentation hub](docs/README.md) is the guide index. It covers workflows,
 
 ## Technical Stack
 
-Ruby 4.0.7 and Rails 8.1.4; PostgreSQL; ERB, Turbo, Stimulus, Tailwind, esbuild, and Propshaft; Solid Queue, Solid Cache, and Solid Cable; Active Storage; Minitest/FactoryBot, Cuprite, and Jest.
+Ruby 4.0.9 and Rails 8.1.4; PostgreSQL; ERB, Turbo, Stimulus, Tailwind, esbuild, and Propshaft; Solid Queue, Solid Cache, and Solid Cable; Active Storage; Minitest/FactoryBot, Cuprite, and Jest.
 
 External integrations are Postmark for email, Twilio for SMS/fax status handling, DocuSeal for signing, and S3-compatible storage in production. Development uses local file storage and Letter Opener for email.
 
@@ -74,6 +74,13 @@ External integrations are Postmark for email, Twilio for SMS/fax status handling
 - The team credentials key, or an isolated development/test credentials setup as described below.
 
 ## Installation
+
+For a local chruby setup, install and select the pinned Ruby before installing gems:
+
+```bash
+ruby-install ruby 4.0.9
+chruby ruby-4.0.9
+```
 
 ```bash
 git clone https://github.com/mdod-tam/vulcan.git
@@ -223,7 +230,11 @@ Development boots without scanner credentials. Testing real uploads requires bot
 
 The checked-in [Procfile](Procfile) defines web, worker, and release processes. Start with a Heroku app and attached Postgres database; [Heroku's Rails guide](https://devcenter.heroku.com/articles/getting-started-with-rails8#create-a-heroku-app) covers provisioning. Set the [production configuration](#production-essentials), including storage and integration credentials.
 
-Keep `heroku/nodejs` before `heroku/ruby` so asset builds use Yarn selected by `packageManager`. Verify libvips in the target runtime before release; the current development and production apps on `heroku-26` load it without an additional buildpack. See [native-library checks and the development-first rollout](docs/infrastructure/active_storage_s3_setup.md#image-processing-prerequisites).
+Keep `heroku/nodejs` before `heroku/ruby` so asset builds use Yarn selected by `packageManager`. Verify libvips in the target runtime before release. See [native-library checks and the development-first rollout](docs/infrastructure/active_storage_s3_setup.md#image-processing-prerequisites).
+
+The Node buildpack installs dependencies, then Rails' `assets:precompile` builds JavaScript and CSS. The `heroku-postbuild` script defers asset compilation to Rails. Set `SKIP_YARN_INSTALL=1` on existing Heroku apps during deployment to skip the Rails tasks' repeated installs; new apps created from [app.json](app.json) receive this setting and buildpack order. See [the asset-build rollout](docs/infrastructure/setup_and_maintenance.md#heroku-asset-build).
+
+Heroku selects Ruby 4.0.9 from `Gemfile.lock` during the next build; chruby is only for local Ruby selection. Keep `.ruby-version`, the Gemfile Ruby requirement, the lockfile Ruby version, and Docker's Ruby build argument aligned. CI reads `.ruby-version`.
 
 For a running instance, follow the [session-migration maintenance window](docs/infrastructure/setup_and_maintenance.md#heroku-deployment-and-operations): stop old web and worker processes and pause scheduled jobs until the migration finishes and the new release is promoted. Everyone must sign in again afterward.
 

@@ -6,6 +6,16 @@
     "ruby"
   ],
   "stack": "heroku-26",
+  "buildpacks": [
+    { "url": "heroku/nodejs" },
+    { "url": "heroku/ruby" }
+  ],
+  "env": {
+    "SKIP_YARN_INSTALL": {
+      "description": "Node installs dependencies before Rails builds assets; skip the Rails bundling tasks' duplicate installs.",
+      "value": "1"
+    }
+  },
   "environments": {
     "test": {
       "buildpacks": [

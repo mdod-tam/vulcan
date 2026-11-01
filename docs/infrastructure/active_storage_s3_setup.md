@@ -67,7 +67,7 @@ Authorized image representations use Rails' `:vips` processor with the `image_pr
 
 The representation route checks the original document's audience and scan clearance before processing. A generated image does not gain its own generic download audience. Original image and PDF downloads still stream their stored bytes; this setup does not add PDF/video conversion tools or expand accepted formats.
 
-On November 1, 2026, the development app `marylandaccessibletelecomdev` and production app `marylandaccessibletelecom` both used `heroku-26`, with `heroku/nodejs` followed by `heroku/ruby`, and both loaded `libvips.so.42` in one-off Ruby checks. No additional native-package buildpack is needed for these observed runtimes. Recheck after a stack or buildpack change:
+Verify libvips in the target runtime after a stack or buildpack change:
 
 ```bash
 heroku stack --app "$MAT_APP"
@@ -77,7 +77,7 @@ heroku run --no-tty --exit-code --app "$MAT_APP" -- ruby -rfiddle -e "Fiddle.dlo
 
 Keep Node.js before Ruby so assets use the Yarn version selected by `packageManager`. A successful gem installation alone does not prove that libvips can load. If the native check fails on another target, provision libvips for that stack and repeat it before releasing. [Rails' variant documentation](https://api.rubyonrails.org/classes/ActiveStorage/Variant.html) and [libvips installation instructions](https://www.libvips.org/install.html) describe the two dependencies.
 
-Validate this change on development before promoting it to production:
+Verify image processing on development before promoting to production:
 
 1. Record the current successful release as the rollback target. Confirm the new build selects Yarn 4.12.0 without a duplicate-selector warning, and that the release phase succeeds.
 2. Check production-mode boot output for the missing-image-processing warning. In a one-off Rails runner, inspect `ActiveStorage.variant_processor` (`:vips`) and `ActiveStorage.variant_transformer` (`ActiveStorage::Transformers::Vips`).

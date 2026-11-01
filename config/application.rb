@@ -3,7 +3,7 @@
 require_relative 'boot'
 require 'rails/all'
 
-# Loaded ahead of Bundler.require; originally added to work around a Rails 8.0.2 load-order error.
+# Load routing helpers before the bundled gems.
 require 'action_dispatch/routing/url_for'
 
 # Require the gems listed in Gemfile
@@ -11,7 +11,6 @@ Bundler.require(*Rails.groups)
 
 module MatVulcan
   class Application < Rails::Application
-    # Initialize configuration defaults for originally generated Rails version.
     config.load_defaults 8.0
     config.time_zone = 'Eastern Time (US & Canada)'
     config.active_record.default_timezone = :utc

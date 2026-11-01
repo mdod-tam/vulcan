@@ -2,7 +2,7 @@
 
 source 'https://rubygems.org'
 
-ruby '4.0.7'
+ruby '4.0.9'
 
 # gem for hosting images & getting ocr functionality
 gem 'aws-sdk-s3', '~> 1.217'
