@@ -3,25 +3,50 @@
 require 'test_helper'
 
 module SolidQueue
+  # Solid Queue's own failure bookkeeping, run against db/queue_schema.rb, which must stay equal to the gem's schema.
   class FailedExecutionTest < ActiveSupport::TestCase
-    test 'failed_at has a default value' do
-      mock_execution = Minitest::Mock.new
-      mock_execution.expect(:failed_at, Time.current)
+    # DocumentScanQueueTest requires every ApplicationJob subclass to use a queue that config/queue.yml serves.
+    class AlwaysFailsJob < ApplicationJob
+      queue_as :low_priority
 
-      assert_not_nil mock_execution.failed_at
+      def perform
+        raise 'worker failure'
+      end
     end
 
-    test 'failed_at column is not nullable in the database' do
-      # Skip if SolidQueue tables are not in the primary database
-      # SolidQueue tables may be in a separate queue database
-      connection = ActiveRecord::Base.connection
-      skip 'solid_queue_failed_executions table not in primary database (may be in queue database)' unless connection.table_exists?('solid_queue_failed_executions')
+    test 'a worker failure leaves one failed execution that retry puts back in the ready queue' do
+      job = SolidQueue::Job.enqueue(AlwaysFailsJob.new)
+      process = SolidQueue::Process.create!(kind: 'Worker', pid: ::Process.pid, name: 'failed-execution-test',
+                                            last_heartbeat_at: Time.current)
+      claimed = SolidQueue::ReadyExecution.claim(AlwaysFailsJob.queue_name, 1, process.id).sole
 
-      table_info = connection.columns('solid_queue_failed_executions')
-      failed_at_column = table_info.find { |c| c.name == 'failed_at' }
+      assert_equal job.id, claimed.job_id
+      assert_raises(RuntimeError) { claimed.perform }
 
-      assert_not_nil failed_at_column
-      assert_equal false, failed_at_column.null
+      failed = job.reload.failed_execution
+      assert_equal 'worker failure', failed.message
+      assert_nil job.ready_execution
+
+      failed.retry
+
+      assert_nil job.reload.failed_execution
+      assert_not_nil job.ready_execution
+    end
+
+    test 'failing the same job again updates its single failed execution' do
+      job = SolidQueue::Job.enqueue(AlwaysFailsJob.new)
+
+      job.failed_with(error_with('first failure'))
+      job.failed_with(error_with('second failure'))
+
+      assert_equal 1, SolidQueue::FailedExecution.where(job_id: job.id).count
+      assert_equal 'second failure', job.reload.failed_execution.message
+    end
+
+    private
+
+    def error_with(message)
+      RuntimeError.new(message).tap { |error| error.set_backtrace(caller) }
     end
   end
 end

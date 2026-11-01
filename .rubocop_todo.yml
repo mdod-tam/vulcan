@@ -51,12 +51,6 @@ Metrics/ClassLength:
     - 'app/controllers/admin/users_controller.rb'
 
 # Offense count: 1
-# Configuration parameters: CountComments, Max, CountAsOne, AllowedMethods, AllowedPatterns.
-Metrics/MethodLength:
-  Exclude:
-    - 'db/migrate/20251203000001_restore_solid_queue_tables.rb'
-
-# Offense count: 1
 # Configuration parameters: CountComments, Max, CountAsOne.
 Metrics/ModuleLength:
   Exclude:
