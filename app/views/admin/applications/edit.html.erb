@@ -2,7 +2,9 @@
 <div class="container mx-auto px-4 py-8">
   <h1 class="text-2xl font-semibold mb-6">Edit Application for <%= @application.user.first_name %></h1>
 
-  <%= form_with(model: [:admin, @application], local: true, class: "space-y-6", data: { turbo_frame: turbo_frame_request_id || "_top" }) do |form| %>
+  <%= form_with(model: [:admin, @application], local: true, class: 'space-y-6',
+                data: { turbo_frame: turbo_frame_request_id || '_top',
+                        application_modal_summary_frame: ('user-application-summary' if params[:modal] == 'true') }) do |form| %>
     <%= hidden_field_tag :modal, params[:modal] if params[:modal].present? %>
     <% if @application.errors.any? %>
       <div id="error_explanation" class="bg-danger-100 border border-danger-400 text-danger-700 px-4 py-3 rounded relative" role="alert">

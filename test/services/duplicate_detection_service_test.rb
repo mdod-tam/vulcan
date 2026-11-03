@@ -4,6 +4,7 @@ require 'test_helper'
 
 class DuplicateDetectionServiceTest < ActiveSupport::TestCase
   setup do
+    ensure_system_audit_actor!
     @registration_attrs = {
       email: 'new-signup@example.com',
       phone: '555-123-4567',

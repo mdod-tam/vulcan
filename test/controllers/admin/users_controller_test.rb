@@ -9,6 +9,43 @@ module Admin
       sign_in_for_integration_test @admin
     end
 
+    test 'the summary frame reuses ordered application and audit date loading' do
+      user = create(:constituent, :with_disabilities)
+      application = create(:application, :completed, :in_progress, user: user, application_date: Date.current)
+      application.approve!(user: @admin)
+      get admin_user_path(user), headers: { 'Turbo-Frame' => 'user-application-summary' }
+      assert_response :success
+      assert_select 'turbo-frame#user-application-summary' do
+        assert_select 'h2', text: "#{user.first_name}'s Applications"
+        assert_select 'div', text: /Application approved on/
+        assert_select "button[data-application-id='#{application.id}']"
+      end
+    end
+
+    test 'application status and voucher summary queries stay bounded as dependents grow' do
+      guardian = create(:constituent, :with_disabilities)
+      add_dependent = lambda do
+        dependent = create(:constituent, :with_disabilities)
+        create(:guardian_relationship, guardian_user: guardian, dependent_user: dependent)
+        application = create(:application, :approved, user: dependent, managing_guardian: guardian)
+        create(:voucher, application: application)
+      end
+      2.times { add_dependent.call }
+      counts = []
+      2.times do |round|
+        queries = []
+        observer = lambda do |_name, _start, _finish, _id, payload|
+          sql = payload[:sql]
+          queries << sql if !payload[:cached] && sql.start_with?('SELECT') && sql.match?(/FROM "(?:applications|application_status_changes|vouchers)"/)
+        end
+        ActiveSupport::Notifications.subscribed(observer, 'sql.active_record') { get admin_user_path(guardian) }
+        assert_response :success
+        counts << queries.length
+        4.times { add_dependent.call } if round.zero?
+      end
+      assert_equal counts.first, counts.last
+    end
+
     test 'invalid role feedback stays available to the admin without logging the submitted value' do
       user = create(:constituent)
       original_type = user.type

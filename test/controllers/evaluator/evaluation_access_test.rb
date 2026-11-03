@@ -4,6 +4,7 @@ require 'test_helper'
 
 class EvaluatorEvaluationAccessTest < ActionDispatch::IntegrationTest
   setup do
+    ensure_system_audit_actor!
     @evaluator = create(:evaluator)
     @admin = create(:admin)
     @evaluation = create(:evaluation, evaluator: @evaluator)

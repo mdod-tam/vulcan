@@ -6,7 +6,7 @@ class Voucher < ApplicationRecord
   belongs_to :application
   belongs_to :vendor, optional: true, class_name: 'User'
   has_many :transactions, class_name: 'VoucherTransaction', dependent: :restrict_with_error
-  has_many :events, as: :auditable, dependent: :destroy
+  has_many :events, as: :auditable, dependent: :restrict_with_error
 
   validates :code, presence: true, uniqueness: true
   validates :initial_value, presence: true, numericality: { greater_than_or_equal_to: 0 }
@@ -15,7 +15,7 @@ class Voucher < ApplicationRecord
 
   before_validation :generate_code, on: :create
   before_validation :set_initial_values, on: :create
-  after_update :log_status_change, if: -> { saved_change_to_status? && respond_to?(:events) }
+  after_update :log_status_change, if: :saved_change_to_status?
 
   enum :status, {
     active: 0,
@@ -96,7 +96,7 @@ class Voucher < ApplicationRecord
 
         process_product_data(product_data, txn) if product_data.present?
 
-        update_voucher_after_redemption(amount, vendor)
+        Current.set(user: vendor) { update_voucher_after_redemption(amount, vendor) }
 
         notify_voucher_redemption(txn)
         log_redemption_event(vendor, amount, txn, product_data)
@@ -108,13 +108,21 @@ class Voucher < ApplicationRecord
     end
   end
 
-  def cancel!
-    return false unless can_cancel?
+  def cancel!(actor:)
+    raise ArgumentError, 'actor is required' if actor.blank?
 
-    update!(
-      status: :cancelled,
-      notes: [notes, "Cancelled at #{Time.current}"].compact.join("\n")
-    )
+    with_lock(requires_new: true) do
+      if can_cancel?
+        Current.set(user: actor) do
+          update!(status: :cancelled, notes: [notes, "Cancelled at #{Time.current}"].compact.join("\n"))
+          AuditEventService.log(action: 'voucher_cancelled', actor: actor, auditable: self,
+                                metadata: { operation_id: SecureRandom.uuid, cancelled_at: Time.current.iso8601, notes: notes })
+        end
+        true
+      else
+        false
+      end
+    end
   end
 
   def can_cancel?
@@ -206,7 +214,7 @@ class Voucher < ApplicationRecord
     VoucherNotificationsMailer.with(transaction: transaction).voucher_redeemed.deliver_later
   end
 
-  # Logs and does not raise on failure, so that the redemption completes.
+  # The audit is part of the redemption transaction.
   def log_redemption_event(vendor, amount, transaction, product_data)
     AuditEventService.log(
       action: 'voucher_redeemed',
@@ -218,13 +226,11 @@ class Voucher < ApplicationRecord
         amount: amount,
         vendor_name: vendor.business_name || 'Unknown vendor',
         transaction_id: transaction.id,
+        operation_id: "voucher_redemption:#{transaction.id}",
         remaining_value: remaining_value,
         products: format_product_data_for_event(product_data)
       }
     )
-  rescue StandardError => e
-    Rails.logger.error("Failed to log voucher redemption event: #{e.class.name}")
-    nil
   end
 
   def format_product_data_for_event(product_data)
@@ -237,22 +243,18 @@ class Voucher < ApplicationRecord
 
   def log_status_change
     actor = determine_actor_for_logging
-    return unless actor && valid_actor?(actor)
 
     AuditEventService.log(
       action: "status_changed_to_#{status}",
       actor: actor,
       auditable: self,
       metadata: {
+        operation_id: SecureRandom.uuid,
         previous_status: status_before_last_save,
         current_status: status,
         timestamp: Time.current
       }
     )
-  rescue StandardError => e
-    # Do not raise, so that the voucher update completes.
-    Rails.logger.error("Failed to log voucher status change: #{e.class.name}")
-    nil
   end
 
   def remaining_value_cannot_exceed_initial_value
@@ -275,14 +277,7 @@ class Voucher < ApplicationRecord
   end
 
   def determine_actor_for_logging
-    Current.user.presence || PublicAuditActor.system_audit_actor_or_report('voucher status change')
-  end
-
-  def valid_actor?(actor)
-    return true if actor&.persisted? && User.exists?(actor.id)
-
-    Rails.logger.warn("Skipping voucher status change audit - actor user (ID: #{actor&.id}) does not exist in database")
-    false
+    Current.user.presence || PublicAuditActor.system_audit_actor!
   end
 
   def set_initial_values

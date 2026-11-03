@@ -222,7 +222,7 @@ class ApplicationTransitionStatusTest < ActiveSupport::TestCase
       application = create(:application, :completed, :in_progress, income_proof_required: true, field => pending_status)
 
       assert_no_difference ['Event.count', 'ApplicationStatusChange.count', 'Voucher.count'] do
-        assert_not application.approve!(user: @admin), "#{field} must block approval"
+        assert_raises(ActiveRecord::RecordInvalid, "#{field} must block approval") { application.approve!(user: @admin) }
       end
 
       assert application.reload.status_in_progress?
@@ -243,7 +243,7 @@ class ApplicationTransitionStatusTest < ActiveSupport::TestCase
       application = create(:application, :completed, status: status)
 
       assert_no_difference ['Event.count', 'ApplicationStatusChange.count', 'Voucher.count'] do
-        assert_not application.approve!(user: @admin)
+        assert_raises(ActiveRecord::RecordInvalid) { application.approve!(user: @admin) }
         assert_raises(ActiveRecord::RecordInvalid) do
           application.transition_status!(:in_progress, actor: @admin)
         end
@@ -265,6 +265,83 @@ class ApplicationTransitionStatusTest < ActiveSupport::TestCase
 
     assert eligible.reload.status_in_progress?
     assert ineligible.reload.status_in_progress?
+  end
+
+  test 'database failure aborts the whole batch without leaking SQL details' do
+    with_after_commit_callbacks do
+      admin = create(:admin)
+      applications = create_list(:application, 2, :completed, :in_progress)
+      original_log = AuditEventService.method(:log)
+      failed_id = applications.last.id
+      logger = lambda do |**attributes|
+        Application.connection.execute('SELECT 1 / 0') if attributes[:auditable].is_a?(Application) && attributes[:auditable].id == failed_id
+        original_log.call(**attributes)
+      end
+
+      assert_no_difference ['Event.count', 'ApplicationStatusChange.count'] do
+        AuditEventService.stub(:log, logger) do
+          result = Application.batch_update_status(applications.map(&:id), :rejected, actor: admin)
+          assert_not result[:success]
+          assert_equal :rolled_back, result[:commit_state]
+          assert_equal ['Applications could not be updated.'], result[:errors]
+        end
+      end
+      assert(applications.all? { |application| application.reload.status_in_progress? })
+      assert_equal 1, Application.connection.select_value('SELECT 1')
+    end
+  end
+
+  test 'batch callback failure reports confirmed durable changes rather than a failed save' do
+    with_after_commit_callbacks do
+      admin = create(:admin)
+      application = create(:application, :completed, :in_progress)
+      callback = -> { raise 'callback failed' if id == application.id }
+      Application.set_callback(:commit, :after, callback)
+      begin
+        result = Application.batch_update_status([application.id], :rejected, actor: admin)
+        assert result[:success]
+        assert_equal :committed, result[:commit_state]
+        assert_match 'follow-up work failed', result[:warning]
+        assert application.reload.status_rejected?
+        assert_equal 1, application.status_changes.where(to_status: :rejected).count
+      ensure
+        Application.skip_callback(:commit, :after, callback)
+      end
+    end
+  end
+
+  test 'failed commit verification leaves an explicit unknown outcome without claiming rollback' do
+    with_after_commit_callbacks do
+      admin = create(:admin)
+      application = create(:application, :completed, :in_progress)
+      callback = -> { raise 'completion failed' if id == application.id }
+      Application.set_callback(:commit, :after, callback)
+      original = ApplicationStatusChange.method(:where)
+      readback = lambda do |*args|
+        raise ActiveRecord::ConnectionNotEstablished if args.first.is_a?(Hash) && args.first.keys == [:id]
+
+        original.call(*args)
+      end
+      begin
+        ApplicationStatusChange.stub(:where, readback) do
+          result = Application.batch_update_status([application.id], :rejected, actor: admin)
+          assert_not result[:success]
+          assert_equal :unknown, result[:commit_state]
+          assert_match 'Check application history before retrying', result[:errors].sole
+        end
+        assert application.reload.status_rejected?
+      ensure
+        Application.skip_callback(:commit, :after, callback)
+      end
+    end
+  end
+
+  test 'approval and rejection keep constituent notifications silent' do
+    application = create(:application, :completed, :in_progress)
+    assert_no_difference ['Notification.count', 'PrintQueueItem.count'] do
+      application.approve!(user: @admin)
+      application.reject!(user: @admin)
+    end
   end
 
   private

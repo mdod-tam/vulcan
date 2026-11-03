@@ -3,6 +3,8 @@
 module ApplicationStatusManagement
   extend ActiveSupport::Concern
 
+  ACTIVE_WORKFLOW_STATUSES = %w[in_progress awaiting_proof reminder_sent awaiting_dcf].freeze
+
   included do
     enum :application_type, {
       new: 0,
@@ -17,7 +19,7 @@ module ApplicationStatusManagement
     }, prefix: true
 
     # Status-related scopes - These rely on the enum defined in the model
-    scope :active, -> { where(status: %i[in_progress awaiting_proof reminder_sent awaiting_dcf]) }
+    scope :active, -> { where(status: ACTIVE_WORKFLOW_STATUSES) }
     scope :draft, -> { where(status: :draft) }
     scope :submitted, -> { where.not(status: :draft) }
     scope :filter_by_status, ->(status) { where(status: status) if status.present? }
@@ -64,6 +66,10 @@ module ApplicationStatusManagement
         order(application_date: :desc)
       end
     }
+  end
+
+  def workflow_active?
+    ACTIVE_WORKFLOW_STATUSES.include?(status)
   end
 
   def submitted?

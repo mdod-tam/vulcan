@@ -7,6 +7,7 @@ module Applications
     include ActionDispatch::TestProcess::FixtureFile
 
     setup do
+      ensure_system_audit_actor!
       @timestamp = Time.current.to_f.to_s.gsub('.', '')
       @user = create_user
       @dependent = create_dependent_for(@user)

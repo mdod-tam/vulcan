@@ -9,7 +9,7 @@ module Admin
     setup do
       @admin = create(:admin)
       @pending_letter = create(:print_queue_item, :pending, letter_type: :registration_confirmation)
-      @pending_letter2 = create(:print_queue_item, :pending, letter_type: :application_approved)
+      @pending_letter2 = create(:print_queue_item, :pending, letter_type: :other_notification)
       @printed_letter = create(:print_queue_item, letter_type: :account_created, admin: @admin)
 
       sign_in(@admin)

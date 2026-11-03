@@ -8,6 +8,7 @@ module Applications
     include ProofResubmissionTestHelper
 
     setup do
+      ensure_system_audit_actor!
       @actor = create(:admin)
       @application = create(:application, :in_progress)
       Current.paper_context = true

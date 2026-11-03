@@ -49,14 +49,15 @@ class EmailDeliveryBoundaryTest < ActionDispatch::IntegrationTest
   end
 
   test 'turning a queued template off records a suppression when the job runs' do
-    VendorNotificationsMailer.with(vendor: create(:vendor)).w9_approved.deliver_later
+    job = VendorNotificationsMailer.with(vendor: create(:vendor)).w9_approved.deliver_later
+    request_id = job.email_delivery_context.fetch('request_id')
     EmailDelivery::ControlWriter.set_template_pair(name: 'vendor_notifications_w9_approved', format: :text, enabled: false,
                                                    actor: @admin, operation_id: 'op-1')
 
     perform_enqueued_jobs
 
     assert_empty ActionMailer::Base.deliveries
-    assert_equal 1, Event.where(action: EmailDelivery::Outcome::SUPPRESSED).count
+    assert_equal 1, Event.where(action: EmailDelivery::Outcome::SUPPRESSED).with_metadata(:request_id, request_id).count
   end
 
   test 'a notification whose email is refused at queueing is recorded as suppressed' do

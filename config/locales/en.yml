@@ -110,6 +110,7 @@ en:
       user:
         date_of_birth: "Date of birth"
       application:
+        managing_guardian: "Managing guardian"
         income_proof: "Income proof"
         residency_proof: "Residency proof"
         id_proof: "ID proof"
@@ -131,6 +132,8 @@ en:
               invalid: "is not a valid date. Enter it as MM/DD/YYYY"
         application:
           attributes:
+            managing_guardian:
+              selection_required: "must be selected; ask a guardian to apply from their own account or contact MAT staff for help"
             base:
               training_service_window: "This application is outside the service window for training services."
               evaluation_service_window: "This application is outside the service window for evaluation services."
@@ -235,6 +238,41 @@ en:
         # Support must resolve distinct people who share both values.
         duplicate_identity: "%{name} is already associated with your account with this name and birthdate. If this is a different person, contact the MAT Team at %{support_email} or %{support_phone}."
   applications:
+    submit_gate:
+      incomplete: "Complete all required confirmations before submitting."
+      ready: "Application is ready to submit."
+      detail: "Still needed: %{items}."
+    form_labels:
+      maryland_resident: "I certify that I am a resident of Maryland"
+      household_size: "Household Size"
+      annual_income: "Annual Income"
+      self_certify_disability: "I certify that I have a disability that affects my ability to access telecommunications services"
+      disability_type: "Disability type"
+      physical_address_1: "Street Address"
+      city: "City"
+      state: "State"
+      zip_code: "Zip Code"
+      professional_name: "Name"
+      professional_phone: "Phone"
+      professional_email: "Email"
+      release_authorized: "I authorize the release and sharing of my disability-related information as described above"
+      terms_accepted: "I have read and accept the terms and conditions"
+      information_verified: "I verify that all information provided above is accurate and complete"
+      income_proof: "Income Verification"
+      residency_proof: "Proof of Residency"
+      id_proof: "ID Verification"
+    proof_card:
+      heading: "%{proof} Proof"
+      approved: "Approved"
+      rejected: "Rejected"
+      pending: "Pending Review"
+      reason: "Reason: %{reason}"
+      rejected_on: "Rejected on: %{date}"
+      upload: "Upload New %{proof} Proof"
+      types:
+        income: "Income"
+        residency: "Residency"
+        id: "ID"
     admission:
       title: "Application status"
       blocking_application: "You already have an active or pending application."

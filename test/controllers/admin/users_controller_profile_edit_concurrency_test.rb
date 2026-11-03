@@ -146,7 +146,7 @@ module Admin
                 phone: fresh_target.phone, phone_type: fresh_target.phone_type }
       )
 
-      controller.send(:update)
+      Current.set(user: fresh_admin) { controller.send(:update) }
 
       response_summary(controller)
     end

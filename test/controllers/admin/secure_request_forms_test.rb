@@ -194,7 +194,7 @@ module Admin
       old_email = 'original@example.test'
       application = create(:application, status: :awaiting_proof, certifying_professional_email: old_email)
       form = create(:secure_request_form, application: application, recipient: application.user)
-      create(:admin, email: PublicAuditActor::SYSTEM_AUDIT_EMAIL)
+      ensure_system_audit_actor!
 
       Applications::SubmitProviderInfo.new(
         application: application,

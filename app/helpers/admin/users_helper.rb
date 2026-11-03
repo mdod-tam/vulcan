@@ -70,7 +70,7 @@ module Admin
     end
 
     def latest_user_application(user)
-      user.applications.max_by { |application| application.application_date || Date.new(1) }
+      user.applications.max_by { |application| [application.application_date || Date.new(1), application.id] }
     end
 
     def user_search_result_locals(user, role:)

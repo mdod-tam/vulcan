@@ -16,6 +16,7 @@ module Applications
     end
 
     setup do
+      ensure_system_audit_actor!
       setup_active_storage_test
 
       setup_paper_application_context

@@ -64,6 +64,8 @@ Notification actors are explicit. A human action names the person who performed 
 
 Expiration notice intents retain their original communication-policy capture and delivery correlation. A crash before dispatch or a failed queue write is retried by the next sweep using that same intent, even though the voucher is already expired. Accepted queued jobs remain owned by the queue. Transport and letter replay checks use the retained identity if an enqueue is repeated. An intentional suppression is terminal; changing communication controls does not authorize replaying the old request. Delivery errors and captures remain on the notification for staff inspection.
 
+Proof-review reminders are administrator-only daily backlog notices. The application query includes attached required proofs awaiting review for three days in an active workflow. The job retains one notification per human administrator and local date, with its original communication-control capture and request identity. A queue retry reuses that identity; a later day may remind again while the work remains open. The system audit account supplies attribution and is excluded from the recipient roster.
+
 Account recovery uses the same operation with `deliver: false` and verifies the returned row before committing its recovery request. `audit: true` sets the notification row's `audited` flag without composing a generic `Event`. Business audit events belong to their workflow owners.
 
 ## Adding to this

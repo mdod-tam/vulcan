@@ -25,7 +25,7 @@
     </ul>
   </div>
 
-  <%= form.label :name, "Name", class: "form-label required-label" %>
+  <%= form.label :name, t('applications.form_labels.professional_name', locale: form_message_locale), class: 'form-label required-label' %>
   <%= form.text_field :name, 
       class: "form-input mt-1",
       "aria-describedby": "name-description" %>
@@ -33,7 +33,7 @@
 
   <div class="grid grid-cols-1 md:grid-cols-2 gap-4 mt-4">
     <div>
-      <%= form.label :phone, "Phone", class: "form-label required-label" %>
+      <%= form.label :phone, t('applications.form_labels.professional_phone', locale: form_message_locale), class: 'form-label required-label' %>
       <%= form.telephone_field :phone, 
           class: "form-input mt-1",
           "aria-describedby": "phone-description",
@@ -41,7 +41,7 @@
       <p id="phone-description" class="form-hint">Enter 10-digit phone number</p>
     </div>
     <div>
-      <%= form.label :email, "Email", class: "form-label required-label" %>
+      <%= form.label :email, t('applications.form_labels.professional_email', locale: form_message_locale), class: 'form-label required-label' %>
       <%= form.email_field :email, 
           class: "form-input mt-1",
           "aria-describedby": "email-description" %>
@@ -99,10 +99,8 @@
           "aria-required": "true",
           "aria-describedby": "disability-release-description",
           id: "application_disability_information_release_authorized" %>
-      <%= label_tag "application[disability_information_release_authorized]",
-          "I authorize the release and sharing of my disability-related information as described above",
-          class: "ml-2 block text-sm font-medium text-info-800 required-label",
-          for: "application_disability_information_release_authorized" %>
+      <%= label_tag 'application[disability_information_release_authorized]', t('applications.form_labels.release_authorized', locale: form_message_locale),
+                    class: 'ml-2 block text-sm font-medium text-info-800 required-label', for: 'application_disability_information_release_authorized' %>
     </div>
     <p id="disability-release-description" class="text-xs text-info-600 ml-6 mt-1">
       This authorization is required to process your MAT application and verify your eligibility.

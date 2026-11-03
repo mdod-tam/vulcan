@@ -17,16 +17,8 @@ class Current < ActiveSupport::CurrentAttributes
   # Test environment only: the authentication concern signs this user in.
   attribute :test_user_id
 
-  # Set by ProofAttachmentService so ProofManageable does not stamp needs_review_since a second time for an
-  # attachment the service already handled.
-  attribute :proof_attachment_service_context
-
   def force_notifications?
     force_notifications.present?
-  end
-
-  def proof_attachment_service_context?
-    proof_attachment_service_context.present?
   end
 
   # Request metadata, set only by Admin::BaseController for audit, template, and mailer readers

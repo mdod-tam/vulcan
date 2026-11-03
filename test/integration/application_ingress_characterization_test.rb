@@ -56,9 +56,7 @@ class ApplicationIngressCharacterizationTest < ActionDispatch::IntegrationTest
       expected_event_action: 'income_proof_attached'
     )
 
-    # CHARACTERIZATION: needs_review_since is set by ProofAttachmentService.update_application_status
-    # via update_columns when status is :not_reviewed. The concern's set_needs_review_timestamp
-    # callback does NOT fire (guarded by Current.proof_attachment_service_context).
+    # Pending proof status and its review marker are saved together by the application invariant.
     application.reload
     assert_not_nil application.needs_review_since, 'needs_review_since should be set for not_reviewed proof'
   end

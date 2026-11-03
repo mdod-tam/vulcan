@@ -24,6 +24,9 @@
         ].join(' '),
         autosave_url_value: autosave_field_constituent_portal_applications_path(user_id: (@application.user_id if @applicant_type == 'dependent')),
         autosave_debounce_wait_value: 1000,
+        final_submit_gate_incomplete_message: t('applications.submit_gate.incomplete', locale: form_message_locale),
+        final_submit_gate_incomplete_detail_message: t('applications.submit_gate.detail', locale: form_message_locale),
+        final_submit_gate_ready_message: t('applications.submit_gate.ready', locale: form_message_locale),
         autosave_saving_text_value: t('applications.autosave.saving', locale: form_message_locale),
         autosave_saved_text_value: t('applications.autosave.saved', locale: form_message_locale),
         autosave_failed_text_value: t('applications.autosave.failed', locale: form_message_locale),
@@ -159,15 +162,14 @@
                     "aria-describedby": "disability-certification-description",
                     "aria-required": "true"
                   }, "1", "0" %>
-              <%= form.label :self_certify_disability,
-                  "I certify that I have a disability that affects my ability to access telecommunications services",
-                  class: "ml-2 block text-sm text-gray-700" %>
+              <%= form.label :self_certify_disability, t('applications.form_labels.self_certify_disability', locale: form_message_locale),
+                             class: 'ml-2 block text-sm text-gray-700' %>
             </div>
             <p id="disability-certification-description" class="form-hint">
               If you have a disability, please self-certify by checking the box above.
             </p>
             <fieldset class="space-y-2" data-requires-one-checkbox="true" aria-describedby="portal-disability-type-help">
-              <legend class="text-sm text-gray-700 font-medium">Disability type</legend>
+              <legend class='text-sm text-gray-700 font-medium'><%= t('applications.form_labels.disability_type', locale: form_message_locale) %></legend>
               <p id="portal-disability-type-help"
                  class="form-hint">Select at least one disability that applies to <%= @applicant_type == 'dependent' ? 'your dependent' : 'you' %>.</p>
               <div class="grid sm:grid-cols-2 gap-4">
@@ -247,7 +249,7 @@
                  data-income-validation-target="incomeFieldsContainer">
               <div class="grid grid-cols-1 md:grid-cols-2 gap-4">
                 <div>
-                  <%= form.label :household_size, "Household Size", class: "form-label required-label" %>
+                  <%= form.label :household_size, t('applications.form_labels.household_size', locale: form_message_locale), class: 'form-label required-label' %>
                   <div class="mt-1">
                     <%= form.number_field :household_size,
                         min: 1,
@@ -265,7 +267,7 @@
                 </div>
 
                 <div>
-                  <%= form.label :annual_income, "Annual Income", class: "form-label required-label" %>
+                  <%= form.label :annual_income, t('applications.form_labels.annual_income', locale: form_message_locale), class: 'form-label required-label' %>
                   <div class="mt-1 relative rounded-md">
                     <div class="absolute inset-y-0 left-0 pl-3 flex items-center pointer-events-none">
                       <span class="text-gray-700 sm:text-sm font-medium" aria-hidden="true">$</span>
@@ -292,7 +294,7 @@
             <div id="income-threshold-warning" hidden class="hidden" role="alert" aria-live="assertive" data-income-validation-target="warningContainer"></div>
 
             <div>
-              <label for="application_income_proof" class="form-label">Upload Income Proof Document</label>
+              <label for='application_income_proof' class='form-label'><%= t('applications.form_labels.income_proof', locale: form_message_locale) %></label>
               <p id="income-hint" class="form-hint mb-2">
                 We need proof of your household income. Please provide one of the following acceptable documents:
                 <strong>Tax return</strong> (preferred), <strong>current year SSA award letter</strong> (less than 2 months old),
@@ -319,14 +321,14 @@
                     required: true,
                     "aria-required": "true",
                     "aria-describedby": "maryland_resident_help" %>
-                <%= form.label :maryland_resident, "I certify that I am a resident of Maryland",
+                <%= form.label :maryland_resident, t('applications.form_labels.maryland_resident', locale: form_message_locale),
                     class: "ml-2 block text-sm text-gray-700 required-label" %>
               </div>
               <p id="maryland_resident_help" class="form-hint ml-6">Note: This will be verified through the residency proof upload/review process</p>
             </div>
 
             <div>
-              <label for="application_residency_proof" class="form-label required-label">Upload Residency Proof Document</label>
+              <label for='application_residency_proof' class='form-label required-label'><%= t('applications.form_labels.residency_proof', locale: form_message_locale) %></label>
               <p id="residency-hint" class="form-hint mb-2">
                 Upload one of the following acceptable documents: <strong>driver's license</strong>, <strong>state ID</strong>,
                 <strong>identification card</strong>, <strong>utility bill</strong>, or <strong> photo ID</strong>.
@@ -344,7 +346,7 @@
             <h3 class="text-base font-medium text-gray-900">ID Verification</h3>
 
             <div>
-              <label for="application_id_proof" class="form-label required-label">Upload ID Proof Document</label>
+              <label for='application_id_proof' class='form-label required-label'><%= t('applications.form_labels.id_proof', locale: form_message_locale) %></label>
               <p id="id-hint" class="form-hint mb-2">
                 Upload a government-issued photo ID such as a <strong>driver's license</strong>, <strong>state ID card</strong>,
                 <strong>identification card</strong>, or <strong>passport</strong>.
@@ -369,9 +371,8 @@
                 id: "terms_accepted",
                 required: true,
                 class: "mt-1 h-4 w-4 text-primary-600 border-gray-300 rounded" %>
-            <%= form.label :terms_accepted,
-                "I have read and accept the terms and conditions",
-                class: "ml-2 block text-sm text-gray-700 required-label" %>
+            <%= form.label :terms_accepted, t('applications.form_labels.terms_accepted', locale: form_message_locale),
+                           for: 'terms_accepted', class: 'ml-2 block text-sm text-gray-700 required-label' %>
           </div>
         </div>
 
@@ -381,9 +382,8 @@
                 id: "information_verified",
                 required: true,
                 class: "mt-1 h-4 w-4 text-primary-600 border-gray-300 rounded" %>
-            <%= form.label :information_verified,
-                "I verify that all information provided above is accurate and complete",
-                class: "ml-2 block text-sm text-gray-700 required-label" %>
+            <%= form.label :information_verified, t('applications.form_labels.information_verified', locale: form_message_locale),
+                           for: 'information_verified', class: 'ml-2 block text-sm text-gray-700 required-label' %>
           </div>
         </div>
 

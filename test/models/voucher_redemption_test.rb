@@ -4,6 +4,7 @@ require 'test_helper'
 
 class VoucherRedemptionTest < ActiveSupport::TestCase
   setup do
+    ensure_system_audit_actor!
     @application = create(:application, :completed)
     @constituent = @application.user
     @vendor = create(:vendor)
@@ -12,6 +13,27 @@ class VoucherRedemptionTest < ActiveSupport::TestCase
 
     @product1 = create(:product, name: 'Test Product A')
     @product2 = create(:product, name: 'Test Product B')
+  end
+
+  test 'required redemption audit failure rolls back balance and products' do
+    original = AuditEventService.method(:log)
+    writer = lambda do |**attributes|
+      raise 'redemption audit unavailable' if attributes[:action] == 'voucher_redeemed'
+
+      original.call(**attributes)
+    end
+    AuditEventService.stub(:log, writer) do
+      assert_no_difference ['VoucherTransaction.count', 'VoucherTransactionProduct.count'] do
+        assert_raises(RuntimeError) { @voucher.redeem!(100, @vendor, { @product1.id => 1 }) }
+      end
+    end
+    assert_equal 500, @voucher.reload.remaining_value
+    assert_empty @application.reload.products
+  end
+
+  test 'distinct rapid redemptions keep separate required audits' do
+    2.times { @voucher.redeem!(100, @vendor) }
+    assert_equal 2, @voucher.events.where(action: 'voucher_redeemed').count
   end
 
   test 'voucher redemption creates transaction record' do
@@ -74,20 +96,6 @@ class VoucherRedemptionTest < ActiveSupport::TestCase
 
     assert_not_nil mock_event.metadata['products']
     assert_equal 2, mock_event.metadata['products'].size
-  end
-
-  test "fault-tolerant event logging doesn't prevent redemption" do
-    Rails.logger.stubs(:error)
-    Rails.logger.expects(:error).with('Failed to log voucher redemption event: StandardError').once
-
-    AuditEventService.stubs(:log).raises(StandardError, 'Simulated audit error')
-
-    assert_difference -> { VoucherTransaction.count }, 1 do
-      @voucher.redeem!(100, @vendor)
-    end
-
-    @voucher.reload
-    assert_equal 400, @voucher.remaining_value
   end
 
   test 'full redemption sets voucher status to redeemed' do

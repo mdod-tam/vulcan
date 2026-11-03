@@ -6,6 +6,7 @@ module Vouchers
   # Eligibility, including the W9 requirement, is the same rule in every environment.
   class RedemptionServiceTest < ActiveSupport::TestCase
     setup do
+      ensure_system_audit_actor!
       FeatureFlag.enable!(:vouchers_enabled)
       @voucher = create(:voucher, :active)
       @session = { verified_vouchers: [@voucher.id] }

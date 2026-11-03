@@ -3,6 +3,8 @@
 require 'test_helper'
 
 class SecureRequestFormsHelperTest < ActionView::TestCase
+  setup { ensure_system_audit_actor! }
+
   include SecureRequestFormsHelper
 
   test 'blocked letter label differs from durable cancellation in both locales' do

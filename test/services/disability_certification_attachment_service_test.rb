@@ -7,6 +7,7 @@ class DisabilityCertificationAttachmentServiceTest < ActiveSupport::TestCase
   include ActionDispatch::TestProcess::FixtureFile
 
   setup do
+    ensure_system_audit_actor!
     clear_active_storage
     @application = create(:application, status: :in_progress)
     @admin = create(:admin)

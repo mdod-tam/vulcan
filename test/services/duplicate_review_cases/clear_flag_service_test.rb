@@ -5,6 +5,7 @@ require 'test_helper'
 module DuplicateReviewCases
   class ClearFlagServiceTest < ActiveSupport::TestCase
     setup do
+      ensure_system_audit_actor!
       @admin = create(:admin)
       @user = create(:constituent, needs_duplicate_review: true)
     end

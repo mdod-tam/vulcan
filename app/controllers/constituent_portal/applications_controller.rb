@@ -387,7 +387,9 @@ module ConstituentPortal
         return
       end
 
-      result.error_messages.each { |message| @application.errors.add(:base, message) }
+      result.error_messages.each do |message|
+        @application.errors.add(:base, message) unless @application.errors.full_messages.include?(message)
+      end
     end
 
     # Warn on GET before file selection because a refusal cannot restore file input values.
@@ -492,6 +494,7 @@ module ConstituentPortal
       @application = find_application_by_standard_query
       @application = find_application_by_flexible_query if @application.nil?
       handle_application_not_found if @application.nil?
+      @guardian_relationship_type = @application&.guardian_relationship_type
     end
 
     def find_application_by_standard_query

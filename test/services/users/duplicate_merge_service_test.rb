@@ -5,6 +5,7 @@ require 'test_helper'
 module Users
   class DuplicateMergeServiceTest < ActiveSupport::TestCase
     setup do
+      ensure_system_audit_actor!
       @admin = create(:admin)
       @canonical = create(:constituent, email: "portal-#{SecureRandom.hex(3)}@example.com", phone: nil)
       @duplicate = phone_only_constituent(phone: '555-777-8888')
@@ -164,6 +165,7 @@ module Users
 
     test 'blocks merge when the duplicate owns delivery for an active secure request form' do
       dependent = create(:constituent)
+      create(:guardian_relationship, guardian_user: @duplicate, dependent_user: dependent)
       application = create(:application, user: dependent, managing_guardian: @duplicate)
       create(:secure_request_form, application:, recipient: dependent, delivery_owner: @duplicate,
                                    delivery_source: 'managing_guardian')
@@ -291,6 +293,7 @@ module Users
       dependent = create(:constituent)
       relationship = create(:guardian_relationship, guardian_user: @duplicate, dependent_user: dependent)
       session = @duplicate.sessions.create!(session_token: SecureRandom.hex(16), user_agent: 'test', ip_address: '127.0.0.1')
+      create(:guardian_relationship, guardian_user: @canonical, dependent_user: dependent)
       protected_application = create(:application, user: dependent, managing_guardian: @canonical)
       form = create(:secure_request_form, application: protected_application, recipient: dependent,
                                           recipient_channel: :sms, recipient_phone: @canonical.phone,
@@ -738,6 +741,7 @@ module Users
     end
 
     test 'clears the managing guardian when a transferred app was managed by the canonical' do
+      create(:guardian_relationship, guardian_user: @canonical, dependent_user: @duplicate)
       app = create(:application, user: @duplicate, managing_guardian: @canonical)
       result = merge
       assert result.success?, result.message
@@ -749,6 +753,7 @@ module Users
     end
 
     test 'clears the managing guardian when the canonical already owns an app managed by the duplicate' do
+      create(:guardian_relationship, guardian_user: @duplicate, dependent_user: @canonical)
       app = create(:application, user: @canonical, managing_guardian: @duplicate)
       result = merge
       assert result.success?, result.message

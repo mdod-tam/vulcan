@@ -584,7 +584,7 @@ class ApplicationTest < ActiveSupport::TestCase
       result = Application.batch_update_status([app1.id, app2.id], :in_progress, actor: admin)
       assert_not result[:success]
       assert_equal 0, result[:success_count]
-      assert_includes result[:errors].first, 'Test error'
+      assert_equal 'Applications could not be updated.', result[:errors].first
     end
 
     assert app1.reload.status_draft?
@@ -692,6 +692,7 @@ class ApplicationTest < ActiveSupport::TestCase
     timestamp = Time.current.to_i
     guardian = create(:constituent, email: "guardian.app.#{timestamp}@example.com", phone: "555555#{timestamp.to_s[-4..]}")
     applicant_user = create(:constituent, email: "applicant.app.#{timestamp + 1}@example.com", phone: "555556#{timestamp.to_s[-4..]}")
+    create(:guardian_relationship, guardian_user: guardian, dependent_user: applicant_user)
     application = create(:application, user: applicant_user, managing_guardian: guardian)
 
     assert_equal(guardian, application.managing_guardian)
@@ -715,6 +716,25 @@ class ApplicationTest < ActiveSupport::TestCase
 
     assert_equal(minor_applicant, application_for_minor.user, "Application's user should be the minor.")
     assert_equal(guardian, application_for_minor.managing_guardian, "Application's managing_guardian should be the guardian.")
+  end
+
+  test 'multiple guardians require explicit selection and cannot silently change application access' do
+    applicant = create(:constituent, :with_disabilities)
+    first, second = create_list(:constituent, 2)
+    [first, second].each { |guardian| create(:guardian_relationship, guardian_user: guardian, dependent_user: applicant) }
+    application = build(:application, :draft, user: applicant)
+    assert_not application.valid?
+    assert_includes application.errors.details[:managing_guardian], error: :selection_required
+    I18n.with_locale(:es) do
+      assert_match(/^Tutor principal debe seleccionarse/, application.errors.full_messages_for(:managing_guardian).sole)
+    end
+    application.managing_guardian = second
+    application.save!
+    assert application.accessible_by?(second)
+    assert_not application.accessible_by?(first)
+    application.user = create(:constituent, :with_disabilities)
+    assert_not application.valid?
+    assert_includes application.errors.details[:managing_guardian], error: :invalid
   end
 
   # escalate_to_dcf!

@@ -8,6 +8,7 @@ module Letters
     include ConcurrencyTestHelper
 
     setup do
+      ensure_system_audit_actor!
       @admin = create(:admin)
       @recipient = create(:constituent)
       @application = create(:application, user: @recipient)

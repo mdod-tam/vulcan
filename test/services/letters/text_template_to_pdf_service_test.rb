@@ -5,6 +5,7 @@ require 'test_helper'
 module Letters
   class TextTemplateToPdfServiceTest < ActiveSupport::TestCase
     setup do
+      ensure_system_audit_actor!
       @user = create(:constituent, email: "test-template-#{SecureRandom.hex(4)}@example.com")
       # Remove any seeded template of this name so the create below passes the uniqueness check.
       EmailTemplate.where(name: 'application_notifications_account_created').destroy_all

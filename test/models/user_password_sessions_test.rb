@@ -4,6 +4,7 @@ require 'test_helper'
 
 class UserPasswordSessionsTest < ActiveSupport::TestCase
   setup do
+    ensure_system_audit_actor!
     @user = create(:constituent)
     @sessions = 2.times.map { @user.sessions.create!(user_agent: 'Password security test', ip_address: '127.0.0.1') }
   end

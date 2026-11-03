@@ -7,6 +7,7 @@ module Applications
     setup do
       @guardian = create(:constituent, email: 'guardian@example.com', phone: '410-555-0100')
       @admin = create(:admin)
+      Current.user = @admin
     end
 
     test 'process_guardian_scenario returns failure result when guardian information is missing' do

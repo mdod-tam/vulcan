@@ -406,6 +406,8 @@ module Applications
         dependent = create(:constituent, email: 'dependent.guardian-filter@example.com', vision_disability: true)
         other_guardian = create(:constituent, email: 'other.guardian@example.com', speech_disability: true)
         other_dependent = create(:constituent, email: 'other.dependent@example.com', mobility_disability: true)
+        create(:guardian_relationship, guardian_user: guardian, dependent_user: dependent)
+        create(:guardian_relationship, guardian_user: other_guardian, dependent_user: other_dependent)
         matching_app = create(:application, status: :draft, user: dependent, managing_guardian: guardian)
         other_app = create(:application, status: :draft, user: other_dependent, managing_guardian: other_guardian)
 

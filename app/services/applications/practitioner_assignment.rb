@@ -23,7 +23,7 @@ module Applications
     # whose message is the reason; notification_outcomes lists the notices queued for delivery after commit.
     def in_transaction(&)
       @notification_outcomes = []
-      ApplicationRecord.transaction(&)
+      ApplicationRecord.transaction(requires_new: true, &)
       success(nil, notification_outcomes: @notification_outcomes)
     rescue Rejected => e
       failure(e.message)

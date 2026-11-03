@@ -3,6 +3,8 @@
 require 'test_helper'
 
 class UserContactPredicatesTest < ActiveSupport::TestCase
+  setup { ensure_system_audit_actor! }
+
   test 'real_email? is true for valid non-synthetic email' do
     user = build(:constituent, email: 'real@example.com')
 

@@ -7,7 +7,7 @@ module Applications
     include ActionDispatch::TestProcess::FixtureFile
 
     setup do
-      @system_audit_actor = create(:admin, email: PublicAuditActor::SYSTEM_AUDIT_EMAIL)
+      @system_audit_actor = ensure_system_audit_actor!
       @application = create(:application, :in_progress)
       @secure_request_form = create(:secure_request_form, kind: :income_proof_resubmission, application: @application)
       @file = fixture_file_upload(Rails.root.join('test/fixtures/files/income_proof.pdf'), 'application/pdf')

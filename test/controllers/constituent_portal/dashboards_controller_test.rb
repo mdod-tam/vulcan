@@ -11,6 +11,34 @@ module ConstituentPortal
       sign_in_for_integration_test(@user)
     end
 
+    test 'proof cards use the viewer locale and relationship queries stay bounded as dependents grow' do
+      @user.update!(locale: 'es')
+      application = create(:application, :in_progress, :with_residency_proof, user: @user)
+      create_list(:constituent, 2, :with_disabilities).each do |dependent|
+        create(:guardian_relationship, guardian_user: @user, dependent_user: dependent)
+        create(:application, :in_progress, user: dependent, managing_guardian: @user)
+      end
+      counts = []
+      2.times do |round|
+        sql = []
+        observer = ->(_name, _start, _finish, _id, payload) { sql << payload[:sql] unless payload[:cached] }
+        ActiveSupport::Notifications.subscribed(observer, 'sql.active_record') { get constituent_portal_dashboard_path }
+        assert_response :success
+        assert_select 'h4', text: 'Comprobante de residencia'
+        assert_select '.badge', text: 'Pendiente de revisión'
+        counts << sql.count { |query| query.start_with?('SELECT') && query.include?('guardian_relationships') }
+        next unless round.zero?
+
+        4.times do
+          dependent = create(:constituent, :with_disabilities)
+          create(:guardian_relationship, guardian_user: @user, dependent_user: dependent)
+          create(:application, :in_progress, user: dependent, managing_guardian: @user)
+        end
+      end
+      assert_equal counts.first, counts.last
+      assert application.reload.status_in_progress?
+    end
+
     test 'should get show' do
       get constituent_portal_dashboard_path
       assert_response :success

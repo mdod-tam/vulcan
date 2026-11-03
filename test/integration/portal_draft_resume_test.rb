@@ -10,6 +10,7 @@ class PortalDraftResumeTest < ActionDispatch::IntegrationTest
   end
 
   test 'a guardian cannot resume a co-guardian managed draft' do
+    create(:guardian_relationship, guardian_user: @other_guardian, dependent_user: @dependent)
     draft = create(:application, :draft, user: @dependent, managing_guardian: @other_guardian)
     assert_wrong_draft_is_not_resumed(draft, actor: @guardian)
   end
@@ -22,6 +23,7 @@ class PortalDraftResumeTest < ActionDispatch::IntegrationTest
   end
 
   test 'a dependent signing in cannot resume a guardian managed draft' do
+    create(:guardian_relationship, guardian_user: @guardian, dependent_user: @dependent)
     draft = create(:application, :draft, user: @dependent, managing_guardian: @guardian)
     assert_wrong_draft_is_not_resumed(draft, actor: @dependent)
   end
@@ -50,7 +52,7 @@ class PortalDraftResumeTest < ActionDispatch::IntegrationTest
 
   def assert_wrong_draft_is_not_resumed(draft, actor:)
     [@guardian, @other_guardian].each do |guardian|
-      create(:guardian_relationship, guardian_user: guardian, dependent_user: @dependent)
+      GuardianRelationship.find_or_create_by!(guardian_user: guardian, dependent_user: @dependent) { |relationship| relationship.relationship_type = 'Parent' }
     end
     before = draft.reload.attributes
     assert_nil Application.resumable_portal_draft([draft], actor_id: actor.id)

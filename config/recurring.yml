@@ -6,6 +6,16 @@
 # Hourly schedules are timezone-invariant.
 
 production:
+  proof_review_reminders:
+    class: ProofReviewReminderJob
+    schedule: "15 6 * * * UTC"
+    description: "Remind administrators about proofs awaiting review for three days"
+
+  cleanup_expired_sessions:
+    class: CleanupExpiredSessionsJob
+    schedule: "30 6 * * * UTC"
+    description: "Delete sessions expired by idle or absolute timeout"
+
   recover_document_scans:
     class: RecoverDocumentScansJob
     schedule: "every minute"
@@ -25,14 +35,12 @@ production:
     class: GenerateVendorInvoicesJob
     schedule: "15 5 */14 * * UTC"
     description: "Generate biweekly invoices for vendors with pending transactions"
-  <% if FeatureFlag.enabled?(:vouchers_enabled) %>
   check_voucher_expiration:
     class: CheckVoucherExpirationJob
     schedule: "30 5 * * * UTC"
     description: "Check for expiring vouchers and notify constituents"
     queue: "default"
     args: []
-  <% end %>
 
   
   proof_attachment_metrics:

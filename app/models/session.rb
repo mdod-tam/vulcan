@@ -21,6 +21,10 @@ class Session < ApplicationRecord
 
   scope :for_token, ->(token) { where(session_token_digest: digest_token(token)) }
 
+  scope :expired_at, lambda { |at|
+    where('expires_at IS NULL OR expires_at <= :at OR last_active_at <= :idle', at: at, idle: at - IDLE_TIMEOUT)
+  }
+
   def self.digest_token(token)
     Digest::SHA256.hexdigest(token.to_s)
   end

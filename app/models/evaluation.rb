@@ -50,7 +50,6 @@ class Evaluation < ApplicationRecord
   validate :appointment_time_must_not_be_future
 
   before_save :ensure_status_schedule_consistency
-  after_save :update_application_record, if: :saved_change_to_status?
 
   # Virtual attributes for UI
   def attendees_field
@@ -212,12 +211,6 @@ class Evaluation < ApplicationRecord
     return if ids.all? { |id| id.match?(/\A[1-9]\d*\z/) } && Product.where(id: ids).count == ids.uniq.size
 
     errors.add(:products_tried, 'must reference catalog products')
-  end
-
-  def update_application_record
-    return unless status_completed? && application.needs_review_since.present?
-
-    application.clear_review_marker!
   end
 
   # Checked for a new or changed assignee only, so a former assignee who lost eligibility can still be cancelled or edited.

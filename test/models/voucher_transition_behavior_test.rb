@@ -7,6 +7,7 @@ class VoucherTransitionBehaviorTest < ActiveSupport::TestCase
   include ActiveJob::TestHelper
 
   def setup
+    ensure_system_audit_actor!
     clear_enqueued_jobs
     clear_performed_jobs
     setup_paper_application_context
@@ -17,6 +18,21 @@ class VoucherTransitionBehaviorTest < ActiveSupport::TestCase
     clear_enqueued_jobs
     clear_performed_jobs
     Current.reset
+  end
+
+  test 'ineligible issuance leaves an enclosing writers earlier change intact without voucher side effects' do
+    FeatureFlag.enable!(:vouchers_enabled)
+    actor = create(:admin)
+    application = create(:application, :in_progress)
+    activity = 1.hour.ago.change(usec: 0)
+    assert_no_difference ['Voucher.count', 'Event.count'] do
+      Application.transaction do
+        application.update!(last_activity_at: activity)
+        result = Vouchers::IssuanceService.new(application, actor: actor).call
+        assert_predicate result, :failure?
+      end
+    end
+    assert_equal activity, application.reload.last_activity_at
   end
 
   test 'AuditEventService allows rapid toggles with different values' do

@@ -4,6 +4,8 @@ require 'test_helper'
 
 module Applications
   class SecureRequestRecipientResolverTest < ActiveSupport::TestCase
+    setup { ensure_system_audit_actor! }
+
     test 'uses letter by default for a letter-preferring recipient with mailing address' do
       constituent = create(:constituent, communication_preference: 'letter')
       application = create(:application, user: constituent)
@@ -313,9 +315,9 @@ module Applications
     test 'uses preloaded guardian relationships when resolving recipient role context' do
       dependent = create(:constituent)
       guardian = create(:constituent)
-      application = create(:application, user: dependent, managing_guardian: guardian)
       relationship = create(:guardian_relationship, dependent_user: dependent, guardian_user: guardian,
                                                     relationship_type: 'parent')
+      application = create(:application, user: dependent, managing_guardian: guardian)
 
       GuardianRelationship.expects(:where).never
 
@@ -332,19 +334,12 @@ module Applications
       assert_equal 'parent', candidate.recipient_relationship_type
     end
 
-    test 'labels the application manager as a guardian without a relationship row' do
+    test 'an unrelated manager cannot become a secure request recipient through application ownership' do
       dependent = create(:constituent)
       guardian = create(:constituent)
-      application = create(:application, user: dependent, managing_guardian: guardian)
-
-      candidate = SecureRequestRecipientResolver
-                  .new(application: application, recipient_ids: [guardian.id])
-                  .resolve
-                  .first
-
-      assert_equal :guardian, candidate.recipient_role
-      assert_nil candidate.recipient_relationship_type
-      assert_equal :managing_guardian, candidate.delivery_source
+      application = build(:application, user: dependent, managing_guardian: guardian)
+      assert_not application.save
+      assert_includes application.errors[:managing_guardian], 'is invalid'
     end
 
     test 'records contact owner and source for a guardian-routed dependent' do

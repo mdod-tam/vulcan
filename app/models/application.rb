@@ -3,7 +3,7 @@
 # Owns application lifecycle rules for proofs, certification, training, evaluations, and fulfillment.
 class Application < ApplicationRecord
   has_many :email_delivery_attempts, dependent: :nullify
-  CertifyingProfessionalInfo = Struct.new(:name, :phone, :fax, :email, keyword_init: true) do # rubocop:disable Style/RedundantStructKeywordInit
+  CertifyingProfessionalInfo = Struct.new(:name, :phone, :fax, :email, keyword_init: true) do
     def present?
       name.present? || phone.present? || fax.present? || email.present?
     end
@@ -137,13 +137,13 @@ class Application < ApplicationRecord
   validate :waiting_period_completed, on: :create
   validate :constituent_must_have_disability, if: :validate_disability?
   validate :managing_guardian_cannot_be_applicant
+  validate :managing_guardian_matches_applicant
 
   delegate :present?, to: :active_training_session, prefix: true
 
   before_validation :scrub_income_fields, if: :should_scrub_income?
-  before_save :ensure_managing_guardian_set, if: :user_id_changed?
-  before_create :stamp_workflow_defaults!
-  before_create :ensure_managing_guardian_set
+  before_validation :ensure_managing_guardian_set, if: -> { new_record? || will_save_change_to_user_id? }
+  before_save :stamp_workflow_defaults!, if: :new_record?, prepend: true
   after_update :reconcile_pending_letters_after_owner_change
 
   scope :draft, -> { where(status: :draft) }
@@ -283,46 +283,64 @@ class Application < ApplicationRecord
       .count
   end
 
-  def self.batch_update_status(ids, new_status, actor:) # rubocop:disable Metrics/PerceivedComplexity
+  class BatchStatusUpdateRefused < StandardError; end
+
+  def self.batch_update_status(ids, new_status, actor:)
     return { success: false, success_count: 0, errors: ['No applications selected'] } if ids.blank?
 
-    success_count = 0
-    errors = []
+    status_change_ids = []
+    writes_finished = false
+    applications = []
+    transaction(requires_new: true) do
+      applications = where(id: ids).order(:id).lock.to_a
+      missing_ids = ids.map(&:to_s).uniq - applications.map { |application| application.id.to_s }
+      raise BatchStatusUpdateRefused, "Applications not found: #{missing_ids.join(', ')}" if missing_ids.any?
 
-    transaction do
-      applications = where(id: ids)
-      found_ids = applications.pluck(:id).map(&:to_s)
-      missing_ids = ids.map(&:to_s) - found_ids
-
-      errors << "Applications not found: #{missing_ids.join(', ')}" if missing_ids.any?
-
-      applications.find_each do |application|
-        success = if new_status.to_sym == :approved
-                    application.approve!(user: actor)
-                  elsif new_status.to_sym == :rejected
-                    application.reject!(user: actor)
-                  else
-                    application.transition_status!(new_status, actor: actor, metadata: { trigger: 'batch_update' })
-                  end
-
-        if success
-          success_count += 1
-        else
-          errors << "Application ##{application.id} failed to update"
+      applications.each do |application|
+        previous_status = application.status
+        case new_status.to_sym
+        when :approved then application.approve!(user: actor)
+        when :rejected then application.reject!(user: actor)
+        else application.transition_status!(new_status, actor: actor, metadata: { trigger: 'batch_update' })
         end
-      rescue StandardError => e
-        errors << "Application ##{application.id}: #{e.message}"
+        status_change_ids << application.status_changes.order(:id).last.id if previous_status != application.status
       end
-
-      raise ActiveRecord::Rollback if errors.any?
+      writes_finished = true
     end
-
-    if errors.any?
-      { success: false, success_count: 0, errors: errors }
+    { success: true, success_count: applications.size, errors: [] }
+  rescue StandardError => e
+    Rails.logger.error("Application batch status update failed (error_class=#{e.class.name})")
+    state = writes_finished ? batch_status_commit_state(status_change_ids) : :rolled_back
+    if state == :committed
+      { success: true, success_count: applications.size, errors: [], commit_state: state,
+        warning: 'Applications were updated, but follow-up work failed. Check their history before retrying.' }
     else
-      { success: true, success_count: success_count, errors: [] }
+      { success: false, success_count: 0, errors: [batch_status_error_message(e, state)], commit_state: state }
     end
   end
+
+  def self.batch_status_error_message(error, state)
+    return 'The outcome could not be confirmed. Check application history before retrying.' if state == :unknown
+    return error.message if error.is_a?(BatchStatusUpdateRefused)
+    return error.record.errors.full_messages.to_sentence if error.is_a?(ActiveRecord::RecordInvalid) && error.record.is_a?(Application)
+
+    'Applications could not be updated.'
+  end
+  private_class_method :batch_status_error_message
+
+  # History IDs are receipts for this batch, rather than an inference from possibly stale statuses.
+  def self.batch_status_commit_state(status_change_ids)
+    return :unknown if status_change_ids.empty?
+
+    count = ApplicationStatusChange.where(id: status_change_ids).count
+    return :committed if count == status_change_ids.size
+    return :rolled_back if count.zero?
+
+    :unknown
+  rescue StandardError
+    :unknown
+  end
+  private_class_method :batch_status_commit_state
 
   def skip_certifying_professional_validation?
     status_draft? ||
@@ -371,41 +389,41 @@ class Application < ApplicationRecord
       old_status = status
       target_status = new_status.to_s
 
-      return true if old_status == target_status
+      unless old_status == target_status
+        validate_status_transition!(target_status)
+        update!(status: target_status)
 
-      validate_status_transition!(target_status)
-      update!(status: target_status)
-
-      status_change = status_changes.create!(
-        from_status: old_status,
-        to_status: status,
-        user: actor,
-        notes: notes,
-        metadata: metadata.reverse_merge(
-          application_id: id,
-          old_status: old_status,
-          new_status: status,
-          submission_method: submission_method,
-          notes: notes
+        status_change = status_changes.create!(
+          from_status: old_status,
+          to_status: status,
+          user: actor,
+          notes: notes,
+          metadata: metadata.reverse_merge(
+            application_id: id,
+            old_status: old_status,
+            new_status: status,
+            submission_method: submission_method,
+            notes: notes
+          )
         )
-      )
 
-      AuditEventService.log(
-        action: 'application_status_changed',
-        actor: actor,
-        auditable: self,
-        metadata: metadata.reverse_merge(
-          operation_id: "application_status_change:#{status_change.id}",
-          application_id: id,
-          old_status: old_status,
-          new_status: status,
-          submission_method: submission_method,
-          notes: notes
+        AuditEventService.log(
+          action: 'application_status_changed',
+          actor: actor,
+          auditable: self,
+          metadata: metadata.reverse_merge(
+            operation_id: "application_status_change:#{status_change.id}",
+            application_id: id,
+            old_status: old_status,
+            new_status: status,
+            submission_method: submission_method,
+            notes: notes
+          )
         )
-      )
 
-      true
+      end
     end
+    true
   end
 
   def constituent_full_name
@@ -530,16 +548,16 @@ class Application < ApplicationRecord
   end
 
   def request_evaluation!(actor:)
-    raise ArgumentError, 'Evaluation can only be requested on approved applications' unless status_approved?
-    raise ArgumentError, 'An evaluation request is already pending' if evaluation_request_pending?
+    with_lock(requires_new: true) do
+      raise ArgumentError, 'Evaluation can only be requested on approved applications' unless status_approved?
+      raise ArgumentError, 'An evaluation request is already pending' if evaluation_request_pending?
 
-    update!(evaluation_requested_at: Time.current)
-    AuditEventService.log(
-      action: 'evaluation_requested',
-      actor: actor,
-      auditable: self,
-      metadata: { application_id: id }
-    )
+      update!(evaluation_requested_at: Time.current)
+      AuditEventService.log(
+        action: 'evaluation_requested', actor: actor, auditable: self,
+        metadata: { application_id: id }
+      )
+    end
   end
 
   def service_window_active?
@@ -561,10 +579,7 @@ class Application < ApplicationRecord
   def guardian_relationship_type
     return nil unless for_dependent?
 
-    GuardianRelationship.find_by(
-      guardian_id: managing_guardian_id,
-      dependent_id: user_id
-    )&.relationship_type
+    user.guardian_relationships_as_dependent.find { |relationship| relationship.guardian_id == managing_guardian_id }&.relationship_type
   end
 
   # The unmanaged applicant or the managing guardian, for viewing and editing alike.
@@ -595,8 +610,9 @@ class Application < ApplicationRecord
   end
 
   def stamp_workflow_defaults!
-    self.fulfillment_type = FeatureFlag.enabled?(:vouchers_enabled) ? :voucher : :equipment
-    self.income_proof_required = FeatureFlag.income_proof_required?
+    income_required = FeatureFlag.income_proof_required?
+    self.fulfillment_type = income_required ? :equipment : :voucher
+    self.income_proof_required = income_required
   end
 
   def scrub_income_fields
@@ -652,19 +668,22 @@ class Application < ApplicationRecord
     errors.add(:base, 'An application cannot be managed by the applicant themselves')
   end
 
-  # Assign a guardian before create or after an applicant change when no manager is set.
-  # An existing manager takes precedence over relationships.
+  # Only an unambiguous relationship can supply an omitted manager.
   def ensure_managing_guardian_set
     return if managing_guardian_id.present? || user_id.blank?
 
-    guardian_relationship = GuardianRelationship.find_by(dependent_id: user_id)
+    guardian_ids = GuardianRelationship.where(dependent_id: user_id).where.not(guardian_id: user_id).limit(2).pluck(:guardian_id)
+    self.managing_guardian_id = guardian_ids.sole if guardian_ids.one?
+  end
 
-    return unless guardian_relationship
+  def managing_guardian_matches_applicant
+    return if user_id.blank?
 
-    # Do not assign the applicant as their own guardian.
-    return if guardian_relationship.guardian_id == user_id
-
-    Rails.logger.info "Setting managing_guardian_id to #{guardian_relationship.guardian_id} for application #{id}"
-    self.managing_guardian_id = guardian_relationship.guardian_id
+    relationships = GuardianRelationship.where(dependent_id: user_id)
+    if managing_guardian_id.present?
+      errors.add(:managing_guardian, :invalid) unless relationships.exists?(guardian_id: managing_guardian_id)
+    elsif relationships.limit(2).many?
+      errors.add(:managing_guardian, :selection_required)
+    end
   end
 end

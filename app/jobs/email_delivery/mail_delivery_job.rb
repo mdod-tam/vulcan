@@ -14,17 +14,29 @@ module EmailDelivery
     # The notice is for someone or something that no longer exists, so record it as not sent.
     discard_on ActiveJob::DeserializationError do |job, _error|
       EmailDelivery::Outcome.record_not_sent(EmailDelivery::Decision.suppressed(:assignment_superseded),
-                                             context: job.email_delivery_context, mail_action: job.email_delivery_mail_action)
+                                             context: job.email_delivery_context, mail_action: job.email_delivery_context&.fetch('mail_action'))
     end
 
     def email_delivery_mail_action
-      mailer, mail_method = arguments
-      "#{mailer}##{mail_method}"
+      framework_envelope.fetch(:mail_action)
     end
 
     def email_delivery_params
-      options = arguments[3]
-      (options.is_a?(Hash) && (options[:params] || options['params'])) || {}
+      framework_envelope.fetch(:params)
+    end
+
+    private
+
+    # ActionMailer::MailDeliveryJob#perform owns this serialized argument contract.
+    def framework_envelope
+      mailer, mail_method, delivery_method, keywords = arguments
+      decode_framework_envelope(mailer, mail_method, delivery_method, **keywords.symbolize_keys)
+    end
+
+    def decode_framework_envelope(mailer, mail_method, _delivery_method, args:, kwargs: nil, params: nil)
+      raise ArgumentError, 'Invalid Action Mailer arguments' unless args.is_a?(Array) && (kwargs.nil? || kwargs.is_a?(Hash))
+
+      { mail_action: "#{mailer}##{mail_method}", params: params || {} }
     end
   end
 end

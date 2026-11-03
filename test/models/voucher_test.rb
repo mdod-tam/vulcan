@@ -21,15 +21,38 @@ class VoucherTest < ActiveSupport::TestCase
     assert @voucher.valid?
   end
 
-  test 'status audit failure logs only its class and preserves the voucher update' do
-    error = RuntimeError.new('private-voucher-audit-value')
-    error.set_backtrace(['private-voucher-audit-backtrace'])
-    AuditEventService.stubs(:log).raises(error)
-    Rails.logger.expects(:error).with('Failed to log voucher status change: RuntimeError').once
+  test 'status audit failure rolls back the voucher update' do
+    AuditEventService.stubs(:log).raises(RuntimeError, 'audit unavailable')
+    assert_raises(RuntimeError) { @voucher.update!(status: :cancelled) }
+    assert_equal 'active', @voucher.reload.status
+  end
 
+  test 'cancellation audit failure rolls back status and both required events' do
+    original = AuditEventService.method(:log)
+    writer = lambda do |**attributes|
+      raise 'cancellation audit unavailable' if attributes[:action] == 'voucher_cancelled'
+
+      original.call(**attributes)
+    end
+    actor = create(:admin)
+    assert_no_difference('Event.count') do
+      AuditEventService.stub(:log, writer) do
+        assert_raises(RuntimeError) { @voucher.cancel!(actor: actor) }
+      end
+    end
+    assert_equal 'active', @voucher.reload.status
+    assert_nil @voucher.notes
+    assert @voucher.cancel!(actor: actor)
+    assert_equal actor, @voucher.events.find_by!(action: 'voucher_cancelled').user
+    assert_equal actor, @voucher.events.find_by!(action: 'status_changed_to_cancelled').user
+  end
+
+  test 'voucher deletion cannot erase its audit history' do
     @voucher.update!(status: :cancelled)
-
-    assert_equal 'cancelled', @voucher.reload.status
+    assert_no_difference ['Voucher.count', 'Event.count'] do
+      assert_not @voucher.destroy
+    end
+    assert @voucher.reload.events.exists?
   end
 
   test 'requires application' do
@@ -259,7 +282,7 @@ class VoucherTest < ActiveSupport::TestCase
   test 'successful cancellation updates status and notes' do
     @voucher.update!(status: :active)
     freeze_time do
-      @voucher.cancel!
+      @voucher.cancel!(actor: create(:admin))
       assert @voucher.voucher_cancelled?
       assert_includes @voucher.notes, "Cancelled at #{Time.current}"
     end

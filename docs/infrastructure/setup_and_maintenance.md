@@ -51,7 +51,9 @@ These tasks overwrite staff changes. Routine policy changes belong in the [polic
 
 Products come from [products.yml](../../test/fixtures/products.yml) in the demo seed. There is no standalone product seed task; production products can be entered through the admin product workflow.
 
-The system audit account is required at runtime: without it, public audit events and metrics alerts are skipped, expiration audits remain pending, secure-link recovery cannot issue a replacement without its original requester, certification uploads fail before storage, and DocuSeal callbacks return HTTP 503 for retry. Registrations requiring duplicate review roll back.
+The system audit account is required at runtime: without it, public audit events and metrics alerts are skipped, expiration audits remain pending, secure-link recovery cannot issue a replacement without its original requester, certification uploads fail before storage, and DocuSeal callbacks return HTTP 503 for retry. Registrations requiring duplicate review roll back. Profile/contact changes and voucher status changes also fail when their required system attribution is unavailable.
+
+Recurring schedules are declared independently of runtime feature flags. `CheckVoucherExpirationJob` checks `vouchers_enabled` when it executes, so a toggle affects the next run without restarting Solid Queue. A missing flag row uses its documented default; a failed database lookup raises rather than silently adopting that default. Proof-review reminders run daily at 06:15 UTC, and expired-session cleanup at 06:30 UTC; the queue worker must be running for these schedules to execute.
 
 ## Heroku asset build
 

@@ -72,7 +72,7 @@ module Admin
         end
         # A successful response lets the modal close.
         if params[:modal] == 'true'
-          head :ok
+          head :no_content
         else
           redirect_to admin_application_path(@application), notice: t('.updated')
         end
@@ -84,9 +84,9 @@ module Admin
     def batch_approve
       result = Application.batch_update_status(params[:ids], :approved, actor: current_user)
       if result[:success]
-        redirect_to admin_applications_path, notice: t('.b_approved')
+        redirect_to admin_applications_path, notice: t('.b_approved'), alert: result[:warning]
       else
-        render json: { error: 'Unable to approve applications', details: result[:errors] },
+        render json: { error: 'Unable to approve applications', details: result[:errors], commit_state: result[:commit_state] },
                status: :unprocessable_content
       end
     end
@@ -94,9 +94,9 @@ module Admin
     def batch_reject
       result = Application.batch_update_status(params[:ids], :rejected, actor: current_user)
       if result[:success]
-        redirect_to admin_applications_path, notice: t('.b_rejected')
+        redirect_to admin_applications_path, notice: t('.b_rejected'), alert: result[:warning]
       else
-        render json: { error: 'Unable to reject applications', details: result[:errors] },
+        render json: { error: 'Unable to reject applications', details: result[:errors], commit_state: result[:commit_state] },
                status: :unprocessable_content
       end
     end
@@ -362,6 +362,7 @@ module Admin
 
     def prepare_application_show
       load_application_show_associations(@application)
+      @guardian_relationship_type = @application.guardian_relationship_type
       load_audit_logs_with_service
       Application.preload_equipment_fulfillment([@application])
       @return_context = Equipment::RequestParameters.return_context(params)

@@ -8,6 +8,7 @@ module Applications
     include ActiveSupport::Testing::TimeHelpers
 
     setup do
+      ensure_system_audit_actor!
       @admin = create(:admin)
       ActionMailer::Base.deliveries.clear
     end

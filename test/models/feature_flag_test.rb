@@ -37,10 +37,10 @@ class FeatureFlagTest < ActiveSupport::TestCase
     assert FeatureFlag.enabled?(:test_feature)
   end
 
-  test 'enabled? rescues errors and returns default' do
+  test 'enabled? propagates lookup failure rather than treating it as a missing flag' do
     FeatureFlag.stubs(:find_by).raises(StandardError.new('Database error'))
-    assert_not FeatureFlag.enabled?('any_feature')
-    assert FeatureFlag.enabled?('any_feature', default: true)
+    assert_raises(StandardError) { FeatureFlag.enabled?('any_feature') }
+    assert_raises(StandardError) { FeatureFlag.enabled?('any_feature', default: true) }
   end
 
   test 'enable! creates flag if it does not exist' do

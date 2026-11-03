@@ -21,6 +21,53 @@ class EvaluationReassignmentTest < ActiveSupport::TestCase
     )
   end
 
+  test 'assignment reuses the open no-show rather than a newer cancelled history row' do
+    @evaluation.update!(status: :no_show)
+    history = create(:evaluation, application: @application, constituent: @application.user, status: :cancelled)
+    result = Applications::EvaluatorAssignment.assign(@application, @replacement, actor: @admin)
+    assert_predicate result, :success?
+    assert_equal @replacement.id, @evaluation.reload.evaluator_id
+    assert_equal 'requested', @evaluation.status
+    assert history.reload.status_cancelled?
+    assert_equal [@evaluation.id], @application.evaluations.open_assigned.ids
+  end
+
+  test 'database constraint covers every open evaluation status beyond service locking' do
+    %i[requested scheduled confirmed no_show rescheduled].each do |status|
+      @evaluation.update!(status: status)
+      assert_includes Evaluation.open_assigned, @evaluation
+      assert_raises(ActiveRecord::RecordNotUnique) do
+        Evaluation.transaction(requires_new: true) do
+          create(:evaluation, application: @application, constituent: @application.user)
+        end
+      end
+    end
+    @evaluation.update!(status: :cancelled)
+    assert_difference('Evaluation.count') { create(:evaluation, application: @application, constituent: @application.user) }
+  end
+
+  test 'nullable status is outside both the open scope and its constraint' do
+    @evaluation.update_column(:status, nil)
+    assert_not_includes Evaluation.open_assigned, @evaluation
+    assert_difference('Evaluation.count') { create(:evaluation, application: @application, constituent: @application.user) }
+  end
+
+  test 'a named database conflict becomes a refusal after rollback without poisoning the caller' do
+    @application.stubs(:open_evaluation).returns(nil)
+    evaluations = @application.evaluations
+    @application.stubs(:evaluations).returns(evaluations)
+    evaluations.stubs(:exists?).returns(false)
+    assert_no_difference ['Evaluation.count', 'Event.count', 'Notification.count'] do
+      Application.transaction do
+        result = Applications::EvaluatorAssignment.assign(@application, @replacement, actor: @admin)
+        assert_predicate result, :failure?
+        assert_match 'already has an open evaluation', result.message
+        assert_equal 1, Application.connection.select_value('SELECT 1')
+      end
+    end
+    assert_equal @evaluator.id, @evaluation.reload.evaluator_id
+  end
+
   test 'transfer preserves the appointment and report context and records both evaluator identities' do
     before = @evaluation.attributes.except('evaluator_id', 'updated_at', 'assignment_operation_id')
     previous_operation = @evaluation.assignment_operation_id

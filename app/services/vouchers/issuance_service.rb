@@ -19,22 +19,38 @@ module Vouchers
     def call
       return failure('Vouchers are not enabled') unless FeatureFlag.enabled?(:vouchers_enabled)
 
-      @application.with_lock do
-        return failure('Application is not eligible for a voucher') unless @application.can_create_voucher?
-
-        voucher = @application.vouchers.create!
-        log_assignment(voucher)
-        VoucherNotificationsMailer.with(voucher: voucher).voucher_assigned.deliver_later
-        success(nil, voucher: voucher)
+      voucher = nil
+      @application.with_lock(requires_new: true) do
+        if @application.can_create_voucher?
+          voucher = @application.vouchers.create!
+          log_assignment(voucher)
+          VoucherNotificationsMailer.with(voucher: voucher).voucher_assigned.deliver_later
+        end
       end
+      voucher ? success(nil, voucher: voucher) : failure('Application is not eligible for a voucher')
     rescue StandardError => e
       Rails.logger.error "Failed to assign voucher for application #{@application.id}: #{e.class.name}"
-      raise if @raise_on_failure
+      state = issuance_commit_state(voucher)
+      if state == :committed
+        success('Voucher was issued, but follow-up work failed. Check delivery before retrying.', voucher: voucher, warning: true)
+      elsif state == :unknown
+        failure('Voucher issuance could not be confirmed. Check the application before retrying.', commit_state: :unknown)
+      else
+        raise if @raise_on_failure
 
-      failure('Voucher could not be issued')
+        failure('Voucher could not be issued')
+      end
     end
 
     private
+
+    def issuance_commit_state(voucher)
+      return :rolled_back unless voucher&.id
+
+      Voucher.exists?(voucher.id) ? :committed : :rolled_back
+    rescue StandardError
+      :unknown
+    end
 
     def log_assignment(voucher)
       AuditEventService.log(

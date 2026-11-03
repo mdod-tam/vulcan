@@ -4,6 +4,7 @@ require 'test_helper'
 
 module Baseline
   class AccountsTest < ActiveSupport::TestCase
+    setup { ensure_system_audit_actor! }
     include ActionMailer::TestHelper
 
     INPUT = { first_name: 'First', last_name: 'Admin', password: 'Correct-Horse-Battery-9!' }.freeze

@@ -13,6 +13,9 @@
    ].join(' '),
    autosave_url_value: autosave_field_constituent_portal_application_path(@application),
    autosave_debounce_wait_value: 1000,
+   final_submit_gate_incomplete_message: t('applications.submit_gate.incomplete', locale: form_message_locale),
+   final_submit_gate_incomplete_detail_message: t('applications.submit_gate.detail', locale: form_message_locale),
+   final_submit_gate_ready_message: t('applications.submit_gate.ready', locale: form_message_locale),
    autosave_saving_text_value: t('applications.autosave.saving', locale: form_message_locale),
    autosave_saved_text_value: t('applications.autosave.saved', locale: form_message_locale),
    autosave_failed_text_value: t('applications.autosave.failed', locale: form_message_locale),
@@ -85,7 +88,7 @@
                class: "mt-1 h-4 w-4 text-primary-600 border-gray-300 rounded",
                required: true,
                "aria-required": "true" %>
-           <%= f.label :maryland_resident, "I certify that I am a resident of Maryland",
+           <%= f.label :maryland_resident, t('applications.form_labels.maryland_resident', locale: form_message_locale),
                class: "ml-2 block text-sm text-gray-700" %>
          </div>
        </div>
@@ -95,7 +98,7 @@
         <legend class="text-lg font-medium text-gray-900">Household Information</legend>
         
         <div>
-          <%= f.label :household_size, "Household Size", class: "form-label" %>
+          <%= f.label :household_size, t('applications.form_labels.household_size', locale: form_message_locale), class: 'form-label' %>
           <div class="mt-1">
             <%= f.number_field :household_size,
                 min: 1,
@@ -110,7 +113,7 @@
         </div>
 
         <div>
-          <%= f.label :annual_income, "Annual Income", class: "form-label" %>
+          <%= f.label :annual_income, t('applications.form_labels.annual_income', locale: form_message_locale), class: 'form-label' %>
           <div class="mt-1 relative rounded-md">
             <div class="absolute inset-y-0 left-0 pl-3 flex items-center pointer-events-none">
               <span class="text-gray-500 sm:text-sm">$</span>
@@ -140,11 +143,10 @@
               <strong>This application is for:</strong> <%= @application.user.full_name %>
             </p>
             <% if @application.managing_guardian %>
-              <% guardian_relationship = GuardianRelationship.find_by(guardian_id: @application.managing_guardian.id, dependent_id: @application.user.id) %>
               <p class="text-sm text-gray-700 mt-2">
                 <strong>Managed by:</strong> <%= @application.managing_guardian.full_name %>
-                <% if guardian_relationship %>
-                  (<%= guardian_relationship.relationship_type %>)
+                <% if @guardian_relationship_type.present? %>
+                  (<%= @guardian_relationship_type %>)
                 <% end %>
               </p>
             <% end %>
@@ -167,16 +169,15 @@
                  class: "mt-1 h-4 w-4 text-primary-600 border-gray-300 rounded",
                  "aria-describedby": "disability-certification-description"
                }, "1", "0" %>
-           <%= f.label :self_certify_disability,
-               "I certify that I have a disability that affects my ability to access telecommunications services",
-               class: "ml-2 block text-sm text-gray-700" %>
+           <%= f.label :self_certify_disability, t('applications.form_labels.self_certify_disability', locale: form_message_locale),
+                       class: 'ml-2 block text-sm text-gray-700' %>
          </div>
          <p id="disability-certification-description" class="form-hint">
            If you have a disability, please self-certify by checking the box above.
          </p>
 
          <fieldset class="space-y-2" data-requires-one-checkbox="true" aria-describedby="portal-edit-disability-type-help">
-           <legend class="text-sm text-gray-700 font-medium">Disability type</legend>
+           <legend class='text-sm text-gray-700 font-medium'><%= t('applications.form_labels.disability_type', locale: form_message_locale) %></legend>
            <p id="portal-edit-disability-type-help" class="form-hint">Select at least one disability that applies to the applicant.</p>
            
            <div class="grid sm:grid-cols-2 gap-4">
@@ -251,7 +252,7 @@
 
          <div class="space-y-4">
            <div>
-             <%= f.label :residency_proof, "Proof of Residency",
+             <%= f.label :residency_proof, t('applications.form_labels.residency_proof', locale: form_message_locale),
                  class: "form-label required-label" %>
              <p id="residency-hint" class="form-hint mb-2">
                Upload one of the following acceptable documents: <strong>driver's license</strong>, <strong>state ID</strong>, 
@@ -263,7 +264,7 @@
 
            <% if @application.income_collection_enabled? %>
            <div>
-             <%= f.label :income_proof, "Income Verification",
+             <%= f.label :income_proof, t('applications.form_labels.income_proof', locale: form_message_locale),
                  class: "form-label required-label" %>
              <p id="income-hint" class="form-hint mb-2">
                Upload SSI/SSDI documentation, recent pay stubs, or tax forms
@@ -274,7 +275,7 @@
            <% end %>
 
            <div>
-             <%= f.label :id_proof, "ID Verification",
+             <%= f.label :id_proof, t('applications.form_labels.id_proof', locale: form_message_locale),
                  class: "form-label required-label" %>
              <p id="id-hint" class="form-hint mb-2">
                Upload a government-issued photo ID such as a driver's license, state ID card, or passport
@@ -296,9 +297,8 @@
              id: "terms_accepted",
              required: true,
              class: "mt-1 h-4 w-4 text-primary-600 border-gray-300 rounded" %>
-         <%= f.label :terms_accepted,
-             "I have read and accept the terms and conditions",
-             class: "ml-2 block text-sm text-gray-700" %>
+         <%= f.label :terms_accepted, t('applications.form_labels.terms_accepted', locale: form_message_locale),
+                     for: 'terms_accepted', class: 'ml-2 block text-sm text-gray-700' %>
        </div>
      </div>
 
@@ -308,9 +308,8 @@
              id: "information_verified",
              required: true,
              class: "mt-1 h-4 w-4 text-primary-600 border-gray-300 rounded" %>
-         <%= f.label :information_verified,
-             "I verify that all information provided above is accurate and complete",
-             class: "ml-2 block text-sm text-gray-700" %>
+         <%= f.label :information_verified, t('applications.form_labels.information_verified', locale: form_message_locale),
+                     for: 'information_verified', class: 'ml-2 block text-sm text-gray-700' %>
        </div>
      </div>
 

@@ -181,7 +181,7 @@ module Applications
       user_ids << application.managing_guardian_id if application.managing_guardian_id.present?
 
       Event
-        .select('id, user_id, action, created_at, metadata, change_values')
+        .select('id, user_id, action, created_at, metadata, change_values, auditable_type, auditable_id')
         .includes(:user)
         .where(action: ['profile_updated', *UserProfile::PROFILE_CHANGE_ON_BEHALF_ACTIONS])
         .where(

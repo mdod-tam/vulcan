@@ -59,6 +59,8 @@ Search rows receive explicit presentation locals from `Admin::UsersHelper#user_s
 
 <a id="32-name-and-dob-review-flag"></a>
 
+The user detail loader prepares ordered personal/dependent application lists, active applications, approval dates, and latest voucher dates before rendering. Its application summary is one shared partial inside a named Turbo frame; a successful application edit refreshes that representation through the same loader. These projections do not change admission policy or expand which user's applications a route may select.
+
 ## Duplicate review
 
 A match is a question, not a verdict. The case holds the evidence and the eventual decision. `users.needs_duplicate_review` is only a cached badge derived from open cases of any source and unresolved current name/date-of-birth pairs — clearing the boolean resolves nothing.

@@ -5,6 +5,7 @@ require 'test_helper'
 module Applications
   class DisabilityCertificationReviewerTest < ActiveSupport::TestCase
     setup do
+      ensure_system_audit_actor!
       @application = create(:application, :completed)
       @admin = create(:admin)
       @service = DisabilityCertificationReviewer.new(@application, @admin)

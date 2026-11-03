@@ -10,7 +10,7 @@
 #
 # It's strongly recommended that you check this file into your version control system.
 
-ActiveRecord::Schema[8.1].define(version: 2026_10_30_183000) do
+ActiveRecord::Schema[8.1].define(version: 2026_11_01_170000) do
   # These are extensions that must be enabled in order to support this database
   enable_extension "pg_catalog.plpgsql"
 
@@ -420,6 +420,7 @@ ActiveRecord::Schema[8.1].define(version: 2026_10_30_183000) do
     t.string "assessment_source", default: "direct_assessment", null: false
     t.string "assignment_operation_id"
     t.index ["application_id"], name: "index_evaluations_on_application_id"
+    t.index ["application_id"], name: "index_evaluations_one_open_per_application", unique: true, where: "(status <> ALL (ARRAY[3, 4]))"
     t.index ["constituent_id"], name: "index_evaluations_on_constituent_id"
     t.index ["evaluator_id"], name: "index_evaluations_on_evaluator_id"
     t.check_constraint "assessment_source::text = ANY (ARRAY['direct_assessment'::character varying::text, 'outside_specialist'::character varying::text])", name: "evaluation_assessment_source"

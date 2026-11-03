@@ -1,7 +1,7 @@
 import { Controller } from "@hotwired/stimulus"
 
 /**
- * Shares a live region for form validation and currency announcements.
+ * Owns a live region for form validation and currency announcements.
  */
 export default class extends Controller {
   static values = {
@@ -10,6 +10,7 @@ export default class extends Controller {
   }
 
   connect() {
+    this.timers = new Set()
     this.ensureAnnouncerExists()
     
     // Listener removal needs the same bound functions.
@@ -42,15 +43,15 @@ export default class extends Controller {
 
   createAnnouncer() {
     const announcer = document.createElement('div')
-    announcer.id = 'accessibility-announcer'
     announcer.setAttribute('aria-live', this.politeValue ? 'polite' : 'assertive')
     announcer.setAttribute('aria-atomic', 'true')
     announcer.className = 'sr-only'
-    document.body.appendChild(announcer)
+    this.element.appendChild(announcer)
+    this.announcer = announcer
   }
 
   getAnnouncer() {
-    return document.getElementById('accessibility-announcer')
+    return this.announcer || null
   }
 
   announce(message, options = {}) {
@@ -66,14 +67,15 @@ export default class extends Controller {
       announcer.setAttribute('aria-live', urgency)
     }
     
+    this.clearAnnouncementTimers()
     announcer.textContent = ''
     
     // The delay separates the empty and populated live-region states.
-    setTimeout(() => {
+    this.schedule(() => {
       announcer.textContent = message
       
       // Remove the text only if it still matches this message.
-      setTimeout(() => {
+      this.schedule(() => {
         if (announcer.textContent === message) {
           announcer.textContent = ''
         }
@@ -173,21 +175,22 @@ export default class extends Controller {
     }
   }
 
-  cleanupAnnouncers() {
-    const announcer = this.getAnnouncer()
-    if (announcer) {
-      announcer.remove()
-    }
+  clearAnnouncementTimers() {
+    this.timers.forEach(timer => clearTimeout(timer))
+    this.timers.clear()
   }
 
-  static announceMessage(message, options = {}) {
-    const announcer = document.getElementById('accessibility-announcer')
-    if (announcer) {
-      const delay = options.delay || 100
-      announcer.textContent = ''
-      setTimeout(() => {
-        announcer.textContent = message
-      }, delay)
-    }
+  schedule(callback, delay) {
+    const timer = setTimeout(() => {
+      this.timers.delete(timer)
+      callback()
+    }, delay)
+    this.timers.add(timer)
   }
-} 
+
+  cleanupAnnouncers() {
+    this.clearAnnouncementTimers()
+    this.announcer?.remove()
+    this.announcer = null
+  }
+}

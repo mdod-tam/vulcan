@@ -4,6 +4,7 @@ require 'test_helper'
 
 class VoucherRedemptionIntegrationTest < ActionDispatch::IntegrationTest
   def setup
+    ensure_system_audit_actor!
     Policy.stubs(:voucher_minimum_redemption_amount).returns(10.0)
 
     # Fully eligible: approved, with an approved W9 on file.

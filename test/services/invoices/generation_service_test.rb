@@ -92,6 +92,7 @@ module Invoices
     end
 
     test 'with vendor email off the invoice is generated and its notice is suppressed, not failed' do
+      previous_outcome_ids = Event.where(action: EmailDelivery::Outcome::SUPPRESSED).ids
       EmailDelivery::ControlWriter.set(name: EmailDelivery.category_control('vendor'), enabled: false, actor: @admin,
                                        operation_id: 'op-1')
 
@@ -100,7 +101,8 @@ module Invoices
       invoice = Invoice.find_by!(vendor: @vendor)
       assert_in_delta 250.25, invoice.total_amount.to_f
       assert_not invoice.events.exists?(action: 'invoice_notification_enqueue_failed')
-      assert_equal 'category_disabled', Event.find_by!(action: EmailDelivery::Outcome::SUPPRESSED).metadata['reason']
+      outcome = Event.where(action: EmailDelivery::Outcome::SUPPRESSED).where.not(id: previous_outcome_ids).sole
+      assert_equal 'category_disabled', outcome.metadata['reason']
       assert_equal(0, enqueued_jobs.count { |job| job[:job] == EmailDelivery::MailDeliveryJob })
     end
 
@@ -122,6 +124,7 @@ module Invoices
     end
 
     test 'unavailable email settings keep the invoice and report a configuration error' do
+      suppressed_count = Event.where(action: EmailDelivery::Outcome::SUPPRESSED).count
       FeatureFlag.find_by!(name: EmailDelivery.category_control('vendor')).destroy!
 
       result = Invoices::GenerationService.new.call
@@ -131,7 +134,7 @@ module Invoices
       assert_equal 2, invoice.voucher_transactions.count
       assert_not invoice.events.exists?(action: 'invoice_notification_enqueue_failed')
       assert Event.exists?(action: EmailDelivery::Outcome::CONFIGURATION_ERROR)
-      assert_not Event.exists?(action: EmailDelivery::Outcome::SUPPRESSED)
+      assert_equal suppressed_count, Event.where(action: EmailDelivery::Outcome::SUPPRESSED).count
       assert_empty enqueued_jobs
       assert_empty ActionMailer::Base.deliveries
     end

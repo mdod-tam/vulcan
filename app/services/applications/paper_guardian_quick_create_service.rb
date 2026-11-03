@@ -33,10 +33,12 @@ module Applications
         user = review.selected_user
         unless user
           flags = PaperContactFlags.new(@request_params, scope: :guardian)
-          creation = UserCreationService.new(
-            flags.apply_to(@attrs), is_managing_adult: true, skip_user_lookup: true,
-                                    skip_email_validation: flags.skip_email_validation?, skip_phone_validation: flags.skip_phone_validation?
-          ).call
+          creation = Current.set(user: @admin) do
+            UserCreationService.new(
+              flags.apply_to(@attrs), is_managing_adult: true, skip_user_lookup: true,
+                                      skip_email_validation: flags.skip_email_validation?, skip_phone_validation: flags.skip_phone_validation?
+            ).call
+          end
           unless creation.success?
             outcome = failure(creation.message, result_data(:invalid, errors: creation.data&.dig(:errors)))
             raise ActiveRecord::Rollback

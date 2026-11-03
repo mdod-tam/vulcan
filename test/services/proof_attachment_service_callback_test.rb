@@ -21,7 +21,7 @@ class ProofAttachmentServiceCallbackTest < ActiveSupport::TestCase
     @valid_pdf_file.tempfile.close
   end
 
-  test 'portal proof attachment sets needs_review_since exactly once via service attrs' do
+  test 'portal proof attachment persists pending review with its marker' do
     app = create_application_for_resubmission
 
     assert_nil app.needs_review_since
@@ -42,12 +42,9 @@ class ProofAttachmentServiceCallbackTest < ActiveSupport::TestCase
     assert_equal 'not_reviewed', app.income_proof_status
   end
 
-  test 'set_needs_review_timestamp callback is suppressed during proof attachment' do
+  test 'the last proof review clears its marker through the canonical reviewer' do
     app = create_application_for_resubmission
 
-    # The concern's set_needs_review_timestamp skips while
-    # Current.proof_attachment_service_context? is true. needs_review_since must carry the
-    # value from the service attrs, not from a second callback-driven update!.
     result = ProofAttachmentService.attach_proof(
       application: app,
       proof_type: :income,
@@ -61,8 +58,8 @@ class ProofAttachmentServiceCallbackTest < ActiveSupport::TestCase
     app.reload
 
     assert_not_nil app.needs_review_since
-    assert Current.proof_attachment_service_context != true,
-           'Context flag should be restored after service call'
+    assert Applications::ProofReviewer.new(app, @admin).review(proof_type: :income, status: :approved)
+    assert_nil app.reload.needs_review_since
   end
 
   test 'scanned proof with approved status does not set needs_review_since' do

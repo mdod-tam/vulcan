@@ -70,7 +70,7 @@
         </div>
         <div>
           <%= f.label :vendor_id, 'Vendor', class: 'form-label' %>
-          <%= f.select :vendor_id, options_from_collection_for_select(Users::Vendor.order(:business_name), :id, :business_name, params[:vendor_id]),
+          <%= f.select :vendor_id, options_from_collection_for_select(@vendors, :id, :business_name, params[:vendor_id]),
                        { include_blank: 'All vendors' }, class: invoice_form_class(:input) %>
         </div>
         <div>

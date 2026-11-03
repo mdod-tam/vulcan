@@ -60,7 +60,7 @@ module Applications
     # Restore paper context before identity evidence, commit callbacks and follow-up.
     def run_create_transaction
       ActiveRecord::Base.transaction do
-        Current.set(paper_context: true) do
+        Current.set(user: admin, paper_context: true) do
           rollback_failure_unless_explained('Constituent processing failed') unless @applicant_intake.call
           rollback_failure('Application creation failed') unless create_application
           unless @skip_proof_processing || PaperDocumentDispositions.new(

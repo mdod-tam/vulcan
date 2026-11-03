@@ -158,9 +158,10 @@ Deployment requires the additive migration before the new server code. All write
 | Attribute | Actual effect |
 | --- | --- |
 | `paper_context` | Paper intake relaxes selected profile validations, and `ProofAttachmentService` leaves reconciliation and delivery to the intake. It does not change whether a proof validation runs. Set and restored by the owning service or controller. |
-| `proof_attachment_service_context` | Tells `ProofManageable` that the attachment service already stamped `needs_review_since`, so its after-save callback does not stamp it a second time. |
 | `force_notifications` | Declared but unused by production delivery paths. |
 | `test_user_id` | Lets test authentication restore a session, which can bypass the sign-in flow a test means to exercise. |
+
+Proof review markers are derived before the application saves: attached required proofs with `not_reviewed` status in an open application need review; reviewed proofs do not. A submission updates the marker and the final review clears it in the same save. The attachment service no longer needs a context flag to suppress a second timestamp save, and a completed evaluation does not clear proof work.
 
 The readers are in [`ProofManageable`](../../app/models/concerns/proof_manageable.rb), [`Authentication`](../../app/controllers/concerns/authentication.rb), [`UserProfile`](../../app/models/concerns/user_profile.rb), [`Users::Constituent`](../../app/models/users/constituent.rb), and [`ProofAttachmentService`](../../app/services/proof_attachment_service.rb). Temporary state is restored through block scope or `ensure`; paper context in particular is not a way to suppress validations, audit events, or notifications. Training commands explicitly schedule delivery through `TrainingSessionNotifier` after commit.
 

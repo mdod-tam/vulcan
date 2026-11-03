@@ -34,6 +34,7 @@ module Admin
         format.html do
           @pagy, @invoices = pagy(scope, limit: 25)
           load_billing_overview
+          @vendors = Users::Vendor.order(:business_name, :id)
         end
         format.csv do
           send_data invoices_csv(scope), filename: "invoices-#{Time.current.strftime('%Y%m%d')}.csv", type: 'text/csv'

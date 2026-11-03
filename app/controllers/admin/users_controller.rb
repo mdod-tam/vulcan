@@ -59,10 +59,24 @@ module Admin
       ActiveRecord::Associations::Preloader.new(
         records: [@user, *@user.guardian_relationships_as_guardian.map(&:dependent_user)], associations: :applications
       ).call
+      load_application_summaries
       @contact_delivery_attention = EmailDelivery::Visibility.contact_attention(@user)
       @access_events = @user.audit_events.where(action: %w[capability_granted capability_removed]).includes(:user)
                             .order(created_at: :desc, id: :desc).limit(25)
     end
+
+    def load_application_summaries
+      users = [@user, *@user.guardian_relationships_as_guardian.map(&:dependent_user)]
+      @application_lists = users.to_h do |user|
+        [user.id, user.applications.sort_by { |application| [application.application_date || Date.new(1), application.id] }.reverse]
+      end
+      @active_applications = @application_lists.transform_values { |applications| applications.find(&:workflow_active?) }
+      approved_ids = @application_lists.values.flatten.select(&:status_approved?).map(&:id)
+      @approval_changes = ApplicationStatusChange.where(application_id: approved_ids, to_status: 'approved')
+                                                 .order(:changed_at, :id).index_by(&:application_id)
+      @latest_vouchers = Voucher.where(application_id: approved_ids).order(:issued_at, :id).index_by(&:application_id)
+    end
+    private :load_application_summaries
 
     def edit
       @user = User.find(params[:id])

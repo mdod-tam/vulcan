@@ -240,6 +240,7 @@ class TrainingNotificationDeliveryTest < ActiveSupport::TestCase
 
   test 'an unmanaged dependent receives the completion letter at their own address with their authorized report link' do
     configure_completion_contacts(email_strategy: :own_snapshot)
+    GuardianRelationship.where(dependent_user: @constituent).destroy_all
     @application.update!(managing_guardian: nil)
     @constituent.update!(communication_preference: :letter)
     contact = Applications::ContactContext.new(application: @application)
@@ -509,6 +510,7 @@ class TrainingNotificationDeliveryTest < ActiveSupport::TestCase
     @replacement_trainer = create(:trainer)
     assert reassign_training(@replacement_trainer)
     jobs = mail_jobs.dup
+    captured_actions = jobs.map { |job| job.fetch('email_delivery_context').fetch('mail_action') }.sort
     TrainingSession.where(id: session.id).delete_all
 
     assert_no_difference -> { ActionMailer::Base.deliveries.count } do
@@ -516,6 +518,8 @@ class TrainingNotificationDeliveryTest < ActiveSupport::TestCase
         jobs.each { |job| assert_nothing_raised { ActiveJob::Base.execute(job) } }
       end
     end
+    outcomes = Event.where(action: EmailDelivery::Outcome::SUPPRESSED).order(:id).last(jobs.length)
+    assert_equal captured_actions, outcomes.map { |event| event.metadata.fetch('mail_action') }.sort
   end
 
   private

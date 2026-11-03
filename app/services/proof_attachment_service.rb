@@ -10,7 +10,7 @@ class ProofAttachmentService
   AttachmentEventContext = Struct.new(
     :application, :proof_type, :status, :submission_method,
     :admin, :metadata, :blob_size, :skip_audit_events,
-    keyword_init: true # rubocop:disable Style/RedundantStructKeywordInit
+    keyword_init: true
   )
   # Attaches a proof document to an application.
   #
@@ -48,10 +48,8 @@ class ProofAttachmentService
       status: params.fetch(:status)
     }
 
-    Current.set(proof_attachment_service_context: true) do
-      with_service_flow(context) do |result|
-        perform_attachment_flow(result, params)
-      end
+    with_service_flow(context) do |result|
+      perform_attachment_flow(result, params)
     end
   end
 
@@ -258,7 +256,6 @@ class ProofAttachmentService
 
     def update_application_status(context)
       attrs = { "#{context.proof_type}_proof_status" => context.status }
-      attrs[:needs_review_since] = Time.current if context.status == :not_reviewed
 
       context.application.update!(attrs)
       context.application.reload
@@ -332,7 +329,7 @@ class ProofAttachmentService
         scan_owner: params[:scan_owner] || params[:admin] || application.user
       )
 
-      Struct.new(:application, :proof_type, :attachment_param, :blob_size, :submission_method, keyword_init: true).new( # rubocop:disable Style/RedundantStructKeywordInit
+      Struct.new(:application, :proof_type, :attachment_param, :blob_size, :submission_method, keyword_init: true).new(
         application: application,
         proof_type: proof_type,
         attachment_param: blob,

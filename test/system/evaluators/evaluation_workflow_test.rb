@@ -7,6 +7,7 @@ module Evaluators
     include EvaluatorSystemAssertions
 
     setup do
+      ensure_system_audit_actor!
       @evaluator = create(:evaluator)
       @product = create(:product, name: 'Retry Device')
       @replacement_product = create(:product, name: 'Replacement Device')
@@ -195,15 +196,18 @@ module Evaluators
         assert_selector 'span', text: 'Needs Scheduling'
         assert_selector "span.#{ApplicationController.helpers.badge_class_for(:evaluation, requested.status).split.join('.')}"
       end
+      page.execute_script('window.evaluatorShortcutDocument = "same-document"')
       {
         'View requested' => 'needs-scheduling-heading',
         'View scheduled' => 'upcoming-evaluations-heading',
         'View completed' => 'recent-completed-heading'
       }.each do |text, heading|
-        assert_selector "a[href='##{heading}'][data-turbo=false]", text: text
+        assert_selector "a[href='##{heading}']", text: text
         page.execute_script("document.querySelector('a[href=\"##{heading}\"]').focus()")
         page.driver.browser.keyboard.type(:enter)
+        assert_selector "h2##{heading}:focus"
         assert_equal heading, page.evaluate_script('document.activeElement.id')
+        assert_equal 'same-document', page.evaluate_script('window.evaluatorShortcutDocument')
       end
       take_screenshot('evaluator-dashboard-shortcut-focused', html: true, full: true)
 
@@ -226,6 +230,7 @@ module Evaluators
       end
       page.execute_script('document.querySelector("a[href=\"#my-upcoming-evaluations-table-heading\"]").focus()')
       page.driver.browser.keyboard.type(:enter)
+      assert_selector 'h2#my-upcoming-evaluations-table-heading:focus'
       assert_equal 'my-upcoming-evaluations-table-heading', page.evaluate_script('document.activeElement.id')
       take_screenshot('admin-my-scheduled-shortcut-focused', html: true, full: true)
       page.current_window.resize_to(375, 812)

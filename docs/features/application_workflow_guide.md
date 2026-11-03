@@ -30,7 +30,7 @@ The [autosave controller tests](../../test/controllers/constituent_portal/applic
 
 ## Status and approval
 
-[Application#transition_status!](../../app/models/application.rb) owns lifecycle changes: the status update, the status-history row, and the `application_status_changed` audit call happen together in one transaction. Transitioning to the status the application already has returns early and writes nothing.
+[Application#transition_status!](../../app/models/application.rb) owns lifecycle changes: the status update, the status-history row, and the `application_status_changed` audit call happen together in one transaction. A transition to the current status is a no-op and writes nothing.
 
 | Status | Meaning |
 | --- | --- |
@@ -41,6 +41,10 @@ The [autosave controller tests](../../test/controllers/constituent_portal/applic
 | `approved`, `rejected`, `archived` | Approved, declined, or retained as historical work. |
 
 These are available states, not a promise that every transition between them is allowed by every workflow.
+
+Admin batch approval/rejection is all-or-nothing. A database or required-audit failure aborts the batch before the controller translates the error; it does not continue running records in an aborted PostgreSQL transaction. A failure after commit is reported as committed with follow-up guidance when the batch's history receipts confirm it. If that readback fails, staff are told to inspect history before retrying.
+
+Approval/rejection records staff workflow without sending constituent notices or approval letters. Existing voucher-assignment notices and requests for replacement proof or required information have their own delivery rules. Evaluation requests recheck eligibility and pending state under the application lock and commit the request timestamp with its audit event.
 
 Manual and automatic approval require the application's saved proof requirements and approved disability certification. Rejected and archived applications cannot return to active processing through an ordinary status transition. The admin profile editor does not change application status; lifecycle changes use the canonical transition owner.
 

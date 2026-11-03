@@ -9,6 +9,7 @@ class ApplicationNotificationsMailerTest < ActionMailer::TestCase
   include Mailers::ApplicationNotificationsHelper
 
   setup do
+    ensure_system_audit_actor!
     setup_email_template_mocks
     setup_email_template_stubs
     create_test_data
@@ -665,7 +666,8 @@ class ApplicationNotificationsMailerTest < ActionMailer::TestCase
     applications = [@application]
 
     # Only reviews older than three days enter the reminder.
-    @application.stubs(:needs_review_since).returns(4.days.ago)
+    @application.update!(income_proof_status: :not_reviewed)
+    @application.update_column(:needs_review_since, 4.days.ago)
 
     ActionMailer::Base.default from: 'no_reply@mdmat.org'
 
@@ -690,7 +692,8 @@ class ApplicationNotificationsMailerTest < ActionMailer::TestCase
 
   test 'proof_needs_review_reminder uses English template for Spanish locale admin' do
     @admin.update!(locale: 'es')
-    @application.stubs(:needs_review_since).returns(4.days.ago)
+    @application.update!(income_proof_status: :not_reviewed)
+    @application.update_column(:needs_review_since, 4.days.ago)
 
     email = ApplicationNotificationsMailer.proof_needs_review_reminder(@admin, [@application])
     email.deliver_now
@@ -968,7 +971,8 @@ class ApplicationNotificationsMailerTest < ActionMailer::TestCase
   end
 
   test 'review reminder rendering failure is logged safely without sending or raising' do
-    @application.stubs(:needs_review_since).returns(4.days.ago)
+    @application.update!(income_proof_status: :not_reviewed)
+    @application.update_column(:needs_review_since, 4.days.ago)
     assert_handled_action_failure(:proof_needs_review_reminder, @admin, [@application])
   end
 

@@ -3,6 +3,8 @@
 require 'test_helper'
 
 class StiUserTest < ActiveSupport::TestCase
+  setup { ensure_system_audit_actor! }
+
   def test_administrator_resolution
     admin = Users::Administrator.create!(
       email: "test-admin-#{Time.now.to_i}@example.com",

@@ -6,7 +6,11 @@ An audit event should clearly describe the business action even when no message 
 
 Notifications record communication.
 
-History is retained when an account leaves service. Admin user management deactivates or reactivates accounts and records the responsible administrator; deactivation revokes sessions. Authored events keep their original user association. History-bearing users and applications cannot be destroyed through their model associations, and the admin user surface has no delete operation.
+History is retained when an account leaves service. Admin user management deactivates or reactivates accounts and records the responsible administrator; deactivation revokes sessions. Authored events keep their original user association. History-bearing users, applications, and vouchers cannot be destroyed through their model associations, and the admin user surface has no delete operation.
+
+Profile and application contact changes use the actual request/command actor. Without an explicit actor, they require the configured system audit account; the affected record's owner is not assumed to have performed the write. Background profile changes are labeled `profile_updated_by_system`. Public provider submissions retain their public-source metadata and system attribution. A missing required actor or failed required audit rolls back these writes.
+
+Voucher redemption and status-change audits are required transaction writes. A redemption's transaction ID identifies its audit; separate rapid purchases retain separate events. Cancellation receives its administrator explicitly and writes its cancellation event in the same locked transaction as the status audit. The voucher timeline reads events by their owner as well as related-record metadata, and retains distinct financial operations in its display. Voucher history is restricted from cascading deletion, while delivery tracking remains separate from proof that an email reached its recipient.
 
 ## How history is built
 

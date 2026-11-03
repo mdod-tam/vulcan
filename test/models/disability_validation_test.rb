@@ -4,6 +4,7 @@ require 'test_helper'
 
 class DisabilityValidationTest < ActiveSupport::TestCase
   setup do
+    ensure_system_audit_actor!
     @constituent = Users::Constituent.create!(
       email: "test_user_#{Time.now.to_i}@example.com",
       password: 'password1234',

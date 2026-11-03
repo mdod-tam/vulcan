@@ -699,7 +699,7 @@ module ConstituentPortal
         dependent: { first_name: 'Updated', last_name: fresh_dependent.last_name }.merge(extra_dependent_params)
       )
 
-      controller.send(:update)
+      Current.set(user: fresh_guardian) { controller.send(:update) }
 
       response_summary(controller)
     end
@@ -740,7 +740,7 @@ module ConstituentPortal
         end
       end
 
-      controller.send(:create)
+      Current.set(user: fresh_guardian) { controller.send(:create) }
 
       response_summary(controller)
     end

@@ -4,6 +4,7 @@ require 'test_helper'
 
 class UserTest < ActiveSupport::TestCase
   setup do
+    ensure_system_audit_actor!
     # A per-run id keeps emails and phones unique without deleting existing users.
     @test_run_id = SecureRandom.hex(4)
 
@@ -234,8 +235,7 @@ class UserTest < ActiveSupport::TestCase
   # --- Profile Change Audit Logging Tests ---
 
   test 'logs profile update when user updates their own profile' do
-    # No Current.user means a self-update.
-    Current.user = nil
+    Current.user = @existing_constituent
 
     original_first_name = @existing_constituent.first_name
 
@@ -254,6 +254,19 @@ class UserTest < ActiveSupport::TestCase
     assert_equal "#{original_first_name.first}***", changes['first_name']['old']
     assert_equal 'u***@e***.com', changes['email']['new']
     assert_equal 'u***@e***.com', changes['email']['old']
+  end
+
+  test 'background profile changes name the system actor and require its presence' do
+    Current.user = nil
+    actor = ensure_system_audit_actor!
+    @existing_constituent.update!(first_name: 'Background Update')
+    event = Event.where(auditable: @existing_constituent).order(:id).last
+    assert_equal actor, event.user
+    assert_equal 'profile_updated_by_system', event.action
+    PublicAuditActor.stub(:system_audit_actor, nil) do
+      assert_raises(PublicAuditActor::MissingSystemActor) { @existing_constituent.update!(first_name: 'Unrecorded') }
+    end
+    assert_equal 'Background Update', @existing_constituent.reload.first_name
   end
 
   test 'logs profile update when guardian updates dependent profile' do
@@ -473,6 +486,7 @@ class UserTest < ActiveSupport::TestCase
     system = ensure_system_audit_actor!
     assert_equal system, User.system_user
 
+    Current.user = system
     system.update!(email: 'former-system@example.test')
 
     assert_no_difference('User.count') { assert_nil User.system_user }

@@ -10,7 +10,6 @@ module Admin
       'residency_proof_rejected' => :attention,
       'id_proof_rejected' => :attention,
       'income_threshold_exceeded' => :danger,
-      'application_approved' => :success,
       'proof_approved' => :success
     }.freeze
 

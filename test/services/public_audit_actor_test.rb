@@ -4,7 +4,7 @@ require 'test_helper'
 
 class PublicAuditActorTest < ActiveSupport::TestCase
   test 'returns configured system audit actor without creating system user' do
-    admin = create(:admin, email: PublicAuditActor::SYSTEM_AUDIT_EMAIL)
+    admin = ensure_system_audit_actor!
 
     User.expects(:system_user).never
 
@@ -12,7 +12,7 @@ class PublicAuditActorTest < ActiveSupport::TestCase
   end
 
   test 'returns nil when configured system audit actor is absent' do
-    User.where(email: PublicAuditActor::SYSTEM_AUDIT_EMAIL).delete_all
+    User.where(email: PublicAuditActor::SYSTEM_AUDIT_EMAIL).update_all(email: 'unconfigured-audit-actor@example.test')
     create(:admin, email: 'other-admin@example.com')
 
     User.expects(:system_user).never
@@ -21,7 +21,7 @@ class PublicAuditActorTest < ActiveSupport::TestCase
   end
 
   test 'log_audit skips event when configured system audit actor is absent' do
-    User.where(email: PublicAuditActor::SYSTEM_AUDIT_EMAIL).delete_all
+    User.where(email: PublicAuditActor::SYSTEM_AUDIT_EMAIL).update_all(email: 'unconfigured-audit-actor@example.test')
 
     assert_no_difference 'Event.count' do
       assert_nil PublicAuditActor.log_audit(
@@ -32,7 +32,7 @@ class PublicAuditActorTest < ActiveSupport::TestCase
   end
 
   test 'log_audit attributes to configured system audit actor when present' do
-    admin = create(:admin, email: PublicAuditActor::SYSTEM_AUDIT_EMAIL)
+    admin = ensure_system_audit_actor!
 
     assert_difference 'Event.count', 1 do
       event = PublicAuditActor.log_audit(

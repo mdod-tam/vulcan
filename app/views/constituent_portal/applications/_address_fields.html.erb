@@ -35,7 +35,7 @@
        data-dependent-fields-target="addressFields"
        aria-hidden="<%= use_guardian_address %>">
     <div>
-      <%= form.label :physical_address_1, "Street Address", class: "form-label required-label" %>
+      <%= form.label :physical_address_1, t('applications.form_labels.physical_address_1', locale: form_message_locale), class: 'form-label required-label' %>
       <%= form.text_field :physical_address_1,
           value: address[:physical_address_1],
           class: "form-input mt-1 h-10 required-label",
@@ -60,7 +60,7 @@
 
     <div class="grid grid-cols-1 md:grid-cols-3 gap-4">
       <div class="md:col-span-1">
-        <%= form.label :city, "City", class: "form-label required-label" %>
+        <%= form.label :city, t('applications.form_labels.city', locale: form_message_locale), class: 'form-label required-label' %>
         <%= form.text_field :city,
             value: address[:city],
             class: "form-input mt-1 h-10 required-label",
@@ -75,7 +75,7 @@
       </div>
 
       <div>
-        <%= form.label :state, "State", class: "form-label required-label" %>
+        <%= form.label :state, t('applications.form_labels.state', locale: form_message_locale), class: 'form-label required-label' %>
         <%= form.select :state,
             options_for_select([
               ["Alabama", "AL"], ["Alaska", "AK"], ["Arizona", "AZ"], ["Arkansas", "AR"],
@@ -105,7 +105,7 @@
       </div>
 
       <div>
-        <%= form.label :zip_code, "Zip Code", class: "form-label required-label" %>
+        <%= form.label :zip_code, t('applications.form_labels.zip_code', locale: form_message_locale), class: 'form-label required-label' %>
         <%= form.text_field :zip_code,
             value: address[:zip_code],
             class: "form-input mt-1 h-10 required-label",

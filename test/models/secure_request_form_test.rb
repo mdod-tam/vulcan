@@ -3,6 +3,8 @@
 require 'test_helper'
 
 class SecureRequestFormTest < ActiveSupport::TestCase
+  setup { ensure_system_audit_actor! }
+
   include ActiveSupport::Testing::TimeHelpers
 
   test 'new forms require complete delivery provenance' do
