@@ -36,6 +36,8 @@ module ConstituentPortal
       fill_in 'application_annual_income', with: 20_000
       fill_in 'application_physical_address_1', with: '123 Retry Street'
       fill_in 'application_certifying_professional_attributes_name', with: 'Dr. Retry'
+      fill_in 'application_certifying_professional_attributes_phone', with: '2025550111'
+      fill_in 'application_certifying_professional_attributes_email', with: 'retry@example.test'
       fill_in 'application_certifying_professional_attributes_fax', with: '2025550199'
       fill_in 'application_alternate_contact_name', with: 'Retry Contact'
       check 'terms_accepted'
@@ -45,6 +47,8 @@ module ConstituentPortal
       assert_field 'application_annual_income', with: '20000'
       assert_field 'application_physical_address_1', with: '123 Retry Street'
       assert_field 'application_certifying_professional_attributes_name', with: 'Dr. Retry'
+      assert_field 'application_certifying_professional_attributes_phone', with: '2025550111'
+      assert_field 'application_certifying_professional_attributes_email', with: 'retry@example.test'
       assert_field 'application_certifying_professional_attributes_fax', with: '2025550199'
       assert_field 'application_alternate_contact_name', with: 'Retry Contact'
       assert_checked_field 'terms_accepted'
@@ -53,6 +57,8 @@ module ConstituentPortal
       fill_in 'application_household_size', with: 4
       fill_in 'application_physical_address_1', with: '456 Corrected Street'
       fill_in 'application_certifying_professional_attributes_name', with: 'Dr. Corrected'
+      fill_in 'application_certifying_professional_attributes_phone', with: '2025550122'
+      fill_in 'application_certifying_professional_attributes_email', with: 'corrected@example.test'
       fill_in 'application_certifying_professional_attributes_fax', with: ''
       fill_in 'application_alternate_contact_name', with: ''
       uncheck 'terms_accepted'
@@ -64,6 +70,8 @@ module ConstituentPortal
       assert_equal 4, application.reload.household_size
       assert_equal '456 Corrected Street', user.reload.physical_address_1
       assert_equal 'Dr. Corrected', application.certifying_professional_name
+      assert_equal '2025550122', application.certifying_professional_phone
+      assert_equal 'corrected@example.test', application.certifying_professional_email
       assert application.certifying_professional_fax.blank?
       assert application.alternate_contact_name.blank?
       assert_not application.terms_accepted?

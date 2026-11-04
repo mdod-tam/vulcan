@@ -3,19 +3,6 @@
 # Owns application lifecycle rules for proofs, certification, training, evaluations, and fulfillment.
 class Application < ApplicationRecord
   has_many :email_delivery_attempts, dependent: :nullify
-  CertifyingProfessionalInfo = Struct.new(:name, :phone, :fax, :email, keyword_init: true) do
-    def present?
-      name.present? || phone.present? || fax.present? || email.present?
-    end
-
-    def valid_phone?
-      phone.present? && phone.match?(/\A[\d\-()\s.]+\z/)
-    end
-
-    def valid_email?
-      email.present? && email.match?(/\A[^@\s]+@[^@\s]+\.[^@\s]+\z/)
-    end
-  end
 
   # Signing URLs require encryption at rest because they can expose document or audit data.
   encrypts :document_signing_audit_url

@@ -44,14 +44,7 @@ module ConstituentPortal
     end
 
     def edit
-      # A Struct gives fields_for named provider attributes.
-      certifying_professional_struct = Struct.new(:name, :phone, :fax, :email)
-      @application.certifying_professional_attributes = certifying_professional_struct.new(
-        @application.certifying_professional_name,
-        @application.certifying_professional_phone,
-        @application.certifying_professional_fax,
-        @application.certifying_professional_email
-      )
+      @application.certifying_professional_attributes = certifying_professional_from_application(@application)
       @applicant_user = @application.for_dependent? ? @application.user : current_user
     end
 
@@ -367,9 +360,8 @@ module ConstituentPortal
       submitted = params.dig(:application, :certifying_professional_attributes)
       return if submitted.blank?
 
-      provider_struct = Struct.new(:name, :phone, :fax, :email)
-      @application.certifying_professional_attributes = provider_struct.new(
-        submitted[:name], submitted[:phone], submitted[:fax], submitted[:email]
+      @application.certifying_professional_attributes = ApplicationDataStructures::CertifyingProfessionalInfo.new(
+        name: submitted[:name], phone: submitted[:phone], fax: submitted[:fax], email: submitted[:email]
       )
     end
 
