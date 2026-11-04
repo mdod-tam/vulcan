@@ -9,7 +9,7 @@ module UserProfile
   REAL_PHONE_TYPES = %w[voice videophone text].freeze
   # Profile changes made by someone other than the user. They record the changed user in
   # metadata['user_id'] and the person who made the change as the event's user.
-  PROFILE_CHANGE_ON_BEHALF_ACTIONS = %w[profile_updated_by_guardian profile_updated_by_admin].freeze
+  PROFILE_CHANGE_ON_BEHALF_ACTIONS = %w[profile_updated_by_guardian profile_updated_by_admin profile_updated_by_system].freeze
 
   included do
     attr_accessor :phone_type_submitted
@@ -176,16 +176,8 @@ module UserProfile
     # The merge owns duplicate_user_merged. Do not add profile events for its contact transfers.
     return if changed_attributes.blank? || merge_in_progress || retiring_for_merge
 
-    actor = Current.user || self
-    action = if Current.paper_context
-               'profile_created_by_admin_via_paper'
-             elsif actor == self
-               'profile_updated'
-             elsif actor.admin?
-               'profile_updated_by_admin'
-             else
-               'profile_updated_by_guardian'
-             end
+    actor = Current.user || PublicAuditActor.system_audit_actor!
+    action = profile_audit_action(actor)
 
     AuditEventService.log(
       actor: actor,
@@ -195,9 +187,24 @@ module UserProfile
         user_id: id,
         changes: changed_attributes,
         updated_by: actor.id,
+        actor_source: Current.user ? 'explicit' : 'system',
         timestamp: Time.current.iso8601
       }
     )
+  end
+
+  def profile_audit_action(actor)
+    if Current.user.nil?
+      'profile_updated_by_system'
+    elsif Current.paper_context
+      'profile_created_by_admin_via_paper'
+    elsif actor == self
+      'profile_updated'
+    elsif actor.admin?
+      'profile_updated_by_admin'
+    else
+      'profile_updated_by_guardian'
+    end
   end
 
   def email_must_be_unique

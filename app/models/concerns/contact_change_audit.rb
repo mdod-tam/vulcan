@@ -26,31 +26,33 @@ module ContactChangeAudit
     changes = saved_field_changes(ALTERNATE_CONTACT_FIELDS)
     return if changes.blank?
 
+    actor = Current.user || PublicAuditActor.system_audit_actor!
     AuditEventService.log(
       action: 'alternate_contact_updated',
-      actor: Current.user || user,
+      actor: actor,
       auditable: self,
-      metadata: { changes: changes, changed_by: Current.user&.id }
+      metadata: { changes: changes, changed_by: actor.id, actor_source: Current.user ? 'explicit' : 'system' }
     )
-  rescue StandardError => e
-    Rails.logger.error "Failed to log alternate contact changes for application #{id} (#{e.class})"
   end
 
   # A secure form submission that replaces a value already on file is marked for staff review.
   def log_certifying_professional_changes
     changes = saved_field_changes(CERTIFYING_PROFESSIONAL_FIELDS)
-    metadata = { changes: changes, changed_by: Current.user&.id }
     source = certifying_professional_change_source
+    actor = source.present? ? PublicAuditActor.system_audit_actor! : (Current.user || PublicAuditActor.system_audit_actor!)
+    metadata = { changes: changes, changed_by: actor.id, actor_source: Current.user ? 'explicit' : 'system' }
     if source.blank?
-      AuditEventService.log(action: 'certifying_professional_info_updated', actor: Current.user || user, auditable: self, metadata: metadata)
+      AuditEventService.log(action: 'certifying_professional_info_updated', actor: actor, auditable: self, metadata: metadata)
       return
     end
 
     overwritten_fields = changes.select { |_field, change| change['old'].present? }.keys
-    PublicAuditActor.log_audit(
+    AuditEventService.log(
+      actor: actor,
       action: 'certifying_professional_info_updated',
       auditable: self,
-      metadata: metadata.merge(source).merge(overwritten_fields: overwritten_fields,
+      metadata: metadata.merge(source).merge(actor_source: 'public', public_audit_actor: PublicAuditActor::PUBLIC_AUDIT_ACTOR_METADATA,
+                                             overwritten_fields: overwritten_fields,
                                              review_required: overwritten_fields.any?)
     )
   end

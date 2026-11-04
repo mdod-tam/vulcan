@@ -85,10 +85,12 @@ class MailQueueBoundaryTest < ActiveSupport::TestCase
     set_email(false, 'op-1')
     set_email(true, 'op-2')
 
-    2.times { ActiveJob::Base.execute(mail_jobs.sole.arguments) }
+    job = mail_jobs.sole
+    request_id = job.arguments.dig('email_delivery_context', 'request_id')
+    2.times { ActiveJob::Base.execute(job.arguments) }
 
     assert_empty ActionMailer::Base.deliveries
-    suppressed = Event.where(action: EmailDelivery::Outcome::SUPPRESSED)
+    suppressed = Event.where(action: EmailDelivery::Outcome::SUPPRESSED).with_metadata(:request_id, request_id)
     assert_equal 1, suppressed.count, 'reprocessing the same job records its outcome once'
     assert_equal 'pending_canceled', suppressed.sole.metadata['reason']
   end
@@ -131,17 +133,20 @@ class MailQueueBoundaryTest < ActiveSupport::TestCase
   end
 
   test 'an off and on interval before commit cancels the original request' do
+    job = nil
     ActiveRecord::Base.transaction do
-      request_reset
+      job = request_reset
       set_email(false, 'op-1')
       set_email(true, 'op-2')
     end
 
     assert_empty mail_jobs
-    assert_equal 'pending_canceled', Event.find_by!(action: EmailDelivery::Outcome::SUPPRESSED).metadata['reason']
+    outcome = Event.where(action: EmailDelivery::Outcome::SUPPRESSED).with_metadata(:request_id, job.email_delivery_context.fetch('request_id')).sole
+    assert_equal 'pending_canceled', outcome.metadata['reason']
   end
 
   test 'training stays committed but its notification reports a deferred queue failure' do
+    previous_outcome_ids = Event.where(action: EmailDelivery::Outcome::ENQUEUE_FAILED).ids
     @trainer = create(:trainer)
     @application = create(:application, :approved, :with_all_proofs, user: @user, assigned_trainer: @trainer, application_date: Date.current)
     @training_session = create(:training_session, application: @application, trainer: @trainer)
@@ -158,17 +163,18 @@ class MailQueueBoundaryTest < ActiveSupport::TestCase
     assert_equal 'none', notification.metadata['actual_delivery_channel']
     assert_equal 'email_enqueue_failed', notification.metadata['delivery_route_reason']
     assert_match 'could not be queued', notification.email_error_message
-    assert_equal 1, Event.where(action: EmailDelivery::Outcome::ENQUEUE_FAILED).count
-    assert_equal 'SolidQueue::Job::EnqueueError', Event.find_by!(action: EmailDelivery::Outcome::ENQUEUE_FAILED).metadata['error_class']
+    outcome = Event.where(action: EmailDelivery::Outcome::ENQUEUE_FAILED).where.not(id: previous_outcome_ids).sole
+    assert_equal 'SolidQueue::Job::EnqueueError', outcome.metadata['error_class']
     assert_empty mail_jobs
   end
 
   test 'a real queue insert failure reports enqueue_failed to an immediate caller' do
+    previous_outcome_ids = Event.where(action: EmailDelivery::Outcome::ENQUEUE_FAILED).ids
     reject_mail_inserts!
 
     assert_equal :enqueue_failed, EmailDelivery.deliver_later(UserMailer.with(user: @user).password_reset)
 
-    event = Event.find_by!(action: EmailDelivery::Outcome::ENQUEUE_FAILED)
+    event = Event.where(action: EmailDelivery::Outcome::ENQUEUE_FAILED).where.not(id: previous_outcome_ids).sole
     assert_equal 'SolidQueue::Job::EnqueueError', event.metadata['error_class']
     assert_not event.metadata.key?('error_message'), 'adapter SQL errors may contain serialized arguments'
     assert_empty mail_jobs

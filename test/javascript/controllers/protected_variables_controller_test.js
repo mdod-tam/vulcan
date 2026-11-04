@@ -67,6 +67,19 @@ describe("ProtectedVariablesController", () => {
     document.body.innerHTML = ""
   })
 
+  test("reconnection owns each listener once and disconnect removes it", () => {
+    const element = document.querySelector('[data-controller="protected-variables"]')
+    const controller = application.getControllerForElementAndIdentifier(element, 'protected-variables')
+    const sync = jest.spyOn(controller, 'syncToTextarea')
+    controller.disconnect()
+    controller.connect()
+    element.dispatchEvent(new Event('submit'))
+    expect(sync).toHaveBeenCalledTimes(1)
+    controller.disconnect()
+    element.dispatchEvent(new Event('submit'))
+    expect(sync).toHaveBeenCalledTimes(1)
+  })
+
   test("protects Liquid trim output tags", () => {
     const variables = Array.from(document.querySelectorAll(".protected-variable")).map((node) => node.textContent)
 

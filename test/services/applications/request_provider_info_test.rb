@@ -7,6 +7,7 @@ module Applications
     include ActiveSupport::Testing::TimeHelpers
 
     setup do
+      ensure_system_audit_actor!
       @actor = create(:admin)
       @application = create(:application)
       @mailer_delivery = mock('provider-info-mailer-delivery')

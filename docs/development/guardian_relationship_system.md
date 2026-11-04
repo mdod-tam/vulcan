@@ -20,6 +20,8 @@ flowchart LR
 
 [`GuardianRelationship`](../../app/models/guardian_relationship.rb) stores `guardian_id`, `dependent_id`, and `relationship_type`. Guardian and dependent are relationship roles, not separate user subclasses.
 
+An application stores its selected `managing_guardian_id`, which controls its access and application-specific delivery. On creation or an applicant change, a single relationship can supply an omitted manager; multiple relationships require an explicit selection. A selected manager must be related to the applicant, and changing the applicant revalidates that relationship. Explicitly clearing an existing manager does not infer that manager again. Inference runs once before validation, rather than choosing whichever relationship an unordered lookup returns.
+
 The [schema](../../db/schema.rb) enforces a unique guardian/dependent pair and foreign keys to users. The model rejects self-guardianship; there is no database check constraint for that rule. `applications.managing_guardian_id` is optional.
 
 [`UserGuardianship`](../../app/models/concerns/user_guardianship.rb) provides `guardians`, `dependents`, and `managed_applications`, plus access and contact helpers. [Application scopes](../../app/models/application.rb) such as `managed_by`, `for_dependents_of`, and `related_to_guardian` support the corresponding application queries.

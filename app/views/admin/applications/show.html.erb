@@ -54,9 +54,8 @@
                           class: "text-primary-600 hover:text-primary-500",
                           data: { turbo_frame: "_top" } %>
               <span class="text-gray-500">(ID: <%= @application.managing_guardian.id %>)</span>
-              <% guardian_relationship = GuardianRelationship.find_by(guardian_id: @application.managing_guardian.id, dependent_id: @application.user.id) %>
-              <% if guardian_relationship %>
-                <span class="text-gray-500 text-xs">(<%= guardian_relationship.relationship_type %>)</span>
+              <% if @guardian_relationship_type.present? %>
+                <span class="text-gray-500 text-xs">(<%= @guardian_relationship_type %>)</span>
               <% end %>
             </dd>
           </div>

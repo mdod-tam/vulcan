@@ -13,7 +13,7 @@ module Applications
       @actor = by
     end
 
-    # @return [Boolean] True if successful, false otherwise
+    # @return [Boolean] True if successful; raises if the operation fails
     def call
       ApplicationRecord.transaction do
         application.transition_status!(
@@ -23,9 +23,6 @@ module Applications
         )
         true
       end
-    rescue StandardError => e
-      log_error(e, context: { application_id: application.id, actor_id: actor.id })
-      # log_error records the error and returns false.
     end
   end
 end

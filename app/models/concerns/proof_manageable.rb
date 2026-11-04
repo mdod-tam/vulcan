@@ -7,11 +7,22 @@
 module ProofManageable
   extend ActiveSupport::Concern
 
+  REVIEW_PROOF_TYPES = %w[income residency id].freeze
+
   included do
     validates :income_proof, :residency_proof, :id_proof, document: { purpose: :proof }
     validate :require_proof_attachments, if: :proofs_due_on_submission?
 
-    after_save :set_needs_review_timestamp, if: :proof_attachments_changed?
+    before_save :sync_proof_review_marker, if: :proof_review_input_changed?
+
+    scope :awaiting_proof_review, lambda {
+      pending = REVIEW_PROOF_TYPES.map do |type|
+        attachments = ActiveStorage::Attachment.where(record_type: base_class.name, name: "#{type}_proof").select(:record_id)
+        relation = where("#{type}_proof_status" => :not_reviewed, id: attachments)
+        type == 'income' ? relation.where(income_proof_required: true) : relation
+      end.reduce(&:or)
+      active.merge(pending)
+    }
   end
 
   # Alias of Application#required_proofs_approved?.
@@ -61,11 +72,14 @@ module ProofManageable
     true
   end
 
-  # Clears the review marker alone, without resubmitting the application's intake fields to validation.
-  def clear_review_marker!
-    return if update_column(:needs_review_since, nil, touch: true) # rubocop:disable Rails/SkipsModelValidations -- Review bookkeeping only.
+  def proof_review_pending?
+    return false unless workflow_active?
 
-    raise ActiveRecord::RecordNotSaved.new('Review marker was not cleared.', self)
+    REVIEW_PROOF_TYPES.any? do |type|
+      next false if type == 'income' && !income_proof_required?
+
+      public_send("#{type}_proof_status_not_reviewed?") && document_attachment_for(type).attached?
+    end
   end
 
   # Applications::ProofReviewer calls this after it sets the rejected status.
@@ -98,33 +112,22 @@ module ProofManageable
     !new_record? && !submission_method_paper? && will_save_change_to_status?(from: 'draft')
   end
 
-  def proof_attachments_changed?
-    return false if new_record?
-
-    if respond_to?(:attachment_changes) && attachment_changes.present?
-      return (FeatureFlag.income_proof_required? && attachment_changes['income_proof'].present?) ||
-             attachment_changes['residency_proof'].present? ||
-             attachment_changes['id_proof'].present?
-    end
-
-    false
+  def proof_review_input_changed?
+    new_record? || will_save_change_to_status? || will_save_change_to_income_proof_required? ||
+      REVIEW_PROOF_TYPES.any? do |type|
+        will_save_change_to_attribute?("#{type}_proof_status") || attachment_changes["#{type}_proof"].present?
+      end
   end
 
-  # update! runs after_save again. The flag stops that recursion.
-  def set_needs_review_timestamp
-    return if @setting_review_timestamp
-    return if Current.proof_attachment_service_context?
-    return unless (FeatureFlag.income_proof_required? && income_proof.attached?) || residency_proof.attached? || id_proof.attached?
-
-    @setting_review_timestamp = true
-
-    begin
-      update!(needs_review_since: Time.current)
-      Rails.logger.info "Set needs_review_since for application #{id}"
-    rescue StandardError => e
-      Rails.logger.error "Error setting needs_review_since for application #{id}: #{e.class.name}"
-    ensure
-      @setting_review_timestamp = false
+  def sync_proof_review_marker
+    if proof_review_pending?
+      pending_upload = REVIEW_PROOF_TYPES.any? do |type|
+        (type != 'income' || income_proof_required?) && public_send("#{type}_proof_status_not_reviewed?") &&
+          attachment_changes["#{type}_proof"].present?
+      end
+      self.needs_review_since = Time.current if needs_review_since.nil? || pending_upload
+    else
+      self.needs_review_since = nil
     end
   end
 end

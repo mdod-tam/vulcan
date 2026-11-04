@@ -52,6 +52,18 @@ class ApplicationContactChangeAuditTest < ActiveSupport::TestCase
     assert_equal 'N*** A***', event.metadata['changes']['alternate_contact_name']['new']
   end
 
+  test 'background contact audit has truthful attribution and fails atomically when unavailable' do
+    actor = ensure_system_audit_actor!
+    Current.user = nil
+    @application.update!(alternate_contact_name: 'System Change')
+    event = @application.events.find_by!(action: 'alternate_contact_updated')
+    assert_equal actor, event.user
+    PublicAuditActor.stub(:system_audit_actor, nil) do
+      assert_raises(PublicAuditActor::MissingSystemActor) { @application.update!(alternate_contact_name: 'Missing Actor') }
+    end
+    assert_equal 'System Change', @application.reload.alternate_contact_name
+  end
+
   test 'provider info requests stay visible while a link is active after the info is complete' do
     assert_not @application.missing_required_provider_info?
     assert_not @application.provider_info_requests_visible?

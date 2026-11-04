@@ -53,15 +53,13 @@
 
                 <% if current_user&.dependents&.any? %>
                   <div class="mt-3 space-y-3">
-                    <% current_user.dependents.each do |dependent| %>
-                      <% dependent_active_app = @managed_applications.find { |app| app.user_id == dependent.id } %>
-                      <% dependent_draft_app = @managed_drafts.find { |app| app.user_id == dependent.id } %>
-                      <% if dependent_active_app %>
+                    <% @dependents.each do |dependent| %>
+                      <% if (dependent_active_app = @managed_by_applicant[dependent.id]) %>
                         <div>
                           <%= link_to "View #{dependent.full_name}'s Application", constituent_portal_application_path(dependent_active_app),
                               class: "btn btn-secondary" %>
                         </div>
-                      <% elsif dependent_draft_app %>
+                      <% elsif (dependent_draft_app = @drafts_by_applicant[dependent.id]) %>
                         <div>
                           <%= link_to "Continue #{dependent.full_name}'s Draft", edit_constituent_portal_application_path(dependent_draft_app),
                               class: "inline-flex items-center px-4 py-2 border border-transparent text-sm font-medium " \
@@ -236,10 +234,10 @@
                 </div>
               <% end %>
 
-              <% if current_user.dependents.any? %>
+              <% if @dependents.any? %>
                 <h4 class="text-base font-medium text-gray-900 mb-4">My Dependents</h4>
                 <ul role="list" class="divide-y divide-gray-200">
-                  <% current_user.dependents.each do |dependent| %>
+                  <% @dependents.each do |dependent| %>
                     <li class="py-4 flex items-center justify-between">
                       <div class="flex-1">
                         <div class="flex items-center">
@@ -249,18 +247,15 @@
                           <%= link_to 'Edit', edit_constituent_portal_dependent_path(dependent),
                               class: "ml-2 text-xs text-primary-600 hover:text-primary-900" %>
                         </div>
-                        <% guardian_relationship = GuardianRelationship.find_by(guardian_user: current_user, dependent_user: dependent) %>
-                        <% if guardian_relationship %>
+                        <% if (guardian_relationship = @dependent_relationships[dependent.id]) %>
                           <p class="text-sm text-gray-500">Relationship: <%= guardian_relationship.relationship_type %></p>
                         <% end %>
                       </div>
                       <div>
-                        <% dependent_active = @managed_applications.find { |app| app.user_id == dependent.id } %>
-                        <% dependent_draft = @managed_drafts.find { |app| app.user_id == dependent.id } %>
-                        <% if dependent_active %>
+                        <% if (dependent_active = @managed_by_applicant[dependent.id]) %>
                           <%= link_to "View Application", constituent_portal_application_path(dependent_active),
                               class: "btn btn-primary btn-sm rounded-full" %>
-                        <% elsif dependent_draft %>
+                        <% elsif (dependent_draft = @drafts_by_applicant[dependent.id]) %>
                           <%= link_to "Continue Draft", edit_constituent_portal_application_path(dependent_draft),
                               class: "inline-flex items-center px-3 py-1.5 border border-transparent text-xs font-medium " \
                                      "rounded-full shadow-elevation-1 text-white bg-warning-600 hover:bg-warning-700" %>
@@ -289,14 +284,13 @@
               <h3 class="text-lg leading-6 font-medium text-gray-900">My Guardians</h3>
             </div>
             <div class="px-4 py-5 sm:p-6">
-              <% if current_user.guardians.any? %>
+              <% if @guardians.any? %>
                 <ul role="list" class="divide-y divide-gray-200">
-                  <% current_user.guardians.each do |guardian| %>
+                  <% @guardians.each do |guardian| %>
                     <li class="py-4 flex items-center justify-between">
                       <div class="flex-1">
                         <p class="text-sm font-medium text-gray-900"><%= guardian.full_name %></p>
-                        <% guardian_relationship = GuardianRelationship.find_by(guardian_user: guardian, dependent_user: current_user) %>
-                        <% if guardian_relationship %>
+                        <% if (guardian_relationship = @guardian_relationships[guardian.id]) %>
                           <p class="text-sm text-gray-500">Relationship: <%= guardian_relationship.relationship_type %></p>
                         <% end %>
                       </div>
@@ -333,16 +327,16 @@
             </div>
             <div class="px-4 py-5 sm:p-6 space-y-6">
               <% if @active_application&.income_proof_required? %>
-                <%= render 'proof_status_card', application: @active_application, proof_type: 'income', label: 'Income' %>
+                <%= render 'proof_status_card', application: @active_application, proof_type: 'income' %>
               <% end %>
-              <%= render 'proof_status_card', application: @active_application, proof_type: 'residency', label: 'Residency' %>
-              <%= render 'proof_status_card', application: @active_application, proof_type: 'id', label: 'ID' %>
+              <%= render 'proof_status_card', application: @active_application, proof_type: 'residency' %>
+              <%= render 'proof_status_card', application: @active_application, proof_type: 'id' %>
             </div>
           </div>
         <% end %>
 
         <% if @managed_applications&.any? %>
-          <% @managed_applications.where.not(status: :draft).each do |managed_app| %>
+          <% @managed_applications.each do |managed_app| %>
             <div class="mt-6 card overflow-hidden rounded-none sm:rounded-lg">
               <div class="px-4 py-5 border-b border-gray-200 sm:px-6">
                 <h3 class="text-lg leading-6 font-medium text-gray-900">
@@ -354,10 +348,10 @@
               </div>
               <div class="px-4 py-5 sm:p-6 space-y-6">
                 <% if managed_app.income_proof_required? %>
-                  <%= render 'proof_status_card', application: managed_app, proof_type: 'income', label: 'Income' %>
+                  <%= render 'proof_status_card', application: managed_app, proof_type: 'income' %>
                 <% end %>
-                <%= render 'proof_status_card', application: managed_app, proof_type: 'residency', label: 'Residency' %>
-                <%= render 'proof_status_card', application: managed_app, proof_type: 'id', label: 'ID' %>
+                <%= render 'proof_status_card', application: managed_app, proof_type: 'residency' %>
+                <%= render 'proof_status_card', application: managed_app, proof_type: 'id' %>
               </div>
             </div>
           <% end %>

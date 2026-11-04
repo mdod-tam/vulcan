@@ -4,6 +4,7 @@ require 'test_helper'
 
 class CertifyingProfessionalNotifierTest < ActiveSupport::TestCase
   setup do
+    ensure_system_audit_actor!
     @admin = create(:admin)
     @constituent = create(:constituent)
     @application = create(:application,

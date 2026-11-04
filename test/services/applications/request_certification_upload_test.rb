@@ -8,6 +8,7 @@ module Applications
     include ActiveJob::TestHelper
 
     setup do
+      ensure_system_audit_actor!
       @actor = create(:admin)
       @application = create(:application, :in_progress,
                             certifying_professional_name: 'Dr. Provider',

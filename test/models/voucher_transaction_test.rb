@@ -4,6 +4,7 @@ require 'test_helper'
 
 class VoucherTransactionTest < ActiveSupport::TestCase
   setup do
+    ensure_system_audit_actor!
     @vendor = create(:vendor)
     @voucher = create(:voucher, :active, initial_value: 500, remaining_value: 500)
     @transaction = create(:voucher_transaction,

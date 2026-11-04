@@ -101,7 +101,7 @@ class UsersControllerConcurrencyTest < ActiveSupport::TestCase
     duplicate = nil
     begin
       Current.paper_context = true
-      duplicate = create(:constituent, email: nil, phone: "555-#{rand(100..999)}-#{rand(1000..9999)}",
+      duplicate = create(:constituent, email: "portal-duplicate-#{SecureRandom.hex(3)}@example.com", phone: "555-#{rand(100..999)}-#{rand(1000..9999)}",
                                        communication_preference: :letter)
     ensure
       Current.reset
@@ -145,7 +145,7 @@ class UsersControllerConcurrencyTest < ActiveSupport::TestCase
               phone: fresh_user.phone, phone_type: fresh_user.phone_type }
     )
 
-    controller.send(:update)
+    Current.set(user: fresh_user) { controller.send(:update) }
 
     response_summary(controller)
   end

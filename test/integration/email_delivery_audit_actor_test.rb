@@ -64,6 +64,7 @@ class EmailDeliveryAuditActorTest < ActionDispatch::IntegrationTest
   end
 
   test 'scheduled voucher expiry cannot promote a public constituent at the system address' do
+    FeatureFlag.enable!(:vouchers_enabled)
     post sign_up_path, params: { user: {
       email: PublicAuditActor::SYSTEM_AUDIT_EMAIL, password: 'password1234', password_confirmation: 'password1234',
       first_name: 'Synthetic', last_name: "Expiry#{SecureRandom.hex(4)}", date_of_birth: '1991-02-03',
@@ -89,6 +90,7 @@ class EmailDeliveryAuditActorTest < ActionDispatch::IntegrationTest
   end
 
   test 'scheduled expiry with no system account refuses processing and reports the missing audit actor' do
+    FeatureFlag.enable!(:vouchers_enabled)
     Current.reset
     voucher = overdue_voucher
     purposes = []

@@ -4,7 +4,6 @@
 module ProofTestHelper
   def clear_current_context
     Current.user = nil
-    Current.proof_attachment_service_context = nil
     Current.paper_context = nil
   end
 

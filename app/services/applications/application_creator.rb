@@ -65,12 +65,14 @@ module Applications
 
       ActiveRecord::Base.transaction do
         lock_and_requalify_applicant!
-        AutosaveRevisions.new(target_application).prepare!(context: @form.autosave_context, revision: @form.autosave_revision)
-        update_user_attributes
-        create_or_update_application
-        set_certifying_professional_details
-        attach_file_uploads
-        save_application_with_audit
+        Current.set(user: @current_user) do
+          AutosaveRevisions.new(target_application).prepare!(context: @form.autosave_context, revision: @form.autosave_revision)
+          update_user_attributes
+          create_or_update_application
+          set_certifying_professional_details
+          attach_file_uploads
+          save_application_with_audit
+        end
       end
 
       success_result
@@ -79,6 +81,11 @@ module Applications
       failure_result(@errors, pending_identity_review: true)
     rescue IneligibleApplicantError, RefusedUploadError => e
       @errors << e.message
+      failure_result(@errors)
+    rescue ActiveRecord::RecordInvalid => e
+      messages = e.record.errors.full_messages if e.record.equal?(target_application)
+      report_unexpected_failure(e) if messages.blank?
+      @errors.concat(messages.presence || [I18n.t('applications.creation.failure', locale: @form.message_locale)])
       failure_result(@errors)
     rescue StandardError => e
       report_unexpected_failure(e)

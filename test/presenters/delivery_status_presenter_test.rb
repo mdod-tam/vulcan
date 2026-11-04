@@ -3,6 +3,8 @@
 require 'test_helper'
 
 class DeliveryStatusPresenterTest < ActiveSupport::TestCase
+  setup { ensure_system_audit_actor! }
+
   test 'details controls identify their record and individual attempt in both locales' do
     notification = create(:notification, delivery_status: :queued)
     attempts = 2.times.map do

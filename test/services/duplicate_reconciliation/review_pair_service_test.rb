@@ -5,6 +5,7 @@ require 'test_helper'
 module DuplicateReconciliation
   class ReviewPairServiceTest < ActiveSupport::TestCase
     setup do
+      ensure_system_audit_actor!
       @admin = create(:admin)
       @first = create_match
       @second = create_match

@@ -83,9 +83,11 @@ Starting points by question: [`ProofAttachmentService`](../../app/services/proof
 | --- | --- |
 | [ProofAttachmentMetricsJob](../../app/jobs/proof_attachment_metrics_job.rb) | Counts income/residency attachment success and failure events over 24 hours. Below 95% success **and** at least five failures it creates admin warning notifications with `deliver: false` — no email. ID and certification events are outside the metric. |
 | [ProofConsistencyCheckJob](../../app/jobs/proof_consistency_check_job.rb) | Weekly. Logs a warning for each application whose income or residency proof is approved but has no file, then a total. It changes nothing and notifies no one, so the log is the only signal. An attached proof awaiting review is normal and is not reported. ID and certification proofs are outside the check. |
-| [ProofReviewReminderJob](../../app/jobs/proof_review_reminder_job.rb) | Would remind admins about applications whose `needs_review_since` passed three days ago. Nothing calls it and nothing schedules it. Do not schedule it as it stands: a proof review does not clear `needs_review_since`, only a completed evaluation does, so it would remind about applications whose proofs were reviewed long ago. |
+| [ProofReviewReminderJob](../../app/jobs/proof_review_reminder_job.rb) | Daily at 06:15 UTC. Uses `Application.awaiting_proof_review` and the three-day marker cutoff, excluding closed applications and reviewed or inapplicable proofs. Each human administrator gets one daily backlog notification; retries reuse its delivery-control snapshot and delivery identity. The system audit account is attribution, not a recipient. |
 
 For a metrics warning that never arrived, the window, covered event types, both thresholds, and notification creation errors are the places to look, with [metrics tests](../../test/jobs/proof_attachment_metrics_job_test.rb) as the reference.
+
+The application derives `needs_review_since` before saving proof state. New pending uploads stamp it; the last pending review clears it. A failed marker/state save fails together. Evaluation completion does not clear pending proofs. The dashboard localizes proof headings, statuses, rejection dates, and replacement links to the viewer's locale; authored rejection notes remain as written.
 
 ### What removes old proof files
 

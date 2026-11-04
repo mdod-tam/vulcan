@@ -19,6 +19,7 @@ module ConstituentPortal
       load_voucher_information
       load_training_sessions_information
       load_proof_status_information
+      load_relationship_and_proof_summaries
       load_recent_activities
       @recent_purchases = VoucherTransaction.purchases_visible_to(current_user).limit(5)
     end
@@ -34,13 +35,8 @@ module ConstituentPortal
       latest_rejected_review(application, proof_type)&.created_at
     end
 
-    # Read once per application and proof for the page, however many cards ask.
     def latest_rejected_review(application, proof_type)
-      @latest_rejected_reviews ||= {}
-      @latest_rejected_reviews.fetch([application.id, proof_type]) do
-        @latest_rejected_reviews[[application.id, proof_type]] =
-          application.proof_reviews.where(proof_type: proof_type, status: :rejected).order(created_at: :desc).first
-      end
+      @latest_rejected_reviews[[application.id, proof_type.to_s]]
     end
 
     def can_resubmit_proof?(application, proof_type, max_submissions)
@@ -118,8 +114,28 @@ module ConstituentPortal
       @recent_activities = get_recent_activities(@active_application) if @active_application
     end
 
+    def load_relationship_and_proof_summaries
+      ActiveRecord::Associations::Preloader.new(
+        records: [current_user], associations: [
+          { guardian_relationships_as_guardian: :dependent_user },
+          { guardian_relationships_as_dependent: :guardian_user }
+        ]
+      ).call
+      @dependent_relationships = current_user.guardian_relationships_as_guardian.index_by(&:dependent_id)
+      @guardian_relationships = current_user.guardian_relationships_as_dependent.index_by(&:guardian_id)
+      @dependents = @dependent_relationships.values.map(&:dependent_user)
+      @guardians = @guardian_relationships.values.map(&:guardian_user)
+      @managed_by_applicant = @managed_applications.to_a.group_by(&:user_id).transform_values(&:first)
+      @drafts_by_applicant = @managed_drafts.to_a.group_by(&:user_id).transform_values(&:first)
+      ids = [@active_application&.id, *@managed_applications.map(&:id)].compact.uniq
+      @latest_rejected_reviews = ProofReview.where(application_id: ids, status: :rejected)
+                                            .order(:created_at, :id).index_by { |review| [review.application_id, review.proof_type] }
+      @proof_submission_counts = Event.where(auditable_type: 'Application', auditable_id: ids, action: 'proof_submitted')
+                                      .group(:auditable_id, :metadata).count
+    end
+
     def count_proof_submissions(application, proof_type)
-      application.events.where(action: 'proof_submitted', metadata: { proof_type: proof_type }).count
+      @proof_submission_counts.fetch([application.id, { 'proof_type' => proof_type.to_s }], 0)
     end
 
     def get_recent_activities(application)

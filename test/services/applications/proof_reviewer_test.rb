@@ -7,6 +7,7 @@ module Applications
     include ProofResubmissionTestHelper
 
     setup do
+      ensure_system_audit_actor!
       @application = create(:application, :in_progress, :with_income_proof)
       @admin = create(:admin)
       @reviewer = ProofReviewer.new(@application, @admin)

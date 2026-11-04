@@ -6,6 +6,8 @@ require 'fugit'
 class RecurringConfigTest < ActiveSupport::TestCase
   RECURRING_TASKS = %w[
     poll_email_delivery
+    proof_review_reminders
+    cleanup_expired_sessions
     cleanup_unattached_uploads
     recover_document_scans
     generate_vendor_invoices
@@ -28,12 +30,12 @@ class RecurringConfigTest < ActiveSupport::TestCase
     end
   end
 
-  test 'keeps the voucher task out of the production schedules when the flag is disabled' do
-    FeatureFlag.stubs(:enabled?).returns(false)
+  test 'schedule rendering never queries runtime flags' do
+    FeatureFlag.expects(:enabled?).never
 
     tasks = rendered_production_tasks
 
-    assert_equal (RECURRING_TASKS - ['check_voucher_expiration']).sort, tasks.keys.sort
+    assert_equal RECURRING_TASKS.sort, tasks.keys.sort
   end
 
   test 'development resumes antivirus scans every minute' do

@@ -36,6 +36,23 @@ class RegistrationsControllerTest < ActionDispatch::IntegrationTest
   teardown do
     ActionMailer::Base.deliveries.clear
   end
+
+  test 'registration preserves a signed-in administrator as the creation actor' do
+    actor = create(:admin)
+    sign_in_for_integration_test(actor)
+    email = "actor-registration-#{SecureRandom.hex(4)}@example.com"
+
+    post sign_up_path, params: { user: {
+      email: email, password: 'password1234', password_confirmation: 'password1234',
+      first_name: 'New', last_name: 'Registrant', date_of_birth: '1990-01-01',
+      phone: nil, phone_type: 'contact_email', hearing_disability: true
+    } }
+
+    assert_redirected_to welcome_path
+    user = User.find_by!(email: email)
+    assert_equal actor, Event.find_by!(auditable: user, action: 'profile_updated_by_admin').user
+  end
+
   def test_should_get_new
     get sign_up_path
     assert_response :success
@@ -749,7 +766,7 @@ class RegistrationsControllerTest < ActionDispatch::IntegrationTest
 
   def test_name_dob_match_rolls_back_when_duplicate_review_actor_is_missing
     User.where(email: PublicAuditActor::SYSTEM_AUDIT_EMAIL).find_each do |user|
-      user.update!(email: "former-system-audit-#{user.id}-#{SecureRandom.hex(3)}@example.com")
+      Current.set(user: user) { user.update!(email: "former-system-audit-#{user.id}-#{SecureRandom.hex(3)}@example.com") }
     end
     create(:constituent,
            first_name: 'MissingActor',

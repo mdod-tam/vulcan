@@ -83,3 +83,21 @@ test('closing announces which dialog closed', async () => {
   expect(closed.mock.calls[0][0].detail.dialog).toBe(dialog)
   window.removeEventListener('modal:closed', closed)
 })
+
+for (const original of ['/document.pdf', '/document.pdf?download=true#preview']) {
+  test(`iframe cache busting preserves URL components: ${original}`, async () => {
+    const dialog = await render()
+    const iframe = document.createElement('iframe')
+    iframe.dataset.originalSrc = original
+    dialog.appendChild(iframe)
+    const controller = application.getControllerForElementAndIdentifier(dialog, 'modal')
+    controller._loadIframes(dialog)
+    const result = new URL(iframe.src)
+    expect(result.pathname).toBe('/document.pdf')
+    expect(result.searchParams.has('t')).toBe(true)
+    if (original.includes('?')) {
+      expect(result.searchParams.get('download')).toBe('true')
+      expect(result.hash).toBe('#preview')
+    }
+  })
+}

@@ -113,7 +113,7 @@ class SecureFormExpirationRecorderTest < ActiveSupport::TestCase
 
   test 'missing system actor leaves an expiration pending until attribution is available' do
     User.where(email: PublicAuditActor::SYSTEM_AUDIT_EMAIL).find_each do |user|
-      user.update!(email: "displaced-#{user.id}@example.test")
+      Current.set(user: @admin) { user.update!(email: "displaced-#{user.id}@example.test") }
     end
     form = create(:secure_request_form, kind: :income_proof_resubmission, requested_by: nil, expires_at: 1.hour.ago)
 

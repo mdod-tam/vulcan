@@ -124,7 +124,9 @@ class ModalController extends Controller {
       if (!originalSrc) return
 
       if (!iframe.src || iframe.src === 'about:blank') {
-         iframe.src = originalSrc + '&t=' + new Date().getTime()
+         const url = new URL(originalSrc, document.baseURI)
+         url.searchParams.set("t", Date.now().toString())
+         iframe.src = url.href
       } else {
          // A reopened dialog can show a blank PDF. Reassigning src makes the browser fetch and render it again.
          iframe.src = iframe.src 

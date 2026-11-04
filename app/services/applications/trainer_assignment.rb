@@ -50,19 +50,20 @@ module Applications
         application.with_lock do
           sessions = application.open_training_assignments.lock.to_a
           verify_reassignment!(trainer, locked_actor, sessions, locked_ids, expected_version)
-          next if application.assigned_trainer_id == trainer.id && sessions.all? { |session| session.trainer_id == trainer.id }
+          unless application.assigned_trainer_id == trainer.id && sessions.all? { |session| session.trainer_id == trainer.id }
 
-          current_ids = coverage_ids(sessions)
-          operation_id = SecureRandom.uuid
-          application.update!(assigned_trainer: trainer)
-          sessions.each { |session| session.update!(trainer: trainer, assignment_operation_id: operation_id) }
-          AuditEventService.log(
-            action: 'trainer_reassigned', actor: locked_actor, auditable: application,
-            metadata: { operation_id: operation_id, application_id: application.id, trainer_id: trainer.id,
-                        previous_trainer_ids: current_ids - [trainer.id], training_session_ids: sessions.map(&:id) }
-          )
-          # Without an open row there is no appointment to announce; a pending request shows on the new trainer's dashboard.
-          %w[trainer_reassigned training_trainer_changed].each { |action| notify(sessions.last, action, locked_actor) } if sessions.any?
+            current_ids = coverage_ids(sessions)
+            operation_id = SecureRandom.uuid
+            application.update!(assigned_trainer: trainer)
+            sessions.each { |session| session.update!(trainer: trainer, assignment_operation_id: operation_id) }
+            AuditEventService.log(
+              action: 'trainer_reassigned', actor: locked_actor, auditable: application,
+              metadata: { operation_id: operation_id, application_id: application.id, trainer_id: trainer.id,
+                          previous_trainer_ids: current_ids - [trainer.id], training_session_ids: sessions.map(&:id) }
+            )
+            # Without an open row there is no appointment to announce; a pending request shows on the new trainer's dashboard.
+            %w[trainer_reassigned training_trainer_changed].each { |action| notify(sessions.last, action, locked_actor) } if sessions.any?
+          end
         end
       end
     end

@@ -5,7 +5,7 @@ require 'test_helper'
 module Applications
   class SubmitProviderInfoTest < ActiveSupport::TestCase
     setup do
-      @system_audit_actor = create(:admin, email: PublicAuditActor::SYSTEM_AUDIT_EMAIL)
+      @system_audit_actor = ensure_system_audit_actor!
       @application = create(
         :application,
         status: :awaiting_proof

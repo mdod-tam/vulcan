@@ -4,6 +4,7 @@ require 'test_helper'
 
 class AuditEventServiceEncryptedChangesTest < ActiveSupport::TestCase
   setup do
+    ensure_system_audit_actor!
     @actor = create(:admin)
     @constituent = create(:constituent)
   end
@@ -99,7 +100,7 @@ class AuditEventServiceEncryptedChangesTest < ActiveSupport::TestCase
   test 'distinct changes with identical masks and repeated transitions are retained' do
     freeze_time do
       %w[alice@example.com anne@example.com alice@example.com anne@example.com].each { |email| @constituent.update!(email: email) }
-      events = Event.where(auditable: @constituent, action: 'profile_updated').where(created_at: Time.current)
+      events = Event.where(auditable: @constituent, action: 'profile_updated_by_system').where(created_at: Time.current)
       assert_equal 4, events.count
       assert_equal 4, Applications::EventDeduplicationService.new.deduplicate(events.to_a).size
     end

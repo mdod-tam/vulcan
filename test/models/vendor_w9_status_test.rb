@@ -4,6 +4,7 @@ require 'test_helper'
 
 class VendorW9StatusTest < ActiveSupport::TestCase
   setup do
+    ensure_system_audit_actor!
     @vendor = create(:vendor, :with_w9)
   end
 

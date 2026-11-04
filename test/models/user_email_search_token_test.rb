@@ -3,6 +3,8 @@
 require 'test_helper'
 
 class UserEmailSearchTokenTest < ActiveSupport::TestCase
+  setup { ensure_system_audit_actor! }
+
   test 'creates HMAC email search tokens for normalized email pieces' do
     user = create(:constituent, email: 'Alex.Smith+Portal@Example.COM')
 

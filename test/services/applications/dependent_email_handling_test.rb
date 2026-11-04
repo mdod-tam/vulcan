@@ -7,6 +7,7 @@ module Applications
     include ActionDispatch::TestProcess::FixtureFile
 
     setup do
+      ensure_system_audit_actor!
       setup_fpl_policies
 
       @admin = create(:admin)

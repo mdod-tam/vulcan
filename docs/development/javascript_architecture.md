@@ -14,6 +14,7 @@ The server re-decides anything the browser decided.
 - **The identifier is the registered name, not the path.** `admin-user-search` lives at `admin/user_search_controller.js`.
 - **Assets are built, not served from source.** [esbuild](../../esbuild.config.js) bundles `app/javascript/application.js` into `app/assets/builds` (`yarn build`); Tailwind is `yarn build:css`.
 - **Views own URLs and copy.** Controllers read them from values rather than constructing paths or composing user-facing strings.
+- **Controllers own connection resources.** Remove or abort connect-time listeners on disconnect. An accessibility announcer owns its local live region and cancels pending announcement/clear timers when removed.
 - **Both attachment syntaxes are in use** — literal `data-controller` attributes and ERB `data:` hashes — so a grep for one finds roughly half the call sites.
 
 ## Autosave, as a representative interaction
@@ -41,9 +42,15 @@ Failed requests need caller-owned visible feedback, via the [flash container](..
 
 Guardian creation collects the current `guardian_attributes` fields, no-contact flags, and review choice/receipt directly. It owns required-field feedback and retry controls. Rails returns a 422 HTML review fragment or JSON containing `user`; the controller selects that returned guardian. No generic form base intercepts the surrounding paper form.
 
-Server-rendered HTML goes through Turbo frames and streams. Authentication and a few lookups still call `fetch` directly and keep their own response contracts. Security-key verification reads its URL and translated feedback from the view; recognized server error codes select local messages, and unknown failures use generic retry guidance. `Auth` and WebAuthn are module imports, not window globals.
+Server-rendered HTML goes through Turbo frames and streams.
+
+The admin application edit modal returns 204 for a successful marked edit. Its wrapper closes the editor, refreshes the named user-summary frame through `Admin::UsersController#show`, and reloads loaded application details. The details dialog retains focus on its edit control. Validation failure returns 422 and retains the editor's input. Other successful forms do not trigger a blanket page visit.
+
+Authentication and a few lookups still call `fetch` directly and keep their own response contracts. Security-key verification reads its URL and translated feedback from the view; recognized server error codes select local messages, and unknown failures use generic retry guidance. `Auth` and WebAuthn are module imports, not window globals.
 
 ## Submit gating
+
+Constituent new/edit forms supply English/Spanish incomplete, ready, and detail messages using `form_message_locale`; admin merge keeps its explicit English overrides. Required control labels and the disability group legend use the same locale, so the existing gate can name outstanding requirements without composing English copy in JavaScript. The server-provided blocked message remains an independent hard block.
 
 | Controller | Responsibility |
 | --- | --- |

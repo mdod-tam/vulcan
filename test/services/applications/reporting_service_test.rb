@@ -5,6 +5,7 @@ require 'test_helper'
 module Applications
   class ReportingServiceTest < ActiveSupport::TestCase
     setup do
+      ensure_system_audit_actor!
       # Distinct email prefixes avoid collisions with seed data.
       @admin = create(:admin, email: "admin_reporting_#{Time.now.to_i}@example.com")
       @user = create(:user, email: "user_reporting_#{Time.now.to_i}@example.com")

@@ -13,34 +13,45 @@ export default class extends Controller {
   ]
   
   connect() {
+    this.listeners = new AbortController()
     this.previousSyntax = this.hasSyntaxSelectTarget ? this.syntaxSelectTarget.value : null
     this.lastEditorRange = null
     this.renderProtectedVariables()
-    this.element.addEventListener("submit", () => this.syncToTextarea())
-    this.editorTarget.addEventListener("input", () => {
+    this.listen(this.element, "submit", () => this.syncToTextarea())
+    this.listen(this.editorTarget, "input", () => {
       this.syncToTextarea()
       this.rememberEditorSelection()
     })
-    this.editorTarget.addEventListener("focus", () => this.rememberEditorSelection())
-    this.editorTarget.addEventListener("click", () => this.rememberEditorSelection())
-    this.editorTarget.addEventListener("keyup", () => this.rememberEditorSelection())
-    this.editorTarget.addEventListener("mouseup", () => this.rememberEditorSelection())
-    this.editorTarget.addEventListener("keydown", (e) => this.handleKeydown(e))
-    this.editorTarget.addEventListener("paste", (e) => this.handlePaste(e))
-    this.editorTarget.addEventListener("dragover", (e) => this.handleDragOver(e))
-    this.editorTarget.addEventListener("drop", (e) => this.handleDrop(e))
-    this.textareaTarget.addEventListener("change", () => this.renderProtectedVariables())
-    this.variableSelectTarget.addEventListener("change", (e) => this.insertVariable(e))
+    this.listen(this.editorTarget, "focus", () => this.rememberEditorSelection())
+    this.listen(this.editorTarget, "click", () => this.rememberEditorSelection())
+    this.listen(this.editorTarget, "keyup", () => this.rememberEditorSelection())
+    this.listen(this.editorTarget, "mouseup", () => this.rememberEditorSelection())
+    this.listen(this.editorTarget, "keydown", (e) => this.handleKeydown(e))
+    this.listen(this.editorTarget, "paste", (e) => this.handlePaste(e))
+    this.listen(this.editorTarget, "dragover", (e) => this.handleDragOver(e))
+    this.listen(this.editorTarget, "drop", (e) => this.handleDrop(e))
+    this.listen(this.textareaTarget, "change", () => this.renderProtectedVariables())
+    this.listen(this.variableSelectTarget, "change", (e) => this.insertVariable(e))
     if (this.hasSubjectVariableSelectTarget) {
-      this.subjectVariableSelectTarget.addEventListener("change", (e) => this.insertSubjectVariable(e))
+      this.listen(this.subjectVariableSelectTarget, "change", (e) => this.insertSubjectVariable(e))
     }
     if (this.hasSyntaxSelectTarget) {
-      this.syntaxSelectTarget.addEventListener("change", () => this.handleSyntaxChange())
+      this.listen(this.syntaxSelectTarget, "change", () => this.handleSyntaxChange())
       this.updateVariableOptions()
       this.updateSyntaxHelp()
     }
   }
   
+  disconnect() {
+    this.listeners.abort()
+    this.lastEditorRange = null
+    this.draggedElement = null
+  }
+
+  listen(element, event, callback) {
+    element.addEventListener(event, callback, { signal: this.listeners.signal })
+  }
+
   handleKeydown(e) {
     if ((e.key === 'Backspace' || e.key === 'Delete') && e.target.classList?.contains('protected-variable')) {
       e.preventDefault()
@@ -116,8 +127,8 @@ export default class extends Controller {
       
       range.insertNode(span)
       
-      span.addEventListener('dragstart', (e) => this.handleDragStart(e))
-      span.addEventListener('dragend', (e) => this.handleDragEnd(e))
+      this.listen(span, 'dragstart', (e) => this.handleDragStart(e))
+      this.listen(span, 'dragend', (e) => this.handleDragEnd(e))
       
       if (this.draggedElement && this.draggedElement !== span) {
         this.draggedElement.remove()
@@ -153,8 +164,8 @@ export default class extends Controller {
     range.deleteContents()
     range.insertNode(span)
 
-    span.addEventListener('dragstart', (e) => this.handleDragStart(e))
-    span.addEventListener('dragend', (e) => this.handleDragEnd(e))
+    this.listen(span, 'dragstart', (e) => this.handleDragStart(e))
+    this.listen(span, 'dragend', (e) => this.handleDragEnd(e))
 
     this.moveCursorAfter(span)
 
@@ -363,8 +374,8 @@ export default class extends Controller {
     
     this.editorTarget.innerHTML = html
     this.editorTarget.querySelectorAll('.protected-variable').forEach(variable => {
-      variable.addEventListener('dragstart', (e) => this.handleDragStart(e))
-      variable.addEventListener('dragend', (e) => this.handleDragEnd(e))
+      this.listen(variable, 'dragstart', (e) => this.handleDragStart(e))
+      this.listen(variable, 'dragend', (e) => this.handleDragEnd(e))
     })
   }
 

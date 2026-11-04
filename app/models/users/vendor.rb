@@ -161,7 +161,7 @@ module Users
     def log_w9_details_changed
       AuditEventService.log(
         action: 'w9_details_changed',
-        actor: Current.user || self,
+        actor: Current.user || PublicAuditActor.system_audit_actor!,
         auditable: self,
         metadata: {
           changed_fields: W9_CERTIFIED_FIELDS.select { |field| saved_change_to_attribute?(field) },

@@ -7,6 +7,7 @@ module Applications
     setup do
       setup_paper_application_context
       @admin = create(:admin)
+      Current.user = @admin
       @constituent = create(:constituent,
                             email: "existing_adult_#{SecureRandom.hex(4)}@example.com",
                             phone: '555-100-2000',

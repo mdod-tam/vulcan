@@ -5,6 +5,7 @@ require 'test_helper'
 module DuplicateReviewCases
   class ResolutionServiceTest < ActiveSupport::TestCase
     setup do
+      ensure_system_audit_actor!
       @admin = create(:admin)
       @subject = create(:constituent, needs_duplicate_review: true)
       @review_case = open_case_for(@subject)

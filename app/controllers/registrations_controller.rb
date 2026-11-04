@@ -66,7 +66,7 @@ class RegistrationsController < ApplicationController
 
   def save_user_with_duplicate_review!(duplicate_detection)
     ActiveRecord::Base.transaction do
-      @user.save!
+      Current.set(user: current_user || @user) { @user.save! }
       require_registration_duplicate_review_case!(duplicate_detection) if duplicate_detection.recommended_action == :flag
     end
 

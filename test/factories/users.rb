@@ -19,6 +19,8 @@ end
 
 FactoryBot.define do
   factory :user do
+    # Fixture creation supplies an explicit actor. Later writes must establish their own context.
+    to_create { |user| Current.set(user: Current.user || user) { user.save! } }
     sequence(:email) { |n| "testuser#{n}@example.com" }
     password { 'password1234' }
     first_name { 'Test' }

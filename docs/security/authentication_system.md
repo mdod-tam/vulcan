@@ -40,6 +40,8 @@ Apply [the session migration](../../db/migrate/20261022173000_add_last_active_at
 
 Five recorded password failures lock the account for an hour ([`UserAuthentication`](../../app/models/concerns/user_authentication.rb)). This lockout is separate from request throttling.
 
+`CleanupExpiredSessionsJob` removes expired session rows daily in batches of 500. Its SQL predicate encodes the same idle/absolute deadlines as `Session#expired?`, including an absent absolute deadline, and rechecks both against current values in the deletion statement. A session refreshed while cleanup waited is retained. This removes session rows only; it changes neither timeout policy nor retained user/audit history.
+
 ## Second factors
 
 Administrators, evaluators, trainers, and vendors must enroll; constituents may. [`ApplicationController#enforce_required_mfa_enrollment`](../../app/controllers/application_controller.rb) redirects a required role with no enabled factor into setup. `second_factor_enabled?` counts a WebAuthn credential, a TOTP credential, or a **verified** SMS credential. An unverified SMS credential is why an account can loop back to setup.

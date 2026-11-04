@@ -66,6 +66,18 @@ module Applications
       end
     end
 
+    test 'deduplicated history retains profile changes alongside application events' do
+      Current.set(user: @application.user) { @application.user.update!(first_name: 'Changed') }
+      profile_event = @application.user.events.where(action: 'profile_updated').order(:id).last
+
+      builder = AuditLogBuilder.new(@application)
+      logs = builder.build_deduplicated_audit_logs
+
+      assert_includes logs, profile_event
+      assert_includes logs, @status_change
+      assert_empty builder.errors
+    end
+
     test 'returns empty array when application is nil' do
       with_mocked_attachments do
         builder = AuditLogBuilder.new(nil)
@@ -192,6 +204,7 @@ module Applications
     test 'includes guardian profile changes for dependent applications' do
       guardian = create(:constituent)
       dependent = create(:constituent)
+      create(:guardian_relationship, guardian_user: guardian, dependent_user: dependent)
       dependent_application = create(:application, user: dependent, managing_guardian: guardian)
 
       guardian_update_event = Event.create!(
@@ -218,6 +231,7 @@ module Applications
     test 'includes managing guardian profile changes' do
       guardian = create(:constituent)
       dependent = create(:constituent)
+      create(:guardian_relationship, guardian_user: guardian, dependent_user: dependent)
       dependent_application = create(:application, user: dependent, managing_guardian: guardian)
 
       guardian_self_update_event = Event.create!(

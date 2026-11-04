@@ -16,8 +16,6 @@ class FeatureFlag < ApplicationRecord
     def enabled?(feature_name, default: false)
       flag = find_by(name: feature_name.to_s)
       flag.nil? ? default : flag.enabled
-    rescue StandardError
-      default
     end
 
     def enable!(feature_name)

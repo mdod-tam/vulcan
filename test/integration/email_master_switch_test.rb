@@ -71,6 +71,7 @@ class EmailMasterSwitchTest < ActionDispatch::IntegrationTest
   end
 
   test 'a letter-preference route still prints while email is off' do
+    suppressed_count = Event.where(action: EmailDelivery::Outcome::SUPPRESSED).count
     load_seeded_email_templates('evaluator_mailer_evaluation_submission_confirmation')
     evaluation = create(:evaluation)
     evaluation.constituent.update!(communication_preference: 'letter')
@@ -82,10 +83,12 @@ class EmailMasterSwitchTest < ActionDispatch::IntegrationTest
     end
 
     assert_empty ActionMailer::Base.deliveries
-    assert_not Event.exists?(action: EmailDelivery::Outcome::SUPPRESSED)
+    assert_equal suppressed_count, Event.where(action: EmailDelivery::Outcome::SUPPRESSED).count
   end
 
   test 'required account access sends with All and Account security disabled' do
+    suppressed_count = Event.where(action: EmailDelivery::Outcome::SUPPRESSED).count
+    existing_handoff_ids = Event.where(action: 'essential_communication_submitted').ids
     request_account_access
     [EmailDelivery::ALL_CONTROL, EmailDelivery.category_control('account_security')].each do |name|
       EmailDelivery::ControlWriter.set(name: name, enabled: false, actor: @admin, operation_id: SecureRandom.uuid)
@@ -98,8 +101,8 @@ class EmailMasterSwitchTest < ActionDispatch::IntegrationTest
     assert_redirected_to sign_in_path
     perform_enqueued_jobs
     assert_equal [[@user.email]], ActionMailer::Base.deliveries.map(&:to)
-    assert_not Event.exists?(action: EmailDelivery::Outcome::SUPPRESSED)
-    events = Event.where(action: 'essential_communication_submitted')
+    assert_equal suppressed_count, Event.where(action: EmailDelivery::Outcome::SUPPRESSED).count
+    events = Event.where(action: 'essential_communication_submitted').where.not(id: existing_handoff_ids)
     assert_equal 2, events.count
     assert(events.all? { |event| event.metadata['mail_action'] == 'UserMailer#password_reset' })
   end

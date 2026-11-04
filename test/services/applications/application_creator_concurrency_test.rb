@@ -407,7 +407,7 @@ module Applications
       duplicate = nil
       begin
         Current.paper_context = true
-        duplicate = create(:constituent, email: nil, phone: "555-#{rand(100..999)}-#{rand(1000..9999)}",
+        duplicate = create(:constituent, email: "portal-duplicate-#{SecureRandom.hex(3)}@example.com", phone: "555-#{rand(100..999)}-#{rand(1000..9999)}",
                                          communication_preference: :letter)
       ensure
         Current.reset

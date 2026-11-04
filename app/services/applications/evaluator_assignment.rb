@@ -66,8 +66,23 @@ module Applications
 
     private
 
+    def in_transaction(&)
+      super
+    rescue ActiveRecord::RecordNotUnique => e
+      constraint = e.cause&.result&.error_field(PG::Result::PG_DIAG_CONSTRAINT_NAME)
+      raise unless constraint == 'index_evaluations_one_open_per_application'
+
+      failure('This application already has an open evaluation. Refresh before assigning an evaluator.')
+    end
+
     def reusable_evaluation
-      application.evaluations.where(status: REUSABLE_EVALUATION_STATUSES).order(created_at: :desc, id: :desc).first
+      open_evaluation = application.open_evaluation
+      if open_evaluation
+        reject!(:evaluation_assignment_closed) unless REUSABLE_EVALUATION_STATUSES.include?(open_evaluation.status.to_sym)
+        open_evaluation
+      else
+        application.evaluations.where(status: :cancelled).order(created_at: :desc, id: :desc).first
+      end
     end
 
     # Reuses the row for lifecycle state only; narrative notes stay because they may document constituent interactions.

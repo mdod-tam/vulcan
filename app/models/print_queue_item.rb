@@ -27,7 +27,6 @@ class PrintQueueItem < ApplicationRecord
     income_proof_rejected: 1,
     residency_proof_rejected: 2,
     income_threshold_exceeded: 3,
-    application_approved: 4,
     registration_confirmation: 5,
     other_notification: 6,
     proof_approved: 7,

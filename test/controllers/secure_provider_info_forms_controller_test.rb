@@ -3,8 +3,10 @@
 require 'test_helper'
 
 class SecureProviderInfoFormsControllerTest < ActionDispatch::IntegrationTest
+  setup { ensure_system_audit_actor! }
+
   test 'a real secure submission keeps review evidence with masked provider history' do
-    actor = create(:admin, email: PublicAuditActor::SYSTEM_AUDIT_EMAIL)
+    actor = ensure_system_audit_actor!
     application = create(:application, status: :awaiting_proof, certifying_professional_name: 'Existing Doctor',
                                        certifying_professional_email: 'existing@example.test', certifying_professional_phone: '410-555-1234')
     token = SecureRequestForm.generate_public_token

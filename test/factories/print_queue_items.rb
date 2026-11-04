@@ -59,9 +59,5 @@ FactoryBot.define do
     trait :account_created do
       letter_type { :account_created }
     end
-
-    trait :application_approved do
-      letter_type { :application_approved }
-    end
   end
 end

@@ -2,18 +2,32 @@ import { Controller } from "@hotwired/stimulus"
 
 class ApplicationModalController extends Controller {
   handleFormSubmit(event) {
-    if (event.detail.success) {
-      const dialog = event.target.closest("dialog")
-      if (dialog) {
-        dialog.close()
-        Turbo.visit(window.location.href, { action: "replace" })
+    const form = event.target
+    if (!event.detail.success || !form.dataset.applicationModalSummaryFrame) return
+
+    const dialog = form.closest("dialog")
+    if (!dialog) return
+    dialog.close()
+
+    const summary = document.getElementById(form.dataset.applicationModalSummaryFrame)
+    if (summary) {
+      if (!document.getElementById("application-modal")?.open) {
+        summary.addEventListener("turbo:frame-load", () => {
+          const buttons = summary.querySelectorAll('[data-action="click->application-modal#open"]')
+          Array.from(buttons).find(button => button.dataset.applicationId === this.returnApplicationId)?.focus()
+        }, { once: true })
       }
+      if (summary.src) summary.reload()
+      else summary.src = summary.dataset.refreshUrl
     }
+    const details = document.getElementById("application-modal-content")
+    if (details?.src) details.reload()
   }
 
   open(event) {
     const button = event.currentTarget
     const applicationId = button.dataset.applicationId
+    this.returnApplicationId = applicationId
     const modalId = button.dataset.modalId
 
     const dialog = document.getElementById(modalId)
@@ -52,25 +66,6 @@ class ApplicationModalController extends Controller {
     const dialog = event.target.closest("dialog")
     if (dialog) {
       dialog.close()
-    }
-  }
-
-  openUserEdit(event) {
-    const userId = event.currentTarget.dataset.userId || document.querySelector('[data-user-id]')?.dataset.userId
-    const dialog = document.getElementById('user-edit-modal')
-    
-    if (!dialog) {
-      console.error("User edit modal not found")
-      return
-    }
-    
-    const frame = dialog.querySelector('[id="user-edit-modal-content"]')
-    
-    if (frame && userId) {
-      Turbo.visit(`/admin/users/${userId}/edit?modal=true`, { 
-        frame: "user-edit-modal-content"
-      })
-      dialog.showModal()
     }
   }
 

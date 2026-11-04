@@ -3,6 +3,8 @@
 require 'test_helper'
 
 class UserLoginIdentifierTest < ActiveSupport::TestCase
+  setup { ensure_system_audit_actor! }
+
   test 'find_by_login_identifier is public portal email-backed lookup only' do
     phone = '410-555-0199'
     phone_only = nil

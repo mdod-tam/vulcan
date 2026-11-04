@@ -808,13 +808,18 @@ module ConstituentPortal
       %w[en es].each do |locale|
         params = pending_review_submission_params.merge(constituent: { locale: locale })
         params[:application] = params[:application].merge(
-          household_size: '', certifying_professional_attributes: { name: '', phone: '', email: '' }
+          household_size: '', certifying_professional_attributes: { name: '', phone: '', fax: '', email: '' }
         )
 
         assert_no_difference('Application.count') { post constituent_portal_applications_path, params: params }
 
         assert_response :unprocessable_content
         assert_equal '', css_select("input[name='application[household_size]']").first['value'].to_s
+        %w[name phone fax email].each do |field|
+          assert_select "input[name='application[certifying_professional_attributes][#{field}]']", count: 1 do |inputs|
+            assert_equal '', inputs.first['value'].to_s
+          end
+        end
       end
     end
 

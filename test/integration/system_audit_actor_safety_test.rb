@@ -9,7 +9,7 @@ class SystemAuditActorSafetyTest < ActionDispatch::IntegrationTest
   setup do
     @admin = create(:admin)
     User.where(email: PublicAuditActor::SYSTEM_AUDIT_EMAIL).find_each do |user|
-      user.update!(email: "displaced-#{user.id}@example.test")
+      Current.set(user: @admin) { user.update!(email: "displaced-#{user.id}@example.test") }
     end
     Event.where(action: METRIC_ACTIONS).delete_all
     Rails.cache.clear
@@ -132,6 +132,7 @@ class SystemAuditActorSafetyTest < ActionDispatch::IntegrationTest
     } }
     @conflicting_user = User.find_by!(email: PublicAuditActor::SYSTEM_AUDIT_EMAIL)
     assert_equal 'Users::Constituent', @conflicting_user.type
+    assert_equal @conflicting_user, Event.find_by!(auditable: @conflicting_user, action: 'profile_updated').user
     @password_digest = @conflicting_user.password_digest
     reset!
     Current.reset

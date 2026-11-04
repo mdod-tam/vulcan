@@ -4,6 +4,7 @@ require 'test_helper'
 
 class IssueInitialVoucherJobTest < ActiveJob::TestCase
   setup do
+    ensure_system_audit_actor!
     setup_paper_application_context
     FeatureFlag.enable!(:vouchers_enabled)
   end

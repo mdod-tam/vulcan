@@ -7,6 +7,7 @@ module Applications
   # The two results must agree, so most of these tests pin parity, not preview-only behavior.
   class PaperIdentityReviewTest < ActiveSupport::TestCase
     setup do
+      ensure_system_audit_actor!
       @admin = create(:admin)
       @facts = { first_name: 'Review', last_name: 'Subject', date_of_birth: '04/02/1990',
                  email: "review-#{SecureRandom.hex(4)}@example.com", phone: '555-000-0123',

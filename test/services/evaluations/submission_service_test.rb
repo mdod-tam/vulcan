@@ -88,10 +88,11 @@ module Evaluations
       assert_equal({ @product.id.to_s => { 'selected' => '1', 'reaction' => 'Satisfied' } }, permitted['products_tried_inputs'])
     end
 
-    test 'report completion clears review bookkeeping and initializes needs without resubmitting historical intake' do
+    test 'report completion preserves proof review bookkeeping and initializes needs without resubmitting historical intake' do
       application = @evaluation.application
       application.update_columns(maryland_resident: false, needs_review_since: 1.day.ago)
-      original = application.reload.attributes.except('needs_review_since', 'equipment_needs_initialized_at', 'updated_at')
+      review_marker = application.reload.needs_review_since
+      original = application.attributes.except('needs_review_since', 'equipment_needs_initialized_at', 'updated_at')
       assert_not application.valid?
 
       assert_difference 'Event.where(action: "evaluation_completed").count', 1 do
@@ -100,7 +101,7 @@ module Evaluations
       end
 
       assert_equal 'completed', @evaluation.reload.status
-      assert_nil application.reload.needs_review_since
+      assert_equal review_marker, application.reload.needs_review_since
       assert application.equipment_needs_initialized_at
       assert_equal original, application.attributes.except('needs_review_since', 'equipment_needs_initialized_at', 'updated_at')
       assert_equal [@product.id], application.equipment_needs.pluck(:product_id)
@@ -131,6 +132,7 @@ module Evaluations
     end
 
     test 'email configuration refusal at enqueue keeps the completed evaluation' do
+      suppressed_count = Event.where(action: EmailDelivery::Outcome::SUPPRESSED).count
       ensure_system_audit_actor!
       FeatureFlag.find_by!(name: EmailDelivery.category_control('evaluation')).destroy!
 
@@ -141,7 +143,7 @@ module Evaluations
 
       assert_equal 'completed', @evaluation.reload.status
       assert Event.exists?(action: EmailDelivery::Outcome::CONFIGURATION_ERROR)
-      assert_not Event.exists?(action: EmailDelivery::Outcome::SUPPRESSED)
+      assert_equal suppressed_count, Event.where(action: EmailDelivery::Outcome::SUPPRESSED).count
       assert_empty ActionMailer::Base.deliveries
     end
 

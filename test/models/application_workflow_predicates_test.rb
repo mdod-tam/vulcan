@@ -423,6 +423,21 @@ class ApplicationWorkflowPredicatesTest < ActiveSupport::TestCase
     assert_equal app.id, event.metadata['application_id']
   end
 
+  test 'an evaluation audit failure rolls back the request and permits a later request' do
+    admin = create(:admin)
+    app = create(:application, :completed)
+    Application.transaction do
+      AuditEventService.stub(:log, ->(**) { raise 'audit unavailable' }) do
+        assert_raises(RuntimeError) { app.request_evaluation!(actor: admin) }
+      end
+      assert_nil app.reload.evaluation_requested_at
+    end
+    assert_nil app.reload.evaluation_requested_at
+    app.request_evaluation!(actor: admin)
+    assert_raises(ArgumentError) { app.request_evaluation!(actor: admin) }
+    assert_equal 1, app.events.where(action: 'evaluation_requested').count
+  end
+
   test 'training_request_pending? tracks unresolved training requests' do
     app = create(:application, :completed)
     app.update_columns(training_requested_at: 2.hours.ago)

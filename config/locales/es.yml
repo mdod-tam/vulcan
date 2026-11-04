@@ -132,6 +132,7 @@ es:
       user:
         date_of_birth: "Fecha de nacimiento"
       application:
+        managing_guardian: "Tutor principal"
         income_proof: "Comprobante de ingresos"
         residency_proof: "Comprobante de residencia en Maryland"
         id_proof: "Comprobante de identidad"
@@ -153,6 +154,8 @@ es:
               invalid: "no es una fecha válida. Ingrésela como MM/DD/AAAA"
         application:
           attributes:
+            managing_guardian:
+              selection_required: "debe seleccionarse; pida a un tutor que solicite desde su propia cuenta o contacte al personal de MAT"
             base:
               training_service_window: "Esta solicitud está fuera del período de servicio para los servicios de capacitación."
               evaluation_service_window: "Esta solicitud está fuera del período de servicio para los servicios de evaluación."
@@ -250,6 +253,41 @@ es:
         stale_request: "Este formulario estaba desactualizado, por lo que no se cambió nada. Vuelva a cargar la página e inténtelo de nuevo."
         duplicate_identity: "%{name} ya está asociado a su cuenta con este nombre y fecha de nacimiento. Si se trata de otra persona, comuníquese con el equipo de MAT al %{support_email} o %{support_phone}."
   applications:
+    submit_gate:
+      incomplete: "Complete todas las confirmaciones obligatorias antes de enviar."
+      ready: "La solicitud está lista para enviar."
+      detail: "Falta completar: %{items}."
+    form_labels:
+      maryland_resident: "Certifico que soy residente de Maryland"
+      household_size: "Tamaño del hogar"
+      annual_income: "Ingresos anuales"
+      self_certify_disability: "Certifico que tengo una discapacidad que afecta mi capacidad para acceder a los servicios de telecomunicaciones"
+      disability_type: "Tipo de discapacidad"
+      physical_address_1: "Dirección"
+      city: "Ciudad"
+      state: "Estado"
+      zip_code: "Código postal"
+      professional_name: "Nombre"
+      professional_phone: "Teléfono"
+      professional_email: "Correo electrónico"
+      release_authorized: "Autorizo la divulgación y el intercambio de información sobre mi discapacidad según lo descrito anteriormente"
+      terms_accepted: "He leído y acepto los términos y condiciones"
+      information_verified: "Confirmo que toda la información proporcionada es exacta y completa"
+      income_proof: "Comprobante de ingresos"
+      residency_proof: "Comprobante de residencia"
+      id_proof: "Comprobante de identidad"
+    proof_card:
+      heading: "Comprobante de %{proof}"
+      approved: "Aprobado"
+      rejected: "Rechazado"
+      pending: "Pendiente de revisión"
+      reason: "Motivo: %{reason}"
+      rejected_on: "Rechazado el: %{date}"
+      upload: "Subir nuevo comprobante de %{proof}"
+      types:
+        income: "ingresos"
+        residency: "residencia"
+        id: "identidad"
     admission:
       title: "Estado de la solicitud"
       blocking_application: "Ya tiene una solicitud activa o pendiente."

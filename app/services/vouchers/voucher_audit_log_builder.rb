@@ -9,11 +9,12 @@ module Vouchers
       @voucher = voucher
     end
 
-    # Events whose metadata names this voucher's id or code, newest first.
+    # Owned voucher events and related records whose metadata names its id or code.
     def build_audit_logs
       return [] unless voucher
 
-      Event.where('metadata @> ?', { voucher_id: voucher.id }.to_json)
+      Event.where(auditable: voucher)
+           .or(Event.where('metadata @> ?', { voucher_id: voucher.id }.to_json))
            .or(Event.where('metadata @> ?', { voucher_code: voucher.code }.to_json))
            .includes(:user)
            .order(created_at: :desc)

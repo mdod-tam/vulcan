@@ -3,6 +3,8 @@
 require 'test_helper'
 
 class UserEncryptedValidationTest < ActiveSupport::TestCase
+  setup { ensure_system_audit_actor! }
+
   def unique_attributes
     {
       first_name: 'John',

@@ -87,7 +87,7 @@ module Admin
     end
 
     def load_vendors
-      @vendors = User.vendors.ordered_by_name
+      @vendors = User.vendors.order(:first_name, :id)
     end
 
     def filtered_products_scope

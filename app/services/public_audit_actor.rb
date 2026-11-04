@@ -24,6 +24,13 @@ module PublicAuditActor
     nil
   end
 
+  class MissingSystemActor < StandardError; end
+
+  # Mandatory domain audits must roll back their writer if attribution is unavailable.
+  def system_audit_actor!
+    system_audit_actor_or_report('required audit') || raise(MissingSystemActor, 'A configured system audit actor is required')
+  end
+
   def log_audit(action:, auditable: nil, metadata: {})
     actor = system_audit_actor
     unless actor

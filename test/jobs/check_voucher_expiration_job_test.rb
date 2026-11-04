@@ -9,10 +9,23 @@ class CheckVoucherExpirationJobTest < ActiveJob::TestCase
   VALIDITY_MONTHS = 12
 
   setup do
+    FeatureFlag.enable!(:vouchers_enabled)
     actor = ensure_system_audit_actor!
     Policy.find_or_initialize_by(key: 'voucher_validity_period_months').update!(value: VALIDITY_MONTHS, updated_by: actor)
     load_seeded_email_templates('voucher_notifications_voucher_expiring_soon', 'voucher_notifications_voucher_expired')
     ActionMailer::Base.deliveries.clear
+  end
+
+  test 'runtime flag changes affect the next run without rebuilding the schedule' do
+    voucher = create_voucher(expires_in: -1.day)
+    FeatureFlag.disable!(:vouchers_enabled)
+    CheckVoucherExpirationJob.perform_now
+    assert voucher.reload.voucher_active?
+    FeatureFlag.enable!(:vouchers_enabled)
+    CheckVoucherExpirationJob.perform_now
+    assert voucher.reload.voucher_expired?
+    FeatureFlag.stubs(:enabled?).raises(ActiveRecord::ConnectionNotEstablished)
+    assert_raises(ActiveRecord::ConnectionNotEstablished) { CheckVoucherExpirationJob.perform_now }
   end
 
   test 'warns a voucher inside the expiring-soon window once across repeated runs' do

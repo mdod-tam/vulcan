@@ -4,6 +4,7 @@ require 'test_helper'
 
 # Writing, reading, and encrypted lookup must agree on one interpretation of a date of birth.
 class UserDateOfBirthTest < ActiveSupport::TestCase
+  setup { ensure_system_audit_actor! }
   test 'every accepted spelling stores the same date' do
     %w[9/10/1980 09/10/1980 09-10-1980 09.10.1980 09101980 1980-09-10].each do |spelling|
       user = Users::Constituent.new(date_of_birth: spelling)

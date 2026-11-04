@@ -8,6 +8,20 @@ module Admin
       sign_in_for_integration_test(create(:admin))
     end
 
+    test 'voucher detail shows separate purchases and the required status event' do
+      actor = create(:admin)
+      vendor = create(:vendor, :approved)
+      voucher = create(:voucher, initial_value: 500, remaining_value: 500)
+      2.times { voucher.redeem!(100, vendor) }
+      voucher.cancel!(actor: actor)
+
+      get admin_voucher_path(voucher)
+
+      assert_response :success
+      assert_select 'div.text-sm.text-gray-500', text: /\AVoucher Redeemed\s+by/, count: 2
+      assert_select 'div.text-sm.text-gray-500', text: /\AStatus Changed To Cancelled\s+by/, count: 1
+    end
+
     test 'an assigned voucher links its vendor to the admin vendor page and an unassigned one is labeled' do
       vendor = create(:vendor, :approved, business_name: 'Linked Index Vendor')
       create(:voucher, :active, vendor: vendor)

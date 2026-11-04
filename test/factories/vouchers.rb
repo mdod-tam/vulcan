@@ -8,7 +8,7 @@ FactoryBot.define do
     status { :active }
     issued_at { Time.current }
     application
-    association :vendor, strategy: :build
+    vendor
 
     trait :active do
       status { :active }

@@ -64,6 +64,32 @@ class EmailDeliveryCaptureTest < ActiveSupport::TestCase
     assert_equal 'provider-accepted', attempt.provider_message_id
   end
 
+  [false, true].each do |parameterized|
+    test "#{parameterized ? 'parameterized' : 'ordinary'} mail preserves positional and keyword arguments through the real queue envelope" do
+      application = create(:application, :in_progress, user: @user)
+      token = SecureRequestForm.generate_public_token
+      form = create(:secure_request_form, application: application, recipient: @user, raw_token: token)
+      notification = create(:notification, recipient: @user, actor: @admin, notifiable: application, action: 'provider_info_requested')
+      mailer = parameterized ? ApplicationNotificationsMailer.with(notification_id: notification.id) : ApplicationNotificationsMailer
+      url = Rails.application.routes.url_helpers.secure_provider_info_form_url(token: token, host: 'example.test')
+      @transport.expects(:post).once.returns(@response)
+
+      job = mailer.provider_info_requested(application, form, secure_url: url).deliver_later
+      context = job.email_delivery_context
+      assert_equal 'ApplicationNotificationsMailer#provider_info_requested', context.fetch('mail_action')
+      if parameterized
+        assert_equal notification.id, context.fetch('notification_id')
+      else
+        assert_nil context['notification_id']
+      end
+      2.times { ActiveJob::Base.execute(job.serialize) }
+
+      attempt = EmailDeliveryAttempt.where(correlation_id: context.fetch('delivery_correlation_id')).sole
+      assert_equal @user.email, attempt.destination
+      assert_equal 'provider-accepted', attempt.provider_message_id
+    end
+  end
+
   test 'provider acceptance with local save failure does not revoke the live secure link' do
     @transport.expects(:post).once.returns(@response)
     EmailDeliveryAttempt.any_instance.stubs(:update!).raises(ActiveRecord::StatementInvalid, 'local write unavailable')
@@ -184,6 +210,7 @@ class EmailDeliveryCaptureTest < ActiveSupport::TestCase
   end
 
   test 'retry does not reroute a refused envelope to a changed destination' do
+    ensure_system_audit_actor!
     refusal = stub(code: '503', body: { ErrorCode: 100, Message: 'Maintenance' }.to_json)
     @transport.expects(:post).once.returns(refusal)
     job = UserMailer.with(user: @user).password_reset.deliver_later

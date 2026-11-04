@@ -532,7 +532,7 @@ class ApplicationNotificationsMailer < ApplicationMailer # rubocop:disable Metri
 
   def filter_stale_reviews(applications)
     applications.select do |app|
-      app.respond_to?(:needs_review_since) &&
+      app.proof_review_pending? &&
         app.needs_review_since.present? &&
         app.needs_review_since < 3.days.ago
     end
