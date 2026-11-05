@@ -163,6 +163,21 @@ module Admin
       assert_response :success
     end
 
+    test 'show lists household size and income with the application details, not in a second financial section' do
+      @application.update!(household_size: 3, annual_income: 24_000)
+
+      get admin_application_path(@application)
+
+      assert_response :success
+      assert_select '#financial-info-title', count: 0
+      assert_select 'section[aria-labelledby=application-details-title]' do
+        assert_select 'dt', text: 'Household Size'
+        assert_select 'dd', text: '3'
+        assert_select 'dt', text: 'Annual Income'
+        assert_select 'dd', text: '$24,000.00'
+      end
+    end
+
     test 'certification upload recovery is scoped to the application' do
       other_application = create(:application, disability_certification_status: :requested)
       get admin_application_path(other_application)

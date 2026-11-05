@@ -490,7 +490,7 @@ module Applications
         application = service.application.reload
         review = application.proof_reviews.rejections.find_by!(proof_type: :disability_certification)
         assert_equal 'none_provided', review.rejection_reason_code
-        assert_equal 'none_provided', review.rejection_reason
+        assert_equal none_provided_text('disability_certification'), review.rejection_reason
         assert_equal @admin, review.admin
         assert application.disability_certification_status_rejected?
         notice = Notification.where(notifiable: application, action: 'disability_certification_not_provided').sole
@@ -503,6 +503,22 @@ module Applications
         assert_includes email.body.to_s, I18n.t('application_notifications.proof_rejected.none_provided.disability_certification', locale: locale)
         assert_not_includes email.body.to_s, 'none_provided'
         assert_nil service.warning_message
+      end
+    end
+
+    test 'paper none provided documents are stored with their code and a reason staff can read' do
+      params = base_paper_params
+      %i[income residency id].each do |type|
+        params.merge!("#{type}_proof_action": 'reject', "#{type}_proof_rejection_reason": 'none_provided')
+      end
+      service = paper_service_with_proofs(params)
+
+      assert service.create, service.errors.inspect
+
+      reviews = service.application.reload.proof_reviews.rejections.index_by(&:proof_type)
+      %w[income residency id].each do |type|
+        assert_equal 'none_provided', reviews.fetch(type).rejection_reason_code, type
+        assert_equal none_provided_text(type), reviews.fetch(type).rejection_reason, type
       end
     end
 
@@ -1843,6 +1859,11 @@ module Applications
     # Keep proof processing active for failures inside that step.
     def paper_service_with_proofs(params)
       PaperApplicationService.new(params: params, admin: @admin)
+    end
+
+    # What the checked-in baseline says staff and applicants read for a document that was not provided.
+    def none_provided_text(proof_type)
+      Baseline::RejectionReasons::DEFINITIONS.find { |d| d[:code] == 'none_provided' && d[:proof_type] == proof_type }.fetch(:en_body)
     end
 
     def base_paper_params

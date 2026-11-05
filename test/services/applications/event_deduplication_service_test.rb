@@ -122,6 +122,17 @@ module Applications
       assert(result.include?(event1) || result.include?(event2))
     end
 
+    test 'a certification status change appears once, as its history row' do
+      travel_to Time.current.beginning_of_minute + 5.seconds do
+        change = @application.transition_disability_certification_status!(:rejected, actor: @admin)
+
+        logs = AuditLogBuilder.new(@application).build_deduplicated_audit_logs
+
+        assert_includes logs, change
+        assert_empty(logs.select { |log| log.is_a?(Event) && log.action == 'disability_certification_status_changed' })
+      end
+    end
+
     test 'keeps distinct secure request notifications for different recipients in the same minute' do
       service = EventDeduplicationService.new
       time = Time.current.beginning_of_minute

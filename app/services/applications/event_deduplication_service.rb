@@ -107,7 +107,7 @@ module Applications
     def generic_action(event)
       case event
       when Notification, Event
-        event.action.to_s.gsub(/_proof_submitted$/, '_submission')
+        certification_status_change_action(event) || event.action.to_s.gsub(/_proof_submitted$/, '_submission')
       when ApplicationStatusChange
         if event.metadata&.[](:change_type) == 'disability_certification' ||
            event.metadata&.[]('change_type') == 'disability_certification'
@@ -120,6 +120,15 @@ module Applications
       else
         event.class.name.underscore
       end
+    end
+
+    # The certification status writer logs this event beside its history row. Both name the same
+    # transition, so the event takes the history row's action and the more specific row is kept.
+    def certification_status_change_action(event)
+      return unless event.is_a?(Event) && event.action == 'disability_certification_status_changed'
+
+      new_status = event.metadata['new_status'] if event.metadata.is_a?(Hash)
+      "disability_certification_#{new_status}" if new_status.present?
     end
 
     # Highest priority_score wins. The newest event breaks a tie.

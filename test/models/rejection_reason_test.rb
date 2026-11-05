@@ -76,4 +76,23 @@ class RejectionReasonTest < ActiveSupport::TestCase
 
     assert_empty RejectionReason.options_for(locale: 'en').map(&:code) & %w[none_provided other]
   end
+
+  test 'every proof type states in words what none provided means, in both locales' do
+    RejectionReason::VALID_PROOF_TYPES.each do |proof_type|
+      locales = RejectionReason.where(code: 'none_provided', proof_type: proof_type).order(:locale).pluck(:locale)
+
+      assert_equal %w[en es], locales, "none_provided for #{proof_type}"
+    end
+  end
+
+  test 'a body may use only the placeholders the forms can fill' do
+    assert_predicate build(:rejection_reason, body: 'Send a document showing %<address>s.'), :valid?
+
+    # The %{city} template form is the case under test: String#% fills it as well as %<city>s.
+    reason = build(:rejection_reason, body: 'Dear %<first_name>s, send a document for %{city}.') # rubocop:disable Style/FormatStringToken
+
+    assert_not reason.valid?
+    assert_match(/first_name, city/, reason.errors[:body].to_sentence)
+    assert_match(/%<address>s/, reason.errors[:body].to_sentence)
+  end
 end

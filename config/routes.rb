@@ -221,7 +221,7 @@ Rails.application.routes.draw do
       end
     end
 
-    resources :rejection_reasons, only: %i[index edit update] do
+    resources :rejection_reasons, only: %i[index new create edit update] do
       member do
         patch :mark_synced
       end

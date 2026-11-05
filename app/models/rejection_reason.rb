@@ -35,6 +35,7 @@ class RejectionReason < ApplicationRecord
   validates :body,       presence: true
   validates :version,    presence: true, numericality: { only_integer: true, greater_than_or_equal_to: 1 }
   validates :code, uniqueness: { scope: %i[proof_type locale] }
+  validate :body_uses_supported_placeholders
 
   before_update :store_previous_body
   before_update :increment_version
@@ -139,5 +140,15 @@ class RejectionReason < ApplicationRecord
 
     errors.add(:base, 'This reason is out of sync with another locale variant. ' \
                       'Update the body to resolve it, or mark it synced.')
+  end
+
+  # interpolations_for supplies the only values a body can state. Any other placeholder would reach the applicant as written.
+  def body_uses_supported_placeholders
+    supported = self.class.interpolations_for(nil).keys.map(&:to_s)
+    unknown = body.to_s.scan(/%<(\w+)>|%\{(\w+)\}/).flatten.compact.uniq - supported
+    return if unknown.empty?
+
+    errors.add(:body, "uses placeholders that are not supported: #{unknown.join(', ')}. " \
+                      "Supported: #{supported.map { |name| "%<#{name}>s" }.to_sentence}.")
   end
 end

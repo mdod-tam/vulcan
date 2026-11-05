@@ -21,6 +21,7 @@ module Admin
     end
 
     test 'admin can view application details successfully with factory-created records' do
+      @application.update!(household_size: 3, annual_income: 24_000)
       visit_admin_application_with_retry(@application, user: @admin)
 
       assert_selector 'h1#application-title', wait: 30
@@ -29,6 +30,12 @@ module Admin
       assert has_selector?('[aria-labelledby="applicant-info-title"]', wait: 25)
       assert has_selector?('[aria-labelledby="application-details-title"]', wait: 25)
       assert has_selector?('[aria-labelledby="attachments-title"]', wait: 25)
+      assert_no_selector '#financial-info-title'
+      within '[aria-labelledby="application-details-title"]' do
+        assert_text 'Household Size'
+        assert_text '$24,000.00'
+      end
+      take_screenshot('admin-application-details-household-income', html: true, full: true)
 
       if has_selector?('[aria-labelledby="attachments-title"]', wait: 25)
         within '[aria-labelledby="attachments-title"]' do

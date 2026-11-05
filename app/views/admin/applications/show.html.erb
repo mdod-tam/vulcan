@@ -161,6 +161,18 @@
             <%= @application.last_activity_at&.strftime("%B %d, %Y at %I:%M %p") || "No activity recorded" %>
           </dd>
         </div>
+        <% if @application.household_size.present? %>
+          <div>
+            <dt class="text-sm font-medium text-gray-500">Household Size</dt>
+            <dd class="mt-1 text-sm text-gray-900"><%= @application.household_size %></dd>
+          </div>
+        <% end %>
+        <% if @application.annual_income.present? %>
+          <div>
+            <dt class="text-sm font-medium text-gray-500">Annual Income</dt>
+            <dd class="mt-1 text-sm text-gray-900"><%= number_to_currency(@application.annual_income) %></dd>
+          </div>
+        <% end %>
       </dl>
     </section>
 
@@ -172,36 +184,6 @@
     <% end %>
 
     <%= render "admin_notes" %>
-
-    <% if @application.income_proof_required? || @application.household_size.present? || @application.annual_income.present? %>
-    <section class="card p-6 mb-6" aria-labelledby="financial-info-title">
-      <h2 id="financial-info-title" class="text-xl font-semibold text-gray-900 mb-4">Financial Information</h2>
-      <dl class="grid grid-cols-1 md:grid-cols-2 gap-6">
-        <% if @application.household_size.present? %>
-        <div>
-          <dt class="text-sm font-medium text-gray-500">Household Size</dt>
-          <dd class="mt-1 text-sm text-gray-900"><%= @application.household_size %></dd>
-        </div>
-        <% end %>
-        <% if @application.annual_income.present? %>
-        <div>
-          <dt class="text-sm font-medium text-gray-500">Annual Income</dt>
-          <dd class="mt-1 text-sm text-gray-900"><%= number_to_currency(@application.annual_income) %></dd>
-        </div>
-        <% end %>
-        <% if @application.income_proof_required? %>
-        <div>
-          <dt class="text-sm font-medium text-gray-500">Income Verification Status</dt>
-          <dd class="mt-1 text-sm text-gray-900"><%= proof_status_badge('income', @application.income_proof_status) %></dd>
-        </div>
-        <div>
-          <dt class="text-sm font-medium text-gray-500">Income Details</dt>
-          <dd class="mt-1 text-sm text-gray-900"><%= @application.income_details.presence || "No additional details provided" %></dd>
-        </div>
-        <% end %>
-      </dl>
-    </section>
-    <% end %>
 
     <section class="card p-6 mb-6" aria-labelledby="alternate-contact-info-title">
       <h2 id="alternate-contact-info-title" class="text-xl font-semibold text-gray-900 mb-4">Alternate Contact Information</h2>
