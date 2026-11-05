@@ -100,13 +100,23 @@ class RejectionReason < ApplicationRecord
     )[:text]
   end
 
-  def self.interpolate_body(body, interpolations = {})
-    return body if interpolations.blank?
-    return body unless body.to_s.include?('%{') || body.to_s.include?('%<')
+  # What a none_provided rejection of this proof type states, as it is stored on the review. Without a record it is
+  # the wording the applicant's letter falls back to.
+  def self.none_provided_text(proof_type)
+    scope = 'application_notifications.proof_rejected.none_provided'
+    fallback = I18n.t("#{scope}.#{proof_type}", locale: :en, default: I18n.t("#{scope}.default", locale: :en))
+    resolve_text(code: 'none_provided', proof_type: proof_type.to_s, fallback: fallback)
+  end
 
-    body % interpolations.transform_keys(&:to_sym)
-  rescue KeyError, ArgumentError
-    body
+  # The one placeholder form a body has. Any other percent sign is ordinary text, so a body is never handed to
+  # Kernel#format, where a stray "50%" or "%<address>d" would raise.
+  PLACEHOLDER = /%<(\w+)>s/
+
+  def self.interpolate_body(body, interpolations = {})
+    return body if body.nil? || interpolations.blank?
+
+    values = interpolations.transform_keys(&:to_s)
+    body.gsub(PLACEHOLDER) { |token| values.fetch(Regexp.last_match(1), token).to_s }
   end
 
   # This reason's body with the application's details filled in.
@@ -142,13 +152,15 @@ class RejectionReason < ApplicationRecord
                       'Update the body to resolve it, or mark it synced.')
   end
 
-  # interpolations_for supplies the only values a body can state. Any other placeholder would reach the applicant as written.
+  # interpolations_for supplies the only values a body can state, and only as %<name>s. Any other %< or %{ form
+  # would reach the applicant as written.
   def body_uses_supported_placeholders
     supported = self.class.interpolations_for(nil).keys.map(&:to_s)
-    unknown = body.to_s.scan(/%<(\w+)>|%\{(\w+)\}/).flatten.compact.uniq - supported
-    return if unknown.empty?
+    unfilled = body.to_s.gsub(PLACEHOLDER) { |token| supported.include?(Regexp.last_match(1)) ? '' : token }
+    leftover = unfilled.scan(/%[<{]\S*/)
+    return if leftover.empty?
 
-    errors.add(:body, "uses placeholders that are not supported: #{unknown.join(', ')}. " \
-                      "Supported: #{supported.map { |name| "%<#{name}>s" }.to_sentence}.")
+    errors.add(:body, "uses placeholders the forms cannot fill: #{leftover.join(', ')}. " \
+                      "Only #{supported.map { |name| "%<#{name}>s" }.to_sentence} is supported, written exactly like that.")
   end
 end

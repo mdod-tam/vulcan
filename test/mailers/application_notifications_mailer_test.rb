@@ -559,7 +559,7 @@ class ApplicationNotificationsMailerTest < ActionMailer::TestCase
     email = ApplicationNotificationsMailer.proof_rejected(@application, proof_review)
     email.deliver_now
 
-    assert_includes email.body.to_s, 'No proof of identity was provided with the application.'
+    assert_includes email.body.to_s, I18n.t('application_notifications.proof_rejected.none_provided.id', locale: :en)
     assert_not_includes email.body.to_s, 'none_provided'
   end
 

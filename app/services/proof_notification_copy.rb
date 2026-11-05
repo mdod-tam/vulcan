@@ -23,6 +23,11 @@ module ProofNotificationCopy
     "#{proof_label(proof_type)} approved"
   end
 
+  # For a document that never arrived; rejected_text is for one that was reviewed and found wanting.
+  def not_provided_text(proof_type)
+    "#{proof_label(proof_type)} not provided"
+  end
+
   def rejected_text(proof_type, reason = nil)
     "#{proof_label(proof_type)} rejected#{rejection_reason_suffix(reason)}"
   end

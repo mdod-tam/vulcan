@@ -137,7 +137,7 @@ module Admin
       end
 
       assert_response :unprocessable_content
-      assert_select 'li', text: /Reason text \(English\) uses placeholders that are not supported: first_name/
+      assert_select 'li', text: /Reason text \(English\) uses placeholders the forms cannot fill: %<first_name>s,/
       assert_select 'textarea#rejection_reason_en_body', text: /Dear %<first_name>s/
       assert_select 'input#rejection_reason_name[value=?]', 'Pay stub cut off'
     end

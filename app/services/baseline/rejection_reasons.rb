@@ -9,8 +9,8 @@ module Baseline
       {
         code: 'none_provided',
         proof_type: 'income',
-        en_body: 'No income proof was provided with the application.',
-        es_body: 'No se proporcionó ningún comprobante de ingresos con la solicitud.'
+        en_body: 'No income proof was provided with this application.',
+        es_body: 'No se proporcionó ningún comprobante de ingresos con esta solicitud.'
       },
       {
         code: 'address_mismatch',
@@ -119,8 +119,8 @@ module Baseline
       {
         code: 'none_provided',
         proof_type: 'residency',
-        en_body: 'No proof of Maryland residency was provided with the application.',
-        es_body: 'No se proporcionó ningún comprobante de residencia en Maryland con la solicitud.'
+        en_body: 'No residency proof was provided with this application.',
+        es_body: 'No se proporcionó ningún comprobante de residencia con esta solicitud.'
       },
       {
         code: 'address_mismatch',
@@ -193,8 +193,8 @@ module Baseline
       {
         code: 'none_provided',
         proof_type: 'id',
-        en_body: 'No ID proof was provided with the application.',
-        es_body: 'No se proporcionó ninguna prueba de identificación con la solicitud.'
+        en_body: 'No ID proof was provided with this application.',
+        es_body: 'No se proporcionó ningún comprobante de identidad con esta solicitud.'
       },
       {
         code: 'expired',
@@ -235,8 +235,8 @@ module Baseline
       {
         code: 'none_provided',
         proof_type: 'disability_certification',
-        en_body: 'No disability certification was provided with the application.',
-        es_body: 'No se proporcionó una certificación de discapacidad con la solicitud.'
+        en_body: 'No disability certification was provided with this application.',
+        es_body: 'No se proporcionó una certificación de discapacidad con esta solicitud.'
       },
       {
         code: 'missing_provider_credentials',

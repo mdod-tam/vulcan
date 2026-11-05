@@ -142,6 +142,40 @@ module Admin
         .select { |activity| activity.proof_type.to_s == proof_type.to_s }
     end
 
+    # A proof that never arrived is stored as a rejection. The attachments card calls it "not provided" and keeps
+    # "rejected" for a document that was reviewed and refused.
+    # The status column for a document type, named for its attachment: income_proof_status, disability_certification_status.
+    def document_status(application, proof_type)
+      application.public_send("#{DocumentType.fetch(proof_type).attachment_name}_status")
+    end
+
+    def proof_not_provided?(application, proof_type)
+      return false unless document_status(application, proof_type) == 'rejected'
+      return false if application.document_attachment_for(proof_type).attached?
+
+      latest = application.proof_reviews.rejections.where(proof_type: proof_type).order(created_at: :desc, id: :desc).first
+      latest.present? && latest.none_provided?
+    end
+
+    def proof_status_label(application, proof_type)
+      return 'Not Provided' if proof_not_provided?(application, proof_type)
+
+      document_status(application, proof_type).titleize
+    end
+
+    # The disability certification card's badge. The shared badge helper stays as is for the list screens, which
+    # would otherwise look up the latest review for every row.
+    def disability_certification_card_badge(application)
+      return disability_certification_status_badge(application) unless proof_not_provided?(application, :disability_certification)
+
+      status_badge(:certification, application.disability_certification_status, label: 'Not Provided')
+    end
+
+    # What a proof history entry says for a rejection.
+    def proof_rejection_verb(activity)
+      activity.source.respond_to?(:none_provided?) && activity.source.none_provided? ? 'Marked not provided on' : 'Rejected on'
+    end
+
     def show_proof_history_submission_fallback?(application, proof_type)
       application.document_attachment_for(proof_type).attached? && application.created_at.present?
     end

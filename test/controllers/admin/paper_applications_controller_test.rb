@@ -1096,6 +1096,7 @@ module Admin
     test 'the paper form offers the stored reasons for each proof, including ones an admin added' do
       create(:rejection_reason, code: 'zz_paper_income', proof_type: 'income', body: 'Added income reason')
       create(:rejection_reason, code: 'zz_paper_cert', proof_type: 'disability_certification', body: 'Added certification reason')
+      RejectionReason.find_by!(code: 'none_provided', proof_type: 'income', locale: 'en').update!(body: 'Staff-edited none provided')
 
       get new_admin_paper_application_path, headers: default_headers
 
@@ -1103,6 +1104,12 @@ module Admin
       assert_select "select#disability_certification_rejection_reason option[value='zz_paper_cert'][data-reason-text='Added certification reason']"
       assert_select "select#income_proof_rejection_reason option[value='zz_paper_cert']", count: 0
       assert_select "select#income_proof_rejection_reason option[value='none_provided']", count: 1
+      # None Provided previews the text the review will store, so an admin edit shows here too.
+      assert_select "select#income_proof_rejection_reason option[value='none_provided'][data-reason-text='Staff-edited none provided']"
+      { 'residency' => 'residency_proof', 'id' => 'id_proof', 'disability_certification' => 'disability_certification' }.each do |type, field|
+        body = RejectionReason.find_by!(code: 'none_provided', proof_type: type, locale: 'en').body
+        assert_select "select##{field}_rejection_reason option[value='none_provided'][data-reason-text=?]", body
+      end
     end
 
     test 'should send rejection notification' do

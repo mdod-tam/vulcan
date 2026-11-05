@@ -127,7 +127,7 @@ module Applications
     def certification_status_change_action(event)
       return unless event.is_a?(Event) && event.action == 'disability_certification_status_changed'
 
-      new_status = event.metadata['new_status'] if event.metadata.is_a?(Hash)
+      new_status = event.metadata.stringify_keys['new_status'] if event.metadata.is_a?(Hash)
       "disability_certification_#{new_status}" if new_status.present?
     end
 

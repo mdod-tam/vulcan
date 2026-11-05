@@ -128,7 +128,7 @@ class DocumentProofHandlerController extends Controller {
   }
 
   /**
-   * data-reason-text supplies a database reason body or a literal fallback.
+   * data-reason-text supplies the text the review will store, from the database reason body.
    */
   previewRejectionReason() {
     if (!this.hasReasonPreviewTarget || !this.hasRejectionReasonSelectTarget) return

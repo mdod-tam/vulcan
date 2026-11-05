@@ -98,7 +98,25 @@ module Applications
       assert_equal 'income', notification.metadata.fetch('proof_type')
       assert_equal 'rejected', notification.metadata.fetch('proof_request_display_mode')
       assert_equal 'Missing income details', notification.metadata.fetch('rejection_reason')
+      assert_not notification.metadata.key?('rejection_reason_code'), 'a reviewed document carries no none_provided marker'
       assert_not notification.metadata.key?('secure_upload_url')
+    end
+
+    test 'a none provided rejection is marked on the request so history can say not provided' do
+      Current.paper_context = true
+      travel 1.minute do
+        create_rejected_proof_review_without_auto_resubmission(
+          application: @application, admin: @actor, proof_type: :income,
+          rejection_reason: 'No income proof was provided with this application.', rejection_reason_code: 'none_provided'
+        )
+      end
+      Current.paper_context = false
+
+      result = RequestProofResubmission.new(application: @application, actor: @actor, proof_type: :income).call
+
+      assert_predicate result, :success?
+      notification = Notification.find_by!(notifiable: @application, action: 'proof_resubmission_requested', recipient: @application.user)
+      assert_equal 'none_provided', notification.metadata.fetch('rejection_reason_code')
     end
 
     test 'creates proof request when rejected attachment is still awaiting purge' do

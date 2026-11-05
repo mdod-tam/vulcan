@@ -283,6 +283,8 @@ module SecureRequestFormsHelper
     application = notification.notifiable if notification.notifiable.is_a?(Application)
 
     if notification.proof_resubmission_rejected?
+      return ProofNotificationCopy.not_provided_text(proof_type) if metadata['rejection_reason_code'] == 'none_provided'
+
       reason = metadata['rejection_reason'].presence || latest_secure_proof_rejection_reason(application, proof_type)
       return ProofNotificationCopy.rejected_text(proof_type, reason)
     end

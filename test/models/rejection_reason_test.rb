@@ -85,14 +85,60 @@ class RejectionReasonTest < ActiveSupport::TestCase
     end
   end
 
-  test 'a body may use only the placeholders the forms can fill' do
+  test 'none provided reads the same in the baseline records and in the letter wording used when a record is missing' do
+    Baseline::RejectionReasons::DEFINITIONS.select { |definition| definition[:code] == 'none_provided' }.each do |definition|
+      %w[en es].each do |locale|
+        letter = I18n.t("application_notifications.proof_rejected.none_provided.#{definition[:proof_type]}", locale: locale)
+
+        assert_equal letter, definition[:"#{locale}_body"], "#{definition[:proof_type]} #{locale}"
+      end
+    end
+  end
+
+  test 'none provided states a fact about this application and does not call the document wrong' do
+    Baseline::RejectionReasons::DEFINITIONS.select { |definition| definition[:code] == 'none_provided' }.each do |definition|
+      assert_match(/was provided with this application\.\z/, definition[:en_body], definition[:proof_type])
+      assert_match(/con esta solicitud\.\z/, definition[:es_body], definition[:proof_type])
+    end
+  end
+
+  test 'a body may use only the address placeholder, written exactly %<address>s' do
     assert_predicate build(:rejection_reason, body: 'Send a document showing %<address>s.'), :valid?
 
-    # The %{city} template form is the case under test: String#% fills it as well as %<city>s.
-    reason = build(:rejection_reason, body: 'Dear %<first_name>s, send a document for %{city}.') # rubocop:disable Style/FormatStringToken
+    [
+      'Dear %<first_name>s, send proof.',
+      'Send proof for %{address}.', # rubocop:disable Style/FormatStringToken -- the template form is a case under test
+      'Send proof for %<address>d.',
+      'Send proof for %<address>-20s.',
+      'Send proof for %<address>.'
+    ].each do |body|
+      reason = build(:rejection_reason, body: body)
 
-    assert_not reason.valid?
-    assert_match(/first_name, city/, reason.errors[:body].to_sentence)
-    assert_match(/%<address>s/, reason.errors[:body].to_sentence)
+      assert_not reason.valid?, body
+      assert_match(/placeholders the forms cannot fill/, reason.errors[:body].to_sentence, body)
+      assert_match(/Only %<address>s is supported/, reason.errors[:body].to_sentence, body)
+    end
+  end
+
+  test 'a literal percent sign never breaks filling the address' do
+    body = 'Income above 200% of the limit; send proof showing %<address>s. Also 50%d and %s.'
+
+    assert_predicate build(:rejection_reason, body: body), :valid?
+    assert_equal 'Income above 200% of the limit; send proof showing 1 Main St. Also 50%d and %s.',
+                 RejectionReason.interpolate_body(body, address: '1 Main St')
+  end
+
+  test 'a placeholder the application cannot state is left as written instead of raising' do
+    assert_equal 'Dear %<first_name>s at 1 Main St',
+                 RejectionReason.interpolate_body('Dear %<first_name>s at %<address>s', address: '1 Main St')
+  end
+
+  test 'none_provided text is the stored reason body, and the letter wording when the record is missing' do
+    RejectionReason.find_by!(code: 'none_provided', proof_type: 'income', locale: 'en').update!(body: 'Staff-edited: no income paperwork arrived.')
+    assert_equal 'Staff-edited: no income paperwork arrived.', RejectionReason.none_provided_text('income')
+
+    RejectionReason.where(code: 'none_provided', proof_type: 'income').delete_all
+    assert_equal I18n.t('application_notifications.proof_rejected.none_provided.income', locale: :en),
+                 RejectionReason.none_provided_text('income')
   end
 end

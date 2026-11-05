@@ -178,6 +178,56 @@ module Admin
       end
     end
 
+    test 'history says a proof was not provided, and keeps rejected for a document that was reviewed and refused' do
+      create(:proof_review, :rejected, application: @application, admin: @admin, proof_type: :income,
+                                       rejection_reason: 'No income proof was provided with this application.', rejection_reason_code: 'none_provided')
+      create(:proof_review, :rejected, application: @application, admin: @admin, proof_type: :id,
+                                       rejection_reason: 'Too blurry')
+
+      get admin_application_path(@application)
+
+      assert_response :success
+      assert_select 'td', text: 'Income proof not provided'
+      assert_select 'td', text: 'ID proof rejected - Too blurry'
+      assert_select 'td', text: /Income proof rejected/, count: 0
+    end
+
+    test 'attachments card says not provided for a proof that never arrived and rejected for a refused one' do
+      [[:income, 'none_provided'], [:residency, 'illegible']].each do |proof_type, reason|
+        ProofAttachmentService.reject_proof_without_attachment(
+          application: @application, proof_type: proof_type, admin: @admin, reason: reason, submission_method: :paper
+        )
+      end
+
+      get admin_application_path(@application)
+
+      assert_response :success
+      assert_select '#attachments-section' do
+        assert_select 'span', text: 'Not Provided', count: 1
+        assert_select 'span', text: 'Rejected', count: 1
+        assert_select 'p', text: /Marked not provided on/, minimum: 1
+        assert_select 'p', text: /Rejected on/, minimum: 1
+      end
+    end
+
+    test 'certification card says not provided for a certification that never arrived and rejected for a refused one' do
+      refused = create(:application, :in_progress)
+      [[@application, 'No disability certification was provided with this application.', 'none_provided'],
+       [refused, 'Missing provider credentials', nil]].each do |application, reason, reason_code|
+        DisabilityCertificationAttachmentService.reject_certification(
+          application: application, admin: @admin, reason: reason, reason_code: reason_code, submission_method: :paper
+        )
+      end
+
+      get admin_application_path(@application)
+      assert_select '#disability-certification-section span', text: 'Not Provided', count: 1
+      assert_select '#disability-certification-section span', text: 'Rejected', count: 0
+
+      get admin_application_path(refused)
+      assert_select '#disability-certification-section span', text: 'Rejected', count: 1
+      assert_select '#disability-certification-section span', text: 'Not Provided', count: 0
+    end
+
     test 'certification upload recovery is scoped to the application' do
       other_application = create(:application, disability_certification_status: :requested)
       get admin_application_path(other_application)
