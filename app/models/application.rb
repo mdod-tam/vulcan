@@ -97,7 +97,10 @@ class Application < ApplicationRecord
   has_many :equipment_items, dependent: :restrict_with_error
   has_many :application_notes, dependent: :restrict_with_error
   has_many :certification_upload_forms, -> { certification_upload }, class_name: 'SecureRequestForm', inverse_of: :application, dependent: :restrict_with_error
-  has_and_belongs_to_many :products
+  has_many :voucher_transactions, through: :vouchers, source: :transactions
+  # Counts a purchase as Applications::ProductHistory does: a completed redemption, not a refund or adjustment.
+  has_many :purchased_products, -> { merge(VoucherTransaction.fulfillable).distinct },
+           through: :voucher_transactions, source: :products
   has_one_attached :income_proof
   has_one_attached :residency_proof
   has_one_attached :id_proof
@@ -501,6 +504,12 @@ class Application < ApplicationRecord
 
   def equipment_fulfillment?
     fulfillment_type_equipment?
+  end
+
+  # The purchased products, each carrying last_purchased_at: the date of its latest completed purchase.
+  def purchased_products_with_dates
+    purchased_products.distinct(false).group('products.id')
+                      .select('products.*', 'MAX(voucher_transactions.processed_at) AS last_purchased_at')
   end
 
   def required_proofs_approved?

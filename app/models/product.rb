@@ -6,7 +6,6 @@ class Product < ApplicationRecord
   has_and_belongs_to_many :vendors,
                           class_name: 'User',
                           join_table: 'products_users'
-  has_and_belongs_to_many :applications
 
   has_many :voucher_transaction_products, dependent: :destroy
   has_many :voucher_transactions, through: :voucher_transaction_products

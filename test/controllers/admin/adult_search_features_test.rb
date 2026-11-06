@@ -73,7 +73,7 @@ module Admin
       approved = create(:constituent, first_name: 'AdmissionApproved')
       last_app = create(:application, :rejected, user: rejected, application_date: 1.day.ago)
       create(:application, :approved, user: approved, application_date: 5.years.ago)
-      last_app.products << create(:product, name: 'Admission Product')
+      record_voucher_purchase(last_app, create(:product, name: 'Admission Product'))
 
       [search_admin_users_path(q: 'Admission', role: 'constituent', frame_id: 'adult_search_results'),
        admin_users_path(q: 'Admission', role: 'constituent', turbo_frame_id: 'adult_search_results')].each do |path|

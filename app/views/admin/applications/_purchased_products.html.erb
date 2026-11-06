@@ -1,4 +1,4 @@
-<% if @application.products.any? %>
+<% if @application.purchased_products.any? %>
   <div class="mt-4">
     <h4 class="text-sm font-medium text-gray-500">Purchased Products</h4>
     <div class="mt-2 flow-root">
@@ -15,12 +15,7 @@
               </tr>
             </thead>
             <tbody class="divide-y divide-gray-200">
-              <% @application.products.distinct.each do |product| %>
-                <% transaction = VoucherTransaction.joins(:voucher_transaction_products)
-                     .where(voucher_transaction_products: { product_id: product.id })
-                     .where(voucher_id: @application.vouchers.pluck(:id))
-                     .order(processed_at: :desc)
-                     .first %>
+              <% @application.purchased_products_with_dates.each do |product| %>
                 <tr>
                   <td class="whitespace-nowrap py-2 pl-4 pr-3 text-sm text-gray-900">
                     <%= product.name %>
@@ -35,7 +30,7 @@
                     <%= product.device_types.first if product.device_types.present? %>
                   </td>
                   <td class="whitespace-nowrap px-3 py-2 text-sm text-gray-900">
-                    <%= transaction&.processed_at&.strftime("%Y-%m-%d") || "Unknown" %>
+                    <%= product.last_purchased_at.in_time_zone.strftime('%Y-%m-%d') %>
                   </td>
                 </tr>
               <% end %>

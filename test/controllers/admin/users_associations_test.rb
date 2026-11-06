@@ -142,7 +142,7 @@ module Admin
       create(:guardian_relationship, guardian_user: user, dependent_user: create(:constituent))
       create(:guardian_relationship, guardian_user: create(:constituent), dependent_user: user)
       application = create(:application, :rejected, user: user)
-      application.products << create(:product, name: 'Bounded Product')
+      record_voucher_purchase(application, create(:product, name: 'Bounded Product'))
       user
     end
 

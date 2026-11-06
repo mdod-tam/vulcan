@@ -1,6 +1,14 @@
 # frozen_string_literal: true
 
 module VoucherTestHelper
+  # Records a completed redemption of the product on one of the application's vouchers.
+  def record_voucher_purchase(application, product, processed_at: Time.current)
+    voucher = application.vouchers.order(:id).first || create(:voucher, application: application)
+    purchase = create(:voucher_transaction, voucher: voucher, processed_at: processed_at)
+    purchase.voucher_transaction_products.create!(product: product, quantity: 1)
+    purchase
+  end
+
   def create_redeemed_voucher(vendor:, amount:)
     voucher = create(:voucher, :active)
     transaction = create(:voucher_transaction,

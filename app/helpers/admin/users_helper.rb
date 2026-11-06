@@ -81,7 +81,7 @@ module Admin
       {
         user: user, role: role, is_constituent_search: is_constituent_search,
         eligibility: eligibility, last_app: last_app,
-        last_products: last_app&.products&.map(&:name) || [],
+        last_products: last_app&.purchased_products&.map(&:name) || [],
         ineligible_reason: is_constituent_search ? paper_application_ineligibility_reason(eligibility) : nil,
         ineligible: is_constituent_search && !eligibility.eligible?,
         email_display: display_contact_email(user), phone_display: display_contact_phone(user)
