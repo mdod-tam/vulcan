@@ -559,8 +559,22 @@ class ApplicationNotificationsMailerTest < ActionMailer::TestCase
     email = ApplicationNotificationsMailer.proof_rejected(@application, proof_review)
     email.deliver_now
 
-    assert_includes email.body.to_s, 'No proof of identity was provided with the application.'
+    assert_includes email.body.to_s, I18n.t('application_notifications.proof_rejected.none_provided.id', locale: :en)
     assert_not_includes email.body.to_s, 'none_provided'
+  end
+
+  test 'proof_rejected fills the applicant address into an edited none_provided reason' do
+    RejectionReason.find_by!(code: 'none_provided', proof_type: 'residency', locale: 'en').update!(body: 'No residency proof for %<address>s.')
+    proof_review = create(:proof_review, :rejected, application: @application, proof_type: :residency,
+                                                    rejection_reason: 'none_provided', rejection_reason_code: 'none_provided')
+
+    email = ApplicationNotificationsMailer.proof_rejected(@application, proof_review)
+    email.deliver_now
+
+    address = RejectionReason.interpolations_for(@application).fetch(:address)
+    assert_predicate address, :present?
+    assert_includes email.body.to_s, "No residency proof for #{address}."
+    assert_not_includes email.body.to_s, '%<address>s'
   end
 
   test 'proof_rejected preserves custom rejection text when it is not a known reason code' do

@@ -612,7 +612,7 @@ module Admin
       # Assert both the reason code and displayed text. Presence alone cannot detect a substituted rejection reason.
       assert_equal 'none_provided', review.rejection_reason_code,
                    'the durable rejection code must be the one that was restored on the form'
-      assert_equal 'No ID proof was provided with the application.', review.rejection_reason,
+      assert_equal 'No ID proof was provided with this application.', review.rejection_reason,
                    'the durable rejection text must match the restored selection'
     end
 

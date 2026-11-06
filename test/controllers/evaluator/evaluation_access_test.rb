@@ -12,7 +12,7 @@ class EvaluatorEvaluationAccessTest < ActionDispatch::IntegrationTest
     @application.update!(alternate_contact_name: 'Evaluation Support Person',
                          alternate_contact_email: 'support-person@example.com',
                          alternate_contact_phone: '2025550123',
-                         income_details: 'Private financial explanation')
+                         annual_income: 24_000)
     sign_in_for_controller_test(@evaluator)
   end
 
@@ -30,7 +30,7 @@ class EvaluatorEvaluationAccessTest < ActionDispatch::IntegrationTest
     assert_includes response.body, 'support-person@example.com'
     assert_includes response.body, '2025550123'
     assert_includes response.body, 'Disabilities'
-    assert_not_includes response.body, 'Private financial explanation'
+    assert_not_includes response.body, '$24,000.00'
     assert_not_includes response.body, 'Annual Income'
     assert_select 'main form', count: 0
   end
@@ -59,7 +59,7 @@ class EvaluatorEvaluationAccessTest < ActionDispatch::IntegrationTest
 
     get admin_application_path(@application)
     assert_response :success
-    assert_includes response.body, 'Private financial explanation'
+    assert_includes response.body, '$24,000.00'
   end
 
   test 'standalone creation editing deletion and information-request writes have no route' do

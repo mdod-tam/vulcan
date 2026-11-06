@@ -15,6 +15,7 @@ end
 
 require 'yaml'
 require 'active_record/fixtures'
+require Rails.root.join('test/support/document_scan_fixtures')
 
 def seed_puts(message)
   Rails.logger.debug message if ENV['VERBOSE_TESTS'] || Rails.env.development?
@@ -67,10 +68,20 @@ def attach_proof_file(app, attachment, proof_type, file_path, filename, indent)
       content_type: 'application/pdf'
     )
     app.save
+    clear_seeded_document(app, attachment, proof_type, file_path)
     seed_success "#{indent}#{proof_type.to_s.humanize} attached"
   else
     seed_error "#{proof_type.to_s.humanize} file not found at #{full_file_path}"
   end
+end
+
+# The app treats a file without a scan record as unavailable. Seed files are repository fixtures, so each gets
+# the synthetic clean scan the development application seeds use; it says nothing about a real antivirus scan.
+def clear_seeded_document(app, attachment, proof_type, fixture)
+  return unless attachment.attached? && attachment.blob.persisted?
+
+  purpose = proof_type == :disability_certification ? :certification : :proof
+  DocumentScanFixtures.clear!(attachment.blob, user: app.user, purpose: purpose, slot: proof_type.to_s, fixture: fixture)
 end
 
 def verify_and_fix_attachment(app, attachment_method, proof_type, source_filename, fixed_files)
@@ -284,39 +295,13 @@ end
 def attach_rex_income_proof(rex_app)
   return unless rex_app.income_proof_status == 'approved' && !rex_app.income_proof.attached?
 
-  seed_puts '  Attaching income proof...'
-  income_file_path = Rails.root.join('test/fixtures/files/income_proof.pdf')
-  if File.exist?(income_file_path)
-    rex_app.income_proof.attach(
-      io: File.open(income_file_path),
-      filename: 'income_proof.pdf',
-      content_type: 'application/pdf'
-    )
-    # Validation still runs. On failure, save returns false and save! raises an exception.
-    rex_app.save
-    seed_success '  Income proof attached successfully'
-  else
-    seed_error "Income proof file not found at #{income_file_path}"
-  end
+  attach_proof_file(rex_app, rex_app.income_proof, :income_proof, 'income_proof.pdf', 'income_proof.pdf', '  ')
 end
 
 def attach_rex_residency_proof(rex_app)
   return unless rex_app.residency_proof_status.in?(%w[approved rejected]) && !rex_app.residency_proof.attached?
 
-  seed_puts '  Attaching residency proof...'
-  residency_file_path = Rails.root.join('test/fixtures/files/residency_proof.pdf')
-  if File.exist?(residency_file_path)
-    rex_app.residency_proof.attach(
-      io: File.open(residency_file_path),
-      filename: 'residency_proof.pdf',
-      content_type: 'application/pdf'
-    )
-    # Validation still runs. On failure, save returns false and save! raises an exception.
-    rex_app.save
-    seed_success '  Residency proof attached successfully'
-  else
-    seed_error "Residency proof file not found at #{residency_file_path}"
-  end
+  attach_proof_file(rex_app, rex_app.residency_proof, :residency_proof, 'residency_proof.pdf', 'residency_proof.pdf', '  ')
 end
 
 def process_other_applications

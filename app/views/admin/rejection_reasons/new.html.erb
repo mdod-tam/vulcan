@@ -1,0 +1,69 @@
+<main class="container mx-auto px-4 py-8" role="main" aria-labelledby="new-rejection-reason-title">
+  <div class="max-w-4xl mx-auto">
+    <%= render 'admin/shared/communications_section_nav', current: :rejection_reasons %>
+    <div class="mb-6 flex items-start justify-between gap-4">
+      <div>
+        <h1 id="new-rejection-reason-title" class="text-3xl font-bold text-gray-900">New Rejection Reason</h1>
+        <p class="mt-2 text-sm text-gray-600">
+          Add a reason staff can choose when rejecting a document. Applicants receive the text in their own language.
+        </p>
+      </div>
+      <%= link_to 'Back to Rejection Reasons', admin_rejection_reasons_path, class: 'btn btn-outline shrink-0' %>
+    </div>
+
+    <%= form_with model: @form, scope: :rejection_reason, url: admin_rejection_reasons_path, class: 'card p-6 space-y-6' do |form| %>
+      <%= render 'shared/action_errors', action: :create_rejection_reason, form: form, form_errors: @form_errors %>
+
+      <div>
+        <%= form.label :proof_type, class: 'form-label' %>
+        <%= form.select :proof_type,
+                        RejectionReason::VALID_PROOF_TYPES.map { |type| [rejection_reason_proof_type_label(type), type] },
+                        { prompt: 'Select a proof type' },
+                        class: 'form-input mt-1', required: true,
+                        aria: action_form_field_aria(:create_rejection_reason, :proof_type, form_errors: @form_errors,
+                                                                                            describedby: 'rejection-reason-proof-type-hint') %>
+        <p id="rejection-reason-proof-type-hint" class="form-hint">
+          The reason appears in the rejection form for this type of document only.
+        </p>
+        <%= render 'shared/field_errors', action: :create_rejection_reason, attribute: :proof_type, form_errors: @form_errors %>
+      </div>
+
+      <div>
+        <%= form.label :name, class: 'form-label' %>
+        <%= form.text_field :name, class: 'form-input mt-1', required: true, maxlength: 80,
+                                   aria: action_form_field_aria(:create_rejection_reason, :name, form_errors: @form_errors,
+                                                                                                 describedby: 'rejection-reason-name-hint') %>
+        <p id="rejection-reason-name-hint" class="form-hint">
+          What staff see in the list, for example "Photo is blurry". The reason's code is made from this name and cannot be changed later.
+        </p>
+        <%= render 'shared/field_errors', action: :create_rejection_reason, attribute: :name, form_errors: @form_errors %>
+      </div>
+
+      <div class="grid grid-cols-1 xl:grid-cols-2 gap-6">
+        <div>
+          <%= form.label :en_body, class: 'form-label' %>
+          <%= form.text_area :en_body, rows: 8, class: 'form-input mt-1', required: true,
+                                       aria: action_form_field_aria(:create_rejection_reason, :en_body, form_errors: @form_errors,
+                                                                                                        describedby: 'rejection-reason-body-hint') %>
+          <%= render 'shared/field_errors', action: :create_rejection_reason, attribute: :en_body, form_errors: @form_errors %>
+        </div>
+        <div>
+          <%= form.label :es_body, class: 'form-label' %>
+          <%= form.text_area :es_body, rows: 8, class: 'form-input mt-1', required: true, lang: 'es',
+                                       aria: action_form_field_aria(:create_rejection_reason, :es_body, form_errors: @form_errors,
+                                                                                                        describedby: 'rejection-reason-body-hint') %>
+          <%= render 'shared/field_errors', action: :create_rejection_reason, attribute: :es_body, form_errors: @form_errors %>
+        </div>
+      </div>
+      <p id="rejection-reason-body-hint" class="form-hint">
+        Write what the applicant should do next, as it should read in their letter or email.
+        <%= rejection_reason_placeholder_hint %>
+      </p>
+
+      <div class="flex justify-end gap-3">
+        <%= link_to 'Cancel', admin_rejection_reasons_path, class: 'btn btn-outline' %>
+        <%= form.submit 'Create Rejection Reason', class: 'btn btn-primary' %>
+      </div>
+    <% end %>
+  </div>
+</main>

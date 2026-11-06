@@ -10,7 +10,7 @@
     <% end %>
   </div>
   <div class="flex items-center space-x-2">
-    <%= disability_certification_status_badge(@application) %>
+    <%= disability_certification_card_badge(@application) %>
     <%= document_signing_status_badge(@application) %>
   </div>
 </div>
@@ -21,6 +21,7 @@
 
 <div class="mt-6 space-y-4">
   <%= render 'disability_certification_upload' %>
+  <%= render 'disability_certification_history' %>
 
   <% if @application.disability_certification.attached? %>
     <div class="mb-4" data-testid="disability-certification">
@@ -79,17 +80,7 @@
         <% if @application.certifying_professional_name.present? %>
           <p class="text-sm font-medium text-gray-900"><%= @application.certifying_professional_name %></p>
         <% end %>
-        <% if @application.certifying_professional_phone.present? || (@application.respond_to?(:certifying_professional_fax) && @application.certifying_professional_fax.present?) %>
-          <p class="text-sm text-gray-600">
-            <% if @application.certifying_professional_phone.present? %>
-              Phone: <%= @application.certifying_professional_phone %>
-            <% end %>
-            <% if @application.respond_to?(:certifying_professional_fax) && @application.certifying_professional_fax.present? %>
-              <% if @application.certifying_professional_phone.present? %> / <% end %>
-              Fax: <%= @application.certifying_professional_fax %>
-            <% end %>
-          </p>
-        <% end %>
+        <%= certifying_professional_phone_fax_line(@application) %>
         <% if @application.certifying_professional_email.present? %>
           <p class="text-sm text-gray-600">Email: <%= @application.certifying_professional_email %></p>
         <% end %>

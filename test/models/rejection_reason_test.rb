@@ -76,4 +76,89 @@ class RejectionReasonTest < ActiveSupport::TestCase
 
     assert_empty RejectionReason.options_for(locale: 'en').map(&:code) & %w[none_provided other]
   end
+
+  test 'every proof type states in words what none provided means, in both locales' do
+    RejectionReason::VALID_PROOF_TYPES.each do |proof_type|
+      locales = RejectionReason.where(code: 'none_provided', proof_type: proof_type).order(:locale).pluck(:locale)
+
+      assert_equal %w[en es], locales, "none_provided for #{proof_type}"
+    end
+  end
+
+  test 'none provided reads the same in the baseline records and in the letter wording used when a record is missing' do
+    Baseline::RejectionReasons::DEFINITIONS.select { |definition| definition[:code] == 'none_provided' }.each do |definition|
+      %w[en es].each do |locale|
+        letter = I18n.t("application_notifications.proof_rejected.none_provided.#{definition[:proof_type]}", locale: locale)
+
+        assert_equal letter, definition[:"#{locale}_body"], "#{definition[:proof_type]} #{locale}"
+      end
+    end
+  end
+
+  test 'none provided states a fact about this application and does not call the document wrong' do
+    Baseline::RejectionReasons::DEFINITIONS.select { |definition| definition[:code] == 'none_provided' }.each do |definition|
+      assert_match(/was provided with this application\.\z/, definition[:en_body], definition[:proof_type])
+      assert_match(/con esta solicitud\.\z/, definition[:es_body], definition[:proof_type])
+    end
+  end
+
+  test 'a body may use only the address placeholder, written exactly %<address>s' do
+    assert_predicate build(:rejection_reason, body: 'Send a document showing %<address>s.'), :valid?
+
+    [
+      'Dear %<first_name>s, send proof.',
+      'Send proof for %{address}.', # rubocop:disable Style/FormatStringToken -- the template form is a case under test
+      'Send proof for %1{address}.', # rubocop:disable Style/FormatStringToken -- an indexed template form is a case under test
+      'Send proof for %1$<address>s.',
+      'Send proof for %-20<address>s.',
+      'Send proof for %+<address>s.',
+      'Send proof for %<address>d.',
+      'Send proof for %<address>-20s.',
+      'Send proof for %<address>.'
+    ].each do |body|
+      reason = build(:rejection_reason, body: body)
+
+      assert_not reason.valid?, body
+      assert_match(/placeholders the forms cannot fill/, reason.errors[:body].to_sentence, body)
+      assert_match(/Only %<address>s is supported/, reason.errors[:body].to_sentence, body)
+    end
+  end
+
+  test 'a literal percent sign never breaks filling the address' do
+    body = 'Income above 200% of the limit; send proof showing %<address>s. Also 50%d and %s.'
+
+    assert_predicate build(:rejection_reason, body: body), :valid?
+    assert_equal 'Income above 200% of the limit; send proof showing 1 Main St. Also 50%d and %s.',
+                 RejectionReason.interpolate_body(body, address: '1 Main St')
+  end
+
+  test 'a placeholder the application cannot state is left as written instead of raising' do
+    assert_equal 'Dear %<first_name>s at 1 Main St',
+                 RejectionReason.interpolate_body('Dear %<first_name>s at %<address>s', address: '1 Main St')
+  end
+
+  test 'none_provided text fills the address for an application, names it in a preview, and follows the locale' do
+    RejectionReason.find_by!(code: 'none_provided', proof_type: 'residency', locale: 'en').update!(body: 'No residency proof for %<address>s.')
+    application = create(:application)
+    address = RejectionReason.interpolations_for(application).fetch(:address)
+
+    assert_predicate address, :present?
+    assert_equal "No residency proof for #{address}.", RejectionReason.none_provided_text('residency', application: application)
+    assert_equal "No residency proof for #{RejectionReason::PREVIEW_ADDRESS}.", RejectionReason.none_provided_text('residency')
+    RejectionReason.find_by!(code: 'none_provided', proof_type: 'residency', locale: 'es').update!(body: 'Texto editado sin comprobante.')
+    assert_equal 'Texto editado sin comprobante.', RejectionReason.none_provided_text('residency', locale: 'es')
+
+    RejectionReason.where(code: 'none_provided', proof_type: 'residency').delete_all
+    assert_equal I18n.t('application_notifications.proof_rejected.none_provided.residency', locale: :es),
+                 RejectionReason.none_provided_text('residency', locale: 'es'), 'a missing record falls back to the locale file'
+  end
+
+  test 'none_provided text is the stored reason body, and the letter wording when the record is missing' do
+    RejectionReason.find_by!(code: 'none_provided', proof_type: 'income', locale: 'en').update!(body: 'Staff-edited: no income paperwork arrived.')
+    assert_equal 'Staff-edited: no income paperwork arrived.', RejectionReason.none_provided_text('income')
+
+    RejectionReason.where(code: 'none_provided', proof_type: 'income').delete_all
+    assert_equal I18n.t('application_notifications.proof_rejected.none_provided.income', locale: :en),
+                 RejectionReason.none_provided_text('income')
+  end
 end

@@ -35,6 +35,7 @@ class RejectionReason < ApplicationRecord
   validates :body,       presence: true
   validates :version,    presence: true, numericality: { only_integer: true, greater_than_or_equal_to: 1 }
   validates :code, uniqueness: { scope: %i[proof_type locale] }
+  validate :body_uses_supported_placeholders
 
   before_update :store_previous_body
   before_update :increment_version
@@ -99,18 +100,44 @@ class RejectionReason < ApplicationRecord
     )[:text]
   end
 
-  def self.interpolate_body(body, interpolations = {})
-    return body if interpolations.blank?
-    return body unless body.to_s.include?('%{') || body.to_s.include?('%<')
+  # Stands in for the address where staff preview a reason before the application exists, as on paper intake.
+  PREVIEW_ADDRESS = "[the applicant's address]"
 
-    body % interpolations.transform_keys(&:to_sym)
-  rescue KeyError, ArgumentError
-    body
+  # What a none_provided rejection of this proof type states: the stored reason when there is one, otherwise the
+  # wording in the locale files. With an application the address is filled in; without one, as in the paper intake
+  # preview, it is named. The paper form and the applicant's letter both ask here.
+  def self.none_provided_text(proof_type, locale: 'en', application: nil)
+    reason = resolve(code: 'none_provided', proof_type: proof_type.to_s, locale: locale)
+    return none_provided_fallback(proof_type, locale) unless reason
+
+    application ? reason.body_for(application) : reason.preview_body
+  end
+
+  def self.none_provided_fallback(proof_type, locale)
+    scope = 'application_notifications.proof_rejected.none_provided'
+    I18n.t("#{scope}.#{proof_type}", locale: locale, default: I18n.t("#{scope}.default", locale: locale))
+  end
+  private_class_method :none_provided_fallback
+
+  # The one placeholder form a body has. Any other percent sign is ordinary text, so a body is never handed to
+  # Kernel#format, where a stray "50%" or "%<address>d" would raise.
+  PLACEHOLDER = /%<(\w+)>s/
+
+  def self.interpolate_body(body, interpolations = {})
+    return body if body.nil? || interpolations.blank?
+
+    values = interpolations.transform_keys(&:to_s)
+    body.gsub(PLACEHOLDER) { |token| values.fetch(Regexp.last_match(1), token).to_s }
   end
 
   # This reason's body with the application's details filled in.
   def body_for(application)
     self.class.interpolate_body(body, self.class.interpolations_for(application))
+  end
+
+  # This reason's body as staff preview it before the application exists: the address is named, not filled.
+  def preview_body
+    self.class.interpolate_body(body, address: PREVIEW_ADDRESS)
   end
 
   private
@@ -139,5 +166,18 @@ class RejectionReason < ApplicationRecord
 
     errors.add(:base, 'This reason is out of sync with another locale variant. ' \
                       'Update the body to resolve it, or mark it synced.')
+  end
+
+  # interpolations_for supplies the only values a body can state, and only as %<name>s. A percent sign that
+  # reaches a < or { through printf flags or an index (%-20<name>s, %1$<name>s, %1{name}) is a placeholder written
+  # another way, and would reach the applicant as written. A percent sign anywhere else is ordinary text.
+  def body_uses_supported_placeholders
+    supported = self.class.interpolations_for(nil).keys.map(&:to_s)
+    unfilled = body.to_s.gsub(PLACEHOLDER) { |token| supported.include?(Regexp.last_match(1)) ? '' : token }
+    leftover = unfilled.scan(/%[-+0#*\d$.]*[<{]\S*/)
+    return if leftover.empty?
+
+    errors.add(:body, "uses placeholders the forms cannot fill: #{leftover.join(', ')}. " \
+                      "Only #{supported.map { |name| "%<#{name}>s" }.to_sentence} is supported, written exactly like that.")
   end
 end

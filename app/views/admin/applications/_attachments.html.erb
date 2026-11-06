@@ -11,7 +11,7 @@
         <h3 class="text-sm font-medium text-gray-900">Income Proof</h3>
       </div>
       <span class="<%= badge_class_for(:proof, @application.income_proof_status) %>">
-        <%= @application.income_proof_status.titleize %>
+        <%= proof_status_label(@application, :income) %>
       </span>
     </div>
 
@@ -30,7 +30,9 @@
           <div class="mb-3">
             <p class="text-sm text-gray-600 mb-1">
               <span class="<%= latest_rejection.icon_class %>"><%= latest_rejection.icon_symbol %></span>
-              Rejected on <%= latest_rejection.created_at.strftime("%B %d, %Y at %I:%M %p") %> by <%= latest_rejection.source.admin&.full_name || "Unknown Admin" %>
+              <%= proof_rejection_verb(latest_rejection) %>
+              <%= latest_rejection.created_at.strftime('%B %d, %Y at %I:%M %p') %>
+              by <%= latest_rejection.source.admin&.full_name || 'Unknown Admin' %>
             </p>
             <% if latest_rejection.details.present? %>
               <p class="text-sm text-gray-600 ml-4 mb-1">
@@ -98,7 +100,7 @@
                   <% when :approval %>
                     Approved on
                   <% when :rejection %>
-                    Rejected on
+                    <%= proof_rejection_verb(activity) %>
                   <% end %>
 
                   <%= activity.created_at.strftime("%B %d, %Y at %I:%M %p") %>
@@ -213,7 +215,7 @@
         <h3 class="text-sm font-medium text-gray-900">Residency Proof</h3>
       </div>
       <span class="<%= badge_class_for(:proof, @application.residency_proof_status) %>">
-        <%= @application.residency_proof_status.titleize %>
+        <%= proof_status_label(@application, :residency) %>
       </span>
     </div>
 
@@ -232,7 +234,9 @@
           <div class="mb-3">
             <p class="text-sm text-gray-600 mb-1">
               <span class="<%= latest_rejection.icon_class %>"><%= latest_rejection.icon_symbol %></span>
-              Rejected on <%= latest_rejection.created_at.strftime("%B %d, %Y at %I:%M %p") %> by <%= latest_rejection.source.admin&.full_name || "Unknown Admin" %>
+              <%= proof_rejection_verb(latest_rejection) %>
+              <%= latest_rejection.created_at.strftime('%B %d, %Y at %I:%M %p') %>
+              by <%= latest_rejection.source.admin&.full_name || 'Unknown Admin' %>
             </p>
             <% if latest_rejection.details.present? %>
               <p class="text-sm text-gray-600 ml-4 mb-1">
@@ -300,7 +304,7 @@
                   <% when :approval %>
                     Approved on
                   <% when :rejection %>
-                    Rejected on
+                    <%= proof_rejection_verb(activity) %>
                   <% end %>
 
                   <%= activity.created_at.strftime("%B %d, %Y at %I:%M %p") %>
@@ -413,7 +417,7 @@
         <h3 class="text-sm font-medium text-gray-900">ID Proof</h3>
       </div>
       <span class="<%= badge_class_for(:proof, @application.id_proof_status) %>">
-        <%= @application.id_proof_status.titleize %>
+        <%= proof_status_label(@application, :id) %>
       </span>
     </div>
 
@@ -432,7 +436,9 @@
           <div class="mb-3">
             <p class="text-sm text-gray-600 mb-1">
               <span class="<%= latest_rejection.icon_class %>"><%= latest_rejection.icon_symbol %></span>
-              Rejected on <%= latest_rejection.created_at.strftime("%B %d, %Y at %I:%M %p") %> by <%= latest_rejection.source.admin&.full_name || "Unknown Admin" %>
+              <%= proof_rejection_verb(latest_rejection) %>
+              <%= latest_rejection.created_at.strftime('%B %d, %Y at %I:%M %p') %>
+              by <%= latest_rejection.source.admin&.full_name || 'Unknown Admin' %>
             </p>
             <% if latest_rejection.details.present? %>
               <p class="text-sm text-gray-600 ml-4 mb-1">
@@ -500,7 +506,7 @@
                   <% when :approval %>
                     Approved on
                   <% when :rejection %>
-                    Rejected on
+                    <%= proof_rejection_verb(activity) %>
                   <% end %>
 
                   <%= activity.created_at.strftime("%B %d, %Y at %I:%M %p") %>

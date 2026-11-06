@@ -111,7 +111,7 @@ module Applications
 
     def load_proof_reviews
       ProofReview
-        .select('id, application_id, admin_id, proof_type, status, created_at, reviewed_at, rejection_reason, notes')
+        .select('id, application_id, admin_id, proof_type, status, created_at, reviewed_at, rejection_reason, rejection_reason_code, notes')
         .includes(admin: [])
         .where(application_id: application.id)
         .order(created_at: :desc)

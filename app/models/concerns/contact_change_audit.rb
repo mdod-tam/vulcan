@@ -19,7 +19,7 @@ module ContactChangeAudit
   end
 
   def saved_change_to_alternate_contact?
-    ALTERNATE_CONTACT_FIELDS.any? { |field| saved_change_to_attribute?(field) }
+    saved_field_changes(ALTERNATE_CONTACT_FIELDS).any?
   end
 
   def log_alternate_contact_changes
@@ -60,15 +60,18 @@ module ContactChangeAudit
   private
 
   def certifying_professional_change_on_submitted_application?
-    CERTIFYING_PROFESSIONAL_FIELDS.any? { |field| saved_change_to_attribute?(field) } &&
+    saved_field_changes(CERTIFYING_PROFESSIONAL_FIELDS).any? &&
       attribute_before_last_save(:status) != 'draft'
   end
 
+  # Only changes staff can see. A form that submits "" for a column holding nil changes nothing on file.
   def saved_field_changes(fields)
     fields.each_with_object({}) do |field, changes|
       next unless saved_change_to_attribute?(field)
 
       old_value, new_value = saved_change_to_attribute(field)
+      next if old_value.blank? && new_value.blank?
+
       changes[field] = { 'old' => old_value, 'new' => new_value }
     end
   end

@@ -42,6 +42,11 @@ class ProofReview < ApplicationRecord
   scope :rejections, -> { where(status: :rejected) }
   scope :last_3_days, -> { where('created_at > ?', 3.days.ago) }
 
+  # A rejection recorded because no document came with the application, not because a document was found wanting.
+  def none_provided?
+    status_rejected? && rejection_reason_code == 'none_provided'
+  end
+
   # The row for one decision on an application. A proof type and a status keep a single row between them,
   # so a repeat decision updates that row instead of adding another.
   def self.for_decision(application, proof_type:, status:)

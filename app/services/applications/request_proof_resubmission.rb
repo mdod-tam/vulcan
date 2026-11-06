@@ -95,7 +95,8 @@ module Applications
         tracking_metadata: {
           proof_type: proof_type.to_s,
           proof_request_display_mode: proof_request_display_mode,
-          rejection_reason: proof_request_rejection_reason
+          rejection_reason: proof_request_rejection_reason,
+          rejection_reason_code: proof_request_rejection_reason_code
         }.compact
       )
       Delivery.new(
@@ -120,6 +121,12 @@ module Applications
       return unless proof_request_rejected?
 
       latest_rejection_review&.rejection_reason
+    end
+
+    def proof_request_rejection_reason_code
+      return unless proof_request_rejected?
+
+      latest_rejection_review&.rejection_reason_code
     end
 
     def deliver_email(delivery)

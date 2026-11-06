@@ -1,0 +1,66 @@
+<%# Certification status changes only. Additional certifications can be kept without changing the status,
+    so this is not a record of every submission. %>
+<div class="mb-4" data-testid="disability-certification-history">
+  <div class="flex justify-between items-center">
+    <h3 class="text-sm font-medium text-gray-700 mb-2">
+      <%= disability_certification_label(@application) %> History
+    </h3>
+  </div>
+
+  <% if @application.disability_certification.attached? %>
+    <% if @application.disability_certification_status == "approved" %>
+      <div class="mt-4">
+        <%= disability_certification_link(@application, :button) %>
+      </div>
+    <% else %>
+      <%= disability_certification_link(@application, :link) %>
+    <% end %>
+  <% end %>
+
+  <div class="mt-4 pl-4 border-l-2 border-gray-200">
+    <% if @certification_status_changes.any? %>
+      <% @certification_status_changes.each do |change| %>
+        <div class="history-item mb-2">
+          <p class="text-sm text-gray-600 mb-1">
+            <% case change.to_status %>
+            <% when 'approved' %>
+              <span class="text-success-600">✓</span> Approved on
+            <% when 'rejected' %>
+              <span class="text-danger-600">×</span> Rejected on
+            <% else %>
+              <span class="text-info-600">→</span> <%= change.to_status.humanize %> on
+            <% end %>
+            <%= format_activity_time(change.created_at) %>
+            <% if change.user.present? %>
+              by <%= change.user.full_name %>
+            <% end %>
+
+            <% if change.metadata&.dig('submission_method').present? %>
+              <span class="text-xs text-gray-500">(via <%= change.metadata['submission_method'] %>)</span>
+            <% end %>
+          </p>
+
+          <%# The resolved reason is stored on the row's metadata; notes are the admin's own comment. %>
+          <% if change.metadata&.dig('rejection_reason').present? %>
+            <p class="text-sm text-gray-600 ml-4 mb-1">
+              <span class="text-gray-500">Reason:</span> "<%= sanitize change.metadata['rejection_reason'] %>"
+            </p>
+          <% end %>
+          <% if change.notes.present? %>
+            <p class="text-sm text-gray-600 ml-4 mb-1">
+              <span class="text-gray-500">Note:</span> "<%= sanitize change.notes %>"
+            </p>
+          <% end %>
+        </div>
+      <% end %>
+    <% elsif @application.disability_certification.attached? %>
+      <div class="history-item mb-2">
+        <p class="text-sm text-gray-600 mb-1">
+          <span class="text-info-600">→</span> Submitted on
+          <%= format_activity_time(@application.disability_certification.created_at) %>
+          <span class="text-xs text-gray-500">(via <%= disability_certification_submission_method(@application) %>)</span>
+        </p>
+      </div>
+    <% end %>
+  </div>
+</div>

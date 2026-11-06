@@ -690,11 +690,11 @@ es:
              %{office_address}
     proof_rejected:
       none_provided:
-        disability_certification: "No se proporcionó una certificación de discapacidad con la solicitud."
-        default: "No se proporcionó el comprobante requerido con la solicitud."
-        id: "No se proporcionó ningún comprobante de identidad con la solicitud."
-        residency: "No se proporcionó ningún comprobante de residencia en Maryland con la solicitud."
-        income: "No se proporcionó ningún comprobante de ingresos con la solicitud."
+        disability_certification: "No se proporcionó una certificación de discapacidad con esta solicitud."
+        default: "No se proporcionó el comprobante requerido con esta solicitud."
+        id: "No se proporcionó ningún comprobante de identidad con esta solicitud."
+        residency: "No se proporcionó ningún comprobante de residencia con esta solicitud."
+        income: "No se proporcionó ningún comprobante de ingresos con esta solicitud."
       remaining_attempts_message:
         one: "Le queda %{count} intento para presentar la documentación requerida."
         other: "Le quedan %{count} intentos para presentar la documentación requerida."

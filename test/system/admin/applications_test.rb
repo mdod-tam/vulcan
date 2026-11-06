@@ -21,6 +21,7 @@ module Admin
     end
 
     test 'admin can view application details successfully with factory-created records' do
+      @application.update!(household_size: 3, annual_income: 24_000)
       visit_admin_application_with_retry(@application, user: @admin)
 
       assert_selector 'h1#application-title', wait: 30
@@ -29,6 +30,12 @@ module Admin
       assert has_selector?('[aria-labelledby="applicant-info-title"]', wait: 25)
       assert has_selector?('[aria-labelledby="application-details-title"]', wait: 25)
       assert has_selector?('[aria-labelledby="attachments-title"]', wait: 25)
+      assert_no_selector '#financial-info-title'
+      within '[aria-labelledby="application-details-title"]' do
+        assert_text 'Household Size'
+        assert_text '$24,000.00'
+      end
+      take_screenshot('admin-application-details-household-income', html: true, full: true)
 
       if has_selector?('[aria-labelledby="attachments-title"]', wait: 25)
         within '[aria-labelledby="attachments-title"]' do
@@ -39,6 +46,25 @@ module Admin
           assert_text 'Not Reviewed', wait: 25
         end
       end
+    end
+
+    test 'certification history shows certification changes only, with the rejection reason' do
+      @application.transition_disability_certification_status!(
+        :rejected, actor: @admin, metadata: { submission_method: 'fax', rejection_reason: 'The signature is missing.' },
+                   notes: 'Phoned the provider'
+      )
+      @application.status_changes.create!(from_status: 'in_progress', to_status: 'approved', user: @admin, change_type: :status,
+                                          metadata: { submission_method: 'paper' }, notes: 'Application approved')
+      visit_admin_application_with_retry(@application, user: @admin)
+
+      within '[data-testid="disability-certification-history"]' do
+        assert_selector '.history-item', count: 1, wait: 25
+        assert_text 'Rejected on'
+        assert_text 'Reason: "The signature is missing."'
+        assert_text 'Note: "Phoned the provider"'
+        assert_no_text 'Approved on'
+      end
+      take_screenshot('certification-history-certification-changes-only', html: true, full: true)
     end
 
     test 'admin can approve disability certification directly via service' do

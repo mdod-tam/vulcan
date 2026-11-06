@@ -510,11 +510,11 @@ en:
              %{office_address}
     proof_rejected:
       none_provided:
-        disability_certification: "No disability certification was provided with the application."
-        default: "No required proof was provided with the application."
-        id: "No proof of identity was provided with the application."
-        residency: "No proof of Maryland residency was provided with the application."
-        income: "No income proof was provided with the application."
+        disability_certification: "No disability certification was provided with this application."
+        default: "No required proof was provided with this application."
+        id: "No ID proof was provided with this application."
+        residency: "No residency proof was provided with this application."
+        income: "No income proof was provided with this application."
       remaining_attempts_message:
         one: "You have %{count} attempt remaining to submit the required documentation."
         other: "You have %{count} attempts remaining to submit the required documentation."

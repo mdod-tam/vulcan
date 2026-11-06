@@ -17,7 +17,23 @@ module Admin
       end
     end
 
+    def new
+      @form = Admin::RejectionReasonForm.new
+      @form_errors = {}
+    end
+
     def edit; end
+
+    def create
+      @form = Admin::RejectionReasonForm.new(new_rejection_reason_params)
+
+      if @form.save(actor: current_user)
+        redirect_to edit_admin_rejection_reason_path(@form.en_reason), notice: 'Rejection reason created in English and Spanish.'
+      else
+        @form_errors = { create_rejection_reason: @form.errors.to_hash(true) }
+        render :new, status: :unprocessable_content
+      end
+    end
 
     def update
       target_reason = reason_for_locale(params[:locale].presence || @rejection_reason.locale)
@@ -68,6 +84,10 @@ module Admin
 
     def rejection_reason_params
       params.expect(rejection_reason: [:body])
+    end
+
+    def new_rejection_reason_params
+      params.expect(rejection_reason: %i[proof_type name en_body es_body])
     end
 
     def reason_for_locale(locale)

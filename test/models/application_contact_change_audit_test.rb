@@ -52,6 +52,15 @@ class ApplicationContactChangeAuditTest < ActiveSupport::TestCase
     assert_equal 'N*** A***', event.metadata['changes']['alternate_contact_name']['new']
   end
 
+  test 'a blank value saved over no value is not recorded as a contact change' do
+    @application.update_columns(alternate_contact_name: nil, certifying_professional_email: nil)
+
+    assert_no_difference -> { Event.where(auditable: @application, action: %w[alternate_contact_updated certifying_professional_info_updated]).count } do
+      @application.update!(alternate_contact_name: '', certifying_professional_email: '')
+    end
+    assert @application.saved_change_to_alternate_contact_name?, 'precondition: Rails still reports nil to "" as a change'
+  end
+
   test 'background contact audit has truthful attribution and fails atomically when unavailable' do
     actor = ensure_system_audit_actor!
     Current.user = nil

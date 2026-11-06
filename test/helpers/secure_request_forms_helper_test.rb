@@ -112,6 +112,30 @@ class SecureRequestFormsHelperTest < ActionView::TestCase
     assert_includes detail, 'via Email'
   end
 
+  test 'proof resubmission detail says not provided, not rejected, when no document came with the application' do
+    application = create(:application, id_proof_status: :rejected)
+    notification = create(
+      :notification,
+      recipient: application.user,
+      actor: create(:admin),
+      notifiable: application,
+      action: 'proof_resubmission_requested',
+      metadata: {
+        'proof_type' => 'id',
+        'proof_request_display_mode' => 'rejected',
+        'rejection_reason' => 'No ID proof was provided with this application.',
+        'rejection_reason_code' => 'none_provided',
+        'recipient_channel' => 'email'
+      }
+    )
+
+    detail = send(:secure_proof_resubmission_notification_detail, notification, notification.metadata,
+                  delivery_owners_by_id: {})
+
+    assert_includes detail, 'ID proof not provided; secure upload link sent to'
+    assert_not_includes detail, 'rejected'
+  end
+
   test 'proof resubmission detail leads with request context when proof is not rejected' do
     application = create(:application, id_proof_status: :not_reviewed)
     admin = create(:admin)

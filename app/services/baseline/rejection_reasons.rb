@@ -7,6 +7,12 @@ module Baseline
     DEFINITIONS = [
       # Income
       {
+        code: 'none_provided',
+        proof_type: 'income',
+        en_body: 'No income proof was provided with this application.',
+        es_body: 'No se proporcionó ningún comprobante de ingresos con esta solicitud.'
+      },
+      {
         code: 'address_mismatch',
         proof_type: 'income',
         en_body: 'The address provided on your income documentation does not match ' \
@@ -111,6 +117,12 @@ module Baseline
 
       # Residency
       {
+        code: 'none_provided',
+        proof_type: 'residency',
+        en_body: 'No residency proof was provided with this application.',
+        es_body: 'No se proporcionó ningún comprobante de residencia con esta solicitud.'
+      },
+      {
         code: 'address_mismatch',
         proof_type: 'residency',
         en_body: 'The address provided on your residency documentation does not match ' \
@@ -181,8 +193,8 @@ module Baseline
       {
         code: 'none_provided',
         proof_type: 'id',
-        en_body: 'No ID proof was provided with the application.',
-        es_body: 'No se proporcionó ninguna prueba de identificación con la solicitud.'
+        en_body: 'No ID proof was provided with this application.',
+        es_body: 'No se proporcionó ningún comprobante de identidad con esta solicitud.'
       },
       {
         code: 'expired',
@@ -220,6 +232,12 @@ module Baseline
       },
 
       # Disability Certification
+      {
+        code: 'none_provided',
+        proof_type: 'disability_certification',
+        en_body: 'No disability certification was provided with this application.',
+        es_body: 'No se proporcionó una certificación de discapacidad con esta solicitud.'
+      },
       {
         code: 'missing_provider_credentials',
         proof_type: 'disability_certification',

@@ -10,9 +10,16 @@ module Admin
       case proof_type.to_s
       when 'income' then 'Income'
       when 'residency' then 'Residency'
+      when 'id' then 'ID'
       when 'disability_certification' then 'Disability Certification'
       else proof_type.to_s.humanize
       end
+    end
+
+    # The rule for text staff write, in one place: the only placeholder, and how to write it.
+    def rejection_reason_placeholder_hint
+      safe_join(["To include the applicant's address, type ", tag.span('%<address>s', class: 'font-mono whitespace-nowrap'),
+                 ' exactly as written; no other placeholders are supported.'])
     end
 
     def rejection_reason_sync_status(reason)

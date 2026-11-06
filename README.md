@@ -215,7 +215,7 @@ Set `RAILS_MASTER_KEY`, `DATABASE_URL`, and `APPLICATION_HOST` (the public hostn
 
 | Integration | Configuration owner |
 | --- | --- |
-| Postmark | `postmark_api_token` in Rails credentials; [email and letters guide](docs/infrastructure/email_system.md). |
+| Postmark | `postmark_api_token` in Rails credentials; `POSTMARK_SERVER_ID` (the ID of the server that token belongs to) on every web and worker process, and `POSTMARK_WEBHOOK_USERNAME` and `POSTMARK_WEBHOOK_PASSWORD` on web. Without the server ID, Postmark handoff is refused and staff see "delivery settings could not be verified". [Email and letters guide](docs/infrastructure/email_system.md). |
 | DocuSeal | Credentials `docuseal.api_key` and optional `docuseal.base_url`; register the webhook URL in the DocuSeal console and store its generated `whsec_...` HMAC secret as top-level credentials `webhook_secret`; [setup, signature verification, and host changes](docs/development/docuseal_integration_guide.md). |
 | Twilio | `TWILIO_ACCOUNT_SID`, `TWILIO_AUTH_TOKEN`, `TWILIO_SMS_FROM_NUMBER`, `TWILIO_VERIFY_SERVICE_SID`, and `TWILIO_FAX_FROM_NUMBER` as needed; [initializer](config/initializers/twilio.rb). |
 | Webhooks | Rails credentials `webhook_secret` supply the HMAC key; DocuSeal verifies its timestamped signature, and Twilio fax callbacks use Twilio's signature. See [webhook controllers](app/controllers/webhooks). |

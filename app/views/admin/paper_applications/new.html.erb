@@ -632,11 +632,11 @@
                               data-document-proof-handler-target="rejectionReasonSelect">
                         <option value="">Select a reason</option>
                         <option value="none_provided" <%= 'selected' if submitted_params[:disability_certification_rejection_reason] == 'none_provided' %>
-                                data-reason-text="No disability certification was provided with the application.">None Provided</option>
+                                data-reason-text="<%= h RejectionReason.none_provided_text('disability_certification') %>">None Provided</option>
                         <%# The provider receives certification reasons in English. %>
                         <% RejectionReason.options_for(locale: 'en', proof_type: 'disability_certification').each do |reason| %>
                           <option value="<%= reason.code %>" <%= 'selected' if submitted_params[:disability_certification_rejection_reason] == reason.code %>
-                                  data-reason-text="<%= h reason.body %>"><%= RejectionReason.label_for(reason.code) %></option>
+                                  data-reason-text="<%= h reason.preview_body %>"><%= RejectionReason.label_for(reason.code) %></option>
                         <% end %>
                         <option value="other" <%= 'selected' if submitted_params[:disability_certification_rejection_reason] == 'other' %>>Other</option>
                       </select>
@@ -860,10 +860,10 @@
                             data-document-proof-handler-target="rejectionReasonSelect">
                       <option value="">Select a reason</option>
                       <option value="none_provided" <%= 'selected' if submitted_params[:income_proof_rejection_reason] == 'none_provided' %>
-                              data-reason-text="No income proof was provided with the application.">None Provided</option>
+                              data-reason-text="<%= h RejectionReason.none_provided_text('income') %>">None Provided</option>
                       <% RejectionReason.options_for(locale: I18n.locale, proof_type: 'income').each do |reason| %>
                         <option value="<%= reason.code %>" <%= 'selected' if submitted_params[:income_proof_rejection_reason] == reason.code %>
-                                data-reason-text="<%= h reason.body %>"><%= RejectionReason.label_for(reason.code) %></option>
+                                data-reason-text="<%= h reason.preview_body %>"><%= RejectionReason.label_for(reason.code) %></option>
                       <% end %>
                       <option value="other" <%= 'selected' if submitted_params[:income_proof_rejection_reason] == 'other' %>>Other</option>
                     </select>
@@ -993,10 +993,10 @@
                             data-document-proof-handler-target="rejectionReasonSelect">
                       <option value="">Select a reason</option>
                       <option value="none_provided" <%= 'selected' if submitted_params[:residency_proof_rejection_reason] == 'none_provided' %>
-                              data-reason-text="No residency proof was provided with the application.">None Provided</option>
+                              data-reason-text="<%= h RejectionReason.none_provided_text('residency') %>">None Provided</option>
                       <% RejectionReason.options_for(locale: I18n.locale, proof_type: 'residency').each do |reason| %>
                         <option value="<%= reason.code %>" <%= 'selected' if submitted_params[:residency_proof_rejection_reason] == reason.code %>
-                                data-reason-text="<%= h reason.body %>"><%= RejectionReason.label_for(reason.code) %></option>
+                                data-reason-text="<%= h reason.preview_body %>"><%= RejectionReason.label_for(reason.code) %></option>
                       <% end %>
                       <option value="other" <%= 'selected' if submitted_params[:residency_proof_rejection_reason] == 'other' %>>Other</option>
                     </select>
@@ -1105,10 +1105,10 @@
                           data-document-proof-handler-target="rejectionReasonSelect">
                     <option value="">Select a reason</option>
                     <option value="none_provided" <%= 'selected' if submitted_params[:id_proof_rejection_reason] == 'none_provided' %>
-                            data-reason-text="No ID proof was provided with the application.">None Provided</option>
+                            data-reason-text="<%= h RejectionReason.none_provided_text('id') %>">None Provided</option>
                     <% RejectionReason.options_for(locale: I18n.locale, proof_type: 'id').each do |reason| %>
                       <option value="<%= reason.code %>" <%= 'selected' if submitted_params[:id_proof_rejection_reason] == reason.code %>
-                              data-reason-text="<%= h reason.body %>"><%= RejectionReason.label_for(reason.code) %></option>
+                              data-reason-text="<%= h reason.preview_body %>"><%= RejectionReason.label_for(reason.code) %></option>
                     <% end %>
                     <option value="other" <%= 'selected' if submitted_params[:id_proof_rejection_reason] == 'other' %>>Other</option>
                   </select>
