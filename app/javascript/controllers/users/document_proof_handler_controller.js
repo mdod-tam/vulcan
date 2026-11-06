@@ -128,7 +128,8 @@ class DocumentProofHandlerController extends Controller {
   }
 
   /**
-   * data-reason-text supplies the text the review will store, from the database reason body.
+   * data-reason-text supplies the text the review will store, from the database reason body. The applicant's
+   * address is not known at intake, so a reason that states it shows a stand-in.
    */
   previewRejectionReason() {
     if (!this.hasReasonPreviewTarget || !this.hasRejectionReasonSelectTarget) return

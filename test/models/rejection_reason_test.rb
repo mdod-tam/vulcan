@@ -108,6 +108,10 @@ class RejectionReasonTest < ActiveSupport::TestCase
     [
       'Dear %<first_name>s, send proof.',
       'Send proof for %{address}.', # rubocop:disable Style/FormatStringToken -- the template form is a case under test
+      'Send proof for %1{address}.', # rubocop:disable Style/FormatStringToken -- an indexed template form is a case under test
+      'Send proof for %1$<address>s.',
+      'Send proof for %-20<address>s.',
+      'Send proof for %+<address>s.',
       'Send proof for %<address>d.',
       'Send proof for %<address>-20s.',
       'Send proof for %<address>.'
@@ -131,6 +135,22 @@ class RejectionReasonTest < ActiveSupport::TestCase
   test 'a placeholder the application cannot state is left as written instead of raising' do
     assert_equal 'Dear %<first_name>s at 1 Main St',
                  RejectionReason.interpolate_body('Dear %<first_name>s at %<address>s', address: '1 Main St')
+  end
+
+  test 'none_provided text fills the address for an application, names it in a preview, and follows the locale' do
+    RejectionReason.find_by!(code: 'none_provided', proof_type: 'residency', locale: 'en').update!(body: 'No residency proof for %<address>s.')
+    application = create(:application)
+    address = RejectionReason.interpolations_for(application).fetch(:address)
+
+    assert_predicate address, :present?
+    assert_equal "No residency proof for #{address}.", RejectionReason.none_provided_text('residency', application: application)
+    assert_equal "No residency proof for #{RejectionReason::PREVIEW_ADDRESS}.", RejectionReason.none_provided_text('residency')
+    RejectionReason.find_by!(code: 'none_provided', proof_type: 'residency', locale: 'es').update!(body: 'Texto editado sin comprobante.')
+    assert_equal 'Texto editado sin comprobante.', RejectionReason.none_provided_text('residency', locale: 'es')
+
+    RejectionReason.where(code: 'none_provided', proof_type: 'residency').delete_all
+    assert_equal I18n.t('application_notifications.proof_rejected.none_provided.residency', locale: :es),
+                 RejectionReason.none_provided_text('residency', locale: 'es'), 'a missing record falls back to the locale file'
   end
 
   test 'none_provided text is the stored reason body, and the letter wording when the record is missing' do

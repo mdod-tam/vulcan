@@ -445,13 +445,14 @@ class ApplicationNotificationsMailer < ApplicationMailer # rubocop:disable Metri
     raw_reason = proof_review.rejection_reason.to_s
     reason_code = proof_review.rejection_reason_code.presence || raw_reason
 
+    return RejectionReason.none_provided_text(proof_review.proof_type, locale: locale, application: proof_review.application) if reason_code == 'none_provided'
+
     reason = rejection_reason_for_code(
       reason_code,
       proof_type: proof_review.proof_type,
       locale: locale
     )
     return reason.body_for(proof_review.application) if reason&.body
-    return none_provided_rejection_reason(proof_review.proof_type, locale) if reason_code == 'none_provided'
 
     proof_review.rejection_reason
   end
@@ -460,14 +461,6 @@ class ApplicationNotificationsMailer < ApplicationMailer # rubocop:disable Metri
     return nil if code.blank?
 
     RejectionReason.resolve(code: code, proof_type: proof_type, locale: locale)
-  end
-
-  def none_provided_rejection_reason(proof_type, locale)
-    I18n.t(
-      "application_notifications.proof_rejected.none_provided.#{proof_type}",
-      locale: locale,
-      default: I18n.t('application_notifications.proof_rejected.none_provided.default', locale: locale)
-    )
   end
 
   def build_remaining_attempts_message(remaining_attempts, locale: nil)

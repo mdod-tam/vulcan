@@ -76,7 +76,7 @@
                                         class: 'form-input mt-1',
                                         aria: { describedby: 'rejection-reason-body-hint-en' } %>
               <p id="rejection-reason-body-hint-en" class="form-hint">
-                Keep placeholders such as <span class="font-mono">%&lt;address&gt;s</span> exactly as written. When a rejection email is built, each placeholder is replaced with the applicant's own details, such as their address.
+                <%= rejection_reason_placeholder_hint %> When a rejection email is built, it is replaced with the applicant's mailing address.
               </p>
             </div>
 
@@ -156,7 +156,7 @@
                                         class: 'form-input mt-1',
                                         aria: { describedby: 'rejection-reason-body-hint-es' } %>
               <p id="rejection-reason-body-hint-es" class="form-hint">
-                Keep placeholders such as <span class="font-mono">%&lt;address&gt;s</span> exactly as written. When a rejection email is built, each placeholder is replaced with the applicant's own details, such as their address.
+                <%= rejection_reason_placeholder_hint %> When a rejection email is built, it is replaced with the applicant's mailing address.
               </p>
             </div>
 

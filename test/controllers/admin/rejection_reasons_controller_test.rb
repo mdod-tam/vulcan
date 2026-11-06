@@ -142,6 +142,51 @@ module Admin
       assert_select 'input#rejection_reason_name[value=?]', 'Pay stub cut off'
     end
 
+    test 'create ties each error to its own control and leaves the other controls unmarked' do
+      post admin_rejection_reasons_path, params: { rejection_reason: {
+        proof_type: 'income', name: 'Pay stub cut off', en_body: 'Dear %<first_name>s, send the whole page.', es_body: 'Envíe la página completa.'
+      } }
+
+      assert_response :unprocessable_content
+      assert_select 'textarea#rejection_reason_en_body[aria-invalid=true]'
+      assert_select 'textarea#rejection_reason_en_body[aria-describedby=?]', 'rejection-reason-body-hint create-rejection-reason-en-body-error'
+      assert_select 'p#create-rejection-reason-en-body-error', text: /placeholders the forms cannot fill/
+      assert_select 'a[href=?]', '#rejection_reason_en_body', text: /placeholders the forms cannot fill/
+      assert_select 'textarea#rejection_reason_es_body[aria-invalid]', count: 0
+      assert_select 'textarea#rejection_reason_es_body[aria-describedby=?]', 'rejection-reason-body-hint'
+      assert_select 'input#rejection_reason_name[aria-invalid]', count: 0
+    end
+
+    test 'create refuses an indexed or flagged way of writing the address placeholder' do
+      ['Send to %1$<address>s.', 'Send to %-20<address>s.', 'Send to %+<address>s.'].each do |body|
+        assert_no_difference 'RejectionReason.count' do
+          post admin_rejection_reasons_path, params: { rejection_reason: {
+            proof_type: 'residency', name: 'Address on file', en_body: body, es_body: 'Envíe a la dirección registrada.'
+          } }
+        end
+        assert_response :unprocessable_content, body
+        assert_select 'li', text: /placeholders the forms cannot fill/, count: 1
+      end
+
+      assert_difference 'RejectionReason.count', 2 do
+        post admin_rejection_reasons_path, params: { rejection_reason: {
+          proof_type: 'residency', name: 'Address on file', en_body: 'Send proof of 100% of the address, %<address>s.',
+          es_body: 'Envíe a la dirección registrada.'
+        } }
+      end
+    end
+
+    test 'edit states the one supported placeholder and no others' do
+      reason = create(:rejection_reason, locale: 'en')
+
+      get edit_admin_rejection_reason_path(reason)
+
+      assert_response :success
+      assert_select '#rejection-reason-body-hint-en', text: /no other placeholders are supported/
+      assert_select '#rejection-reason-body-hint-en span.font-mono', text: '%<address>s'
+      assert_select '#rejection-reason-body-hint-en', text: /placeholders such as/, count: 0
+    end
+
     test 'create is limited to administrators' do
       sign_in_as create(:constituent)
 

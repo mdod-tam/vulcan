@@ -19,6 +19,7 @@ module Admin
 
     def new
       @form = Admin::RejectionReasonForm.new
+      @form_errors = {}
     end
 
     def edit; end
@@ -29,6 +30,7 @@ module Admin
       if @form.save(actor: current_user)
         redirect_to edit_admin_rejection_reason_path(@form.en_reason), notice: 'Rejection reason created in English and Spanish.'
       else
+        @form_errors = { create_rejection_reason: @form.errors.to_hash(true) }
         render :new, status: :unprocessable_content
       end
     end

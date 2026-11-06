@@ -1112,6 +1112,18 @@ module Admin
       end
     end
 
+    test 'the paper form previews the address a reason states with a stand-in, since the applicant is not known yet' do
+      RejectionReason.find_by!(code: 'none_provided', proof_type: 'residency', locale: 'en').update!(body: 'No residency proof for %<address>s.')
+
+      get new_admin_paper_application_path, headers: default_headers
+
+      stock = css_select("select#residency_proof_rejection_reason option[value='address_mismatch']").sole['data-reason-text']
+      assert_includes stock, RejectionReason::PREVIEW_ADDRESS
+      assert_not_includes stock, '%<address>s'
+      assert_select "select#residency_proof_rejection_reason option[value='none_provided'][data-reason-text=?]",
+                    "No residency proof for #{RejectionReason::PREVIEW_ADDRESS}."
+    end
+
     test 'should send rejection notification' do
       def @controller.redirect_to(*args)
         flash[:notice] = 'Rejection notification has been sent'

@@ -12,18 +12,7 @@
     </div>
 
     <%= form_with model: @form, scope: :rejection_reason, url: admin_rejection_reasons_path, class: 'card p-6 space-y-6' do |form| %>
-      <% if @form.errors.any? %>
-        <div class="rounded-md bg-danger-50 border border-danger-300 p-4" role="alert">
-          <p class="text-sm font-medium text-danger-800">
-            <%= pluralize(@form.errors.count, 'error') %> prevented this rejection reason from saving:
-          </p>
-          <ul class="mt-2 list-disc list-inside text-sm text-danger-700">
-            <% @form.errors.full_messages.each do |message| %>
-              <li><%= message %></li>
-            <% end %>
-          </ul>
-        </div>
-      <% end %>
+      <%= render 'shared/action_errors', action: :create_rejection_reason, form: form, form_errors: @form_errors %>
 
       <div>
         <%= form.label :proof_type, class: 'form-label' %>
@@ -31,36 +20,44 @@
                         RejectionReason::VALID_PROOF_TYPES.map { |type| [rejection_reason_proof_type_label(type), type] },
                         { prompt: 'Select a proof type' },
                         class: 'form-input mt-1', required: true,
-                        aria: { describedby: 'rejection-reason-proof-type-hint' } %>
+                        aria: action_form_field_aria(:create_rejection_reason, :proof_type, form_errors: @form_errors,
+                                                                                            describedby: 'rejection-reason-proof-type-hint') %>
         <p id="rejection-reason-proof-type-hint" class="form-hint">
           The reason appears in the rejection form for this type of document only.
         </p>
+        <%= render 'shared/field_errors', action: :create_rejection_reason, attribute: :proof_type, form_errors: @form_errors %>
       </div>
 
       <div>
         <%= form.label :name, class: 'form-label' %>
         <%= form.text_field :name, class: 'form-input mt-1', required: true, maxlength: 80,
-                                   aria: { describedby: 'rejection-reason-name-hint' } %>
+                                   aria: action_form_field_aria(:create_rejection_reason, :name, form_errors: @form_errors,
+                                                                                                 describedby: 'rejection-reason-name-hint') %>
         <p id="rejection-reason-name-hint" class="form-hint">
           What staff see in the list, for example "Photo is blurry". The reason's code is made from this name and cannot be changed later.
         </p>
+        <%= render 'shared/field_errors', action: :create_rejection_reason, attribute: :name, form_errors: @form_errors %>
       </div>
 
       <div class="grid grid-cols-1 xl:grid-cols-2 gap-6">
         <div>
           <%= form.label :en_body, class: 'form-label' %>
           <%= form.text_area :en_body, rows: 8, class: 'form-input mt-1', required: true,
-                                       aria: { describedby: 'rejection-reason-body-hint' } %>
+                                       aria: action_form_field_aria(:create_rejection_reason, :en_body, form_errors: @form_errors,
+                                                                                                        describedby: 'rejection-reason-body-hint') %>
+          <%= render 'shared/field_errors', action: :create_rejection_reason, attribute: :en_body, form_errors: @form_errors %>
         </div>
         <div>
           <%= form.label :es_body, class: 'form-label' %>
           <%= form.text_area :es_body, rows: 8, class: 'form-input mt-1', required: true, lang: 'es',
-                                       aria: { describedby: 'rejection-reason-body-hint' } %>
+                                       aria: action_form_field_aria(:create_rejection_reason, :es_body, form_errors: @form_errors,
+                                                                                                        describedby: 'rejection-reason-body-hint') %>
+          <%= render 'shared/field_errors', action: :create_rejection_reason, attribute: :es_body, form_errors: @form_errors %>
         </div>
       </div>
       <p id="rejection-reason-body-hint" class="form-hint">
-        Write what the applicant should do next, as it should read in their letter or email. To include the applicant's address, type
-        <span class="font-mono whitespace-nowrap">%&lt;address&gt;s</span> exactly as written; no other placeholders are supported.
+        Write what the applicant should do next, as it should read in their letter or email.
+        <%= rejection_reason_placeholder_hint %>
       </p>
 
       <div class="flex justify-end gap-3">

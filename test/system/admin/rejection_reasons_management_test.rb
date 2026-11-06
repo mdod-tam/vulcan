@@ -18,6 +18,8 @@ module Admin
       click_button 'Create Rejection Reason'
       assert_text 'Reason name is reserved'
       assert_field 'Reason text (English)', with: 'Please send a clearer photo of your ID.'
+      assert_selector "#rejection_reason_name[aria-invalid='true']"
+      assert_selector '#create-rejection-reason-name-error', text: 'Reason name is reserved'
       take_screenshot('rejection-reason-new-form-error', html: true, full: true)
 
       fill_in 'Reason name', with: 'Photo is blurry'
