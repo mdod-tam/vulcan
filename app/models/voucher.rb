@@ -15,6 +15,7 @@ class Voucher < ApplicationRecord
 
   before_validation :generate_code, on: :create
   before_validation :set_initial_values, on: :create
+  before_validation :set_issued_at, on: :create
   after_update :log_status_change, if: :saved_change_to_status?
 
   enum :status, {
@@ -274,6 +275,11 @@ class Voucher < ApplicationRecord
     Current.user.presence || PublicAuditActor.system_audit_actor!
   end
 
+  # Expiry counts from issued_at; a voucher without one never expires.
+  def set_issued_at
+    self.issued_at ||= Time.current
+  end
+
   def set_initial_values
     return if initial_value.present? && remaining_value.present?
 
@@ -285,6 +291,5 @@ class Voucher < ApplicationRecord
       self.initial_value = 0
       self.remaining_value = 0
     end
-    self.issued_at = Time.current
   end
 end

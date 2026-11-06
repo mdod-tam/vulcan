@@ -143,6 +143,26 @@ class VoucherTest < ActiveSupport::TestCase
     assert_not_nil voucher.issued_at
   end
 
+  test 'a voucher created with its values given is still stamped with issued_at, so it can expire' do
+    voucher = create(:voucher, issued_at: nil, initial_value: 100)
+
+    assert_not_nil voucher.issued_at, 'a voucher without issued_at never expires'
+    assert_in_delta Time.current, voucher.issued_at, 5.seconds
+    assert_equal voucher.issued_at + Policy.voucher_validity_period, voucher.expiration_date
+    assert_not voucher.expired?
+    travel_to(voucher.expiration_date + 1.minute) { assert_predicate voucher, :expired? }
+  end
+
+  test 'an issued_at given on create is kept' do
+    issued_at = 2.months.ago.change(usec: 0)
+
+    given_values = create(:voucher, issued_at: issued_at)
+    derived_values = create(:voucher, issued_at: issued_at, initial_value: nil, remaining_value: nil)
+
+    assert_equal issued_at, given_values.issued_at
+    assert_equal issued_at, derived_values.issued_at
+  end
+
   test 'sends notification when assigned' do
     FeatureFlag.find_by!(name: 'vouchers_enabled').update!(enabled: true)
     constituent = create(:constituent, email: "unique_#{Time.now.to_i}@example.com")
